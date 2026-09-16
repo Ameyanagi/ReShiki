@@ -35,7 +35,7 @@ def check_supported(mol):
 
 
 def from_document(doc):
-    if doc.get("version") != 1:
+    if doc.get("version") not in (1, 2):
         raise ValueError("Unsupported document version")
     rw = Chem.RWMol()
     ids = {}
@@ -130,7 +130,7 @@ def to_document(mol, base=None):
                       "order": int(b.GetBondTypeAsDouble()), "display": display,
                       "stereo": reverse_stereo.get(b.GetStereo()),
                       "stereo_atoms": [ids[i] for i in b.GetStereoAtoms()]})
-    return {"version": 1, "atoms": atoms, "bonds": bonds,
+    return {"version": 2, "atoms": atoms, "bonds": bonds,
             "annotations": (base or {}).get("annotations", []),
             "arrows": (base or {}).get("arrows", [])}
 
@@ -145,9 +145,45 @@ def analyze(mol):
             "inchi": Chem.MolToInchi(mol), "inchikey": Chem.MolToInchiKey(mol)}
 
 
+def import_cdxml(text):
+    root = ET.fromstring(text)
+    allowed = {"CDXML", "page", "fragment", "n", "b", "t", "s", "fonttable", "font", "colortable", "color", "arrow"}
+    if {el.tag for el in root.iter()} - allowed or len(list(root.iter("page"))) != 1:
+        raise ValueError("CDXML contains unsupported drawing objects or multiple pages.")
+    parts = Chem.MolsFromCDXML(text)
+    if not parts:
+        raise ValueError("No supported molecules found")
+    mol = parts[0]
+    for part in parts[1:]:
+        mol = Chem.CombineMols(mol, part)
+    scale = 42.0 / float(root.get("BondLength", "30"))
+    base = {"annotations": [], "arrows": []}
+    next_id = mol.GetNumAtoms() + 1
+    def point(value):
+        values = [float(v) for v in value.split()]
+        if len(values) < 2 or not all(math.isfinite(v) for v in values):
+            raise ValueError("Invalid CDXML coordinates")
+        return {"x": values[0]*scale, "y": values[1]*scale}
+    for page in root.iter("page"):
+        for el in page:
+            if el.tag == "t":
+                base["annotations"].append({"id": next_id, "position": point(el.attrib["p"]),
+                                            "text": "".join(el.itertext())})
+                next_id += 1
+            elif el.tag == "arrow":
+                if el.get("ArrowheadTail", "None") != "None" or el.get("ArrowheadHead", "Full") != "Full" or el.get("AngularSize", "0") != "0":
+                    raise ValueError("This CDXML arrow style is not supported; use native format to preserve it.")
+                base["arrows"].append({"id": next_id, "start": point(el.attrib["Tail3D"]),
+                                       "end": point(el.attrib["Head3D"]), "kind": "forward"})
+                next_id += 1
+    return mol, base
+
+
 def export_cdxml(doc):
     # Coordinates and styles belong to the editor. Chemistry is checked first.
     from_document(doc)
+    if any(a.get("kind", "forward") != "forward" for a in doc.get("arrows", [])):
+        raise ValueError("CDXML currently supports forward arrows. Use native, SVG, PDF or PNG for other arrow styles.")
     root = ET.Element("CDXML", BondLength="42", LabelSize="11", CaptionSize="12")
     fonts = ET.SubElement(root, "fonttable")
     ET.SubElement(fonts, "font", id="3", charset="utf-8", name="Arial")
@@ -192,23 +228,17 @@ def handle(request):
     if operation == "import":
         fmt, text = request.get("format", "smiles"), request.get("text", "")
         if not text.strip(): raise ValueError("Enter a structure first")
+        base = None
         if fmt == "smiles": mol = Chem.MolFromSmiles(text)
         elif fmt == "mol": mol = Chem.MolFromMolBlock(text, removeHs=False)
         elif fmt == "inchi": mol = Chem.MolFromInchi(text, removeHs=False)
         elif fmt == "cdxml":
-            root = ET.fromstring(text)
-            unsupported = {el.tag for el in root.iter()} - {"CDXML", "page", "fragment", "n", "b", "t", "s", "fonttable", "font", "colortable", "color"}
-            if unsupported or any(el.tag == "t" for page in root.iter("page") for el in page):
-                raise ValueError("CDXML import currently accepts molecular drawings only. Text, arrows, and other objects must be kept in a native document.")
-            parts = Chem.MolsFromCDXML(text)
-            if not parts: raise ValueError("No supported molecules found")
-            mol = parts[0]
-            for part in parts[1:]: mol = Chem.CombineMols(mol, part)
+            mol, base = import_cdxml(text)
         else: raise ValueError("Unsupported import format")
         if mol is None: raise ValueError("Could not parse this structure")
         check_supported(mol)
         if fmt in ("smiles", "inchi") or not mol.GetNumConformers(): rdDepictor.Compute2DCoords(mol)
-        response.update(document=to_document(mol), analysis=analyze(mol))
+        response.update(document=to_document(mol, base), analysis=analyze(mol))
     elif operation in ("analyze", "clean", "export"):
         doc = request["document"]
         if not doc["atoms"]: raise ValueError("Draw or import a molecule first")

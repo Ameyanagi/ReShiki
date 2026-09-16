@@ -85,6 +85,11 @@ pub struct PythonEngine {
 }
 impl PythonEngine {
     async fn spawn() -> Result<Worker, String> {
+        let bundled = std::env::current_exe().ok().and_then(|exe| {
+            let contents = exe.parent()?.parent()?;
+            let worker = contents.join("Resources/chemistry/moruno-engine");
+            worker.is_file().then_some(worker)
+        });
         let root = std::env::var_os("MORUNO_ROOT")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")));
@@ -96,9 +101,16 @@ impl PythonEngine {
         let python = std::env::var_os("MORUNO_PYTHON")
             .map(PathBuf::from)
             .unwrap_or(default_python);
-        let mut child = Command::new(&python)
-            .arg("-u")
-            .arg(root.join("engine/worker.py"))
+        let mut command = if let Some(executable) =
+            bundled.filter(|_| std::env::var_os("MORUNO_PYTHON").is_none())
+        {
+            Command::new(executable)
+        } else {
+            let mut command = Command::new(&python);
+            command.arg("-u").arg(root.join("engine/worker.py"));
+            command
+        };
+        let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())

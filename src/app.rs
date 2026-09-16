@@ -2,13 +2,15 @@ use crate::canvas::{self, Camera, Edit, MoleculeCanvas, Tool};
 use iced::{
     Color, Element, Length, Subscription, Task, Theme,
     widget::{
-        Space, button, canvas as drawing, column, container, row, scrollable, text, text_input,
+        Space, button, canvas as drawing, checkbox, column, container, pick_list, row, scrollable,
+        text, text_input,
     },
 };
 use moruno::{
     document::{Annotation, Arrow, Document, History, Point},
+    editing::{self, Arrange, Transform},
     engine::{Analysis, ChemistryEngine, PythonEngine, Request, Response},
-    scene,
+    recovery::{Candidate, Recovery},
 };
 use std::path::PathBuf;
 
@@ -35,6 +37,24 @@ pub enum Message {
     Save,
     Export(&'static str),
     CopySmiles,
+    Copy(bool),
+    Paste,
+    Pasted(Option<String>),
+    Duplicate,
+    Transform(Transform),
+    Arrange(Arrange),
+    ReverseBonds,
+    RingSize(u8),
+    AromaticRing(bool),
+    ArrowStyle(&'static str),
+    CustomElement(String),
+    ApplyElement,
+    InsertTemplate(&'static str),
+    UpdateLabel,
+    SaveAs,
+    Tick,
+    Restore,
+    DismissRecovery,
     Charge(i32),
     Isotope(String),
     ApplyIsotope,
@@ -54,6 +74,7 @@ pub enum Message {
 pub enum Job {
     Import,
     ImportFile,
+    Insert,
     Startup,
     Analyze,
     Clean,
@@ -87,9 +108,26 @@ pub struct App {
     saved: Document,
     pending: Option<Pending>,
     file_epoch: u64,
+    ring_size: u8,
+    aromatic_ring: bool,
+    arrow_style: &'static str,
+    custom_element: String,
+    recovery: Option<Recovery>,
+    recovered: Vec<Candidate>,
+    autosaved_revision: Option<u64>,
+    autosave_status: String,
 }
 impl App {
     pub fn new() -> (Self, Task<Message>) {
+        let recovery = if cfg!(test) {
+            None
+        } else {
+            Recovery::standard().ok()
+        };
+        let recovered = recovery
+            .as_ref()
+            .map(|r| r.candidates())
+            .unwrap_or_default();
         let mut app = Self {
             doc: Document::default(),
             history: History::default(),
@@ -111,6 +149,14 @@ impl App {
             saved: Document::default(),
             pending: None,
             file_epoch: 0,
+            ring_size: 6,
+            aromatic_ring: false,
+            arrow_style: "Forward",
+            custom_element: String::new(),
+            recovery,
+            recovered,
+            autosaved_revision: None,
+            autosave_status: String::new(),
         };
         let task = app.run(Request::import_smiles(&app.smiles), Job::Startup);
         (app, task)
@@ -141,6 +187,7 @@ impl App {
     }
     pub fn subscription(&self) -> Subscription<Message> {
         Subscription::batch([
+            iced::time::every(std::time::Duration::from_secs(5)).map(|_| Message::Tick),
             iced::window::close_requests().map(Message::Close),
             iced::event::listen_with(|event, status, _window| {
                 use iced::keyboard::{Key, key::Named};
@@ -162,10 +209,18 @@ impl App {
                         } else {
                             Message::Undo
                         }),
-                        "s" => Some(Message::Save),
+                        "s" => Some(if mods.shift() {
+                            Message::SaveAs
+                        } else {
+                            Message::Save
+                        }),
                         "o" => Some(Message::Open),
                         "n" => Some(Message::New),
                         "a" => Some(Message::SelectAll),
+                        "c" => Some(Message::Copy(false)),
+                        "x" => Some(Message::Copy(true)),
+                        "v" => Some(Message::Paste),
+                        "d" => Some(Message::Duplicate),
                         _ => None,
                     },
                     Key::Named(Named::Delete | Named::Backspace) => Some(Message::Delete),
@@ -177,6 +232,13 @@ impl App {
     }
     fn dirty(&self) -> bool {
         self.doc != self.saved
+    }
+    fn clear_recovery(&mut self) {
+        if let Some(recovery) = &self.recovery {
+            let _ = recovery.clear();
+        }
+        self.autosaved_revision = None;
+        self.autosave_status.clear();
     }
     fn run(&mut self, request: Request, kind: Job) -> Task<Message> {
         if self.busy {
@@ -197,11 +259,19 @@ impl App {
         )
     }
     fn changed(&mut self, before: Document) {
+        let chemistry_changed = before.atoms != self.doc.atoms || before.bonds != self.doc.bonds;
         if self.history.commit(before, &self.doc) {
             self.revision += 1;
-            self.analysis = None;
+            if chemistry_changed {
+                self.analysis = None;
+            }
             self.error = false;
-            self.status = "Drawing changed · Check structure to refresh properties".into();
+            self.status = if chemistry_changed {
+                "Drawing changed · Check structure to refresh properties"
+            } else {
+                "Drawing updated"
+            }
+            .into();
         }
         self.selected.retain(|id| self.doc.all_ids().contains(id));
     }
@@ -223,6 +293,7 @@ impl App {
     fn perform(&mut self, action: Pending) -> Task<Message> {
         match action {
             Pending::New => {
+                self.clear_recovery();
                 self.file_epoch += 1;
                 self.revision += 1;
                 let before = self.doc.clone();
@@ -237,8 +308,8 @@ impl App {
             }
             Pending::Open => Task::perform(
                 async {
-                    // Extension filters in the macOS panel can leave valid
-                    // selections disabled. Validate the selected file ourselves.
+                    // Accept supported extensions without relying on macOS
+                    // type registration; validate the selected content below.
                     let file = rfd::AsyncFileDialog::new()
                         .set_title("Open a Moruno, MOL, CDXML, or SMILES document")
                         .pick_file()
@@ -249,7 +320,10 @@ impl App {
                 },
                 Message::Opened,
             ),
-            Pending::Close(id) => iced::window::close(id),
+            Pending::Close(id) => {
+                self.clear_recovery();
+                iced::window::close(id)
+            }
         }
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
@@ -265,11 +339,188 @@ impl App {
             Message::Caption(s) => self.caption = s,
             Message::Smiles(s) => self.smiles = s,
             Message::Isotope(s) => self.isotope = s,
+            Message::RingSize(n) => {
+                self.ring_size = n;
+                self.tool = Tool::Ring;
+            }
+            Message::AromaticRing(value) => {
+                self.aromatic_ring = value;
+                if value {
+                    self.ring_size = 6;
+                }
+                self.tool = Tool::Ring;
+            }
+            Message::ArrowStyle(style) => {
+                self.arrow_style = style;
+                self.tool = Tool::Arrow;
+                let before = self.doc.clone();
+                for a in &mut self.doc.arrows {
+                    if self.selected.contains(&a.id) {
+                        a.kind = arrow_kind(style).into();
+                    }
+                }
+                self.changed(before);
+            }
+            Message::CustomElement(s) => self.custom_element = s,
+            Message::ApplyElement => {
+                let symbol = self.custom_element.trim();
+                if editing::ELEMENTS.contains(&symbol) {
+                    self.element = symbol.into();
+                    self.tool = Tool::Atom;
+                    self.status = format!("Place {} atoms", self.element);
+                    self.error = false;
+                } else {
+                    self.status = "Enter an element symbol, for example Si, Fe, Na or H".into();
+                    self.error = true;
+                }
+            }
+            Message::Copy(cut) => {
+                if self.selected.is_empty() {
+                    self.status = "Select objects to copy".into();
+                    return Task::none();
+                }
+                let selection = editing::selection(&self.doc, &self.selected);
+                if let Ok(json) = serde_json::to_string(&selection) {
+                    if cut {
+                        let before = self.doc.clone();
+                        self.doc.delete(&self.selected);
+                        self.selected.clear();
+                        self.changed(before);
+                    }
+                    self.status = if cut {
+                        "Selection cut"
+                    } else {
+                        "Selection copied"
+                    }
+                    .into();
+                    return iced::clipboard::write(format!("{}{json}", editing::CLIPBOARD_PREFIX));
+                }
+            }
+            Message::Paste => return iced::clipboard::read().map(Message::Pasted),
+            Message::Pasted(contents) => {
+                if let Some(contents) = contents.filter(|s| !s.trim().is_empty()) {
+                    if let Some(json) = contents.strip_prefix(editing::CLIPBOARD_PREFIX) {
+                        match serde_json::from_str::<Document>(json)
+                            .map_err(|e| e.to_string())
+                            .and_then(|d| {
+                                d.validate()?;
+                                Ok(d)
+                            }) {
+                            Ok(part) => {
+                                let center = editing::center(&part, &part.all_ids());
+                                let before = self.doc.clone();
+                                self.selected = editing::append(
+                                    &mut self.doc,
+                                    &part,
+                                    Point::new(
+                                        self.camera.center.x - center.x + 24.0,
+                                        self.camera.center.y - center.y + 24.0,
+                                    ),
+                                );
+                                self.changed(before);
+                                self.tool = Tool::Select;
+                                self.status = "Selection pasted".into();
+                            }
+                            Err(e) => {
+                                self.status = format!("Could not paste: {e}");
+                                self.error = true;
+                            }
+                        }
+                    } else {
+                        return self.run(input_request(&contents), Job::Insert);
+                    }
+                }
+            }
+            Message::Duplicate => {
+                let part = editing::selection(&self.doc, &self.selected);
+                let before = self.doc.clone();
+                self.selected = editing::append(&mut self.doc, &part, Point::new(28.0, 28.0));
+                self.changed(before);
+                self.tool = Tool::Select;
+            }
+            Message::Transform(transform) => {
+                let before = self.doc.clone();
+                editing::transform(&mut self.doc, &self.selected, transform);
+                self.changed(before);
+            }
+            Message::Arrange(arrange) => {
+                let before = self.doc.clone();
+                editing::arrange(&mut self.doc, &self.selected, arrange);
+                self.changed(before);
+            }
+            Message::ReverseBonds => {
+                let before = self.doc.clone();
+                self.doc.invalidate_chemistry(&self.selected);
+                for b in &mut self.doc.bonds {
+                    if self.selected.contains(&b.a) && self.selected.contains(&b.b) {
+                        std::mem::swap(&mut b.a, &mut b.b);
+                        b.stereo_atoms.reverse();
+                    }
+                }
+                self.changed(before);
+            }
+            Message::InsertTemplate(smiles) => {
+                return self.run(Request::import_smiles(smiles), Job::Insert);
+            }
+            Message::UpdateLabel => {
+                let before = self.doc.clone();
+                let caption = self.caption.replace("\\n", "\n");
+                for a in &mut self.doc.annotations {
+                    if self.selected.contains(&a.id) {
+                        a.text = caption.clone();
+                    }
+                }
+                self.changed(before);
+            }
+            Message::Tick => {
+                if self.dirty() && self.autosaved_revision != Some(self.revision) {
+                    if let Some(recovery) = &self.recovery {
+                        match recovery.save(&self.doc, self.path.clone()) {
+                            Ok(()) => {
+                                self.autosaved_revision = Some(self.revision);
+                                self.autosave_status = "Recovery draft saved".into();
+                            }
+                            Err(e) => self.autosave_status = format!("Recovery save failed: {e}"),
+                        }
+                    }
+                } else if !self.dirty() {
+                    self.clear_recovery();
+                }
+            }
+            Message::Restore => {
+                if self.dirty() {
+                    self.status =
+                        "Save the current drawing before restoring a previous session".into();
+                    return Task::none();
+                }
+                if let Some(candidate) = self.recovered.first().cloned() {
+                    let before = self.doc.clone();
+                    self.doc = candidate.snapshot.document;
+                    self.doc.version = 2;
+                    self.path = None;
+                    self.saved = Document::default();
+                    self.file_epoch += 1;
+                    self.changed(before);
+                    self.revision += 1;
+                    self.fit();
+                    self.selected.clear();
+                    if let Some(store) = &self.recovery
+                        && store.save(&self.doc, None).is_ok()
+                    {
+                        let _ = moruno::recovery::remove(&candidate.path);
+                        self.recovered.remove(0);
+                    }
+                    self.status = "Recovered drawing · Save to keep a new copy".into();
+                }
+            }
+            Message::DismissRecovery => {
+                self.recovered.clear();
+            }
             Message::Canvas(edit) => self.edit(edit),
             Message::Grid => self.grid = !self.grid,
             Message::Fit => self.fit(),
             Message::Zoom(f) => self.camera.zoom = (self.camera.zoom * f).clamp(0.25, 5.0),
-            Message::Import => return self.run(Request::import_smiles(&self.smiles), Job::Import),
+            Message::Import => return self.run(input_request(&self.smiles), Job::Import),
             Message::Example(smiles) => {
                 self.smiles = smiles.into();
                 return self.run(Request::import_smiles(smiles), Job::Import);
@@ -297,6 +548,25 @@ impl App {
                         }
                         if self.revision != revision {
                             self.status="Operation finished; newer edits were preserved. Run it again to update.".into();
+                            return Task::none();
+                        }
+                        if matches!(kind, Job::Insert) {
+                            if let Some(document) = response.document {
+                                let before = self.doc.clone();
+                                let center = editing::center(&document, &document.all_ids());
+                                self.selected = editing::append(
+                                    &mut self.doc,
+                                    &document,
+                                    Point::new(
+                                        self.camera.center.x - center.x,
+                                        self.camera.center.y - center.y,
+                                    ),
+                                );
+                                self.changed(before);
+                                self.tool = Tool::Select;
+                                self.status =
+                                    "Inserted structure · Drag selection to position it".into();
+                            }
                             return Task::none();
                         }
                         if let Some(document) = response.document {
@@ -410,7 +680,9 @@ impl App {
                                         doc.validate()?;
                                         Ok(doc)
                                     }) {
-                                    Ok(doc) => {
+                                    Ok(mut doc) => {
+                                        doc.version = 2;
+                                        self.clear_recovery();
                                         self.file_epoch += 1;
                                         self.doc = doc;
                                         self.saved = self.doc.clone();
@@ -432,6 +704,7 @@ impl App {
                                 let format = match extension.as_str() {
                                     "mol" => "mol",
                                     "cdxml" => "cdxml",
+                                    "inchi" => "inchi",
                                     _ => "smiles",
                                 };
                                 return self
@@ -441,8 +714,12 @@ impl App {
                     }
                 }
             }
-            Message::Save => {
-                let path = self.path.clone();
+            Message::Save | Message::SaveAs => {
+                let path = if matches!(message, Message::SaveAs) {
+                    None
+                } else {
+                    self.path.clone()
+                };
                 let bytes = match serde_json::to_vec_pretty(&self.doc) {
                     Ok(b) => b,
                     Err(e) => {
@@ -459,7 +736,6 @@ impl App {
                             p
                         } else {
                             let Some(file) = rfd::AsyncFileDialog::new()
-                                .add_filter("Moruno document", &["moruno"])
                                 .set_file_name("Untitled.moruno")
                                 .save_file()
                                 .await
@@ -484,6 +760,9 @@ impl App {
                     self.path = Some(path);
                     self.status = "Document saved".into();
                     self.error = false;
+                    if !self.dirty() {
+                        self.clear_recovery();
+                    }
                     if !self.dirty()
                         && let Some(action) = self.pending.take()
                     {
@@ -497,8 +776,19 @@ impl App {
                 }
             },
             Message::Export(format) => {
-                if format == "svg" {
-                    return export_file(scene::svg(&self.doc), format);
+                if ["svg", "pdf", "png"].contains(&format) {
+                    let doc = self.doc.clone();
+                    return Task::perform(
+                        async move {
+                            let bytes = tokio::task::spawn_blocking(move || {
+                                moruno::export::drawing(&doc, format)
+                            })
+                            .await
+                            .map_err(|e| e.to_string())??;
+                            save_export(bytes, format).await
+                        },
+                        Message::Exported,
+                    );
                 }
                 let mut request = Request::molecule("export", self.doc.clone());
                 request.format = Some(format.into());
@@ -542,7 +832,12 @@ impl App {
             Edit::Bond(start, end, a, b) => {
                 if self.tool == Tool::Arrow {
                     let id = self.doc.next_id();
-                    self.doc.arrows.push(Arrow { id, start, end });
+                    self.doc.arrows.push(Arrow {
+                        id,
+                        start,
+                        end,
+                        kind: arrow_kind(self.arrow_style).into(),
+                    });
                     self.selected = vec![id];
                 } else {
                     let a = a.unwrap_or_else(|| self.doc.add_atom("C", start));
@@ -571,7 +866,7 @@ impl App {
                             self.selected = vec![id];
                         }
                     }
-                    Tool::Bond(_) | Tool::Wedge | Tool::Hash => {
+                    Tool::Bond(_) | Tool::Wedge | Tool::Hash | Tool::Wavy => {
                         let atom = self.doc.nearest(p, 10.0 / self.camera.zoom);
                         let bond =
                             self.doc
@@ -598,26 +893,13 @@ impl App {
                         }
                     }
                     Tool::Ring => {
-                        let anchor = self.doc.nearest(p, 10.0 / self.camera.zoom);
-                        let center = anchor
-                            .and_then(|id| self.doc.atom(id).map(|a| a.position.offset(-42.0, 0.0)))
-                            .unwrap_or(p);
-                        let mut ids = vec![];
-                        for i in 0..6 {
-                            let angle = i as f32 * std::f32::consts::PI / 3.0;
-                            ids.push(if let Some(anchor) = anchor.filter(|_| i == 0) {
-                                anchor
-                            } else {
-                                self.doc.add_atom(
-                                    "C",
-                                    center.offset(angle.cos() * 42.0, angle.sin() * 42.0),
-                                )
-                            });
-                        }
-                        for i in 0..6 {
-                            self.doc.add_bond(ids[i], ids[(i + 1) % 6], 1, "plain");
-                        }
-                        self.selected = ids;
+                        self.selected = editing::ring(
+                            &mut self.doc,
+                            p,
+                            self.ring_size,
+                            self.aromatic_ring,
+                            10.0 / self.camera.zoom,
+                        );
                     }
                     Tool::Text => {
                         if !self.caption.trim().is_empty() {
@@ -625,7 +907,7 @@ impl App {
                             self.doc.annotations.push(Annotation {
                                 id,
                                 position: p,
-                                text: self.caption.clone(),
+                                text: self.caption.replace("\\n", "\n"),
                             });
                             self.selected = vec![id];
                         }
@@ -660,6 +942,7 @@ impl App {
             Tool::Bond(n) => (n, "plain"),
             Tool::Wedge => (1, "wedge"),
             Tool::Hash => (1, "hash"),
+            Tool::Wavy => (1, "wavy"),
             _ => (1, "plain"),
         }
     }
@@ -674,6 +957,9 @@ impl App {
             Space::new().width(Length::Fill),
             button("New").on_press(Message::New).style(button::text),
             button("Open").on_press(Message::Open).style(button::text),
+            button("Save as")
+                .on_press(Message::SaveAs)
+                .style(button::text),
             button("Save").on_press(Message::Save).padding([9, 18])
         ]
         .align_y(iced::Alignment::Center)
@@ -704,7 +990,8 @@ impl App {
             ("Triple bond", Tool::Bond(3)),
             ("Solid wedge", Tool::Wedge),
             ("Hashed wedge", Tool::Hash),
-            ("Six-member ring", Tool::Ring),
+            ("Wavy bond", Tool::Wavy),
+            ("Ring", Tool::Ring),
             ("Reaction arrow", Tool::Arrow),
             ("Text label", Tool::Text),
             ("Eraser", Tool::Erase),
@@ -742,15 +1029,91 @@ impl App {
         }
         let left = column![
             tool_list,
+            section("RING"),
+            pick_list(
+                [3_u8, 4, 5, 6, 7, 8],
+                Some(self.ring_size),
+                Message::RingSize
+            )
+            .width(Length::Fill),
+            checkbox(self.aromatic_ring)
+                .label("Aromatic ring")
+                .on_toggle(Message::AromaticRing)
+                .size(14)
+                .text_size(12),
+            section("ARROW"),
+            pick_list(
+                [
+                    "Forward",
+                    "Equilibrium",
+                    "Resonance",
+                    "Retrosynthesis",
+                    "Curved"
+                ],
+                Some(self.arrow_style),
+                Message::ArrowStyle
+            )
+            .width(Length::Fill)
+            .text_size(12),
             Space::new().height(12),
             elements,
+            row![
+                text_input("Any element", &self.custom_element)
+                    .on_input(Message::CustomElement)
+                    .on_submit(Message::ApplyElement)
+                    .size(12),
+                button("Use")
+                    .on_press(Message::ApplyElement)
+                    .style(button::secondary)
+            ]
+            .spacing(4),
             Space::new().height(12),
             section("ANNOTATION"),
             text_input("Text label", &self.caption)
                 .on_input(Message::Caption)
                 .size(12),
+            text("Use \\n for a new line").size(10).color(muted()),
+            button("Update selected labels")
+                .on_press(Message::UpdateLabel)
+                .style(button::text),
             Space::new().height(12),
             section("SELECTION"),
+            row![
+                button("↶ 30°")
+                    .on_press(Message::Transform(Transform::Rotate(-30.0)))
+                    .style(button::secondary),
+                button("↷ 30°")
+                    .on_press(Message::Transform(Transform::Rotate(30.0)))
+                    .style(button::secondary)
+            ]
+            .spacing(4),
+            row![
+                button("Flip H")
+                    .on_press(Message::Transform(Transform::FlipHorizontal))
+                    .style(button::secondary),
+                button("Flip V")
+                    .on_press(Message::Transform(Transform::FlipVertical))
+                    .style(button::secondary)
+            ]
+            .spacing(4),
+            row![
+                button("Align X")
+                    .on_press(Message::Arrange(Arrange::AlignHorizontal))
+                    .style(button::secondary),
+                button("Align Y")
+                    .on_press(Message::Arrange(Arrange::AlignVertical))
+                    .style(button::secondary)
+            ]
+            .spacing(4),
+            button("Distribute horizontally")
+                .on_press(Message::Arrange(Arrange::DistributeHorizontal))
+                .style(button::text),
+            button("Distribute vertically")
+                .on_press(Message::Arrange(Arrange::DistributeVertical))
+                .style(button::text),
+            button("Reverse selected bonds")
+                .on_press(Message::ReverseBonds)
+                .style(button::text),
             row![
                 button("Charge −")
                     .on_press(Message::Charge(-1))
@@ -824,6 +1187,8 @@ impl App {
             .push(section("EXPORT"));
         for (label, format) in [
             ("SVG drawing", "svg"),
+            ("PDF drawing", "pdf"),
+            ("PNG image · 300 dpi", "png"),
             ("MOL structure", "mol"),
             ("CDXML drawing", "cdxml"),
             ("SMILES text", "smiles"),
@@ -836,8 +1201,32 @@ impl App {
                     .width(Length::Fill),
             );
         }
+        properties = properties
+            .push(Space::new().height(18))
+            .push(section("INSERT TEMPLATE"));
+        for (name, smiles) in [
+            ("Benzene", "c1ccccc1"),
+            ("Pyridine", "c1ccncc1"),
+            ("Pyrrole", "c1cc[nH]c1"),
+            ("Furan", "c1ccoc1"),
+            ("Thiophene", "c1ccsc1"),
+            ("Cyclopentane", "C1CCCC1"),
+            ("Cyclohexane", "C1CCCCC1"),
+            ("Naphthalene", "c1ccc2ccccc2c1"),
+            ("Acetaldehyde", "CC=O"),
+            ("Acetic acid", "CC(=O)O"),
+            ("Methylamine", "CN"),
+            ("Methanol", "CO"),
+        ] {
+            properties = properties.push(
+                button(text(name).size(12))
+                    .on_press_maybe((!self.busy).then_some(Message::InsertTemplate(smiles)))
+                    .width(Length::Fill)
+                    .style(button::text),
+            );
+        }
         let input = row![
-            text_input("Paste a SMILES structure…", &self.smiles)
+            text_input("Paste SMILES or InChI…", &self.smiles)
                 .on_input(Message::Smiles)
                 .on_submit(Message::Import)
                 .size(13)
@@ -891,6 +1280,24 @@ impl App {
         .align_y(iced::Alignment::Center);
         let center = column![
             history,
+            row![
+                button("Cut")
+                    .on_press_maybe((!self.selected.is_empty()).then_some(Message::Copy(true)))
+                    .style(button::text),
+                button("Copy")
+                    .on_press_maybe((!self.selected.is_empty()).then_some(Message::Copy(false)))
+                    .style(button::text),
+                button("Paste").on_press(Message::Paste).style(button::text),
+                button("Duplicate")
+                    .on_press_maybe((!self.selected.is_empty()).then_some(Message::Duplicate))
+                    .style(button::text),
+                Space::new().width(Length::Fill),
+                text(format!("{} selected", self.selected.len()))
+                    .size(11)
+                    .color(muted()),
+            ]
+            .spacing(4)
+            .align_y(iced::Alignment::Center),
             input,
             examples,
             container(canvas.map(Message::Canvas))
@@ -918,6 +1325,27 @@ impl App {
         ]
         .height(Length::Fill);
         let mut content = column![container(header).padding([16, 22]).style(panel)];
+        if !self.recovered.is_empty() {
+            content = content.push(
+                container(
+                    row![
+                        text(format!(
+                            "{} previous recovery draft(s) found",
+                            self.recovered.len()
+                        ))
+                        .size(13),
+                        Space::new().width(Length::Fill),
+                        button("Restore latest").on_press(Message::Restore),
+                        button("Later")
+                            .on_press(Message::DismissRecovery)
+                            .style(button::secondary)
+                    ]
+                    .spacing(10)
+                    .align_y(iced::Alignment::Center),
+                )
+                .padding([10, 20]),
+            );
+        }
         if self.pending.is_some() {
             content = content.push(
                 container(
@@ -941,11 +1369,15 @@ impl App {
         content
             .push(body)
             .push(
-                container(text(&self.status).size(12).color(if self.error {
-                    Color::from_rgb8(169, 48, 42)
-                } else {
-                    muted()
-                }))
+                container(row![
+                    text(&self.status).size(12).color(if self.error {
+                        Color::from_rgb8(169, 48, 42)
+                    } else {
+                        muted()
+                    }),
+                    Space::new().width(Length::Fill),
+                    text(&self.autosave_status).size(11).color(muted())
+                ])
                 .padding([10, 22])
                 .width(Length::Fill),
             )
@@ -954,21 +1386,42 @@ impl App {
 }
 fn export_file(contents: String, format: &'static str) -> Task<Message> {
     Task::perform(
-        async move {
-            let Some(file) = rfd::AsyncFileDialog::new()
-                .add_filter("Export", &[format])
-                .set_file_name(format!("Molecule.{format}"))
-                .save_file()
-                .await
-            else {
-                return Ok(None);
-            };
-            let path = file.path().to_path_buf();
-            moruno::storage::write_atomic(&path, contents.as_bytes())?;
-            Ok(Some(path))
-        },
+        save_export(contents.into_bytes(), format),
         Message::Exported,
     )
+}
+async fn save_export(bytes: Vec<u8>, format: &'static str) -> Result<Option<PathBuf>, String> {
+    let Some(file) = rfd::AsyncFileDialog::new()
+        .set_file_name(format!("Molecule.{format}"))
+        .save_file()
+        .await
+    else {
+        return Ok(None);
+    };
+    let path = file.path().to_path_buf();
+    moruno::storage::write_atomic(&path, &bytes)?;
+    Ok(Some(path))
+}
+fn input_request(text: &str) -> Request {
+    let format = if text.trim_start().starts_with("InChI=") {
+        "inchi"
+    } else if text.contains("M  END") {
+        "mol"
+    } else if text.contains("<CDXML") {
+        "cdxml"
+    } else {
+        "smiles"
+    };
+    Request::import(format, text)
+}
+fn arrow_kind(style: &str) -> &str {
+    match style {
+        "Equilibrium" => "equilibrium",
+        "Resonance" => "resonance",
+        "Retrosynthesis" => "retro",
+        "Curved" => "curved",
+        _ => "forward",
+    }
 }
 fn muted() -> Color {
     Color::from_rgb8(102, 121, 117)

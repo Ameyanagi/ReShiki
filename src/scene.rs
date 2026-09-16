@@ -169,29 +169,103 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
         }
     }
     for a in &doc.arrows {
-        out.push(Primitive::Line(a.start, a.end, 1.3));
         let angle = (a.end.y - a.start.y).atan2(a.end.x - a.start.x);
-        out.push(Primitive::Polygon(vec![
-            a.end,
-            a.end.offset(
-                -angle.cos() * 10.0 - angle.sin() * 3.5,
-                -angle.sin() * 10.0 + angle.cos() * 3.5,
-            ),
-            a.end.offset(
-                -angle.cos() * 10.0 + angle.sin() * 3.5,
-                -angle.sin() * 10.0 - angle.cos() * 3.5,
-            ),
-        ]));
+        let nx = -angle.sin();
+        let ny = angle.cos();
+        match a.kind.as_str() {
+            "equilibrium" => {
+                let a1 = a.start.offset(nx * 3.0, ny * 3.0);
+                let b1 = a.end.offset(nx * 3.0, ny * 3.0);
+                let a2 = a.end.offset(-nx * 3.0, -ny * 3.0);
+                let b2 = a.start.offset(-nx * 3.0, -ny * 3.0);
+                out.push(Primitive::Line(a1, b1, 1.3));
+                head(&mut out, b1, angle, true);
+                out.push(Primitive::Line(a2, b2, 1.3));
+                head(&mut out, b2, angle + std::f32::consts::PI, true);
+            }
+            "resonance" => {
+                out.push(Primitive::Line(a.start, a.end, 1.3));
+                head(&mut out, a.end, angle, false);
+                head(&mut out, a.start, angle + std::f32::consts::PI, false);
+            }
+            "retro" => {
+                for offset in [-2.0, 2.0] {
+                    out.push(Primitive::Line(
+                        a.start.offset(nx * offset, ny * offset),
+                        a.end.offset(
+                            -angle.cos() * 5.0 + nx * offset,
+                            -angle.sin() * 5.0 + ny * offset,
+                        ),
+                        1.3,
+                    ));
+                }
+                for sign in [-1.0, 1.0] {
+                    out.push(Primitive::Line(
+                        a.end,
+                        a.end.offset(
+                            -angle.cos() * 10.0 + nx * sign * 7.0,
+                            -angle.sin() * 10.0 + ny * sign * 7.0,
+                        ),
+                        1.3,
+                    ));
+                }
+            }
+            "curved" => {
+                let control = Point::new((a.start.x + a.end.x) / 2.0, (a.start.y + a.end.y) / 2.0)
+                    .offset(
+                        nx * a.start.distance(a.end) * 0.5,
+                        ny * a.start.distance(a.end) * 0.5,
+                    );
+                let mut prev = a.start;
+                for i in 1..=32 {
+                    let t = i as f32 / 32.0;
+                    let u = 1.0 - t;
+                    let p = Point::new(
+                        u * u * a.start.x + 2.0 * u * t * control.x + t * t * a.end.x,
+                        u * u * a.start.y + 2.0 * u * t * control.y + t * t * a.end.y,
+                    );
+                    out.push(Primitive::Line(prev, p, 1.3));
+                    prev = p;
+                }
+                head(
+                    &mut out,
+                    a.end,
+                    (a.end.y - control.y).atan2(a.end.x - control.x),
+                    false,
+                );
+            }
+            _ => {
+                out.push(Primitive::Line(a.start, a.end, 1.3));
+                head(&mut out, a.end, angle, false);
+            }
+        }
     }
     for a in &doc.annotations {
-        out.push(Primitive::Text {
-            position: a.position,
-            text: a.text.clone(),
-            size: 12.0,
-            color: [34, 49, 54],
-        });
+        for (i, line) in a.text.lines().enumerate() {
+            out.push(Primitive::Text {
+                position: a.position.offset(0.0, i as f32 * 16.0),
+                text: line.into(),
+                size: 12.0,
+                color: [34, 49, 54],
+            });
+        }
     }
     out
+}
+fn head(out: &mut Vec<Primitive>, end: Point, angle: f32, half: bool) {
+    let a = end.offset(
+        -angle.cos() * 10.0 - angle.sin() * 3.5,
+        -angle.sin() * 10.0 + angle.cos() * 3.5,
+    );
+    if half {
+        out.push(Primitive::Line(end, a, 1.3));
+    } else {
+        let b = end.offset(
+            -angle.cos() * 10.0 + angle.sin() * 3.5,
+            -angle.sin() * 10.0 - angle.cos() * 3.5,
+        );
+        out.push(Primitive::Polygon(vec![end, a, b]));
+    }
 }
 fn escape(s: &str) -> String {
     s.replace('&', "&amp;")

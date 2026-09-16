@@ -62,12 +62,12 @@ class ChemistryTests(unittest.TestCase):
                     result = handle(dict(protocol=1, operation="import", format=fmt, text=output))
                     self.assertEqual(initial["analysis"]["smiles"], result["analysis"]["smiles"])
 
-    def test_cdxml_does_not_silently_drop_annotations(self):
+    def test_cdxml_preserves_supported_annotations(self):
         doc = imported("CCO")["document"]
         doc["annotations"] = [{"id":50,"position":{"x":0,"y":0},"text":"heat"}]
         xml = handle(dict(protocol=1, operation="export", format="cdxml", document=doc))["output"]
-        with self.assertRaisesRegex(ValueError, "molecular drawings only"):
-            handle(dict(protocol=1, operation="import", format="cdxml", text=xml))
+        result = handle(dict(protocol=1, operation="import", format="cdxml", text=xml))
+        self.assertEqual(result["document"]["annotations"][0]["text"], "heat")
 
     def test_reference_ui_export_imports_as_ethanol(self):
         xml = (ROOT / "tests/fixtures/reference-ethanol.cdxml").read_text()
@@ -84,6 +84,12 @@ class ChemistryTests(unittest.TestCase):
         xml = (fixtures / "ui-drawn-ethanol.cdxml").read_text()
         self.assertEqual(Chem.MolToSmiles(Chem.MolsFromCDXML(xml)[0]), "CCO")
         self.assertEqual(len(ET.fromstring(xml).findall(".//arrow")), 1)
+        roundtrip = handle(dict(protocol=1,operation="import",format="cdxml",text=xml))["document"]
+        self.assertEqual(roundtrip["annotations"][0]["text"], "oxidation")
+        self.assertEqual(roundtrip["arrows"][0]["kind"], "forward")
+        original_delta = doc["arrows"][0]["start"]["x"] - doc["atoms"][0]["position"]["x"]
+        imported_delta = roundtrip["arrows"][0]["start"]["x"] - roundtrip["atoms"][0]["position"]["x"]
+        self.assertAlmostEqual(original_delta, imported_delta, places=3)
         svg = ET.parse(fixtures / "ui-drawn-ethanol.svg")
         self.assertIn("oxidation", "".join(svg.getroot().itertext()))
 

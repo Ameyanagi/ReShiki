@@ -11,6 +11,7 @@ pub enum Tool {
     Bond(u8),
     Wedge,
     Hash,
+    Wavy,
     Atom,
     Ring,
     Arrow,
@@ -20,14 +21,14 @@ pub enum Tool {
 impl Tool {
     pub fn hint(self) -> &'static str {
         match self {
-            Self::Select => {
-                "Drag atoms to move · Drag empty space to select · Delete removes selection"
-            }
-            Self::Bond(_) | Self::Wedge | Self::Hash => {
+            Self::Select => "Drag to move or select · Double-click an atom to select its molecule",
+            Self::Bond(_) | Self::Wedge | Self::Hash | Self::Wavy => {
                 "Drag to draw a bond · Release over an atom to connect · Click a bond to change it"
             }
             Self::Atom => "Click to add an atom or replace an existing element",
-            Self::Ring => "Click to place a six-membered ring",
+            Self::Ring => {
+                "Click to place a ring · Click a bond to fuse · Click an atom to share a vertex"
+            }
             Self::Arrow => "Drag to draw a reaction arrow",
             Self::Text => "Enter a label on the left, then click to place it",
             Self::Erase => "Click an atom, bond, label, or arrow to erase",
@@ -74,6 +75,7 @@ impl Camera {
 pub struct State {
     gesture: Option<Gesture>,
     cursor: Option<Point>,
+    last_click: Option<(std::time::Instant, u64)>,
 }
 #[derive(Debug)]
 enum Gesture {
@@ -113,6 +115,11 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
             .map(|p| Point::new(p.x - bounds.x, p.y - bounds.y));
         let inside = point.is_some_and(|p| Rectangle::with_size(bounds.size()).contains(p));
         match event {
+            Event::Window(iced::window::Event::Unfocused) => {
+                state.gesture = None;
+                state.last_click = None;
+                Some(Action::request_redraw())
+            }
             Event::Mouse(mouse::Event::WheelScrolled { delta }) if inside => {
                 let amount = match delta {
                     mouse::ScrollDelta::Lines { y, .. } => *y * 0.12,
@@ -145,10 +152,12 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                     } else {
                         Gesture::Select { start: p }
                     }),
-                    Tool::Bond(_) | Tool::Wedge | Tool::Hash | Tool::Arrow => Some(Gesture::Draw {
-                        start: p,
-                        id: self.doc.nearest(p, 10.0 / self.camera.zoom),
-                    }),
+                    Tool::Bond(_) | Tool::Wedge | Tool::Hash | Tool::Wavy | Tool::Arrow => {
+                        Some(Gesture::Draw {
+                            start: p,
+                            id: self.doc.nearest(p, 10.0 / self.camera.zoom),
+                        })
+                    }
                     _ => return Some(Action::publish(Edit::Click(p)).and_capture()),
                 };
                 Some(Action::request_redraw().and_capture())
@@ -194,8 +203,26 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                     }
                     Gesture::Move { start, ids } => {
                         if start.distance(p) < 1.0 / self.camera.zoom {
+                            if let Some(atom) = self.doc.nearest(start, 10.0 / self.camera.zoom) {
+                                let now = std::time::Instant::now();
+                                if state.last_click.is_some_and(|(time, id)| {
+                                    id == atom && now.duration_since(time).as_millis() < 450
+                                }) {
+                                    state.last_click = None;
+                                    let connected =
+                                        moruno::editing::groups(self.doc, &self.doc.all_ids())
+                                            .into_iter()
+                                            .find(|g| g.contains(&atom))
+                                            .unwrap_or(ids);
+                                    return Some(
+                                        Action::publish(Edit::Select(connected)).and_capture(),
+                                    );
+                                }
+                                state.last_click = Some((now, atom));
+                            }
                             Edit::Select(ids)
                         } else {
+                            state.last_click = None;
                             Edit::Move(ids, p.x - start.x, p.y - start.y)
                         }
                     }
@@ -298,12 +325,20 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                     &Path::rectangle(
                         self.camera.screen(a.position, bounds),
                         iced::Size::new(
-                            a.text.chars().count() as f32 * 7.0 * self.camera.zoom,
-                            17.0 * self.camera.zoom,
+                            a.size().0 * self.camera.zoom,
+                            a.size().1 * self.camera.zoom,
                         ),
                     ),
                     Stroke::default().with_color(Color::from_rgb8(20, 130, 112)),
                 );
+            }
+            for a in preview.arrows.iter().filter(|a| a.id == *id) {
+                for p in [a.start, a.end] {
+                    frame.stroke(
+                        &Path::circle(self.camera.screen(p, bounds), 5.0),
+                        Stroke::default().with_color(rgb([19, 135, 116])),
+                    );
+                }
             }
         }
         for primitive in primitives(&preview) {
@@ -431,9 +466,9 @@ pub fn hit_object(doc: &Document, p: World, r: f32) -> Option<u64> {
                 .rev()
                 .find(|a| {
                     p.x >= a.position.x
-                        && p.x < a.position.x + a.text.chars().count() as f32 * 7.0
+                        && p.x < a.position.x + a.size().0
                         && p.y >= a.position.y
-                        && p.y < a.position.y + 17.0
+                        && p.y < a.position.y + a.size().1
                 })
                 .map(|a| a.id)
         })
@@ -441,7 +476,29 @@ pub fn hit_object(doc: &Document, p: World, r: f32) -> Option<u64> {
             doc.arrows
                 .iter()
                 .rev()
-                .find(|a| distance_to_segment(p, a.start, a.end) < r)
+                .find(|a| {
+                    if a.kind != "curved" {
+                        return distance_to_segment(p, a.start, a.end) < r;
+                    }
+                    let control = World::new(
+                        (a.start.x + a.end.x) / 2.0 - (a.end.y - a.start.y) * 0.5,
+                        (a.start.y + a.end.y) / 2.0 + (a.end.x - a.start.x) * 0.5,
+                    );
+                    let mut prev = a.start;
+                    for i in 1..=32 {
+                        let t = i as f32 / 32.0;
+                        let u = 1.0 - t;
+                        let end = World::new(
+                            u * u * a.start.x + 2.0 * u * t * control.x + t * t * a.end.x,
+                            u * u * a.start.y + 2.0 * u * t * control.y + t * t * a.end.y,
+                        );
+                        if distance_to_segment(p, prev, end) < r {
+                            return true;
+                        }
+                        prev = end;
+                    }
+                    false
+                })
                 .map(|a| a.id)
         })
 }

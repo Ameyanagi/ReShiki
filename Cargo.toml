@@ -1,6 +1,6 @@
 [package]
 name = "moruno"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "A molecular drawing workspace"
 
@@ -11,6 +11,10 @@ serde_json = "1"
 tokio = { version = "1", features = ["process", "io-util", "sync", "time", "rt-multi-thread", "macros"] }
 rfd = "0.15"
 tempfile = "3"
+directories-next = "2"
+resvg = "0.45"
+png = "0.17"
+svg2pdf = { version = "0.13", default-features = false, features = ["text"] }
 
 [profile.dev]
 debug = 1

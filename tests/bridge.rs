@@ -1,4 +1,75 @@
 use moruno::engine::{ChemistryEngine, PythonEngine, Request};
+use moruno::{
+    document::{Document, Point},
+    editing::{self, Transform},
+};
+
+#[tokio::test]
+async fn copy_and_reflection_preserve_stereochemistry() {
+    let engine = PythonEngine::default();
+    for smiles in ["N[C@@H](C)C(=O)O", "F/C=C/F", "F/C=C\\F"] {
+        let initial = engine
+            .execute(Request::import_smiles(smiles))
+            .await
+            .unwrap();
+        let expected = initial.analysis.unwrap().smiles;
+        let part = initial.document.unwrap();
+        let mut doc = Document::default();
+        editing::append(&mut doc, &part, Point::default());
+        let ids = editing::append(&mut doc, &part, Point::new(200.0, 100.0));
+        editing::transform(&mut doc, &ids, Transform::FlipHorizontal);
+        editing::transform(&mut doc, &ids, Transform::Rotate(30.0));
+        doc.atoms.reverse();
+        doc.bonds.reverse();
+        doc.validate().unwrap();
+        let result = engine
+            .execute(Request::molecule("analyze", doc))
+            .await
+            .unwrap();
+        assert_eq!(
+            result.analysis.unwrap().smiles,
+            format!("{expected}.{expected}")
+        );
+    }
+}
+
+#[tokio::test]
+async fn ring_tools_build_chemically_valid_rings_and_fused_aromatics() {
+    let engine = PythonEngine::default();
+    for n in 3..=8 {
+        let mut doc = Document::default();
+        editing::ring(&mut doc, Point::default(), n, false, 5.0);
+        let result = engine
+            .execute(Request::molecule("analyze", doc))
+            .await
+            .unwrap();
+        assert_eq!(result.analysis.unwrap().formula, format!("C{n}H{}", 2 * n));
+    }
+    let mut doc = Document::default();
+    editing::ring(&mut doc, Point::default(), 6, true, 5.0);
+    // Fuse after chemistry has converted the first aromatic ring to Kekule form.
+    let mut doc = engine
+        .execute(Request::molecule("analyze", doc))
+        .await
+        .unwrap()
+        .document
+        .unwrap();
+    let bond = doc.bonds[0].clone();
+    let a = doc.atom(bond.a).unwrap().position;
+    let b = doc.atom(bond.b).unwrap().position;
+    editing::ring(
+        &mut doc,
+        Point::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0),
+        6,
+        true,
+        5.0,
+    );
+    let result = engine
+        .execute(Request::molecule("analyze", doc))
+        .await
+        .unwrap();
+    assert_eq!(result.analysis.unwrap().formula, "C10H8");
+}
 
 #[tokio::test]
 async fn python_bridge_preserves_identity_across_cleanup() {

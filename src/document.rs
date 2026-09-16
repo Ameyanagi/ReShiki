@@ -69,11 +69,29 @@ pub struct Annotation {
     pub position: Point,
     pub text: String,
 }
+impl Annotation {
+    pub fn size(&self) -> (f32, f32) {
+        (
+            self.text
+                .lines()
+                .map(|l| l.chars().count())
+                .max()
+                .unwrap_or(0) as f32
+                * 7.0,
+            self.text.lines().count().max(1) as f32 * 16.0,
+        )
+    }
+}
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Arrow {
     pub id: u64,
     pub start: Point,
     pub end: Point,
+    #[serde(default = "forward")]
+    pub kind: String,
+}
+fn forward() -> String {
+    "forward".into()
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -89,7 +107,7 @@ pub struct Document {
 impl Default for Document {
     fn default() -> Self {
         Self {
-            version: 1,
+            version: 2,
             atoms: vec![],
             bonds: vec![],
             annotations: vec![],
@@ -172,6 +190,9 @@ impl Document {
         }
     }
     pub fn invalidate_chemistry(&mut self, affected: &[u64]) {
+        if !self.atoms.iter().any(|a| affected.contains(&a.id)) {
+            return;
+        }
         for atom in &mut self.atoms {
             atom.label_h = 0;
             if affected.contains(&atom.id)
@@ -228,7 +249,7 @@ impl Document {
             .collect()
     }
     pub fn validate(&self) -> Result<(), String> {
-        if self.version != 1 {
+        if ![1, 2].contains(&self.version) {
             return Err(format!("Unsupported document version {}", self.version));
         }
         let mut ids = HashSet::new();
@@ -298,6 +319,11 @@ impl Document {
                 return Err("Non-finite drawing position".into());
             }
         }
+        if self.arrows.iter().any(|a| {
+            !["forward", "equilibrium", "resonance", "retro", "curved"].contains(&a.kind.as_str())
+        }) {
+            return Err("Unsupported arrow style".into());
+        }
         Ok(())
     }
     pub fn bounds(&self) -> (Point, Point) {
@@ -308,10 +334,21 @@ impl Document {
             .chain(self.annotations.iter().flat_map(|a| {
                 [
                     a.position,
-                    a.position.offset(a.text.chars().count() as f32 * 9.0, 18.0),
+                    a.position.offset(
+                        a.text.lines().map(|l| l.chars().count()).max().unwrap_or(0) as f32 * 9.0,
+                        a.text.lines().count().max(1) as f32 * 16.0,
+                    ),
                 ]
             }))
-            .chain(self.arrows.iter().flat_map(|a| [a.start, a.end]))
+            .chain(self.arrows.iter().flat_map(|a| {
+                let mid = Point::new((a.start.x + a.end.x) / 2.0, (a.start.y + a.end.y) / 2.0);
+                let control = if a.kind == "curved" {
+                    mid.offset(-(a.end.y - a.start.y) * 0.5, (a.end.x - a.start.x) * 0.5)
+                } else {
+                    mid
+                };
+                [a.start, a.end, control]
+            }))
             .collect();
         if points.is_empty() {
             return (Point::new(-100.0, -75.0), Point::new(100.0, 75.0));
