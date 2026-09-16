@@ -916,7 +916,7 @@ impl App {
                     self.selected = vec![id];
                 } else {
                     let a = a.unwrap_or_else(|| self.doc.add_atom("C", start));
-                    let b = b.unwrap_or_else(|| self.doc.add_atom(&self.element, end));
+                    let b = b.unwrap_or_else(|| self.doc.add_atom("C", end));
                     let (order, display) = self.bond_style();
                     self.doc.add_bond(a, b, order, display);
                     self.selected = vec![b];
@@ -960,11 +960,13 @@ impl App {
                             let (order, display) = self.bond_style();
                             self.doc.add_bond(b.a, b.b, order, display);
                         } else {
+                            let (order, display) = self.bond_style();
                             let a = atom.unwrap_or_else(|| self.doc.add_atom("C", p));
                             let start = self.doc.atom(a).unwrap().position;
-                            let b = self.doc.add_atom(&self.element, start.offset(36.37, -21.0));
-                            let (order, display) = self.bond_style();
+                            let end = editing::bond_extension(&self.doc, start, Some(a), order);
+                            let b = self.doc.add_atom("C", end);
                             self.doc.add_bond(a, b, order, display);
+                            self.selected = vec![b];
                         }
                     }
                     Tool::Ring => {
@@ -1070,6 +1072,73 @@ fn arrow_kind(style: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn endpoint_clicks_grow_a_connected_zigzag_with_undo_and_redo() {
+        let (mut app, _) = App::new();
+        app.tool = Tool::Bond(1);
+        app.edit(Edit::Click(Point::default()));
+        for _ in 0..5 {
+            let endpoint = app
+                .doc
+                .atom(*app.selected.first().unwrap())
+                .unwrap()
+                .position;
+            app.edit(Edit::Click(endpoint));
+        }
+        assert_eq!((app.doc.atoms.len(), app.doc.bonds.len()), (7, 6));
+        for three in app.doc.atoms.windows(3) {
+            let a = three[0].position;
+            let b = three[1].position;
+            let c = three[2].position;
+            let cosine = ((a.x - b.x) * (c.x - b.x) + (a.y - b.y) * (c.y - b.y))
+                / (a.distance(b) * c.distance(b));
+            assert!((cosine + 0.5).abs() < 0.001, "chain needs 120° junctions");
+            assert!(c.x > b.x && b.x > a.x, "chain must keep extending forward");
+            assert!((a.y - c.y).abs() < 0.001, "successive turns must alternate");
+        }
+        let complete = app.doc.clone();
+        let _ = app.update(Message::Undo);
+        assert_eq!((app.doc.atoms.len(), app.doc.bonds.len()), (6, 5));
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc, complete);
+        let analysis = app
+            .engine
+            .execute(Request::molecule("analyze", complete))
+            .await
+            .unwrap()
+            .analysis
+            .unwrap();
+        assert_eq!(analysis.smiles, "CCCCCCC");
+        assert_eq!(analysis.formula, "C7H16");
+    }
+
+    #[test]
+    fn bond_tools_grow_carbon_after_using_an_atom_label_and_still_edit_bonds() {
+        let (mut app, _) = App::new();
+        let _ = app.update(Message::Element("O".into()));
+        app.edit(Edit::Click(Point::default()));
+        let oxygen = app.doc.atoms[0].id;
+        let _ = app.update(Message::Tool(Tool::Bond(1)));
+        app.edit(Edit::Click(Point::default()));
+        let carbon = app.doc.atoms[1].clone();
+        assert_eq!(carbon.element, "C");
+        assert_eq!(app.doc.atom(oxygen).unwrap().element, "O");
+        app.edit(Edit::Bond(
+            carbon.position,
+            carbon.position.offset(36.373066, 21.0),
+            Some(carbon.id),
+            None,
+        ));
+        assert_eq!(app.doc.atoms[2].element, "C");
+        app.tool = Tool::Bond(2);
+        app.edit(Edit::Click(Point::new(
+            carbon.position.x / 2.0,
+            carbon.position.y / 2.0,
+        )));
+        assert_eq!((app.doc.atoms.len(), app.doc.bonds.len()), (3, 2));
+        assert_eq!(app.doc.bonds[0].order, 2);
+    }
 
     #[test]
     fn fit_uses_available_canvas_and_respects_manual_pan() {

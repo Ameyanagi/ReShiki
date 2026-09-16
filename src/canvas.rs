@@ -23,7 +23,7 @@ impl Tool {
         match self {
             Self::Select => "Drag to move or select · Double-click an atom to select its molecule",
             Self::Bond(_) | Self::Wedge | Self::Hash | Self::Wavy => {
-                "Drag to draw a bond · Release over an atom to connect · Click a bond to change it"
+                "Click an endpoint to grow a chain · Drag to choose direction · Click a bond to change it"
             }
             Self::Atom => "Click to add an atom or replace an existing element",
             Self::Ring => {
@@ -32,6 +32,13 @@ impl Tool {
             Self::Arrow => "Drag to draw a reaction arrow",
             Self::Text => "Enter a label above the canvas, then click to place it",
             Self::Erase => "Click an atom, bond, label, or arrow to erase",
+        }
+    }
+    fn bond_order(self) -> Option<u8> {
+        match self {
+            Self::Bond(order) => Some(order),
+            Self::Wedge | Self::Hash | Self::Wavy => Some(1),
+            _ => None,
         }
     }
 }
@@ -189,14 +196,13 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                         if start.distance(p) < 3.0 / self.camera.zoom {
                             Edit::Click(p)
                         } else {
-                            let target = self.doc.nearest(p, 12.0 / self.camera.zoom);
                             let origin = id
                                 .and_then(|id| self.doc.atom(id).map(|a| a.position))
                                 .unwrap_or(start);
-                            let end = if target.is_none() && self.tool != Tool::Arrow {
-                                snap(origin, p)
+                            let (end, target) = if self.tool == Tool::Arrow {
+                                (p, None)
                             } else {
-                                p
+                                bond_target(self.doc, origin, p, id, 12.0 / self.camera.zoom)
                             };
                             Edit::Bond(origin, end, id, target)
                         }
@@ -385,24 +391,22 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
             let p = Point::new(p.x - bounds.x, p.y - bounds.y);
             match &state.gesture {
                 Some(Gesture::Draw { start, id }) => {
-                    let start = id
+                    let origin = id
                         .and_then(|id| self.doc.atom(id).map(|a| a.position))
                         .unwrap_or(*start);
                     let end = self.camera.world(p, bounds);
-                    let end = self
-                        .doc
-                        .nearest(end, 12.0 / self.camera.zoom)
-                        .and_then(|id| self.doc.atom(id).map(|a| a.position))
-                        .unwrap_or_else(|| {
-                            if self.tool == Tool::Arrow {
-                                end
-                            } else {
-                                snap(start, end)
-                            }
-                        });
+                    let end = if let Some(order) = self.tool.bond_order() {
+                        if start.distance(end) < 3.0 / self.camera.zoom {
+                            moruno::editing::bond_extension(self.doc, origin, *id, order)
+                        } else {
+                            bond_target(self.doc, origin, end, *id, 12.0 / self.camera.zoom).0
+                        }
+                    } else {
+                        end
+                    };
                     frame.stroke(
                         &Path::line(
-                            self.camera.screen(start, bounds),
+                            self.camera.screen(origin, bounds),
                             self.camera.screen(end, bounds),
                         ),
                         Stroke::default()
@@ -421,16 +425,44 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                     );
                 }
                 _ => {
-                    if cursor.is_over(bounds)
-                        && let Some(id) = self
-                            .doc
-                            .nearest(self.camera.world(p, bounds), 10.0 / self.camera.zoom)
-                        && let Some(a) = self.doc.atom(id)
-                    {
-                        frame.stroke(
-                            &Path::circle(self.camera.screen(a.position, bounds), 9.0),
-                            Stroke::default().with_color(rgb([19, 135, 116])),
-                        );
+                    if cursor.is_over(bounds) {
+                        let point = self.camera.world(p, bounds);
+                        let atom = self.doc.nearest(point, 10.0 / self.camera.zoom);
+                        let origin = atom
+                            .and_then(|id| self.doc.atom(id))
+                            .map(|a| a.position)
+                            .unwrap_or(point);
+                        if let Some(order) = self.tool.bond_order()
+                            && (atom.is_some()
+                                || moruno::editing::nearest_bond(
+                                    self.doc,
+                                    point,
+                                    7.0 / self.camera.zoom,
+                                )
+                                .is_none())
+                        {
+                            let end =
+                                moruno::editing::bond_extension(self.doc, origin, atom, order);
+                            frame.stroke(
+                                &Path::line(
+                                    self.camera.screen(origin, bounds),
+                                    self.camera.screen(end, bounds),
+                                ),
+                                Stroke::default()
+                                    .with_width(1.5)
+                                    .with_color(Color::from_rgba8(19, 135, 116, 0.5)),
+                            );
+                            frame.fill(
+                                &Path::circle(self.camera.screen(end, bounds), 3.0),
+                                Color::from_rgba8(19, 135, 116, 0.5),
+                            );
+                        }
+                        if atom.is_some() {
+                            frame.stroke(
+                                &Path::circle(self.camera.screen(origin, bounds), 9.0),
+                                Stroke::default().with_color(rgb([19, 135, 116])),
+                            );
+                        }
                     }
                 }
             }
@@ -457,7 +489,30 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
 pub fn snap(start: World, end: World) -> World {
     let angle = ((end.y - start.y).atan2(end.x - start.x) / (std::f32::consts::PI / 6.0)).round()
         * (std::f32::consts::PI / 6.0);
-    start.offset(angle.cos() * 42.0, angle.sin() * 42.0)
+    let length = moruno::style::DEFAULT.bond_length_world;
+    start.offset(angle.cos() * length, angle.sin() * length)
+}
+/// Use the same attachment resolution for the drag preview and committed bond.
+/// Excluding the source lets short drags grow a bond rather than snap to themselves.
+fn bond_target(
+    doc: &Document,
+    start: World,
+    end: World,
+    source: Option<u64>,
+    radius: f32,
+) -> (World, Option<u64>) {
+    let nearest = |p: World| {
+        doc.atoms
+            .iter()
+            .filter(|a| Some(a.id) != source && a.position.distance(p) < radius)
+            .min_by(|a, b| a.position.distance(p).total_cmp(&b.position.distance(p)))
+    };
+    let snapped = snap(start, end);
+    if let Some(atom) = nearest(end).or_else(|| nearest(snapped)) {
+        (atom.position, Some(atom.id))
+    } else {
+        (snapped, None)
+    }
 }
 pub fn hit_object(doc: &Document, p: World, r: f32) -> Option<u64> {
     doc.nearest(p, r)
@@ -517,6 +572,61 @@ pub fn distance_to_segment(p: World, a: World, b: World) -> f32 {
 mod tests {
     use super::*;
     use iced::widget::canvas::Program;
+
+    #[test]
+    fn short_endpoint_drag_grows_instead_of_snapping_to_its_source() {
+        let mut doc = Document::default();
+        let source = doc.add_atom("C", World::default());
+        let canvas = MoleculeCanvas {
+            doc: &doc,
+            selected: &[],
+            tool: Tool::Bond(1),
+            camera: Camera {
+                center: World::default(),
+                zoom: 1.0,
+            },
+            grid: false,
+        };
+        let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(400.0, 300.0));
+        let mut state = State::default();
+        let end = Point::new(206.0, 150.0);
+        let cursor = mouse::Cursor::Available(end);
+        for event in [
+            mouse::Event::CursorMoved {
+                position: Point::new(200.0, 150.0),
+            },
+            mouse::Event::ButtonPressed(mouse::Button::Left),
+            mouse::Event::CursorMoved { position: end },
+        ] {
+            canvas.update(&mut state, &Event::Mouse(event), bounds, cursor);
+        }
+        let action = canvas
+            .update(
+                &mut state,
+                &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                bounds,
+                cursor,
+            )
+            .unwrap();
+        let Some(Edit::Bond(start, end, Some(id), None)) = action.into_inner().0 else {
+            panic!("short drag must extend, not connect the source to itself");
+        };
+        assert_eq!(id, source);
+        assert_eq!(start, World::default());
+        assert_eq!(end, World::new(42.0, 0.0));
+    }
+
+    #[test]
+    fn drag_reuses_atoms_at_the_cursor_or_the_snapped_endpoint() {
+        let mut doc = Document::default();
+        let source = doc.add_atom("C", World::default());
+        let target = doc.add_atom("C", World::new(42.0, 0.0));
+        for cursor in [World::new(42.0, 3.0), World::new(80.0, 0.0)] {
+            let (end, id) = bond_target(&doc, World::default(), cursor, Some(source), 12.0);
+            assert_eq!(id, Some(target));
+            assert_eq!(end, World::new(42.0, 0.0));
+        }
+    }
 
     #[test]
     fn fast_drag_uses_each_motion_event_instead_of_final_cursor_snapshot() {

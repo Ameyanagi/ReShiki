@@ -4,13 +4,16 @@ Assessment date: 2026-09-16. Compared against the installed version 26 reference
 
 **Moruno does not yet have full feature parity.** Version 0.2 adds everyday editing, recovery and standalone packaging. The table records the current boundary; the original desktop test record is retained below.
 
-The subsequent [JACS / ACS default-style update](jacs-style.md) adds publication dimensions, measured atom labels, inset ring double bonds and 1200 dpi PNG output. Its current validation count is 20 Rust tests and 10 Python tests; the historical counts below describe earlier builds.
+The subsequent [JACS / ACS default-style update](jacs-style.md) adds publication dimensions, measured atom labels, inset ring double bonds and 1200 dpi PNG output. That update passed 20 Rust tests and 10 Python tests; the historical counts below describe earlier builds.
 
-The [workspace redesign](workspace-review.md) adds an original vector palette, contextual controls, inspector tabs, import drawer and tool shortcuts. Current checks pass 21 Rust tests and 10 Python tests, including actual-viewport fitting and preservation of manual camera movement.
+The [workspace redesign](workspace-review.md) adds an original vector palette, contextual controls, inspector tabs, import drawer and tool shortcuts. That update passed 21 Rust tests and 10 Python tests, including actual-viewport fitting and preservation of manual camera movement.
+
+The chain-growth fix adds graph-aware endpoint placement, a hover preview, and reliable attachment on short drags. Current checks pass 27 Rust tests and 10 Python tests. See the desktop regression record below.
 
 | Capability | Moruno status | Evidence or limitation |
 | --- | --- | --- |
 | Freehand atoms and bonds | Implemented; desktop tested | Drew ethanol from an empty canvas; 3 atoms, 2 bonds, `CCO` |
+| Chain growth and branching | Implemented; desktop tested | Endpoint clicks build a zigzag; either end can grow; branches use open angles; short drags extend; carbon bonds remain independent of the last atom label |
 | Single/double/triple bonds | Implemented | Freehand single bonds tested; double bonds visible in imported aspirin |
 | Solid/hashed wedges | Implemented | Molecular stereo round-trip tests; manual creation needs broader UI testing |
 | Wavy/aromatic bonds | Implemented | Wavy palette tool; aromatic ring placement and rendering |
@@ -84,3 +87,19 @@ The installed Structure menu exposed structure/reaction cleanup, label expansion
 - The standalone chemistry check succeeded from `/tmp` with `MORUNO_ROOT=/nonexistent`. This verifies use of the bundled Python/RDKit worker without the project's `.venv`.
 
 The recovery fixture was synthetic; this was not a forced termination of a user's document. The standalone build is approximately 233 MB on the tested Apple Silicon Mac. No ruviz files were modified; integration requirements are in `ruviz-integration.md`.
+
+## Chain-growth regression check
+
+Reproduced through native computer use: endpoint clicks used a fixed direction, so repeated extensions appeared as one straight line and could overlap an existing bond. A short drag could also resolve its target to the source atom and make no change.
+
+The fix chooses 120° turns from the neighboring graph, alternates along a terminal chain, and considers free angular space and nearby geometry for branches. Triple-bond and cumulative-double-bond junctions remain linear. Hover and drag previews use the same placement rules as committed bonds. Drag attachment excludes the source atom and also checks the snapped endpoint for existing atoms. Bond tools add carbon; element replacement stays in the atom tool.
+
+In the rebuilt standalone app:
+
+- Started an empty document and clicked six bonds to produce seven connected carbons with a visible zigzag. Check returned `CCCCCCC`, `C7H16`.
+- Dragged an endpoint only six screenshot pixels; one full-length bond appeared, making 8 atoms and 7 bonds. Undid this extension.
+- Grew the opposite endpoint and clicked an internal vertex to branch. Check returned `CCCCC(C)CCC`, `C9H20`, with 9 atoms and 8 bonds.
+- Replaced the branch tip with O, switched back to the bond tool and extended it. The new endpoint was carbon; Check returned `C9H20O`.
+- Exercised Undo/Redo, restored the all-carbon example, checked it again and saved `artifacts/chain-growth-check.moruno` through the native dialog. Reading the file confirmed nine carbon atoms and eight bonds. The artifact is local and ignored by Git.
+
+All 27 Rust and 10 Python tests pass, as do formatting, Clippy and bundle signature verification. Six added regression tests cover connected-chain identity and geometry, Undo/Redo, growth from either end, branching and occupied positions, linear junctions, atom-label carryover, short pointer gestures, and attachment to existing atoms. Automatic chain placement is a local geometry heuristic; a single drag still creates one bond. Drag explicitly to choose another direction in a crowded drawing.

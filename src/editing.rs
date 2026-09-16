@@ -272,6 +272,131 @@ pub fn nearest_bond(doc: &Document, p: Point, r: f32) -> Option<usize> {
         .map(|x| x.0)
 }
 
+/// Place a clicked bond using the local graph, keeping terminal chains zigzagged.
+/// Explicit drags still choose their own direction.
+pub fn bond_extension(doc: &Document, start: Point, atom: Option<u64>, order: u8) -> Point {
+    use std::f32::consts::{FRAC_PI_3, PI, TAU};
+    let length = crate::style::DEFAULT.bond_length_world;
+    let neighbors: Vec<_> = doc
+        .bonds
+        .iter()
+        .filter_map(|b| {
+            let id = if Some(b.a) == atom {
+                b.b
+            } else if Some(b.b) == atom {
+                b.a
+            } else {
+                return None;
+            };
+            let p = doc.atom(id)?.position;
+            (start.distance(p) > 0.001).then_some((id, p, b.order))
+        })
+        .collect();
+    let direction = |a: Point, b: Point| (b.y - a.y).atan2(b.x - a.x);
+    let mut preferred = -PI / 6.0;
+    let candidates = match neighbors.as_slice() {
+        [] => vec![(preferred, TAU)],
+        &[(id, neighbor, previous_order)] => {
+            let incoming = direction(neighbor, start);
+            // Triple bonds and two consecutive double bonds have a linear junction.
+            if order == 3 || previous_order == 3 || (order == 2 && previous_order == 2) {
+                vec![(incoming, PI)]
+            } else {
+                let previous: Vec<_> = doc
+                    .bonds
+                    .iter()
+                    .filter_map(|b| {
+                        let other = if b.a == id {
+                            b.b
+                        } else if b.b == id {
+                            b.a
+                        } else {
+                            return None;
+                        };
+                        (Some(other) != atom).then(|| doc.atom(other)).flatten()
+                    })
+                    .collect();
+                // Reuse the direction of the preceding segment so repeated clicks
+                // alternate turns instead of curling into a ring.
+                preferred = if let [previous] = previous.as_slice() {
+                    direction(previous.position, neighbor)
+                } else {
+                    (incoming / PI).round() * PI
+                };
+                vec![
+                    (incoming + FRAC_PI_3, 2.0 * FRAC_PI_3),
+                    (incoming - FRAC_PI_3, 2.0 * FRAC_PI_3),
+                ]
+            }
+        }
+        _ => {
+            let mut angles: Vec<_> = neighbors
+                .iter()
+                .map(|(_, p, _)| direction(start, *p).rem_euclid(TAU))
+                .collect();
+            angles.sort_by(f32::total_cmp);
+            (0..angles.len())
+                .map(|i| {
+                    let next = if i + 1 == angles.len() {
+                        angles[0] + TAU
+                    } else {
+                        angles[i + 1]
+                    };
+                    let gap = next - angles[i];
+                    (angles[i] + gap / 2.0, gap)
+                })
+                .collect()
+        }
+    };
+    let point = |angle: f32| start.offset(length * angle.cos(), length * angle.sin());
+    let score = |angle: f32, gap: f32| {
+        let end = point(angle);
+        let mut collisions = 0.0;
+        // Avoid placing a new atom on an existing atom or routing through a bond.
+        for a in &doc.atoms {
+            if Some(a.id) != atom {
+                let distance = segment_distance(a.position, start, end) / length;
+                collisions += (0.45 - distance).max(0.0).powi(2);
+            }
+        }
+        for b in &doc.bonds {
+            if Some(b.a) == atom || Some(b.b) == atom {
+                continue;
+            }
+            if let Some((a, z)) = doc.atom(b.a).zip(doc.atom(b.b)) {
+                for fraction in [0.25, 0.5, 0.75, 1.0] {
+                    let p =
+                        start.offset((end.x - start.x) * fraction, (end.y - start.y) * fraction);
+                    let distance = segment_distance(p, a.position, z.position) / length;
+                    collisions += (0.2 - distance).max(0.0).powi(2);
+                }
+            }
+        }
+        collisions * 1000.0 + (TAU - gap) + (1.0 - (angle - preferred).cos()) * 0.01
+    };
+    let mut best = candidates[0];
+    let mut best_score = score(best.0, best.1);
+    for candidate in candidates.into_iter().skip(1) {
+        let value = score(candidate.0, candidate.1);
+        if value < best_score - 0.00001 {
+            best = candidate;
+            best_score = value;
+        }
+    }
+    point(best.0)
+}
+
+fn segment_distance(p: Point, a: Point, b: Point) -> f32 {
+    let dx = b.x - a.x;
+    let dy = b.y - a.y;
+    let length_sq = dx * dx + dy * dy;
+    if length_sq < 0.00001 {
+        return p.distance(a);
+    }
+    let t = (((p.x - a.x) * dx + (p.y - a.y) * dy) / length_sq).clamp(0.0, 1.0);
+    p.distance(a.offset(dx * t, dy * t))
+}
+
 pub fn ring(doc: &mut Document, p: Point, size: u8, aromatic: bool, radius: f32) -> Vec<u64> {
     let n = size.clamp(3, 8) as usize;
     let atom = doc.nearest(p, radius);
@@ -353,6 +478,40 @@ pub fn ring(doc: &mut Document, p: Point, size: u8, aromatic: bool, radius: f32)
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn growth_uses_open_space_at_either_end_and_at_a_branch() {
+        let mut doc = Document::default();
+        let a = doc.add_atom("C", Point::default());
+        let b = doc.add_atom("C", Point::new(36.373066, -21.0));
+        let c = doc.add_atom("C", Point::new(72.74613, 0.0));
+        doc.add_bond(a, b, 1, "plain");
+        doc.add_bond(b, c, 1, "plain");
+        let left = bond_extension(&doc, doc.atom(a).unwrap().position, Some(a), 1);
+        let right = bond_extension(&doc, doc.atom(c).unwrap().position, Some(c), 1);
+        let branch = bond_extension(&doc, doc.atom(b).unwrap().position, Some(b), 1);
+        assert!(left.x < -36.0 && (left.y + 21.0).abs() < 0.01);
+        assert!(right.x > 109.0 && (right.y + 21.0).abs() < 0.01);
+        assert!((branch.x - 36.373066).abs() < 0.01 && (branch.y + 63.0).abs() < 0.01);
+
+        // An occupied preferred endpoint should choose the other 120° turn.
+        doc.add_atom("O", right);
+        let alternate = bond_extension(&doc, doc.atom(c).unwrap().position, Some(c), 1);
+        assert!(alternate.distance(right) > 60.0);
+        assert!((alternate.x - 72.74613).abs() < 0.01 && (alternate.y - 42.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn triple_and_cumulative_double_bonds_extend_linearly() {
+        for (previous, next) in [(3, 1), (1, 3), (2, 2)] {
+            let mut doc = Document::default();
+            let a = doc.add_atom("C", Point::default());
+            let b = doc.add_atom("C", Point::new(42.0, 0.0));
+            doc.add_bond(a, b, previous, "plain");
+            let end = bond_extension(&doc, doc.atom(b).unwrap().position, Some(b), next);
+            assert!(end.distance(Point::new(84.0, 0.0)) < 0.001);
+        }
+    }
     #[test]
     fn fused_ring_reuses_shared_atoms_and_chooses_free_side() {
         let mut d = Document::default();
