@@ -23,6 +23,8 @@ flowchart LR
 | `src/scene.rs` | Toolkit-independent lines, polygons, labels and SVG serialization |
 | `src/canvas.rs` | Hit testing, pointer gestures, snapping, camera and previews |
 | `src/app.rs` | Desktop controls, asynchronous requests, selection and file workflows |
+| `src/app/workspace.rs` | Command bar, context options, compact palette, inspector and drawers |
+| `src/app/icons.rs` | Original vector tool and command icons |
 | `src/engine.rs` | Chemistry interface, worker lifecycle, timeout and response validation |
 | `src/editing.rs` | Clipboard remapping, transforms, component arrangement and ring placement |
 | `src/recovery.rs` | Atomic session snapshots and recovery candidates |
@@ -52,6 +54,8 @@ Iced tasks keep chemistry work off the UI thread. A document revision prevents l
 Both the canvas and SVG consume the same vector primitives. Canvas text is emitted as glyph outlines to maintain drawing order. SVG retains editable text and depends on compatible fonts in the viewer. Label placement and collision handling are still approximate.
 
 Pointer motion is read from each event, rather than only Iced's latest cursor snapshot. This matters when multiple move/press/release events arrive in a single batch. The desktop drag test found this issue; a regression test now reproduces that event sequence.
+
+An Iced sensor reports actual canvas dimensions for Fit, including window resizing, inspector visibility and drawer changes. Fit follows size changes until the user manually pans or zooms. This updates only the camera. Tool shortcuts ignore key events already captured by text inputs. Workspace state (inspector tab, import drawer and grid visibility) is currently per-session.
 
 The file-open panel is intentionally unfiltered, so opening a supported file does not depend on macOS type registration. Parsing and document validation enforce supported content after selection. Desktop tests observed a delayed Open-button enablement both with and without filters, so the cause is not established; subsequent native reopen checks succeeded.
 

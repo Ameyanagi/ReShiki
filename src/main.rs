@@ -22,7 +22,11 @@ fn main() -> iced::Result {
         .title(app::App::title)
         .theme(app::App::theme)
         .subscription(app::App::subscription)
-        .window_size((1280.0, 820.0))
+        .window(iced::window::Settings {
+            size: iced::Size::new(1280.0, 820.0),
+            min_size: Some(iced::Size::new(1040.0, 680.0)),
+            ..Default::default()
+        })
         .exit_on_close_request(false)
         .antialiasing(true)
         .centered()

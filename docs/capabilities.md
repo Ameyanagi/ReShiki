@@ -6,6 +6,8 @@ Assessment date: 2026-09-16. Compared against the installed version 26 reference
 
 The subsequent [JACS / ACS default-style update](jacs-style.md) adds publication dimensions, measured atom labels, inset ring double bonds and 1200 dpi PNG output. Its current validation count is 20 Rust tests and 10 Python tests; the historical counts below describe earlier builds.
 
+The [workspace redesign](workspace-review.md) adds an original vector palette, contextual controls, inspector tabs, import drawer and tool shortcuts. Current checks pass 21 Rust tests and 10 Python tests, including actual-viewport fitting and preservation of manual camera movement.
+
 | Capability | Moruno status | Evidence or limitation |
 | --- | --- | --- |
 | Freehand atoms and bonds | Implemented; desktop tested | Drew ethanol from an empty canvas; 3 atoms, 2 bonds, `CCO` |

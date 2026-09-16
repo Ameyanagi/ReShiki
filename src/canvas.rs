@@ -30,7 +30,7 @@ impl Tool {
                 "Click to place a ring · Click a bond to fuse · Click an atom to share a vertex"
             }
             Self::Arrow => "Drag to draw a reaction arrow",
-            Self::Text => "Enter a label on the left, then click to place it",
+            Self::Text => "Enter a label above the canvas, then click to place it",
             Self::Erase => "Click an atom, bond, label, or arrow to erase",
         }
     }

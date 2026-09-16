@@ -1,11 +1,5 @@
-use crate::canvas::{self, Camera, Edit, MoleculeCanvas, Tool};
-use iced::{
-    Color, Element, Length, Subscription, Task, Theme,
-    widget::{
-        Space, button, canvas as drawing, checkbox, column, container, pick_list, row, scrollable,
-        text, text_input,
-    },
-};
+use crate::canvas::{self, Camera, Edit, Tool};
+use iced::{Color, Element, Subscription, Task, Theme};
 use moruno::{
     document::{Annotation, Arrow, Document, History, Point},
     editing::{self, Arrange, Transform},
@@ -13,9 +7,24 @@ use moruno::{
     recovery::{Candidate, Recovery},
 };
 use std::path::PathBuf;
+mod icons;
+mod workspace;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum InspectorTab {
+    Properties,
+    Templates,
+    Export,
+}
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    ToggleInspector,
+    Inspector(InspectorTab),
+    ToggleImport,
+    InsertInput,
+    ToggleHelp,
+    Viewport(iced::Size),
     Canvas(Edit),
     Tool(Tool),
     Element(String),
@@ -116,6 +125,12 @@ pub struct App {
     recovered: Vec<Candidate>,
     autosaved_revision: Option<u64>,
     autosave_status: String,
+    inspector_open: bool,
+    inspector_tab: InspectorTab,
+    import_open: bool,
+    help_open: bool,
+    viewport: iced::Size,
+    fit_to_view: bool,
 }
 impl App {
     pub fn new() -> (Self, Task<Message>) {
@@ -138,7 +153,7 @@ impl App {
             caption: "Reaction conditions".into(),
             smiles: "CC(=O)Oc1ccccc1C(=O)O".into(),
             isotope: String::new(),
-            grid: true,
+            grid: false,
             analysis: None,
             engine: PythonEngine::default(),
             revision: 0,
@@ -157,6 +172,12 @@ impl App {
             recovered,
             autosaved_revision: None,
             autosave_status: String::new(),
+            inspector_open: true,
+            inspector_tab: InspectorTab::Properties,
+            import_open: false,
+            help_open: false,
+            viewport: iced::Size::new(850.0, 600.0),
+            fit_to_view: true,
         };
         let task = app.run(Request::import_smiles(&app.smiles), Job::Startup);
         (app, task)
@@ -176,8 +197,8 @@ impl App {
         Theme::custom(
             "Moruno",
             iced::theme::Palette {
-                background: Color::from_rgb8(243, 246, 243),
-                text: Color::from_rgb8(35, 52, 51),
+                background: Color::from_rgb8(239, 241, 244),
+                text: Color::from_rgb8(37, 43, 51),
                 primary: Color::from_rgb8(17, 126, 108),
                 success: Color::from_rgb8(17, 126, 108),
                 danger: Color::from_rgb8(182, 66, 61),
@@ -221,6 +242,23 @@ impl App {
                         "x" => Some(Message::Copy(true)),
                         "v" => Some(Message::Paste),
                         "d" => Some(Message::Duplicate),
+                        "i" => Some(Message::ToggleImport),
+                        "e" => Some(Message::Inspector(InspectorTab::Export)),
+                        _ => None,
+                    },
+                    Key::Character(c) if !mods.control() && !mods.alt() => match c.as_str() {
+                        "v" => Some(Message::Tool(Tool::Select)),
+                        "b" | "1" => Some(Message::Tool(Tool::Bond(1))),
+                        "2" => Some(Message::Tool(Tool::Bond(2))),
+                        "3" => Some(Message::Tool(Tool::Bond(3))),
+                        "r" => Some(Message::Tool(Tool::Ring)),
+                        "a" => Some(Message::Tool(Tool::Arrow)),
+                        "t" => Some(Message::Tool(Tool::Text)),
+                        "e" => Some(Message::Tool(Tool::Erase)),
+                        "c" | "n" | "o" | "s" | "p" | "f" => {
+                            Some(Message::Element(c.to_uppercase()))
+                        }
+                        "?" => Some(Message::ToggleHelp),
                         _ => None,
                     },
                     Key::Named(Named::Delete | Named::Backspace) => Some(Message::Delete),
@@ -278,9 +316,10 @@ impl App {
     fn fit(&mut self) {
         let (lo, hi) = self.doc.bounds();
         self.camera.center = Point::new((lo.x + hi.x) / 2.0, (lo.y + hi.y) / 2.0);
-        self.camera.zoom = (600.0 / (hi.x - lo.x).max(180.0))
-            .min(450.0 / (hi.y - lo.y).max(140.0))
-            .clamp(0.25, 2.0);
+        self.camera.zoom = ((self.viewport.width - 80.0).max(100.0) / (hi.x - lo.x).max(240.0))
+            .min((self.viewport.height - 80.0).max(100.0) / (hi.y - lo.y).max(200.0))
+            .clamp(0.25, 2.5);
+        self.fit_to_view = true;
     }
     fn pending(&mut self, action: Pending) -> Task<Message> {
         if self.dirty() {
@@ -328,6 +367,30 @@ impl App {
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
+            Message::ToggleInspector => self.inspector_open = !self.inspector_open,
+            Message::Inspector(tab) => {
+                self.inspector_tab = tab;
+                self.inspector_open = true;
+            }
+            Message::ToggleImport => {
+                self.import_open = !self.import_open;
+                if self.import_open {
+                    self.help_open = false;
+                }
+            }
+            Message::InsertInput => return self.run(input_request(&self.smiles), Job::Insert),
+            Message::ToggleHelp => {
+                self.help_open = !self.help_open;
+                if self.help_open {
+                    self.import_open = false;
+                }
+            }
+            Message::Viewport(size) => {
+                self.viewport = size;
+                if self.fit_to_view {
+                    self.fit();
+                }
+            }
             Message::Tool(tool) => {
                 self.tool = tool;
                 self.error = false;
@@ -519,7 +582,10 @@ impl App {
             Message::Canvas(edit) => self.edit(edit),
             Message::Grid => self.grid = !self.grid,
             Message::Fit => self.fit(),
-            Message::Zoom(f) => self.camera.zoom = (self.camera.zoom * f).clamp(0.25, 5.0),
+            Message::Zoom(f) => {
+                self.fit_to_view = false;
+                self.camera.zoom = (self.camera.zoom * f).clamp(0.25, 5.0);
+            }
             Message::Import => return self.run(input_request(&self.smiles), Job::Import),
             Message::Example(smiles) => {
                 self.smiles = smiles.into();
@@ -814,13 +880,22 @@ impl App {
     fn edit(&mut self, edit: Edit) {
         let before = self.doc.clone();
         match edit {
-            Edit::Select(ids) => self.selected = ids,
+            Edit::Select(ids) => {
+                if let Some(label) = self.doc.annotations.iter().find(|a| ids.contains(&a.id)) {
+                    self.caption = label.text.replace('\n', "\\n");
+                }
+                self.selected = ids;
+            }
             Edit::Move(ids, dx, dy) => {
                 self.doc.translate(&ids, dx, dy);
                 self.selected = ids;
             }
-            Edit::Pan(dx, dy) => self.camera.center = self.camera.center.offset(-dx, -dy),
+            Edit::Pan(dx, dy) => {
+                self.fit_to_view = false;
+                self.camera.center = self.camera.center.offset(-dx, -dy);
+            }
             Edit::Zoom(f, at) => {
+                self.fit_to_view = false;
                 let old = self.camera.zoom;
                 self.camera.zoom = (old * f).clamp(0.25, 5.0);
                 let ratio = old / self.camera.zoom;
@@ -948,446 +1023,10 @@ impl App {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        let header = row![
-            column![
-                text("moruno").size(28),
-                text("MOLECULAR WORKSPACE").size(9).color(muted())
-            ]
-            .spacing(1),
-            Space::new().width(Length::Fill),
-            button("New").on_press(Message::New).style(button::text),
-            button("Open").on_press(Message::Open).style(button::text),
-            button("Save as")
-                .on_press(Message::SaveAs)
-                .style(button::text),
-            button("Save").on_press(Message::Save).padding([9, 18])
-        ]
-        .align_y(iced::Alignment::Center)
-        .spacing(12);
-        let history = row![
-            button("Undo")
-                .on_press_maybe(self.history.can_undo().then_some(Message::Undo))
-                .style(button::secondary),
-            button("Redo")
-                .on_press_maybe(self.history.can_redo().then_some(Message::Redo))
-                .style(button::secondary),
-            Space::new().width(Length::Fill),
-            button(if self.busy {
-                "Working…"
-            } else {
-                "Check structure"
-            })
-            .on_press_maybe((!self.busy).then_some(Message::Analyze))
-            .style(button::secondary),
-            button("Clean up").on_press_maybe((!self.busy).then_some(Message::Clean))
-        ]
-        .spacing(8)
-        .align_y(iced::Alignment::Center);
-        let tools = [
-            ("Select / move", Tool::Select),
-            ("Single bond", Tool::Bond(1)),
-            ("Double bond", Tool::Bond(2)),
-            ("Triple bond", Tool::Bond(3)),
-            ("Solid wedge", Tool::Wedge),
-            ("Hashed wedge", Tool::Hash),
-            ("Wavy bond", Tool::Wavy),
-            ("Ring", Tool::Ring),
-            ("Reaction arrow", Tool::Arrow),
-            ("Text label", Tool::Text),
-            ("Eraser", Tool::Erase),
-        ];
-        let mut tool_list = column![section("DRAW")].spacing(5);
-        for (name, tool) in tools {
-            tool_list = tool_list.push(
-                button(text(name).size(13))
-                    .width(Length::Fill)
-                    .padding([8, 12])
-                    .style(if self.tool == tool {
-                        button::primary
-                    } else {
-                        button::text
-                    })
-                    .on_press(Message::Tool(tool)),
-            );
-        }
-        let mut elements = column![section("ELEMENT")].spacing(5);
-        for group in [["C", "N", "O"], ["S", "P", "F"], ["Cl", "Br", "I"]] {
-            let mut r = row![].spacing(4);
-            for e in group {
-                r = r.push(
-                    button(text(e).size(14))
-                        .width(Length::Fill)
-                        .on_press(Message::Element(e.into()))
-                        .style(if self.element == e && self.tool == Tool::Atom {
-                            button::primary
-                        } else {
-                            button::secondary
-                        }),
-                );
-            }
-            elements = elements.push(r);
-        }
-        let left = column![
-            tool_list,
-            section("RING"),
-            pick_list(
-                [3_u8, 4, 5, 6, 7, 8],
-                Some(self.ring_size),
-                Message::RingSize
-            )
-            .width(Length::Fill),
-            checkbox(self.aromatic_ring)
-                .label("Aromatic ring")
-                .on_toggle(Message::AromaticRing)
-                .size(14)
-                .text_size(12),
-            section("ARROW"),
-            pick_list(
-                [
-                    "Forward",
-                    "Equilibrium",
-                    "Resonance",
-                    "Retrosynthesis",
-                    "Curved"
-                ],
-                Some(self.arrow_style),
-                Message::ArrowStyle
-            )
-            .width(Length::Fill)
-            .text_size(12),
-            Space::new().height(12),
-            elements,
-            row![
-                text_input("Any element", &self.custom_element)
-                    .on_input(Message::CustomElement)
-                    .on_submit(Message::ApplyElement)
-                    .size(12),
-                button("Use")
-                    .on_press(Message::ApplyElement)
-                    .style(button::secondary)
-            ]
-            .spacing(4),
-            Space::new().height(12),
-            section("ANNOTATION"),
-            text_input("Text label", &self.caption)
-                .on_input(Message::Caption)
-                .size(12),
-            text("Use \\n for a new line").size(10).color(muted()),
-            button("Update selected labels")
-                .on_press(Message::UpdateLabel)
-                .style(button::text),
-            Space::new().height(12),
-            section("SELECTION"),
-            row![
-                button("↶ 30°")
-                    .on_press(Message::Transform(Transform::Rotate(-30.0)))
-                    .style(button::secondary),
-                button("↷ 30°")
-                    .on_press(Message::Transform(Transform::Rotate(30.0)))
-                    .style(button::secondary)
-            ]
-            .spacing(4),
-            row![
-                button("Flip H")
-                    .on_press(Message::Transform(Transform::FlipHorizontal))
-                    .style(button::secondary),
-                button("Flip V")
-                    .on_press(Message::Transform(Transform::FlipVertical))
-                    .style(button::secondary)
-            ]
-            .spacing(4),
-            row![
-                button("Align X")
-                    .on_press(Message::Arrange(Arrange::AlignHorizontal))
-                    .style(button::secondary),
-                button("Align Y")
-                    .on_press(Message::Arrange(Arrange::AlignVertical))
-                    .style(button::secondary)
-            ]
-            .spacing(4),
-            button("Distribute horizontally")
-                .on_press(Message::Arrange(Arrange::DistributeHorizontal))
-                .style(button::text),
-            button("Distribute vertically")
-                .on_press(Message::Arrange(Arrange::DistributeVertical))
-                .style(button::text),
-            button("Reverse selected bonds")
-                .on_press(Message::ReverseBonds)
-                .style(button::text),
-            row![
-                button("Charge −")
-                    .on_press(Message::Charge(-1))
-                    .style(button::secondary),
-                button("+")
-                    .on_press(Message::Charge(1))
-                    .style(button::secondary)
-            ]
-            .spacing(5),
-            row![
-                text_input("Isotope", &self.isotope)
-                    .on_input(Message::Isotope)
-                    .size(12),
-                button("Set")
-                    .on_press(Message::ApplyIsotope)
-                    .style(button::secondary)
-            ]
-            .spacing(5),
-            button("Delete selected")
-                .on_press_maybe((!self.selected.is_empty()).then_some(Message::Delete))
-                .style(button::text)
-        ]
-        .spacing(8);
-        let mut properties = column![
-            section("DRAWING STYLE"),
-            text(&moruno::style::DEFAULT.name).size(12),
-            text("10 pt Arial · 0.6 pt lines").size(11).color(muted()),
-            Space::new().height(8),
-            section("STRUCTURE"),
-            text(format!(
-                "{} atoms  ·  {} bonds",
-                self.doc.atoms.len(),
-                self.doc.bonds.len()
-            ))
-            .size(13),
-            Space::new().height(12)
-        ]
-        .spacing(8);
-        if let Some(a) = &self.analysis {
-            properties = properties
-                .push(text(&a.formula).size(29))
-                .push(text("Molecular formula").size(11).color(muted()))
-                .push(Space::new().height(8));
-            for (label, value) in [
-                ("Molecular weight", format!("{:.3} g/mol", a.mass)),
-                ("Exact mass", format!("{:.5} Da", a.exact_mass)),
-                ("cLogP", format!("{:.2}", a.logp)),
-                ("Polar surface", format!("{:.2} Å²", a.tpsa)),
-                ("H-bond donors", a.donors.to_string()),
-                ("H-bond acceptors", a.acceptors.to_string()),
-                ("Rings", a.rings.to_string()),
-            ] {
-                properties = properties.push(
-                    column![text(label).size(11).color(muted()), text(value).size(15)].spacing(2),
-                );
-            }
-            properties = properties
-                .push(Space::new().height(10))
-                .push(section("CANONICAL SMILES"))
-                .push(text(&a.smiles).size(11))
-                .push(
-                    button("Copy SMILES")
-                        .on_press(Message::CopySmiles)
-                        .style(button::text),
-                );
-        } else {
-            properties = properties.push(
-                text("Check your structure to calculate molecular properties.")
-                    .size(13)
-                    .color(muted()),
-            );
-        }
-        properties = properties
-            .push(Space::new().height(20))
-            .push(section("EXPORT"));
-        for (label, format) in [
-            ("SVG drawing", "svg"),
-            ("PDF drawing", "pdf"),
-            ("PNG image · 1200 dpi", "png"),
-            ("MOL structure", "mol"),
-            ("CDXML drawing", "cdxml"),
-            ("SMILES text", "smiles"),
-            ("InChI text", "inchi"),
-        ] {
-            properties = properties.push(
-                button(text(label).size(12))
-                    .on_press_maybe((!self.busy).then_some(Message::Export(format)))
-                    .style(button::secondary)
-                    .width(Length::Fill),
-            );
-        }
-        properties = properties
-            .push(Space::new().height(18))
-            .push(section("INSERT TEMPLATE"));
-        for (name, smiles) in [
-            ("Benzene", "c1ccccc1"),
-            ("Pyridine", "c1ccncc1"),
-            ("Pyrrole", "c1cc[nH]c1"),
-            ("Furan", "c1ccoc1"),
-            ("Thiophene", "c1ccsc1"),
-            ("Cyclopentane", "C1CCCC1"),
-            ("Cyclohexane", "C1CCCCC1"),
-            ("Naphthalene", "c1ccc2ccccc2c1"),
-            ("Acetaldehyde", "CC=O"),
-            ("Acetic acid", "CC(=O)O"),
-            ("Methylamine", "CN"),
-            ("Methanol", "CO"),
-        ] {
-            properties = properties.push(
-                button(text(name).size(12))
-                    .on_press_maybe((!self.busy).then_some(Message::InsertTemplate(smiles)))
-                    .width(Length::Fill)
-                    .style(button::text),
-            );
-        }
-        let input = row![
-            text_input("Paste SMILES or InChI…", &self.smiles)
-                .on_input(Message::Smiles)
-                .on_submit(Message::Import)
-                .size(13)
-                .padding(10),
-            button("Import")
-                .on_press_maybe((!self.busy).then_some(Message::Import))
-                .padding([10, 16])
-        ]
-        .spacing(8);
-        let examples = row![
-            text("EXAMPLES").size(10).color(muted()),
-            button("Ethanol")
-                .on_press(Message::Example("CCO"))
-                .style(button::text),
-            button("Benzene")
-                .on_press(Message::Example("c1ccccc1"))
-                .style(button::text),
-            button("Aspirin")
-                .on_press(Message::Example("CC(=O)Oc1ccccc1C(=O)O"))
-                .style(button::text),
-            button("Caffeine")
-                .on_press(Message::Example("Cn1c(=O)c2c(ncn2C)n(C)c1=O"))
-                .style(button::text)
-        ]
-        .spacing(4)
-        .align_y(iced::Alignment::Center);
-        let canvas = drawing(MoleculeCanvas {
-            doc: &self.doc,
-            selected: &self.selected,
-            tool: self.tool,
-            camera: self.camera,
-            grid: self.grid,
-        })
-        .width(Length::Fill)
-        .height(Length::Fill);
-        let canvas: Element<'_, Edit> = canvas.into();
-        let footer = row![
-            text(self.tool.hint()).size(11).color(muted()),
-            Space::new().width(Length::Fill),
-            button(if self.grid { "Grid on" } else { "Grid off" })
-                .on_press(Message::Grid)
-                .style(button::text),
-            button("−").on_press(Message::Zoom(0.8)).style(button::text),
-            text(format!("{:.0}%", self.camera.zoom * 100.0)).size(11),
-            button("+")
-                .on_press(Message::Zoom(1.25))
-                .style(button::text),
-            button("Fit").on_press(Message::Fit).style(button::text)
-        ]
-        .spacing(4)
-        .align_y(iced::Alignment::Center);
-        let center = column![
-            history,
-            row![
-                button("Cut")
-                    .on_press_maybe((!self.selected.is_empty()).then_some(Message::Copy(true)))
-                    .style(button::text),
-                button("Copy")
-                    .on_press_maybe((!self.selected.is_empty()).then_some(Message::Copy(false)))
-                    .style(button::text),
-                button("Paste").on_press(Message::Paste).style(button::text),
-                button("Duplicate")
-                    .on_press_maybe((!self.selected.is_empty()).then_some(Message::Duplicate))
-                    .style(button::text),
-                Space::new().width(Length::Fill),
-                text(format!("{} selected", self.selected.len()))
-                    .size(11)
-                    .color(muted()),
-            ]
-            .spacing(4)
-            .align_y(iced::Alignment::Center),
-            input,
-            examples,
-            container(canvas.map(Message::Canvas))
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .style(sheet),
-            footer
-        ]
-        .spacing(10);
-        let body = row![
-            container(scrollable(left))
-                .padding(16)
-                .width(194)
-                .height(Length::Fill)
-                .style(panel),
-            container(center)
-                .padding([16, 20])
-                .width(Length::Fill)
-                .height(Length::Fill),
-            container(scrollable(properties))
-                .padding(18)
-                .width(224)
-                .height(Length::Fill)
-                .style(panel)
-        ]
-        .height(Length::Fill);
-        let mut content = column![container(header).padding([16, 22]).style(panel)];
-        if !self.recovered.is_empty() {
-            content = content.push(
-                container(
-                    row![
-                        text(format!(
-                            "{} previous recovery draft(s) found",
-                            self.recovered.len()
-                        ))
-                        .size(13),
-                        Space::new().width(Length::Fill),
-                        button("Restore latest").on_press(Message::Restore),
-                        button("Later")
-                            .on_press(Message::DismissRecovery)
-                            .style(button::secondary)
-                    ]
-                    .spacing(10)
-                    .align_y(iced::Alignment::Center),
-                )
-                .padding([10, 20]),
-            );
-        }
-        if self.pending.is_some() {
-            content = content.push(
-                container(
-                    row![
-                        text("This document has unsaved changes.").size(13),
-                        Space::new().width(Length::Fill),
-                        button("Save").on_press(Message::Save),
-                        button("Discard & continue")
-                            .on_press(Message::Discard)
-                            .style(button::danger),
-                        button("Cancel")
-                            .on_press(Message::Cancel)
-                            .style(button::secondary)
-                    ]
-                    .spacing(10)
-                    .align_y(iced::Alignment::Center),
-                )
-                .padding([10, 20]),
-            );
-        }
-        content
-            .push(body)
-            .push(
-                container(row![
-                    text(&self.status).size(12).color(if self.error {
-                        Color::from_rgb8(169, 48, 42)
-                    } else {
-                        muted()
-                    }),
-                    Space::new().width(Length::Fill),
-                    text(&self.autosave_status).size(11).color(muted())
-                ])
-                .padding([10, 22])
-                .width(Length::Fill),
-            )
-            .into()
+        self.workspace()
     }
 }
+
 fn export_file(contents: String, format: &'static str) -> Task<Message> {
     Task::perform(
         save_export(contents.into_bytes(), format),
@@ -1427,38 +1066,28 @@ fn arrow_kind(style: &str) -> &str {
         _ => "forward",
     }
 }
-fn muted() -> Color {
-    Color::from_rgb8(102, 121, 117)
-}
-fn section(label: &str) -> iced::widget::Text<'_> {
-    text(label).size(10).color(muted())
-}
-fn panel(_theme: &Theme) -> container::Style {
-    container::Style {
-        background: Some(Color::from_rgb8(249, 250, 247).into()),
-        border: iced::Border {
-            color: Color::from_rgb8(225, 233, 227),
-            width: 1.0,
-            radius: 0.0.into(),
-        },
-        ..Default::default()
-    }
-}
-fn sheet(_theme: &Theme) -> container::Style {
-    container::Style {
-        background: Some(Color::WHITE.into()),
-        border: iced::Border {
-            color: Color::from_rgb8(215, 224, 217),
-            width: 1.0,
-            radius: 8.0.into(),
-        },
-        ..Default::default()
-    }
-}
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fit_uses_available_canvas_and_respects_manual_pan() {
+        let (mut app, _) = App::new();
+        app.doc.add_atom("C", Point::new(-250.0, -100.0));
+        app.doc.add_atom("O", Point::new(250.0, 100.0));
+        let document = app.doc.clone();
+        let _ = app.update(Message::Viewport(iced::Size::new(600.0, 400.0)));
+        let small_zoom = app.camera.zoom;
+        let _ = app.update(Message::Viewport(iced::Size::new(1000.0, 700.0)));
+        assert!(app.camera.zoom > small_zoom);
+        app.edit(Edit::Pan(60.0, -20.0));
+        let camera = app.camera;
+        let _ = app.update(Message::Viewport(iced::Size::new(700.0, 500.0)));
+        assert_eq!(app.camera.center, camera.center);
+        assert_eq!(app.camera.zoom, camera.zoom);
+        assert_eq!(app.doc, document);
+    }
 
     #[test]
     fn late_save_does_not_mark_newer_edits_as_saved() {

@@ -31,20 +31,27 @@ The default development bundle uses this checkout's `engine/worker.py` and `.ven
 
 ## Use
 
+- The two-column palette keeps drawing tools visible. Hover an icon for its name and shortcut; options for the selected tool appear above the canvas.
 - Drag with a bond tool to draw. New bonds snap to 30° angles and a consistent length; release over an existing atom to connect. Click a bond's middle to change its order or style.
 - Choose an element and click an atom to replace it, or empty space to place an atom. The palette contains common elements; the symbol field accepts all 118 elements.
 - Choose a 3–8 member ring, enable aromatic bonds, click a bond to fuse a ring, or click an atom to share a vertex.
-- Choose an arrow style, or enter annotation text (`\n` for new lines) and place a label. Select a label and use Update selected labels to edit it.
+- Choose an arrow style, or enter annotation text (`\n` for new lines) in the tool options and place a label. Select a label and use Update label in the Properties inspector to edit it.
 - Copy/cut/paste and duplicate selected drawing objects. Paste SMILES, InChI, MOL or supported CDXML to insert a molecule. Templates insert into the current document.
-- Scroll the left panel for rotate, flip, align, distribute, and bond-direction controls. Double-click an atom to select its molecule.
-- Select/move drags atoms or objects. Drag empty space for a rectangular selection. Scroll the left panel for charge, isotope, and deletion controls.
+- Select objects to reveal rotate, flip, align, distribute, and bond-direction controls in the Properties inspector. Double-click an atom to select its molecule.
+- Select/move drags atoms or objects. Drag empty space for a rectangular selection. Charge, isotope, and deletion controls appear in the Properties inspector for the relevant selection.
 - Check structure validates the graph and refreshes formula, mass, descriptors, implicit hydrogen labels, and canonical SMILES. Clean up regenerates 2D coordinates.
-- The SMILES field and example buttons replace the drawing; Undo restores it.
+- Open Import to enter SMILES, InChI or supported structure text. Enter and Insert add to the drawing; Replace drawing and the example buttons replace it. Undo restores the prior state.
 - Save/open `.moruno` retains the complete editable drawing. The Open dialog also accepts MOL, SMILES (`.smi`/`.smiles`), InChI, and supported CDXML drawings.
 - Export SVG or PDF for a vector drawing, PNG at 1200 dpi, MOL/SMILES/InChI for molecular data, or CDXML for basic drawing interchange. MOL/SMILES/InChI cannot store annotation text or arrows.
+- Properties, Templates and Export have separate inspector tabs. The top-right inspector button hides the panel to expand the canvas. Grid starts off; Fit uses the actual available canvas size and leaves export dimensions unchanged.
 
 | Shortcut | Action |
 | --- | --- |
+| V / B or 1 / 2 / 3 | Select / single / double / triple bond |
+| R / A / T / E | Ring / arrow / text / eraser |
+| C / N / O / S / P / F | Choose an atom element |
+| Cmd/Ctrl+I / E | Import / export panel |
+| ? | Shortcut reference |
 | Cmd/Ctrl+Z; Cmd/Ctrl+Shift+Z | Undo; redo |
 | Cmd/Ctrl+A | Select all drawing objects |
 | Cmd/Ctrl+C / X / V / D | Copy / cut / paste / duplicate |
