@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "atoms": [
+    {
+      "id": 1,
+      "element": "C",
+      "position": {
+        "x": -73.98897,
+        "y": -26.242676
+      },
+      "charge": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 3
+    },
+    {
+      "id": 2,
+      "element": "C",
+      "position": {
+        "x": -31.988968,
+        "y": -26.242676
+      },
+      "charge": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 2
+    },
+    {
+      "id": 3,
+      "element": "O",
+      "position": {
+        "x": 4.384098,
+        "y": -5.242676
+      },
+      "charge": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 1
+    }
+  ],
+  "bonds": [
+    {
+      "a": 1,
+      "b": 2,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": []
+    },
+    {
+      "a": 2,
+      "b": 3,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": []
+    }
+  ],
+  "annotations": [
+    {
+      "id": 5,
+      "position": {
+        "x": 72.1875,
+        "y": -53.65076
+      },
+      "text": "oxidation"
+    }
+  ],
+  "arrows": [
+    {
+      "id": 4,
+      "start": {
+        "x": 56.525734,
+        "y": -26.242676
+      },
+      "end": {
+        "x": 167.46323,
+        "y": -26.242676
+      }
+    }
+  ]
+}
