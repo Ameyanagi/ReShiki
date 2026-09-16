@@ -55,6 +55,7 @@ pub enum Message {
     ReverseBonds,
     RingSize(u8),
     AromaticRing(bool),
+    ToggleAromaticRing,
     ArrowStyle(&'static str),
     CustomElement(String),
     ApplyElement,
@@ -246,6 +247,14 @@ impl App {
                         "e" => Some(Message::Inspector(InspectorTab::Export)),
                         _ => None,
                     },
+                    Key::Character(c)
+                        if mods.shift()
+                            && !mods.control()
+                            && !mods.alt()
+                            && c.eq_ignore_ascii_case("r") =>
+                    {
+                        Some(Message::ToggleAromaticRing)
+                    }
                     Key::Character(c) if !mods.control() && !mods.alt() => match c.as_str() {
                         "v" => Some(Message::Tool(Tool::Select)),
                         "b" | "1" => Some(Message::Tool(Tool::Bond(1))),
@@ -412,6 +421,9 @@ impl App {
                     self.ring_size = 6;
                 }
                 self.tool = Tool::Ring;
+            }
+            Message::ToggleAromaticRing => {
+                return self.update(Message::AromaticRing(!self.aromatic_ring));
             }
             Message::ArrowStyle(style) => {
                 self.arrow_style = style;

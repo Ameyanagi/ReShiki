@@ -49,6 +49,7 @@ The default development bundle uses this checkout's `engine/worker.py` and `.ven
 | Shortcut | Action |
 | --- | --- |
 | V / B or 1 / 2 / 3 | Select / single / double / triple bond |
+| Shift+R | Toggle aromatic ring mode (enabling selects a six-member ring) |
 | R / A / T / E | Ring / arrow / text / eraser |
 | C / N / O / S / P / F | Choose an atom element |
 | Cmd/Ctrl+I / E | Import / export panel |

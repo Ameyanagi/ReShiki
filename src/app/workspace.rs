@@ -181,7 +181,7 @@ impl App {
             (Tool::Wavy, "Wavy bond"),
             (Tool::Wedge, "Solid wedge"),
             (Tool::Hash, "Hashed wedge"),
-            (Tool::Ring, "Ring · R"),
+            (Tool::Ring, "Ring · R / Aromatic · Shift+R"),
             (Tool::Arrow, "Reaction arrow · A"),
             (Tool::Text, "Text label · T"),
             (Tool::Erase, "Eraser · E"),
@@ -249,16 +249,12 @@ impl App {
                     )
                     .push(
                         checkbox(self.aromatic_ring)
-                            .label("Aromatic")
+                            .label("Aromatic · Shift+R")
                             .on_toggle(Message::AromaticRing)
                             .size(14)
                             .text_size(12),
                     )
-                    .push(
-                        text("Click or drag onto an atom or bond to attach")
-                            .size(11)
-                            .color(muted()),
-                    );
+                    .push(text("Click / drag to attach").size(11).color(muted()));
             }
             Tool::Arrow => {
                 options = options
@@ -678,7 +674,7 @@ impl App {
 
     fn shortcut_drawer(&self) -> Element<'_, Message> {
         container(row![
-            column![text("Draw without leaving the canvas").size(13),text("V Select   B / 1 Bond   2 Double   3 Triple   R Ring   A Arrow   T Text   E Erase").size(12),text("C / N / O / S / P / F Atom   ⌘I Import   ⌘E Export   ⌘D Duplicate   Esc Select").size(12)].spacing(5),
+            column![text("Draw without leaving the canvas").size(13),text("V Select   B / 1 Bond   2 Double   3 Triple   R Ring   A Arrow   T Text   E Erase").size(12),text("Shift+R Toggle aromatic ring mode").size(12),text("C / N / O / S / P / F Atom   ⌘I Import   ⌘E Export   ⌘D Duplicate   Esc Select").size(12)].spacing(5),
             Space::new().width(Length::Fill),icon_button(Icon::Close,"Close shortcuts",Some(Message::ToggleHelp),false)
         ].align_y(Alignment::Center)).padding([12,18]).style(panel).into()
     }
