@@ -456,6 +456,9 @@ impl App {
     fn selection_panel(&self) -> Element<'_, Message> {
         let has_atoms = self.doc.atoms.iter().any(|a| self.selected.contains(&a.id));
         let mut body = column![
+            text("Drag a box corner to resize. Drag the top handle to rotate; Shift snaps to 15°.")
+                .size(11)
+                .color(muted()),
             row![
                 command("↶ 30°", Message::Transform(Transform::Rotate(-30.0))).width(Length::Fill),
                 command("↷ 30°", Message::Transform(Transform::Rotate(30.0))).width(Length::Fill)

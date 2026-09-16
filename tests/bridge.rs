@@ -60,6 +60,7 @@ async fn copy_and_reflection_preserve_stereochemistry() {
         let ids = editing::append(&mut doc, &part, Point::new(200.0, 100.0));
         editing::transform(&mut doc, &ids, Transform::FlipHorizontal);
         editing::transform(&mut doc, &ids, Transform::Rotate(30.0));
+        editing::transform_about(&mut doc, &ids, Point::new(100.0, -50.0), 1.8, 73.0);
         doc.atoms.reverse();
         doc.bonds.reverse();
         doc.validate().unwrap();

@@ -698,7 +698,10 @@ impl App {
                 self.doc.delete(&self.selected);
                 self.changed(before);
             }
-            Message::SelectAll => self.selected = self.doc.all_ids(),
+            Message::SelectAll => {
+                self.selected = self.doc.all_ids();
+                self.tool = Tool::Select;
+            }
             Message::Charge(delta) => {
                 let before = self.doc.clone();
                 self.doc.invalidate_chemistry(&self.selected);
@@ -892,6 +895,15 @@ impl App {
     fn edit(&mut self, edit: Edit) {
         let before = self.doc.clone();
         match edit {
+            Edit::Transform {
+                ids,
+                pivot,
+                scale,
+                rotation,
+            } => {
+                editing::transform_about(&mut self.doc, &ids, pivot, scale, rotation);
+                self.selected = ids;
+            }
             Edit::Ring(anchor, direction) => {
                 self.selected = editing::ring_oriented(
                     &mut self.doc,
@@ -1115,6 +1127,69 @@ fn arrow_kind(style: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn selection_handle_transforms_preserve_other_objects_and_undo_in_one_step() {
+        let (mut app, _) = App::new();
+        let a = app.doc.add_atom("C", Point::new(-20.0, -10.0));
+        let b = app.doc.add_atom("C", Point::new(20.0, 10.0));
+        let other = app.doc.add_atom("O", Point::new(150.0, 80.0));
+        app.doc.add_bond(a, b, 1, "wedge");
+        let original = app.doc.clone();
+        app.edit(Edit::Transform {
+            ids: vec![a, b],
+            pivot: Point::new(-20.0, -10.0),
+            scale: 2.0,
+            rotation: 0.0,
+        });
+        let resized = app.doc.clone();
+        assert_eq!(
+            resized.atom(a).unwrap().position,
+            original.atom(a).unwrap().position
+        );
+        assert_eq!(resized.atom(b).unwrap().position, Point::new(60.0, 30.0));
+        app.edit(Edit::Transform {
+            ids: vec![a, b],
+            pivot: Point::new(20.0, 10.0),
+            scale: 1.0,
+            rotation: 90.0,
+        });
+        let rotated = app.doc.clone();
+        assert!(
+            rotated
+                .atom(b)
+                .unwrap()
+                .position
+                .distance(Point::new(0.0, 50.0))
+                < 0.001
+        );
+        assert_eq!(rotated.atom(other), original.atom(other));
+        assert_eq!(rotated.bonds, original.bonds);
+        assert_eq!(app.selected, vec![a, b]);
+        for expected in [&resized, &original] {
+            let _ = app.update(Message::Undo);
+            assert_eq!(&app.doc, expected);
+        }
+        for expected in [&resized, &rotated] {
+            let _ = app.update(Message::Redo);
+            assert_eq!(&app.doc, expected);
+        }
+        app.edit(Edit::Transform {
+            ids: vec![a, b],
+            pivot: Point::default(),
+            scale: 1.0,
+            rotation: 0.0,
+        });
+        let _ = app.update(Message::Undo);
+        assert_eq!(
+            app.doc, resized,
+            "clicking a handle without dragging adds no history"
+        );
+        app.tool = Tool::Ring;
+        let _ = app.update(Message::SelectAll);
+        assert_eq!(app.tool, Tool::Select);
+        assert_eq!(app.selected, app.doc.all_ids());
+    }
 
     #[test]
     fn snapping_a_ring_is_one_undoable_edit_with_original_atom_ids_restored() {

@@ -4,6 +4,8 @@ use moruno::{
     document::{Document, Point as World},
     scene::{Primitive, primitives},
 };
+mod selection;
+use selection::{Handle, SelectionBox, TransformDrag};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Tool {
@@ -44,6 +46,12 @@ impl Tool {
 pub enum Edit {
     Select(Vec<u64>),
     Move(Vec<u64>, f32, f32),
+    Transform {
+        ids: Vec<u64>,
+        pivot: World,
+        scale: f32,
+        rotation: f32,
+    },
     Bond(World, World, Option<u64>, Option<u64>),
     Ring(World, Option<World>),
     Click(World),
@@ -82,9 +90,11 @@ pub struct State {
     gesture: Option<Gesture>,
     cursor: Option<Point>,
     last_click: Option<(std::time::Instant, u64)>,
+    modifiers: iced::keyboard::Modifiers,
 }
 #[derive(Debug)]
 enum Gesture {
+    Transform(Box<TransformDrag>),
     Draw {
         start: World,
         id: Option<u64>,
@@ -133,12 +143,23 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
         if let Event::Mouse(mouse::Event::CursorMoved { position }) = event {
             state.cursor = Some(*position);
         }
+        if let Event::Keyboard(
+            iced::keyboard::Event::ModifiersChanged(modifiers)
+            | iced::keyboard::Event::KeyPressed { modifiers, .. }
+            | iced::keyboard::Event::KeyReleased { modifiers, .. },
+        ) = event
+        {
+            state.modifiers = *modifiers;
+        }
         let point = state
             .cursor
             .or(cursor.position())
             .map(|p| Point::new(p.x - bounds.x, p.y - bounds.y));
         let inside = point.is_some_and(|p| Rectangle::with_size(bounds.size()).contains(p));
         match event {
+            Event::Keyboard(iced::keyboard::Event::ModifiersChanged(_)) => {
+                Some(Action::request_redraw())
+            }
             Event::Keyboard(iced::keyboard::Event::KeyPressed {
                 key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
                 ..
@@ -156,7 +177,9 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                 state.cursor = None;
                 Some(Action::request_redraw())
             }
-            Event::Mouse(mouse::Event::WheelScrolled { delta }) if inside => {
+            Event::Mouse(mouse::Event::WheelScrolled { delta })
+                if inside && state.gesture.is_none() =>
+            {
                 let amount = match delta {
                     mouse::ScrollDelta::Lines { y, .. } => *y * 0.12,
                     mouse::ScrollDelta::Pixels { y, .. } => *y * 0.003,
@@ -174,6 +197,20 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
             }
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) if inside => {
                 let p = self.camera.world(point?, bounds);
+                if self.tool == Tool::Select
+                    && let Some(selection) =
+                        SelectionBox::new(self.doc, self.selected, self.camera, bounds)
+                    && let Some(handle) = selection.hit(point?)
+                {
+                    state.last_click = None;
+                    state.gesture = Some(Gesture::Transform(Box::new(TransformDrag::new(
+                        selection,
+                        handle,
+                        p,
+                        self.selected,
+                    ))));
+                    return Some(Action::request_redraw().and_capture());
+                }
                 let mut hit = hit_selection(self.doc, p, 10.0 / self.camera.zoom);
                 if self.tool == Tool::Select && hit.is_empty() {
                     hit = moruno::editing::ring_at(self.doc, p).unwrap_or_default();
@@ -231,6 +268,15 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                 let gesture = state.gesture.take()?;
                 let p = self.camera.world(point?, bounds);
                 let edit = match gesture {
+                    Gesture::Transform(drag) => {
+                        let (scale, rotation) = drag.values(p, state.modifiers.shift());
+                        Edit::Transform {
+                            ids: drag.ids,
+                            pivot: drag.pivot,
+                            scale,
+                            rotation,
+                        }
+                    }
                     Gesture::Ring { start, attached } => {
                         if !inside {
                             return Some(Action::request_redraw().and_capture());
@@ -369,6 +415,14 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
         }
         let mut preview = self.doc.clone();
         let mut ring_selection = None;
+        if let (Some(Gesture::Transform(drag)), Some(p)) = (&state.gesture, state.cursor) {
+            let end = self
+                .camera
+                .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
+            let (scale, rotation) = drag.values(end, state.modifiers.shift());
+            moruno::editing::transform_about(&mut preview, &drag.ids, drag.pivot, scale, rotation);
+            ring_selection = Some(drag.ids.clone());
+        }
         if let (Some(Gesture::Ring { start, attached }), Some(p)) = (&state.gesture, state.cursor)
             && bounds.contains(p)
         {
@@ -515,16 +569,45 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                 _ => {}
             }
         }
+        if self.tool == Tool::Select {
+            if let (Some(Gesture::Transform(drag)), Some(p)) = (&state.gesture, state.cursor)
+                && matches!(drag.handle, Handle::Rotate)
+            {
+                let end = self
+                    .camera
+                    .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
+                drag.selection
+                    .draw(&mut frame, drag.values(end, state.modifiers.shift()).1);
+            } else if let Some(selection) =
+                SelectionBox::new(&preview, selected, self.camera, bounds)
+            {
+                selection.draw(&mut frame, 0.0);
+            }
+        }
         vec![frame.into_geometry()]
     }
     fn mouse_interaction(
         &self,
-        _state: &State,
+        state: &State,
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> mouse::Interaction {
+        if let Some(Gesture::Transform(drag)) = &state.gesture {
+            return if matches!(drag.handle, Handle::Rotate) {
+                mouse::Interaction::Grabbing
+            } else {
+                drag.handle.cursor()
+            };
+        }
         if cursor.is_over(bounds) {
             if self.tool == Tool::Select {
+                if let Some(selection) =
+                    SelectionBox::new(self.doc, self.selected, self.camera, bounds)
+                    && let Some(p) = cursor.position()
+                    && let Some(handle) = selection.hit(Point::new(p.x - bounds.x, p.y - bounds.y))
+                {
+                    return handle.cursor();
+                }
                 mouse::Interaction::default()
             } else {
                 mouse::Interaction::Crosshair
@@ -701,6 +784,88 @@ mod tests {
             .into_inner()
             .0
             .unwrap()
+    }
+
+    #[test]
+    fn selection_handles_resize_and_rotate_without_moving_or_merging_atoms() {
+        let mut doc = Document::default();
+        let a = doc.add_atom("C", World::new(-20.0, -10.0));
+        let b = doc.add_atom("C", World::new(20.0, 10.0));
+        doc.add_bond(a, b, 1, "plain");
+        let original = doc.clone();
+        let canvas = MoleculeCanvas {
+            doc: &doc,
+            selected: &[a, b],
+            tool: Tool::Select,
+            camera: Camera {
+                center: World::default(),
+                zoom: 1.0,
+            },
+            grid: false,
+            ring_size: 6,
+            aromatic_ring: false,
+        };
+        for (start, end, expected_pivot, expected_scale, expected_rotation) in [
+            (
+                Point::new(232.0, 172.0),
+                Point::new(272.0, 192.0),
+                World::new(-20.0, -10.0),
+                2.0,
+                0.0,
+            ),
+            (
+                Point::new(200.0, 100.0),
+                Point::new(250.0, 150.0),
+                World::default(),
+                1.0,
+                90.0,
+            ),
+        ] {
+            let Edit::Transform {
+                ids,
+                pivot,
+                scale,
+                rotation,
+            } = pointer_gesture(&canvas, start, end)
+            else {
+                panic!("handle must produce a transform, not an atom move");
+            };
+            assert_eq!(ids, vec![a, b]);
+            assert_eq!(pivot, expected_pivot);
+            assert!((scale - expected_scale).abs() < 0.001);
+            assert!((rotation - expected_rotation).abs() < 0.001);
+        }
+        assert_eq!(
+            doc, original,
+            "pointer previews must not mutate the document"
+        );
+        let mut state = State::default();
+        let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(400.0, 300.0));
+        let cursor = mouse::Cursor::Available(Point::new(232.0, 172.0));
+        canvas.update(
+            &mut state,
+            &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            bounds,
+            cursor,
+        );
+        assert!(matches!(state.gesture, Some(Gesture::Transform(_))));
+        canvas.update(
+            &mut state,
+            &Event::Window(iced::window::Event::Unfocused),
+            bounds,
+            cursor,
+        );
+        assert!(state.gesture.is_none());
+        assert!(
+            canvas
+                .update(
+                    &mut state,
+                    &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                    bounds,
+                    cursor
+                )
+                .is_none()
+        );
     }
 
     #[test]

@@ -131,6 +131,40 @@ pub fn transform(doc: &mut Document, ids: &[u64], transform: Transform) {
         };
         center.offset(x, y)
     };
+    map_positions(doc, ids, convert);
+    if !matches!(transform, Transform::Rotate(_)) {
+        // Reflect the projection while preserving the molecule's stereochemistry.
+        for b in &mut doc.bonds {
+            if ids.contains(&b.a) && ids.contains(&b.b) {
+                b.display = match b.display.as_str() {
+                    "wedge" => "hash",
+                    "hash" => "wedge",
+                    other => other,
+                }
+                .into();
+            }
+        }
+    }
+}
+
+/// Uniform, orientation-preserving transform used by the selection handles.
+pub fn transform_about(doc: &mut Document, ids: &[u64], pivot: Point, scale: f32, degrees: f32) {
+    if !scale.is_finite()
+        || scale <= 0.0
+        || !degrees.is_finite()
+        || (scale == 1.0 && degrees == 0.0)
+    {
+        return;
+    }
+    let (s, c) = degrees.to_radians().sin_cos();
+    map_positions(doc, ids, |p| {
+        let x = (p.x - pivot.x) * scale;
+        let y = (p.y - pivot.y) * scale;
+        pivot.offset(x * c - y * s, x * s + y * c)
+    });
+}
+
+fn map_positions(doc: &mut Document, ids: &[u64], convert: impl Fn(Point) -> Point) {
     let boundary: Vec<_> = doc
         .bonds
         .iter()
@@ -154,19 +188,6 @@ pub fn transform(doc: &mut Document, ids: &[u64], transform: Transform) {
         if ids.contains(&a.id) {
             a.start = convert(a.start);
             a.end = convert(a.end);
-        }
-    }
-    if !matches!(transform, Transform::Rotate(_)) {
-        // Reflect the projection while preserving the molecule's stereochemistry.
-        for b in &mut doc.bonds {
-            if ids.contains(&b.a) && ids.contains(&b.b) {
-                b.display = match b.display.as_str() {
-                    "wedge" => "hash",
-                    "hash" => "wedge",
-                    other => other,
-                }
-                .into();
-            }
         }
     }
 }

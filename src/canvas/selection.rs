@@ -1,0 +1,203 @@
+use super::{Camera, World, rgb};
+use iced::widget::canvas::{Frame, Path, Stroke};
+use iced::{Color, Point, Rectangle, Size, mouse};
+use moruno::{document::Document, editing, scene};
+
+#[derive(Clone, Copy, Debug)]
+pub(super) enum Handle {
+    Resize(usize),
+    Rotate,
+}
+
+impl Handle {
+    pub fn cursor(self) -> mouse::Interaction {
+        match self {
+            Self::Rotate => mouse::Interaction::Grab,
+            Self::Resize(0 | 2) => mouse::Interaction::ResizingDiagonallyDown,
+            Self::Resize(_) => mouse::Interaction::ResizingDiagonallyUp,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(super) struct SelectionBox {
+    corners: [World; 4],
+    pub pivot: World,
+    camera: Camera,
+    bounds: Rectangle,
+}
+
+impl SelectionBox {
+    pub fn new(doc: &Document, ids: &[u64], camera: Camera, bounds: Rectangle) -> Option<Self> {
+        if ids.len() == 1 && doc.atom(ids[0]).is_some() {
+            return None;
+        }
+        let (lo, hi) = scene::selection_bounds(doc, ids)?;
+        Some(Self {
+            corners: [lo, World::new(hi.x, lo.y), hi, World::new(lo.x, hi.y)],
+            pivot: editing::center(doc, ids),
+            camera,
+            bounds,
+        })
+    }
+
+    fn grips(self) -> [Point; 4] {
+        let offsets = [(-12.0, -12.0), (12.0, -12.0), (12.0, 12.0), (-12.0, 12.0)];
+        std::array::from_fn(|i| {
+            let p = self.camera.screen(self.corners[i], self.bounds);
+            Point::new(p.x + offsets[i].0, p.y + offsets[i].1)
+        })
+    }
+
+    fn rotation_grip(self) -> Point {
+        let p = self.grips();
+        Point::new((p[0].x + p[1].x) / 2.0, p[0].y - 28.0)
+    }
+
+    pub fn hit(self, p: Point) -> Option<Handle> {
+        if p.distance(self.rotation_grip()) < 10.0 {
+            return Some(Handle::Rotate);
+        }
+        self.grips()
+            .iter()
+            .position(|q| (p.x - q.x).abs() < 8.0 && (p.y - q.y).abs() < 8.0)
+            .map(Handle::Resize)
+    }
+
+    /// During rotation the box and its handle rotate with the preview.
+    pub fn draw(self, frame: &mut Frame, rotation: f32) {
+        let pivot = self.camera.screen(self.pivot, self.bounds);
+        let (s, c) = rotation.to_radians().sin_cos();
+        let rotate = |p: Point| {
+            Point::new(
+                pivot.x + (p.x - pivot.x) * c - (p.y - pivot.y) * s,
+                pivot.y + (p.x - pivot.x) * s + (p.y - pivot.y) * c,
+            )
+        };
+        let corners = self.grips().map(rotate);
+        let outline = Path::new(|p| {
+            p.move_to(corners[0]);
+            for corner in &corners[1..] {
+                p.line_to(*corner);
+            }
+            p.close();
+        });
+        let stroke = Stroke::default()
+            .with_width(1.2)
+            .with_color(rgb([19, 135, 116]));
+        frame.stroke(&outline, stroke);
+        for p in corners {
+            let handle = Path::rectangle(Point::new(p.x - 4.0, p.y - 4.0), Size::new(8.0, 8.0));
+            frame.fill(&handle, Color::WHITE);
+            frame.stroke(&handle, stroke);
+        }
+        let top = Point::new(
+            (corners[0].x + corners[1].x) / 2.0,
+            (corners[0].y + corners[1].y) / 2.0,
+        );
+        let grip = rotate(self.rotation_grip());
+        frame.stroke(&Path::line(top, grip), stroke);
+        let handle = Path::circle(grip, 6.0);
+        frame.fill(&handle, Color::WHITE);
+        frame.stroke(&handle, stroke.with_width(1.8));
+        frame.fill(&Path::circle(grip, 2.0), rgb([19, 135, 116]));
+    }
+}
+
+#[derive(Debug)]
+pub(super) struct TransformDrag {
+    pub ids: Vec<u64>,
+    pub pivot: World,
+    pub handle: Handle,
+    pub selection: SelectionBox,
+    start: World,
+    corner: World,
+    offset: World,
+}
+
+impl TransformDrag {
+    pub fn new(selection: SelectionBox, handle: Handle, start: World, ids: &[u64]) -> Self {
+        let (pivot, corner) = match handle {
+            Handle::Rotate => (selection.pivot, start),
+            Handle::Resize(i) => (selection.corners[(i + 2) % 4], selection.corners[i]),
+        };
+        Self {
+            ids: ids.to_vec(),
+            pivot,
+            handle,
+            selection,
+            start,
+            corner,
+            offset: World::new(start.x - corner.x, start.y - corner.y),
+        }
+    }
+
+    pub fn values(&self, end: World, snap_angle: bool) -> (f32, f32) {
+        match self.handle {
+            Handle::Rotate => {
+                if end.distance(self.pivot) < 0.001 {
+                    return (1.0, 0.0);
+                }
+                let a = (self.start.y - self.pivot.y).atan2(self.start.x - self.pivot.x);
+                let b = (end.y - self.pivot.y).atan2(end.x - self.pivot.x);
+                let angle = ((b - a).to_degrees() + 180.0).rem_euclid(360.0) - 180.0;
+                (
+                    1.0,
+                    if snap_angle {
+                        (angle / 15.0).round() * 15.0
+                    } else {
+                        angle
+                    },
+                )
+            }
+            Handle::Resize(_) => {
+                let x = self.corner.x - self.pivot.x;
+                let y = self.corner.y - self.pivot.y;
+                let length = x * x + y * y;
+                if length < 0.001 {
+                    return (1.0, 0.0);
+                }
+                let factor = ((end.x - self.offset.x - self.pivot.x) * x
+                    + (end.y - self.offset.y - self.pivot.y) * y)
+                    / length;
+                (factor.clamp(0.05, 20.0), 0.0)
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn handles_keep_grab_offsets_and_snap_rotation_without_reflecting() {
+        let mut doc = Document::default();
+        let a = doc.add_atom("C", World::new(-20.0, -10.0));
+        let b = doc.add_atom("C", World::new(20.0, 10.0));
+        doc.add_bond(a, b, 1, "plain");
+        for zoom in [0.5, 1.0, 3.0] {
+            let camera = Camera {
+                center: World::new(30.0, -15.0),
+                zoom,
+            };
+            let bounds = Rectangle::new(Point::new(80.0, 100.0), Size::new(400.0, 300.0));
+            let selection = SelectionBox::new(&doc, &[a, b], camera, bounds).unwrap();
+            let grip = selection.grips()[2];
+            let start = camera.world(Point::new(grip.x + 3.0, grip.y - 2.0), bounds);
+            let drag = TransformDrag::new(selection, Handle::Resize(2), start, &[a, b]);
+            assert_eq!(drag.values(start, false), (1.0, 0.0));
+            assert!((drag.values(start.offset(40.0, 20.0), false).0 - 2.0).abs() < 0.001);
+            assert!(drag.values(start.offset(-100.0, -100.0), false).0 > 0.0);
+            let start = camera.world(selection.rotation_grip(), bounds);
+            let drag = TransformDrag::new(selection, Handle::Rotate, start, &[a, b]);
+            let angle = 22.0_f32.to_radians();
+            let radius = start.distance(drag.pivot);
+            let end = drag
+                .pivot
+                .offset(radius * angle.sin(), -radius * angle.cos());
+            assert!((drag.values(end, false).1 - 22.0).abs() < 0.001);
+            assert_eq!(drag.values(end, true), (1.0, 15.0));
+        }
+    }
+}

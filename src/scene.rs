@@ -129,6 +129,38 @@ fn text_bounds(runs: &[Primitive]) -> Option<(Point, Point)> {
         })
 }
 
+/// Visible selected extents, including atom labels in the original graph.
+pub fn selection_bounds(doc: &Document, ids: &[u64]) -> Option<(Point, Point)> {
+    let mut points = Vec::new();
+    for atom in doc.atoms.iter().filter(|a| ids.contains(&a.id)) {
+        points.push(atom.position);
+        if let Some((lo, hi)) = text_bounds(&atom_label(atom, doc)) {
+            points.extend([lo, hi]);
+        }
+    }
+    for a in doc.annotations.iter().filter(|a| ids.contains(&a.id)) {
+        points.extend([a.position, a.position.offset(a.size().0, a.size().1)]);
+    }
+    for a in doc.arrows.iter().filter(|a| ids.contains(&a.id)) {
+        points.extend([a.start, a.end]);
+        if a.kind == "curved" {
+            points.push(Point::new(
+                (a.start.x + a.end.x) / 2.0 - (a.end.y - a.start.y) / 2.0,
+                (a.start.y + a.end.y) / 2.0 + (a.end.x - a.start.x) / 2.0,
+            ));
+        }
+    }
+    points.into_iter().fold(None, |bounds, p| {
+        Some(match bounds {
+            None => (p, p),
+            Some((lo, hi)) => (
+                Point::new(lo.x.min(p.x), lo.y.min(p.y)),
+                Point::new(hi.x.max(p.x), hi.y.max(p.y)),
+            ),
+        })
+    })
+}
+
 fn label_end(atom: &Atom, ux: f32, uy: f32, bounds: Option<(Point, Point)>, max: f32) -> Point {
     let Some((lo, hi)) = bounds else {
         return atom.position;
