@@ -880,6 +880,16 @@ impl App {
     fn edit(&mut self, edit: Edit) {
         let before = self.doc.clone();
         match edit {
+            Edit::Ring(anchor, direction) => {
+                self.selected = editing::ring_oriented(
+                    &mut self.doc,
+                    anchor,
+                    self.ring_size,
+                    self.aromatic_ring,
+                    10.0 / self.camera.zoom,
+                    direction,
+                );
+            }
             Edit::Select(ids) => {
                 if let Some(label) = self.doc.annotations.iter().find(|a| ids.contains(&a.id)) {
                     self.caption = label.text.replace('\n', "\\n");
@@ -887,8 +897,17 @@ impl App {
                 self.selected = ids;
             }
             Edit::Move(ids, dx, dy) => {
-                self.doc.translate(&ids, dx, dy);
-                self.selected = ids;
+                if let Some(snapped) = editing::snap_ring(
+                    &mut self.doc,
+                    &ids,
+                    Point::new(dx, dy),
+                    14.0 / self.camera.zoom,
+                ) {
+                    self.selected = snapped;
+                } else {
+                    self.doc.translate(&ids, dx, dy);
+                    self.selected = ids;
+                }
             }
             Edit::Pan(dx, dy) => {
                 self.fit_to_view = false;
@@ -970,6 +989,7 @@ impl App {
                                 self.bond_style()
                             };
                             self.doc.add_bond(b.a, b.b, order, display);
+                            self.selected = vec![b.a, b.b];
                         } else {
                             let (order, display) = self.bond_style();
                             let a = atom.unwrap_or_else(|| self.doc.add_atom("C", p));
@@ -1083,6 +1103,31 @@ fn arrow_kind(style: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn snapping_a_ring_is_one_undoable_edit_with_original_atom_ids_restored() {
+        let (mut app, _) = App::new();
+        let a = app.doc.add_atom("C", Point::default());
+        let b = app.doc.add_atom("C", Point::new(60.0, 0.0));
+        app.doc.add_bond(a, b, 1, "plain");
+        let ids = editing::ring(&mut app.doc, Point::new(200.0, 200.0), 5, false, 5.0);
+        let p = app.doc.atom(ids[0]).unwrap().position;
+        let q = app.doc.atom(ids[1]).unwrap().position;
+        let before = app.doc.clone();
+        app.edit(Edit::Move(
+            ids,
+            30.0 - (p.x + q.x) / 2.0,
+            -(p.y + q.y) / 2.0,
+        ));
+        let snapped = app.doc.clone();
+        assert_eq!((snapped.atoms.len(), snapped.bonds.len()), (5, 5));
+        assert_eq!(app.selected.len(), 5);
+        assert!(app.selected.contains(&a) && app.selected.contains(&b));
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, before);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc, snapped);
+    }
 
     #[test]
     fn clicking_existing_bonds_cycles_order_and_can_be_undone() {

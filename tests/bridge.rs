@@ -5,6 +5,47 @@ use moruno::{
 };
 
 #[tokio::test]
+async fn ring_attachments_preserve_methyl_and_methylene_identity() {
+    let engine = PythonEngine::default();
+    for (order, expected) in [(1, "CC1CCCCC1"), (2, "C=C1CCCCC1")] {
+        let mut doc = Document::default();
+        let a = doc.add_atom("C", Point::default());
+        let b = doc.add_atom("C", Point::new(36.373066, -21.0));
+        doc.add_bond(a, b, order, "plain");
+        editing::ring(&mut doc, Point::new(36.373066, -21.0), 6, false, 5.0);
+        let analysis = engine
+            .execute(Request::molecule("analyze", doc))
+            .await
+            .unwrap()
+            .analysis
+            .unwrap();
+        assert_eq!(analysis.smiles, expected);
+    }
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", Point::default());
+    let b = doc.add_atom("C", Point::new(60.0, 0.0));
+    doc.add_bond(a, b, 1, "plain");
+    let ids = editing::ring(&mut doc, Point::new(200.0, 200.0), 5, false, 5.0);
+    let p = doc.atom(ids[0]).unwrap().position;
+    let q = doc.atom(ids[1]).unwrap().position;
+    editing::snap_ring(
+        &mut doc,
+        &ids,
+        Point::new(30.0 - (p.x + q.x) / 2.0, -(p.y + q.y) / 2.0),
+        5.0,
+    )
+    .unwrap();
+    let analysis = engine
+        .execute(Request::molecule("analyze", doc))
+        .await
+        .unwrap()
+        .analysis
+        .unwrap();
+    assert_eq!(analysis.smiles, "C1CCCC1");
+    assert_eq!(analysis.formula, "C5H10");
+}
+
+#[tokio::test]
 async fn copy_and_reflection_preserve_stereochemistry() {
     let engine = PythonEngine::default();
     for smiles in ["N[C@@H](C)C(=O)O", "F/C=C/F", "F/C=C\\F"] {

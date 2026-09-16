@@ -10,6 +10,8 @@ The [workspace redesign](workspace-review.md) adds an original vector palette, c
 
 The chain-growth fix adds graph-aware endpoint placement, a hover preview, and reliable attachment on short drags. It passed 27 Rust tests and 10 Python tests. The subsequent bond-click update passes 28 Rust tests and adds the single → double → triple → single cycle. See the desktop regression records below.
 
+The 2026-09-17 [selection and ring-placement update](selection-and-ring-placement.md) replaces the idle bond preview with clear atom/bond markers, fixes ring orientation at substituents, and adds drag attachment and rescaling. Current validation: 36 Rust tests and 10 Python tests.
+
 | Capability | Moruno status | Evidence or limitation |
 | --- | --- | --- |
 | Freehand atoms and bonds | Implemented; desktop tested | Drew ethanol from an empty canvas; 3 atoms, 2 bonds, `CCO` |
@@ -17,7 +19,7 @@ The chain-growth fix adds graph-aware endpoint placement, a hover preview, and r
 | Single/double/triple bonds | Implemented; desktop tested | With a plain bond tool, clicks on an existing bond cycle single → double → triple → single; new bonds use the selected tool's order |
 | Solid/hashed wedges | Implemented | Molecular stereo round-trip tests; manual creation needs broader UI testing |
 | Wavy/aromatic bonds | Implemented | Wavy palette tool; aromatic ring placement and rendering |
-| Ring placement | Implemented; desktop tested | 3–8 members, shared vertex, fused placement; fused aromatic `C10H8` verified |
+| Ring placement | Implemented; desktop tested | 3–8 members; attached rings orient into open space and match local bond length; click/drag placement and side selection; existing isolated cycloalkanes can snap onto single bonds |
 | Charges and isotopes | Implemented | Selection controls; charged/isotopic structures covered by chemistry tests |
 | Selection and transforms | Implemented; desktop tested | Molecule double-click, rectangle select, move, erase, rotate, stereo-preserving flip, component align/distribute |
 | Undo/redo | Implemented; desktop tested | Snapshot history, up to 100 changes |

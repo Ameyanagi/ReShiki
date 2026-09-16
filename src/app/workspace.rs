@@ -62,6 +62,8 @@ impl App {
             tool: self.tool,
             camera: self.camera,
             grid: self.grid,
+            ring_size: self.ring_size,
+            aromatic_ring: self.aromatic_ring,
         })
         .width(Length::Fill)
         .height(Length::Fill)
@@ -252,7 +254,11 @@ impl App {
                             .size(14)
                             .text_size(12),
                     )
-                    .push(text("Click a bond to fuse").size(11).color(muted()));
+                    .push(
+                        text("Click or drag onto an atom or bond to attach")
+                            .size(11)
+                            .color(muted()),
+                    );
             }
             Tool::Arrow => {
                 options = options
