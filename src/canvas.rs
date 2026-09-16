@@ -347,7 +347,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                     &Path::line(self.camera.screen(a, bounds), self.camera.screen(b, bounds)),
                     Stroke::default()
                         .with_width(width * self.camera.zoom)
-                        .with_color(rgb([34, 49, 54])),
+                        .with_color(Color::BLACK),
                 ),
                 Primitive::Polygon(points) => {
                     let path = Path::new(|builder| {
@@ -359,7 +359,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                             builder.close();
                         }
                     });
-                    frame.fill(&path, rgb([34, 49, 54]));
+                    frame.fill(&path, Color::BLACK);
                 }
                 Primitive::Text {
                     position,
@@ -371,7 +371,8 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                         content: text,
                         position: self.camera.screen(position, bounds),
                         size: (size * self.camera.zoom).into(),
-                        font: iced::Font::with_name("Arial"),
+                        font: iced::Font::with_name(&moruno::style::DEFAULT.font_family),
+                        line_height: iced::widget::text::LineHeight::Relative(1.0),
                         color: rgb(color),
                         shaping: iced::widget::text::Shaping::Advanced,
                         ..Default::default()

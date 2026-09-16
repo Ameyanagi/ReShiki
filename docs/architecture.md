@@ -28,9 +28,10 @@ flowchart LR
 | `src/recovery.rs` | Atomic session snapshots and recovery candidates |
 | `src/export.rs` | Vector PDF and raster PNG from the shared SVG scene |
 | `src/storage.rs` | Write complete files beside the destination, then atomically replace |
+| `src/style.rs` and `engine/drawing_style.json` | Shared JACS / ACS defaults, publication units and font advances |
 | `engine/worker.py` | Molecular parsing, sanitization, descriptors, depiction and exchange formats |
 
-Document coordinates use screen-style positive-down Y, with 28 points per RDKit coordinate unit. The default single bond is 42 points. The camera never changes stored coordinates. Native documents use JSON format version 2 and accept version 1 when reading. Arrow styles prompted the version bump so an older editor rejects unsupported new documents. History and camera are session state.
+Document coordinates use screen-style positive-down Y, with 28 world units per RDKit coordinate unit. The default single bond is 42 world units, representing 14.4 publication points in the JACS / ACS preset. The camera never changes stored coordinates or export size. Native documents use JSON format version 2 and accept version 1 when reading. Arrow styles prompted the version bump so an older editor rejects unsupported new documents. History and camera are session state.
 
 Atoms retain formal charge, isotope, explicit-H count, implicit-H policy, map number and tetrahedral winding. Winding refers to an explicit ordered list of stable neighbor IDs. The worker compensates for permutation when constructing a toolkit molecule, preventing array reordering from reversing a stereocenter. Double-bond stereo stores its reference atoms separately. Topology edits invalidate affected stereo and derived hydrogen labels; the next structure check recomputes chemistry.
 

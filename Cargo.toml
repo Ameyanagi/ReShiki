@@ -14,6 +14,7 @@ tempfile = "3"
 directories-next = "2"
 resvg = "0.45"
 png = "0.17"
+ttf-parser = "0.25"
 svg2pdf = { version = "0.13", default-features = false, features = ["text"] }
 
 [profile.dev]

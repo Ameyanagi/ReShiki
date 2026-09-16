@@ -1,6 +1,6 @@
 use crate::{document::Document, scene};
 
-/// Render the shared vector scene. PDF stays vector; PNG is rendered at 300 dpi.
+/// Render at the style's physical size. PDF stays vector; PNG uses line-art resolution.
 pub fn drawing(doc: &Document, format: &str) -> Result<Vec<u8>, String> {
     let svg = scene::svg(doc);
     if format == "svg" {
@@ -13,15 +13,19 @@ pub fn drawing(doc: &Document, format: &str) -> Result<Vec<u8>, String> {
         "pdf" => svg2pdf::to_pdf(
             &tree,
             svg2pdf::ConversionOptions::default(),
-            svg2pdf::PageOptions::default(),
+            // usvg resolves CSS physical units at 96 px/in.
+            svg2pdf::PageOptions { dpi: 96.0 },
         )
         .map_err(|e| e.to_string()),
         "png" => {
-            let scale = 300.0 / 96.0;
+            let dpi = crate::style::DEFAULT.png_dpi;
+            let scale = dpi as f32 / 96.0;
             let width = (tree.size().width() * scale).ceil() as u32;
             let height = (tree.size().height() * scale).ceil() as u32;
             if u64::from(width) * u64::from(height) > 80_000_000 {
-                return Err("Drawing is too large for a 300 dpi PNG; use SVG or PDF.".into());
+                return Err(format!(
+                    "Drawing is too large for a {dpi} dpi PNG; use SVG or PDF."
+                ));
             }
             let mut pixmap =
                 resvg::tiny_skia::Pixmap::new(width, height).ok_or("Could not allocate image")?;
@@ -37,8 +41,8 @@ pub fn drawing(doc: &Document, format: &str) -> Result<Vec<u8>, String> {
                 encoder.set_color(png::ColorType::Rgba);
                 encoder.set_depth(png::BitDepth::Eight);
                 encoder.set_pixel_dims(Some(png::PixelDimensions {
-                    xppu: 11811,
-                    yppu: 11811,
+                    xppu: (dpi as f64 / 0.0254).round() as u32,
+                    yppu: (dpi as f64 / 0.0254).round() as u32,
                     unit: png::Unit::Meter,
                 }));
                 let mut writer = encoder.write_header().map_err(|e| e.to_string())?;
@@ -68,6 +72,27 @@ mod tests {
         let reader = png::Decoder::new(std::io::Cursor::new(&png))
             .read_info()
             .unwrap();
-        assert_eq!(reader.info().pixel_dims.unwrap().xppu, 11811);
+        assert_eq!(reader.info().pixel_dims.unwrap().xppu, 47244);
+    }
+
+    #[test]
+    fn physical_scale_survives_svg_and_png_export() {
+        use crate::document::Point;
+        let mut d = Document::default();
+        let a = d.add_atom("C", Point::default());
+        let b = d.add_atom("C", Point::new(42.0, 0.0));
+        d.add_bond(a, b, 1, "plain");
+        let svg = scene::svg(&d);
+        let tree = resvg::usvg::Tree::from_str(&svg, &Default::default()).unwrap();
+        // A 14.4 pt bond plus a 4 pt border on each side, independent of screen zoom.
+        assert!((tree.size().width() * 72.0 / 96.0 - 22.4).abs() < 0.001);
+        let png = drawing(&d, "png").unwrap();
+        let reader = png::Decoder::new(std::io::Cursor::new(&png))
+            .read_info()
+            .unwrap();
+        assert_eq!(
+            reader.info().width,
+            (22.4_f32 / 72.0 * 1200.0).ceil() as u32
+        );
     }
 }

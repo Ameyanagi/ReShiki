@@ -2,6 +2,8 @@
 
 The goal is a complete molecular drawing workspace. These are implementation stages, not release commitments. Version 0.2 delivered clipboard editing, configurable/fused rings, transforms, multiline labels, arrow styles, templates, five-second recovery, standalone local packaging and PDF/PNG export. The remaining work below is broader than that iteration.
 
+JACS / ACS is the required default for future drawing and export features. Build on the shared preset in `engine/drawing_style.json`; preserve physical sizes independently of screen zoom. Atom scripts and basic font measurements are now implemented, while rich user-editable labels and general collision avoidance remain work below.
+
 1. **Editor completeness:** rich chemical labels, brackets, customizable templates, abbreviation expansion, attachment-aware fragment insertion, drawing styles and more precise label layout.
 2. **Reliable documents:** native file association, open-file OS events, notarized release packaging, accessibility, full document-format validation and a larger interoperability corpus. Add exact text metrics and collision handling before claiming publication-quality rendering.
 3. **Reaction workflows:** explicit reactant/product/reagent groups, reaction coordinates, atom mapping, stoichiometry, balancing and reaction file formats. Preserve semantics separately from arrow appearance.

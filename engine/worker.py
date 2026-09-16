@@ -2,12 +2,14 @@
 import json
 import math
 import sys
+from pathlib import Path
 import xml.etree.ElementTree as ET
 
 from rdkit import Chem, rdBase
 from rdkit.Chem import Descriptors, rdDepictor, rdMolDescriptors
 
 SCALE = 28.0
+DRAWING_STYLE = json.loads(Path(__file__).with_name("drawing_style.json").read_text())
 ORDERS = {1: Chem.BondType.SINGLE, 2: Chem.BondType.DOUBLE,
           3: Chem.BondType.TRIPLE, 4: Chem.BondType.AROMATIC}
 STEREO = {"cis": Chem.BondStereo.STEREOCIS, "trans": Chem.BondStereo.STEREOTRANS,
@@ -184,17 +186,26 @@ def export_cdxml(doc):
     from_document(doc)
     if any(a.get("kind", "forward") != "forward" for a in doc.get("arrows", [])):
         raise ValueError("CDXML currently supports forward arrows. Use native, SVG, PDF or PNG for other arrow styles.")
-    root = ET.Element("CDXML", BondLength="42", LabelSize="11", CaptionSize="12")
+    style = DRAWING_STYLE
+    scale = style["bond_length_pt"] / style["bond_length_world"]
+    root = ET.Element("CDXML", BondLength=str(style["bond_length_pt"]),
+                      LabelSize=str(style["font_size_pt"]), CaptionSize=str(style["font_size_pt"]),
+                      LabelFont="3", CaptionFont="3", LabelFace="0", CaptionFace="0",
+                      LineWidth=str(style["line_width_pt"]), BoldWidth=str(style["bold_width_pt"]),
+                      MarginWidth=str(style["margin_width_pt"]), HashSpacing=str(style["hash_spacing_pt"]),
+                      BondSpacing=str(style["bond_spacing_ratio"] * 100), ChainAngle="120")
     fonts = ET.SubElement(root, "fonttable")
-    ET.SubElement(fonts, "font", id="3", charset="utf-8", name="Arial")
+    ET.SubElement(fonts, "font", id="3", charset="utf-8", name=style["font_family"])
     page = ET.SubElement(root, "page", id="1", BoundingBox="0 0 612 792")
     fragment = ET.SubElement(page, "fragment", id="2")
     points = [a["position"] for a in doc["atoms"]]
-    dx = 70-min((p["x"] for p in points), default=0)
-    dy = 70-min((p["y"] for p in points), default=0)
+    dx = 30-min((p["x"] * scale for p in points), default=0)
+    dy = 30-min((p["y"] * scale for p in points), default=0)
+    def position(p):
+        return f'{p["x"] * scale + dx:.6f} {p["y"] * scale + dy:.6f}'
     ids = {a["id"]: i+3 for i, a in enumerate(doc["atoms"])}
     for a in doc["atoms"]:
-        attrs = {"id": str(ids[a["id"]]), "p": f'{a["position"]["x"]+dx:.4f} {a["position"]["y"]+dy:.4f}',
+        attrs = {"id": str(ids[a["id"]]), "p": position(a["position"]),
                  "Element": str(Chem.GetPeriodicTable().GetAtomicNumber(a["element"]))}
         if a.get("charge"): attrs["Charge"] = str(a["charge"])
         if a.get("isotope"): attrs["Isotope"] = str(a["isotope"])
@@ -209,13 +220,12 @@ def export_cdxml(doc):
         ET.SubElement(fragment, "b", **attrs)
         next_id += 1
     for a in doc.get("annotations", []):
-        t = ET.SubElement(page, "t", id=str(next_id), p=f'{a["position"]["x"]+dx:.4f} {a["position"]["y"]+dy:.4f}')
-        ET.SubElement(t, "s", font="3", size="12").text = a["text"]
+        t = ET.SubElement(page, "t", id=str(next_id), p=position(a["position"]))
+        ET.SubElement(t, "s", font="3", size=str(style["font_size_pt"])).text = a["text"]
         next_id += 1
     for a in doc.get("arrows", []):
         ET.SubElement(page, "arrow", id=str(next_id), ArrowheadHead="Full", ArrowheadType="Solid",
-                      Tail3D=f'{a["start"]["x"]+dx} {a["start"]["y"]+dy} 0',
-                      Head3D=f'{a["end"]["x"]+dx} {a["end"]["y"]+dy} 0')
+                      Tail3D=position(a["start"])+" 0", Head3D=position(a["end"])+" 0")
         next_id += 1
     return '<?xml version="1.0" encoding="UTF-8"?>\n'+ET.tostring(root, encoding="unicode")
 

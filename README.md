@@ -4,6 +4,8 @@ A molecular drawing workspace built with Rust and Iced, with a local Python/RDKi
 
 Version 0.2 expands everyday editing, recovery and export. It is not yet a complete professional chemistry suite. The [capability report](docs/capabilities.md) separates tested workflows, partial support, and planned features.
 
+The default drawing style is **JACS / ACS**: black bonds and labels, 10 pt Arial, 14.4 pt bonds, and 0.6 pt lines. Canvas and exports share the preset; SVG/PDF retain physical publication dimensions and PNG uses 1200 dpi. See [style settings and sources](docs/jacs-style.md).
+
 ## Run
 
 Requires a current Rust toolchain and [uv](https://docs.astral.sh/uv/). Tested on Apple Silicon macOS with Rust 1.95, Iced 0.14, Python 3.12, and RDKit 2026.3.6. Other operating systems have not been tested.
@@ -39,7 +41,7 @@ The default development bundle uses this checkout's `engine/worker.py` and `.ven
 - Check structure validates the graph and refreshes formula, mass, descriptors, implicit hydrogen labels, and canonical SMILES. Clean up regenerates 2D coordinates.
 - The SMILES field and example buttons replace the drawing; Undo restores it.
 - Save/open `.moruno` retains the complete editable drawing. The Open dialog also accepts MOL, SMILES (`.smi`/`.smiles`), InChI, and supported CDXML drawings.
-- Export SVG or PDF for a vector drawing, PNG at 300 dpi, MOL/SMILES/InChI for molecular data, or CDXML for basic drawing interchange. MOL/SMILES/InChI cannot store annotation text or arrows.
+- Export SVG or PDF for a vector drawing, PNG at 1200 dpi, MOL/SMILES/InChI for molecular data, or CDXML for basic drawing interchange. MOL/SMILES/InChI cannot store annotation text or arrows.
 
 | Shortcut | Action |
 | --- | --- |

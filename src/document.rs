@@ -74,11 +74,9 @@ impl Annotation {
         (
             self.text
                 .lines()
-                .map(|l| l.chars().count())
-                .max()
-                .unwrap_or(0) as f32
-                * 7.0,
-            self.text.lines().count().max(1) as f32 * 16.0,
+                .map(|l| crate::style::text_width(l, crate::style::DEFAULT.font_size()))
+                .fold(0.0, f32::max),
+            self.text.lines().count().max(1) as f32 * crate::style::DEFAULT.line_height(),
         )
     }
 }
@@ -331,15 +329,11 @@ impl Document {
             .atoms
             .iter()
             .map(|a| a.position)
-            .chain(self.annotations.iter().flat_map(|a| {
-                [
-                    a.position,
-                    a.position.offset(
-                        a.text.lines().map(|l| l.chars().count()).max().unwrap_or(0) as f32 * 9.0,
-                        a.text.lines().count().max(1) as f32 * 16.0,
-                    ),
-                ]
-            }))
+            .chain(
+                self.annotations
+                    .iter()
+                    .flat_map(|a| [a.position, a.position.offset(a.size().0, a.size().1)]),
+            )
             .chain(self.arrows.iter().flat_map(|a| {
                 let mid = Point::new((a.start.x + a.end.x) / 2.0, (a.start.y + a.end.y) / 2.0);
                 let control = if a.kind == "curved" {

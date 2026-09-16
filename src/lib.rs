@@ -5,3 +5,4 @@ pub mod export;
 pub mod recovery;
 pub mod scene;
 pub mod storage;
+pub mod style;

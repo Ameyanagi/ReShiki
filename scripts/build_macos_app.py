@@ -25,6 +25,7 @@ if args.standalone:
         'uv', 'run', '--locked', '--group', 'packaging', 'pyinstaller',
         '--noconfirm', '--clean', '--onedir', '--name', 'moruno-engine',
         '--collect-all', 'rdkit', '--collect-all', 'numpy',
+        '--add-data', str(root / 'engine/drawing_style.json') + ':.',
         '--distpath', str(work / 'dist'), '--workpath', str(work / 'build'),
         '--specpath', str(work), str(root / 'engine/worker.py'),
     ], cwd=root, check=True)

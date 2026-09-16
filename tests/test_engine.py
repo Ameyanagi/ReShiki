@@ -75,6 +75,24 @@ class ChemistryTests(unittest.TestCase):
         self.assertEqual(result["analysis"]["smiles"], "CCO")
         self.assertEqual(result["analysis"]["formula"], "C2H6O")
 
+    def test_cdxml_uses_publication_scale_without_changing_chemistry(self):
+        doc = imported("CCO")["document"]
+        xml = handle(dict(protocol=1, operation="export", format="cdxml", document=doc))["output"]
+        root = ET.fromstring(xml)
+        self.assertAlmostEqual(float(root.attrib["BondLength"]), 14.4)
+        self.assertAlmostEqual(float(root.attrib["LineWidth"]), 0.6)
+        self.assertEqual(float(root.attrib["LabelSize"]), 10)
+        nodes = root.findall(".//n")
+        first, second = [[float(v) for v in n.attrib["p"].split()] for n in nodes[:2]]
+        self.assertAlmostEqual(sum((a-b)**2 for a, b in zip(first, second))**0.5, 14.4, places=4)
+        result = handle(dict(protocol=1, operation="import", format="cdxml", text=xml))
+        self.assertEqual(result["analysis"]["smiles"], "CCO")
+        for before, after in zip(doc["atoms"], result["document"]["atoms"]):
+            # Import may translate, but must preserve relative geometry and scale.
+            for axis in ("x", "y"):
+                self.assertAlmostEqual(before["position"][axis] - doc["atoms"][0]["position"][axis],
+                    after["position"][axis] - result["document"]["atoms"][0]["position"][axis], places=4)
+
     def test_freehand_ui_saved_drawing_and_exports(self):
         fixtures = ROOT / "tests/fixtures"
         doc = json.loads((fixtures / "ui-drawn-ethanol.moruno").read_text())

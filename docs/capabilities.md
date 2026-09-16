@@ -4,6 +4,8 @@ Assessment date: 2026-09-16. Compared against the installed version 26 reference
 
 **Moruno does not yet have full feature parity.** Version 0.2 adds everyday editing, recovery and standalone packaging. The table records the current boundary; the original desktop test record is retained below.
 
+The subsequent [JACS / ACS default-style update](jacs-style.md) adds publication dimensions, measured atom labels, inset ring double bonds and 1200 dpi PNG output. Its current validation count is 20 Rust tests and 10 Python tests; the historical counts below describe earlier builds.
+
 | Capability | Moruno status | Evidence or limitation |
 | --- | --- | --- |
 | Freehand atoms and bonds | Implemented; desktop tested | Drew ethanol from an empty canvas; 3 atoms, 2 bonds, `CCO` |
@@ -24,7 +26,8 @@ Assessment date: 2026-09-16. Compared against the installed version 26 reference
 | MOL | Implemented molecular subset | Parse/export; stereo identity tests; no reactions or drawing annotations |
 | CDXML | Partial; exchange desktop tested | Molecular import, basic molecule/text/arrow export; see restrictions below |
 | Native save/open | Implemented; desktop tested | Versioned `.moruno` JSON, complete graph and drawing objects |
-| SVG / PDF / PNG | Implemented; desktop and rendering tested | Vector SVG/PDF, PNG with 300 dpi metadata; no TIFF or print dialog |
+| SVG / PDF / PNG | Implemented; desktop and rendering tested | Vector SVG/PDF, PNG with 1200 dpi metadata; no TIFF or print dialog |
+| Default drawing style | JACS / ACS | Black, 10 pt Arial, 14.4 pt bonds, 0.6 pt lines; shared canvas and physical export settings |
 | Templates and named abbreviations | Partial | Twelve insertable molecular templates; no custom library or nickname expansion |
 | Reaction cleanup/mapping | Planned | Arrows are drawing objects; no reactant/product grouping or automatic mapping |
 | Query structures, R-groups, polymers | Planned | Unsupported constructs are rejected where detected |

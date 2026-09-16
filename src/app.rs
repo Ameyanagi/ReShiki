@@ -1138,6 +1138,10 @@ impl App {
         ]
         .spacing(8);
         let mut properties = column![
+            section("DRAWING STYLE"),
+            text(&moruno::style::DEFAULT.name).size(12),
+            text("10 pt Arial · 0.6 pt lines").size(11).color(muted()),
+            Space::new().height(8),
             section("STRUCTURE"),
             text(format!(
                 "{} atoms  ·  {} bonds",
@@ -1188,7 +1192,7 @@ impl App {
         for (label, format) in [
             ("SVG drawing", "svg"),
             ("PDF drawing", "pdf"),
-            ("PNG image · 300 dpi", "png"),
+            ("PNG image · 1200 dpi", "png"),
             ("MOL structure", "mol"),
             ("CDXML drawing", "cdxml"),
             ("SMILES text", "smiles"),

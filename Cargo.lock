@@ -2019,6 +2019,7 @@ dependencies = [
  "svg2pdf",
  "tempfile",
  "tokio",
+ "ttf-parser",
 ]
 
 [[package]]
