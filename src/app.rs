@@ -957,7 +957,18 @@ impl App {
                                 })
                                 .cloned();
                         if let Some(b) = bond.filter(|_| atom.is_none()) {
-                            let (order, display) = self.bond_style();
+                            let (order, display) = if matches!(self.tool, Tool::Bond(_)) {
+                                (
+                                    match b.order {
+                                        1 => 2,
+                                        2 => 3,
+                                        _ => 1,
+                                    },
+                                    "plain",
+                                )
+                            } else {
+                                self.bond_style()
+                            };
                             self.doc.add_bond(b.a, b.b, order, display);
                         } else {
                             let (order, display) = self.bond_style();
@@ -1072,6 +1083,35 @@ fn arrow_kind(style: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn clicking_existing_bonds_cycles_order_and_can_be_undone() {
+        for tool in [Tool::Bond(1), Tool::Bond(2), Tool::Bond(3)] {
+            let (mut app, _) = App::new();
+            app.tool = tool;
+            let a = app.doc.add_atom("C", Point::default());
+            let b = app.doc.add_atom("C", Point::new(42.0, 0.0));
+            app.doc.add_bond(a, b, 1, "plain");
+            let original = app.doc.clone();
+            for order in [2, 3, 1] {
+                app.edit(Edit::Click(Point::new(21.0, 0.0)));
+                assert_eq!(app.doc.atoms, original.atoms);
+                assert_eq!(app.doc.bonds.len(), 1);
+                assert_eq!(app.doc.bonds[0].order, order);
+                assert_eq!(app.doc.bonds[0].display, "plain");
+            }
+            assert_eq!(app.doc, original);
+            for order in [3, 2, 1] {
+                let _ = app.update(Message::Undo);
+                assert_eq!(app.doc.bonds[0].order, order);
+            }
+            assert_eq!(app.doc, original);
+            app.tool = Tool::Wedge;
+            app.edit(Edit::Click(Point::new(21.0, 0.0)));
+            assert_eq!(app.doc.bonds[0].order, 1);
+            assert_eq!(app.doc.bonds[0].display, "wedge");
+        }
+    }
 
     #[tokio::test]
     async fn endpoint_clicks_grow_a_connected_zigzag_with_undo_and_redo() {

@@ -8,13 +8,13 @@ The subsequent [JACS / ACS default-style update](jacs-style.md) adds publication
 
 The [workspace redesign](workspace-review.md) adds an original vector palette, contextual controls, inspector tabs, import drawer and tool shortcuts. That update passed 21 Rust tests and 10 Python tests, including actual-viewport fitting and preservation of manual camera movement.
 
-The chain-growth fix adds graph-aware endpoint placement, a hover preview, and reliable attachment on short drags. Current checks pass 27 Rust tests and 10 Python tests. See the desktop regression record below.
+The chain-growth fix adds graph-aware endpoint placement, a hover preview, and reliable attachment on short drags. It passed 27 Rust tests and 10 Python tests. The subsequent bond-click update passes 28 Rust tests and adds the single → double → triple → single cycle. See the desktop regression records below.
 
 | Capability | Moruno status | Evidence or limitation |
 | --- | --- | --- |
 | Freehand atoms and bonds | Implemented; desktop tested | Drew ethanol from an empty canvas; 3 atoms, 2 bonds, `CCO` |
 | Chain growth and branching | Implemented; desktop tested | Endpoint clicks build a zigzag; either end can grow; branches use open angles; short drags extend; carbon bonds remain independent of the last atom label |
-| Single/double/triple bonds | Implemented | Freehand single bonds tested; double bonds visible in imported aspirin |
+| Single/double/triple bonds | Implemented; desktop tested | With a plain bond tool, clicks on an existing bond cycle single → double → triple → single; new bonds use the selected tool's order |
 | Solid/hashed wedges | Implemented | Molecular stereo round-trip tests; manual creation needs broader UI testing |
 | Wavy/aromatic bonds | Implemented | Wavy palette tool; aromatic ring placement and rendering |
 | Ring placement | Implemented; desktop tested | 3–8 members, shared vertex, fused placement; fused aromatic `C10H8` verified |
@@ -103,3 +103,9 @@ In the rebuilt standalone app:
 - Exercised Undo/Redo, restored the all-carbon example, checked it again and saved `artifacts/chain-growth-check.moruno` through the native dialog. Reading the file confirmed nine carbon atoms and eight bonds. The artifact is local and ignored by Git.
 
 All 27 Rust and 10 Python tests pass, as do formatting, Clippy and bundle signature verification. Six added regression tests cover connected-chain identity and geometry, Undo/Redo, growth from either end, branching and occupied positions, linear junctions, atom-label carryover, short pointer gestures, and attachment to existing atoms. Automatic chain placement is a local geometry heuristic; a single drag still creates one bond. Drag explicitly to choose another direction in a crowded drawing.
+
+## Bond-click cycle regression check
+
+With any single/double/triple bond tool active, clicking the middle of an existing bond cycles its order through 1 → 2 → 3 → 1. Wedge, hash and wavy tools continue to apply their selected style. Drawing a new bond still uses the selected order, and endpoint clicks still grow the chain.
+
+Verified in the rebuilt desktop app: created a two-carbon single bond, clicked its midpoint three times, and inspected a screenshot after each click showing double, triple and single respectively. The atom/bond counts stayed at 2/1. The user's existing 22-atom drawing was preserved in a separate native file before restarting and reopened after testing. All 28 Rust tests, formatting and Clippy pass; the new regression covers each plain bond tool, unchanged atom positions, the complete cycle, Undo and wedge application.

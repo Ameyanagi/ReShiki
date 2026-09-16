@@ -32,7 +32,7 @@ The default development bundle uses this checkout's `engine/worker.py` and `.ven
 ## Use
 
 - The two-column palette keeps drawing tools visible. Hover an icon for its name and shortcut; options for the selected tool appear above the canvas.
-- With a bond tool, click an empty spot to start a carbon chain, then click its endpoint to grow a zigzag. A teal preview shows the next bond; branching uses the available space around existing bonds. Drag to choose a direction (30° snapping and consistent length), or release over an atom to connect. Click a bond's middle to change its order or style. Use the atom tool to replace carbons with other elements.
+- With a bond tool, click an empty spot to start a carbon chain, then click its endpoint to grow a zigzag. A teal preview shows the next bond; branching uses the available space around existing bonds. Drag to choose a direction (30° snapping and consistent length), or release over an atom to connect. With any single/double/triple bond tool, click a bond's middle to cycle **single → double → triple → single**. Wedge, hash and wavy tools apply their style instead. Use the atom tool to replace carbons with other elements.
 - Choose an element and click an atom to replace it, or empty space to place an atom. The palette contains common elements; the symbol field accepts all 118 elements.
 - Choose a 3–8 member ring, enable aromatic bonds, click a bond to fuse a ring, or click an atom to share a vertex.
 - Choose an arrow style, or enter annotation text (`\n` for new lines) in the tool options and place a label. Select a label and use Update label in the Properties inspector to edit it.

@@ -22,7 +22,10 @@ impl Tool {
     pub fn hint(self) -> &'static str {
         match self {
             Self::Select => "Drag to move or select · Double-click an atom to select its molecule",
-            Self::Bond(_) | Self::Wedge | Self::Hash | Self::Wavy => {
+            Self::Bond(_) => {
+                "Click an endpoint to grow · Drag to draw · Click a bond to cycle single → double → triple"
+            }
+            Self::Wedge | Self::Hash | Self::Wavy => {
                 "Click an endpoint to grow a chain · Drag to choose direction · Click a bond to change it"
             }
             Self::Atom => "Click to add an atom or replace an existing element",
