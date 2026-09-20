@@ -81,6 +81,9 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
             && let keyboard::Key::Character(c) = key
         {
             let message = match c.to_ascii_lowercase().as_str() {
+                "p" => Some(Message::Printing(super::printing::Action::Start(
+                    moruno::printing::Scope::Document,
+                ))),
                 "n" => Some(Message::New),
                 "o" => Some(Message::Open),
                 "s" if modifiers.shift() => Some(Message::SaveAs),

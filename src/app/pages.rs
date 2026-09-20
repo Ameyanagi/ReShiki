@@ -128,6 +128,16 @@ impl Editor {
     }
 }
 impl App {
+    pub(super) fn print_document(&self) -> Result<moruno::document::Document, String> {
+        let mut snapshot = self.doc.clone();
+        if let Some(editor) = &self.pages.editor {
+            if editor.epoch != self.file_epoch || editor.original != self.doc.page_layout {
+                return Err("Reopen Page setup before printing changed page settings.".into());
+            }
+            snapshot.page_layout = Some(editor.candidate()?);
+        }
+        Ok(snapshot)
+    }
     pub(super) fn fit_pages(&mut self, index: Option<usize>) {
         let Some(layout) = &self.doc.page_layout else {
             return;
@@ -375,6 +385,17 @@ impl App {
                         .on_press(Message::Pages(Action::Export))
                         .width(Length::Fill),
                 );
+            if moruno::printing::available() {
+                body = body.push(
+                    command("Print… · ⌘P")
+                        .on_press_maybe(self.printing.active.is_none().then_some(
+                            Message::Printing(super::printing::Action::Start(
+                                moruno::printing::Scope::Document,
+                            )),
+                        ))
+                        .width(Length::Fill),
+                );
+            }
             let overflow = layout.overflow(&self.doc);
             if overflow > 0 {
                 body = body.push(text(format!("{overflow} items cross a page edge or sit outside the pages. PDF pages clip at paper edges.")).size(11).color(iced::Color::from_rgb8(168,91,36)));
@@ -519,6 +540,17 @@ impl App {
                         .on_press(Message::Pages(Action::Export))
                         .width(Length::Fill),
                 );
+            if moruno::printing::available() {
+                body = body.push(
+                    command("Print… · ⌘P")
+                        .on_press_maybe(self.printing.active.is_none().then_some(
+                            Message::Printing(super::printing::Action::Start(
+                                moruno::printing::Scope::Document,
+                            )),
+                        ))
+                        .width(Length::Fill),
+                );
+            }
             let overflow = layout.overflow(&self.doc);
             if overflow > 0 {
                 body=body.push(text(format!("{overflow} objects cross a page edge or sit outside the pages. PDF pages clip at paper edges.")).size(11).color(iced::Color::from_rgb8(168,91,36)));

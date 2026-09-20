@@ -498,7 +498,8 @@ pub(super) fn commits_draft(message: &Message) -> bool {
                 | super::pages::Action::Remove
                 | super::pages::Action::Center(_)
                 | super::pages::Action::Export
-        ) | Message::Tool(_)
+        ) | Message::Printing(super::printing::Action::Start(_))
+            | Message::Tool(_)
             | Message::Palette(_)
             | Message::ContextKey(_)
             | Message::New

@@ -23,6 +23,19 @@ clipboard_temporary = clipboard.with_suffix('.new')
 subprocess.run(['swiftc', '-O', str(root / 'native/macos/Clipboard.swift'), '-o', str(clipboard_temporary)], check=True)
 clipboard_temporary.replace(clipboard)
 
+print_bundle = bundle / 'Contents/Helpers/Moruno Print.app'
+print_executable = print_bundle / 'Contents/MacOS/moruno-print'
+print_executable.parent.mkdir(parents=True, exist_ok=True)
+print_temporary = print_executable.with_suffix('.new')
+subprocess.run(['swiftc', '-O', str(root / 'native/macos/Print.swift'), '-o', str(print_temporary)], check=True)
+print_temporary.replace(print_executable)
+with (print_bundle / 'Contents/Info.plist').open('wb') as stream:
+    plistlib.dump({'CFBundleName': 'Moruno Print', 'CFBundleDisplayName': 'Moruno Print',
+                  'CFBundleIdentifier': 'dev.moruno.print', 'CFBundleExecutable': 'moruno-print',
+                  'CFBundlePackageType': 'APPL', 'CFBundleShortVersionString': '0.2.0',
+                  'NSHighResolutionCapable': True, 'LSUIElement': True,
+                  'LSMinimumSystemVersion': '12.0'}, stream)
+
 if args.standalone:
     work = root / 'target/pyinstaller'
     work.mkdir(parents=True, exist_ok=True)

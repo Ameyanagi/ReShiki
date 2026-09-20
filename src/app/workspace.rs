@@ -2242,6 +2242,34 @@ impl App {
                 Message::Pages(super::pages::Action::Export),
             ));
         }
+        if moruno::printing::available() {
+            body = body.push(
+                command(
+                    "Print… · ⌘P",
+                    Message::Printing(super::printing::Action::Start(
+                        moruno::printing::Scope::Document,
+                    )),
+                )
+                .on_press_maybe(self.printing.active.is_none().then_some(Message::Printing(
+                    super::printing::Action::Start(moruno::printing::Scope::Document),
+                )))
+                .width(Length::Fill),
+            );
+            if !self.selected.is_empty() {
+                body = body.push(
+                    command(
+                        "Print selection…",
+                        Message::Printing(super::printing::Action::Start(
+                            moruno::printing::Scope::Selection,
+                        )),
+                    )
+                    .on_press_maybe(self.printing.active.is_none().then_some(Message::Printing(
+                        super::printing::Action::Start(moruno::printing::Scope::Selection),
+                    )))
+                    .width(Length::Fill),
+                );
+            }
+        }
         body = body.push(horizontal_line()).push(section("CHEMICAL DATA"));
         for (label, format) in [
             ("MOL structure", "mol"),

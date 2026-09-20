@@ -21,6 +21,7 @@ mod inline_text;
 mod joining;
 mod pages;
 mod palettes;
+mod printing;
 mod shortcuts;
 mod template_library;
 mod typography;
@@ -42,6 +43,7 @@ pub enum Message {
     InlineText(inline_text::Action),
     Join(joining::Action),
     Pages(pages::Action),
+    Printing(printing::Action),
     Escape,
     Palette(palettes::Action),
     Assistant(assistant::Action),
@@ -243,6 +245,7 @@ pub struct App {
     inline_text: Option<inline_text::State>,
     joining: Option<joining::State>,
     pages: pages::State,
+    printing: printing::State,
     font_options: iced::widget::combo_box::State<String>,
     font_size_input: String,
     text_color_input: String,
@@ -330,6 +333,7 @@ impl App {
             inline_text: None,
             joining: None,
             pages: pages::State::default(),
+            printing: printing::State::default(),
             font_options: iced::widget::combo_box::State::new(
                 moruno::style::font_families()
                     .iter()
@@ -761,6 +765,9 @@ impl App {
                     | Message::Cancel
                     | Message::Saved(..)
                     | Message::Exported(_)
+                    | Message::Printing(
+                        printing::Action::Prepared(..) | printing::Action::Finished(..)
+                    )
                     | Message::Opened(_)
                     | Message::ClipboardRead { .. }
                     | Message::ClipboardWritten { .. }
@@ -797,6 +804,7 @@ impl App {
             && matches!(&message, Message::Canvas(Edit::Select(ids)) if ids.iter().any(|id| self.doc.annotations.iter().any(|a| a.id == *id) || self.doc.graphics.iter().any(|g|g.id==*id))));
         match message {
             Message::Pages(action) => return self.page_action(action),
+            Message::Printing(action) => return self.print_action(action),
             Message::Assistant(_)
             | Message::Palette(_)
             | Message::InlineText(_)
