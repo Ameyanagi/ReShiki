@@ -160,7 +160,12 @@ def archive(folder, output):
         output = Path(str(output) + ".zip")
         run(["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", folder, output])
     elif platform.system() == "Windows":
-        output = Path(shutil.make_archive(str(output), "zip", folder.parent, folder.name))
+        output = Path(str(output) + ".zip")
+        # Some wheel files have reproducible 1970 timestamps; ZIP starts in 1980.
+        with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED, strict_timestamps=False) as stream:
+            for entry in sorted(folder.rglob("*")):
+                if entry.is_file():
+                    stream.write(entry, entry.relative_to(folder.parent))
     else:
         output = Path(str(output) + ".tar.gz")
         with tarfile.open(output, "w:gz") as stream:
