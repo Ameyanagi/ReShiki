@@ -251,23 +251,9 @@ pub async fn copy(
                 .push(format!("Editable exchange unavailable: {error}")),
         }
     }
-    let images = tokio::task::spawn_blocking(move || {
-        [
-            ("com.adobe.pdf", "pdf"),
-            ("public.png", "png"),
-            ("public.svg-image", "svg"),
-        ]
-        .into_iter()
-        .map(|(kind, format)| {
-            (
-                format,
-                export::drawing(&doc, format).map(|bytes| Representation::new(kind, &bytes)),
-            )
-        })
-        .collect::<Vec<_>>()
-    })
-    .await
-    .map_err(|e| format!("Could not render clipboard images: {e}"))?;
+    let images = tokio::task::spawn_blocking(move || copy_images(&doc, image_only))
+        .await
+        .map_err(|e| format!("Could not render clipboard images: {e}"))?;
     let mut image_count = 0;
     for (format, result) in images {
         match result {
@@ -285,7 +271,9 @@ pub async fn copy(
                     }
                 }
                 representations.push(image);
-                image_count += 1;
+                if format != "native picture" {
+                    image_count += 1;
+                }
             }
             Err(error) => outcome
                 .notices
@@ -297,6 +285,44 @@ pub async fn copy(
     }
     invoke("write", &representations).await?;
     Ok(outcome)
+}
+
+fn copy_images(
+    doc: &Document,
+    image_only: bool,
+) -> Vec<(&'static str, Result<Representation, String>)> {
+    let mut images: Vec<_> = [
+        ("com.adobe.pdf", "pdf"),
+        ("public.png", "png"),
+        ("public.svg-image", "svg"),
+    ]
+    .into_iter()
+    .map(|(kind, format)| {
+        (
+            format,
+            export::drawing(doc, format).map(|bytes| Representation::new(kind, &bytes)),
+        )
+    })
+    .collect();
+    if image_only && let Some((_, Ok(png))) = images.iter().find(|(format, _)| *format == "png") {
+        // Keep Copy Image pasteable inside Moruno as one picture, with the
+        // same physical dimensions as the exported 1200 dpi raster.
+        let native = png.bytes().and_then(|bytes| {
+            let picture = crate::pictures::Picture::import(&bytes)?;
+            let width = crate::style::DEFAULT
+                .world(picture.width() as f32 * 72. / crate::style::DEFAULT.png_dpi as f32);
+            let height = crate::style::DEFAULT
+                .world(picture.height() as f32 * 72. / crate::style::DEFAULT.png_dpi as f32);
+            let mut doc = picture.document();
+            if let Some(g) = doc.graphics.first_mut() {
+                crate::pictures::resize(g, width, height)?;
+            }
+            let bytes = serde_json::to_vec(&doc).map_err(|e| e.to_string())?;
+            Ok(Representation::new(NATIVE, &bytes))
+        });
+        images.push(("native picture", native));
+    }
+    images
 }
 
 fn native_document(data: &[u8]) -> Result<Document, String> {
@@ -346,15 +372,29 @@ pub fn text_request(text: &str) -> Request {
     Request::import(format, text)
 }
 
-pub async fn paste(engine: PythonEngine) -> Result<Document, String> {
-    let packet = invoke("read", &[]).await?;
+pub async fn paste(engine: PythonEngine, image_only: bool) -> Result<Document, String> {
+    let packet = invoke(if image_only { "read_picture" } else { "read" }, &[]).await?;
+    paste_packet(engine, packet).await
+}
+
+async fn paste_packet(engine: PythonEngine, packet: Packet) -> Result<Document, String> {
     let item = packet
         .representations
         .first()
         .ok_or("No supported drawing on the clipboard")?;
     let data = item.bytes()?;
     if item.kind == NATIVE {
-        return native_document(&data);
+        return tokio::task::spawn_blocking(move || native_document(&data))
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+    if matches!(
+        item.kind.as_str(),
+        "public.png" | "public.tiff" | "public.jpeg" | "org.webmproject.webp" | "public.webp"
+    ) {
+        return tokio::task::spawn_blocking(move || crate::pictures::clipboard_document(&data))
+            .await
+            .map_err(|e| e.to_string())?;
     }
     let request = if item.kind.contains("cdxml") {
         Request::import(
@@ -376,7 +416,7 @@ pub async fn paste(engine: PythonEngine) -> Result<Document, String> {
         text_request(text)
     } else {
         return Err(
-            "The clipboard contains an image. Pasting images onto the canvas is not supported yet"
+            "Paste supports PNG, JPEG, TIFF and WebP pictures. Export this PDF or SVG to PNG first"
                 .into(),
         );
     };
@@ -392,6 +432,83 @@ pub async fn paste(engine: PythonEngine) -> Result<Document, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn raster_paste_and_copy_image_preserve_pixels_and_physical_size_without_a_clipboard_write()
+     {
+        let doc: Document =
+            serde_json::from_str(include_str!("../tests/fixtures/ui-drawn-ethanol.moruno"))
+                .unwrap();
+        let images = copy_images(&doc, true);
+        let native = images
+            .iter()
+            .find(|(format, _)| *format == "native picture")
+            .unwrap()
+            .1
+            .as_ref()
+            .unwrap()
+            .clone();
+        let png = images
+            .iter()
+            .find(|(format, _)| *format == "png")
+            .unwrap()
+            .1
+            .as_ref()
+            .unwrap()
+            .clone();
+        let restored = paste_packet(
+            PythonEngine::default(),
+            Packet {
+                representations: vec![native],
+            },
+        )
+        .await
+        .unwrap();
+        let raster = paste_packet(
+            PythonEngine::default(),
+            Packet {
+                representations: vec![png],
+            },
+        )
+        .await
+        .unwrap();
+        assert!(restored.atoms.is_empty());
+        assert_eq!(restored.graphics.len(), 1);
+        assert_eq!(raster.graphics[0].picture, restored.graphics[0].picture);
+        assert!((raster.graphics[0].axis_x.x - restored.graphics[0].axis_x.x).abs() < 0.01);
+        assert!((raster.graphics[0].axis_y.y - restored.graphics[0].axis_y.y).abs() < 0.01);
+        let invalid = Representation::new("public.png", b"not a PNG");
+        assert!(
+            paste_packet(
+                PythonEngine::default(),
+                Packet {
+                    representations: vec![invalid]
+                }
+            )
+            .await
+            .is_err()
+        );
+        for (kind, format) in [
+            ("public.jpeg", image::ImageFormat::Jpeg),
+            ("public.tiff", image::ImageFormat::Tiff),
+            ("org.webmproject.webp", image::ImageFormat::WebP),
+        ] {
+            let mut data = std::io::Cursor::new(Vec::new());
+            image::DynamicImage::new_rgb8(12, 8)
+                .write_to(&mut data, format)
+                .unwrap();
+            let result = paste_packet(
+                PythonEngine::default(),
+                Packet {
+                    representations: vec![Representation::new(kind, &data.into_inner())],
+                },
+            )
+            .await
+            .unwrap();
+            let picture = result.graphics[0].picture.as_ref().unwrap();
+            assert_eq!((picture.width(), picture.height()), (12, 8));
+        }
+    }
 
     #[test]
     fn mol_line_framing_preserves_empty_title_and_refuses_truncation() {

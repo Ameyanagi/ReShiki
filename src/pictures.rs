@@ -91,6 +91,19 @@ fn decode(bytes: &[u8]) -> Result<(DynamicImage, ImageFormat), String> {
     Ok((image, format))
 }
 impl Picture {
+    pub fn open(path: &std::path::Path) -> Result<Self, String> {
+        use std::io::Read as _;
+        let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
+        let metadata = file.metadata().map_err(|e| e.to_string())?;
+        if !metadata.is_file() || metadata.len() > MAX_BYTES as u64 {
+            return Err("Choose a picture file no larger than 16 MB".into());
+        }
+        let mut bytes = Vec::new();
+        file.take(MAX_BYTES as u64 + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|e| e.to_string())?;
+        Self::import(&bytes)
+    }
     fn stored(bytes: Vec<u8>, width: u32, height: u32) -> Self {
         let png = Bytes::from(bytes);
         let handle = Handle::from_bytes(png.clone());
@@ -174,4 +187,57 @@ impl Picture {
         doc.graphics.push(self.graphic(1, Point::default()));
         doc
     }
+}
+
+/// Resize around the picture's center, retaining rotation and reflection.
+pub fn resize(graphic: &mut Graphic, width: f32, height: f32) -> Result<(), String> {
+    graphic.validate()?;
+    if graphic.picture.is_none()
+        || !(0.01..=1_000_000.).contains(&width)
+        || !(0.01..=1_000_000.).contains(&height)
+    {
+        return Err("Picture dimensions must be positive and finite".into());
+    }
+    let center = graphic.origin.offset(
+        (graphic.axis_x.x + graphic.axis_y.x) / 2.,
+        (graphic.axis_x.y + graphic.axis_y.y) / 2.,
+    );
+    let x = width / graphic.axis_x.distance(Point::default());
+    let y = height / graphic.axis_y.distance(Point::default());
+    let mut next = graphic.clone();
+    next.axis_x = Point::new(graphic.axis_x.x * x, graphic.axis_x.y * x);
+    next.axis_y = Point::new(graphic.axis_y.x * y, graphic.axis_y.y * y);
+    next.origin = center.offset(
+        -(next.axis_x.x + next.axis_y.x) / 2.,
+        -(next.axis_x.y + next.axis_y.y) / 2.,
+    );
+    next.validate()?;
+    *graphic = next;
+    Ok(())
+}
+
+/// PNG clipboard images may carry publication resolution. Honor it instead of
+/// treating a high-resolution drawing as a low-resolution photograph.
+pub fn clipboard_document(bytes: &[u8]) -> Result<Document, String> {
+    let picture = Picture::import(bytes)?;
+    let mut doc = picture.document();
+    if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        let reader = png::Decoder::new(Cursor::new(bytes))
+            .read_info()
+            .map_err(|e| e.to_string())?;
+        if let Some(dims) = reader
+            .info()
+            .pixel_dims
+            .filter(|d| d.unit == png::Unit::Meter && d.xppu > 0 && d.yppu > 0)
+            && let Some(g) = doc.graphics.first_mut()
+        {
+            let width = crate::style::DEFAULT
+                .world(picture.width() as f32 * 72. / (dims.xppu as f32 * 0.0254));
+            let height = crate::style::DEFAULT
+                .world(picture.height() as f32 * 72. / (dims.yppu as f32 * 0.0254));
+            resize(g, width, height)?;
+        }
+    }
+    doc.validate()?;
+    Ok(doc)
 }

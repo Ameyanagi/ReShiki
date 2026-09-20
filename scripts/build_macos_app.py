@@ -20,7 +20,7 @@ shutil.copy2(root / f'target/{profile}/moruno', temporary_executable)
 temporary_executable.replace(executable)
 clipboard = executable.with_name('moruno-clipboard')
 clipboard_temporary = clipboard.with_suffix('.new')
-subprocess.run(['swiftc', '-O', str(root / 'native/macos/Clipboard.swift'), '-o', str(clipboard_temporary)], check=True)
+subprocess.run(['swiftc', '-O', str(root / 'native/macos/ClipboardSupport.swift'), str(root / 'native/macos/Clipboard.swift'), '-o', str(clipboard_temporary)], check=True)
 clipboard_temporary.replace(clipboard)
 
 print_bundle = bundle / 'Contents/Helpers/Moruno Print.app'

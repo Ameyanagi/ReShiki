@@ -1,0 +1,24 @@
+# Pictures in drawings
+
+Use **Import → Picture…** to insert a PNG, JPEG, TIFF or WebP file. The drawing stays responsive while the picture loads. Cancel leaves the drawing unchanged. If you switch documents or edit the drawing during loading, import again when ready; a late result never replaces newer work.
+
+On macOS, ordinary **Paste** accepts pictures when no explicit editable drawing representation takes priority. **Cmd+Shift+V**, or **Import → Paste picture**, chooses the raster representation explicitly. Clipboard reads are asynchronous and reject stale completion. PNG paste respects physical-resolution metadata.
+
+Select a picture to move it, drag a corner to resize proportionally, or use the top handle to rotate. Existing Flip H / Flip V, grouping, alignment and distribution controls also apply. The Picture inspector provides:
+
+- Width and height in millimetres. Press Enter to apply a dimension. **Link width and height** preserves the current proportions when entering dimensions.
+- **Restore original proportions**, fitted inside the current frame.
+- **Replace picture…**, retaining the center, orientation, reflection and layer while fitting the new picture inside the old frame.
+- **Send to back** and **Bring to front**, with the same stacking order on the canvas and in exports.
+
+Each insertion, replacement and transformation is undoable. Pictures are normalized to embedded PNG data, including transparency, so native files do not depend on the source image. Native Copy/Paste keeps the full frame; SVG/PDF/PNG export includes pictures alongside chemical drawing objects. The assistant can inspect pictures through its rendered canvas image.
+
+## Limits
+
+Files are limited to 16 MB, 16 million pixels, and 8192 pixels per side. A drawing permits at most 64 MB of encoded pictures and 64 million picture pixels. File import starts at 300 dpi and fits very large pictures within 100 mm; dimensions remain editable. Animated/multipage images currently use only the first frame. Embedded pictures use 8-bit RGBA pixels; retain the source file for original bit depth and metadata. There is no crop, masking, image adjustment, PDF/SVG picture import, or external editable picture exchange yet. Unsupported external picture exchange reports an error; it does not substitute an empty frame.
+
+## Verification
+
+Regression tests cover supported decoding formats, malformed inputs and size limits, transformations and transparency, export layering, native persistence, Undo, asynchronous cancellation/stale results, replacement, numeric dimensions and assistant image context. Native clipboard tests use a private pasteboard to verify format precedence and explicit picture paste without touching the user's clipboard.
+
+Desktop checks used an isolated document with a transparent PNG and editable ethanol: file import, physical dimensions, rotation/resize handles, front/back ordering, native save/reopen and clipboard workflows. Local QA artifacts are under `artifacts/pictures-qa/` and are not included in Git.

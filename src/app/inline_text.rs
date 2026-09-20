@@ -500,6 +500,12 @@ pub(super) fn commits_draft(message: &Message) -> bool {
                 | super::pages::Action::Center(_)
                 | super::pages::Action::Export
         ) | Message::Printing(super::printing::Action::Start(_))
+            | Message::Pictures(
+                super::pictures::Action::Import
+                    | super::pictures::Action::Replace
+                    | super::pictures::Action::Resize(_)
+                    | super::pictures::Action::RestoreAspect
+            )
             | Message::Tool(_)
             | Message::Palette(_)
             | Message::ContextKey(_)
@@ -513,6 +519,7 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::CopyImage
             | Message::CopySmiles
             | Message::Paste
+            | Message::PastePicture
             | Message::Duplicate
             | Message::Delete
             | Message::SelectAll

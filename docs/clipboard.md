@@ -6,15 +6,16 @@ Use **Cmd+Shift+C**, or **Export → Copy image**, for a picture of the selectio
 
 Editable external exchange uses the supported binary CDX/CDXML subset. It covers tested molecules, formal charges, isotopes, tetrahedral and double-bond stereo, bond/label colors, styled text, supported arrows, graphics and nested groups. Some scientific symbols and orbitals become editable vector paths rather than retaining their original preset type. If the receiving editor asks which document settings to use, preserving the copied settings retains the source appearance.
 
-Paste prefers native drawing data, then supported external drawings, MOL, SMILES, InChI or legacy Moruno text. Unsupported editable content produces an error rather than silently substituting a picture.
+Paste prefers native drawing data and explicit external chemical formats, then PNG/JPEG/TIFF/WebP pictures, then plain chemical text. Unsupported editable content produces an error rather than silently substituting a picture. **Cmd+Shift+V** or **Import → Paste picture** explicitly chooses a raster representation, including when editable formats are also present.
 
 ## Boundaries
 
-- Pasting pictures onto Moruno's canvas is not implemented yet. Use normal Copy for editable structures between Moruno documents.
+- Picture paste creates one embedded object and one Undo step. Native Moruno Copy/Paste preserves a picture’s frame, orientation and transparency. Copy Image also supplies a native raster object so normal Paste retains its publication size; PNG paste honors resolution metadata. [Picture controls and limits](pictures.md).
+- External editable exchange does not yet support embedded pictures: Copy reports that limitation and still supplies the native Moruno drawing and image alternatives. CDXML picture export fails explicitly.
 - Binary exchange shares the documented CDXML restrictions. Query/reaction predicates, unsupported objects, polymer semantics and enhanced stereo are not supported. External text metrics can differ. Binary paragraph line spacing is rounded to whole points; native documents and image exports retain their own precision.
 - If external editable export is unavailable, Copy still provides the native Moruno drawing and available images, with a visible notice. Image representations that fail to render are also reported.
 - The binary codec accepts up to 16 MB. The native helper limits all representations to 64 MB combined and the rendered raster to 80 million pixels. Large drawings can exceed the combined clipboard limit before reaching the raster limit; file export remains available.
-- Other platforms use the earlier text clipboard path. Office interoperability, embedded document objects and general image import remain future work.
+- Other platforms use the earlier text clipboard path; picture file import is available in the app. Office interoperability and embedded external document objects remain future work.
 - CDX is currently exposed through the clipboard and internal worker; the file Open/Export UI does not yet offer it.
 
 ## Verification

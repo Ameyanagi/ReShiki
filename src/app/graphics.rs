@@ -12,6 +12,7 @@ pub(super) fn parse_color(s: &str) -> Option<[u8; 3]> {
 }
 impl App {
     pub(super) fn sync_graphics(&mut self) {
+        self.sync_pictures();
         if let Some(g) = self
             .doc
             .graphics
@@ -38,7 +39,7 @@ impl App {
         change.apply(&mut self.graphic_style);
         let before = self.doc.clone();
         for g in &mut self.doc.graphics {
-            if self.selected.contains(&g.id) {
+            if self.selected.contains(&g.id) && g.picture.is_none() {
                 change.apply(&mut g.style);
             }
         }

@@ -206,6 +206,18 @@ async fn canvas_tools_return_live_data_and_images_without_mutating_the_document(
     use std::sync::{Arc, RwLock};
     let mut document = Document::default();
     let atom = document.add_atom("O", Point::default());
+    let mut pixels = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+        40,
+        30,
+        image::Rgba([220, 80, 60, 255]),
+    ))
+    .write_to(&mut pixels, image::ImageFormat::Png)
+    .unwrap();
+    let picture = moruno::pictures::Picture::import(&pixels.into_inner()).unwrap();
+    document
+        .graphics
+        .push(picture.graphic(2, Point::new(100., 0.)));
     let canvas = Arc::new(RwLock::new(Snapshot {
         document: document.clone(),
         selected: vec![atom],
@@ -228,6 +240,11 @@ async fn canvas_tools_return_live_data_and_images_without_mutating_the_document(
         serde_json::from_str(inspect["contentItems"][0]["text"].as_str().unwrap()).unwrap();
     assert_eq!(text["selected_ids"], serde_json::json!([atom]));
     assert_eq!(text["revision"], 8);
+    assert_eq!(
+        text["document"]["graphics"][0]["picture"],
+        serde_json::json!({"width_pixels":40,"height_pixels":30,"embedded":true})
+    );
+    assert!(!text.to_string().contains("iVBORw0KGgo"));
     let data = inspect["contentItems"][1]["imageUrl"]
         .as_str()
         .unwrap()
@@ -237,6 +254,8 @@ async fn canvas_tools_return_live_data_and_images_without_mutating_the_document(
         .decode(data)
         .unwrap();
     assert!(png.starts_with(b"\x89PNG"));
+    let rendered = image::load_from_memory(&png).unwrap().to_rgba8();
+    assert!(rendered.pixels().any(|p| p.0 == [220, 80, 60, 255]));
     let preview = tools
         .call(
             "canvas_preview",

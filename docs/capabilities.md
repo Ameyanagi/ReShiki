@@ -1,5 +1,7 @@
 # Capability report
 
+The [picture workflow](pictures.md) adds asynchronous file import, macOS raster paste, embedded storage, numeric dimensions, replacement and layering with chemistry. Desktop checks cover canvas transforms, grouping, native persistence and private-pasteboard copy/paste; **225 Rust tests**, **64 Python tests**, formatting and strict Clippy pass. The standalone macOS bundle opens saved pictures outside the checkout. External editable picture exchange remains unsupported.
+
 Assessment date: 2026-09-16, with subsequent updates recorded below. Workflows were checked through the desktop app, saved documents, rendering and chemistry tests.
 
 **Several workflows remain incomplete.** Version 0.2 adds everyday editing, recovery and standalone packaging. The table records the current boundary; the original desktop test record is retained below.

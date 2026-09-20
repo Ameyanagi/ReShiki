@@ -119,7 +119,7 @@ impl App {
                 .doc
                 .graphics
                 .iter()
-                .filter(|g| self.selected.contains(&g.id))
+                .filter(|g| self.selected.contains(&g.id) && g.picture.is_none())
             {
                 colors.push(g.style.stroke);
                 colors.extend(g.style.fill);
@@ -358,7 +358,7 @@ impl App {
                 }
             }
             for graphic in &mut self.doc.graphics {
-                if self.selected.contains(&graphic.id) {
+                if self.selected.contains(&graphic.id) && graphic.picture.is_none() {
                     graphic.style.stroke = color;
                     if graphic.style.fill.is_some() {
                         graphic.style.fill = Some(color);

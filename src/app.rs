@@ -21,6 +21,7 @@ mod inline_text;
 mod joining;
 mod pages;
 mod palettes;
+mod pictures;
 mod printing;
 mod shortcuts;
 mod template_library;
@@ -44,6 +45,7 @@ pub enum Message {
     Join(joining::Action),
     Pages(pages::Action),
     Printing(printing::Action),
+    Pictures(pictures::Action),
     Escape,
     Palette(palettes::Action),
     Assistant(assistant::Action),
@@ -146,6 +148,7 @@ pub enum Message {
         result: Box<Result<Document, String>>,
     },
     Paste,
+    PastePicture,
     Pasted(Option<String>),
     Duplicate,
     Transform(Transform),
@@ -246,6 +249,7 @@ pub struct App {
     joining: Option<joining::State>,
     pages: pages::State,
     printing: printing::State,
+    pictures: pictures::State,
     font_options: iced::widget::combo_box::State<String>,
     font_size_input: String,
     text_color_input: String,
@@ -334,6 +338,7 @@ impl App {
             joining: None,
             pages: pages::State::default(),
             printing: printing::State::default(),
+            pictures: pictures::State::default(),
             font_options: iced::widget::combo_box::State::new(
                 moruno::style::font_families()
                     .iter()
@@ -479,6 +484,9 @@ impl App {
                             Message::Copy(false)
                         }),
                         "x" => Some(Message::Copy(true)),
+                        "v" if mods.shift() && cfg!(target_os = "macos") => {
+                            Some(Message::PastePicture)
+                        }
                         "v" => Some(Message::Paste),
                         "d" => Some(Message::Duplicate),
                         "i" => Some(Message::ToggleImport),
@@ -589,6 +597,7 @@ impl App {
                 "Drawing updated"
             }
             .into();
+            self.sync_pictures();
         }
         self.selected.retain(|id| self.doc.all_ids().contains(id));
     }
@@ -768,6 +777,7 @@ impl App {
                     | Message::Printing(
                         printing::Action::Prepared(..) | printing::Action::Finished(..)
                     )
+                    | Message::Pictures(pictures::Action::Loaded(..))
                     | Message::Opened(_)
                     | Message::ClipboardRead { .. }
                     | Message::ClipboardWritten { .. }
@@ -805,6 +815,7 @@ impl App {
         match message {
             Message::Pages(action) => return self.page_action(action),
             Message::Printing(action) => return self.print_action(action),
+            Message::Pictures(action) => return self.picture_action(action),
             Message::Assistant(_)
             | Message::Palette(_)
             | Message::InlineText(_)
@@ -1388,9 +1399,10 @@ impl App {
                     return iced::clipboard::write(format!("{}{json}", editing::CLIPBOARD_PREFIX));
                 }
             }
+            Message::PastePicture => return self.paste_native(true),
             Message::Paste => {
                 if cfg!(target_os = "macos") {
-                    return self.paste_native();
+                    return self.paste_native(false);
                 }
                 return iced::clipboard::read().map(Message::Pasted);
             }

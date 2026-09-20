@@ -33,7 +33,7 @@ impl App {
         )
     }
 
-    pub(super) fn paste_native(&mut self) -> Task<Message> {
+    pub(super) fn paste_native(&mut self, image_only: bool) -> Task<Message> {
         if self.clipboard_busy {
             self.status = "A clipboard operation is already in progress".into();
             return Task::none();
@@ -43,7 +43,7 @@ impl App {
         self.status = "Reading clipboard…".into();
         let (epoch, revision) = (self.file_epoch, self.revision);
         Task::perform(
-            moruno::clipboard::paste(self.engine.clone()),
+            moruno::clipboard::paste(self.engine.clone(), image_only),
             move |result| Message::ClipboardRead {
                 epoch,
                 revision,
@@ -104,7 +104,12 @@ impl App {
         result: Result<Document, String>,
     ) {
         self.clipboard_busy = false;
-        if epoch != self.file_epoch || revision != self.revision {
+        if epoch != self.file_epoch
+            || revision != self.revision
+            || self.inline_text.is_some()
+            || self.joining.is_some()
+            || self.cleanup.is_some()
+        {
             self.status =
                 "Drawing changed while reading the clipboard · Paste again to insert here".into();
             return;
@@ -143,7 +148,18 @@ impl App {
         self.sync_graphics();
         self.sync_arrows();
         self.sync_bonds();
-        self.status = "Editable drawing pasted".into();
+        if part.atoms.is_empty()
+            && part.annotations.is_empty()
+            && part.arrows.is_empty()
+            && part.graphics.iter().all(|g| g.picture.is_some())
+        {
+            if let Some(id) = self.selected.first().copied() {
+                self.reveal_picture(id);
+            }
+            self.status = "Picture pasted · Drag the corner handles to resize".into();
+        } else {
+            self.status = "Editable drawing pasted".into();
+        }
     }
 }
 

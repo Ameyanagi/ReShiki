@@ -4,8 +4,8 @@ Updated 2026-09-20 for Moruno 0.2.0. This inventory records supported workflows,
 explicit limitations and planned work. A supported subset is not a claim of
 complete coverage for every chemical structure or document.
 
-The largest remaining everyday gaps include imported images, document styles
-and broader clipboard interchange. Canvas text editing supports drafts and a
+The largest remaining everyday gaps include document styles and broader
+clipboard interchange. Canvas text editing supports drafts and a
 caret; full rich-text caret layout remains partial. Advanced reaction, query,
 polymer and spectroscopy workflows also remain incomplete.
 
@@ -96,7 +96,7 @@ Template placement offers explicit new-bond connection, shared-atom and fused-bo
 | Orbitals | Supported subset | Seven node-based shapes, outline/solid/flat-gray phases, phase reversal, inspector preview and vector exports. No gradient shading or 3D orbital model. |
 | TLC / gel electrophoresis plates | Missing | No chromatography objects. |
 | Tables | Missing | No editable table object. |
-| Imported pictures | In progress | Embedded picture model and layered rendering groundwork; native save/reopen and SVG/PDF/PNG rendering are covered by regression tests. Import/paste UI and external editable picture exchange remain missing. |
+| Imported pictures | Supported subset | Asynchronous PNG/JPEG/TIFF/WebP import and macOS image paste; embedded storage, resize/rotate/reflect, physical dimensions, linked proportions, replacement and front/back ordering. Native save/copy/Undo and SVG/PDF/PNG exports retain pictures. No cropping, PDF/SVG import or external editable picture exchange yet. [Picture workflow](pictures.md). |
 | Group / ungroup / integral groups | Supported | Nested groups with whole-molecule boundaries, member editing, integral selection and native/CDXML persistence. Molecular growth extends membership; joining grouped molecules unites overlapping groups and retains captions. |
 | Add frame | Supported | Fitted brackets, parentheses, braces and boxes; grouped with selection in one undoable action. |
 | Bring forward / send backward | Supported subset | Graphics can go to back/front relative to chemistry and other graphics; no general object stacking UI. |
@@ -160,7 +160,7 @@ Template placement offers explicit new-bond connection, shared-atom and fused-bo
 
 ## Next work
 
-1. Broader clipboard compatibility, canvas image import, Office verification and cross-platform exchange.
+1. Broader clipboard compatibility, editable external picture exchange, Office verification and cross-platform exchange.
 2. Broader chemical nicknames and full rich-text caret layout.
 3. Document styles, stationery, calibrated actual-size view, advanced page composition and printing on other platforms.
 4. Reaction roles, atom mapping, query/polymer data, naming and spectra.

@@ -72,7 +72,7 @@ impl App {
             .doc
             .graphics
             .iter()
-            .filter(|g| self.selected.contains(&g.id))
+            .filter(|g| self.selected.contains(&g.id) && g.picture.is_none())
             .collect();
         let kind = match self.tool {
             Tool::Graphic(k) => k,
@@ -1374,9 +1374,17 @@ impl App {
                 .doc
                 .graphics
                 .iter()
-                .any(|g| self.selected.contains(&g.id))
+                .any(|g| self.selected.contains(&g.id) && g.picture.is_none())
         {
             body = column![self.graphic_panel(), horizontal_line(), body].spacing(12);
+        }
+        if self
+            .doc
+            .graphics
+            .iter()
+            .any(|g| self.selected.contains(&g.id) && g.picture.is_some())
+        {
+            body = column![self.picture_panel(), horizontal_line(), body].spacing(12);
         }
         if self.tool == Tool::Arrow
             || self
@@ -2297,7 +2305,7 @@ impl App {
         container(
             column![
                 row![
-                    text("Import structure").size(13),
+                    text("Import").size(13),
                     Space::new().width(Length::Fill),
                     icon_button(
                         Icon::Close,
@@ -2320,6 +2328,25 @@ impl App {
                         .on_press_maybe((!self.busy).then_some(Message::Import))
                 ]
                 .spacing(8)
+                .align_y(Alignment::Center),
+                row![
+                    command(
+                        "Picture…",
+                        Message::Pictures(super::pictures::Action::Import)
+                    )
+                    .on_press_maybe(
+                        self.pictures
+                            .active
+                            .is_none()
+                            .then_some(Message::Pictures(super::pictures::Action::Import))
+                    ),
+                    text("PNG · JPEG · TIFF · WebP").size(11).color(muted()),
+                    command("Paste picture", Message::PastePicture).on_press_maybe(
+                        (cfg!(target_os = "macos") && !self.clipboard_busy)
+                            .then_some(Message::PastePicture)
+                    )
+                ]
+                .spacing(6)
                 .align_y(Alignment::Center),
                 row![
                     text("Try").size(11).color(muted()),
@@ -2437,7 +2464,7 @@ pub(super) fn hover_hint<'a>(
     .snap_within_viewport(true)
 }
 
-fn command(label: &str, message: Message) -> button::Button<'_, Message> {
+pub(super) fn command(label: &str, message: Message) -> button::Button<'_, Message> {
     button(text(label).size(12))
         .padding([7, 9])
         .on_press(message)

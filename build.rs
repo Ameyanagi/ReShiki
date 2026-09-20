@@ -2,13 +2,19 @@ use std::{env, path::PathBuf, process::Command};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-changed=native/macos/Clipboard.swift");
+    println!("cargo:rerun-if-changed=native/macos/ClipboardSupport.swift");
     println!("cargo:rerun-if-changed=native/macos/Print.swift");
     println!("cargo:rerun-if-changed=native/macos/PrintSupport.swift");
     if env::var("CARGO_CFG_TARGET_OS")? == "macos" {
         let helper = PathBuf::from(env::var_os("OUT_DIR").ok_or("Missing build output directory")?)
             .join("moruno-clipboard");
         let status = Command::new("swiftc")
-            .args(["-O", "native/macos/Clipboard.swift", "-o"])
+            .args([
+                "-O",
+                "native/macos/ClipboardSupport.swift",
+                "native/macos/Clipboard.swift",
+                "-o",
+            ])
             .arg(&helper)
             .status()?;
         if !status.success() {
