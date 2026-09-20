@@ -1,0 +1,73 @@
+---
+title: Build with templates
+description: Find a structure, choose its attachment point, and reuse your own fragments.
+---
+
+import Screenshot from "../../../components/Screenshot.astro";
+
+## Find a structure
+
+Open **Templates**. Pick a category or search by name, then choose a structure. Hover a thumbnail to see its name.
+
+<Screenshot
+  src="/moruno/manual/template-categories.png"
+  alt="Template categories beside the drawing."
+/>
+
+<Screenshot
+  src="/moruno/manual/template-grid.png"
+  alt="Aromatics shown as a compact grid of chemical structures."
+/>
+
+## Choose how it connects
+
+Click the exact atom or bond in the large template preview, then its destination on the canvas.
+
+| Mode                    | Result                                 |
+| ----------------------- | -------------------------------------- |
+| **Connect with a bond** | Joins two atoms with a new single bond |
+| **Share an atom**       | Merges the chosen atoms                |
+| **Fuse along a bond**   | Shares an edge and both endpoints      |
+
+<Screenshot
+  src="/moruno/manual/template-connect.png"
+  alt="Furan joined to a benzene ring, with its source atom selected in the template preview."
+/>
+
+<Screenshot
+  src="/moruno/manual/template-fuse.png"
+  alt="Furan fused along a highlighted bond to make benzofuran."
+/>
+
+<Screenshot
+  src="/moruno/manual/template-share.png"
+  alt="Cyclopentane sharing one atom with cyclohexane."
+/>
+
+Drag from the destination to choose a direction. **Shift/Ctrl** snaps the angle; **Alt/Option** frees it. Click empty space to place a separate structure.
+
+**Keep placing** inserts more copies. **Escape** ends placement. Use **Browse templates**, your mouse's Back button, or **Alt+Left** to return to the library.
+
+## Keep a fragment for later
+
+1. Select the structure, including any captions or arrows you want.
+2. Choose **Save selection as template**. Give it a name and collection, then **Save**.
+3. In its preview, choose an attachment point and **Remember anchor**.
+
+<Screenshot
+  src="/moruno/manual/custom-template.png"
+  alt="A reusable Benzofuran template with an attachment point and Favorite control."
+/>
+
+Use **Favorite** for quick access. Custom templates also have **Edit**, **Replace from selection**, and **Remove template**. **Undo library change** restores the last library edit.
+
+**Export** and **Import** in Templates share a `.moruno-templates` collection.
+
+Already have the fragment on the canvas? Select it and choose **Move & attach…** above the canvas.
+
+[Open the benzofuran example](/moruno/examples/benzofuran.moruno).
+
+<Screenshot
+  src="/moruno/manual/move-attach.png"
+  alt="An existing cyclopentane fragment joined to cyclohexane with Move & attach."
+/>

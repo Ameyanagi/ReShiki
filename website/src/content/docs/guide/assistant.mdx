@@ -1,0 +1,56 @@
+---
+title: Draw with the assistant
+description: Describe a structure or scheme, review its drawing, and apply or undo changes.
+---
+
+import Screenshot from "../../../components/Screenshot.astro";
+
+## Describe the drawing
+
+Open **Assistant**, describe what to draw, then **Send**. Try:
+
+> Draw the esterification of acetic acid and ethanol. Put the reactants on the left, ethyl acetate and water on the right, and acid catalyst above the arrow.
+
+The assistant receives the current drawing and can inspect its canvas image. Its proposals use your document's drawing style. You can keep working while it responds.
+
+<Screenshot
+  src="/moruno/manual/assistant-review.png"
+  alt="The assistant produces a drawing preview with Apply and Discard controls."
+/>
+
+## Review or apply automatically
+
+| Mode                 | What happens                                           |
+| -------------------- | ------------------------------------------------------ |
+| **Review edits**     | Inspect the proposal, then **Apply** or **Discard** it |
+| **Accept all edits** | Applies each validated proposal automatically          |
+
+<Screenshot
+  src="/moruno/manual/assistant-modes.png"
+  alt="Review edits and Accept all edits are available beside the composer."
+/>
+
+Use **Replace selection** when replacing part of a drawing. **Undo** restores the previous drawing after an applied edit, in either mode.
+
+Ask for a follow-up such as “Move the conditions above the arrow” or “Keep the existing molecule and add its product.” Use **Stop** to end a running request.
+
+<Screenshot
+  src="/moruno/manual/assistant-auto.png"
+  alt="An automatically applied scheme, including a requested Water caption, remains editable."
+/>
+
+## Choose a model
+
+The model menu follows the latest available model until you choose one explicitly. Open the effort menu to choose reasoning effort and service tier. Defaults are **Low** and **Standard**.
+
+<Screenshot
+  src="/moruno/manual/assistant-model.png"
+  alt="The model selector can follow the latest model or use an explicit choice."
+/>
+
+<Screenshot
+  src="/moruno/manual/assistant-effort.png"
+  alt="Reasoning effort and service tier are separate choices."
+/>
+
+The assistant needs a Codex login and internet connection. Check the chemistry and layout before using a generated figure.

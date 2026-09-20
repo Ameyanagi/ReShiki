@@ -12,9 +12,9 @@ gh workflow run release.yml --ref main
 gh workflow run release.yml --ref main -f sign_macos=true
 ```
 
-Each archive is extracted into a temporary directory with spaces outside the checkout. The extracted executable must report clear missing-uv instructions, set up a fresh local environment and return the expected ethanol formula and SMILES. A second launch must work with uv in offline mode. On macOS, the app signature is verified again after setup. This is a packaging check, not a complete graphical acceptance test. Test the GUI on each supported operating system before announcing a release.
+Each archive is extracted into a temporary directory with spaces outside the checkout. The extracted executable must report clear missing-uv instructions, set up a fresh local environment and return the expected ethanol formula and SMILES. A second launch must work with uv in offline mode. On macOS, the app signature is verified again after setup. This is a packaging check, not a complete graphical acceptance test. Record desktop checks separately from package verification.
 
-The [2026-09-20 signing test](https://github.com/Ameyanagi/moruno/actions/runs/35508449077) passed Developer ID signing, Apple notarization, stapling, Gatekeeper assessment, and extracted-package chemistry checks on Apple Silicon. It did not publish a release. That run preceded the ARM Windows/Linux additions; those targets require their own successful runner checks.
+The [2026-09-20 release validation](https://github.com/Ameyanagi/moruno/actions/runs/35510386732) passed all five package checks, including native ARM Windows/Linux applications, fresh chemistry setup, and offline reuse. Apple Silicon also passed Developer ID signing, notarization, stapling, and Gatekeeper assessment. This manual run did not publish a release.
 
 ## Publish a version
 

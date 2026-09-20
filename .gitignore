@@ -12,3 +12,4 @@ __pycache__/
 /website/.astro/
 /website/dist/
 /website/src/content/docs/reference/
+/website/src/content/docs/developer/

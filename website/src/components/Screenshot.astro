@@ -1,0 +1,29 @@
+---
+interface Props {
+  src: string;
+  alt: string;
+}
+const { src, alt } = Astro.props;
+---
+
+<a class="manual-shot" href={src} aria-label={`${alt} Open full-size screenshot.`}>
+  <img src={src} alt={alt} width="2560" height="1704" loading="lazy" decoding="async" />
+</a>
+
+<style>
+  .manual-shot {
+    display: block;
+    margin-block: 1.25rem;
+    cursor: zoom-in;
+  }
+  .manual-shot img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .manual-shot:focus-visible {
+    outline: 2px solid var(--sl-color-accent);
+    outline-offset: 4px;
+    border-radius: 0.65rem;
+  }
+</style>

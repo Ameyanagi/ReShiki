@@ -1,47 +1,20 @@
 ---
-title: Chemistry, clearly drawn.
-description: A practical guide to drawing molecules and reaction schemes with Moruno.
+title: Draw molecules. Build clear schemes.
+description: Draw molecules, build reaction schemes, and prepare figures with Moruno. Learn by following the visual manual.
 template: splash
 hero:
-  title: Chemistry, clearly drawn.
-  tagline: An editable canvas for molecules, reaction schemes, and publication figures. Built with Rust. Chemistry powered locally by RDKit.
+  title: Draw molecules.<br />Build clear schemes.
+  tagline: An editable canvas for your chemistry, from the first bond to the finished figure.
   actions:
-    - text: Start drawing
-      link: /moruno/reference/getting-started/
-      icon: right-arrow
     - text: Download Moruno
       link: https://github.com/Ameyanagi/moruno/releases
-      variant: minimal
+      icon: download
+    - text: Open the visual manual
+      link: /moruno/guide/first-molecule/
+      icon: right-arrow
+      variant: secondary
 ---
 
-import { Card, CardGrid, LinkCard } from "@astrojs/starlight/components";
+import Home from "../../components/Home.astro";
 
-## From a first bond to a finished scheme
-
-<CardGrid>
-  <Card title="Draw with precision" icon="pencil">
-    Start with publication defaults, build chains and rings, and attach templates at an exact atom
-    or bond. [Explore drawing tools](/moruno/reference/bond-tools/)
-  </Card>
-  <Card title="Keep every part editable" icon="document">
-    Refine labels, arrows, pictures, and groups. Review cleanup on a selection and undo each applied
-    change. [Work with selections](/moruno/reference/selection-and-groups/)
-  </Card>
-  <Card title="Ask your assistant" icon="approve-check">
-    Describe a molecule or reaction, review the proposed drawing, and apply it to the canvas with
-    Undo available. [Use the assistant](/moruno/reference/assistant/)
-  </Card>
-  <Card title="Prepare a figure" icon="open-book">
-    Use JACS / ACS styling, set publication pages, and export vector SVG or PDF and high-resolution
-    PNG. [Prepare publication pages](/moruno/reference/publication-pages/)
-  </Card>
-</CardGrid>
-
-## Know what to expect
-
-Moruno is under active development. The capability guide records tested workflows, platform differences, and current limitations.
-
-<CardGrid>
-  <LinkCard title="Capabilities and limitations" href="/moruno/reference/capabilities/" />
-  <LinkCard title="Build and contribute" href="/moruno/reference/development/" />
-</CardGrid>
+<Home />

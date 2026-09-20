@@ -1,0 +1,75 @@
+---
+title: Draw your first molecule
+description: Draw ethanol, change elements, and add bonds, chains, and rings.
+---
+
+import Screenshot from "../../../components/Screenshot.astro";
+
+## Draw ethanol
+
+1. Choose **New**, then press **B** for a single bond.
+2. Drag a bond. Drag from its endpoint to add a second bond.
+3. Select the last atom and press **O**. Its label becomes **OH**.
+4. Click **Check**. Ethanol should read **C2H6O**.
+
+<Screenshot
+  src="/moruno/manual/first-molecule.png"
+  alt="A two-bond ethanol drawing with its formula and properties checked."
+/>
+
+Press **⌘S** on Mac or **Ctrl+S** elsewhere to save an editable `.moruno` file. **⌘/Ctrl+Z** undoes an edit.
+
+## Choose an element
+
+Click **C** in the toolbar, choose an element, then click an atom to replace it or empty space to place it.
+
+<Screenshot
+  src="/moruno/manual/periodic-table.png"
+  alt="The periodic table opens beside the atom tool."
+/>
+
+For common labels, hover an atom and press **C, N, O, S, P, F, or H**. Moruno adds the appropriate hydrogen count.
+
+## Change a bond
+
+Click a bond tool to open its visual palette. Choose a style, then draw or click an existing bond.
+
+<Screenshot
+  src="/moruno/manual/bond-palette.png"
+  alt="The floating bond palette shows single, multiple, wedge, dashed and other bond styles."
+/>
+
+| With a bond selected or hovered  | Press             |
+| -------------------------------- | ----------------- |
+| Single / double / triple         | **S / D / T**     |
+| Move a double bond's second line | **D** again       |
+| Erase an object                  | **E**, then click |
+
+<Screenshot
+  src="/moruno/manual/double-bond.png"
+  alt="The selected double bond after pressing D to shift its second line."
+/>
+
+The controls above the canvas set **Length** and **Angles**. Hold **Alt/Option** while dragging to draw freely.
+
+## Add a ring or chain
+
+Click the ring tool, choose a shape, then click empty space or an existing atom/bond.
+
+<Screenshot
+  src="/moruno/manual/ring-palette.png"
+  alt="The ring palette includes regular rings, benzene and chair projections."
+/>
+
+**X** draws a straight chain; **Shift+X** draws a snaking chain. Drag to set its length. **Straight chain** can use an exact atom count; **Snaking chain** has a **Max atoms** limit.
+
+<Screenshot
+  src="/moruno/manual/chain.png"
+  alt="An eight-atom chain drawn with an exact atom count."
+/>
+
+Select an aromatic ring and press **A** to switch between a circle and alternating bonds.
+
+[Attach a template →](/moruno/guide/templates/)
+
+[Open the ethanol example](/moruno/examples/ethanol.moruno) · [Add captions and atom labels](/moruno/guide/labels/)

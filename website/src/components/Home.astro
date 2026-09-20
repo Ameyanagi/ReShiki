@@ -1,0 +1,76 @@
+---
+const workflows = [
+  {
+    number: "01",
+    title: "Build a molecule",
+    description: "Draw bonds, choose atoms, and attach a template.",
+    href: "/moruno/guide/first-molecule/",
+  },
+  {
+    number: "02",
+    title: "Arrange a reaction",
+    description: "Place molecules and arrows, then assign reaction roles.",
+    href: "/moruno/guide/reactions/",
+  },
+  {
+    number: "03",
+    title: "Share your figure",
+    description: "Copy editable structures or export SVG, PDF, and PNG.",
+    href: "/moruno/guide/sharing/",
+  },
+];
+const guides = [
+  { title: "Templates", href: "/moruno/guide/templates/" },
+  { title: "Editing", href: "/moruno/guide/editing/" },
+  { title: "Assistant", href: "/moruno/guide/assistant/" },
+  { title: "Figures", href: "/moruno/guide/figures/" },
+];
+---
+
+<div class="moruno-home not-content">
+  <p class="home-platforms">
+    macOS · Windows · Linux
+    <span aria-hidden="true">/</span>
+    <a href="/moruno/guide/install/">Install uv first</a>
+  </p>
+
+  <figure class="home-workspace">
+    <a href="/moruno/manual/workspace.png" aria-label="View the workspace screenshot at full size">
+      <img
+        src="/moruno/manual/workspace.png"
+        alt="Moruno's canvas with an editable chemical drawing and its drawing tools."
+        width="2560"
+        height="1704"
+        fetchpriority="high"
+        decoding="async"
+      />
+    </a>
+    <figcaption>Moruno · JACS / ACS drawing style</figcaption>
+  </figure>
+
+  <section class="home-manual" aria-labelledby="manual-title">
+    <div class="home-section-heading">
+      <h2 id="manual-title">Start drawing</h2>
+      <p>From your first bond to a finished figure.</p>
+    </div>
+    <div class="home-workflows">
+      {
+        workflows.map((workflow) => (
+          <a class="home-workflow" href={workflow.href}>
+            <span class="home-step" aria-hidden="true">{workflow.number}</span>
+            <h3>{workflow.title}<span aria-hidden="true">↗</span></h3>
+            <p>{workflow.description}</p>
+          </a>
+        ))
+      }
+    </div>
+    <nav class="home-guide-links" aria-label="More drawing guides">
+      {guides.map((guide) => <a href={guide.href}>{guide.title}<span aria-hidden="true">→</span></a>)}
+    </nav>
+  </section>
+
+  <div class="home-developers">
+    <span>Building with Moruno?</span>
+    <a href="/moruno/developer/development/">Developer docs <span aria-hidden="true">→</span></a>
+  </div>
+</div>

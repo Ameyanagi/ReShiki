@@ -5,18 +5,270 @@
   --sl-font:
     -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif;
   --sl-content-width: 52rem;
+  --moruno-surface: #17211f;
+  --moruno-shadow: 0 18px 60px #0003;
 }
+
 :root[data-theme="light"] {
   --sl-color-accent-low: #e1f2ed;
   --sl-color-accent: #287866;
   --sl-color-accent-high: #184f44;
+  --moruno-surface: #f2f6f3;
+  --moruno-shadow: 0 18px 60px #163e2f12;
 }
-.hero h1 {
-  letter-spacing: -0.04em;
-}
-.card {
-  border-radius: 0.8rem;
-}
+
 .sl-markdown-content img {
-  border-radius: 0.5rem;
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 0.65rem;
+}
+
+.sl-markdown-content :is(h1, h2, h3) {
+  letter-spacing: -0.025em;
+}
+
+/* Keep the landing page separate from the manual's reading layout. */
+[data-has-hero] .hero {
+  display: block;
+  padding: clamp(2rem, 6vw, 5.5rem) 0 0;
+}
+
+[data-has-hero] .hero .stack {
+  align-items: center;
+  text-align: center;
+  gap: 1.75rem;
+}
+
+[data-has-hero] .hero .copy {
+  align-items: center;
+  gap: 1.4rem;
+}
+
+[data-has-hero] .hero h1 {
+  font-size: clamp(2.65rem, 6.2vw, 4.75rem);
+  font-weight: 620;
+  letter-spacing: -0.055em;
+  line-height: 1.06;
+}
+
+[data-has-hero] .hero .tagline {
+  max-width: 34rem;
+  font-size: clamp(1.05rem, 1.7vw, 1.2rem);
+  line-height: 1.6;
+}
+
+[data-has-hero] .hero .actions {
+  justify-content: center;
+  gap: 0.8rem;
+}
+
+[data-has-hero] .hero .sl-link-button {
+  padding: 0.9rem 1.2rem;
+  border-radius: 0.6rem;
+  font-size: 0.95rem;
+  font-weight: 550;
+}
+
+[data-has-hero] .hero .sl-link-button.secondary {
+  border-color: var(--sl-color-hairline);
+}
+
+.moruno-home {
+  color: var(--sl-color-text);
+}
+
+.moruno-home a {
+  text-decoration: none;
+}
+
+.moruno-home a:focus-visible {
+  outline: 3px solid var(--sl-color-text-accent);
+  outline-offset: 5px;
+}
+
+.home-platforms {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin: 0 0 2.5rem;
+  color: var(--sl-color-gray-2);
+  font-size: 0.8rem;
+}
+
+.home-platforms > span {
+  color: var(--sl-color-gray-3);
+  margin-inline: 0.25rem;
+}
+
+.home-platforms a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.home-workspace {
+  margin: 0;
+}
+
+.home-workspace > a {
+  display: block;
+  padding: clamp(0.5rem, 1.4vw, 1rem);
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 1rem;
+  background: var(--moruno-surface);
+  box-shadow: var(--moruno-shadow);
+}
+
+.home-workspace img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 0.4rem;
+}
+
+.home-workspace figcaption {
+  margin-top: 0.9rem;
+  color: var(--sl-color-gray-2);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.home-manual {
+  margin-top: clamp(3.5rem, 7vw, 6rem);
+}
+
+.home-section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem 2rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.75rem;
+}
+
+.home-section-heading h2 {
+  margin: 0;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-weight: 550;
+  letter-spacing: -0.035em;
+}
+
+.home-section-heading p {
+  margin: 0;
+  color: var(--sl-color-gray-2);
+  font-size: 0.9rem;
+}
+
+.home-workflows {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+
+.home-workflow {
+  display: block;
+  padding: 1.25rem 0;
+  border-top: 1px solid var(--sl-color-hairline);
+  color: var(--sl-color-text);
+}
+
+.home-workflow:hover {
+  border-color: var(--sl-color-text-accent);
+}
+
+.home-step {
+  display: block;
+  margin-bottom: 1.25rem;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--sl-color-text-accent);
+}
+
+.home-workflow h3 {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0 0 0.65rem;
+  font-size: 1.12rem;
+  font-weight: 550;
+  letter-spacing: -0.02em;
+}
+
+.home-workflow h3 > span {
+  color: var(--sl-color-text-accent);
+  font-weight: 400;
+}
+
+.home-workflow p {
+  margin: 0;
+  color: var(--sl-color-gray-2);
+  font-size: 0.9rem;
+  line-height: 1.65;
+}
+
+.home-guide-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem 2rem;
+  padding: 1.5rem 0 2rem;
+  border-bottom: 1px solid var(--sl-color-hairline);
+}
+
+.home-guide-links a {
+  display: inline-flex;
+  gap: 1rem;
+  align-items: center;
+  color: var(--sl-color-text);
+  font-size: 0.9rem;
+}
+
+.home-guide-links a:hover,
+.home-developers a:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.3em;
+}
+
+.home-guide-links span {
+  color: var(--sl-color-gray-3);
+}
+
+.home-developers {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  margin-top: 2rem;
+  color: var(--sl-color-gray-2);
+  font-size: 0.85rem;
+}
+
+.home-developers a {
+  color: var(--sl-color-text-accent);
+}
+
+@media (max-width: 40rem) {
+  .home-workflows {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+
+  .home-workflow {
+    position: relative;
+    padding-left: 2.5rem;
+  }
+
+  .home-step {
+    position: absolute;
+    left: 0;
+    top: 1.45rem;
+  }
+
+  .home-guide-links {
+    gap: 0.9rem 1.5rem;
+  }
+
+  .home-platforms {
+    font-size: 0.75rem;
+    gap: 0.4rem;
+  }
 }

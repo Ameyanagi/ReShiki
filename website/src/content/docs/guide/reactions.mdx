@@ -1,0 +1,55 @@
+---
+title: Build a reaction scheme
+description: Arrange molecules, add arrows and conditions, and define reactants and products.
+---
+
+import Screenshot from "../../../components/Screenshot.astro";
+
+## Put the reaction on the page
+
+1. Draw or import the molecules. Put reactants on the left and products on the right.
+2. Choose the **arrow** tool and drag between them.
+3. Choose **Text** (**T**) and add conditions above the arrow.
+4. Select related objects and use **Properties** to align them.
+
+<Screenshot
+  src="/moruno/manual/reaction-scheme.png"
+  alt="A complete esterification scheme with conditions above the reaction arrow."
+/>
+
+## Bend an arrow
+
+Choose **Curved / electron pair**, **Single electron**, or **Bent / elbow** from the arrow palette.
+
+<Screenshot
+  src="/moruno/manual/arrow-palette.png"
+  alt="The arrow palette includes bent, curved, equilibrium, and retrosynthesis arrows."
+/>
+
+Select the arrow. Drag its middle handle to set the bend or corner; drag an endpoint to change its length. **Properties** provides **Reverse**, **Flip bend**, **Straighten**, and arrowhead/stroke settings.
+
+<Screenshot
+  src="/moruno/manual/bent-arrow.png"
+  alt="A bent arrow with its editable middle handle and arrow properties."
+/>
+
+## Make the reaction exportable
+
+The drawing can also carry explicit reactant, product, and reagent roles:
+
+1. Select an arrow and open **Properties → Reaction roles…**.
+2. Select a molecule, then **+ Assign selected molecules** under its role.
+3. Repeat for the remaining molecules.
+
+<Screenshot
+  src="/moruno/manual/reaction-roles.png"
+  alt="The reaction inspector assigns reactant, product, and reagent roles."
+/>
+
+Use **RXN** or **Reaction SMILES** to export the chemical reaction. Captions and page layout belong in `.moruno`, SVG, PDF, or PNG instead.
+
+Use **Open** for an RXN file. Use **Import** to paste RXN text or reaction SMILES. Reaction roles do not check reaction balance or predict products.
+
+[Let the assistant draft a scheme →](/moruno/guide/assistant/)
+
+[Open the esterification example](/moruno/examples/esterification.moruno).

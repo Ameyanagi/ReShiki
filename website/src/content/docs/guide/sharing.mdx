@@ -1,0 +1,45 @@
+---
+title: Save and share
+description: Keep an editable original, export a figure, or copy structures into another drawing.
+next: false
+---
+
+import Screenshot from "../../../components/Screenshot.astro";
+
+## Keep an editable original
+
+**Save** writes a `.moruno` file with the complete drawing. Use **Save as** for a separate version. Reopen it with **Open**.
+
+If Moruno offers a recovery draft after an interrupted session, choose **Restore latest** to inspect it, then save it to a file.
+
+## Choose an export
+
+Open **Export** and choose the format you need.
+
+| You need                     | Use                                              |
+| ---------------------------- | ------------------------------------------------ |
+| A vector figure              | **SVG** or **PDF**                               |
+| A high-resolution image      | **PNG**                                          |
+| Multiple publication pages   | **PDF · all pages**                              |
+| An editable chemical drawing | **CDXML**                                        |
+| Chemical structure data      | **MOL**, **SMILES**, or **InChI**                |
+| Chemical reaction data       | **RXN** or **Reaction SMILES** in Reaction roles |
+
+Molecular and reaction data formats do not retain the full figure layout. Keep the `.moruno` original.
+
+<Screenshot
+  src="/moruno/manual/export.png"
+  alt="The Export panel offers vector drawings, images, chemical data, and print controls."
+/>
+
+## Copy and paste
+
+Select the objects, then **⌘/Ctrl+C** and **⌘/Ctrl+V**. **Cut** and **Duplicate** are also available above the canvas.
+
+On macOS, Copy offers supported editable drawing data and an image to the receiving app. **Shift+⌘+C** copies an image explicitly; **Shift+⌘+V** pastes a picture. Editable exchange depends on the receiving app and the objects used.
+
+## Print
+
+On macOS, use **⌘P** or **Export → Print…**. The native print dialog also offers Save as PDF. Use **Print selection** for selected objects.
+
+Windows and Linux do not yet have the same native clipboard and print integration. Export files for those workflows.

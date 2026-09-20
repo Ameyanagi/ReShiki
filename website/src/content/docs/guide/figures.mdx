@@ -1,0 +1,62 @@
+---
+title: Prepare a figure
+description: Set drawing style, add labels and artwork, and lay out publication pages.
+---
+
+import Screenshot from "../../../components/Screenshot.astro";
+
+## Set the drawing style
+
+New documents use **JACS / ACS**. Click the style badge to change fonts, bond lengths, and line widths. Review the preview, then **Apply to document**.
+
+<Screenshot
+  src="/moruno/manual/drawing-style.png"
+  alt="Drawing style panel with a structure preview and Apply to document."
+/>
+
+**Save style…** and **Load…** reuse settings. **Scale layout with bond length** also resizes existing geometry; leave it off to keep current positions.
+
+## Add artwork
+
+| Add                                       | Where                                           |
+| ----------------------------------------- | ----------------------------------------------- |
+| Rectangle, ellipse, brackets, line, curve | Tools palette; choose variants above the canvas |
+| Chemical symbol or orbital                | Tools palette, then the contextual selector     |
+| A picture                                 | **Import → Picture…**                           |
+
+Select artwork to change its style in **Properties**. Pictures can be resized, rotated, replaced, or sent behind the drawing. Group a picture and caption to move them together.
+
+<Screenshot
+  src="/moruno/manual/picture.png"
+  alt="A pasted picture with linked physical width and height controls."
+/>
+
+<Screenshot
+  src="/moruno/manual/orbitals.png"
+  alt="A p orbital with a colored outline and reversed gray phase."
+/>
+
+At a bond crossing, select the bond's middle and choose **Properties → Bond in front / Bond behind** to control the gap.
+
+<Screenshot
+  src="/moruno/manual/bond-crossing.png"
+  alt="A selected crossing bond brought forward, leaving a gap in the bond behind it."
+/>
+
+## Set the page
+
+Open **View → Page setup…** or **Export → Page setup…**. Choose paper, orientation, margins, and **Columns / Rows**, then **Apply page setup**.
+
+<Screenshot
+  src="/moruno/manual/publication-pages.png"
+  alt="Two publication pages with the selected scheme centered on the second page."
+/>
+
+Use **Fit page** to work on one page or **Fit all pages** to see the document. **View** also contains rulers, grid, and crosshair controls.
+
+<Screenshot
+  src="/moruno/manual/view-guides.png"
+  alt="Rulers, a dotted grid, and crosshair guides enabled from View."
+/>
+
+[Export the figure →](/moruno/guide/sharing/)
