@@ -75,6 +75,75 @@ pub fn drawing(doc: &Document, format: &str) -> Result<Vec<u8>, String> {
         _ => Err("Unsupported drawing export".into()),
     }
 }
+/// Export all physical sheets without scaling the drawing. Page gaps and margin
+/// guides belong to the editor only; marks beyond a sheet edge are clipped.
+pub fn pages_pdf(doc: &Document) -> Result<Vec<u8>, String> {
+    use pdf_writer::{Content, Finish, Name, Pdf, Rect, Ref};
+    use std::collections::HashMap;
+    doc.validate()?;
+    let layout = doc
+        .page_layout
+        .as_ref()
+        .ok_or("Set up publication pages before exporting a page PDF.")?;
+    let svg = scene::svg(doc);
+    let mut options = resvg::usvg::Options::default();
+    options.fontdb_mut().load_system_fonts();
+    let tree = resvg::usvg::Tree::from_str(&svg, &options).map_err(|e| e.to_string())?;
+    let (chunk, root) = svg2pdf::to_chunk(&tree, svg2pdf::ConversionOptions::default())
+        .map_err(|e| e.to_string())?;
+    let mut next = Ref::new(1);
+    let catalog = next.bump();
+    let pages = next.bump();
+    let page_ids: Vec<_> = (0..layout.count())
+        .map(|_| (next.bump(), next.bump()))
+        .collect();
+    let mut mapping = HashMap::new();
+    let chunk = chunk.renumber(|old| *mapping.entry(old).or_insert_with(|| next.bump()));
+    let root = mapping
+        .get(&root)
+        .copied()
+        .ok_or("Could not embed the drawing in the page PDF.")?;
+    let mut pdf = Pdf::new();
+    pdf.catalog(catalog).pages(pages);
+    pdf.pages(pages)
+        .kids(page_ids.iter().map(|(id, _)| *id))
+        .count(layout.count() as i32);
+    let (drawing_lo, drawing_hi) = scene::bounds(&scene::primitives(doc));
+    let scale = crate::style::DEFAULT.points_per_world();
+    let width = (drawing_hi.x - drawing_lo.x) * scale;
+    let height = (drawing_hi.y - drawing_lo.y) * scale;
+    let name = Name(b"Drawing");
+    for (index, (id, content_id)) in page_ids.into_iter().enumerate() {
+        let (lo, _) = layout.bounds(index).ok_or("Invalid page in layout.")?;
+        let mut page = pdf.page(id);
+        page.parent(pages)
+            .media_box(Rect::new(0., 0., layout.width_pt, layout.height_pt))
+            .contents(content_id);
+        page.resources().x_objects().pair(name, root);
+        page.finish();
+        let mut content = Content::new();
+        content
+            .save_state()
+            .rect(0., 0., layout.width_pt, layout.height_pt)
+            .clip_nonzero()
+            .end_path();
+        content
+            .transform([
+                width,
+                0.,
+                0.,
+                height,
+                (drawing_lo.x - lo.x) * scale,
+                layout.height_pt - (drawing_lo.y - lo.y) * scale - height,
+            ])
+            .x_object(name);
+        content.restore_state();
+        pdf.stream(content_id, &content.finish());
+    }
+    pdf.extend(&chunk);
+    Ok(pdf.finish())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -491,7 +491,14 @@ fn editor_bounds(
 pub(super) fn commits_draft(message: &Message) -> bool {
     matches!(
         message,
-        Message::Tool(_)
+        Message::Pages(
+            super::pages::Action::Show
+                | super::pages::Action::Open
+                | super::pages::Action::Apply
+                | super::pages::Action::Remove
+                | super::pages::Action::Center(_)
+                | super::pages::Action::Export
+        ) | Message::Tool(_)
             | Message::Palette(_)
             | Message::ContextKey(_)
             | Message::New

@@ -125,6 +125,8 @@ fn forward() -> String {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Document {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub page_layout: Option<crate::pages::Layout>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub abbreviations: Vec<crate::abbreviations::Abbreviation>,
     #[serde(default)]
@@ -144,7 +146,8 @@ pub struct Document {
 impl Default for Document {
     fn default() -> Self {
         Self {
-            version: 11,
+            version: 12,
+            page_layout: None,
             abbreviations: vec![],
             atom_labels: Default::default(),
             atoms: vec![],
@@ -323,8 +326,11 @@ impl Document {
             .collect()
     }
     pub fn validate(&self) -> Result<(), String> {
-        if ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].contains(&self.version) {
+        if ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].contains(&self.version) {
             return Err(format!("Unsupported document version {}", self.version));
+        }
+        if let Some(layout) = &self.page_layout {
+            layout.validate()?;
         }
         self.validate_groups()?;
         self.validate_abbreviations()?;

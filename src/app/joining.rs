@@ -152,7 +152,8 @@ pub(super) fn cancels_draft(message: &Message) -> bool {
     (super::inline_text::commits_draft(message) && !matches!(message, Message::Canvas(_)))
         || matches!(
             message,
-            Message::Undo
+            Message::TemplateNavigate(_)
+                | Message::Undo
                 | Message::Redo
                 | Message::TextStyle(_)
                 | Message::ApplyFontSize

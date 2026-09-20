@@ -47,7 +47,7 @@ The 2026-09-17 [selection and ring-placement update](selection-and-ring-placemen
 | Charges, isotopes and radicals | Implemented subset | Selection controls, attached charge/radical marks, positioned lone-pair annotations; one/two unpaired electrons with chemistry and exchange tests. See [scientific symbols](scientific-symbols.md). |
 | Selection and transforms | Implemented; desktop tested | Molecule double-click, rectangle/lasso selection, add/subtract/invert, nested/integral groups, move, erase, proportional resize/rotation handles, stereo-preserving flip, edge/center alignment, group/component distribution |
 | Undo/redo | Implemented; desktop tested | Snapshot history, up to 100 changes |
-| Pan, zoom, grid and fit | Implemented | Session camera only; no printable page layout |
+| Pan, zoom, grid and fit | Implemented | Drawing/page fit, page navigation and canvas-only grid/ruler/crosshair aids |
 | Text and reaction arrows | Partial; desktop tested | Rich multiline labels, font/style/color controls, scripts, paragraph layout and eight editable arrow presets; no in-canvas text caret or reaction semantics |
 | Structure validation | Implemented; desktop tested | RDKit sanitization, invalid-valence error tests |
 | 2D cleanup | Implemented; desktop tested | Requires selection. Preview selected atoms or selected molecules with original comparison, Apply/Cancel and one-step Undo. Unselected atoms stay fixed; each molecule keeps its center/orientation. |
@@ -66,7 +66,7 @@ The 2026-09-17 [selection and ring-placement update](selection-and-ring-placemen
 | Systematic chemical naming | Planned | No name-to-structure or structure-to-name engine |
 | Spectra / NMR | Planned | No prediction, assignment or spectrum objects |
 | Rich typography, curves, brackets | Partial; desktop tested | Rich labels, nine graphic types, editable Bézier points, graphical brackets, colors/fills/strokes; nested groups and fitted frames; no freehand pen or polymer semantics |
-| Publication layout and printing | Partial | JACS / ACS default and cropped vector PDF; no multiple pages, journal-style library or print dialog |
+| Publication layout and printing | Partial | JACS / ACS default, physical page setup and multipage vector PDF; no journal-style library or native print dialog |
 | Native binary drawing format | Planned | No binary CDX importer/exporter |
 | Clipboard drawing interchange | Implemented native subset | Native objects copy/cut/paste/duplicate; text SMILES, InChI, MOL and supported CDXML paste |
 | Script/plugin API | Planned | Worker protocol exists; no stable public automation API |

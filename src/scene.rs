@@ -687,7 +687,7 @@ fn escape(s: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
 }
-fn bounds(drawing: &[Primitive]) -> (Point, Point) {
+pub(crate) fn bounds(drawing: &[Primitive]) -> (Point, Point) {
     let mut points = vec![];
     for p in drawing {
         match p {

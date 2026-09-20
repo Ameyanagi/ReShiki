@@ -65,7 +65,7 @@ def check_supported(mol):
 
 
 def from_document(doc):
-    if doc.get("version") not in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11):
+    if doc.get("version") not in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12):
         raise ValueError("Unsupported document version")
     abbreviations.validate(doc)
     rw = Chem.RWMol()
@@ -215,7 +215,8 @@ def to_document(mol, base=None, rewedge=False):
                       "cip_label": b.GetProp('_CIPCode') if b.HasProp('_CIPCode') else None, **appearance})
     old_order={frozenset((b["a"],b["b"])):i for i,b in enumerate((base or {}).get("bonds",[]))}
     bonds.sort(key=lambda b:old_order.get(frozenset((b["a"],b["b"])),len(old_order)))
-    return {"version": 11, "atoms": atoms, "bonds": bonds,
+    return {"version": 12, "atoms": atoms, "bonds": bonds,
+            **({"page_layout": base["page_layout"]} if base and base.get("page_layout") is not None else {}),
             "abbreviations": (base or {}).get("abbreviations", []),
             "atom_labels": (base or {}).get("atom_labels", {}),
             "annotations": (base or {}).get("annotations", []),

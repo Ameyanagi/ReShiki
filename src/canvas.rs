@@ -7,6 +7,7 @@ use moruno::{
     scene::{Primitive, primitives},
 };
 pub mod guides;
+mod pages;
 mod selection;
 use selection::{Handle, SelectionBox, TransformDrag};
 
@@ -969,6 +970,9 @@ impl MoleculeCanvas<'_> {
             bounds.size(),
             Color::from_rgb8(253, 253, 250),
         );
+        if let Some(layout) = &self.doc.page_layout {
+            pages::draw(frame, layout, self.camera, bounds);
+        }
         if self.grid {
             let spacing = 28.0 * self.camera.zoom;
             if spacing > 9.0 {
@@ -1679,6 +1683,11 @@ fn draw_atom_markers(
     bounds: Rectangle,
     selected: bool,
 ) {
+    // At page-fit zoom the selection box is more useful than overlapping atom rings.
+    if selected && ids.len() > 1 && camera.zoom < 0.12 {
+        return;
+    }
+    let marker_scale = camera.zoom.clamp(0.15, 1.);
     for bond in doc.bonds.iter().filter(|b| doc.bond_visible(b.a, b.b)) {
         if ids.contains(&bond.a)
             && ids.contains(&bond.b)
@@ -1690,21 +1699,21 @@ fn draw_atom_markers(
                     camera.screen(b.position, bounds),
                 ),
                 Stroke::default()
-                    .with_width(7.0)
+                    .with_width(7.0 * marker_scale)
                     .with_color(Color::from_rgba8(19, 135, 116, 0.16)),
             );
         }
     }
     for id in ids {
         if let Some(atom) = doc.atom(*id).filter(|a| doc.atom_visible(a.id)) {
-            let circle = Path::circle(camera.screen(atom.position, bounds), 8.0);
+            let circle = Path::circle(camera.screen(atom.position, bounds), 8.0 * marker_scale);
             if selected {
                 frame.fill(&circle, Color::from_rgba8(19, 135, 116, 0.12));
             }
             frame.stroke(
                 &circle,
                 Stroke::default()
-                    .with_width(if selected { 1.8 } else { 1.4 })
+                    .with_width((if selected { 1.8 } else { 1.4 }) * marker_scale.sqrt())
                     .with_color(rgb([19, 135, 116])),
             );
         }

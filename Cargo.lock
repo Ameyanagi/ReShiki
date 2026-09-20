@@ -2012,6 +2012,7 @@ dependencies = [
  "base64",
  "directories-next",
  "iced",
+ "pdf-writer",
  "png",
  "resvg",
  "rfd",

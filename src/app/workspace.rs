@@ -1302,7 +1302,9 @@ impl App {
                             || (tab == InspectorTab::Properties
                                 && matches!(
                                     self.inspector_tab,
-                                    InspectorTab::Labels | InspectorTab::Abbreviations
+                                    InspectorTab::Labels
+                                        | InspectorTab::Abbreviations
+                                        | InspectorTab::Pages
                                 )),
                     ))
                     .on_press(Message::Inspector(tab)),
@@ -1310,6 +1312,7 @@ impl App {
         }
         let body = match self.inspector_tab {
             InspectorTab::Assistant => self.assistant_panel(),
+            InspectorTab::Pages => self.pages_panel(),
             InspectorTab::Properties if self.joining.is_some() => self.join_panel(),
             InspectorTab::Properties => self.properties_panel(),
             InspectorTab::Labels => self.atom_labels_panel(),
@@ -2226,6 +2229,19 @@ impl App {
                     .color(muted()),
                 );
         }
+        body = body
+            .push(horizontal_line())
+            .push(section("PUBLICATION PAGES"))
+            .push(command(
+                "Page setup…",
+                Message::Pages(super::pages::Action::Show),
+            ));
+        if self.doc.page_layout.is_some() {
+            body = body.push(command(
+                "PDF · all pages",
+                Message::Pages(super::pages::Action::Export),
+            ));
+        }
         body = body.push(horizontal_line()).push(section("CHEMICAL DATA"));
         for (label, format) in [
             ("MOL structure", "mol"),
@@ -2332,7 +2348,7 @@ impl App {
                 .text_size(12)
                 .padding(5)
                 .width(68),
-                text("Origin at drawing (0, 0)").size(11).color(muted()),
+                command("Page setup…", Message::Pages(super::pages::Action::Show)),
                 Space::new().width(Length::Fill),
                 command("Done", Message::ToggleView),
             ]
@@ -2463,7 +2479,7 @@ fn divider() -> Element<'static, Message> {
     .padding([0, 5])
     .into()
 }
-fn horizontal_line() -> Element<'static, Message> {
+pub(super) fn horizontal_line() -> Element<'static, Message> {
     container(
         container(Space::new().height(1).width(Length::Fill)).style(|_| container::Style {
             background: Some(Color::from_rgb8(230, 233, 237).into()),

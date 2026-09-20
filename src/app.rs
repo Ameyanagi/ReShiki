@@ -19,6 +19,7 @@ mod graphics;
 mod icons;
 mod inline_text;
 mod joining;
+mod pages;
 mod palettes;
 mod shortcuts;
 mod template_library;
@@ -28,6 +29,7 @@ mod workspace;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum InspectorTab {
     Assistant,
+    Pages,
     Abbreviations,
     Properties,
     Labels,
@@ -39,6 +41,7 @@ pub enum InspectorTab {
 pub enum Message {
     InlineText(inline_text::Action),
     Join(joining::Action),
+    Pages(pages::Action),
     Escape,
     Palette(palettes::Action),
     Assistant(assistant::Action),
@@ -239,6 +242,7 @@ pub struct App {
     caption_target: Option<u64>,
     inline_text: Option<inline_text::State>,
     joining: Option<joining::State>,
+    pages: pages::State,
     font_options: iced::widget::combo_box::State<String>,
     font_size_input: String,
     text_color_input: String,
@@ -325,6 +329,7 @@ impl App {
             caption_target: None,
             inline_text: None,
             joining: None,
+            pages: pages::State::default(),
             font_options: iced::widget::combo_box::State::new(
                 moruno::style::font_families()
                     .iter()
@@ -584,6 +589,7 @@ impl App {
         self.selected.retain(|id| self.doc.all_ids().contains(id));
     }
     fn fit(&mut self) {
+        self.pages.fit = None;
         let (lo, hi) = self.display_document().bounds();
         self.camera.center = Point::new((lo.x + hi.x) / 2.0, (lo.y + hi.y) / 2.0);
         let viewport = self.guides.paper(iced::Rectangle::with_size(self.viewport));
@@ -616,6 +622,7 @@ impl App {
                 self.path = None;
                 self.selected.clear();
                 self.camera = Camera::default();
+                self.pages = pages::State::default();
                 self.fit_to_view = true;
                 self.analysis = None;
                 self.error = false;
@@ -789,6 +796,7 @@ impl App {
         ) || (self.inspector_tab != InspectorTab::Templates
             && matches!(&message, Message::Canvas(Edit::Select(ids)) if ids.iter().any(|id| self.doc.annotations.iter().any(|a| a.id == *id) || self.doc.graphics.iter().any(|g|g.id==*id))));
         match message {
+            Message::Pages(action) => return self.page_action(action),
             Message::Assistant(_)
             | Message::Palette(_)
             | Message::InlineText(_)
@@ -1214,7 +1222,9 @@ impl App {
             }
             Message::Viewport(size) => {
                 self.viewport = size;
-                if self.fit_to_view {
+                if let Some(index) = self.pages.fit {
+                    self.fit_pages(index);
+                } else if self.fit_to_view {
                     self.fit();
                 }
             }
@@ -1514,7 +1524,7 @@ impl App {
                 if let Some(candidate) = self.recovered.first().cloned() {
                     let before = self.doc.clone();
                     self.doc = candidate.snapshot.document;
-                    self.doc.version = 11;
+                    self.doc.version = 12;
                     self.path = None;
                     self.saved = Document::default();
                     self.file_epoch = self.file_epoch.wrapping_add(1);
@@ -1547,8 +1557,9 @@ impl App {
             Message::RulerUnit(unit) => self.guides.unit = unit,
             Message::Fit => self.fit(),
             Message::Zoom(f) => {
+                self.pages.fit = None;
                 self.fit_to_view = false;
-                self.camera.zoom = (self.camera.zoom * f).clamp(0.25, 5.0);
+                self.camera.zoom = (self.camera.zoom * f).clamp(0.005, 5.0);
             }
             Message::Import => return self.run(input_request(&self.smiles), Job::Import),
             Message::Example(smiles) => {
@@ -1791,6 +1802,20 @@ impl App {
                     self.sync_graphics();
                     self.sync_arrows();
                     self.sync_bonds();
+                    if before.page_layout != self.doc.page_layout {
+                        self.pages.editor = self
+                            .pages
+                            .editor
+                            .as_ref()
+                            .map(|_| pages::Editor::new(&self.doc, self.file_epoch));
+                        if let Some(layout) = &self.doc.page_layout {
+                            self.pages.active =
+                                self.pages.active.min(layout.count().saturating_sub(1));
+                            self.fit_pages(Some(self.pages.active));
+                        } else {
+                            self.fit();
+                        }
+                    }
                     self.status = "History restored".into();
                     self.error = false;
                 }
@@ -1870,7 +1895,7 @@ impl App {
                                         Ok(doc)
                                     }) {
                                     Ok(mut doc) => {
-                                        doc.version = 11;
+                                        doc.version = 12;
                                         moruno::atom_labels::clear_computed(&mut doc);
                                         self.clear_recovery();
                                         self.file_epoch = self.file_epoch.wrapping_add(1);
@@ -1882,7 +1907,12 @@ impl App {
                                         self.analysis = None;
                                         self.refresh_due = Some(std::time::Instant::now());
                                         self.selected.clear();
-                                        self.fit();
+                                        self.pages = pages::State::default();
+                                        if self.doc.page_layout.is_some() {
+                                            self.fit_pages(Some(0));
+                                        } else {
+                                            self.fit();
+                                        }
                                         self.status = "Document opened".into();
                                         self.error = false;
                                     }
@@ -2012,6 +2042,9 @@ impl App {
         }
     }
     fn edit(&mut self, edit: Edit) {
+        if matches!(edit, Edit::Pan(..) | Edit::Zoom(..)) {
+            self.pages.fit = None;
+        }
         if let Edit::Hover(point) = edit {
             self.hover = point.map(|p| (p, self.file_epoch));
             return;
@@ -2029,7 +2062,7 @@ impl App {
                     self.fit_to_view = false;
                 }
                 Edit::Zoom(factor, _) => {
-                    self.camera.zoom = (self.camera.zoom * factor).clamp(0.25, 5.);
+                    self.camera.zoom = (self.camera.zoom * factor).clamp(0.005, 5.);
                     self.fit_to_view = false;
                 }
                 _ => {}
@@ -2257,7 +2290,7 @@ impl App {
             Edit::Zoom(f, at) => {
                 self.fit_to_view = false;
                 let old = self.camera.zoom;
-                self.camera.zoom = (old * f).clamp(0.25, 5.0);
+                self.camera.zoom = (old * f).clamp(0.005, 5.0);
                 let ratio = old / self.camera.zoom;
                 self.camera.center = Point::new(
                     at.x + (self.camera.center.x - at.x) * ratio,
@@ -2525,6 +2558,7 @@ impl App {
 /// Hydrogen labels are a computed display cache, not unsaved drawing edits.
 fn same_drawing(a: &Document, b: &Document) -> bool {
     a.version == b.version
+        && a.page_layout == b.page_layout
         && a.atom_labels == b.atom_labels
         && a.bonds.len() == b.bonds.len()
         && a.bonds.iter().zip(&b.bonds).all(|(a, b)| {

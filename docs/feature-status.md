@@ -4,8 +4,8 @@ Updated 2026-09-20 for Moruno 0.2.0. This inventory records supported workflows,
 explicit limitations and planned work. A supported subset is not a claim of
 complete coverage for every chemical structure or document.
 
-The largest remaining everyday gaps are general fragment joining, document
-layout and broader clipboard interchange. Canvas text editing supports drafts
+The largest remaining everyday gaps include imported images, native printing,
+document styles and broader clipboard interchange. Canvas text editing supports drafts
 and a caret; full rich-text caret layout remains partial. Advanced reaction, query, polymer and spectroscopy workflows also
 remain incomplete.
 
@@ -58,7 +58,7 @@ Typography includes stored styles, selection-aware editing, text measurement and
 | Eraser | Supported subset | Atom, bond, annotation and arrow deletion. |
 | Aromatic circle display | Supported subset | A toggles selected aromatic rings between circles and alternating bonds, retaining molecular identity and editable exchange. Saturated rings are unchanged. |
 | Hover-target atom/bond hotkeys | Supported subset | C/N/O/S/P/F/H replace the hovered or singly selected atom, showing valence-derived hydrogens. S/D/T set a hovered or selected bond; repeated D shifts double lines. Focused text fields retain typing. |
-| General join/merge of selected fragments | Missing | Bond drawing reuses atoms; existing ring-drag fusion is restricted. No general Join command. |
+| General join/merge of selected fragments | Supported subset | Move & attach offers exact source atom/bond selection, preview, connect/share/fuse, cancellation and one-step Undo. Attachment chemistry remains bounded. [Workflow and checks](fragment-joining.md). |
 
 ## Templates and labels
 
@@ -70,7 +70,7 @@ Typography includes stored styles, selection-aware editing, text measurement and
 | Attach template to existing bond | Supported with restrictions | Reuses the two atoms and existing bond order; rotates/scales the fragment. Saturated ring templates can also attach to double bonds, creating cycloalkenes. Common neutral five/six-member aromatic fusion can reassign Kekulé orders. |
 | Choose attachment side | Supported | Drag from the target to choose a side. |
 | Choose a particular source atom/bond in the thumbnail | Supported | Interactive source preview selects exact atoms/bonds; custom entries remember anchors. No silent fallback when incompatible. [Workflow and chemistry checks](template-library.md). |
-| Arbitrary drag-to-join after insertion | Partial | Select-mode snapping handles isolated saturated carbon rings. Templates attach during placement. |
+| Arbitrary drag-to-join after insertion | Supported subset | Move & attach handles existing separate fragments with a chosen source anchor. Direct Select-mode snapping remains limited to isolated saturated carbon rings. |
 | Template browser/search/favorites | Supported | Name/collection/SMILES search, collection and favorite filters, fitted thumbnails and attachment detail view. |
 | Custom template authoring and libraries | Supported subset | Save mixed selections, edit metadata, replace drawing, remember anchor, remove/undo, persistence and Moruno collection import/export. No third-party palette or cloud-library interchange. [Evidence](template-library.md). |
 | Broad chemistry template content | Expanded subset | 81 built-ins: common heterocycles, bicyclic/cage rings, 20 amino acids, five nucleobases, small molecules and two chair projections. Chemical identities are checked against frozen PubChem records. Sugars, nucleotide/peptide assemblies, polymers and specialized families remain missing. |
@@ -100,13 +100,13 @@ Template placement offers explicit new-bond connection, shared-atom and fused-bo
 | Group / ungroup / integral groups | Supported | Nested groups with whole-molecule boundaries, member editing, integral selection and native/CDXML persistence. Molecular growth extends membership; joining grouped molecules unites overlapping groups and retains captions. |
 | Add frame | Supported | Fitted brackets, parentheses, braces and boxes; grouped with selection in one undoable action. |
 | Bring forward / send backward | Supported subset | Graphics can go to back/front relative to chemistry and other graphics; no general object stacking UI. |
-| Alignment | Supported subset | Left/right/top/bottom edges and X/Y centers using visible bounds; groups move together. No center-on-page. |
+| Alignment | Supported subset | Left/right/top/bottom edges and X/Y centers using visible bounds; groups move together. Page controls center complete connected molecules or all drawing objects without scaling. |
 | Distribution | Supported subset | Horizontal/vertical group and component arrangement. |
 | Numeric rotate / scale dialogs | Partial | Free rotation, proportional handles, 30° buttons exist; no numeric entry or 3D rotation. |
 | Rulers / crosshair | Supported | View controls independently toggle rulers, pointer crosshair and grid. Rulers and coordinate readout use mm, cm, inches or points at the physical drawing/export scale, following zoom and pan. Canvas aids do not change or export with the document. |
 | Actual-size view | Missing | Zoom is a viewport magnification, not calibrated screen-to-paper size. |
-| Page size / margins / multipage layout | Missing | Infinite-style viewport and cropped export only. |
-| Print / page setup | Missing | Exporting a PDF does not provide a print workflow. |
+| Page size / margins / multipage layout | Supported subset | Standard/custom paper, four margins, a uniform page grid, canvas guides, navigation and multipage vector PDF; no automatic pagination or per-sheet sizes. [Publication pages](publication-pages.md). |
+| Print / page setup | Partial | Page setup and physical multipage PDF exist. Native printer selection and print dialogs remain missing. |
 | Editable document/object styles | Partial | Stored text and graphic overrides; no editable document-wide bond/label preset. |
 | Journal stationery / reusable settings | Missing | No selectable journal formats or custom stationery. |
 | Document annotations / attached data | Missing | No structured document metadata or object-data attachments. |
@@ -118,7 +118,7 @@ Template placement offers explicit new-bond connection, shared-atom and fused-bo
 | Structure validation / 2D cleanup | Supported subset | RDKit-backed selection-only layout preview, fixed unselected atoms, per-molecule position/orientation preservation, original comparison, Apply/Cancel and one-step Undo. Reaction layout remains missing. |
 | Continuous warnings on the drawing | Partial | Background chemistry refresh reports errors in Properties/Labels. No per-atom warning overlays. |
 | Formula, masses, logP, TPSA, HBD/HBA, ring count | Supported subset | Current inspector shows these calculated values. |
-| Periodic table window | Missing | Symbol entry accepts 118 elements but no periodic-table UI or query lists. |
+| Periodic table window | Supported drawing subset | The atom-tool palette provides 118 elements; query-atom lists remain missing. |
 | Reaction interpretation and cleanup | Missing | Arrows do not define reactants, products, reagents or reaction roles. |
 | Atom mapping / clear reaction map | Missing UI/workflow | Atom map numbers can survive molecular interchange, but no mapping tool or reaction model. |
 | Stoichiometry / balancing | Missing | No quantities, equivalents, yield or reaction analysis. |
@@ -161,8 +161,8 @@ Template placement offers explicit new-bond connection, shared-atom and fused-bo
 ## Next work
 
 1. Broader clipboard compatibility, canvas image import, Office verification and cross-platform exchange.
-2. General fragment joining, broader chemical nicknames and full rich-text caret layout.
-3. Publication pages, document styles, stationery, actual-size view and printing.
+2. Broader chemical nicknames and full rich-text caret layout.
+3. Native printing, document styles, stationery, calibrated actual-size view and advanced page composition.
 4. Reaction roles, atom mapping, query/polymer data, naming and spectra.
 5. Native menus, accessibility, document tabs and release distribution.
 
