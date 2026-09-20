@@ -1,47 +1,71 @@
 """Versioned JSON-lines chemistry service. No editor state or UI dependencies."""
-import json
+
 import base64
+import json
 import math
 import sys
-from pathlib import Path
 import xml.etree.ElementTree as ET
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from rdkit import Chem, rdBase
-from rdkit.Chem import Descriptors, rdDepictor, rdMolDescriptors, rdCIPLabeler
+from rdkit.Chem import rdCIPLabeler, rdDepictor, rdMolDescriptors
 
-if __package__:
-    from . import abbreviations, cleanup, aromatic
-    from . import abbreviations_exchange
-    from .cdx_exchange import to_cdx, from_cdx, LIMIT as CDX_LIMIT
-    from .graphics_exchange import read_graphics, write_graphics, palette
-    from .bonds_exchange import chemistry_xml, read_bonds, write_bond, write_crossings
-    from .groups_exchange import read_groups, write_groups
+if TYPE_CHECKING or __package__:
+    from . import abbreviations, abbreviations_exchange, aromatic, cleanup
     from .arrows_exchange import read_arrow, write_arrow
+    from .bonds_exchange import chemistry_xml, read_bonds, write_bond, write_crossings
+    from .cdx_exchange import LIMIT as CDX_LIMIT
+    from .cdx_exchange import from_cdx, to_cdx
+    from .graphics_exchange import palette, read_graphics, write_graphics
+    from .groups_exchange import read_groups, write_groups
+    from .labels_exchange import read_labels, write_labels
+    from .labels_exchange import visible as label_visible
     from .marks_exchange import read_marks, write_marks
-    from .labels_exchange import read_labels, write_labels, visible as label_visible
 else:
-    import abbreviations, cleanup, aromatic
+    import abbreviations
     import abbreviations_exchange
-    from cdx_exchange import to_cdx, from_cdx, LIMIT as CDX_LIMIT
-    from graphics_exchange import read_graphics, write_graphics, palette
-    from bonds_exchange import chemistry_xml, read_bonds, write_bond, write_crossings
-    from groups_exchange import read_groups, write_groups
+    import aromatic
+    import cleanup
     from arrows_exchange import read_arrow, write_arrow
+    from bonds_exchange import chemistry_xml, read_bonds, write_bond, write_crossings
+    from cdx_exchange import LIMIT as CDX_LIMIT
+    from cdx_exchange import from_cdx, to_cdx
+    from graphics_exchange import palette, read_graphics, write_graphics
+    from groups_exchange import read_groups, write_groups
+    from labels_exchange import read_labels, write_labels
+    from labels_exchange import visible as label_visible
     from marks_exchange import read_marks, write_marks
-    from labels_exchange import read_labels, write_labels, visible as label_visible
 
 SCALE = 28.0
 DRAWING_STYLE = json.loads(Path(__file__).with_name("drawing_style.json").read_text())
-ORDERS = {1: Chem.BondType.SINGLE, 2: Chem.BondType.DOUBLE,
-          3: Chem.BondType.TRIPLE, 4: Chem.BondType.AROMATIC,
-          0: Chem.BondType.HYDROGEN, 5: Chem.BondType.DATIVE, 6: Chem.BondType.QUADRUPLE,
-          7: Chem.BondType.ONEANDAHALF}
-STEREO = {"cis": Chem.BondStereo.STEREOCIS, "trans": Chem.BondStereo.STEREOTRANS,
-          "z": Chem.BondStereo.STEREOZ, "e": Chem.BondStereo.STEREOE}
-DIRECTIONS = {"wedge": Chem.BondDir.BEGINWEDGE, "hash": Chem.BondDir.BEGINDASH,
-              "wavy": Chem.BondDir.UNKNOWN, "plain": Chem.BondDir.NONE,
-              "hollow_wedge": Chem.BondDir.BEGINWEDGE, "hashed": Chem.BondDir.BEGINDASH,
-              "bold": Chem.BondDir.BEGINWEDGE, "dashed": Chem.BondDir.NONE, "dotted": Chem.BondDir.NONE}
+ORDERS = {
+    1: Chem.BondType.SINGLE,
+    2: Chem.BondType.DOUBLE,
+    3: Chem.BondType.TRIPLE,
+    4: Chem.BondType.AROMATIC,
+    0: Chem.BondType.HYDROGEN,
+    5: Chem.BondType.DATIVE,
+    6: Chem.BondType.QUADRUPLE,
+    7: Chem.BondType.ONEANDAHALF,
+}
+STEREO = {
+    "cis": Chem.BondStereo.STEREOCIS,
+    "trans": Chem.BondStereo.STEREOTRANS,
+    "z": Chem.BondStereo.STEREOZ,
+    "e": Chem.BondStereo.STEREOE,
+}
+DIRECTIONS = {
+    "wedge": Chem.BondDir.BEGINWEDGE,
+    "hash": Chem.BondDir.BEGINDASH,
+    "wavy": Chem.BondDir.UNKNOWN,
+    "plain": Chem.BondDir.NONE,
+    "hollow_wedge": Chem.BondDir.BEGINWEDGE,
+    "hashed": Chem.BondDir.BEGINDASH,
+    "bold": Chem.BondDir.BEGINWEDGE,
+    "dashed": Chem.BondDir.NONE,
+    "dotted": Chem.BondDir.NONE,
+}
 
 
 def check_supported(mol):
@@ -50,17 +74,22 @@ def check_supported(mol):
     for a in mol.GetAtoms():
         if a.HasQuery():
             raise ValueError("Query atoms are not supported yet; import was cancelled.")
-        if a.GetNumRadicalElectrons()>2:
+        if a.GetNumRadicalElectrons() > 2:
             raise ValueError("More than two unpaired electrons on an atom are not supported yet")
-        if a.GetChiralTag() not in (Chem.ChiralType.CHI_UNSPECIFIED,
-                                   Chem.ChiralType.CHI_TETRAHEDRAL_CW,
-                                   Chem.ChiralType.CHI_TETRAHEDRAL_CCW):
+        if a.GetChiralTag() not in (
+            Chem.ChiralType.CHI_UNSPECIFIED,
+            Chem.ChiralType.CHI_TETRAHEDRAL_CW,
+            Chem.ChiralType.CHI_TETRAHEDRAL_CCW,
+        ):
             raise ValueError("This stereochemistry class is not supported yet.")
     for b in mol.GetBonds():
         if b.HasQuery() or b.GetBondType() not in ORDERS.values():
             raise ValueError("This bond type is not supported yet.")
-        if b.GetStereo() not in (*STEREO.values(), Chem.BondStereo.STEREONONE,
-                                Chem.BondStereo.STEREOANY):
+        if b.GetStereo() not in (
+            *STEREO.values(),
+            Chem.BondStereo.STEREONONE,
+            Chem.BondStereo.STEREOANY,
+        ):
             raise ValueError("This bond stereochemistry is not supported yet.")
 
 
@@ -85,12 +114,25 @@ def from_document(doc):
         a.SetProp("moruno_id", str(atom_id))
         ids[atom_id] = rw.AddAtom(a)
     for item in doc["bonds"]:
-        if item['order']==0:
-            atoms={a['id']:a for a in doc['atoms']}
-            h,acceptor=atoms[item['a']],atoms[item['b']]
-            if h['element']!='H' or acceptor['element'] not in ('N','O','F','S') or acceptor.get('charge',0)>0 or not any(
-                b['order']==1 and ((b['a']==item['a'] and b['b']!=item['b']) or (b['b']==item['a'] and b['a']!=item['b'])) for b in doc['bonds']):
-                raise ValueError('A hydrogen bond must start at a covalently bound explicit H and end at an acceptor (N, O, F or S)')
+        if item["order"] == 0:
+            atoms = {a["id"]: a for a in doc["atoms"]}
+            h, acceptor = atoms[item["a"]], atoms[item["b"]]
+            if (
+                h["element"] != "H"
+                or acceptor["element"] not in ("N", "O", "F", "S")
+                or acceptor.get("charge", 0) > 0
+                or not any(
+                    b["order"] == 1
+                    and (
+                        (b["a"] == item["a"] and b["b"] != item["b"])
+                        or (b["b"] == item["a"] and b["a"] != item["b"])
+                    )
+                    for b in doc["bonds"]
+                )
+            ):
+                raise ValueError(
+                    "A hydrogen bond must start at a covalently bound explicit H and end at an acceptor (N, O, F or S)"
+                )
         rw.AddBond(ids[item["a"]], ids[item["b"]], ORDERS[item["order"]])
         b = rw.GetBondBetweenAtoms(ids[item["a"]], ids[item["b"]])
         display = item.get("display", "plain")
@@ -112,19 +154,28 @@ def from_document(doc):
             if set(current) != set(given) or len(current) != len(given):
                 raise ValueError("Stereocenter neighbor mapping changed")
             permutation = [given.index(n) for n in current]
-            odd = sum(permutation[i] > permutation[j] for i in range(len(permutation))
-                      for j in range(i+1, len(permutation))) % 2
+            odd = (
+                sum(
+                    permutation[i] > permutation[j]
+                    for i in range(len(permutation))
+                    for j in range(i + 1, len(permutation))
+                )
+                % 2
+            )
             clockwise = stereo["winding"] == "cw"
             if odd:
                 clockwise = not clockwise
-            a.SetChiralTag(Chem.ChiralType.CHI_TETRAHEDRAL_CW if clockwise
-                          else Chem.ChiralType.CHI_TETRAHEDRAL_CCW)
+            a.SetChiralTag(
+                Chem.ChiralType.CHI_TETRAHEDRAL_CW
+                if clockwise
+                else Chem.ChiralType.CHI_TETRAHEDRAL_CCW
+            )
     mol.AddConformer(conf)
     Chem.SanitizeMol(mol)
-    for item in doc['atoms']:
-        requested=item.get('radical_electrons',0)
-        if requested and mol.GetAtomWithIdx(ids[item['id']]).GetNumRadicalElectrons()!=requested:
-            raise ValueError('Radical count conflicts with the atom valence or explicit hydrogens')
+    for item in doc["atoms"]:
+        requested = item.get("radical_electrons", 0)
+        if requested and mol.GetAtomWithIdx(ids[item["id"]]).GetNumRadicalElectrons() != requested:
+            raise ValueError("Radical count conflicts with the atom valence or explicit hydrogens")
     Chem.AssignChiralTypesFromBondDirs(mol, replaceExistingTags=False)
     for item in doc["bonds"]:
         b = mol.GetBondBetweenAtoms(ids[item["a"]], ids[item["b"]])
@@ -149,32 +200,49 @@ def to_document(mol, base=None, rewedge=False):
     Chem.Kekulize(work, clearAromaticFlags=True)
     Chem.WedgeMolBonds(work, work.GetConformer())
     for item in list(work.GetAtoms()) + list(work.GetBonds()):
-        if item.HasProp('_CIPCode'):
-            item.ClearProp('_CIPCode')
+        if item.HasProp("_CIPCode"):
+            item.ClearProp("_CIPCode")
     rdCIPLabeler.AssignCIPLabels(work, maxRecursiveIterations=1_250_000)
-    ids = {a.GetIdx(): int(a.GetProp("moruno_id")) if a.HasProp("moruno_id")
-           else a.GetIdx()+1 for a in work.GetAtoms()}
-    atoms = []
+    ids = {
+        a.GetIdx(): int(a.GetProp("moruno_id")) if a.HasProp("moruno_id") else a.GetIdx() + 1
+        for a in work.GetAtoms()
+    }
+    atoms: list[dict[str, Any]] = []
     for a in work.GetAtoms():
         p = work.GetConformer().GetAtomPosition(a.GetIdx())
         stereo = None
         if a.GetChiralTag() != Chem.ChiralType.CHI_UNSPECIFIED:
-            stereo = {"winding": "cw" if a.GetChiralTag() == Chem.ChiralType.CHI_TETRAHEDRAL_CW else "ccw",
-                      "neighbors": [ids[n.GetIdx()] for n in a.GetNeighbors()]}
-        atoms.append({"id": ids[a.GetIdx()], "element": a.GetSymbol(),
-                      "position": {"x": p.x*SCALE, "y": -p.y*SCALE},
-                      "charge": a.GetFormalCharge(), "isotope": a.GetIsotope(),
-                      "radical_electrons": a.GetNumRadicalElectrons(),
-                      "explicit_h": a.GetNumExplicitHs(), "no_implicit": a.GetNoImplicit(),
-                      "aromatic": a.GetIsAromatic(), "map_num": a.GetAtomMapNum(),
-                      "stereo": stereo, "label_h": a.GetTotalNumHs(),
-                      "cip_label": a.GetProp('_CIPCode') if a.HasProp('_CIPCode') else None})
+            stereo = {
+                "winding": "cw"
+                if a.GetChiralTag() == Chem.ChiralType.CHI_TETRAHEDRAL_CW
+                else "ccw",
+                "neighbors": [ids[n.GetIdx()] for n in a.GetNeighbors()],
+            }
+        atoms.append(
+            {
+                "id": ids[a.GetIdx()],
+                "element": a.GetSymbol(),
+                "position": {"x": p.x * SCALE, "y": -p.y * SCALE},
+                "charge": a.GetFormalCharge(),
+                "isotope": a.GetIsotope(),
+                "radical_electrons": a.GetNumRadicalElectrons(),
+                "explicit_h": a.GetNumExplicitHs(),
+                "no_implicit": a.GetNoImplicit(),
+                "aromatic": a.GetIsAromatic(),
+                "map_num": a.GetAtomMapNum(),
+                "stereo": stereo,
+                "label_h": a.GetTotalNumHs(),
+                "cip_label": a.GetProp("_CIPCode") if a.HasProp("_CIPCode") else None,
+            }
+        )
     previous = {a["id"]: a for a in (base or {}).get("atoms", [])}
-    circular_atoms = {id for b in (base or {}).get('bonds', []) if b['order']==4 for id in (b['a'],b['b'])}
-    index_by_id = {id: i for i,id in ids.items()}
+    circular_atoms = {
+        id for b in (base or {}).get("bonds", []) if b["order"] == 4 for id in (b["a"], b["b"])
+    }
+    index_by_id = {id: i for i, id in ids.items()}
     for atom in atoms:
-        if atom['id'] in circular_atoms:
-            atom['explicit_h'] = mol.GetAtomWithIdx(index_by_id[atom['id']]).GetNumExplicitHs()
+        if atom["id"] in circular_atoms:
+            atom["explicit_h"] = mol.GetAtomWithIdx(index_by_id[atom["id"]]).GetNumExplicitHs()
         if previous.get(atom["id"], {}).get("display"):
             atom["display"] = previous[atom["id"]]["display"]
         if previous.get(atom["id"], {}).get("marks"):
@@ -182,65 +250,126 @@ def to_document(mol, base=None, rewedge=False):
         if previous.get(atom["id"], {}).get("text_style"):
             atom["text_style"] = previous[atom["id"]]["text_style"]
     bonds = []
-    previous_bonds = {frozenset((b['a'],b['b'])):b for b in (base or {}).get('bonds',[])}
+    previous_bonds = {frozenset((b["a"], b["b"])): b for b in (base or {}).get("bonds", [])}
     reverse_stereo = {value: key for key, value in STEREO.items()}
     for b in work.GetBonds():
-        display = {Chem.BondDir.BEGINWEDGE: "wedge", Chem.BondDir.BEGINDASH: "hash",
-                   Chem.BondDir.UNKNOWN: "wavy"}.get(b.GetBondDir(), "plain")
+        display = {
+            Chem.BondDir.BEGINWEDGE: "wedge",
+            Chem.BondDir.BEGINDASH: "hash",
+            Chem.BondDir.UNKNOWN: "wavy",
+        }.get(b.GetBondDir(), "plain")
         if b.GetStereo() == Chem.BondStereo.STEREOANY:
             display = "wavy"
-        a,z=ids[b.GetBeginAtomIdx()],ids[b.GetEndAtomIdx()]
-        old=previous_bonds.get(frozenset((a,z)))
-        stereo_atoms=[ids[i] for i in b.GetStereoAtoms()]
-        appearance={}
+        a, z = ids[b.GetBeginAtomIdx()], ids[b.GetEndAtomIdx()]
+        old = previous_bonds.get(frozenset((a, z)))
+        stereo_atoms = [ids[i] for i in b.GetStereoAtoms()]
+        appearance = {}
         if old:
-            appearance={k:old[k] for k in ('secondary_display','double_position','color','indicator','z_order') if k in old}
-            display=old.get('display','plain')
-            if rewedge and old['order']==1 and display in ('wedge','hash','hollow_wedge','hashed','bold'):
-                start=next(i for i,id in ids.items() if id==old['a'])
-                if work.GetAtomWithIdx(start).GetChiralTag()!=Chem.ChiralType.CHI_UNSPECIFIED:
-                    Chem.WedgeBond(b,start,work.GetConformer())
-                    up=b.GetBondDir()==Chem.BondDir.BEGINWEDGE
-                    if display == 'bold':
-                        display = 'bold' if up else 'hashed'
-                    elif display in ('hollow_wedge', 'hashed'):
-                        display = 'hollow_wedge' if up else 'hashed'
+            appearance = {
+                k: old[k]
+                for k in ("secondary_display", "double_position", "color", "indicator", "z_order")
+                if k in old
+            }
+            display = old.get("display", "plain")
+            if (
+                rewedge
+                and old["order"] == 1
+                and display in ("wedge", "hash", "hollow_wedge", "hashed", "bold")
+            ):
+                start = next(i for i, id in ids.items() if id == old["a"])
+                if work.GetAtomWithIdx(start).GetChiralTag() != Chem.ChiralType.CHI_UNSPECIFIED:
+                    Chem.WedgeBond(b, start, work.GetConformer())
+                    up = b.GetBondDir() == Chem.BondDir.BEGINWEDGE
+                    if display == "bold":
+                        display = "bold" if up else "hashed"
+                    elif display in ("hollow_wedge", "hashed"):
+                        display = "hollow_wedge" if up else "hashed"
                     else:
-                        display = 'wedge' if up else 'hash'
-            if old['a']!=a:
+                        display = "wedge" if up else "hash"
+            if old["a"] != a:
                 stereo_atoms.reverse()
-            a,z=old['a'],old['b']
-        bonds.append({"a":a,"b":z,"order":4 if old and old['order']==4 and mol.GetBondWithIdx(b.GetIdx()).GetIsAromatic() else {v:k for k,v in ORDERS.items()}[b.GetBondType()],"display":display,
-                      "stereo":reverse_stereo.get(b.GetStereo()),"stereo_atoms":stereo_atoms,
-                      "cip_label": b.GetProp('_CIPCode') if b.HasProp('_CIPCode') else None, **appearance})
-    old_order={frozenset((b["a"],b["b"])):i for i,b in enumerate((base or {}).get("bonds",[]))}
-    bonds.sort(key=lambda b:old_order.get(frozenset((b["a"],b["b"])),len(old_order)))
-    return {"version": 13, "atoms": atoms, "bonds": bonds,
-            **({"page_layout": base["page_layout"]} if base and base.get("page_layout") is not None else {}),
-            "abbreviations": (base or {}).get("abbreviations", []),
-            "atom_labels": (base or {}).get("atom_labels", {}),
-            "annotations": (base or {}).get("annotations", []),
-            "arrows": (base or {}).get("arrows", []),
-            "graphics": (base or {}).get("graphics", []),
-            "groups": (base or {}).get("groups", [])}
+            a, z = old["a"], old["b"]
+        bonds.append(
+            {
+                "a": a,
+                "b": z,
+                "order": 4
+                if old and old["order"] == 4 and mol.GetBondWithIdx(b.GetIdx()).GetIsAromatic()
+                else {v: k for k, v in ORDERS.items()}[b.GetBondType()],
+                "display": display,
+                "stereo": reverse_stereo.get(b.GetStereo()),
+                "stereo_atoms": stereo_atoms,
+                "cip_label": b.GetProp("_CIPCode") if b.HasProp("_CIPCode") else None,
+                **appearance,
+            }
+        )
+    old_order = {
+        frozenset((b["a"], b["b"])): i for i, b in enumerate((base or {}).get("bonds", []))
+    }
+    bonds.sort(key=lambda b: old_order.get(frozenset((b["a"], b["b"])), len(old_order)))
+    return {
+        "version": 13,
+        "atoms": atoms,
+        "bonds": bonds,
+        **(
+            {"page_layout": base["page_layout"]}
+            if base and base.get("page_layout") is not None
+            else {}
+        ),
+        "abbreviations": (base or {}).get("abbreviations", []),
+        "atom_labels": (base or {}).get("atom_labels", {}),
+        "annotations": (base or {}).get("annotations", []),
+        "arrows": (base or {}).get("arrows", []),
+        "graphics": (base or {}).get("graphics", []),
+        "groups": (base or {}).get("groups", []),
+    }
 
 
 def analyze(mol):
-    identifiers=not any(b.GetBondType() in (Chem.BondType.HYDROGEN,Chem.BondType.ONEANDAHALF) for b in mol.GetBonds())
-    inchi_ok=identifiers and not any(b.GetBondType() in (Chem.BondType.DATIVE,Chem.BondType.QUADRUPLE) for b in mol.GetBonds())
-    return {"smiles": Chem.MolToSmiles(mol) if identifiers else "", "formula": rdMolDescriptors.CalcMolFormula(mol),
-            "mass": Descriptors.MolWt(mol), "exact_mass": Descriptors.ExactMolWt(mol),
-            "logp": Descriptors.MolLogP(mol), "tpsa": Descriptors.TPSA(mol),
-            "donors": rdMolDescriptors.CalcNumHBD(mol),
-            "acceptors": rdMolDescriptors.CalcNumHBA(mol),
-            "rings": rdMolDescriptors.CalcNumRings(mol),
-            "unpaired_electrons": sum(a.GetNumRadicalElectrons() for a in mol.GetAtoms()),
-            "inchi": Chem.MolToInchi(mol) if inchi_ok else "", "inchikey": Chem.MolToInchiKey(mol) if inchi_ok else ""}
+    identifiers = not any(
+        b.GetBondType() in (Chem.BondType.HYDROGEN, Chem.BondType.ONEANDAHALF)
+        for b in mol.GetBonds()
+    )
+    inchi_ok = identifiers and not any(
+        b.GetBondType() in (Chem.BondType.DATIVE, Chem.BondType.QUADRUPLE) for b in mol.GetBonds()
+    )
+    return {
+        "smiles": Chem.MolToSmiles(mol) if identifiers else "",
+        "formula": rdMolDescriptors.CalcMolFormula(mol),
+        "mass": rdMolDescriptors._CalcMolWt(mol),
+        "exact_mass": rdMolDescriptors.CalcExactMolWt(mol),
+        "logp": rdMolDescriptors.CalcCrippenDescriptors(mol)[0],
+        "tpsa": rdMolDescriptors.CalcTPSA(mol),
+        "donors": rdMolDescriptors.CalcNumHBD(mol),
+        "acceptors": rdMolDescriptors.CalcNumHBA(mol),
+        "rings": rdMolDescriptors.CalcNumRings(mol),
+        "unpaired_electrons": sum(a.GetNumRadicalElectrons() for a in mol.GetAtoms()),
+        "inchi": Chem.MolToInchi(mol) if inchi_ok else "",
+        "inchikey": Chem.MolToInchiKey(mol) if inchi_ok else "",
+    }
 
 
-TEXT_DEFAULTS = {"family": "Arial", "size_pt": 10.0, "bold": False,
-                 "italic": False, "underline": False, "color": [0, 0, 0],
-                 "script": "normal", "formula": False}
+class TextStyle(TypedDict):
+    family: str
+    size_pt: float
+    bold: bool
+    italic: bool
+    underline: bool
+    color: list[int]
+    script: str
+    formula: bool
+
+
+TEXT_DEFAULTS: TextStyle = {
+    "family": "Arial",
+    "size_pt": 10.0,
+    "bold": False,
+    "italic": False,
+    "underline": False,
+    "color": [0, 0, 0],
+    "script": "normal",
+    "formula": False,
+}
 
 
 def text_runs(text, format):
@@ -252,8 +381,8 @@ def text_runs(text, format):
         if not end <= span["start"] < span["end"] <= len(raw):
             raise ValueError("Invalid text style range")
         if span["start"] > end:
-            yield raw[end:span["start"]].decode("utf-8"), base
-        yield raw[span["start"]:span["end"]].decode("utf-8"), {**base, **span["style"]}
+            yield raw[end : span["start"]].decode("utf-8"), base
+        yield raw[span["start"] : span["end"]].decode("utf-8"), {**base, **span["style"]}
         end = span["end"]
     if end < len(raw) or not raw:
         yield raw[end:].decode("utf-8"), base
@@ -261,13 +390,18 @@ def text_runs(text, format):
 
 def cdxml_text_reader(root):
     fonts = {el.get("id"): el.get("name", "Arial") for el in root.findall("./fonttable/font")}
-    colors = [[0, 0, 0], [255, 255, 255]] + ([
-        [round(float(el.get(axis, "0")) * 255) for axis in ("r", "g", "b")]
-        for el in root.findall("./colortable/color")] or [[255, 255, 255], [0, 0, 0]])
+    colors = [[0, 0, 0], [255, 255, 255]] + (
+        [
+            [round(float(el.get(axis, "0")) * 255) for axis in ("r", "g", "b")]
+            for el in root.findall("./colortable/color")
+        ]
+        or [[255, 255, 255], [0, 0, 0]]
+    )
 
     def read(el, defaults=None, atom=False):
         inherited = {**root.attrib, **(defaults or {}), **el.attrib}
         prefix = "Label" if atom else "Caption"
+
         def style(run):
             face = int(run.get("face", inherited.get(prefix + "Face", "0")))
             if face & ~(1 | 2 | 4 | 32 | 64):
@@ -277,11 +411,17 @@ def cdxml_text_reader(root):
             size = float(run.get("size", inherited.get(prefix + "Size", "10")))
             if not 0 <= color < len(colors) or not 4 <= size <= 144:
                 raise ValueError("Unsupported CDXML text color or font size")
-            return {"family": fonts.get(run.get("font", inherited.get(prefix + "Font")), "Arial"),
-                    "size_pt": size, "bold": bool(face & 1), "italic": bool(face & 2),
-                    "underline": bool(face & 4), "color": colors[color],
-                    "script": {32: "subscript", 64: "superscript"}.get(script, "normal"),
-                    "formula": script == 96}
+            return {
+                "family": fonts.get(run.get("font", inherited.get(prefix + "Font")), "Arial"),
+                "size_pt": size,
+                "bold": bool(face & 1),
+                "italic": bool(face & 2),
+                "underline": bool(face & 4),
+                "color": colors[color],
+                "script": {32: "subscript", 64: "superscript"}.get(script, "normal"),
+                "formula": script == 96,
+            }
+
         runs = [(run.text or "", style(run)) for run in el.findall("s")]
         if not runs:
             raise ValueError("CDXML text has no supported style runs")
@@ -298,15 +438,24 @@ def cdxml_text_reader(root):
         if not atom and alignment not in ("Left", "Center", "Right", "Full"):
             raise ValueError("This CDXML text alignment is not supported yet")
         height = inherited.get(prefix + "LineHeight", inherited.get("LineHeight", "auto"))
-        spacing = 1.2 if height in ("auto", "variable", "0", "1") else float(height) / base["size_pt"]
+        spacing = (
+            1.2 if height in ("auto", "variable", "0", "1") else float(height) / base["size_pt"]
+        )
         width = float(inherited.get("WordWrapWidth", "0"))
         if not 0.8 <= spacing <= 3.0 or (width and not 10 <= width <= 2000):
             raise ValueError("This CDXML paragraph spacing or width is not supported yet")
         if float(inherited.get("RotationAngle", "0")) != 0:
             raise ValueError("Rotated CDXML text is not supported yet")
-        return text, {"style": base, "spans": spans,
-                      "alignment": {"Center": "center", "Right": "right", "Full": "justified"}.get(alignment, "left"),
-                      "line_spacing": spacing, "width_pt": width or None}
+        return text, {
+            "style": base,
+            "spans": spans,
+            "alignment": {"Center": "center", "Right": "right", "Full": "justified"}.get(
+                alignment, "left"
+            ),
+            "line_spacing": spacing,
+            "width_pt": width or None,
+        }
+
     return read
 
 
@@ -315,25 +464,50 @@ def import_cdxml(text):
     # These predicates and reaction changes have no equivalent in the drawing
     # model yet. A topology parser may ignore them, so reject them before it runs.
     predicates = {
-        'RingBondCount': {'Unspecified', '-1'},
-        'UnsaturatedBonds': {'Unspecified', '0'},
-        'SubstituentsUpTo': set(), 'SubstituentsExactly': set(),
-        'FreeSites': {'0'}, 'LinkCountLow': set(), 'LinkCountHigh': set(),
-        'IsotopicAbundance': {'Unspecified', '0'},
-        'Topology': {'Unspecified', '0'},
-        'RxnChange': {'no', '0'}, 'RxnStereo': {'Unspecified', '0'},
-        'RxnParticipation': {'Unspecified', '0'},
+        "RingBondCount": {"Unspecified", "-1"},
+        "UnsaturatedBonds": {"Unspecified", "0"},
+        "SubstituentsUpTo": set(),
+        "SubstituentsExactly": set(),
+        "FreeSites": {"0"},
+        "LinkCountLow": set(),
+        "LinkCountHigh": set(),
+        "IsotopicAbundance": {"Unspecified", "0"},
+        "Topology": {"Unspecified", "0"},
+        "RxnChange": {"no", "0"},
+        "RxnStereo": {"Unspecified", "0"},
+        "RxnParticipation": {"Unspecified", "0"},
     }
     for el in root.iter():
-        if el.tag in ('n', 'b'):
+        if el.tag in ("n", "b"):
             for name, defaults in predicates.items():
                 if name in el.attrib and el.get(name) not in defaults:
-                    raise ValueError('Unsupported query or reaction predicate: ' + name)
-    allowed = {"CDXML", "page", "fragment", "n", "b", "t", "s", "fonttable", "font", "colortable", "color", "arrow", "graphic", "curve", "group", "represent", "objecttag", "embeddedobject"}
+                    raise ValueError("Unsupported query or reaction predicate: " + name)
+    allowed = {
+        "CDXML",
+        "page",
+        "fragment",
+        "n",
+        "b",
+        "t",
+        "s",
+        "fonttable",
+        "font",
+        "colortable",
+        "color",
+        "arrow",
+        "graphic",
+        "curve",
+        "group",
+        "represent",
+        "objecttag",
+        "embeddedobject",
+    }
     if {el.tag for el in root.iter()} - allowed or len(list(root.iter("page"))) != 1:
         raise ValueError("CDXML contains unsupported drawing objects or multiple pages.")
     abbreviated = abbreviations_exchange.flatten(root)
-    parts = Chem.MolsFromCDXML(ET.tostring(chemistry_xml(root), encoding="unicode"), sanitize=False, removeHs=False)
+    parts = Chem.MolsFromCDXML(
+        ET.tostring(chemistry_xml(root), encoding="unicode"), sanitize=False, removeHs=False
+    )
     object_map = {}
     fragments = {el.get("id"): el for el in root.iter("fragment")}
     offset = 0
@@ -347,25 +521,32 @@ def import_cdxml(text):
     for part in parts[1:]:
         mol = Chem.CombineMols(mol, part)
     scale = 42.0 / float(root.get("BondLength", "30"))
-    base = {"atoms": [], "annotations": [], "arrows": [],
-            "bonds": read_bonds(root, parts, scale, palette(root))}
-    for bond in base['bonds']:
-        chemical=mol.GetBondBetweenAtoms(bond['a']-1,bond['b']-1)
-        chemical.SetBondType(ORDERS[bond['order']])
-        if bond['order']==4:
+    base = {
+        "atoms": [],
+        "annotations": [],
+        "arrows": [],
+        "bonds": read_bonds(root, parts, scale, palette(root)),
+    }
+    for bond in base["bonds"]:
+        chemical = mol.GetBondBetweenAtoms(bond["a"] - 1, bond["b"] - 1)
+        chemical.SetBondType(ORDERS[bond["order"]])
+        if bond["order"] == 4:
             chemical.SetIsAromatic(True)
-            chemical.GetBeginAtom().SetIsAromatic(True);chemical.GetEndAtom().SetIsAromatic(True)
+            chemical.GetBeginAtom().SetIsAromatic(True)
+            chemical.GetEndAtom().SetIsAromatic(True)
     Chem.SanitizeMol(mol)
     Chem.AssignChiralTypesFromBondDirs(mol, replaceExistingTags=False)
     Chem.DetectBondStereochemistry(mol, confId=0)
     Chem.AssignStereochemistry(mol, cleanIt=False, force=True)
     read_text = cdxml_text_reader(root)
     next_id = mol.GetNumAtoms() + 1
+
     def point(value):
         values = [float(v) for v in value.split()]
         if len(values) < 2 or not all(math.isfinite(v) for v in values):
             raise ValueError("Invalid CDXML coordinates")
-        return {"x": values[0]*scale, "y": values[1]*scale}
+        return {"x": values[0] * scale, "y": values[1] * scale}
+
     parents = {child: parent for parent in root.iter() for child in parent}
     for page in root.iter("page"):
         for el in page.iter():
@@ -374,11 +555,18 @@ def import_cdxml(text):
                 # Caption p is a baseline anchor; a bounding box supplies the
                 # top-left origin used by the editor, including centered text.
                 origin = el.get("BoundingBox", el.attrib.get("p", "0 0"))
-                base["annotations"].append({"id": next_id, "position": point(origin),
-                                            "text": value, "format": format})
+                base["annotations"].append(
+                    {"id": next_id, "position": point(origin), "text": value, "format": format}
+                )
                 object_map[el] = [next_id]
                 next_id += 1
-            elif el.tag == "arrow" or (el.tag == "curve" and any(el.get(k, "None") not in ("None", "Unspecified") for k in ("ArrowheadHead", "ArrowheadTail"))):
+            elif el.tag == "arrow" or (
+                el.tag == "curve"
+                and any(
+                    el.get(k, "None") not in ("None", "Unspecified")
+                    for k in ("ArrowheadHead", "ArrowheadTail")
+                )
+            ):
                 base["arrows"].append(read_arrow(el, root, point, palette(root), next_id))
                 object_map[el] = [next_id]
                 next_id += 1
@@ -388,7 +576,9 @@ def import_cdxml(text):
     for node in root.iter("n"):
         label = node.find("t")
         if label is None:
-            if not any(key in node.attrib for key in ("LabelFont", "LabelSize", "LabelFace", "LabelColor")):
+            if not any(
+                key in node.attrib for key in ("LabelFont", "LabelSize", "LabelFace", "LabelColor")
+            ):
                 continue
             label = ET.Element("t")
             ET.SubElement(label, "s")
@@ -403,142 +593,234 @@ def import_cdxml(text):
         matches = []
         for a in mol.GetAtoms():
             pos = mol.GetConformer().GetAtomPosition(a.GetIdx())
-            if (a.GetAtomicNum() == int(node.get("Element", "6"))
-                    and abs(pos.x * SCALE - p["x"]) < 0.01
-                    and abs(-pos.y * SCALE - p["y"]) < 0.01):
+            if (
+                a.GetAtomicNum() == int(node.get("Element", "6"))
+                and abs(pos.x * SCALE - p["x"]) < 0.01
+                and abs(-pos.y * SCALE - p["y"]) < 0.01
+            ):
                 matches.append(a.GetIdx() + 1)
         if len(matches) != 1:
             raise ValueError("Could not safely associate CDXML text style with its atom")
         base["atoms"].append({"id": matches[0], "text_style": s})
-    read_marks(root,mol,base,scale,object_map)
-    read_labels(root,mol,base,scale,read_text,object_map)
+    read_marks(root, mol, base, scale, object_map)
+    read_labels(root, mol, base, scale, read_text, object_map)
     aromatic.remove_owned_circles(root, mol, base, scale)
     base["graphics"] = read_graphics(root, scale, next_id, object_map)
     # A chemical fragment may also contain nonchemical curves.
     for fragment, atoms in list(object_map.items()):
         if fragment.tag == "fragment":
-            object_map[fragment] = atoms + [id for child in fragment if child in object_map for id in object_map[child]]
+            object_map[fragment] = atoms + [
+                id for child in fragment if child in object_map for id in object_map[child]
+            ]
     base["groups"] = read_groups(root, object_map, next_id + len(base["graphics"]))
     base["abbreviations"] = abbreviations_exchange.read(abbreviated, root, mol, scale)
-    if not mol.GetNumAtoms() and not base["annotations"] and not base["arrows"] and not base["graphics"]:
+    if (
+        not mol.GetNumAtoms()
+        and not base["annotations"]
+        and not base["arrows"]
+        and not base["graphics"]
+    ):
         raise ValueError("No supported drawing objects found")
     return mol, base
 
 
-def export_cdxml(doc, text_layout=None, graphic_paths=None, graphic_parts=None, atom_indicators=None):
+def export_cdxml(
+    doc, text_layout=None, graphic_paths=None, graphic_parts=None, atom_indicators=None
+):
     # Coordinates and styles belong to the editor. Chemistry is checked first.
     mol = from_document(doc)
     style = DRAWING_STYLE
     scale = style["bond_length_pt"] / style["bond_length_world"]
-    root = ET.Element("CDXML", BondLength=str(style["bond_length_pt"]),
-                      LabelSize=str(style["font_size_pt"]), CaptionSize=str(style["font_size_pt"]),
-                      LabelFont="3", CaptionFont="3", LabelFace="0", CaptionFace="0",
-                      LineWidth=str(style["line_width_pt"]), BoldWidth=str(style["bold_width_pt"]),
-                      MarginWidth=str(style["margin_width_pt"]), HashSpacing=str(style["hash_spacing_pt"]),
-                      BondSpacing=str(style["bond_spacing_ratio"] * 100), ChainAngle="120")
+    root = ET.Element(
+        "CDXML",
+        BondLength=str(style["bond_length_pt"]),
+        LabelSize=str(style["font_size_pt"]),
+        CaptionSize=str(style["font_size_pt"]),
+        LabelFont="3",
+        CaptionFont="3",
+        LabelFace="0",
+        CaptionFace="0",
+        LineWidth=str(style["line_width_pt"]),
+        BoldWidth=str(style["bold_width_pt"]),
+        MarginWidth=str(style["margin_width_pt"]),
+        HashSpacing=str(style["hash_spacing_pt"]),
+        BondSpacing=str(style["bond_spacing_ratio"] * 100),
+        ChainAngle="120",
+    )
     fonts = ET.SubElement(root, "fonttable")
     colors = ET.SubElement(root, "colortable")
     font_ids, color_ids = {}, {}
+
     def font_id(name):
         if name not in font_ids:
             font_ids[name] = str(len(font_ids) + 3)
             ET.SubElement(fonts, "font", id=font_ids[name], charset="utf-8", name=name)
         return font_ids[name]
+
     def color_id(rgb):
         key = tuple(rgb)
         if key not in color_ids:
             color_ids[key] = str(len(color_ids) + 2)
-            ET.SubElement(colors, "color", **{axis: f"{c / 255:.8f}" for axis, c in zip(("r", "g", "b"), rgb)})
+            ET.SubElement(
+                colors, "color", {axis: f"{c / 255:.8f}" for axis, c in zip(("r", "g", "b"), rgb)}
+            )
         return color_ids[key]
+
     font_id(style["font_family"])
     color_id([255, 255, 255])
     color_id([0, 0, 0])
+
     def write_text(parent, value, format, **attrs):
         t = ET.SubElement(parent, "t", **attrs)
         for value, s in text_runs(value, format):
             face = int(s["bold"]) + 2 * int(s["italic"]) + 4 * int(s["underline"])
             face |= {"subscript": 32, "superscript": 64}.get(s["script"], 96 if s["formula"] else 0)
-            ET.SubElement(t, "s", font=font_id(s["family"]), size=str(s["size_pt"]),
-                          face=str(face), color=color_id(s["color"])).text = value
+            ET.SubElement(
+                t,
+                "s",
+                font=font_id(s["family"]),
+                size=str(s["size_pt"]),
+                face=str(face),
+                color=color_id(s["color"]),
+            ).text = value
         return t
+
     page = ET.SubElement(root, "page", id="1", BoundingBox="0 0 612 792")
     fragment = ET.SubElement(page, "fragment", id="2")
     object_map = {}
     points = [a["position"] for a in doc["atoms"]]
     # Fit all drawing objects into the page. In particular, a rotated picture
     # can extend above/left of its molecule; using atoms alone clips that image.
-    points.extend(a['position'] for a in doc.get('annotations', []))
-    for arrow in doc.get('arrows', []):
-        points.extend(arrow[k] for k in ('start', 'end', 'control') if arrow.get(k))
-    for graphic in doc.get('graphics', []):
-        if graphic.get('kind') == 'picture':
-            o, x, y = [graphic[k] for k in ('origin', 'axis_x', 'axis_y')]
-            points.extend({k:o[k]+u*x[k]+v*y[k] for k in ('x','y')}
-                          for u,v in ((0,0),(1,0),(0,1),(1,1)))
+    points.extend(a["position"] for a in doc.get("annotations", []))
+    for arrow in doc.get("arrows", []):
+        points.extend(arrow[k] for k in ("start", "end", "control") if arrow.get(k))
+    for graphic in doc.get("graphics", []):
+        if graphic.get("kind") == "picture":
+            o, x, y = [graphic[k] for k in ("origin", "axis_x", "axis_y")]
+            points.extend(
+                {k: o[k] + u * x[k] + v * y[k] for k in ("x", "y")}
+                for u, v in ((0, 0), (1, 0), (0, 1), (1, 1))
+            )
         else:
-            for command in (graphic_paths or {}).get(str(graphic['id']), []):
-                value = command.get('points')
-                if isinstance(value, dict): points.append(value)
-                elif isinstance(value, list): points.extend(value)
-    dx = 30-min((p["x"] * scale for p in points), default=0)
-    dy = 30-min((p["y"] * scale for p in points), default=0)
+            for command in (graphic_paths or {}).get(str(graphic["id"]), []):
+                value = command.get("points")
+                if isinstance(value, dict):
+                    points.append(value)
+                elif isinstance(value, list):
+                    points.extend(value)
+    dx = 30 - min((p["x"] * scale for p in points), default=0)
+    dy = 30 - min((p["y"] * scale for p in points), default=0)
+
     def position(p):
-        return f'{p["x"] * scale + dx:.6f} {p["y"] * scale + dy:.6f}'
-    ids = {a["id"]: i+3 for i, a in enumerate(doc["atoms"])}
+        return f"{p['x'] * scale + dx:.6f} {p['y'] * scale + dy:.6f}"
+
+    ids = {a["id"]: i + 3 for i, a in enumerate(doc["atoms"])}
     for a in doc["atoms"]:
-        attrs = {"id": str(ids[a["id"]]), "p": position(a["position"]),
-                 "Element": str(Chem.GetPeriodicTable().GetAtomicNumber(a["element"]))}
-        if a.get("charge"): attrs["Charge"] = str(a["charge"])
-        if a.get("isotope"): attrs["Isotope"] = str(a["isotope"])
-        if a.get("radical_electrons"): attrs["Radical"] = {1:"Doublet",2:"Triplet"}[a["radical_electrons"]]
-        if a.get("explicit_h"): attrs["NumHydrogens"] = str(a["explicit_h"])
+        attrs = {
+            "id": str(ids[a["id"]]),
+            "p": position(a["position"]),
+            "Element": str(Chem.GetPeriodicTable().GetAtomicNumber(a["element"])),
+        }
+        if a.get("charge"):
+            attrs["Charge"] = str(a["charge"])
+        if a.get("isotope"):
+            attrs["Isotope"] = str(a["isotope"])
+        if a.get("radical_electrons"):
+            attrs["Radical"] = {1: "Doublet", 2: "Triplet"}[a["radical_electrons"]]
+        if a.get("explicit_h"):
+            attrs["NumHydrogens"] = str(a["explicit_h"])
         if a.get("marks"):
             attrs["NumHydrogens"] = str(a.get("label_h", a.get("explicit_h", 0)))
-        n = ET.SubElement(fragment, "n", **attrs)
+        n = ET.SubElement(fragment, "n", attrs)
         object_map[a["id"]] = n
         if a.get("text_style") or a.get("marks") or a.get("display") or doc.get("atom_labels"):
             # ChemDraw requires a concrete label to resolve represent links.
             # Atomic identity stays in Element/Charge/Isotope; the text is a view.
-            s = {**TEXT_DEFAULTS, **(a.get("text_style") or {}), "script": "normal", "formula": False}
+            s = {
+                **TEXT_DEFAULTS,
+                **(a.get("text_style") or {}),
+                "script": "normal",
+                "formula": False,
+            }
             isotope = str(a["isotope"]) if a.get("isotope") else ""
             label = isotope + a["element"]
             spans = []
             if isotope:
-                spans.append({"start": 0, "end": len(isotope), "style": {**s, "script": "superscript"}})
+                spans.append(
+                    {"start": 0, "end": len(isotope), "style": {**s, "script": "superscript"}}
+                )
             hydrogens = a.get("label_h", 0)
             show_h = a.get("display", {}).get("hydrogens")
-            if show_h is None: show_h = doc.get("atom_labels", {}).get("hydrogens", True)
+            if show_h is None:
+                show_h = doc.get("atom_labels", {}).get("hydrogens", True)
             if hydrogens and show_h and a["element"] != "H":
                 label += "H"
                 if hydrogens > 1:
                     start = len(label)
                     label += str(hydrogens)
-                    spans.append({"start": start, "end": len(label), "style": {**s, "script": "subscript"}})
-            if a.get("charge") and not any(m["kind"] in ("charge","circled_charge","radical_ion") for m in a.get("marks",[])):
+                    spans.append(
+                        {"start": start, "end": len(label), "style": {**s, "script": "subscript"}}
+                    )
+            if a.get("charge") and not any(
+                m["kind"] in ("charge", "circled_charge", "radical_ion") for m in a.get("marks", [])
+            ):
                 start = len(label)
                 charge = a["charge"]
-                label += (str(abs(charge)) if abs(charge) > 1 else "") + ("+" if charge > 0 else "−")
-                spans.append({"start": start, "end": len(label.encode("utf-8")), "style": {**s, "script": "superscript"}})
+                label += (str(abs(charge)) if abs(charge) > 1 else "") + (
+                    "+" if charge > 0 else "−"
+                )
+                spans.append(
+                    {
+                        "start": start,
+                        "end": len(label.encode("utf-8")),
+                        "style": {**s, "script": "superscript"},
+                    }
+                )
             # Invisible skeletal carbons need no text object. Keep their dormant
             # style on the node for Moruno's editable CDXML round trip.
             hidden = not label_visible(a, doc)
             if hidden:
                 face = int(s["bold"]) + 2 * int(s["italic"]) + 4 * int(s["underline"])
-                n.attrib.update(LabelFont=font_id(s["family"]), LabelSize=str(s["size_pt"]),
-                                LabelFace=str(face), LabelColor=color_id(s["color"]))
+                n.attrib.update(
+                    LabelFont=font_id(s["family"]),
+                    LabelSize=str(s["size_pt"]),
+                    LabelFace=str(face),
+                    LabelColor=color_id(s["color"]),
+                )
                 continue
-            write_text(n, label, {"style": s, "spans": spans},
-                       p=position(a["position"]), LabelAlignment="Auto")
-    next_id = len(ids)+3
+            write_text(
+                n,
+                label,
+                {"style": s, "spans": spans},
+                p=position(a["position"]),
+                LabelAlignment="Auto",
+            )
+    next_id = len(ids) + 3
     bond_nodes = []
     for b in doc["bonds"]:
-        attrs = {"id": str(next_id), "B": str(ids[b["a"]]), "E": str(ids[b["b"]]),
-                 "Order": {0:"hydrogen",4:"1.5",5:"dative",6:"4",7:"1.5"}.get(b["order"],str(b["order"]))}
+        attrs = {
+            "id": str(next_id),
+            "B": str(ids[b["a"]]),
+            "E": str(ids[b["b"]]),
+            "Order": {0: "hydrogen", 4: "1.5", 5: "dative", 6: "4", 7: "1.5"}.get(
+                b["order"], str(b["order"])
+            ),
+        }
         attrs.update(write_bond(b, color_id))
-        bond_nodes.append(ET.SubElement(fragment, "b", **attrs))
+        bond_nodes.append(ET.SubElement(fragment, "b", attrs))
         next_id += 1
     next_id = aromatic.write_circles(fragment, doc, mol, position, color_id, next_id)
-    write_labels(root, doc, object_map, bond_nodes, position, scale, write_text, TEXT_DEFAULTS, atom_indicators)
+    write_labels(
+        root,
+        doc,
+        object_map,
+        bond_nodes,
+        position,
+        scale,
+        write_text,
+        TEXT_DEFAULTS,
+        atom_indicators,
+    )
     for a in doc.get("annotations", []):
         format = a.get("format", {})
         s = {**TEXT_DEFAULTS, **format.get("style", {})}
@@ -546,17 +828,33 @@ def export_cdxml(doc, text_layout=None, graphic_paths=None, graphic_parts=None, 
         if metrics is None:
             # Non-GUI protocol clients can supply measured metrics. This fallback
             # still preserves the origin; the desktop always supplies real ones.
-            metrics = {"width": format.get("width_pt") or max(map(len, a["text"].split("\n"))) * s["size_pt"] * 0.6,
-                       "height": len(a["text"].split("\n")) * s["size_pt"] * format.get("line_spacing", 1.2),
-                       "baseline": s["size_pt"] * 0.9}
+            metrics = {
+                "width": format.get("width_pt")
+                or max(map(len, a["text"].split("\n"))) * s["size_pt"] * 0.6,
+                "height": len(a["text"].split("\n"))
+                * s["size_pt"]
+                * format.get("line_spacing", 1.2),
+                "baseline": s["size_pt"] * 0.9,
+            }
         anchor = {"x": a["position"]["x"], "y": a["position"]["y"] + metrics["baseline"] / scale}
-        anchor["x"] += metrics["width"] / scale * {"center": 0.5, "right": 1.0}.get(format.get("alignment"), 0.0)
-        far = {"x": a["position"]["x"] + metrics["width"] / scale,
-               "y": a["position"]["y"] + metrics["height"] / scale}
-        attrs = {"id": str(next_id), "p": position(anchor),
-                 "BoundingBox": position(a["position"]) + " " + position(far),
-                 "CaptionJustification": {"center": "Center", "right": "Right", "justified": "Full"}.get(format.get("alignment"), "Left"),
-                 "CaptionLineHeight": str(round(s["size_pt"] * format.get("line_spacing", 1.2), 3))}
+        anchor["x"] += (
+            metrics["width"]
+            / scale
+            * {"center": 0.5, "right": 1.0}.get(format.get("alignment"), 0.0)
+        )
+        far = {
+            "x": a["position"]["x"] + metrics["width"] / scale,
+            "y": a["position"]["y"] + metrics["height"] / scale,
+        }
+        attrs = {
+            "id": str(next_id),
+            "p": position(anchor),
+            "BoundingBox": position(a["position"]) + " " + position(far),
+            "CaptionJustification": {"center": "Center", "right": "Right", "justified": "Full"}.get(
+                format.get("alignment"), "Left"
+            ),
+            "CaptionLineHeight": str(round(s["size_pt"] * format.get("line_spacing", 1.2), 3)),
+        }
         if format.get("width_pt"):
             attrs["WordWrapWidth"] = str(round(format["width_pt"]))
         object_map[a["id"]] = write_text(page, a["text"], format, **attrs)
@@ -565,18 +863,28 @@ def export_cdxml(doc, text_layout=None, graphic_paths=None, graphic_parts=None, 
     for a in doc.get("arrows", []):
         object_map[a["id"]] = write_arrow(page, a, next_id, position, color_id)
         next_id += 1
-    next_id, middle, graphic_objects = write_graphics(page, doc.get("graphics", []), graphic_paths,
-                               scale, position, color_id, next_id, graphic_parts)
+    next_id, middle, graphic_objects = write_graphics(
+        page,
+        doc.get("graphics", []),
+        graphic_paths,
+        scale,
+        position,
+        color_id,
+        next_id,
+        graphic_parts,
+    )
     # Leave one common layer for the molecule, arrows and text. The graphic
     # layers above and below it retain the editor's front/back order.
     for el in page.iter():
-        if el.tag in ("fragment", "n", "b", "t", "arrow") or el in [object_map[a["id"]] for a in doc.get("arrows", [])]:
+        if el.tag in ("fragment", "n", "b", "t", "arrow") or el in [
+            object_map[a["id"]] for a in doc.get("arrows", [])
+        ]:
             el.set("Z", str(middle))
     write_crossings(doc, bond_nodes, page, middle)
     object_map.update(graphic_objects)
     write_groups(page, doc, fragment, object_map, ids, next_id)
     abbreviations_exchange.write(root, doc, ids, position, write_text, TEXT_DEFAULTS)
-    return '<?xml version="1.0" encoding="UTF-8"?>\n'+ET.tostring(root, encoding="unicode")
+    return '<?xml version="1.0" encoding="UTF-8"?>\n' + ET.tostring(root, encoding="unicode")
 
 
 def handle(request):
@@ -585,66 +893,114 @@ def handle(request):
     operation = request["operation"]
     response = {"engine_version": rdBase.rdkitVersion, "warnings": []}
     if operation == "aromatic":
-        result, mol = aromatic.toggle(request["document"], request.get("selected_ids"), from_document, to_document)
+        result, mol = aromatic.toggle(
+            request["document"], request.get("selected_ids"), from_document, to_document
+        )
         response.update(document=result, analysis=analyze(mol))
         return response
     if operation == "abbreviate":
-        doc=request['document'];selection=request.get('selected_ids',[])
-        mol=from_document(doc)
-        if request.get('format')=='replace':
-            result=abbreviations.replace(doc,selection,request.get('text'),to_document)
+        doc = request["document"]
+        selection = request.get("selected_ids", [])
+        mol = from_document(doc)
+        if request.get("format") == "replace":
+            result = abbreviations.replace(doc, selection, request.get("text"), to_document)
         else:
-            result=abbreviations.find(doc,mol,selection,request.get('text'))
-        checked=from_document(result)
-        response.update(document=to_document(checked,result),analysis=analyze(checked))
+            result = abbreviations.find(doc, mol, selection, request.get("text"))
+        checked = from_document(result)
+        response.update(document=to_document(checked, result), analysis=analyze(checked))
         return response
     if operation == "import":
         fmt, text = request.get("format", "smiles"), request.get("text", "")
-        if not text.strip(): raise ValueError("Enter a structure first")
+        if not text.strip():
+            raise ValueError("Enter a structure first")
         base = None
-        if fmt == "smiles": mol = Chem.MolFromSmiles(text)
-        elif fmt == "mol": mol = Chem.MolFromMolBlock(text, removeHs=False)
-        elif fmt == "inchi": mol = Chem.MolFromInchi(text, removeHs=False)
+        if fmt == "smiles":
+            mol = Chem.MolFromSmiles(text)
+        elif fmt == "mol":
+            mol = Chem.MolFromMolBlock(text, removeHs=False)
+        elif fmt == "inchi":
+            mol = Chem.MolFromInchi(text, removeHs=False)
         elif fmt == "cdx":
             if len(text) > (CDX_LIMIT + 2) // 3 * 4:
                 raise ValueError("Drawing exceeds the 16 MB structure limit")
             mol, base = import_cdxml(from_cdx(base64.b64decode(text, validate=True)))
         elif fmt == "cdxml":
             mol, base = import_cdxml(text)
-        else: raise ValueError("Unsupported import format")
-        if mol is None: raise ValueError("Could not parse this structure")
+        else:
+            raise ValueError("Unsupported import format")
+        if mol is None:
+            raise ValueError("Could not parse this structure")
         check_supported(mol)
-        if fmt in ("smiles", "inchi") or not mol.GetNumConformers(): rdDepictor.Compute2DCoords(mol)
-        response.update(document=to_document(mol, base), analysis=analyze(mol) if mol.GetNumAtoms() else None)
+        if fmt in ("smiles", "inchi") or not mol.GetNumConformers():
+            rdDepictor.Compute2DCoords(mol)
+        response.update(
+            document=to_document(mol, base), analysis=analyze(mol) if mol.GetNumAtoms() else None
+        )
     elif operation in ("analyze", "clean", "export"):
         doc = request["document"]
         if not doc["atoms"]:
             if operation == "export" and request.get("format") in ("cdxml", "cdx"):
-                output = export_cdxml(doc, request.get("text_layout"), request.get("graphic_paths"), request.get("graphic_parts"), request.get("atom_indicators"))
-                if request.get("format") == "cdx": output = base64.b64encode(to_cdx(output)).decode('ascii')
+                output = export_cdxml(
+                    doc,
+                    request.get("text_layout"),
+                    request.get("graphic_paths"),
+                    request.get("graphic_parts"),
+                    request.get("atom_indicators"),
+                )
+                if request.get("format") == "cdx":
+                    output = base64.b64encode(to_cdx(output)).decode("ascii")
                 response.update(document=doc, analysis=None, output=output)
                 return response
             raise ValueError("Draw or import a molecule first")
         if operation == "clean":
-            response.update(cleanup.clean(doc, request.get('cleanup'), request.get('selected_ids'),
-                            from_document, to_document, analyze, SCALE, DRAWING_STYLE["bond_length_world"]))
+            response.update(
+                cleanup.clean(
+                    doc,
+                    request.get("cleanup"),
+                    request.get("selected_ids"),
+                    from_document,
+                    to_document,
+                    analyze,
+                    SCALE,
+                    DRAWING_STYLE["bond_length_world"],
+                )
+            )
             return response
         mol = from_document(doc)
         result_doc = to_document(mol, doc)
         response.update(document=result_doc, analysis=analyze(mol))
         if operation == "export":
             fmt = request["format"]
-            exotic={b['order'] for b in result_doc['bonds']} & {0,5,6,7}
-            if (fmt=='mol' and exotic & {0,6,7}) or (fmt=='smiles' and exotic & {0,7}) or (fmt=='inchi' and exotic):
-                raise ValueError('This export cannot preserve the hydrogen, partial, dative or quadruple bonds in this drawing; use native or CDXML')
-            if fmt == "mol": response["output"] = Chem.MolToMolBlock(mol)
-            elif fmt == "smiles": response["output"] = Chem.MolToSmiles(mol)
-            elif fmt == "inchi": response["output"] = Chem.MolToInchi(mol)
+            exotic = {b["order"] for b in result_doc["bonds"]} & {0, 5, 6, 7}
+            if (
+                (fmt == "mol" and exotic & {0, 6, 7})
+                or (fmt == "smiles" and exotic & {0, 7})
+                or (fmt == "inchi" and exotic)
+            ):
+                raise ValueError(
+                    "This export cannot preserve the hydrogen, partial, dative or quadruple bonds in this drawing; use native or CDXML"
+                )
+            if fmt == "mol":
+                response["output"] = Chem.MolToMolBlock(mol)
+            elif fmt == "smiles":
+                response["output"] = Chem.MolToSmiles(mol)
+            elif fmt == "inchi":
+                response["output"] = Chem.MolToInchi(mol)
             elif fmt in ("cdxml", "cdx"):
-                output = export_cdxml(result_doc, request.get("text_layout"), request.get("graphic_paths"), request.get("graphic_parts"), request.get("atom_indicators"))
-                response["output"] = base64.b64encode(to_cdx(output)).decode('ascii') if fmt == "cdx" else output
-            else: raise ValueError("Unsupported export format")
-    else: raise ValueError("Unknown chemistry operation")
+                output = export_cdxml(
+                    result_doc,
+                    request.get("text_layout"),
+                    request.get("graphic_paths"),
+                    request.get("graphic_parts"),
+                    request.get("atom_indicators"),
+                )
+                response["output"] = (
+                    base64.b64encode(to_cdx(output)).decode("ascii") if fmt == "cdx" else output
+                )
+            else:
+                raise ValueError("Unsupported export format")
+    else:
+        raise ValueError("Unknown chemistry operation")
     return response
 
 

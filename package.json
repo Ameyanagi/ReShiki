@@ -1,0 +1,26 @@
+{
+  "name": "moruno-development",
+  "private": true,
+  "workspaces": [
+    "website"
+  ],
+  "type": "module",
+  "scripts": {
+    "prepare": "lefthook install",
+    "docs:dev": "npm run dev --workspace website",
+    "docs:build": "npm run build --workspace website",
+    "docs:check": "npm run check --workspace website",
+    "lint:js": "oxlint --deny-warnings website",
+    "format:check": "oxfmt --check .",
+    "format": "oxfmt .",
+    "check": "npm run lint:js && npm run format:check && npm run docs:check"
+  },
+  "devDependencies": {
+    "lefthook": "2.1.14",
+    "oxfmt": "0.68.0",
+    "oxlint": "1.83.0"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  }
+}

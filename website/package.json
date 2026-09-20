@@ -1,0 +1,20 @@
+{
+  "name": "@moruno/docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync": "node scripts/sync-docs.mjs",
+    "dev": "npm run sync && astro dev",
+    "build": "npm run sync && astro build && node scripts/check-links.mjs",
+    "check": "npm run sync && astro check"
+  },
+  "dependencies": {
+    "@astrojs/markdown-remark": "7.3.1",
+    "@astrojs/starlight": "0.42.2",
+    "astro": "7.3.3"
+  },
+  "devDependencies": {
+    "@astrojs/check": "0.9.10",
+    "typescript": "6.0.3"
+  }
+}

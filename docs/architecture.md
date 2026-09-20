@@ -17,24 +17,24 @@ flowchart LR
 
 ## Modules
 
-| File | Responsibility |
-| --- | --- |
-| `src/document.rs` | Atoms, bonds, text, arrows, stable object IDs, validation, undo/redo snapshots |
-| `src/scene.rs` | Toolkit-independent lines, polygons, labels and SVG serialization |
-| `src/canvas.rs` | Hit testing, pointer gestures, snapping, camera and previews |
-| `src/app.rs` | Desktop controls, asynchronous requests, selection and file workflows |
-| `src/app/workspace.rs` | Command bar, context options, compact palette, inspector and drawers |
-| `src/app/icons.rs` | Original vector tool and command icons |
-| `src/engine.rs` | Chemistry interface, worker lifecycle, timeout and response validation |
-| `src/editing.rs` | Clipboard remapping, transforms, component arrangement and ring placement |
-| `src/recovery.rs` | Atomic session snapshots and recovery candidates |
-| `src/clipboard.rs`, `src/app/clipboard.rs` | Native multi-format Copy/Paste, asynchronous completion guards and safe Cut |
-| `native/macos/Clipboard.swift` | Bounded single-item AppKit pasteboard bridge |
-| `engine/cdx_exchange.py` | Checked binary drawing conversion through the supported CDXML subset |
-| `src/export.rs` | Vector PDF and raster PNG from the shared SVG scene |
-| `src/storage.rs` | Write complete files beside the destination, then atomically replace |
-| `src/style.rs` and `engine/drawing_style.json` | Shared JACS / ACS defaults, publication units and font advances |
-| `engine/worker.py` | Molecular parsing, sanitization, descriptors, depiction and exchange formats |
+| File                                           | Responsibility                                                                 |
+| ---------------------------------------------- | ------------------------------------------------------------------------------ |
+| `src/document.rs`                              | Atoms, bonds, text, arrows, stable object IDs, validation, undo/redo snapshots |
+| `src/scene.rs`                                 | Toolkit-independent lines, polygons, labels and SVG serialization              |
+| `src/canvas.rs`                                | Hit testing, pointer gestures, snapping, camera and previews                   |
+| `src/app.rs`                                   | Desktop controls, asynchronous requests, selection and file workflows          |
+| `src/app/workspace.rs`                         | Command bar, context options, compact palette, inspector and drawers           |
+| `src/app/icons.rs`                             | Original vector tool and command icons                                         |
+| `src/engine.rs`                                | Chemistry interface, worker lifecycle, timeout and response validation         |
+| `src/editing.rs`                               | Clipboard remapping, transforms, component arrangement and ring placement      |
+| `src/recovery.rs`                              | Atomic session snapshots and recovery candidates                               |
+| `src/clipboard.rs`, `src/app/clipboard.rs`     | Native multi-format Copy/Paste, asynchronous completion guards and safe Cut    |
+| `native/macos/Clipboard.swift`                 | Bounded single-item AppKit pasteboard bridge                                   |
+| `engine/cdx_exchange.py`                       | Checked binary drawing conversion through the supported CDXML subset           |
+| `src/export.rs`                                | Vector PDF and raster PNG from the shared SVG scene                            |
+| `src/storage.rs`                               | Write complete files beside the destination, then atomically replace           |
+| `src/style.rs` and `engine/drawing_style.json` | Shared JACS / ACS defaults, publication units and font advances                |
+| `engine/worker.py`                             | Molecular parsing, sanitization, descriptors, depiction and exchange formats   |
 
 Document coordinates use screen-style positive-down Y, with 28 world units per RDKit coordinate unit. The default single bond is 42 world units, representing 14.4 publication points in the JACS / ACS preset. The camera never changes stored coordinates or export size. Native documents use JSON format version 11 and accept supported versions 1–10 when reading. New presentation fields prompted version increments so older editors reject unsupported documents. History and camera are session state.
 
@@ -45,7 +45,7 @@ Atoms retain formal charge, isotope, explicit-H count, implicit-H policy, map nu
 One JSON object per line on stdin/stdout. Diagnostics use stderr. Requests and responses include a numeric request ID; requests also have `protocol: 1`. Supported operations are `import`, `analyze`, `clean`, `abbreviate`, and `export`.
 
 ```json
-{"id":1,"protocol":1,"operation":"import","format":"smiles","text":"CCO"}
+{ "id": 1, "protocol": 1, "operation": "import", "format": "smiles", "text": "CCO" }
 ```
 
 Successful responses contain `ok: true` and `result` with the engine version, document and analysis, or an exported string. Failures contain `ok: false` and an error. One persistent worker processes serialized requests. A failed, exited or timed-out worker is dropped and restarted for the next request. The timeout is 30 seconds.

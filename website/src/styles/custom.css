@@ -1,0 +1,22 @@
+:root {
+  --sl-color-accent-low: #123b35;
+  --sl-color-accent: #389280;
+  --sl-color-accent-high: #b8e9df;
+  --sl-font:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+  --sl-content-width: 52rem;
+}
+:root[data-theme="light"] {
+  --sl-color-accent-low: #e1f2ed;
+  --sl-color-accent: #287866;
+  --sl-color-accent-high: #184f44;
+}
+.hero h1 {
+  letter-spacing: -0.04em;
+}
+.card {
+  border-radius: 0.8rem;
+}
+.sl-markdown-content img {
+  border-radius: 0.5rem;
+}

@@ -25,7 +25,7 @@ Used a separate QA app so existing drawings in older Moruno windows remained ope
 3. Selected only `Pd/C` in the editor; applied bold and blue. The remainder stayed black and regular.
 4. Saved, restarted the QA app and reopened the native document. Both the text and its formatting survived.
 5. Searched for Helvetica in the font field, applied 8 pt, moved the label, centered the paragraph and used Cmd+I on only the second line.
-6. Opened the exported CDXML in an external drawing application and saved it there. The resulting fixture is retained under `tests/fixtures/`;  its style runs exposed reserved-color and baseline-origin issues which now have regression tests.
+6. Opened the exported CDXML in an external drawing application and saved it there. The resulting fixture is retained under `tests/fixtures/`; its style runs exposed reserved-color and baseline-origin issues which now have regression tests.
 7. Exported the final centered Helvetica label through Moruno's native Save dialog. Opened and magnified it in an external drawing application: blue bold `Pd/C`, subscript `2`, centered lines and italic second line were all visible.
 
 Local screenshots and native files are under ignored `artifacts/style-qa-20260920/`. The label accompanies an example molecule for visual testing; its caption is not a proposed reaction for that molecule.

@@ -2,19 +2,19 @@
 
 Added 2026-09-20. The bond palette and contextual menu now offer **17 presets**. Select a bond to change its preset, RGB color and double-line position in Properties. The drawing canvas, SVG, PDF and PNG use the same geometry.
 
-| Preset | Meaning in Moruno |
-| --- | --- |
-| Single, double, triple | Ordinary covalent orders; existing midpoint click cycling remains available |
-| Solid wedge, hashed wedge | Tetrahedral up/down depiction from the first endpoint |
-| Hollow wedge, parallel hashed | Alternate up/down depictions |
-| Bold | Up depiction for a single bond; thick stroke |
-| Wavy | Unspecified single-bond stereochemistry |
-| Coordination (dashed), dative | Directed donor-to-acceptor RDKit dative bond; dashed line or arrow |
-| Hydrogen bond | Noncovalent interaction from an explicit bonded H to an acceptor |
+| Preset                                            | Meaning in Moruno                                                              |
+| ------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Single, double, triple                            | Ordinary covalent orders; existing midpoint click cycling remains available    |
+| Solid wedge, hashed wedge                         | Tetrahedral up/down depiction from the first endpoint                          |
+| Hollow wedge, parallel hashed                     | Alternate up/down depictions                                                   |
+| Bold                                              | Up depiction for a single bond; thick stroke                                   |
+| Wavy                                              | Unspecified single-bond stereochemistry                                        |
+| Coordination (dashed), dative                     | Directed donor-to-acceptor RDKit dative bond; dashed line or arrow             |
+| Hydrogen bond                                     | Noncovalent interaction from an explicit bonded H to an acceptor               |
 | Partial (solid / dashed), partial (double dashed) | Fractional 1.5 order and the indicated line pattern; see semantic limits below |
-| Bold double | Bold primary line and ordinary secondary line |
-| Crossed double | Double bond with unspecified E/Z stereochemistry |
-| Quadruple | Four-line bond and RDKit quadruple order; shortcut `4` |
+| Bold double                                       | Bold primary line and ordinary secondary line                                  |
+| Crossed double                                    | Double bond with unspecified E/Z stereochemistry                               |
+| Quadruple                                         | Four-line bond and RDKit quadruple order; shortcut `4`                         |
 
 ## Workflow
 

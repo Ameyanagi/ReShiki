@@ -7,3 +7,8 @@ __pycache__/
 /dist/
 /build/
 *.spec
+/node_modules/
+/website/node_modules/
+/website/.astro/
+/website/dist/
+/website/src/content/docs/reference/

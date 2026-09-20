@@ -1,0 +1,16 @@
+{
+  "ignorePatterns": [
+    "target/**",
+    "dist/**",
+    "artifacts/**",
+    "assets/**",
+    "tests/fixtures/**",
+    "engine/cdx_schema.py",
+    "website/.astro/**",
+    "website/dist/**",
+    "website/src/content/docs/reference/**",
+    "package-lock.json",
+    "uv.lock",
+    "Cargo.lock"
+  ]
+}

@@ -162,13 +162,27 @@ struct Worker {
 pub struct PythonEngine {
     worker: Arc<Mutex<Option<Worker>>>,
 }
+fn bundled_worker(executable: &std::path::Path) -> Option<PathBuf> {
+    let directory = executable.parent()?;
+    let worker = if cfg!(target_os = "macos") {
+        directory
+            .parent()?
+            .join("Resources/chemistry/moruno-engine")
+    } else {
+        directory.join("chemistry").join(if cfg!(windows) {
+            "moruno-engine.exe"
+        } else {
+            "moruno-engine"
+        })
+    };
+    worker.is_file().then_some(worker)
+}
+
 impl PythonEngine {
     async fn spawn() -> Result<Worker, String> {
-        let bundled = std::env::current_exe().ok().and_then(|exe| {
-            let contents = exe.parent()?.parent()?;
-            let worker = contents.join("Resources/chemistry/moruno-engine");
-            worker.is_file().then_some(worker)
-        });
+        let bundled = std::env::current_exe()
+            .ok()
+            .and_then(|exe| bundled_worker(&exe));
         let root = std::env::var_os("MORUNO_ROOT")
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")));
@@ -189,6 +203,9 @@ impl PythonEngine {
             command.arg("-u").arg(root.join("engine/worker.py"));
             command
         };
+        // A GUI launch on Windows must not open a console for the local worker.
+        #[cfg(windows)]
+        command.creation_flags(0x08000000);
         let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -281,5 +298,33 @@ impl PythonEngine {
 impl ChemistryEngine for PythonEngine {
     async fn execute(&self, request: Request) -> Result<Response, String> {
         self.request(request).await
+    }
+}
+
+#[cfg(test)]
+mod packaging_tests {
+    use super::bundled_worker;
+
+    #[test]
+    fn discovers_the_bundled_worker_in_a_relocated_directory() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("Moruno with spaces");
+        let (exe, worker) = if cfg!(target_os = "macos") {
+            (
+                root.join("Contents/MacOS/moruno"),
+                root.join("Contents/Resources/chemistry/moruno-engine"),
+            )
+        } else if cfg!(windows) {
+            (
+                root.join("Moruno.exe"),
+                root.join("chemistry/moruno-engine.exe"),
+            )
+        } else {
+            (root.join("moruno"), root.join("chemistry/moruno-engine"))
+        };
+        assert_eq!(bundled_worker(&exe), None);
+        std::fs::create_dir_all(worker.parent().unwrap()).unwrap();
+        std::fs::write(&worker, b"fixture").unwrap();
+        assert_eq!(bundled_worker(&exe), Some(worker));
     }
 }

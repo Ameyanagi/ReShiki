@@ -4,6 +4,7 @@ The published embeddedobject format stores an unrotated BoundingBox and a
 clockwise RotationAngle in degrees * 65536 (including in CDXML). Its PNG/TIFF/
 JPEG/GIF/BMP properties are raw bytes in CDX and hexadecimal in CDXML.
 """
+
 import base64
 import io
 import math
@@ -28,16 +29,27 @@ def decode(data, expected=None, budget=None):
                 if expected is not None and source.format != expected:
                     raise ValueError("Embedded picture bytes do not match their declared format")
                 width, height = source.size
-                if not 0 < width <= MAX_SIDE or not 0 < height <= MAX_SIDE or width * height > MAX_PIXELS:
-                    raise ValueError("Embedded pictures are limited to 8192 pixels per side and 16 million pixels")
+                if (
+                    not 0 < width <= MAX_SIDE
+                    or not 0 < height <= MAX_SIDE
+                    or width * height > MAX_PIXELS
+                ):
+                    raise ValueError(
+                        "Embedded pictures are limited to 8192 pixels per side and 16 million pixels"
+                    )
                 if budget is not None:
-                    budget['pixels'] += width * height
-                    if budget['pixels'] > 64_000_000:
+                    budget["pixels"] += width * height
+                    if budget["pixels"] > 64_000_000:
                         raise ValueError("A drawing can contain at most 64 million picture pixels")
                 # First frame only, matching file import. Normalize orientation
                 # and transparency before crossing the worker boundary.
                 return ImageOps.exif_transpose(source).convert("RGBA")
-    except (OSError, SyntaxError, Image.DecompressionBombError, Image.DecompressionBombWarning) as e:
+    except (
+        OSError,
+        SyntaxError,
+        Image.DecompressionBombError,
+        Image.DecompressionBombWarning,
+    ) as e:
         raise ValueError("Invalid or oversized embedded picture") from e
 
 
@@ -53,7 +65,9 @@ def png_bytes(pixels):
 def read_picture(el, scale, budget=None):
     name = next((name for name in FORMATS if el.get(name)), None)
     if name is None:
-        raise ValueError("Embedded picture needs a PNG, TIFF, JPEG, GIF or BMP representation; vector/OLE-only pictures are not supported")
+        raise ValueError(
+            "Embedded picture needs a PNG, TIFF, JPEG, GIF or BMP representation; vector/OLE-only pictures are not supported"
+        )
     value = el.get(name)
     if len(value) > MAX_BYTES * 3:
         raise ValueError("Embedded picture data exceeds 16 MB")
@@ -73,19 +87,23 @@ def read_picture(el, scale, budget=None):
         raise ValueError("Invalid embedded picture bounds or rotation")
     left, top, right, bottom = box
     width, height = right - left, bottom - top
-    if not .01 <= abs(width) <= 1_000_000 or not .01 <= abs(height) <= 1_000_000:
+    if not 0.01 <= abs(width) <= 1_000_000 or not 0.01 <= abs(height) <= 1_000_000:
         raise ValueError("Embedded picture dimensions are outside the supported range")
     c, s = math.cos(math.radians(angle)), math.sin(math.radians(angle))
     x, y = dict(x=c * width, y=s * width), dict(x=-s * height, y=c * height)
-    origin = dict(x=(left + right - x['x'] - y['x']) / 2,
-                  y=(top + bottom - x['y'] - y['y']) / 2)
+    origin = dict(x=(left + right - x["x"] - y["x"]) / 2, y=(top + bottom - x["y"] - y["y"]) / 2)
     data = png_bytes(pixels)
     if budget is not None:
-        budget['bytes'] += len(data)
-        if budget['bytes'] > 64 * 1024 * 1024:
+        budget["bytes"] += len(data)
+        if budget["bytes"] > 64 * 1024 * 1024:
             raise ValueError("A drawing can contain at most 64 MB of encoded pictures")
-    return dict(kind="picture", origin=origin, axis_x=x, axis_y=y,
-                picture=base64.b64encode(data).decode("ascii"))
+    return dict(
+        kind="picture",
+        origin=origin,
+        axis_x=x,
+        axis_y=y,
+        picture=base64.b64encode(data).decode("ascii"),
+    )
 
 
 def write_picture(parent, graphic, position, identifier, z):
@@ -97,18 +115,27 @@ def write_picture(parent, graphic, position, identifier, z):
     coords = [p[key] for p in (origin, x, y) for key in ("x", "y")]
     if not all(math.isfinite(v) for v in coords):
         raise ValueError("Invalid picture frame")
-    width, height = math.hypot(x['x'], x['y']), math.hypot(y['x'], y['y'])
-    if (not .01 <= width <= 1_000_000 or not .01 <= height <= 1_000_000
-            or abs(x['x'] * y['x'] + x['y'] * y['y']) > width * height * .0001):
+    width, height = math.hypot(x["x"], x["y"]), math.hypot(y["x"], y["y"])
+    if (
+        not 0.01 <= width <= 1_000_000
+        or not 0.01 <= height <= 1_000_000
+        or abs(x["x"] * y["x"] + x["y"] * y["y"]) > width * height * 0.0001
+    ):
         raise ValueError("Picture exchange requires a rectangular frame")
-    if x['x'] * y['y'] - x['y'] * y['x'] < 0:
+    if x["x"] * y["y"] - x["y"] * y["x"] < 0:
         # The format has no reflection flag. Reverse rows without resampling,
         # and retain the independently editable rectangle and rotation.
         pixels = pixels.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
     center = {k: origin[k] + (x[k] + y[k]) / 2 for k in ("x", "y")}
-    a = dict(x=center['x'] - width / 2, y=center['y'] - height / 2)
-    b = dict(x=center['x'] + width / 2, y=center['y'] + height / 2)
-    angle = round(math.degrees(math.atan2(x['y'], x['x'])) * 65536)
-    return ET.SubElement(parent, "embeddedobject", id=str(identifier), Z=str(z),
-                         BoundingBox=position(a) + " " + position(b),
-                         RotationAngle=str(angle), PNG=png_bytes(pixels).hex())
+    a = dict(x=center["x"] - width / 2, y=center["y"] - height / 2)
+    b = dict(x=center["x"] + width / 2, y=center["y"] + height / 2)
+    angle = round(math.degrees(math.atan2(x["y"], x["x"])) * 65536)
+    return ET.SubElement(
+        parent,
+        "embeddedobject",
+        id=str(identifier),
+        Z=str(z),
+        BoundingBox=position(a) + " " + position(b),
+        RotationAngle=str(angle),
+        PNG=png_bytes(pixels).hex(),
+    )

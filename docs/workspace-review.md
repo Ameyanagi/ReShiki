@@ -10,17 +10,17 @@ Moruno's previous layout used a large brand header, four rows above the canvas, 
 
 ## Implemented changes
 
-| Area | Updated behavior |
-| --- | --- |
+| Area          | Updated behavior                                                                                                       |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | Drawing tools | Original monochrome vector icons in a two-column palette; hover names and shortcuts; persistent active-tool indication |
-| Commands | Compact file, undo/redo, import, check, cleanup, export and inspector controls |
-| Tool options | Context bar shows ring size/aromaticity, arrow style, atom symbol or annotation input when relevant |
-| Inspector | Separate Properties, Templates and Export tabs; can be hidden |
-| Selection | Transform, charge, isotope and label editing appear for the relevant selected objects |
-| Import | Drawer opens on demand; Enter inserts, while replacement is an explicit separate action |
-| Canvas | White surface, restrained neutral surround, grid off by default |
-| Camera | Fit uses measured canvas dimensions; manual pan/zoom survives later viewport changes |
-| Keyboard | Single-key tool/element selection, import/export shortcuts and a visible shortcut reference |
+| Commands      | Compact file, undo/redo, import, check, cleanup, export and inspector controls                                         |
+| Tool options  | Context bar shows ring size/aromaticity, arrow style, atom symbol or annotation input when relevant                    |
+| Inspector     | Separate Properties, Templates and Export tabs; can be hidden                                                          |
+| Selection     | Transform, charge, isotope and label editing appear for the relevant selected objects                                  |
+| Import        | Drawer opens on demand; Enter inserts, while replacement is an explicit separate action                                |
+| Canvas        | White surface, restrained neutral surround, grid off by default                                                        |
+| Camera        | Fit uses measured canvas dimensions; manual pan/zoom survives later viewport changes                                   |
+| Keyboard      | Single-key tool/element selection, import/export shortcuts and a visible shortcut reference                            |
 
 The same 1154 × 768 screenshot framing showed an approximately 805 × 579 pixel canvas with the inspector open, versus roughly 741 × 411 before the redesign: about 50% more drawing area. Hiding the inspector expanded it to roughly 1034 × 579, almost twice the earlier area. These measurements are screenshot estimates, not universal window-size guarantees.
 

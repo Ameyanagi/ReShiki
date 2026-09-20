@@ -1,4 +1,5 @@
 """Logical CDXML groups, independent of the chemistry graph and graphic paint."""
+
 import xml.etree.ElementTree as ET
 
 
@@ -7,6 +8,7 @@ def read_groups(root, object_map, first_id):
         if el in object_map:
             return object_map[el]
         return [id for child in el for id in members(child)]
+
     result = []
     seen = {}
     # Innermost groups first. Redundant wrappers carry no extra membership.
@@ -33,7 +35,9 @@ def write_groups(page, doc, fragment, object_map, atom_xml_ids, next_id):
     for group in groups:
         members = set(group["members"])
         if any((b["a"] in members) != (b["b"] in members) for b in doc["bonds"]):
-            raise ValueError("A group cuts through a molecule; ungroup or group the whole molecule before CDXML export")
+            raise ValueError(
+                "A group cuts through a molecule; ungroup or group the whole molecule before CDXML export"
+            )
     remaining = {a["id"] for a in doc["atoms"]}
     components = []
     while remaining:
@@ -56,7 +60,14 @@ def write_groups(page, doc, fragment, object_map, atom_xml_ids, next_id):
             next_id += 1
         xml_ids = {str(atom_xml_ids[id]) for id in component}
         for el in children:
-            belongs = (el.tag == "n" and el.get("id") in xml_ids) or (el.tag == "b" and el.get("B") in xml_ids) or (el.tag == "graphic" and any(rep.get("object") in xml_ids for rep in el.findall("represent")))
+            belongs = (
+                (el.tag == "n" and el.get("id") in xml_ids)
+                or (el.tag == "b" and el.get("B") in xml_ids)
+                or (
+                    el.tag == "graphic"
+                    and any(rep.get("object") in xml_ids for rep in el.findall("represent"))
+                )
+            )
             if belongs and target is not fragment:
                 fragment.remove(el)
                 target.append(el)
@@ -64,12 +75,20 @@ def write_groups(page, doc, fragment, object_map, atom_xml_ids, next_id):
             object_map[id] = target
     containers = {}
     for group in groups:
-        containers[group["id"]] = ET.Element("group", id=str(next_id), Integral="yes" if group.get("integral") else "no")
+        containers[group["id"]] = ET.Element(
+            "group", id=str(next_id), Integral="yes" if group.get("integral") else "no"
+        )
         next_id += 1
     for group in groups:
-        supersets = [other for other in groups if len(other["members"]) > len(group["members"])
-                     and set(group["members"]).issubset(other["members"])]
-        parent = containers[min(supersets, key=lambda g: len(g["members"]))["id"]] if supersets else page
+        supersets = [
+            other
+            for other in groups
+            if len(other["members"]) > len(group["members"])
+            and set(group["members"]).issubset(other["members"])
+        ]
+        parent = (
+            containers[min(supersets, key=lambda g: len(g["members"]))["id"]] if supersets else page
+        )
         parent.append(containers[group["id"]])
     moved = set()
     for id, el in object_map.items():
@@ -81,6 +100,6 @@ def write_groups(page, doc, fragment, object_map, atom_xml_ids, next_id):
         containers[owner["id"]].append(el)
         moved.add(el)
     for container in containers.values():
-        values = [int(el.get("Z")) for el in container.iter() if "Z" in el.attrib]
+        values = [int(el.attrib["Z"]) for el in container.iter() if "Z" in el.attrib]
         container.set("Z", str(min(values, default=0)))
     return next_id

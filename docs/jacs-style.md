@@ -2,17 +2,17 @@
 
 Moruno defaults to the ACS structure preset for JACS-oriented drawings. This applies to canvas drawings, annotations, SVG, PDF, PNG, and the supported CDXML exchange subset. The application controls keep their own interface theme.
 
-| Setting | Default |
-| --- | --- |
-| Drawing color | Black |
-| Atom and annotation font | Arial, 10 pt |
-| Bond length | 14.4 pt |
-| Bond line width | 0.6 pt |
-| Bold/wedge width | 2.0 pt |
-| Multiple-bond spacing | 18% of nominal bond length |
-| Label margin | 1.6 pt |
-| Hash spacing | 2.5 pt |
-| PNG resolution | 1200 dpi |
+| Setting                  | Default                    |
+| ------------------------ | -------------------------- |
+| Drawing color            | Black                      |
+| Atom and annotation font | Arial, 10 pt               |
+| Bond length              | 14.4 pt                    |
+| Bond line width          | 0.6 pt                     |
+| Bold/wedge width         | 2.0 pt                     |
+| Multiple-bond spacing    | 18% of nominal bond length |
+| Label margin             | 1.6 pt                     |
+| Hash spacing             | 2.5 pt                     |
+| PNG resolution           | 1200 dpi                   |
 
 The numeric structure settings come from the [ACS graphics preparation guide](https://pubs.acs.org/paragonplus/submission/general/graphics_prep.html). The [current JACS author guidelines](https://researcher-resources.acs.org/publish/author_guidelines?coden=jacsat), checked on 2026-09-16, specify 1200 dpi for black-and-white line art and allow Helvetica or Arial lettering. The current JACS page does not repeat the full older structure-settings table; this preset combines that established ACS table with current JACS output guidance.
 

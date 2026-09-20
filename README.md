@@ -6,9 +6,11 @@ Version 0.2 expands everyday editing, recovery and export. It is not yet a compl
 
 The default drawing style is **JACS / ACS**: black bonds and labels, 10 pt Arial, 14.4 pt bonds, and 0.6 pt lines. Every new document restores those defaults, including after custom typography or bond lengths in another drawing. Canvas and exports share the preset; SVG/PDF retain physical publication dimensions and PNG uses 1200 dpi. See [style settings and sources](docs/jacs-style.md).
 
+[Documentation](https://ameyanagi.github.io/moruno/) · [Downloads](https://github.com/Ameyanagi/moruno/releases) · [Development and pre-commit hooks](docs/development.md)
+
 ## Run
 
-Requires a current Rust toolchain and [uv](https://docs.astral.sh/uv/). Tested on Apple Silicon macOS with Rust 1.95, Iced 0.14, Python 3.12, and RDKit 2026.3.6. Other operating systems have not been tested.
+Requires a current Rust toolchain and [uv](https://docs.astral.sh/uv/). Tested on Apple Silicon macOS with Rust 1.95, Iced 0.14, Python 3.12, and RDKit 2026.3.6. Release CI builds native macOS, Windows and Linux packages and verifies their bundled chemistry engines. Full graphical workflows are currently verified on macOS; see [installation and platform limits](docs/getting-started.md).
 
 ```sh
 cd ~/dev/moruno
@@ -27,7 +29,7 @@ python3 scripts/build_macos_app.py --standalone
 open dist/Moruno.app
 ```
 
-The default development bundle uses this checkout's `engine/worker.py` and `.venv`. The `--standalone` bundle includes its chemistry worker and needs neither the checkout nor an installed Python. Add `--release` for an optimized Rust build. The bundle is signed ad hoc for local use; it is not a notarized release. `MORUNO_ROOT` overrides the development worker directory; `MORUNO_PYTHON` explicitly selects an external Python even in a standalone bundle. All molecule processing runs locally, without a chemistry service account.
+The default development bundle uses this checkout's `engine/worker.py` and `.venv`. The `--standalone` bundle includes its chemistry worker and needs neither the checkout nor an installed Python. Add `--release` for an optimized Rust build. This local bundle is signed ad hoc. Tagged releases use Developer ID signing and Apple notarization; see [release setup](docs/releasing.md). `MORUNO_ROOT` overrides the development worker directory; `MORUNO_PYTHON` explicitly selects an external Python even in a standalone bundle. All molecule processing runs locally, without a chemistry service account.
 
 ## Use
 
@@ -61,36 +63,36 @@ The default development bundle uses this checkout's `engine/worker.py` and `.ven
 - The Style palette applies color to **All selected**, **Text**, or **Bonds**. Select All includes bonds; click a bond’s middle to select it individually and Shift-click to add more. Each color change is one Undo step.
 - Properties, Templates and Export have separate inspector tabs. The top-right inspector button hides the panel to expand the canvas. View controls toggle Grid, Rulers and Crosshair independently and choose mm, cm, inches or points. These canvas aids start off and follow the publication scale. Fit uses the actual available canvas size and leaves export dimensions unchanged.
 
-| Shortcut | Action |
-| --- | --- |
-| V / B or 1 / 2 / 3 | Select / single / double / triple bond |
-| 4 | Quadruple bond |
-| X / Shift+X | Straight / snaking chain |
-| Alt while drawing a bond or chain | Temporarily release angle/length constraints |
-| L | Freeform lasso |
-| Shift+R | Toggle aromatic ring mode (enabling selects a six-member ring) |
-| R / A / T / E | Ring / arrow / text / eraser |
-| C / N / O / S / P / F / H | Replace the hovered or singly selected atom; show valence-derived H labels. With no target, choose an element tool. |
-| S / D / T on a bond | Set single / double / triple; repeated D cycles centered / left / right lines |
-| A with a selected aromatic ring | Toggle aromatic circle / alternating bonds |
-| Shift/Ctrl while dragging a template | Snap its direction to 15°; Alt temporarily releases the constraint |
-| Mouse Back / Forward; Alt+Left / Right | Navigate template categories and previews |
-| Cmd/Ctrl+I / E | Import / export panel |
-| ? | Shortcut reference |
-| Cmd/Ctrl+Z; Cmd/Ctrl+Shift+Z | Undo; redo |
-| Cmd/Ctrl+B / I / U in the text editor | Bold / italic / underline |
-| Cmd/Ctrl+A | Select all drawing objects |
-| Cmd/Ctrl+Shift+A | Invert selection |
-| Cmd/Ctrl+G / Cmd/Ctrl+Shift+G | Group / ungroup one level |
-| Cmd/Ctrl+C / X / V / D | Copy / cut / paste / duplicate |
-| Cmd+Shift+C (macOS) | Copy image of selection, or whole drawing |
-| Cmd+Shift+V (macOS) | Paste the clipboard picture representation |
-| Cmd/Ctrl+Shift+S | Save as |
-| Delete/Backspace | Delete selection |
-| Cmd/Ctrl+S / O / N | Save / open / new |
-| Escape | Select tool |
-| Wheel | Zoom around the pointer |
-| Right or middle drag | Pan |
+| Shortcut                               | Action                                                                                                              |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| V / B or 1 / 2 / 3                     | Select / single / double / triple bond                                                                              |
+| 4                                      | Quadruple bond                                                                                                      |
+| X / Shift+X                            | Straight / snaking chain                                                                                            |
+| Alt while drawing a bond or chain      | Temporarily release angle/length constraints                                                                        |
+| L                                      | Freeform lasso                                                                                                      |
+| Shift+R                                | Toggle aromatic ring mode (enabling selects a six-member ring)                                                      |
+| R / A / T / E                          | Ring / arrow / text / eraser                                                                                        |
+| C / N / O / S / P / F / H              | Replace the hovered or singly selected atom; show valence-derived H labels. With no target, choose an element tool. |
+| S / D / T on a bond                    | Set single / double / triple; repeated D cycles centered / left / right lines                                       |
+| A with a selected aromatic ring        | Toggle aromatic circle / alternating bonds                                                                          |
+| Shift/Ctrl while dragging a template   | Snap its direction to 15°; Alt temporarily releases the constraint                                                  |
+| Mouse Back / Forward; Alt+Left / Right | Navigate template categories and previews                                                                           |
+| Cmd/Ctrl+I / E                         | Import / export panel                                                                                               |
+| ?                                      | Shortcut reference                                                                                                  |
+| Cmd/Ctrl+Z; Cmd/Ctrl+Shift+Z           | Undo; redo                                                                                                          |
+| Cmd/Ctrl+B / I / U in the text editor  | Bold / italic / underline                                                                                           |
+| Cmd/Ctrl+A                             | Select all drawing objects                                                                                          |
+| Cmd/Ctrl+Shift+A                       | Invert selection                                                                                                    |
+| Cmd/Ctrl+G / Cmd/Ctrl+Shift+G          | Group / ungroup one level                                                                                           |
+| Cmd/Ctrl+C / X / V / D                 | Copy / cut / paste / duplicate                                                                                      |
+| Cmd+Shift+C (macOS)                    | Copy image of selection, or whole drawing                                                                           |
+| Cmd+Shift+V (macOS)                    | Paste the clipboard picture representation                                                                          |
+| Cmd/Ctrl+Shift+S                       | Save as                                                                                                             |
+| Delete/Backspace                       | Delete selection                                                                                                    |
+| Cmd/Ctrl+S / O / N                     | Save / open / new                                                                                                   |
+| Escape                                 | Select tool                                                                                                         |
+| Wheel                                  | Zoom around the pointer                                                                                             |
+| Right or middle drag                   | Pan                                                                                                                 |
 
 Text fields handle their own editing shortcuts. Use the window close button for the unsaved-changes prompt; interrupted sessions can be restored from the five-second recovery snapshots. Recovery files live in the platform application-data directory (override with `MORUNO_DATA_DIR`). Restoration makes an unsaved copy.
 
