@@ -3,7 +3,7 @@ name = "moruno-engine"
 version = "0.1.0"
 description = "Local chemistry worker for Moruno"
 requires-python = ">=3.11,<3.14"
-dependencies = ["rdkit>=2025.9,<2027"]
+dependencies = ["rdkit>=2025.9,<2027", "pillow>=12.3,<13"]
 
 [dependency-groups]
 packaging = ["pyinstaller>=6.16,<7"]

@@ -96,7 +96,7 @@ Template placement offers explicit new-bond connection, shared-atom and fused-bo
 | Orbitals | Supported subset | Seven node-based shapes, outline/solid/flat-gray phases, phase reversal, inspector preview and vector exports. No gradient shading or 3D orbital model. |
 | TLC / gel electrophoresis plates | Missing | No chromatography objects. |
 | Tables | Missing | No editable table object. |
-| Imported pictures | Supported subset | Asynchronous PNG/JPEG/TIFF/WebP import and macOS image paste; embedded storage, resize/rotate/reflect, physical dimensions, linked proportions, replacement and front/back ordering. Native save/copy/Undo and SVG/PDF/PNG exports retain pictures. No cropping, PDF/SVG import or external editable picture exchange yet. [Picture workflow](pictures.md). |
+| Imported pictures | Supported subset | Asynchronous PNG/JPEG/TIFF/WebP import and macOS image paste; embedded storage, resize/rotate/reflect, physical dimensions, linked proportions, replacement and front/back ordering. Native save/copy/Undo and SVG/PDF/PNG exports retain pictures. CDXML and binary clipboard exchange retain separate pictures alongside chemistry, including rotation, reflection, transparency and groups. No cropping or PDF/SVG picture import yet. [Picture workflow](pictures.md). |
 | Group / ungroup / integral groups | Supported | Nested groups with whole-molecule boundaries, member editing, integral selection and native/CDXML persistence. Molecular growth extends membership; joining grouped molecules unites overlapping groups and retains captions. |
 | Add frame | Supported | Fitted brackets, parentheses, braces and boxes; grouped with selection in one undoable action. |
 | Bring forward / send backward | Supported subset | Graphics can go to back/front relative to chemistry and other graphics; no general object stacking UI. |
@@ -141,7 +141,7 @@ Template placement offers explicit new-bond connection, shared-atom and fused-bo
 | --- | --- | --- |
 | Native editable documents | Supported subset | `.moruno` retains its supported objects. |
 | Binary CDX | Supported clipboard subset | Bounded reader/writer bridges the supported CDXML subset. File Open/Export UI does not yet expose CDX. [Clipboard limits](clipboard.md). |
-| CDXML | Partial | One page, molecules, supported rich-text runs/paragraphs and styled straight/quadratic arrows, including text-only/graphics-only documents and supported editable vector paths. Nested mixed-object groups now work for supported children; many styles remain unsupported. See [arrow exchange limits](arrows.md), [group exchange limits](selection-and-groups.md) and [graphics](graphics.md). |
+| CDXML | Partial | One page, molecules, supported rich-text runs/paragraphs and styled straight/quadratic arrows, including text-only/graphics-only documents, embedded raster pictures and supported editable vector paths. Nested mixed-object groups now work for supported children; many styles remain unsupported. See [arrow exchange limits](arrows.md), [group exchange limits](selection-and-groups.md) and [graphics](graphics.md). |
 | MOL / SMILES / InChI | Present molecular subset | No reaction semantics or drawing annotations in these exports. |
 | RXN / SDF / SLN and wider chemical interchange | Missing | No corresponding app workflow. |
 | SVG / PDF / PNG | Supported subset | Shared scene, publication dimensions and 1200 dpi PNG. |

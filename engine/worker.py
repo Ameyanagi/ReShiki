@@ -329,7 +329,7 @@ def import_cdxml(text):
             for name, defaults in predicates.items():
                 if name in el.attrib and el.get(name) not in defaults:
                     raise ValueError('Unsupported query or reaction predicate: ' + name)
-    allowed = {"CDXML", "page", "fragment", "n", "b", "t", "s", "fonttable", "font", "colortable", "color", "arrow", "graphic", "curve", "group", "represent", "objecttag"}
+    allowed = {"CDXML", "page", "fragment", "n", "b", "t", "s", "fonttable", "font", "colortable", "color", "arrow", "graphic", "curve", "group", "represent", "objecttag", "embeddedobject"}
     if {el.tag for el in root.iter()} - allowed or len(list(root.iter("page"))) != 1:
         raise ValueError("CDXML contains unsupported drawing objects or multiple pages.")
     abbreviated = abbreviations_exchange.flatten(root)
@@ -465,6 +465,21 @@ def export_cdxml(doc, text_layout=None, graphic_paths=None, graphic_parts=None, 
     fragment = ET.SubElement(page, "fragment", id="2")
     object_map = {}
     points = [a["position"] for a in doc["atoms"]]
+    # Fit all drawing objects into the page. In particular, a rotated picture
+    # can extend above/left of its molecule; using atoms alone clips that image.
+    points.extend(a['position'] for a in doc.get('annotations', []))
+    for arrow in doc.get('arrows', []):
+        points.extend(arrow[k] for k in ('start', 'end', 'control') if arrow.get(k))
+    for graphic in doc.get('graphics', []):
+        if graphic.get('kind') == 'picture':
+            o, x, y = [graphic[k] for k in ('origin', 'axis_x', 'axis_y')]
+            points.extend({k:o[k]+u*x[k]+v*y[k] for k in ('x','y')}
+                          for u,v in ((0,0),(1,0),(0,1),(1,1)))
+        else:
+            for command in (graphic_paths or {}).get(str(graphic['id']), []):
+                value = command.get('points')
+                if isinstance(value, dict): points.append(value)
+                elif isinstance(value, list): points.extend(value)
     dx = 30-min((p["x"] * scale for p in points), default=0)
     dy = 30-min((p["y"] * scale for p in points), default=0)
     def position(p):

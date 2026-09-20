@@ -15,7 +15,7 @@ LIMIT = 16 * 1024 * 1024
 MAX_OBJECTS = 100_000
 OBJECTS = {0x8000:'CDXML', 0x8001:'page', 0x8002:'group', 0x8003:'fragment',
            0x8004:'n', 0x8005:'b', 0x8006:'t', 0x8007:'graphic',
-           0x8008:'curve', 0x8011:'objecttag', 0x8027:'arrow'}
+           0x8008:'curve', 0x8009:'embeddedobject', 0x8011:'objecttag', 0x8027:'arrow'}
 PROPERTIES = dict(PUBLISHED)
 # The overview predates these enumerations. Numeric values are cross-checked
 # against the public SDK constants and native clipboard fixtures.
@@ -34,7 +34,8 @@ BY_NAME = {v[0]:(k, v[1], v[2]) for k,v in PROPERTIES.items()}
 INTS = {'INT8':'b', 'UINT8':'B', 'INT16':'h', 'UINT16':'H',
         'INT32':'i', 'UINT32':'I', 'CDXObjectID':'I', 'CDXCoordinate':'i', 'FLOAT64':'d'}
 BITFIELDS = {'Order', 'LineType', 'RectangleType', 'OvalType', 'CurveType'}
-ANGLES = {'ChainAngle', 'RotationAngle', 'PositioningAngle'}
+# RotationAngle retains its 16.16 value in CDXML, unlike ChainAngle.
+ANGLES = {'ChainAngle', 'PositioningAngle'}
 # Non-rendering bookkeeping on current native nodes. Other unknown properties
 # on drawing objects are refused instead of silently discarding features.
 NODE_BOOKKEEPING = {0x448, 0x44d}
@@ -187,6 +188,9 @@ def to_cdx(xml):
             elif kind in ('CDXPoint2D','CDXPoint3D','CDXRectangle'): data = coordinates(value,kind)
             elif kind == 'CDXString': data = b'\0\0'+value.encode('latin-1')
             elif kind == 'CDXObjectIDArray': data = b''.join(packed('I',int(v)) for v in value.split())
+            elif kind == 'Unformatted' and el.tag == 'embeddedobject':
+                try: data = bytes.fromhex(value)
+                except ValueError as e: raise ValueError('Invalid embedded picture hexadecimal data') from e
             elif kind == 'CDXCurvePoints':
                 points = value.split()
                 if len(points)%2: raise ValueError('Invalid curve points')
@@ -238,8 +242,6 @@ def from_cdx(data):
         nonlocal count, property_count
         count += 1
         if depth>64 or count>MAX_OBJECTS: raise ValueError('Drawing object limit exceeded')
-        if code == 0x8009:
-            raise ValueError('The drawing contains an image. Pasting images onto the canvas is not supported yet')
         if code not in OBJECTS: raise ValueError(f'Unsupported binary drawing object 0x{code:04x}')
         el = ET.Element(OBJECTS[code])
         identifier = reader.number('I')
@@ -316,6 +318,7 @@ def from_cdx(data):
                 ET.SubElement(el,'represent',object=str(identifier),attribute=prop[0])
             elif kind=='varies' and name=='Value':
                 if data: raise ValueError('Unsupported binary object-tag value')
+            elif kind=='Unformatted' and el.tag=='embeddedobject': el.set(name,data.hex())
             elif el.tag in ('CDXML','page') and kind in ('Unformatted','CDXDate'): continue
             else: raise ValueError('Unsupported binary drawing property: '+name)
         if texts:

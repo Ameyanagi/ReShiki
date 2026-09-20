@@ -32,6 +32,7 @@ name = "moruno-engine"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "pillow" },
     { name = "rdkit" },
 ]
 
@@ -41,7 +42,10 @@ packaging = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "rdkit", specifier = ">=2025.9,<2027" }]
+requires-dist = [
+    { name = "pillow", specifier = ">=12.3,<13" },
+    { name = "rdkit", specifier = ">=2025.9,<2027" },
+]
 
 [package.metadata.requires-dev]
 packaging = [{ name = "pyinstaller", specifier = ">=6.16,<7" }]

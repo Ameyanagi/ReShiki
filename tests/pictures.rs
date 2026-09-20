@@ -203,7 +203,7 @@ fn exported_pictures_preserve_pixels_transparency_rotation_and_layer_order() {
 }
 
 #[tokio::test]
-async fn chemistry_retains_pictures_and_unsupported_exchange_fails_explicitly() {
+async fn chemistry_and_editable_exchange_preserve_mixed_pictures() {
     let engine = PythonEngine::default();
     let mut doc = engine
         .execute(Request::import_smiles("CCO"))
@@ -213,6 +213,8 @@ async fn chemistry_retains_pictures_and_unsupported_exchange_fails_explicitly() 
         .unwrap();
     doc.graphics
         .push(picture().graphic(10, Point::new(100., 100.)));
+    editing::transform(&mut doc, &[10], Transform::Rotate(37.));
+    editing::transform(&mut doc, &[10], Transform::FlipHorizontal);
     for op in ["analyze", "clean"] {
         let response = engine
             .execute(Request::molecule(op, doc.clone()))
@@ -224,7 +226,40 @@ async fn chemistry_retains_pictures_and_unsupported_exchange_fails_explicitly() 
     for format in ["cdxml", "cdx"] {
         let mut request = Request::molecule("export", doc.clone());
         request.format = Some(format.into());
-        let error = engine.execute(request).await.unwrap_err();
-        assert!(error.contains("embedded picture exchange"), "{error}");
+        let output = engine.execute(request).await.unwrap().output.unwrap();
+        let response = engine
+            .execute(Request::import(format, &output))
+            .await
+            .unwrap();
+        assert_eq!(response.analysis.unwrap().smiles, "CCO");
+        let back = response.document.unwrap();
+        back.validate().unwrap();
+        assert_eq!(back.atoms.len(), doc.atoms.len());
+        assert_eq!(back.bonds.len(), doc.bonds.len());
+        assert_eq!(back.graphics.len(), 1);
+        let original = &doc.graphics[0];
+        let restored = &back.graphics[0];
+        let offset = Point::new(
+            back.atoms[0].position.x - doc.atoms[0].position.x,
+            back.atoms[0].position.y - doc.atoms[0].position.y,
+        );
+        assert!((original.axis_x.x - restored.axis_x.x).abs() < 0.001);
+        assert!((original.axis_x.y - restored.axis_x.y).abs() < 0.001);
+        assert!((original.axis_y.x + restored.axis_y.x).abs() < 0.001);
+        assert!((original.axis_y.y + restored.axis_y.y).abs() < 0.001);
+        assert!(
+            (restored.origin.x - original.origin.x - original.axis_y.x - offset.x).abs() < 0.001
+        );
+        assert!(
+            (restored.origin.y - original.origin.y - original.axis_y.y - offset.y).abs() < 0.001
+        );
+        let original_pixels =
+            image::load_from_memory(original.picture.as_ref().unwrap().png()).unwrap();
+        let restored_pixels =
+            image::load_from_memory(restored.picture.as_ref().unwrap().png()).unwrap();
+        assert_eq!(
+            original_pixels.flipv().to_rgba8(),
+            restored_pixels.to_rgba8()
+        );
     }
 }

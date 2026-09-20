@@ -1,6 +1,10 @@
 """CDXML vector-graphic exchange. Coordinates come from the editor's scene model."""
 import math
 import xml.etree.ElementTree as ET
+if __package__:
+    from .pictures_exchange import read_picture, write_picture
+else:
+    from pictures_exchange import read_picture, write_picture
 
 
 def palette(root):
@@ -142,9 +146,10 @@ def read_graphics(root, scale, first_id, object_map=None):
         return result
 
     result = []
+    picture_budget = dict(bytes=0, pixels=0)
     def collect(container):
         for el in container:
-            if el.tag in ("graphic", "curve", "group"):
+            if el.tag in ("graphic", "curve", "group", "embeddedobject"):
                 if el.get("SupersededBy") or el in object_map:
                     continue
                 if el.tag == "group":
@@ -152,6 +157,10 @@ def read_graphics(root, scale, first_id, object_map=None):
                     if value is None:
                         collect(el)
                         continue
+                elif el.tag == "embeddedobject":
+                    value = read_picture(el, scale, picture_budget)
+                    z = int(el.get("Z", "0"))
+                    value["layer"] = z - middle if z < middle else z - middle + 1
                 else:
                     value = {"curve": curve, "graphic": graphic}[el.tag](el)
                 value["id"] = first_id + len(result)
@@ -195,8 +204,11 @@ def write_graphics(page, graphics, paths, scale, position, color_id, next_id, pa
         return groups
 
     for index, g in enumerate(ordered):
+        z=index+1 if g.get('layer',-1)<0 else index+2
         if g.get("kind") == "picture":
-            raise ValueError("Pictures are preserved in native/SVG/PDF/PNG; embedded picture exchange is not supported yet")
+            objects[g['id']] = write_picture(page, g, position, next_id, z)
+            next_id += 1
+            continue
         styled_parts=(parts or {}).get(str(g['id']))
         if styled_parts is None:
             if isinstance(g.get('kind'),dict):
@@ -215,7 +227,6 @@ def write_graphics(page, graphics, paths, scale, position, color_id, next_id, pa
             if paint['fill'] is not None and any(closed for _,closed in subpaths) and not all(closed for _,closed in subpaths):
                 raise ValueError('Mixed open/closed filled paths are not supported by CDXML export')
             parsed.append((paint,subpaths))
-        z=index+1 if g.get('layer',-1)<0 else index+2
         parent=page
         if len(parsed)>1 or any(len(subpaths)>1 or paint['fill'] is not None for paint,subpaths in parsed):
             parent=ET.SubElement(page,'group',id=str(next_id),Z=str(z));next_id+=1

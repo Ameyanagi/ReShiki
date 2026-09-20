@@ -11,6 +11,11 @@ EXPORT = {'plain':'Solid', 'dashed':'Dash', 'dotted':'Dot', 'bold':'Bold', 'hash
 
 def chemistry_xml(root):
     result=copy.deepcopy(root)
+    # Pictures have no chemical meaning. Validate/decode them in the bounded
+    # picture importer, not RDKit's independent embedded-image parser.
+    for parent in result.iter():
+        for child in list(parent):
+            if child.tag == 'embeddedobject': parent.remove(child)
     for bond in result.iter('b'):
         display=bond.get('Display','Solid')
         if display not in DISPLAY or bond.get('Display2','Solid') not in ('Solid','Dash','Bold','DottedHydrogen'):
