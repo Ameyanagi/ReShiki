@@ -987,6 +987,94 @@ fn card() -> container::Style {
 mod tests {
     use super::*;
     #[test]
+    fn selecting_and_styling_a_scheme_keeps_the_assistant_open_for_replacement() {
+        use crate::canvas::Edit;
+        use moruno::{
+            arrows::{ArrowStyle, Preset},
+            document::{Annotation, Arrow, Point},
+            graphics::{Graphic, GraphicKind, GraphicStyle},
+            typography::StyleChange,
+        };
+        let (mut app, _) = App::new();
+        app.busy = false;
+        let carbon = app.doc.add_atom("C", Point::default());
+        let oxygen = app.doc.add_atom("O", Point::new(42., 0.));
+        app.doc.add_bond(carbon, oxygen, 1, "plain");
+        let caption = app.doc.next_id();
+        app.doc.annotations.push(Annotation {
+            id: caption,
+            position: Point::new(80., -30.),
+            text: "Reaction conditions".into(),
+            format: Default::default(),
+        });
+        let arrow = app.doc.next_id();
+        app.doc.arrows.push(Arrow::new(
+            arrow,
+            Point::new(70., 0.),
+            Point::new(140., 0.),
+            Preset::Forward,
+            ArrowStyle::default(),
+        ));
+        let graphic = app.doc.next_id();
+        app.doc.graphics.push(Graphic::dragged(
+            graphic,
+            GraphicKind::Rectangle,
+            Point::new(-30., -50.),
+            Point::new(170., 50.),
+            GraphicStyle::default(),
+            Default::default(),
+            false,
+        ));
+        app.assistant.account = Some(codex::Account {
+            connected: true,
+            models: vec![],
+        });
+        let _ = app.assistant_action(Action::Open);
+        let _ = app.assistant_action(Action::AutoApply(true));
+        let _ = app.assistant_action(Action::Replace(true));
+        let _ = app.assistant_action(Action::Example("Replace this scheme"));
+        let original = app.doc.clone();
+        let revision = app.revision;
+        let _ = app.update(Message::SelectAll);
+        assert_eq!(app.selected, original.all_ids());
+        assert_eq!(app.inspector_tab, InspectorTab::Assistant);
+        for ids in [
+            vec![carbon, oxygen],
+            vec![caption],
+            vec![arrow],
+            vec![graphic],
+            vec![],
+        ] {
+            let _ = app.update(Message::Canvas(Edit::Select(ids.clone())));
+            assert_eq!(app.selected, ids);
+            assert!(app.inspector_open);
+            assert_eq!(app.inspector_tab, InspectorTab::Assistant);
+            assert_eq!(app.doc, original);
+            assert_eq!(app.revision, revision);
+            assert!(!app.history.can_undo());
+            assert!(app.assistant.preferences.auto_apply && app.assistant.replace);
+            assert_eq!(app.assistant.input.text(), "Replace this scheme");
+        }
+        let _ = app.update(Message::SelectAll);
+        let _ = app.update(Message::TextStyle(StyleChange::Color([32, 80, 145])));
+        let colored = app.doc.clone();
+        assert_ne!(colored, original);
+        assert_eq!(app.inspector_tab, InspectorTab::Assistant);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, original);
+        assert_eq!(app.inspector_tab, InspectorTab::Assistant);
+        assert!(!app.history.can_undo());
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc, colored);
+        assert_eq!(app.inspector_tab, InspectorTab::Assistant);
+        // Explicit navigation still opens the ordinary selection controls.
+        let _ = app.update(Message::Inspector(InspectorTab::Properties));
+        let _ = app.update(Message::Canvas(Edit::Select(vec![caption])));
+        assert_eq!(app.inspector_tab, InspectorTab::Properties);
+        assert_eq!(app.caption_target, Some(caption));
+    }
+
+    #[test]
     fn automatic_canvas_edits_wait_for_a_text_draft_and_keep_separate_undo_steps() {
         let (mut app, _) = App::new();
         app.busy = false;

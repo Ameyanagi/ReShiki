@@ -25,7 +25,10 @@ impl App {
             self.bracket_sides = g.sides;
             if !matches!(
                 self.inspector_tab,
-                InspectorTab::Templates | InspectorTab::Reactions
+                InspectorTab::Templates
+                    | InspectorTab::Reactions
+                    | InspectorTab::Assistant
+                    | InspectorTab::Pages
             ) {
                 self.inspector_open = true;
                 self.inspector_tab = InspectorTab::Properties;

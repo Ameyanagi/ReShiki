@@ -2352,11 +2352,14 @@ impl App {
                 ]
                 .align_y(Alignment::Center),
                 row![
-                    text_input("SMILES, InChI, MOL or CDXML", &self.smiles)
-                        .on_input(Message::Smiles)
-                        .on_submit(Message::InsertInput)
-                        .size(13)
-                        .padding(9),
+                    text_input(
+                        "SMILES, reaction SMILES, RXN, InChI, MOL or CDXML",
+                        &self.smiles
+                    )
+                    .on_input(Message::Smiles)
+                    .on_submit(Message::InsertInput)
+                    .size(13)
+                    .padding(9),
                     command("Insert", Message::InsertInput)
                         .style(button::primary)
                         .on_press_maybe((!self.busy).then_some(Message::InsertInput)),

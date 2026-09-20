@@ -298,6 +298,113 @@ async fn chosen_aromatic_edges_fuse_regardless_of_kekule_phase() {
     }
 }
 
+#[tokio::test]
+async fn circle_benzene_fuses_at_the_chosen_furan_edge_and_undo_restores_the_circle() {
+    use moruno::{
+        document::History,
+        editing,
+        templates::{Anchor, Connection, place_with_mode},
+    };
+    let engine = PythonEngine::default();
+    let mut original = Document::default();
+    editing::ring(&mut original, Point::new(100., 100.), 6, true, 5.);
+    assert_eq!(moruno::aromatic::circles(&original).len(), 1);
+    let furan = template("Furan");
+    let source = Anchor::Bond(2, 3);
+    for target in &original.bonds {
+        let a = original.atom(target.a).unwrap().position;
+        let b = original.atom(target.b).unwrap().position;
+        let point = Point::new((a.x + b.x) * 0.5, (a.y + b.y) * 0.5);
+        let direction = Some(point.offset(point.x - 100., point.y - 100.));
+        let (mut fused, ids) = place_with_mode(
+            &original,
+            furan,
+            point,
+            direction,
+            5.,
+            source,
+            Connection::FuseBond,
+        )
+        .unwrap();
+        assert_eq!(fused.atoms.len(), 9);
+        assert_eq!(fused.bonds.len(), 10);
+        assert!(fused.bonds.iter().all(|b| matches!(b.order, 1 | 2)));
+        let mapping: std::collections::HashMap<_, _> =
+            furan.all_ids().into_iter().zip(ids).collect();
+        assert_eq!(
+            std::collections::BTreeSet::from([mapping[&2], mapping[&3]]),
+            std::collections::BTreeSet::from([target.a, target.b]),
+            "The selected source edge must be the shared edge"
+        );
+        for atom in &original.atoms {
+            assert_eq!(fused.atom(atom.id).unwrap().position, atom.position);
+        }
+        let analysis = engine
+            .execute(Request::molecule("analyze", fused.clone()))
+            .await
+            .unwrap()
+            .analysis
+            .unwrap();
+        assert_eq!(analysis.formula, "C8H6O");
+        assert_eq!(analysis.smiles, "c1ccc2occc2c1");
+        let expected = fused.clone();
+        let mut history = History::default();
+        assert!(history.commit(original.clone(), &fused));
+        assert!(history.undo(&mut fused));
+        assert_eq!(fused, original);
+        assert!(!history.can_undo());
+        assert!(history.redo(&mut fused));
+        assert_eq!(fused, expected);
+    }
+    assert!(original.bonds.iter().all(|b| b.order == 4));
+}
+
+#[test]
+fn unsupported_circle_fusion_targets_and_anchors_remain_unchanged() {
+    use moruno::{
+        editing,
+        templates::{Anchor, Connection, place_with_mode},
+    };
+    let mut ring = Document::default();
+    editing::ring(&mut ring, Point::default(), 6, true, 5.);
+    let target = ring.bonds.first().unwrap();
+    let a = ring.atom(target.a).unwrap().position;
+    let b = ring.atom(target.b).unwrap().position;
+    let point = Point::new((a.x + b.x) * 0.5, (a.y + b.y) * 0.5);
+    let mut partial = ring.clone();
+    partial.bonds.last_mut().unwrap().order = 1;
+    let mut charged = ring.clone();
+    charged.atom_mut(target.a).unwrap().charge = 1;
+    let mut full_valence = ring.clone();
+    let methyl = full_valence.add_atom("C", a.offset(80., 0.));
+    full_valence.add_bond(target.a, methyl, 1, "plain");
+    let mut larger_aromatic_system = ring.clone();
+    let outside = larger_aromatic_system.add_atom("C", a.offset(80., 0.));
+    larger_aromatic_system.add_bond(target.a, outside, 4, "plain");
+    for (doc, anchor) in [
+        (partial, Anchor::Bond(2, 3)),
+        (charged, Anchor::Bond(2, 3)),
+        (full_valence, Anchor::Bond(2, 3)),
+        (larger_aromatic_system, Anchor::Bond(2, 3)),
+        (ring, Anchor::Bond(3, 4)), // Oxygen cannot replace the chosen carbon.
+    ] {
+        let before = doc.clone();
+        assert!(
+            place_with_mode(
+                &doc,
+                template("Furan"),
+                point,
+                None,
+                5.,
+                anchor,
+                Connection::FuseBond,
+            )
+            .is_err()
+        );
+        assert_eq!(doc, before);
+    }
+}
+
 #[test]
 fn connected_phenyl_ring_has_120_degree_angles_at_every_source_vertex() {
     use moruno::{

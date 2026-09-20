@@ -650,4 +650,86 @@ mod tests {
         let _ = app.update(Message::Undo);
         assert_eq!(app.doc, before);
     }
+
+    #[test]
+    fn selecting_page_artwork_keeps_page_controls_and_centers_only_the_selection() {
+        use crate::canvas::Edit;
+        use moruno::{
+            arrows::{ArrowStyle, Preset as ArrowPreset},
+            document::{Annotation, Arrow},
+            graphics::{Graphic, GraphicKind, GraphicStyle},
+        };
+        let mut app = ready();
+        let caption = app.doc.next_id();
+        app.doc.annotations.push(Annotation {
+            id: caption,
+            position: Point::new(10., 35.),
+            text: "Methanol".into(),
+            format: Default::default(),
+        });
+        let arrow = app.doc.next_id();
+        app.doc.arrows.push(Arrow::new(
+            arrow,
+            Point::new(200., 0.),
+            Point::new(300., 0.),
+            ArrowPreset::Forward,
+            ArrowStyle::default(),
+        ));
+        let graphic = app.doc.next_id();
+        app.doc.graphics.push(Graphic::dragged(
+            graphic,
+            GraphicKind::Rectangle,
+            Point::new(200., 100.),
+            Point::new(300., 150.),
+            GraphicStyle::default(),
+            Default::default(),
+            false,
+        ));
+        app.doc.page_layout = Some(Layout {
+            columns: 2,
+            ..Default::default()
+        });
+        let before = app.doc.clone();
+        let revision = app.revision;
+        let _ = app.update(Message::Pages(Action::Show));
+        let _ = app.update(Message::Pages(Action::Fit(None)));
+        let _ = app.update(Message::SelectAll);
+        assert_eq!(app.selected, before.all_ids());
+        assert_eq!(app.inspector_tab, InspectorTab::Pages);
+        for ids in [
+            vec![caption],
+            vec![arrow],
+            vec![graphic],
+            vec![1, 2, caption],
+        ] {
+            let _ = app.update(Message::Canvas(Edit::Select(ids.clone())));
+            assert_eq!(app.selected, ids);
+            assert_eq!(app.inspector_tab, InspectorTab::Pages);
+            assert!(app.inspector_open);
+            assert_eq!(app.doc, before);
+            assert_eq!(app.revision, revision);
+            assert!(!app.history.can_undo());
+        }
+        let _ = app.update(Message::Pages(Action::Navigate(1)));
+        let _ = app.update(Message::Pages(Action::Center(true)));
+        assert_eq!(app.selected, vec![1, 2, caption]);
+        assert_eq!(app.inspector_tab, InspectorTab::Pages);
+        assert_eq!(app.doc.arrows, before.arrows);
+        assert_eq!(app.doc.graphics, before.graphics);
+        assert_ne!(app.doc.atoms, before.atoms);
+        let (lo, hi) = moruno::scene::selection_bounds(&app.doc, &app.selected).unwrap();
+        let (page_lo, page_hi) = app
+            .doc
+            .page_layout
+            .as_ref()
+            .unwrap()
+            .content_bounds(1)
+            .unwrap();
+        assert!(((lo.x + hi.x) - (page_lo.x + page_hi.x)).abs() < 0.01);
+        assert!(((lo.y + hi.y) - (page_lo.y + page_hi.y)).abs() < 0.01);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, before);
+        assert_eq!(app.inspector_tab, InspectorTab::Pages);
+        assert!(!app.history.can_undo());
+    }
 }

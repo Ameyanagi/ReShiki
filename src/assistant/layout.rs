@@ -138,11 +138,17 @@ async fn prepare(
     let (lo, hi) =
         crate::scene::selection_bounds(&doc, &doc.all_ids()).ok_or("Empty proposed molecule")?;
     let mut label = molecule.label.clone();
-    // A formula already represented by the structure/coefficient needs no duplicate caption.
-    if smiles == "O"
-        && ["H₂O", "H2O", "3 H₂O", "3 H2O", "Water", "water", "水"].contains(&label.as_str())
-    {
-        label.clear();
+    // Suppress only a formula already shown by the structure/coefficient.
+    // Explicit names such as Water or 水 remain editable captions.
+    if smiles == "O" {
+        let formula = label
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .collect::<String>()
+            .replace('₂', "2");
+        if formula == "H2O" || formula == format!("{coefficient}H2O") {
+            label.clear();
+        }
     }
     let mut label_format = settings.format.clone();
     label_format.alignment = TextAlign::Center;

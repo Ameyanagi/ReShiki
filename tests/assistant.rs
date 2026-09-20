@@ -72,6 +72,13 @@ async fn reaction_is_editable_validated_styled_and_exchangeable() {
         .find(|a| a.text.contains("H₂SO₄"))
         .unwrap();
     assert!(conditions.position.y + conditions.size().1 < arrow.start.y);
+    let water_caption = doc.annotations.iter().find(|a| a.text == "Water").unwrap();
+    let product_caption = doc
+        .annotations
+        .iter()
+        .find(|a| a.text == "Ethyl acetate")
+        .unwrap();
+    assert_eq!(water_caption.position.y, product_caption.position.y);
     assert!(
         doc.annotations
             .iter()
@@ -98,6 +105,52 @@ async fn reaction_is_editable_validated_styled_and_exchangeable() {
     assert!(!ids.contains(&a));
     let (replaced, _) = assistant::candidate(&base, &doc, &[a]).unwrap();
     assert_eq!(replaced.atoms.len(), doc.atoms.len());
+}
+
+#[tokio::test]
+async fn water_names_remain_captions_while_only_duplicate_formulas_are_hidden() {
+    let engine = PythonEngine::default();
+    for (label, coefficient, visible) in [
+        ("Water", 1, true),
+        ("water", 1, true),
+        ("水", 1, true),
+        ("H₂O (water)", 1, true),
+        ("H2O", 1, false),
+        ("H₂O", 1, false),
+        ("3H2O", 3, false),
+        ("3 H₂O", 3, false),
+        // A different coefficient is not a redundant copy of the drawing.
+        ("3 H₂O", 1, true),
+    ] {
+        let mut water = molecule("O", label);
+        water.coefficient = coefficient;
+        let proposal = Proposal {
+            replace_ids: vec![],
+            explanation: String::new(),
+            molecules: vec![water],
+            reactions: vec![],
+        };
+        let doc = assistant::render(&engine, &proposal, &Default::default())
+            .await
+            .unwrap();
+        assert_eq!(doc.atoms.len(), 1);
+        let caption = doc.annotations.iter().find(|a| a.text == label);
+        assert_eq!(caption.is_some(), visible, "{label}");
+        if let Some(caption) = caption {
+            assert!(caption.position.y > doc.atoms[0].position.y);
+            assert_eq!(
+                caption.format.alignment,
+                moruno::typography::TextAlign::Center
+            );
+        }
+        if coefficient > 1 {
+            assert!(
+                doc.annotations
+                    .iter()
+                    .any(|a| a.text == coefficient.to_string())
+            );
+        }
+    }
 }
 #[tokio::test]
 async fn invalid_molecule_discards_entire_candidate_and_ambiguous_answer_has_no_drawing() {

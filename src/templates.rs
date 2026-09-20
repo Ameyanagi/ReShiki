@@ -558,9 +558,7 @@ pub fn place_anchored(
             .get(index)
             .ok_or("The target bond is unavailable")?;
         if target.display != "plain" || target.stereo.is_some() || !matches!(target.order, 1 | 2) {
-            return Err(
-                "Choose a plain single or double bond; Clean up converts aromatic bond orders.",
-            );
+            return Err("Choose a plain single/double bond or a compatible aromatic ring edge.");
         }
         let saturated = part
             .bonds

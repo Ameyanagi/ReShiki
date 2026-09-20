@@ -30,6 +30,14 @@ fn ring(doc: &Document, a: u64, b: u64) -> Option<BTreeSet<Edge>> {
                 .filter_map(|p| Some(edge(*p.first()?, *p.get(1)?)))
                 .collect();
             edges.insert(edge(a, b));
+            // Circle display stores aromatic order on every edge. Recognize a
+            // complete cycle, never a mixed or partially aromatic path. Fused
+            // aromatic systems need a larger assignment than this bounded ring.
+            let circular = edges.iter().all(|&(a, b)| {
+                doc.bonds
+                    .iter()
+                    .any(|e| edge(e.a, e.b) == edge(a, b) && e.order == 4)
+            });
             let mut doubles = 0;
             let mut valid = true;
             for id in &path {
@@ -39,16 +47,32 @@ fn ring(doc: &Document, a: u64, b: u64) -> Option<BTreeSet<Edge>> {
                     .iter()
                     .filter(|e| edges.contains(&edge(e.a, e.b)) && (e.a == *id || e.b == *id))
                     .collect();
-                let pi = bonds.iter().filter(|e| e.order == 2).count();
                 let donor = matches!(atom.element.as_str(), "O" | "S")
                     || (atom.element == "N" && atom.explicit_h == 1);
+                let pi = if circular {
+                    usize::from(!donor)
+                } else {
+                    bonds.iter().filter(|e| e.order == 2).count()
+                };
                 valid &= atom.charge == 0
                     && atom.stereo.is_none()
                     && atom.radical_electrons == 0
                     && bonds.len() == 2
                     && bonds.iter().all(|e| {
-                        matches!(e.order, 1 | 2) && e.display == "plain" && e.stereo.is_none()
+                        (if circular {
+                            e.order == 4
+                        } else {
+                            matches!(e.order, 1 | 2)
+                        }) && e.display == "plain"
+                            && e.stereo.is_none()
                     })
+                    && (!circular
+                        || (atom.explicit_h == u32::from(atom.element == "N" && donor)
+                            && !doc.bonds.iter().any(|e| {
+                                e.order == 4
+                                    && (e.a == *id || e.b == *id)
+                                    && !edges.contains(&edge(e.a, e.b))
+                            })))
                     && if donor {
                         pi == 0
                     } else {
