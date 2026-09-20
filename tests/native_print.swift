@@ -85,7 +85,7 @@ struct NativePrintTests {
                     for pageIndex in 0..<result.pageCount {
                         guard let page=result.page(at:pageIndex),let ref=reference.page(at:pageIndex) else { throw TestFailure(message:"Missing page") }
                         let bounds=page.bounds(for:.mediaBox)
-                        try check(abs(bounds.width-size.width)<0.01 && abs(bounds.height-size.height)<0.01,"Paper dimensions changed")
+                        try check(abs(bounds.width-size.width)<0.01 && abs(bounds.height-size.height)<0.01,"Paper dimensions changed: expected=\(size) actual=\(bounds.size) rotation=\(page.rotation) settings=\(operation.printInfo.paperSize)")
                         let actual=try inkBounds(page),desired=try inkBounds(ref)
                         try check(abs(actual.minX-desired.minX)<=1 && abs(actual.minY-desired.minY)<=1 && abs(actual.width-desired.width)<=1 && abs(actual.height-desired.height)<=1,
                                   "Artwork shifted or scaled: paper=\(size) scale=\(scale) page=\(pageIndex) actual=\(actual) expected=\(desired)")

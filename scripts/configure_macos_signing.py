@@ -68,7 +68,7 @@ def main():
     configure_environment()
     if args.certificate:
         password = (
-            args.password_file.read_text().strip()
+            args.password_file.read_text(encoding="utf-8").strip()
             if args.password_file
             else getpass.getpass("Certificate export password: ")
         )

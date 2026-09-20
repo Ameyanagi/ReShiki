@@ -22,7 +22,7 @@ def run(command, **kwargs):
 
 
 def version():
-    return tomllib.loads((ROOT / "Cargo.toml").read_text())["package"]["version"]
+    return tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))["package"]["version"]
 
 
 def check_tag(tag):
@@ -50,7 +50,7 @@ def notices(destination):
     destination.mkdir(parents=True, exist_ok=True)
     with (destination / "rust-dependencies.json").open("w") as stream:
         run(["cargo", "metadata", "--format-version", "1", "--locked"], cwd=ROOT, stdout=stream)
-    metadata = json.loads((destination / "rust-dependencies.json").read_text())
+    metadata = json.loads((destination / "rust-dependencies.json").read_text(encoding="utf-8"))
     for package in metadata["packages"]:
         source = Path(package["manifest_path"]).parent
         for candidate in source.iterdir():

@@ -19,7 +19,7 @@ from rdkit.Chem import rdMolDescriptors  # noqa: E402
 from engine.worker import handle  # noqa: E402
 
 path = ROOT / "assets/templates.json"
-catalog = json.loads((ROOT / "assets/template-catalog.json").read_text())
+catalog = json.loads((ROOT / "assets/template-catalog.json").read_text(encoding="utf-8"))
 library = []
 for entry in catalog:
     mol = (

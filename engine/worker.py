@@ -38,7 +38,9 @@ else:
     from marks_exchange import read_marks, write_marks
 
 SCALE = 28.0
-DRAWING_STYLE = json.loads(Path(__file__).with_name("drawing_style.json").read_text())
+DRAWING_STYLE = json.loads(
+    Path(__file__).with_name("drawing_style.json").read_text(encoding="utf-8")
+)
 ORDERS = {
     1: Chem.BondType.SINGLE,
     2: Chem.BondType.DOUBLE,

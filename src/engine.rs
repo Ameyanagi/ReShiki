@@ -187,7 +187,8 @@ impl PythonEngine {
         command
             .arg("-u")
             .arg(root.join("engine/worker.py"))
-            .env("PYTHONDONTWRITEBYTECODE", "1");
+            .env("PYTHONDONTWRITEBYTECODE", "1")
+            .env("PYTHONUTF8", "1");
         // A GUI launch on Windows must not open a console for the local worker.
         #[cfg(windows)]
         command.creation_flags(0x08000000);

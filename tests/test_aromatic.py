@@ -59,7 +59,9 @@ class AromaticTests(unittest.TestCase):
             call("aromatic", document=saturated, selected_ids=list(range(1, 7)))
 
     def test_native_fixture_has_owned_circle_and_ordinary_ovals_are_retained(self):
-        text = (Path(__file__).parent / "fixtures/aromatic-circle-native.cdxml").read_text()
+        text = (Path(__file__).parent / "fixtures/aromatic-circle-native.cdxml").read_text(
+            encoding="utf-8"
+        )
         result = call("import", format="cdxml", text=text)
         self.assertEqual(result["analysis"]["formula"], "C6H6")
         self.assertEqual(result["document"]["graphics"], [])

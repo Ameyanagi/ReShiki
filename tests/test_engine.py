@@ -24,7 +24,9 @@ class ChemistryTests(unittest.TestCase):
                 protocol=1,
                 operation="import",
                 format="cdxml",
-                text=(ROOT / "tests/fixtures/atom-labels-chemdraw.cdxml").read_text(),
+                text=(ROOT / "tests/fixtures/atom-labels-chemdraw.cdxml").read_text(
+                    encoding="utf-8"
+                ),
             )
         )
         doc = result["document"]
@@ -45,7 +47,11 @@ class ChemistryTests(unittest.TestCase):
         self.assertEqual(float(root.get("LabelSize")), 10.0)
 
     def test_cip_is_recomputed_instead_of_trusting_imported_text(self):
-        xml = (ROOT / "tests/fixtures/atom-labels-chemdraw.cdxml").read_text().replace("(S)", "(R)")
+        xml = (
+            (ROOT / "tests/fixtures/atom-labels-chemdraw.cdxml")
+            .read_text(encoding="utf-8")
+            .replace("(S)", "(R)")
+        )
         result = handle(dict(protocol=1, operation="import", format="cdxml", text=xml))
         self.assertEqual(
             [a["cip_label"] for a in result["document"]["atoms"] if a["cip_label"]], ["S"]
@@ -57,7 +63,7 @@ class ChemistryTests(unittest.TestCase):
             )
 
     def test_unknown_or_detached_object_tags_are_rejected(self):
-        xml = (ROOT / "tests/fixtures/atom-labels-chemdraw.cdxml").read_text()
+        xml = (ROOT / "tests/fixtures/atom-labels-chemdraw.cdxml").read_text(encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "object tag"):
             handle(
                 dict(
@@ -93,7 +99,7 @@ class ChemistryTests(unittest.TestCase):
         self.assertEqual(responses[-1]["result"]["analysis"]["formula"], "C2H6O")
 
     def test_chemdraw_saved_symbols_keep_atom_ownership_and_jacs_defaults(self):
-        xml = (ROOT / "tests/fixtures/attached-symbols-chemdraw.cdxml").read_text()
+        xml = (ROOT / "tests/fixtures/attached-symbols-chemdraw.cdxml").read_text(encoding="utf-8")
         result = handle(dict(protocol=1, operation="import", format="cdxml", text=xml))
         self.assertEqual(result["analysis"]["formula"], "H4N+")
         doc = result["document"]
@@ -114,7 +120,7 @@ class ChemistryTests(unittest.TestCase):
                 protocol=1,
                 operation="import",
                 format="cdxml",
-                text=(ROOT / "tests/fixtures/symbols-chemdraw.cdxml").read_text(),
+                text=(ROOT / "tests/fixtures/symbols-chemdraw.cdxml").read_text(encoding="utf-8"),
             )
         )["document"]
         self.assertEqual(
@@ -155,7 +161,7 @@ class ChemistryTests(unittest.TestCase):
             handle(dict(protocol=1, operation="export", format="cdxml", document=doc))
         xml = (
             (ROOT / "tests/fixtures/symbols-chemdraw.cdxml")
-            .read_text()
+            .read_text(encoding="utf-8")
             .replace('OrbitalType="p"', 'OrbitalType="pShaded"')
         )
         with self.assertRaisesRegex(ValueError, "Gradient-shaded"):
@@ -177,7 +183,9 @@ class ChemistryTests(unittest.TestCase):
                 protocol=1,
                 operation="import",
                 format="cdxml",
-                text=(ROOT / "tests/fixtures/exported-charge-chemdraw.cdxml").read_text(),
+                text=(ROOT / "tests/fixtures/exported-charge-chemdraw.cdxml").read_text(
+                    encoding="utf-8"
+                ),
             )
         )
         self.assertEqual(saved["analysis"]["smiles"], "[NH4+]")
@@ -187,8 +195,8 @@ class ChemistryTests(unittest.TestCase):
             handle(dict(protocol=1, operation="export", format="cdxml", document=doc))
 
     def test_builtin_catalog_matches_frozen_pubchem_formula_and_stereochemistry(self):
-        catalog = json.loads((ROOT / "assets/template-catalog.json").read_text())
-        library = json.loads((ROOT / "assets/templates.json").read_text())
+        catalog = json.loads((ROOT / "assets/template-catalog.json").read_text(encoding="utf-8"))
+        library = json.loads((ROOT / "assets/templates.json").read_text(encoding="utf-8"))
         self.assertEqual(len(catalog), 79)
         self.assertEqual(len(library), len(catalog))
         self.assertEqual(sum(item["group"] == "Amino acids" for item in catalog), 20)
@@ -216,7 +224,9 @@ class ChemistryTests(unittest.TestCase):
                 protocol=1,
                 operation="import",
                 format="cdxml",
-                text=(ROOT / "tests/fixtures/ring-presets-chemdraw.cdxml").read_text(),
+                text=(ROOT / "tests/fixtures/ring-presets-chemdraw.cdxml").read_text(
+                    encoding="utf-8"
+                ),
             )
         )
         doc = result["document"]
@@ -237,7 +247,7 @@ class ChemistryTests(unittest.TestCase):
                 )
 
     def test_chemdraw_saved_arrows_keep_head_styles_and_exact_bezier_controls(self):
-        xml = (ROOT / "tests/fixtures/arrows-chemdraw.cdxml").read_text()
+        xml = (ROOT / "tests/fixtures/arrows-chemdraw.cdxml").read_text(encoding="utf-8")
         result = handle(dict(protocol=1, operation="import", format="cdxml", text=xml))
         arrows = result["document"]["arrows"]
         self.assertEqual(len(arrows), 7)
@@ -287,7 +297,7 @@ class ChemistryTests(unittest.TestCase):
                 a["style"] = {**appearance(dict(kind=kind)), **change}
                 with self.assertRaises(ValueError):
                     handle(dict(protocol=1, operation="export", format="cdxml", document=doc))
-        xml = (ROOT / "tests/fixtures/arrows-chemdraw.cdxml").read_text()
+        xml = (ROOT / "tests/fixtures/arrows-chemdraw.cdxml").read_text(encoding="utf-8")
         root = ET.fromstring(xml)
         root.find(".//arrow").set("AngularSize", "90")
         with self.assertRaisesRegex(ValueError, "elliptical"):
@@ -330,7 +340,7 @@ class ChemistryTests(unittest.TestCase):
         )
 
     def test_chemdraw_saved_extended_bond_gallery_preserves_chemistry_and_appearance(self):
-        xml = (ROOT / "tests/fixtures/bond-styles-chemdraw.cdxml").read_text()
+        xml = (ROOT / "tests/fixtures/bond-styles-chemdraw.cdxml").read_text(encoding="utf-8")
         result = handle(dict(protocol=1, operation="import", format="cdxml", text=xml))
         doc = result["document"]
         self.assertEqual(len(doc["bonds"]), 18)
@@ -450,7 +460,7 @@ class ChemistryTests(unittest.TestCase):
             handle(dict(protocol=1, operation="import", format="cdxml", text=bad))
 
     def test_chemdraw_saved_groups_keep_captions_attached_to_their_molecules(self):
-        xml = (ROOT / "tests/fixtures/grouped-aspirin-chemdraw.cdxml").read_text()
+        xml = (ROOT / "tests/fixtures/grouped-aspirin-chemdraw.cdxml").read_text(encoding="utf-8")
         result = handle(dict(protocol=1, operation="import", format="cdxml", text=xml))
         doc = result["document"]
         self.assertEqual(result["analysis"]["formula"], "C18H16O8")
@@ -468,7 +478,7 @@ class ChemistryTests(unittest.TestCase):
             )
 
     def test_chemdraw_saved_graphics_keep_fill_stroke_and_nested_fragment_curves(self):
-        xml = (ROOT / "tests/fixtures/graphics-chemdraw.cdxml").read_text()
+        xml = (ROOT / "tests/fixtures/graphics-chemdraw.cdxml").read_text(encoding="utf-8")
         result = handle(dict(protocol=1, operation="import", format="cdxml", text=xml))
         self.assertEqual(result["analysis"]["smiles"], "CC(=O)Oc1ccccc1C(=O)O")
         graphics = result["document"]["graphics"]
@@ -693,7 +703,7 @@ class ChemistryTests(unittest.TestCase):
             handle(dict(protocol=1, operation="import", format="cdxml", text=xml))
 
     def test_chemdraw_saved_typography_uses_reserved_colors_and_bounding_box(self):
-        xml = (ROOT / "tests/fixtures/formatted-label-chemdraw.cdxml").read_text()
+        xml = (ROOT / "tests/fixtures/formatted-label-chemdraw.cdxml").read_text(encoding="utf-8")
         result = handle(dict(protocol=1, operation="import", format="cdxml", text=xml))
         label = result["document"]["annotations"][0]
         self.assertEqual(label["text"], "Pd/C, H2\nEtOH · 25 °C")
@@ -712,7 +722,7 @@ class ChemistryTests(unittest.TestCase):
         self.assertAlmostEqual(label["position"]["x"], float(bbox[0]) * 42 / 14.4)
 
     def test_reference_ui_export_imports_as_ethanol(self):
-        xml = (ROOT / "tests/fixtures/reference-ethanol.cdxml").read_text()
+        xml = (ROOT / "tests/fixtures/reference-ethanol.cdxml").read_text(encoding="utf-8")
         result = handle(dict(protocol=1, operation="import", format="cdxml", text=xml))
         self.assertEqual(result["analysis"]["smiles"], "CCO")
         self.assertEqual(result["analysis"]["formula"], "C2H6O")
@@ -742,11 +752,11 @@ class ChemistryTests(unittest.TestCase):
 
     def test_freehand_ui_saved_drawing_and_exports(self):
         fixtures = ROOT / "tests/fixtures"
-        doc = json.loads((fixtures / "ui-drawn-ethanol.moruno").read_text())
+        doc = json.loads((fixtures / "ui-drawn-ethanol.moruno").read_text(encoding="utf-8"))
         self.assertEqual(Chem.MolToSmiles(from_document(doc)), "CCO")
         self.assertEqual(doc["annotations"][0]["text"], "oxidation")
         self.assertEqual(len(doc["arrows"]), 1)
-        xml = (fixtures / "ui-drawn-ethanol.cdxml").read_text()
+        xml = (fixtures / "ui-drawn-ethanol.cdxml").read_text(encoding="utf-8")
         self.assertEqual(Chem.MolToSmiles(Chem.MolsFromCDXML(xml)[0]), "CCO")
         self.assertEqual(len(ET.fromstring(xml).findall(".//arrow")), 1)
         roundtrip = handle(dict(protocol=1, operation="import", format="cdxml", text=xml))[

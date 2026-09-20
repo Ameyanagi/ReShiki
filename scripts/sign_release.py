@@ -16,13 +16,16 @@ def main():
     source = inputs[0]
     with source.open("rb") as stream:
         digest = hashlib.file_digest(stream, "sha256").hexdigest()
-    if Path(str(source) + ".sha256").read_text().strip() != f"{digest}  {source.name}":
+    if (
+        Path(str(source) + ".sha256").read_text(encoding="utf-8").strip()
+        != f"{digest}  {source.name}"
+    ):
         raise ValueError("Archive checksum mismatch")
     with tempfile.TemporaryDirectory(prefix="moruno-release-sign-") as temporary:
         directory = Path(temporary)
         run(["ditto", "-x", "-k", source, directory])
         folder = directory / source.stem
-        metadata = json.loads((folder / "build.json").read_text())
+        metadata = json.loads((folder / "build.json").read_text(encoding="utf-8"))
         import os
 
         if (
