@@ -587,6 +587,7 @@ impl App {
             );
         }
         let drawing: Element<'_, Edit> = canvas(MoleculeCanvas {
+            joining: self.joining.as_ref().map(|s| &s.prepared),
             hidden_annotation: self.inline_label_id(),
             bond_drawing: self.bond_drawing,
             chain_drawing: self.chain_drawing,
@@ -613,13 +614,22 @@ impl App {
             guides: self.guides,
             ring_size: self.ring_size,
             aromatic_ring: self.aromatic_ring,
-            template_connection: self.templates.connection,
+            template_connection: self
+                .joining
+                .as_ref()
+                .map(|s| s.mode)
+                .unwrap_or(self.templates.connection),
             template: self
-                .templates
-                .library
-                .get(self.template_index)
-                .filter(|_| self.tool == Tool::Template)
-                .map(|t| (&t.document, self.templates.anchor)),
+                .joining
+                .as_ref()
+                .map(|s| (&s.prepared.fragment, s.anchor))
+                .or_else(|| {
+                    self.templates
+                        .library
+                        .get(self.template_index)
+                        .filter(|_| self.tool == Tool::Template)
+                        .map(|t| (&t.document, self.templates.anchor))
+                }),
         })
         .width(Length::Fill)
         .height(Length::Fill)
@@ -958,6 +968,9 @@ impl App {
     }
 
     fn context_bar(&self) -> Element<'_, Message> {
+        if self.joining.is_some() {
+            return self.join_bar();
+        }
         let mut options = row![text(tool_name(self.tool)).size(12).color(ink()), divider()]
             .spacing(10)
             .align_y(Alignment::Center);
@@ -1183,6 +1196,8 @@ impl App {
                     .push(command("Copy", Message::Copy(false)))
                     .push(command("Paste", Message::Paste))
                     .push(command("Duplicate", Message::Duplicate))
+                    .push(command("Move & attach…", Message::Join(super::joining::Action::Begin))
+                        .on_press_maybe(self.selected.iter().any(|id| self.doc.atom(*id).is_some()).then_some(Message::Join(super::joining::Action::Begin))))
                     .push(
                         command("Group", Message::Group)
                             .on_press_maybe(self.can_group().then_some(Message::Group)),
@@ -1295,6 +1310,7 @@ impl App {
         }
         let body = match self.inspector_tab {
             InspectorTab::Assistant => self.assistant_panel(),
+            InspectorTab::Properties if self.joining.is_some() => self.join_panel(),
             InspectorTab::Properties => self.properties_panel(),
             InspectorTab::Labels => self.atom_labels_panel(),
             InspectorTab::Abbreviations => self.abbreviations_panel(),
@@ -2492,7 +2508,7 @@ pub(super) fn control(active: bool) -> impl Fn(&Theme, button::Status) -> button
         }
     }
 }
-fn panel(_: &Theme) -> container::Style {
+pub(super) fn panel(_: &Theme) -> container::Style {
     container::Style {
         background: Some(Color::from_rgb8(250, 251, 252).into()),
         border: Border {

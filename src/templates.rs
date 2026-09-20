@@ -473,12 +473,14 @@ pub fn place_anchored(
                     score += 0.05 / (distance + 0.1).powi(2);
                 }
             }
-            // A matching two-atom molecule would add nothing.
+            // A single atom or edge can be shared too. Existing-fragment joining
+            // then removes the duplicate while retaining its captions and groups.
             if count == 0 {
-                return;
+                center = dest;
+            } else {
+                center.x /= count as f32;
+                center.y /= count as f32;
             }
-            center.x /= count as f32;
-            center.y /= count as f32;
             if let Some(direction) = direction.filter(|p| p.distance(dest) > radius) {
                 let aim = (direction.y - dest.y).atan2(direction.x - dest.x);
                 let actual = (center.y - dest.y).atan2(center.x - dest.x);
@@ -581,6 +583,7 @@ pub fn place_anchored(
             // to avoid silently adding/removing unsaturation elsewhere.
             if (source.order != target.order && !(saturated && target.order == 2))
                 || source.display != "plain"
+                || source.stereo.is_some()
             {
                 continue;
             }
@@ -655,6 +658,14 @@ pub fn place_anchored(
                 .iter()
                 .find(|b| b.a == source.id || b.b == source.id);
             let Some(b) = anchor_bond else {
+                consider(
+                    &[source.id],
+                    &[id],
+                    source.position,
+                    target.position,
+                    1.,
+                    0.,
+                );
                 continue;
             };
             let source_length = part

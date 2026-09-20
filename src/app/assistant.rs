@@ -56,7 +56,7 @@ pub enum Menu {
 
 #[derive(Default)]
 pub struct State {
-    waiting_for_text: bool,
+    waiting_for_canvas_edit: bool,
     input: text_editor::Content,
     pub draft: Option<Draft>,
     messages: Vec<(String, String)>,
@@ -127,7 +127,7 @@ impl App {
             Action::Replace(value) => self.assistant.replace = value,
             Action::AutoApply(value) => {
                 if !value {
-                    self.assistant.waiting_for_text = false;
+                    self.assistant.waiting_for_canvas_edit = false;
                 }
                 self.assistant.preferences.auto_apply = value;
                 self.assistant.preferences_dirty = true;
@@ -173,7 +173,7 @@ impl App {
                 }
             }
             Action::Reset => {
-                self.assistant.waiting_for_text = false;
+                self.assistant.waiting_for_canvas_edit = false;
                 self.assistant.cancel.stop();
                 let serial = self.assistant.serial.wrapping_add(1);
                 self.assistant.draft = None;
@@ -187,7 +187,7 @@ impl App {
                 self.assistant.started = None;
             }
             Action::Stop => {
-                self.assistant.waiting_for_text = false;
+                self.assistant.waiting_for_canvas_edit = false;
                 self.assistant.cancel.stop();
                 self.assistant.serial = self.assistant.serial.wrapping_add(1);
                 self.assistant.busy = false;
@@ -237,8 +237,11 @@ impl App {
                 }
             }
             Action::Poll => {
-                if self.assistant.waiting_for_text && self.inline_text.is_none() {
-                    self.assistant.waiting_for_text = false;
+                if self.assistant.waiting_for_canvas_edit
+                    && self.inline_text.is_none()
+                    && self.joining.is_none()
+                {
+                    self.assistant.waiting_for_canvas_edit = false;
                     return self.assistant_action(Action::Apply);
                 }
                 if self.assistant.busy
@@ -288,7 +291,7 @@ impl App {
                 }
             }
             Action::Reject => {
-                self.assistant.waiting_for_text = false;
+                self.assistant.waiting_for_canvas_edit = false;
                 self.assistant.draft = None;
                 self.assistant.record(
                     "Moruno",
@@ -300,10 +303,10 @@ impl App {
                 if self.assistant.busy || self.cleanup.is_some() {
                     return Task::none();
                 }
-                if self.inline_text.is_some() {
-                    self.assistant.waiting_for_text = true;
+                if self.inline_text.is_some() || self.joining.is_some() {
+                    self.assistant.waiting_for_canvas_edit = true;
                     self.assistant.status =
-                        "Ready · Finish or cancel the current text edit to apply".into();
+                        "Ready · Finish or cancel the current canvas edit to apply".into();
                     return Task::none();
                 }
                 let Some(draft) = &self.assistant.draft else {
@@ -361,7 +364,7 @@ impl App {
                 if prompt.is_empty() {
                     return Task::none();
                 }
-                self.assistant.waiting_for_text = false;
+                self.assistant.waiting_for_canvas_edit = false;
                 if prompt.len() > 12_000 {
                     self.assistant.error = true;
                     self.assistant.status =
@@ -995,7 +998,7 @@ mod tests {
         )));
         ready(&mut app);
         assert!(app.doc.atoms.is_empty());
-        assert!(app.assistant.waiting_for_text);
+        assert!(app.assistant.waiting_for_canvas_edit);
         assert_eq!(app.caption, "Current label");
         assert!(app.finish_inline(true));
         let text_document = app.doc.clone();

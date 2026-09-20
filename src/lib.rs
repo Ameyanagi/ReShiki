@@ -28,6 +28,7 @@ pub mod engine;
 pub mod export;
 pub mod graphics;
 pub mod grouping;
+pub mod joining;
 pub mod recovery;
 pub mod rings;
 pub mod scene;

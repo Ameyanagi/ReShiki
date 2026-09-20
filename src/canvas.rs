@@ -207,6 +207,7 @@ enum Gesture {
     },
 }
 pub struct MoleculeCanvas<'a> {
+    pub joining: Option<&'a moruno::joining::Prepared>,
     pub hidden_annotation: Option<u64>,
     pub bond_drawing: BondDrawing,
     pub chain_drawing: ChainDrawing,
@@ -239,12 +240,12 @@ impl MoleculeCanvas<'_> {
         end: World,
         modifiers: iced::keyboard::Modifiers,
     ) -> (World, Option<World>) {
+        let doc = self.joining.map(|j| &j.base).unwrap_or(self.doc);
         let (anchor, direction) = ring_gesture(start, end, true, 10. / self.camera.zoom);
         if !(modifiers.shift() || modifiers.control()) || modifiers.alt() {
             return (anchor, direction);
         }
-        let origin = self
-            .doc
+        let origin = doc
             .nearest(anchor, 10. / self.camera.zoom)
             .and_then(|id| self.doc.atom(id))
             .map(|a| a.position)
@@ -994,7 +995,7 @@ impl MoleculeCanvas<'_> {
                 .filter(|p| bounds.contains(*p))
                 .map(|p| Point::new(p.x - bounds.x, p.y - bounds.y)),
         );
-        let mut preview = self.doc.clone();
+        let mut preview = self.joining.map(|j| &j.base).unwrap_or(self.doc).clone();
         let mut ring_selection = None;
         let mut chain_badge = None;
         let mut template_notice = None;
@@ -1229,29 +1230,54 @@ impl MoleculeCanvas<'_> {
             } else {
                 (end, None)
             };
-            match moruno::templates::place_with_mode(
-                self.doc,
-                template,
-                anchor,
-                direction,
-                10.0 / self.camera.zoom,
-                source_anchor,
-                self.template_connection,
-            ) {
+            let placement = if let Some(joining) = self.joining {
+                joining.place(
+                    anchor,
+                    direction,
+                    10. / self.camera.zoom,
+                    source_anchor,
+                    self.template_connection,
+                )
+            } else {
+                moruno::templates::place_with_mode(
+                    self.doc,
+                    template,
+                    anchor,
+                    direction,
+                    10. / self.camera.zoom,
+                    source_anchor,
+                    self.template_connection,
+                )
+                .map_err(str::to_owned)
+            };
+            match placement {
                 Ok((document, ids)) => {
                     template_notice = Some((
-                        format!(
-                            "Preview · {} new objects ({} atoms) · Shift/Ctrl drag snaps 15° · Escape cancels",
-                            document.all_ids().len() - self.doc.all_ids().len(),
-                            document.atoms.len() - self.doc.atoms.len()
-                        ),
+                        if self.joining.is_some() {
+                            "Move & attach preview · Click or release to join · Escape cancels"
+                                .into()
+                        } else {
+                            format!(
+                                "Preview · {} new objects ({} atoms) · Shift/Ctrl drag snaps 15° · Escape cancels",
+                                document
+                                    .all_ids()
+                                    .len()
+                                    .saturating_sub(self.doc.all_ids().len()),
+                                document.atoms.len().saturating_sub(self.doc.atoms.len())
+                            )
+                        },
                         true,
                     ));
                     preview = document;
                     // Tint only transient objects. Commit calls the same pure
                     // placement operation again and retains saved/JACS colors.
-                    let existing: std::collections::HashSet<_> =
-                        self.doc.all_ids().into_iter().collect();
+                    let existing: std::collections::HashSet<_> = self
+                        .joining
+                        .map(|j| &j.base)
+                        .unwrap_or(self.doc)
+                        .all_ids()
+                        .into_iter()
+                        .collect();
                     let tint = [17, 126, 108];
                     for atom in &mut preview.atoms {
                         if !existing.contains(&atom.id) {
@@ -2201,6 +2227,7 @@ mod tests {
     fn rulers_exclude_editing_and_pointer_coordinates_use_the_inset_paper() {
         let doc = Document::default();
         let canvas = MoleculeCanvas {
+            joining: None,
             hidden_annotation: None,
             tool: Tool::Atom,
             guides: guides::Guides {
@@ -2278,6 +2305,7 @@ mod tests {
     fn free_ring_preset_drag_keeps_its_start_as_rotation_anchor() {
         let doc = Document::default();
         let canvas = MoleculeCanvas {
+            joining: None,
             hidden_annotation: None,
             tool: Tool::RingPreset(moruno::rings::Preset::ChairUp),
             camera: Camera {
@@ -2311,6 +2339,7 @@ mod tests {
             ArrowStyle::default(),
         ));
         let canvas = MoleculeCanvas {
+            joining: None,
             hidden_annotation: None,
             tool: Tool::Select,
             selected: &[1],
@@ -2329,6 +2358,7 @@ mod tests {
         assert_eq!(hit_object(&doc, World::new(0., -55.), 4.), Some(1));
         assert_eq!(hit_object(&doc, World::new(0., 0.), 4.), None);
         let canvas = MoleculeCanvas {
+            joining: None,
             hidden_annotation: None,
             tool: Tool::Arrow,
             selected: &[1],
@@ -2388,6 +2418,7 @@ mod tests {
         static STYLE: std::sync::LazyLock<GraphicStyle> =
             std::sync::LazyLock::new(GraphicStyle::default);
         MoleculeCanvas {
+            joining: None,
             hidden_annotation: None,
             doc,
             selected: &[],
@@ -2611,6 +2642,7 @@ mod tests {
         doc.add_atom("O", World::new(50., 0.));
         let style = GraphicStyle::default();
         let canvas = MoleculeCanvas {
+            joining: None,
             hidden_annotation: None,
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),
@@ -2721,6 +2753,7 @@ mod tests {
         doc.group_selection(&[1, 2]).unwrap();
         let style = GraphicStyle::default();
         let canvas = MoleculeCanvas {
+            joining: None,
             hidden_annotation: None,
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),
@@ -2782,6 +2815,7 @@ mod tests {
         // Alt-drag edits a member immediately, even when its group is selected.
         let selected = [1, 2];
         let canvas = MoleculeCanvas {
+            joining: None,
             hidden_annotation: None,
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),
@@ -2841,6 +2875,7 @@ mod tests {
         let doc = Document::default();
         let style = GraphicStyle::default();
         let mut canvas = MoleculeCanvas {
+            joining: None,
             hidden_annotation: None,
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),
@@ -2905,6 +2940,7 @@ mod tests {
         doc.group_selection(&[atom, label]).unwrap();
         let style = GraphicStyle::default();
         let canvas = MoleculeCanvas {
+            joining: None,
             hidden_annotation: None,
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),
@@ -2995,6 +3031,7 @@ mod tests {
         let b = doc.add_atom("C", World::new(30.0, 0.0));
         doc.add_bond(a, b, 1, "plain");
         let canvas = MoleculeCanvas {
+            joining: None,
             hidden_annotation: None,
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),
@@ -3134,6 +3171,7 @@ mod tests {
         doc.add_bond(a, b, 1, "plain");
         let original = doc.clone();
         let canvas = MoleculeCanvas {
+            joining: None,
             hidden_annotation: None,
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),
@@ -3230,6 +3268,7 @@ mod tests {
         assert_eq!(hit_selection(&doc, World::default(), 10.0), vec![a, b]);
         assert_eq!(hit_selection(&doc, World::new(-20.0, 0.0), 10.0), vec![a]);
         let canvas = MoleculeCanvas {
+            joining: None,
             hidden_annotation: None,
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),
@@ -3262,6 +3301,7 @@ mod tests {
         );
         let selected = [a, b];
         let canvas = MoleculeCanvas {
+            joining: None,
             hidden_annotation: None,
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),
@@ -3283,6 +3323,7 @@ mod tests {
         let b = doc.add_atom("C", World::new(21.0, 0.0));
         doc.add_bond(a, b, 1, "plain");
         let canvas = MoleculeCanvas {
+            joining: None,
             hidden_annotation: None,
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),
@@ -3319,6 +3360,7 @@ mod tests {
     fn leaving_the_canvas_requests_a_redraw_and_leaving_the_window_clears_hover() {
         let doc = Document::default();
         let canvas = MoleculeCanvas {
+            joining: None,
             hidden_annotation: None,
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),
@@ -3371,6 +3413,7 @@ mod tests {
         let mut doc = Document::default();
         let source = doc.add_atom("C", World::default());
         let canvas = MoleculeCanvas {
+            joining: None,
             hidden_annotation: None,
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),
@@ -3440,6 +3483,7 @@ mod tests {
     fn fast_drag_uses_each_motion_event_instead_of_final_cursor_snapshot() {
         let doc = Document::default();
         let canvas = MoleculeCanvas {
+            joining: None,
             hidden_annotation: None,
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),

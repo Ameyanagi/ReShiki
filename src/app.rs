@@ -18,6 +18,7 @@ mod file_shortcuts;
 mod graphics;
 mod icons;
 mod inline_text;
+mod joining;
 mod palettes;
 mod shortcuts;
 mod template_library;
@@ -37,6 +38,7 @@ pub enum InspectorTab {
 #[derive(Debug, Clone)]
 pub enum Message {
     InlineText(inline_text::Action),
+    Join(joining::Action),
     Escape,
     Palette(palettes::Action),
     Assistant(assistant::Action),
@@ -236,6 +238,7 @@ pub struct App {
     caption_format: moruno::typography::TextFormat,
     caption_target: Option<u64>,
     inline_text: Option<inline_text::State>,
+    joining: Option<joining::State>,
     font_options: iced::widget::combo_box::State<String>,
     font_size_input: String,
     text_color_input: String,
@@ -321,6 +324,7 @@ impl App {
             caption_format: Default::default(),
             caption_target: None,
             inline_text: None,
+            joining: None,
             font_options: iced::widget::combo_box::State::new(
                 moruno::style::font_families()
                     .iter()
@@ -669,6 +673,17 @@ impl App {
             .unwrap_or(&self.doc)
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        if let Message::Join(action) = message {
+            return self.join_action(action);
+        }
+        if self.joining.is_some()
+            && matches!(message, Message::Escape | Message::TemplateNavigate(false))
+        {
+            return self.join_action(joining::Action::Cancel);
+        }
+        if self.joining.is_some() && joining::cancels_draft(&message) {
+            self.cancel_join();
+        }
         if let Message::InlineText(action) = message {
             return self.inline_action(action);
         }
@@ -777,6 +792,7 @@ impl App {
             Message::Assistant(_)
             | Message::Palette(_)
             | Message::InlineText(_)
+            | Message::Join(_)
             | Message::Escape => {}
             Message::ContextKey(key) => return self.context_key(&key),
             Message::AromaticDisplay => {
@@ -2116,6 +2132,37 @@ impl App {
                 }
             }
             Edit::Template(anchor, direction) => {
+                if let Some(state) = &self.joining {
+                    if state.revision != self.revision || state.epoch != self.file_epoch {
+                        self.cancel_join();
+                        self.status = "The drawing changed. Start Move & attach again.".into();
+                        self.error = true;
+                        return;
+                    }
+                    match state.prepared.place(
+                        anchor,
+                        direction,
+                        10. / self.camera.zoom,
+                        state.anchor,
+                        state.mode,
+                    ) {
+                        Ok((document, selected)) => {
+                            self.doc = document;
+                            self.selected = selected;
+                            self.joining = None;
+                            self.tool = Tool::Select;
+                            self.changed(before);
+                            self.status =
+                                "Fragments joined · Undo restores their original positions".into();
+                            self.sync_typography();
+                        }
+                        Err(error) => {
+                            self.status = error;
+                            self.error = true;
+                        }
+                    }
+                    return;
+                }
                 if self.tool != Tool::Template {
                     return;
                 }
