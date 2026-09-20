@@ -14,6 +14,8 @@ gh workflow run release.yml --ref main -f sign_macos=true
 
 Each archive is extracted into a temporary directory with spaces outside the checkout. The extracted executable must report clear missing-uv instructions, set up a fresh local environment and return the expected ethanol formula and SMILES. A second launch must work with uv in offline mode. On macOS, the app signature is verified again after setup. This is a packaging check, not a complete graphical acceptance test. Test the GUI on each supported operating system before announcing a release.
 
+The [2026-09-20 packaging run](https://github.com/Ameyanagi/moruno/actions/runs/35504965288) passed these checks on all four targets. It was an unsigned test run; Developer ID signing and notarization still require the Apple account credentials described below.
+
 ## Publish a version
 
 1. Update the package version in `Cargo.toml`, update `Cargo.lock`, and record release changes.
