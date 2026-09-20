@@ -125,6 +125,11 @@ fn forward() -> String {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Document {
+    #[serde(
+        default,
+        skip_serializing_if = "crate::style::DrawingStyle::is_default"
+    )]
+    pub drawing_style: crate::style::DrawingStyle,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub page_layout: Option<crate::pages::Layout>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -146,7 +151,8 @@ pub struct Document {
 impl Default for Document {
     fn default() -> Self {
         Self {
-            version: 13,
+            version: 14,
+            drawing_style: Default::default(),
             page_layout: None,
             abbreviations: vec![],
             atom_labels: Default::default(),
@@ -326,6 +332,7 @@ impl Document {
             .collect()
     }
     pub fn validate(&self) -> Result<(), String> {
+        self.drawing_style.validate()?;
         let mut picture_bytes = 0_usize;
         let mut picture_pixels = 0_u64;
         for picture in self.graphics.iter().filter_map(|g| g.picture.as_ref()) {
@@ -336,7 +343,7 @@ impl Document {
                 return Err("Drawing pictures exceed 64 MB or 64 million pixels".into());
             }
         }
-        if ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].contains(&self.version) {
+        if !(1..=14).contains(&self.version) {
             return Err(format!("Unsupported document version {}", self.version));
         }
         if let Some(layout) = &self.page_layout {

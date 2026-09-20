@@ -1226,33 +1226,25 @@ impl App {
         if self.tool != Tool::Text {
             options = options.push(Space::new().width(Length::Fill));
         }
-        if matches!(self.tool, Tool::Chain(_)) || self.tool.bond_preset().is_some() {
-            let label = if (self.bond_drawing.length - moruno::style::DEFAULT.bond_length_world)
-                .abs()
-                < 0.001
-                && self.chain_drawing.angle == 120.
-                && self.bond_drawing.fixed_length
-                && self.bond_drawing.fixed_angles
-            {
-                "JACS / ACS"
-            } else {
-                "Reset JACS / ACS"
-            };
+        options = options.push(hover_hint(
+            button(text(&self.doc.drawing_style.name).size(10))
+                .padding([5, 8])
+                .style(control(self.inspector_tab == InspectorTab::DrawingStyle))
+                .on_press(Message::DrawingStyle(super::document_styles::Action::Open)),
+            "Edit document fonts, bond dimensions and publication style",
+            tooltip::Position::Bottom,
+        ));
+        if (matches!(self.tool, Tool::Chain(_)) || self.tool.bond_preset().is_some())
+            && ((self.bond_drawing.length - self.doc.drawing_style.bond_length_world).abs() > 0.001
+                || self.chain_drawing.angle != 120.
+                || !self.bond_drawing.fixed_length
+                || !self.bond_drawing.fixed_angles)
+        {
             options = options.push(hover_hint(
-                command(label, Message::ResetBondDrawing),
-                "Restore 14.4 pt bonds, 120° chain angle and drawing constraints",
+                command("Reset bonds", Message::ResetBondDrawing),
+                "Restore this document's bond length and drawing constraints",
                 tooltip::Position::Bottom,
             ));
-        } else {
-            options = options.push(
-                container(
-                    text("JACS / ACS")
-                        .size(10)
-                        .color(Color::from_rgb8(28, 109, 91)),
-                )
-                .padding([5, 8])
-                .style(badge),
-            );
         }
         if matches!(self.tool, Tool::Chain(_)) {
             return container(
@@ -1282,6 +1274,13 @@ impl App {
     }
 
     fn inspector(&self) -> Element<'_, Message> {
+        if self.inspector_tab == InspectorTab::DrawingStyle {
+            return container(self.drawing_style_panel())
+                .width(320)
+                .height(Length::Fill)
+                .style(panel)
+                .into();
+        }
         if self.inspector_tab == InspectorTab::Assistant {
             return container(self.assistant_panel())
                 .width(380)
@@ -1306,6 +1305,7 @@ impl App {
                                     InspectorTab::Labels
                                         | InspectorTab::Abbreviations
                                         | InspectorTab::Pages
+                                        | InspectorTab::DrawingStyle
                                 )),
                     ))
                     .on_press(Message::Inspector(tab)),
@@ -1314,6 +1314,7 @@ impl App {
         let body = match self.inspector_tab {
             InspectorTab::Assistant => self.assistant_panel(),
             InspectorTab::Pages => self.pages_panel(),
+            InspectorTab::DrawingStyle => self.drawing_style_panel(),
             InspectorTab::Properties if self.joining.is_some() => self.join_panel(),
             InspectorTab::Properties => self.properties_panel(),
             InspectorTab::Labels => self.atom_labels_panel(),
@@ -1331,7 +1332,11 @@ impl App {
             ]
             .spacing(4),
         )
-        .width(256)
+        .width(if self.inspector_tab == InspectorTab::DrawingStyle {
+            320
+        } else {
+            256
+        })
         .height(Length::Fill)
         .style(panel)
         .into()
@@ -1496,12 +1501,22 @@ impl App {
         }
         body.push(horizontal_line())
             .push(section("PUBLICATION STYLE"))
-            .push(text("JACS / ACS").size(13))
+            .push(text(&self.doc.drawing_style.name).size(13))
             .push(
-                text("Default: Arial 10 pt\nBonds 14.4 pt · Lines 0.6 pt\nText overrides saved with the drawing\nPNG 1200 dpi")
-                    .size(11)
-                    .color(muted()),
+                text(format!(
+                    "{} {} pt\nBonds {} pt · Lines {} pt\nPNG 1200 dpi",
+                    self.doc.drawing_style.font_family,
+                    self.doc.drawing_style.font_size_pt,
+                    self.doc.drawing_style.bond_length_pt,
+                    self.doc.drawing_style.line_width_pt
+                ))
+                .size(11)
+                .color(muted()),
             )
+            .push(command(
+                "Edit drawing style…",
+                Message::DrawingStyle(super::document_styles::Action::Open),
+            ))
             .into()
     }
 
@@ -2205,9 +2220,12 @@ impl App {
     fn export_panel(&self) -> Element<'_, Message> {
         let mut body = column![
             section("DRAWING"),
-            text("JACS / ACS · physical publication size")
-                .size(11)
-                .color(muted())
+            text(format!(
+                "{} · physical publication size",
+                self.doc.drawing_style.name
+            ))
+            .size(11)
+            .color(muted())
         ]
         .spacing(10);
         for (label, format) in [
@@ -2603,16 +2621,6 @@ fn sheet(_: &Theme) -> container::Style {
             color: Color::from_rgba8(35, 45, 57, 0.08),
             offset: iced::Vector::new(0., 2.),
             blur_radius: 8.,
-        },
-        ..Default::default()
-    }
-}
-fn badge(_: &Theme) -> container::Style {
-    container::Style {
-        background: Some(Color::from_rgb8(234, 245, 240).into()),
-        border: Border {
-            radius: 4.0.into(),
-            ..Default::default()
         },
         ..Default::default()
     }

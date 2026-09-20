@@ -12,7 +12,7 @@ from rdkit import Chem, rdBase
 from rdkit.Chem import rdCIPLabeler, rdDepictor, rdMolDescriptors
 
 if TYPE_CHECKING or __package__:
-    from . import abbreviations, abbreviations_exchange, aromatic, cleanup
+    from . import abbreviations, abbreviations_exchange, aromatic, cleanup, drawing_styles
     from .arrows_exchange import read_arrow, write_arrow
     from .bonds_exchange import chemistry_xml, read_bonds, write_bond, write_crossings
     from .cdx_exchange import LIMIT as CDX_LIMIT
@@ -27,6 +27,7 @@ else:
     import abbreviations_exchange
     import aromatic
     import cleanup
+    import drawing_styles
     from arrows_exchange import read_arrow, write_arrow
     from bonds_exchange import chemistry_xml, read_bonds, write_bond, write_crossings
     from cdx_exchange import LIMIT as CDX_LIMIT
@@ -96,8 +97,9 @@ def check_supported(mol):
 
 
 def from_document(doc):
-    if doc.get("version") not in (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13):
+    if doc.get("version") not in range(1, 15):
         raise ValueError("Unsupported document version")
+    drawing_styles.checked(doc.get("drawing_style"))
     abbreviations.validate(doc)
     rw = Chem.RWMol()
     ids = {}
@@ -310,7 +312,8 @@ def to_document(mol, base=None, rewedge=False):
     }
     bonds.sort(key=lambda b: old_order.get(frozenset((b["a"], b["b"])), len(old_order)))
     return {
-        "version": 13,
+        "version": 14,
+        "drawing_style": drawing_styles.checked((base or {}).get("drawing_style")),
         "atoms": atoms,
         "bonds": bonds,
         **(
@@ -522,8 +525,16 @@ def import_cdxml(text):
     mol = parts[0] if parts else Chem.Mol()
     for part in parts[1:]:
         mol = Chem.CombineMols(mol, part)
-    scale = 42.0 / float(root.get("BondLength", "30"))
+    document_style = drawing_styles.from_cdxml(root)
+    scale = 1 / drawing_styles.POINTS_PER_WORLD
+    # RDKit normalizes imported bonds to 1.5; restore the original physical size.
+    factor = document_style["bond_length_pt"] / DRAWING_STYLE["bond_length_pt"]
+    for conf in mol.GetConformers():
+        for index in range(mol.GetNumAtoms()):
+            p = conf.GetAtomPosition(index)
+            conf.SetAtomPosition(index, (p.x * factor, p.y * factor, p.z * factor))
     base = {
+        "drawing_style": document_style,
         "atoms": [],
         "annotations": [],
         "arrows": [],
@@ -631,7 +642,7 @@ def export_cdxml(
 ):
     # Coordinates and styles belong to the editor. Chemistry is checked first.
     mol = from_document(doc)
-    style = DRAWING_STYLE
+    style = drawing_styles.checked(doc.get("drawing_style"))
     scale = style["bond_length_pt"] / style["bond_length_world"]
     root = ET.Element(
         "CDXML",
@@ -740,6 +751,8 @@ def export_cdxml(
             # Atomic identity stays in Element/Charge/Isotope; the text is a view.
             s = {
                 **TEXT_DEFAULTS,
+                "family": style["font_family"],
+                "size_pt": style["font_size_pt"],
                 **(a.get("text_style") or {}),
                 "script": "normal",
                 "formula": False,
@@ -861,7 +874,9 @@ def export_cdxml(
             attrs["WordWrapWidth"] = str(round(format["width_pt"]))
         object_map[a["id"]] = write_text(page, a["text"], format, **attrs)
         next_id += 1
-    next_id = write_marks(fragment, doc["atoms"], ids, position, scale, next_id)
+    next_id = write_marks(
+        fragment, doc["atoms"], ids, position, scale, next_id, style["font_size_pt"]
+    )
     for a in doc.get("arrows", []):
         object_map[a["id"]] = write_arrow(page, a, next_id, position, color_id)
         next_id += 1
@@ -964,7 +979,7 @@ def handle(request):
                     to_document,
                     analyze,
                     SCALE,
-                    DRAWING_STYLE["bond_length_world"],
+                    drawing_styles.checked(doc.get("drawing_style"))["bond_length_world"],
                 )
             )
             return response

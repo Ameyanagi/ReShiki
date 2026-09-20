@@ -22,9 +22,9 @@ The numeric structure settings come from the [ACS graphics preparation guide](ht
 
 Atom labels use measured font advances and separate text runs for hydrogen subscripts, isotope masses and charges. Hydrogens choose a side based on neighboring bonds; ring double bonds use an inset second line. Annotation selection bounds and multiline spacing follow the larger default font. Arial must be available for exact font matching; fallback sans-serif metrics are used otherwise.
 
-The preset supplies the default drawing values; saved per-object overrides and supported imported formatting remain intact. A complete document-style/stationery editor and page/column layouts remain future work. Arbitrarily dense structures still need manual inspection and cleanup. The style does not supply reaction semantics, naming, or NMR prediction.
+The preset supplies the default drawing values; saved per-object overrides and supported imported formatting remain intact. The [document style editor](drawing-styles.md) supports custom fonts, bond dimensions and reusable settings. [Publication pages](publication-pages.md) support paper layouts. Complete stationery remains future work. Arbitrarily dense structures still need manual inspection and cleanup. The style does not supply reaction semantics, naming, or NMR prediction.
 
-The 2026-09-20 chain update makes **every new document** reset drawing and typography controls to JACS/ACS, including after another document used custom fonts, colors, bond lengths or constraints. The contextual JACS/ACS button also restores bond length, chain angle and constraints without modifying existing objects. Per-object overrides and imported formatting remain supported. See [chain controls and measured desktop results](chain-tools.md).
+The 2026-09-20 chain update makes **every new document** reset drawing and typography controls to JACS/ACS, including after another document used custom fonts, colors, bond lengths or constraints. The contextual style-name button opens the document style editor. When drawing controls differ from the current document defaults, **Reset bonds** restores its bond length, chain angle and constraints without modifying existing objects. Per-object overrides and imported formatting remain supported. See [chain controls and measured desktop results](chain-tools.md).
 
 ## Verification
 

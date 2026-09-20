@@ -1801,15 +1801,17 @@ pub fn hit_object(doc: &Document, p: World, r: f32) -> Option<u64> {
                 .rev()
                 .find(|a| {
                     doc.atom_visible(a.id)
-                        && moruno::scientific::mark_parts(a).iter().any(|part| {
-                            moruno::graphics::flattened(&part.commands)
-                                .iter()
-                                .any(|points| {
-                                    points.windows(2).any(
+                        && moruno::scientific::styled_mark_parts(a, &doc.drawing_style)
+                            .iter()
+                            .any(|part| {
+                                moruno::graphics::flattened(&part.commands)
+                                    .iter()
+                                    .any(|points| {
+                                        points.windows(2).any(
                                     |q| matches!(q, [a, b] if distance_to_segment(p, *a, *b) < r),
                                 )
-                                })
-                        })
+                                    })
+                            })
                 })
                 .map(|a| a.id)
         })

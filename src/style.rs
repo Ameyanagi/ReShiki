@@ -1,11 +1,12 @@
 //! Default ACS structure settings, shared with the exchange worker.
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     sync::{LazyLock, Mutex},
 };
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct DrawingStyle {
     pub name: String,
     pub font_family: String,
@@ -18,6 +19,11 @@ pub struct DrawingStyle {
     pub hash_spacing_pt: f32,
     pub bond_spacing_ratio: f32,
     pub png_dpi: u32,
+}
+impl Default for DrawingStyle {
+    fn default() -> Self {
+        (*DEFAULT).clone()
+    }
 }
 pub static DEFAULT: LazyLock<DrawingStyle> = LazyLock::new(|| {
     serde_json::from_str(include_str!("../engine/drawing_style.json")).unwrap_or_else(|_| {
@@ -37,8 +43,53 @@ pub static DEFAULT: LazyLock<DrawingStyle> = LazyLock::new(|| {
     })
 });
 impl DrawingStyle {
+    pub fn is_default(&self) -> bool {
+        self == &*DEFAULT
+    }
+    pub fn text_style(&self) -> crate::typography::TextStyle {
+        crate::typography::TextStyle {
+            family: self.font_family.clone(),
+            size_pt: self.font_size_pt,
+            ..Default::default()
+        }
+    }
+    pub fn set_bond_length(&mut self, points: f32) {
+        self.bond_length_pt = points;
+        self.bond_length_world = self.world(points);
+    }
+    pub fn validate(&self) -> Result<(), String> {
+        self.text_style().validate()?;
+        if self.name.trim().is_empty() || self.name.len() > 120 {
+            return Err("Give the drawing style a name of 1–120 characters.".into());
+        }
+        for (name, value, min, max) in [
+            ("Bond length", self.bond_length_pt, 5., 100.),
+            ("Line width", self.line_width_pt, 0.1, 6.),
+            ("Bold width", self.bold_width_pt, 0.1, 12.),
+            ("Label margin", self.margin_width_pt, 0., 12.),
+            ("Hash spacing", self.hash_spacing_pt, 0.3, 12.),
+            ("Bond spacing", self.bond_spacing_ratio * 100., 5., 40.),
+        ] {
+            if !value.is_finite() || !(min..=max).contains(&value) {
+                return Err(format!("{name} must be between {min} and {max}."));
+            }
+        }
+        if self.bold_width_pt < self.line_width_pt {
+            return Err("Bold width must be at least the line width.".into());
+        }
+        if !self.bond_length_world.is_finite()
+            || (self.bond_length_world - self.world(self.bond_length_pt)).abs() > 0.001
+        {
+            return Err("Drawing style uses incompatible coordinate units.".into());
+        }
+        if self.png_dpi != 1200 {
+            return Err("Drawing styles currently use 1200 dpi PNG output.".into());
+        }
+        Ok(())
+    }
     pub fn points_per_world(&self) -> f32 {
-        self.bond_length_pt / self.bond_length_world
+        // Document coordinates retain physical size when style defaults change.
+        14.4 / 42.
     }
     pub fn world(&self, points: f32) -> f32 {
         points / self.points_per_world()

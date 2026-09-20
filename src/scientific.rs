@@ -297,9 +297,17 @@ impl Graphic {
     }
 }
 pub fn mark_parts(atom: &Atom) -> Vec<Part> {
-    let default_size = atom.text_style.as_ref().map_or(10., |s| s.size_pt) * 0.75;
+    styled_mark_parts(atom, &DEFAULT)
+}
+pub fn styled_mark_parts(atom: &Atom, drawing_style: &crate::style::DrawingStyle) -> Vec<Part> {
+    let default_size = atom
+        .text_style
+        .as_ref()
+        .map_or(drawing_style.font_size_pt, |s| s.size_pt)
+        * 0.75;
     let style = GraphicStyle {
         stroke: atom.text_style.as_ref().map_or([0; 3], |s| s.color),
+        width_pt: drawing_style.line_width_pt,
         ..Default::default()
     };
     let mut out = vec![];
@@ -418,13 +426,17 @@ impl Drawing {
             && self.attach
             && let Some(id) = doc.nearest(start, radius)
         {
+            let default_label_size = doc.drawing_style.font_size_pt;
             let atom = doc
                 .atom_mut(id)
                 .ok_or("The symbol's attachment atom is unavailable")?;
             let offset = if start.distance(end) < 3. {
                 {
                     let angle = (-90. - 90. * (atom.marks.len() % 4) as f32).to_radians();
-                    let label_size = atom.text_style.as_ref().map_or(10., |s| s.size_pt);
+                    let label_size = atom
+                        .text_style
+                        .as_ref()
+                        .map_or(default_label_size, |s| s.size_pt);
                     let radius =
                         DEFAULT.world(label_size * (1.0 + 0.8 * (atom.marks.len() / 4) as f32));
                     Point::new(radius * angle.cos(), radius * angle.sin())

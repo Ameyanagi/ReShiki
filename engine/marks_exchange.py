@@ -71,7 +71,7 @@ def read_marks(root, mol, base, scale, object_map):
         object_map[el] = [identifier]
 
 
-def write_marks(fragment, atoms, atom_ids, position, scale, first_id):
+def write_marks(fragment, atoms, atom_ids, position, scale, first_id, default_label_size=10):
     for atom in atoms:
         for mark in atom.get("marks", []):
             kind = mark["kind"]
@@ -108,7 +108,7 @@ def write_marks(fragment, atoms, atom_ids, position, scale, first_id):
             # the atom's text color; fail if these would diverge.
             if atom.get("text_style", {}).get("color", [0, 0, 0]) != [0, 0, 0]:
                 raise ValueError("Colored atom marks need native/SVG/PDF/PNG export")
-            label_size = atom.get("text_style", {}).get("size_pt", 10)
+            label_size = atom.get("text_style", {}).get("size_pt", default_label_size)
             if math.hypot(mark["offset"]["x"], mark["offset"]["y"]) * scale > label_size * 1.05:
                 raise ValueError(
                     "ChemDraw can detach distant atom marks on import; use native/SVG/PDF/PNG or move the mark closer to its atom"

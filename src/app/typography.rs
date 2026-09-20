@@ -179,7 +179,10 @@ impl App {
                 .find(|a| self.selected.contains(&a.id))
             {
                 self.caption_format = TextFormat {
-                    style: atom.text_style.clone().unwrap_or_default(),
+                    style: atom
+                        .text_style
+                        .clone()
+                        .unwrap_or_else(|| self.doc.drawing_style.text_style()),
                     ..Default::default()
                 };
             }
@@ -283,7 +286,9 @@ impl App {
         }
         for atom in &mut self.doc.atoms {
             if self.selected.contains(&atom.id) {
-                let style = atom.text_style.get_or_insert_with(TextStyle::default);
+                let style = atom
+                    .text_style
+                    .get_or_insert_with(|| self.doc.drawing_style.text_style());
                 change.apply(style);
                 // Chemical scripts are derived from charge/isotope/H count.
                 style.script = Script::Normal;
@@ -327,7 +332,9 @@ impl App {
             }
             for atom in &mut self.doc.atoms {
                 if self.selected.contains(&atom.id) && !text_only {
-                    atom.text_style.get_or_insert_with(TextStyle::default).color = color;
+                    atom.text_style
+                        .get_or_insert_with(|| self.doc.drawing_style.text_style())
+                        .color = color;
                     atom.display.stereo.style.color = color;
                     if let Some(number) = &mut atom.display.number {
                         number.style.color = color;

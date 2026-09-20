@@ -23,6 +23,7 @@ pub mod cleanup;
 pub mod clipboard;
 pub mod crossings;
 pub mod document;
+pub mod document_styles;
 pub mod editing;
 pub mod engine;
 pub mod export;

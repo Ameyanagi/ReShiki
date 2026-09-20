@@ -247,7 +247,7 @@ impl App {
                     Ok(layout) => {
                         let before = self.doc.clone();
                         self.doc.page_layout = Some(layout);
-                        self.doc.version = 13;
+                        self.doc.version = 14;
                         self.changed(before);
                         self.pages.editor = None;
                         self.pages.active = self.pages.active.min(

@@ -110,6 +110,7 @@ pub fn schema() -> Value {
 
 #[derive(Debug, Clone)]
 pub struct DrawingSettings {
+    pub drawing_style: crate::style::DrawingStyle,
     pub format: TextFormat,
     pub bond_length: f32,
     pub bond_color: [u8; 3],
@@ -119,6 +120,7 @@ pub struct DrawingSettings {
 impl Default for DrawingSettings {
     fn default() -> Self {
         Self {
+            drawing_style: Default::default(),
             format: TextFormat::default(),
             bond_length: crate::style::DEFAULT.bond_length_world,
             bond_color: [0; 3],

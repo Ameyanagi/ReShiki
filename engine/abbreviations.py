@@ -123,7 +123,7 @@ def find(doc, mol, selection, label=None):
             )
         )
         used.update(members)
-    result["version"] = 13
+    result["version"] = 14
     validate(result)
     return result
 
@@ -217,6 +217,6 @@ def replace(doc, selection, label, to_document):
     result["abbreviations"].append(
         dict(label=label, reverse_label=PRESETS[label][1], anchor=target, members=members)
     )
-    result["version"] = 13
+    result["version"] = 14
     validate(result)
     return result

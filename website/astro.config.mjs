@@ -41,6 +41,7 @@ export default defineConfig({
             "selection-cleanup",
             "typography",
             "jacs-style",
+            "drawing-styles",
             "graphics",
             "pictures",
             "scientific-symbols",

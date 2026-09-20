@@ -6,7 +6,7 @@ Updated 2026-09-20 for Moruno 0.2.0. This inventory records supported workflows,
 explicit limitations and planned work. A supported subset is not a claim of
 complete coverage for every chemical structure or document.
 
-The largest remaining everyday gaps include document styles and broader
+The largest remaining everyday gaps include reusable stationery and broader
 clipboard interchange. Canvas text editing supports drafts and a
 caret; full rich-text caret layout remains partial. Advanced reaction, query,
 polymer and spectroscopy workflows also remain incomplete.
@@ -109,8 +109,8 @@ Template placement offers explicit new-bond connection, shared-atom and fused-bo
 | Actual-size view                                      | Missing                  | Zoom is a viewport magnification, not calibrated screen-to-paper size.                                                                                                                                                                                                                                                                                                                                                                                                     |
 | Page size / margins / multipage layout                | Supported subset         | Standard/custom paper, four margins, a uniform page grid, canvas guides, navigation and multipage vector PDF; no automatic pagination or per-sheet sizes. [Publication pages](publication-pages.md).                                                                                                                                                                                                                                                                       |
 | Print / page setup                                    | Supported macOS subset   | Native asynchronous print dialog, page ranges, scale, Save to PDF and selection printing; preserves publication dimensions and placement. Physical printer output and other platforms remain unverified. [Workflow and checks](publication-pages.md).                                                                                                                                                                                                                      |
-| Editable document/object styles                       | Partial                  | Stored text and graphic overrides; no editable document-wide bond/label preset.                                                                                                                                                                                                                                                                                                                                                                                            |
-| Journal stationery / reusable settings                | Missing                  | No selectable journal formats or custom stationery.                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Editable document/object styles                       | Partial                  | Editable document fonts and bond dimensions, preview, preset files, physical exchange and Undo. See [drawing styles](drawing-styles.md).                                                                                                                                                                                                                                                                                                                                   |
+| Journal stationery / reusable settings                | Missing                  | JACS / ACS and Presentation settings plus custom style files; complete page/object stationery remains missing.                                                                                                                                                                                                                                                                                                                                                             |
 | Document annotations / attached data                  | Missing                  | No structured document metadata or object-data attachments.                                                                                                                                                                                                                                                                                                                                                                                                                |
 
 ## Chemistry, reactions and specialist workflows
@@ -164,7 +164,7 @@ Template placement offers explicit new-bond connection, shared-atom and fused-bo
 
 1. Broader clipboard compatibility, editable external picture exchange, Office verification and cross-platform exchange.
 2. Broader chemical nicknames and full rich-text caret layout.
-3. Document styles, stationery, calibrated actual-size view, advanced page composition and printing on other platforms.
+3. Complete stationery, calibrated actual-size view, advanced page composition and printing on other platforms.
 4. Reaction roles, atom mapping, query/polymer data, naming and spectra.
 5. Native menus, accessibility, document tabs and release distribution.
 

@@ -14,6 +14,7 @@ mod assistant;
 mod atom_labels;
 mod cleanup;
 mod clipboard;
+mod document_styles;
 mod file_shortcuts;
 mod graphics;
 mod icons;
@@ -30,6 +31,7 @@ mod workspace;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum InspectorTab {
+    DrawingStyle,
     Assistant,
     Pages,
     Abbreviations,
@@ -41,6 +43,7 @@ pub enum InspectorTab {
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    DrawingStyle(document_styles::Action),
     InlineText(inline_text::Action),
     Join(joining::Action),
     Pages(pages::Action),
@@ -176,7 +179,7 @@ pub enum Message {
         result: Box<Result<Response, String>>,
     },
     Opened(Option<(PathBuf, Result<String, String>)>),
-    Saved(u64, Document, Result<Option<PathBuf>, String>),
+    Saved(u64, Box<Document>, Result<Option<PathBuf>, String>),
     Exported(Result<Option<PathBuf>, String>),
     Close(iced::window::Id),
     Discard,
@@ -213,6 +216,7 @@ struct CleanupPreview {
 }
 
 pub struct App {
+    styles: document_styles::State,
     palette: Option<palettes::Family>,
     assistant: assistant::State,
     hover: Option<(Point, u64)>,
@@ -302,6 +306,7 @@ impl App {
             .map(|r| r.candidates())
             .unwrap_or_default();
         let mut app = Self {
+            styles: Default::default(),
             palette: None,
             assistant: assistant::State::new(),
             hover: None,
@@ -578,6 +583,7 @@ impl App {
             }
             self.doc.reconcile_molecule_groups();
         }
+        let drawing_style_changed = before.drawing_style != self.doc.drawing_style;
         let chemistry_changed = chemistry_changed(&before, &self.doc);
         if chemistry_changed {
             moruno::atom_labels::clear_computed(&mut self.doc);
@@ -598,6 +604,9 @@ impl App {
             }
             .into();
             self.sync_pictures();
+        }
+        if drawing_style_changed {
+            self.sync_drawing_defaults();
         }
         self.selected.retain(|id| self.doc.all_ids().contains(id));
     }
@@ -636,6 +645,7 @@ impl App {
                 self.selected.clear();
                 self.camera = Camera::default();
                 self.pages = pages::State::default();
+                self.styles.editor = None;
                 self.fit_to_view = true;
                 self.analysis = None;
                 self.error = false;
@@ -706,6 +716,12 @@ impl App {
         }
         if let Message::InlineText(action) = message {
             return self.inline_action(action);
+        }
+        if matches!(message, Message::Escape)
+            && self.inspector_tab == InspectorTab::DrawingStyle
+            && self.styles.editor.is_some()
+        {
+            return self.drawing_style_action(document_styles::Action::Cancel);
         }
         if matches!(message, Message::Escape) {
             return if self.inline_text.is_some() {
@@ -813,6 +829,7 @@ impl App {
         ) || (self.inspector_tab != InspectorTab::Templates
             && matches!(&message, Message::Canvas(Edit::Select(ids)) if ids.iter().any(|id| self.doc.annotations.iter().any(|a| a.id == *id) || self.doc.graphics.iter().any(|g|g.id==*id))));
         match message {
+            Message::DrawingStyle(action) => return self.drawing_style_action(action),
             Message::Pages(action) => return self.page_action(action),
             Message::Printing(action) => return self.print_action(action),
             Message::Pictures(action) => return self.picture_action(action),
@@ -870,10 +887,14 @@ impl App {
             }
             Message::ResetBondDrawing => {
                 self.bond_drawing = Default::default();
-                self.drawing_length_input = moruno::style::DEFAULT.bond_length_pt.to_string();
+                self.bond_drawing.length = self.doc.drawing_style.bond_length_world;
+                self.drawing_length_input = self.doc.drawing_style.bond_length_pt.to_string();
                 self.chain_drawing.angle = 120.;
                 self.chain_angle_input = "120".into();
-                self.status = "JACS / ACS bond defaults · 14.4 pt length · 120° chain angle".into();
+                self.status = format!(
+                    "{} bond defaults · {} pt length · 120° chain angle",
+                    self.doc.drawing_style.name, self.doc.drawing_style.bond_length_pt
+                );
                 self.error = false;
             }
             Message::FixedLength(on) => self.bond_drawing.fixed_length = on,
@@ -979,7 +1000,10 @@ impl App {
                         kind,
                         lo.offset(-padding, -padding),
                         hi.offset(padding, padding),
-                        GraphicStyle::default(),
+                        GraphicStyle {
+                            width_pt: self.doc.drawing_style.line_width_pt,
+                            ..Default::default()
+                        },
                         BracketSides::Both,
                         false,
                     ));
@@ -1201,6 +1225,9 @@ impl App {
             }
             Message::ToggleInspector => self.inspector_open = !self.inspector_open,
             Message::Inspector(tab) => {
+                if tab != InspectorTab::DrawingStyle {
+                    self.styles.editor = None;
+                }
                 if tab == InspectorTab::Labels {
                     let atoms: Vec<_> = self
                         .doc
@@ -1334,6 +1361,7 @@ impl App {
             Message::ArrowStyle(style) => {
                 self.arrow_style = style;
                 self.arrows.style = moruno::arrows::ArrowStyle::preset(style);
+                self.arrows.style.width_pt = self.doc.drawing_style.line_width_pt;
                 self.tool = Tool::Arrow;
                 self.inspector_open = true;
                 self.inspector_tab = InspectorTab::Properties;
@@ -1544,7 +1572,9 @@ impl App {
                 if let Some(candidate) = self.recovered.first().cloned() {
                     let before = self.doc.clone();
                     self.doc = candidate.snapshot.document;
-                    self.doc.version = 13;
+                    self.doc.version = 14;
+                    self.sync_drawing_defaults();
+                    self.styles.editor = None;
                     self.path = None;
                     self.saved = Document::default();
                     self.file_epoch = self.file_epoch.wrapping_add(1);
@@ -1822,6 +1852,10 @@ impl App {
                     self.sync_graphics();
                     self.sync_arrows();
                     self.sync_bonds();
+                    if before.drawing_style != self.doc.drawing_style {
+                        self.sync_drawing_defaults();
+                        self.styles.editor = None;
+                    }
                     if before.page_layout != self.doc.page_layout {
                         self.pages.editor = self
                             .pages
@@ -1915,11 +1949,13 @@ impl App {
                                         Ok(doc)
                                     }) {
                                     Ok(mut doc) => {
-                                        doc.version = 13;
+                                        doc.version = 14;
                                         moruno::atom_labels::clear_computed(&mut doc);
                                         self.clear_recovery();
                                         self.file_epoch = self.file_epoch.wrapping_add(1);
                                         self.doc = doc;
+                                        self.sync_drawing_defaults();
+                                        self.styles.editor = None;
                                         self.saved = self.doc.clone();
                                         self.path = Some(path);
                                         self.history = History::default();
@@ -1988,7 +2024,7 @@ impl App {
                         moruno::storage::write_atomic(&path, &bytes)?;
                         Ok(Some(path))
                     },
-                    move |result| Message::Saved(epoch, snapshot.clone(), result),
+                    move |result| Message::Saved(epoch, Box::new(snapshot.clone()), result),
                 );
             }
             Message::Saved(epoch, snapshot, result) => match result {
@@ -1997,7 +2033,7 @@ impl App {
                         self.status = "Previous document saved".into();
                         return Task::none();
                     }
-                    self.saved = snapshot;
+                    self.saved = *snapshot;
                     self.path = Some(path);
                     self.status = "Document saved".into();
                     self.error = false;
@@ -2578,6 +2614,7 @@ impl App {
 /// Hydrogen labels are a computed display cache, not unsaved drawing edits.
 fn same_drawing(a: &Document, b: &Document) -> bool {
     a.version == b.version
+        && a.drawing_style == b.drawing_style
         && a.page_layout == b.page_layout
         && a.atom_labels == b.atom_labels
         && a.bonds.len() == b.bonds.len()
@@ -3846,7 +3883,7 @@ mod tests {
         app.doc.add_atom("O", Point::default());
         let _ = app.update(Message::Saved(
             0,
-            snapshot,
+            Box::new(snapshot),
             Ok(Some("example.moruno".into())),
         ));
         assert!(app.dirty());
@@ -3859,7 +3896,7 @@ mod tests {
         let _ = app.perform(Pending::New);
         let _ = app.update(Message::Saved(
             0,
-            snapshot,
+            Box::new(snapshot),
             Ok(Some("previous.moruno".into())),
         ));
         assert!(app.path.is_none());

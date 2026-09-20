@@ -2,7 +2,7 @@
 use crate::{
     document::{Document, Point},
     scene::Primitive,
-    style::DEFAULT,
+    style::{DEFAULT, DrawingStyle},
 };
 #[derive(Debug, Clone, Copy)]
 pub struct Gap {
@@ -17,12 +17,12 @@ fn cross(a: Point, b: Point) -> f32 {
 fn delta(a: Point, b: Point) -> Point {
     Point::new(b.x - a.x, b.y - a.y)
 }
-fn thickness(bond: &crate::document::Bond) -> f32 {
+fn thickness(bond: &crate::document::Bond, style: &DrawingStyle) -> f32 {
     let width =
         if ["bold", "wedge", "hollow_wedge", "hashed", "hash"].contains(&bond.display.as_str()) {
-            DEFAULT.world(DEFAULT.bold_width_pt)
+            style.world(style.bold_width_pt)
         } else {
-            DEFAULT.line_width()
+            style.line_width()
         };
     let lines = match bond.order {
         2 | 4 | 7 => 1.,
@@ -30,7 +30,7 @@ fn thickness(bond: &crate::document::Bond) -> f32 {
         6 => 3.,
         _ => 0.,
     };
-    width + lines * DEFAULT.bond_length_world * DEFAULT.bond_spacing_ratio
+    width + lines * style.bond_length_world * style.bond_spacing_ratio
 }
 /// Sorted sweep avoids checking every pair of well-separated molecules.
 pub fn gaps(doc: &Document) -> Vec<Vec<Gap>> {
@@ -93,8 +93,9 @@ pub fn gaps(doc: &Document) -> Vec<Vec<Gap>> {
                 c.distance(*d)
             };
             let sine = determinant.abs() / (length * other_length).max(0.001);
-            let half =
-                ((thickness(over) * 0.5 + DEFAULT.world(1.1)) / sine.max(0.15)).min(length * 0.22);
+            let half = ((thickness(over, &doc.drawing_style) * 0.5 + DEFAULT.world(1.1))
+                / sine.max(0.15))
+            .min(length * 0.22);
             if let Some(list) = gaps.get_mut(under) {
                 list.push(Gap {
                     origin: from,

@@ -389,6 +389,7 @@ impl App {
                     return Task::none();
                 }
                 let settings = DrawingSettings {
+                    drawing_style: self.doc.drawing_style.clone(),
                     format: self.caption_format.clone(),
                     bond_length: self.bond_drawing.length,
                     bond_color: super::graphics::parse_color(&self.bond_color_input)
@@ -396,7 +397,7 @@ impl App {
                     arrow_style: self.arrows.style.clone(),
                     labels: self.doc.atom_labels.clone(),
                 };
-                let request = json!({"request":prompt,"conversation":self.assistant.messages,"previous_proposal":self.assistant.draft.as_ref().map(|d|&d.proposal),"drawing_summary":{"atoms":context.atoms.len(),"bonds":context.bonds.len(),"arrows":context.arrows.len()},"selected_ids":self.selected,"placement":if self.assistant.replace {"replace selected objects"} else {"add new drawing objects"},"style":{"name":"JACS / ACS","bond_length_pt":self.bond_drawing.length * moruno::style::DEFAULT.points_per_world(),"text":settings.format,"bond_color":settings.bond_color}}).to_string();
+                let request = json!({"request":prompt,"conversation":self.assistant.messages,"previous_proposal":self.assistant.draft.as_ref().map(|d|&d.proposal),"drawing_summary":{"atoms":context.atoms.len(),"bonds":context.bonds.len(),"arrows":context.arrows.len()},"selected_ids":self.selected,"placement":if self.assistant.replace {"replace selected objects"} else {"add new drawing objects"},"style":{"name":self.doc.drawing_style.name,"bond_length_pt":self.bond_drawing.length * moruno::style::DEFAULT.points_per_world(),"text":settings.format,"bond_color":settings.bond_color}}).to_string();
                 let replace = if self.assistant.replace {
                     self.doc.expand_abbreviation_selection(&self.selected)
                 } else {

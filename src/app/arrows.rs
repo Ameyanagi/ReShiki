@@ -57,6 +57,13 @@ impl Default for State {
         }
     }
 }
+impl State {
+    pub(super) fn refresh_inputs(&mut self) {
+        self.numbers = FIELDS.map(|f| f.get(&self.style).to_string());
+        let [r, g, b] = self.style.color;
+        self.color = format!("#{r:02X}{g:02X}{b:02X}");
+    }
+}
 #[derive(Debug, Clone)]
 pub enum Action {
     Head(Head),
@@ -89,9 +96,7 @@ impl App {
                 self.inspector_tab = InspectorTab::Properties;
             }
         }
-        self.arrows.numbers = FIELDS.map(|f| f.get(&self.arrows.style).to_string());
-        let [r, g, b] = self.arrows.style.color;
-        self.arrows.color = format!("#{r:02X}{g:02X}{b:02X}");
+        self.arrows.refresh_inputs();
     }
     pub(super) fn arrow_action(&mut self, action: Action) {
         match action {
@@ -128,7 +133,10 @@ impl App {
                         .parse::<f32>()
                         .map_err(|_| "Enter a number and press Return")?,
                 ),
-                Action::Reset => *s = ArrowStyle::preset(self.arrow_style),
+                Action::Reset => {
+                    *s = ArrowStyle::preset(self.arrow_style);
+                    s.width_pt = self.doc.drawing_style.line_width_pt;
+                }
                 _ => {}
             }
             s.validate()

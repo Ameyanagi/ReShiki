@@ -768,7 +768,10 @@ class ChemistryTests(unittest.TestCase):
         imported_delta = (
             roundtrip["arrows"][0]["start"]["x"] - roundtrip["atoms"][0]["position"]["x"]
         )
-        self.assertAlmostEqual(original_delta, imported_delta, places=3)
+        # This legacy fixture declares 42 pt bonds. Preserve that physical size,
+        # rather than silently normalizing it to the newer 14.4 pt default.
+        scale = float(ET.fromstring(xml).get("BondLength")) / 14.4
+        self.assertAlmostEqual(original_delta * scale, imported_delta, places=3)
         svg = ET.parse(fixtures / "ui-drawn-ethanol.svg")
         self.assertIn("oxidation", "".join(svg.getroot().itertext()))
 

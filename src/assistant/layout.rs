@@ -105,6 +105,7 @@ async fn prepare(
     if doc.atoms.len() > 300 {
         return Err("A proposed molecule exceeds 300 atoms".into());
     }
+    doc.drawing_style = settings.drawing_style.clone();
     let scale = settings.bond_length / crate::style::DEFAULT.bond_length_world;
     let angle = molecule.rotation.to_radians();
     let (sin, cos) = angle.sin_cos();
@@ -261,6 +262,7 @@ pub async fn render(
     }
     let gap = settings.bond_length;
     let mut doc = Document {
+        drawing_style: settings.drawing_style.clone(),
         atom_labels: settings.labels.clone(),
         ..Default::default()
     };

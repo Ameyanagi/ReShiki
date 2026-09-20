@@ -70,6 +70,7 @@ def toggle(doc, selection, read, write):
 def circles(doc, mol):
     ids = [a["id"] for a in doc["atoms"]]
     edges = {frozenset((b["a"], b["b"])): b for b in doc["bonds"]}
+    style = doc.get("drawing_style", {})
     result = []
     for ring in mol.GetRingInfo().AtomRings():
         bonds = [edges[frozenset((ids[a], ids[b]))] for a, b in zip(ring, (*ring[1:], ring[0]))]
@@ -92,8 +93,10 @@ def circles(doc, mol):
             lengths.append(length)
         if len(distances) != len(points):
             continue
-        radius = min(distances) - sum(lengths) / len(lengths) * 0.18
-        if radius > 3.5:
+        radius = min(distances) - sum(lengths) / len(lengths) * style.get(
+            "bond_spacing_ratio", 0.18
+        )
+        if radius > style.get("line_width_pt", 0.6) * 42 / 14.4 * 2:
             result.append((center, radius, bonds[0].get("color", [0, 0, 0])))
     return result
 
@@ -132,6 +135,7 @@ def remove_owned_circles(root, mol, base, scale):
             for i in range(mol.GetNumAtoms())
         ],
         bonds=base["bonds"],
+        drawing_style=base.get("drawing_style", {}),
     )
     expected = circles(doc, mol)
     for fragment in root.iter("fragment"):

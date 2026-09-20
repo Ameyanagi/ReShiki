@@ -10,6 +10,7 @@ pub struct Circle {
     pub center: Point,
     pub radius: f32,
     pub color: [u8; 3],
+    pub width_pt: f32,
 }
 impl Circle {
     pub fn graphic(&self) -> Graphic {
@@ -20,6 +21,7 @@ impl Circle {
             self.center.offset(self.radius, self.radius),
             GraphicStyle {
                 stroke: self.color,
+                width_pt: self.width_pt,
                 ..Default::default()
             },
             Default::default(),
@@ -125,13 +127,14 @@ pub fn circles(doc: &Document) -> Vec<Circle> {
             length += l;
         }
         let radius =
-            clearance - length / points.len() as f32 * crate::style::DEFAULT.bond_spacing_ratio;
-        if radius.is_finite() && radius > crate::style::DEFAULT.line_width() * 2. {
+            clearance - length / points.len() as f32 * doc.drawing_style.bond_spacing_ratio;
+        if radius.is_finite() && radius > doc.drawing_style.line_width() * 2. {
             result.push(Circle {
                 atoms,
                 center,
                 radius,
                 color: b.color,
+                width_pt: doc.drawing_style.line_width_pt,
             });
         }
     }

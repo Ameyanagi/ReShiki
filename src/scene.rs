@@ -34,7 +34,9 @@ fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
     if let Some(group) = doc.abbreviation(a.id) {
         let style = crate::typography::TextStyle {
             formula: true,
-            ..a.text_style.clone().unwrap_or_default()
+            ..a.text_style
+                .clone()
+                .unwrap_or_else(|| doc.drawing_style.text_style())
         };
         let content = group.text(doc);
         let size = STYLE.world(style.size_pt);
@@ -76,7 +78,10 @@ fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
     if !visible(a, doc) {
         return vec![];
     }
-    let style = a.text_style.clone().unwrap_or_default();
+    let style = a
+        .text_style
+        .clone()
+        .unwrap_or_else(|| doc.drawing_style.text_style());
     let text_width = |text: &str, size| crate::style::styled_text_width(text, size, &style);
     let text = |position, content, size| Primitive::Text {
         position,
@@ -232,7 +237,7 @@ pub fn selection_bounds(doc: &Document, ids: &[u64]) -> Option<(Point, Point)> {
         .filter(|a| ids.contains(&a.id) && doc.atom_visible(a.id))
     {
         points.push(atom.position);
-        for part in crate::scientific::mark_parts(atom) {
+        for part in crate::scientific::styled_mark_parts(atom, &doc.drawing_style) {
             points.extend(
                 part.commands
                     .iter()
@@ -261,11 +266,17 @@ pub fn selection_bounds(doc: &Document, ids: &[u64]) -> Option<(Point, Point)> {
     })
 }
 
-fn label_end(atom: &Atom, ux: f32, uy: f32, bounds: Option<(Point, Point)>, max: f32) -> Point {
+fn label_end(
+    atom: &Atom,
+    ux: f32,
+    uy: f32,
+    bounds: Option<(Point, Point)>,
+    max: f32,
+    margin: f32,
+) -> Point {
     let Some((lo, hi)) = bounds else {
         return atom.position;
     };
-    let margin = STYLE.world(STYLE.margin_width_pt);
     let dx = if ux > 0.001 {
         (hi.x + margin - atom.position.x) / ux
     } else if ux < -0.001 {
@@ -350,6 +361,7 @@ fn ring_center(doc: &Document, from: u64, to: u64) -> Option<Point> {
 }
 
 pub fn primitives(doc: &Document) -> Vec<Primitive> {
+    let style = &doc.drawing_style;
     let mut out = vec![];
     let mut graphics: Vec<_> = doc.graphics.iter().collect();
     graphics.sort_by_key(|g| g.layer);
@@ -412,6 +424,7 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             uy,
             label_bounds.get(&a.id).copied().flatten(),
             length * 0.45,
+            style.world(style.margin_width_pt),
         );
         let end = label_end(
             z,
@@ -419,6 +432,7 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             -uy,
             label_bounds.get(&z.id).copied().flatten(),
             length * 0.45,
+            style.world(style.margin_width_pt),
         );
         let nx = -uy;
         let ny = ux;
@@ -427,16 +441,16 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             "wedge" => out.push(Primitive::Polygon(vec![
                 start,
                 end.offset(
-                    nx * STYLE.world(STYLE.bold_width_pt) / 2.0,
-                    ny * STYLE.world(STYLE.bold_width_pt) / 2.0,
+                    nx * style.world(style.bold_width_pt) / 2.0,
+                    ny * style.world(style.bold_width_pt) / 2.0,
                 ),
                 end.offset(
-                    -nx * STYLE.world(STYLE.bold_width_pt) / 2.0,
-                    -ny * STYLE.world(STYLE.bold_width_pt) / 2.0,
+                    -nx * style.world(style.bold_width_pt) / 2.0,
+                    -ny * style.world(style.bold_width_pt) / 2.0,
                 ),
             ])),
             "hollow_wedge" => {
-                let width = STYLE.world(STYLE.bold_width_pt) / 2.0;
+                let width = style.world(style.bold_width_pt) / 2.0;
                 let points = [
                     start,
                     end.offset(nx * width, ny * width),
@@ -445,12 +459,12 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
                 ];
                 for pair in points.windows(2) {
                     if let [a, b] = pair {
-                        out.push(Primitive::Line(*a, *b, STYLE.line_width()));
+                        out.push(Primitive::Line(*a, *b, style.line_width()));
                     }
                 }
             }
             "hash" | "hashed" => {
-                let spacing = STYLE.world(STYLE.hash_spacing_pt);
+                let spacing = style.world(style.hash_spacing_pt);
                 let count = (start.distance(end) / spacing).floor().max(1.0) as u32;
                 for i in 1..=count {
                     let t = (i as f32 * spacing / start.distance(end)).min(1.0);
@@ -461,24 +475,24 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
                     let t = if b.display == "hashed" { 1.0 } else { t };
                     out.push(Primitive::Line(
                         p.offset(
-                            nx * t * STYLE.world(STYLE.bold_width_pt) / 2.0,
-                            ny * t * STYLE.world(STYLE.bold_width_pt) / 2.0,
+                            nx * t * style.world(style.bold_width_pt) / 2.0,
+                            ny * t * style.world(style.bold_width_pt) / 2.0,
                         ),
                         p.offset(
-                            -nx * t * STYLE.world(STYLE.bold_width_pt) / 2.0,
-                            -ny * t * STYLE.world(STYLE.bold_width_pt) / 2.0,
+                            -nx * t * style.world(style.bold_width_pt) / 2.0,
+                            -ny * t * style.world(style.bold_width_pt) / 2.0,
                         ),
-                        STYLE.line_width(),
+                        style.line_width(),
                     ));
                 }
             }
             "wavy" if b.order == 2 => {
-                let half = STYLE.bond_length_world * STYLE.bond_spacing_ratio / 2.0;
+                let half = style.bond_length_world * style.bond_spacing_ratio / 2.0;
                 for sign in [-1.0, 1.0] {
                     out.push(Primitive::Line(
                         start.offset(nx * half * sign, ny * half * sign),
                         end.offset(-nx * half * sign, -ny * half * sign),
-                        STYLE.line_width(),
+                        style.line_width(),
                     ));
                 }
             }
@@ -491,12 +505,12 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
                         start.x + (end.x - start.x) * t + nx * offset,
                         start.y + (end.y - start.y) * t + ny * offset,
                     );
-                    out.push(Primitive::Line(prev, p, STYLE.line_width()));
+                    out.push(Primitive::Line(prev, p, style.line_width()));
                     prev = p;
                 }
             }
             _ => {
-                let spacing = STYLE.bond_length_world * STYLE.bond_spacing_ratio;
+                let spacing = style.bond_length_world * style.bond_spacing_ratio;
                 let inward = if b.order == 4 {
                     automatic_double_side(doc, b).unwrap_or(1.)
                 } else {
@@ -540,6 +554,7 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
                                 crate::graphics::PathCommand::Line(last),
                             ],
                             style: crate::graphics::GraphicStyle {
+                                width_pt: style.line_width_pt,
                                 pattern: if display == "dotted" {
                                     crate::graphics::LinePattern::Dotted
                                 } else {
@@ -554,9 +569,9 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
                             first,
                             last,
                             if display == "bold" {
-                                STYLE.world(STYLE.bold_width_pt)
+                                style.world(style.bold_width_pt)
                             } else {
-                                STYLE.line_width()
+                                style.line_width()
                             },
                         ));
                     }
@@ -574,14 +589,14 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
                                 start.x + (end.x - start.x) * v + nx * spacing * inward,
                                 start.y + (end.y - start.y) * v + ny * spacing * inward,
                             ),
-                            STYLE.line_width(),
+                            style.line_width(),
                         ));
                     }
                 }
             }
         }
         if b.order == 5 && b.display == "plain" {
-            head(&mut out, end, uy.atan2(ux), false);
+            head(&mut out, end, uy.atan2(ux), false, style.line_width());
         }
         if let Some(gaps) = crossing_gaps.get(bond_index).filter(|g| !g.is_empty()) {
             let bond_primitives = out.drain(bond_start..).collect();
@@ -634,7 +649,7 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
     for a in doc.atoms.iter().filter(|a| doc.atom_visible(a.id)) {
         out.extend(labels.get(&a.id).into_iter().flatten().cloned());
         out.extend(
-            crate::scientific::mark_parts(a)
+            crate::scientific::styled_mark_parts(a, &doc.drawing_style)
                 .into_iter()
                 .map(|p| Primitive::Path {
                     commands: p.commands,
@@ -674,13 +689,13 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
     );
     out
 }
-fn head(out: &mut Vec<Primitive>, end: Point, angle: f32, half: bool) {
+fn head(out: &mut Vec<Primitive>, end: Point, angle: f32, half: bool, width: f32) {
     let a = end.offset(
         -angle.cos() * 10. - angle.sin() * 3.5,
         -angle.sin() * 10. + angle.cos() * 3.5,
     );
     if half {
-        out.push(Primitive::Line(end, a, STYLE.line_width()));
+        out.push(Primitive::Line(end, a, width));
     } else {
         let b = end.offset(
             -angle.cos() * 10. + angle.sin() * 3.5,
