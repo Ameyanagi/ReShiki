@@ -18,6 +18,11 @@ executable.parent.mkdir(parents=True, exist_ok=True)
 temporary_executable = executable.with_name('moruno.new')
 shutil.copy2(root / f'target/{profile}/moruno', temporary_executable)
 temporary_executable.replace(executable)
+clipboard = executable.with_name('moruno-clipboard')
+clipboard_temporary = clipboard.with_suffix('.new')
+subprocess.run(['swiftc', '-O', str(root / 'native/macos/Clipboard.swift'), '-o', str(clipboard_temporary)], check=True)
+clipboard_temporary.replace(clipboard)
+
 if args.standalone:
     work = root / 'target/pyinstaller'
     work.mkdir(parents=True, exist_ok=True)

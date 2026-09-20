@@ -21,6 +21,10 @@ pub enum Transform {
 }
 #[derive(Debug, Clone, Copy)]
 pub enum Arrange {
+    AlignLeft,
+    AlignRight,
+    AlignTop,
+    AlignBottom,
     AlignHorizontal,
     AlignVertical,
     DistributeHorizontal,
@@ -28,7 +32,11 @@ pub enum Arrange {
 }
 
 pub fn selection(doc: &Document, ids: &[u64]) -> Document {
+    let ids = doc.expand_abbreviation_selection(ids);
+    let ids = ids.as_slice();
     let mut part = doc.clone();
+    part.groups
+        .retain(|g| g.members.iter().all(|id| ids.contains(id)));
     let removed: Vec<_> = doc
         .all_ids()
         .into_iter()
@@ -41,44 +49,131 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Document {
 }
 
 pub fn append(doc: &mut Document, source: &Document, offset: Point) -> Vec<u64> {
+    if doc.validate().is_err()
+        || source.validate().is_err()
+        || !offset.x.is_finite()
+        || !offset.y.is_finite()
+    {
+        return vec![];
+    }
     let first = doc.next_id();
-    let mapping: HashMap<_, _> = source
+    let mapping: Option<HashMap<_, _>> = source
         .all_ids()
         .into_iter()
+        .chain(source.groups.iter().map(|g| g.id))
         .enumerate()
-        .map(|(i, id)| (id, first + i as u64))
+        .map(|(i, id)| {
+            first
+                .checked_add(i as u64)
+                .filter(|next| *next < u64::MAX)
+                .map(|next| (id, next))
+        })
         .collect();
+    let Some(mapping) = mapping else {
+        return vec![];
+    };
     let mut part = source.clone();
     for a in &mut part.atoms {
-        a.id = mapping[&a.id];
+        // A pasted fragment keeps its source appearance when document defaults differ.
+        if source.atom_labels != doc.atom_labels {
+            a.display.carbons.get_or_insert(source.atom_labels.carbons);
+            a.display
+                .hydrogens
+                .get_or_insert(source.atom_labels.hydrogens);
+            a.display
+                .stereo
+                .show
+                .get_or_insert(source.atom_labels.stereo);
+        }
+        let Some(mapped) = mapping.get(&a.id).copied() else {
+            return vec![];
+        };
+        a.id = mapped;
         a.position = a.position.offset(offset.x, offset.y);
         if let Some(s) = &mut a.stereo {
             for id in &mut s.neighbors {
-                *id = mapping[id];
+                let Some(mapped) = mapping.get(id).copied() else {
+                    return vec![];
+                };
+                *id = mapped;
             }
         }
     }
     for b in &mut part.bonds {
-        b.a = mapping[&b.a];
-        b.b = mapping[&b.b];
+        if source.atom_labels.stereo != doc.atom_labels.stereo {
+            b.indicator.show.get_or_insert(source.atom_labels.stereo);
+        }
+        let Some(mapped) = mapping.get(&b.a).copied() else {
+            return vec![];
+        };
+        b.a = mapped;
+        let Some(mapped) = mapping.get(&b.b).copied() else {
+            return vec![];
+        };
+        b.b = mapped;
         for id in &mut b.stereo_atoms {
-            *id = mapping[id];
+            let Some(mapped) = mapping.get(id).copied() else {
+                return vec![];
+            };
+            *id = mapped;
         }
     }
     for a in &mut part.annotations {
-        a.id = mapping[&a.id];
+        let Some(mapped) = mapping.get(&a.id).copied() else {
+            return vec![];
+        };
+        a.id = mapped;
         a.position = a.position.offset(offset.x, offset.y);
     }
     for a in &mut part.arrows {
-        a.id = mapping[&a.id];
-        a.start = a.start.offset(offset.x, offset.y);
-        a.end = a.end.offset(offset.x, offset.y);
+        let Some(mapped) = mapping.get(&a.id).copied() else {
+            return vec![];
+        };
+        a.id = mapped;
+        a.map_points(|p| p.offset(offset.x, offset.y));
+    }
+    for g in &mut part.graphics {
+        let Some(mapped) = mapping.get(&g.id).copied() else {
+            return vec![];
+        };
+        g.id = mapped;
+        g.origin = g.origin.offset(offset.x, offset.y);
+    }
+    for g in &mut part.groups {
+        let Some(mapped) = mapping.get(&g.id).copied() else {
+            return vec![];
+        };
+        g.id = mapped;
+        for id in &mut g.members {
+            let Some(mapped) = mapping.get(id).copied() else {
+                return vec![];
+            };
+            *id = mapped;
+        }
+    }
+    for group in &mut part.abbreviations {
+        let Some(anchor) = mapping.get(&group.anchor).copied() else {
+            return vec![];
+        };
+        group.anchor = anchor;
+        for id in &mut group.members {
+            let Some(mapped) = mapping.get(id).copied() else {
+                return vec![];
+            };
+            *id = mapped;
+        }
     }
     let ids = part.all_ids();
     doc.atoms.extend(part.atoms);
     doc.bonds.extend(part.bonds);
     doc.annotations.extend(part.annotations);
     doc.arrows.extend(part.arrows);
+    doc.graphics.extend(part.graphics);
+    doc.groups.extend(part.groups);
+    doc.abbreviations.extend(part.abbreviations);
+    if !doc.abbreviations.is_empty() {
+        doc.version = doc.version.max(11);
+    }
     ids
 }
 
@@ -86,7 +181,7 @@ fn point_bounds(doc: &Document, ids: &[u64]) -> Option<(Point, Point)> {
     let points = doc
         .atoms
         .iter()
-        .filter(|a| ids.contains(&a.id))
+        .filter(|a| ids.contains(&a.id) && doc.atom_visible(a.id))
         .map(|a| a.position)
         .chain(
             doc.annotations
@@ -99,6 +194,15 @@ fn point_bounds(doc: &Document, ids: &[u64]) -> Option<(Point, Point)> {
                 .iter()
                 .filter(|a| ids.contains(&a.id))
                 .flat_map(|a| [a.start, a.end]),
+        )
+        .chain(
+            doc.graphics
+                .iter()
+                .filter(|g| ids.contains(&g.id))
+                .flat_map(|g| {
+                    let (lo, hi) = g.bounds();
+                    [lo, hi]
+                }),
         );
     points.fold(None, |bounds, p| {
         Some(match bounds {
@@ -136,10 +240,13 @@ pub fn transform(doc: &mut Document, ids: &[u64], transform: Transform) {
         // Reflect the projection while preserving the molecule's stereochemistry.
         for b in &mut doc.bonds {
             if ids.contains(&b.a) && ids.contains(&b.b) {
-                b.display = match b.display.as_str() {
-                    "wedge" => "hash",
-                    "hash" => "wedge",
-                    other => other,
+                b.double_position = b.double_position.reversed();
+                b.display = match (b.order, b.display.as_str()) {
+                    (1, "wedge") => "hash",
+                    (1, "hash") => "wedge",
+                    (1, "hollow_wedge" | "bold") => "hashed",
+                    (1, "hashed") => "hollow_wedge",
+                    (_, other) => other,
                 }
                 .into();
             }
@@ -165,6 +272,13 @@ pub fn transform_about(doc: &mut Document, ids: &[u64], pivot: Point, scale: f32
 }
 
 fn map_positions(doc: &mut Document, ids: &[u64], convert: impl Fn(Point) -> Point) {
+    let ids = doc.expand_abbreviation_selection(ids);
+    let ids = ids.as_slice();
+    for graphic in &mut doc.graphics {
+        if ids.contains(&graphic.id) {
+            graphic.map_positions(&convert);
+        }
+    }
     let boundary: Vec<_> = doc
         .bonds
         .iter()
@@ -176,7 +290,32 @@ fn map_positions(doc: &mut Document, ids: &[u64], convert: impl Fn(Point) -> Poi
     }
     for a in &mut doc.atoms {
         if ids.contains(&a.id) {
-            a.position = convert(a.position);
+            let position = convert(a.position);
+            for offset in [
+                a.display.number.as_mut().and_then(|n| n.offset.as_mut()),
+                a.display.stereo.offset.as_mut(),
+            ]
+            .into_iter()
+            .flatten()
+            {
+                let moved = convert(a.position.offset(offset.x, offset.y));
+                *offset = Point::new(moved.x - position.x, moved.y - position.y);
+            }
+            for mark in &mut a.marks {
+                let moved = convert(a.position.offset(mark.offset.x, mark.offset.y));
+                mark.offset = Point::new(moved.x - position.x, moved.y - position.y);
+            }
+            a.position = position;
+        }
+    }
+    for b in &mut doc.bonds {
+        if ids.contains(&b.a)
+            && ids.contains(&b.b)
+            && let Some(offset) = &mut b.indicator.offset
+        {
+            let zero = convert(Point::default());
+            let moved = convert(*offset);
+            *offset = Point::new(moved.x - zero.x, moved.y - zero.y);
         }
     }
     for a in &mut doc.annotations {
@@ -186,8 +325,7 @@ fn map_positions(doc: &mut Document, ids: &[u64], convert: impl Fn(Point) -> Poi
     }
     for a in &mut doc.arrows {
         if ids.contains(&a.id) {
-            a.start = convert(a.start);
-            a.end = convert(a.end);
+            a.map_points(&convert);
         }
     }
 }
@@ -202,8 +340,16 @@ pub fn groups(doc: &Document, ids: &[u64]) -> Vec<Vec<u64>> {
         }
         let mut group = vec![*id];
         let mut i = 0;
-        while i < group.len() {
-            let current = group[i];
+        while let Some(current) = group.get(i).copied() {
+            for persistent in &doc.groups {
+                if persistent.members.contains(&current) {
+                    for id in &persistent.members {
+                        if remaining.remove(id) {
+                            group.push(*id);
+                        }
+                    }
+                }
+            }
             for bond in &doc.bonds {
                 let neighbor = if bond.a == current {
                     Some(bond.b)
@@ -227,7 +373,10 @@ pub fn groups(doc: &Document, ids: &[u64]) -> Vec<Vec<u64>> {
 pub fn arrange(doc: &mut Document, ids: &[u64], action: Arrange) {
     let horizontal = matches!(
         action,
-        Arrange::AlignHorizontal | Arrange::DistributeHorizontal
+        Arrange::AlignHorizontal
+            | Arrange::DistributeHorizontal
+            | Arrange::AlignLeft
+            | Arrange::AlignRight
     );
     let distribute = matches!(
         action,
@@ -235,7 +384,7 @@ pub fn arrange(doc: &mut Document, ids: &[u64], action: Arrange) {
     );
     let mut groups: Vec<_> = groups(doc, ids)
         .into_iter()
-        .filter_map(|g| point_bounds(doc, &g).map(|b| (g, b)))
+        .filter_map(|g| crate::scene::selection_bounds(doc, &g).map(|b| (g, b)))
         .collect();
     if groups.len() < 2 {
         return;
@@ -259,6 +408,10 @@ pub fn arrange(doc: &mut Document, ids: &[u64], action: Arrange) {
     for (group, (min, max)) in groups {
         let delta = if distribute {
             target - coordinate(min)
+        } else if matches!(action, Arrange::AlignLeft | Arrange::AlignTop) {
+            lo - coordinate(min)
+        } else if matches!(action, Arrange::AlignRight | Arrange::AlignBottom) {
+            hi - coordinate(max)
         } else {
             (lo + hi - coordinate(min) - coordinate(max)) / 2.0
         };
@@ -275,6 +428,7 @@ pub fn nearest_bond(doc: &Document, p: Point, r: f32) -> Option<usize> {
     doc.bonds
         .iter()
         .enumerate()
+        .filter(|(_, b)| doc.bond_visible(b.a, b.b))
         .filter_map(|(i, b)| {
             let a = doc.atom(b.a)?.position;
             let z = doc.atom(b.b)?.position;
@@ -320,7 +474,10 @@ pub fn bond_extension(doc: &Document, start: Point, atom: Option<u64>, order: u8
         &[(id, neighbor, previous_order)] => {
             let incoming = direction(neighbor, start);
             // Triple bonds and two consecutive double bonds have a linear junction.
-            if order == 3 || previous_order == 3 || (order == 2 && previous_order == 2) {
+            if [3, 6].contains(&order)
+                || [3, 6].contains(&previous_order)
+                || (order == 2 && previous_order == 2)
+            {
                 vec![(incoming, PI)]
             } else {
                 let previous: Vec<_> = doc
@@ -356,15 +513,14 @@ pub fn bond_extension(doc: &Document, start: Point, atom: Option<u64>, order: u8
                 .map(|(_, p, _)| direction(start, *p).rem_euclid(TAU))
                 .collect();
             angles.sort_by(f32::total_cmp);
-            (0..angles.len())
-                .map(|i| {
-                    let next = if i + 1 == angles.len() {
-                        angles[0] + TAU
-                    } else {
-                        angles[i + 1]
-                    };
-                    let gap = next - angles[i];
-                    (angles[i] + gap / 2.0, gap)
+            angles
+                .iter()
+                .zip(angles.iter().cycle().skip(1))
+                .take(angles.len())
+                .enumerate()
+                .map(|(i, (&start, &next))| {
+                    let gap = next + if i + 1 == angles.len() { TAU } else { 0. } - start;
+                    (start + gap / 2.0, gap)
                 })
                 .collect()
         }
@@ -395,7 +551,9 @@ pub fn bond_extension(doc: &Document, start: Point, atom: Option<u64>, order: u8
         }
         collisions * 1000.0 + (TAU - gap) + (1.0 - (angle - preferred).cos()) * 0.01
     };
-    let mut best = candidates[0];
+    let Some(mut best) = candidates.first().copied() else {
+        return point(preferred);
+    };
     let mut best_score = score(best.0, best.1);
     for candidate in candidates.into_iter().skip(1) {
         let value = score(candidate.0, candidate.1);
@@ -440,22 +598,29 @@ pub fn ring_oriented(
     };
     let mut ids = vec![];
     if let Some(index) = bond {
-        let b = doc.bonds[index].clone();
-        let a = doc.atom(b.a).unwrap().position;
-        let z = doc.atom(b.b).unwrap().position;
+        let Some(b) = doc.bonds.get(index).cloned() else {
+            return vec![];
+        };
+        let (Some(a), Some(z)) = (doc.atom(b.a), doc.atom(b.b)) else {
+            return vec![];
+        };
+        let (a, z) = (a.position, z.position);
         let positions = |sign: f32| {
             let mut points = vec![a, z];
             let mut vector = Point::new(z.x - a.x, z.y - a.y);
             let (s, c) = (sign * std::f32::consts::TAU / n as f32).sin_cos();
             for _ in 2..n {
                 vector = Point::new(vector.x * c - vector.y * s, vector.x * s + vector.y * c);
-                points.push(points.last().unwrap().offset(vector.x, vector.y));
+                if let Some(last) = points.last().copied() {
+                    points.push(last.offset(vector.x, vector.y));
+                }
             }
             points
         };
         let score = |points: &[Point]| {
-            points[2..]
+            points
                 .iter()
+                .skip(2)
                 .map(|p| {
                     doc.atoms
                         .iter()
@@ -473,7 +638,7 @@ pub fn ring_oriented(
             .unwrap_or_else(|| score(&first) <= score(&second));
         let points = if first_side { first } else { second };
         ids.extend([b.a, b.b]);
-        for p in &points[2..] {
+        for p in points.iter().skip(2) {
             ids.push(doc.add_atom("C", *p));
         }
     } else {
@@ -526,26 +691,28 @@ pub fn ring_oriented(
             });
         }
     }
-    for i in 0..n {
+    for (i, (&a, &b)) in ids
+        .iter()
+        .zip(ids.iter().cycle().skip(1))
+        .take(n)
+        .enumerate()
+    {
         if i == 0 && bond.is_some() && !aromatic {
             continue;
         }
-        doc.add_bond(
-            ids[i],
-            ids[(i + 1) % n],
-            if aromatic { 4 } else { 1 },
-            "plain",
-        );
+        doc.add_bond(a, b, if aromatic { 4 } else { 1 }, "plain");
     }
     if aromatic {
         for id in &ids {
-            doc.atom_mut(*id).unwrap().aromatic = true;
+            if let Some(atom) = doc.atom_mut(*id) {
+                atom.aromatic = true;
+            }
         }
     }
     ids
 }
 
-fn open_angle(anchor: Point, neighbors: &[Point]) -> f32 {
+pub(crate) fn open_angle(anchor: Point, neighbors: &[Point]) -> f32 {
     use std::f32::consts::{PI, TAU};
     if neighbors.is_empty() {
         return PI;
@@ -555,17 +722,23 @@ fn open_angle(anchor: Point, neighbors: &[Point]) -> f32 {
         .map(|p| (p.y - anchor.y).atan2(p.x - anchor.x).rem_euclid(TAU))
         .collect();
     angles.sort_by(f32::total_cmp);
-    let (start, gap) = (0..angles.len())
-        .map(|i| {
-            let end = if i + 1 < angles.len() {
-                angles[i + 1]
-            } else {
-                angles[0] + TAU
-            };
-            (angles[i], end - angles[i])
+    let (start, gap) = angles
+        .iter()
+        .zip(angles.iter().cycle().skip(1))
+        .take(angles.len())
+        .enumerate()
+        .map(|(i, (&start, &end))| {
+            (
+                start,
+                if i + 1 == angles.len() {
+                    end + TAU - start
+                } else {
+                    end - start
+                },
+            )
         })
         .max_by(|a, b| a.1.total_cmp(&b.1))
-        .unwrap();
+        .unwrap_or((0., TAU));
     start + gap / 2.0
 }
 
@@ -604,7 +777,8 @@ fn isolated_ring(doc: &Document, ids: &[u64]) -> Option<Vec<u64>> {
             return None;
         }
     }
-    let mut ordered = vec![ids[0]];
+    let first = *ids.first()?;
+    let mut ordered = vec![first];
     let mut previous = 0;
     loop {
         let current = *ordered.last()?;
@@ -621,7 +795,7 @@ fn isolated_ring(doc: &Document, ids: &[u64]) -> Option<Vec<u64>> {
                 }
             })
             .find(|id| *id != previous)?;
-        if next == ordered[0] {
+        if next == first {
             return (ordered.len() == ids.len()).then_some(ordered);
         }
         if ordered.contains(&next) {
@@ -636,9 +810,13 @@ pub fn ring_at(doc: &Document, p: Point) -> Option<Vec<u64>> {
     groups(doc, &doc.all_ids()).into_iter().find_map(|ids| {
         let ring = isolated_ring(doc, &ids)?;
         let mut inside = false;
-        for i in 0..ring.len() {
-            let a = doc.atom(ring[i])?.position;
-            let b = doc.atom(ring[(i + 1) % ring.len()])?.position;
+        for (a, b) in ring
+            .iter()
+            .zip(ring.iter().cycle().skip(1))
+            .take(ring.len())
+        {
+            let a = doc.atom(*a)?.position;
+            let b = doc.atom(*b)?.position;
             if (a.y > p.y) != (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x {
                 inside = !inside;
             }
@@ -651,6 +829,13 @@ pub fn ring_at(doc: &Document, p: Point) -> Option<Vec<u64>> {
 /// The two shared atoms are reused; the remaining ring atoms rotate and scale
 /// together to match that edge. Failed snaps leave the document untouched.
 pub fn snap_ring(doc: &mut Document, ids: &[u64], delta: Point, radius: f32) -> Option<Vec<u64>> {
+    if doc
+        .groups
+        .iter()
+        .any(|g| g.members.iter().any(|id| ids.contains(id)))
+    {
+        return None;
+    }
     struct Candidate {
         score: f32,
         source: [u64; 2],
@@ -659,8 +844,12 @@ pub fn snap_ring(doc: &mut Document, ids: &[u64], delta: Point, radius: f32) -> 
     }
     let ring = isolated_ring(doc, ids)?;
     let mut best: Option<Candidate> = None;
-    for i in 0..ring.len() {
-        let source = [ring[i], ring[(i + 1) % ring.len()]];
+    for (a, b) in ring
+        .iter()
+        .zip(ring.iter().cycle().skip(1))
+        .take(ring.len())
+    {
+        let source = [*a, *b];
         let a = doc.atom(source[0])?.position;
         let b = doc.atom(source[1])?.position;
         let sx = b.x - a.x;
@@ -715,18 +904,18 @@ pub fn snap_ring(doc: &mut Document, ids: &[u64], delta: Point, radius: f32) -> 
                 let points: Vec<_> = ring
                     .iter()
                     .map(|id| {
-                        let p = doc.atom(*id).unwrap().position;
+                        let p = doc.atom(*id)?.position;
                         let x = p.x - a.x;
                         let y = p.y - a.y;
-                        target[0].position.offset(
+                        Some(target[0].position.offset(
                             cosine_scale * x - sine_scale * y,
                             sine_scale * x + cosine_scale * y,
-                        )
+                        ))
                     })
-                    .collect();
+                    .collect::<Option<Vec<_>>>()?;
                 let mut score = 0.0;
                 for (id, p) in ring.iter().zip(&points) {
-                    let moved = doc.atom(*id).unwrap().position.offset(delta.x, delta.y);
+                    let moved = doc.atom(*id)?.position.offset(delta.x, delta.y);
                     score += (p.distance(moved) / length).powi(2) * 0.1;
                     if !source.contains(id) {
                         for other in &doc.atoms {

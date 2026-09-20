@@ -1,7 +1,27 @@
 use crate::{document::Document, scene};
 
+/// Refresh derived chemistry for an export snapshot without touching editing history.
+pub async fn checked_document(
+    engine: &crate::engine::PythonEngine,
+    mut doc: Document,
+) -> Result<Document, String> {
+    doc.validate()?;
+    if doc.atoms.is_empty() {
+        return Ok(doc);
+    }
+    let response = engine
+        .request(crate::engine::Request::molecule("analyze", doc.clone()))
+        .await?;
+    let checked = response
+        .document
+        .ok_or("Chemistry engine returned no drawing")?;
+    crate::atom_labels::refresh_computed(&mut doc, &checked);
+    Ok(doc)
+}
+
 /// Render at the style's physical size. PDF stays vector; PNG uses line-art resolution.
 pub fn drawing(doc: &Document, format: &str) -> Result<Vec<u8>, String> {
+    doc.validate()?;
     let svg = scene::svg(doc);
     if format == "svg" {
         return Ok(svg.into_bytes());

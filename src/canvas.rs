@@ -1,49 +1,108 @@
 use iced::widget::canvas::{self, Action, Frame, Geometry, Path, Stroke};
 use iced::{Color, Event, Point, Rectangle, Renderer, Theme, Vector, mouse};
 use moruno::{
+    chains::{self, BondDrawing, ChainDrawing, ChainMode},
     document::{Document, Point as World},
+    graphics::{BracketSides, Graphic, GraphicKind, GraphicStyle, PathCommand},
     scene::{Primitive, primitives},
 };
+pub mod guides;
 mod selection;
 use selection::{Handle, SelectionBox, TransformDrag};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Tool {
     Select,
+    Lasso,
+    Chain(ChainMode),
     Bond(u8),
+    StyledBond(moruno::bonds::BondPreset),
     Wedge,
     Hash,
     Wavy,
     Atom,
     Ring,
+    RingPreset(moruno::rings::Preset),
+    Template,
     Arrow,
     Text,
     Erase,
+    Graphic(GraphicKind),
+    EditPoints,
 }
 impl Tool {
+    pub fn bond_preset(self) -> Option<moruno::bonds::BondPreset> {
+        use moruno::bonds::BondPreset as P;
+        Some(match self {
+            Self::Bond(1) => P::Single,
+            Self::Bond(2) => P::Double,
+            Self::Bond(3) => P::Triple,
+            Self::Wedge => P::Wedge,
+            Self::Hash => P::HashedWedge,
+            Self::Wavy => P::Wavy,
+            Self::StyledBond(p) => p,
+            _ => return None,
+        })
+    }
+    pub fn selects(self) -> bool {
+        matches!(self, Self::Select | Self::Lasso)
+    }
     pub fn hint(self) -> &'static str {
         match self {
             Self::Select => {
                 "Drag atoms, bonds or ring interiors · Drag a ring edge onto a bond to fuse"
             }
+            Self::Lasso => "Draw around objects · Shift adds · Option/Alt drag subtracts",
+            Self::Chain(_) => {
+                "Drag a chain · Ctrl bends · Shift flips · Click places the chosen number of carbons"
+            }
+            Self::Bond(2) => {
+                "Click a bond to make it double · Click again to shift centered / left / right"
+            }
             Self::Bond(_) => {
                 "Click an endpoint to grow · Drag to draw · Click a bond to cycle single → double → triple"
             }
-            Self::Wedge | Self::Hash | Self::Wavy => {
+            Self::Wedge | Self::Hash | Self::Wavy | Self::StyledBond(_) => {
                 "Click an endpoint to grow a chain · Drag to choose direction · Click a bond to change it"
             }
             Self::Atom => "Click to add an atom or replace an existing element",
-            Self::Ring => {
+            Self::Ring | Self::RingPreset(_) => {
                 "Click or drag onto an atom or bond to attach · Drag from a bond to choose the side"
             }
-            Self::Arrow => "Drag to draw a reaction arrow",
+            Self::Template => {
+                "Preview, then click an atom or bond to attach · Drag to choose the side · Escape cancels"
+            }
+            Self::Arrow => {
+                "Drag to draw · Drag an endpoint to resize or the middle handle to bend · Alt frees angles"
+            }
             Self::Text => "Enter a label above the canvas, then click to place it",
             Self::Erase => "Click an atom, bond, label, or arrow to erase",
+            Self::Graphic(GraphicKind::Symbol(_)) => {
+                "Click an atom to attach · Drag from an atom to position · Click empty space for a free symbol"
+            }
+            Self::Graphic(GraphicKind::Orbital(_)) => {
+                "Click to place · Drag from the node for size/direction · Shift snaps to 15°"
+            }
+            Self::Graphic(_) => {
+                "Drag to draw · Shift constrains proportions or angle · Escape cancels"
+            }
+            Self::EditPoints => "Drag a curve point or control handle · Escape returns to Select",
         }
     }
 }
 #[derive(Debug, Clone)]
 pub enum Edit {
+    Hover(Option<World>),
+    Chain {
+        points: Vec<World>,
+        source: Option<u64>,
+        target: Option<u64>,
+    },
+    Graphic(World, World, bool),
+    GraphicPoint(u64, usize, World),
+    AtomMark(u64, usize, World),
+    AtomIndicator(moruno::atom_labels::Owner, World),
+    ArrowHandle(u64, usize, World),
     Select(Vec<u64>),
     Move(Vec<u64>, f32, f32),
     Transform {
@@ -54,6 +113,8 @@ pub enum Edit {
     },
     Bond(World, World, Option<u64>, Option<u64>),
     Ring(World, Option<World>),
+    RingPreset(moruno::rings::Preset, World, Option<World>, bool, bool),
+    Template(World, Option<World>),
     Click(World),
     Pan(f32, f32),
     Zoom(f32, World),
@@ -94,6 +155,32 @@ pub struct State {
 }
 #[derive(Debug)]
 enum Gesture {
+    Chain {
+        start: World,
+        pressed: World,
+        source: Option<u64>,
+        points: Vec<World>,
+        snaking: bool,
+        dragged: bool,
+    },
+    Graphic {
+        start: World,
+    },
+    AtomIndicator {
+        owner: moruno::atom_labels::Owner,
+    },
+    AtomMark {
+        id: u64,
+        index: usize,
+    },
+    GraphicPoint {
+        id: u64,
+        index: usize,
+    },
+    ArrowHandle {
+        id: u64,
+        index: usize,
+    },
     Transform(Box<TransformDrag>),
     Draw {
         start: World,
@@ -111,21 +198,157 @@ enum Gesture {
     Select {
         start: World,
     },
+    Lasso {
+        points: Vec<World>,
+    },
     Pan {
         last: Point,
     },
 }
 pub struct MoleculeCanvas<'a> {
+    pub bond_drawing: BondDrawing,
+    pub chain_drawing: ChainDrawing,
     pub doc: &'a Document,
     pub selected: &'a [u64],
     pub tool: Tool,
     pub camera: Camera,
     pub grid: bool,
+    pub guides: guides::Guides,
     pub ring_size: u8,
     pub aromatic_ring: bool,
+    pub template_connection: moruno::templates::Connection,
+    pub template: Option<(&'a Document, moruno::templates::Anchor)>,
+    pub arrow_preset: moruno::arrows::Preset,
+    pub arrow_style: &'a moruno::arrows::ArrowStyle,
+    pub orbital_phase: moruno::scientific::Phase,
+    pub phase_flipped: bool,
+    pub attach_symbols: bool,
+    pub graphic_style: &'a GraphicStyle,
+    pub bracket_sides: BracketSides,
 }
 fn rgb(c: [u8; 3]) -> Color {
     Color::from_rgb8(c[0], c[1], c[2])
+}
+
+impl MoleculeCanvas<'_> {
+    fn template_gesture(
+        &self,
+        start: World,
+        end: World,
+        modifiers: iced::keyboard::Modifiers,
+    ) -> (World, Option<World>) {
+        let (anchor, direction) = ring_gesture(start, end, true, 10. / self.camera.zoom);
+        if !(modifiers.shift() || modifiers.control()) || modifiers.alt() {
+            return (anchor, direction);
+        }
+        let origin = self
+            .doc
+            .nearest(anchor, 10. / self.camera.zoom)
+            .and_then(|id| self.doc.atom(id))
+            .map(|a| a.position)
+            .unwrap_or(anchor);
+        let bond = BondDrawing {
+            fixed_angles: true,
+            fixed_length: false,
+            ..self.bond_drawing
+        };
+        (anchor, direction.map(|p| bond.endpoint(origin, p)))
+    }
+
+    fn chain_plan(
+        &self,
+        origin: (World, World),
+        source: Option<u64>,
+        points: &[World],
+        flags: (bool, bool),
+        cursor: World,
+        modifiers: iced::keyboard::Modifiers,
+    ) -> (Vec<World>, Option<u64>) {
+        let (start, pressed) = origin;
+        let (snaking, dragged) = flags;
+        let click = !dragged && pressed.distance(cursor) < 3.0 / self.camera.zoom;
+        if dragged && pressed.distance(cursor) < 3.0 / self.camera.zoom {
+            return (vec![start], None);
+        }
+        let mut bond = self.bond_drawing.unconstrained(modifiers.alt());
+        let mut flip = modifiers.shift();
+        let chain = if click {
+            ChainDrawing {
+                atoms: Some(self.chain_drawing.atoms.unwrap_or(6)),
+                ..self.chain_drawing
+            }
+        } else {
+            self.chain_drawing
+        };
+        let end = if click {
+            bond.fixed_length = true;
+            let first = moruno::editing::bond_extension(self.doc, start, source, 1);
+            let half = (180. - chain.angle).to_radians() / 2.;
+            let first_angle = chains::direction(start, first);
+            let mut axis = first_angle + half;
+            let neighbors: Vec<_> = self
+                .doc
+                .bonds
+                .iter()
+                .filter_map(|b| {
+                    if Some(b.a) == source {
+                        self.doc.atom(b.b)
+                    } else if Some(b.b) == source {
+                        self.doc.atom(b.a)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            if let [previous] = neighbors.as_slice() {
+                let incoming = chains::direction(previous.position, start);
+                let turn = (first_angle - incoming + std::f32::consts::PI)
+                    .rem_euclid(std::f32::consts::TAU)
+                    - std::f32::consts::PI;
+                if turn.abs() > 0.01 {
+                    axis = first_angle - if turn > 0. { half } else { -half };
+                    flip ^= turn > 0.;
+                }
+            }
+            start.offset(axis.cos() * bond.length, axis.sin() * bond.length)
+        } else {
+            cursor
+        };
+        let mut points = if snaking && !click {
+            let mut points = points.to_vec();
+            chains::snake(&mut points, cursor, source.is_some(), bond, chain, flip);
+            points
+        } else {
+            chains::straight(start, end, source.is_some(), bond, chain, flip)
+        };
+        let target = if click || points.len() < 2 {
+            None
+        } else {
+            self.doc
+                .nearest(cursor, 12.0 / self.camera.zoom)
+                .filter(|id| Some(*id) != source || points.len() > 3)
+                .filter(|id| {
+                    self.doc
+                        .atom(*id)
+                        .zip(points.last())
+                        .is_some_and(|(atom, last)| {
+                            atom.position.distance(*last) < bond.length * 0.8
+                        })
+                })
+        };
+        // Choose the unoccupied side when attaching; Shift is an explicit override.
+        if !snaking
+            && !modifiers.shift()
+            && source.is_some()
+            && chains::place(self.doc, &points, source, target, 8.).is_err()
+        {
+            let other = chains::straight(start, end, source.is_some(), bond, chain, !flip);
+            if chains::place(self.doc, &other, source, target, 8.).is_ok() {
+                points = other;
+            }
+        }
+        (points, target)
+    }
 }
 
 impl canvas::Program<Edit> for MoleculeCanvas<'_> {
@@ -137,6 +360,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<Action<Edit>> {
+        let bounds = self.guides.paper(bounds);
         // Iced may dispatch a batch with the final cursor position. Preserve the
         // position carried by each motion event so fast drags retain their origin.
         let was_inside = state.cursor.is_some_and(|p| bounds.contains(p));
@@ -171,11 +395,11 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                 state.gesture = None;
                 state.last_click = None;
                 state.cursor = None;
-                Some(Action::request_redraw())
+                Some(Action::publish(Edit::Hover(None)))
             }
             Event::Mouse(mouse::Event::CursorLeft) => {
                 state.cursor = None;
-                Some(Action::request_redraw())
+                Some(Action::publish(Edit::Hover(None)))
             }
             Event::Mouse(mouse::Event::WheelScrolled { delta })
                 if inside && state.gesture.is_none() =>
@@ -189,6 +413,16 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                         .and_capture(),
                 )
             }
+            // macOS can report Control-click as a secondary click.
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right))
+                if inside && self.tool == Tool::Template && state.modifiers.control() =>
+            {
+                state.gesture = Some(Gesture::Ring {
+                    start: self.camera.world(point?, bounds),
+                    attached: true,
+                });
+                Some(Action::request_redraw().and_capture())
+            }
             Event::Mouse(mouse::Event::ButtonPressed(
                 mouse::Button::Right | mouse::Button::Middle,
             )) if inside => {
@@ -197,7 +431,71 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
             }
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) if inside => {
                 let p = self.camera.world(point?, bounds);
-                if self.tool == Tool::Select
+                if (self.tool.selects() || matches!(self.tool, Tool::Arrow | Tool::EditPoints))
+                    && self.selected.len() == 1
+                {
+                    for a in
+                        self.doc.arrows.iter().filter(|a| {
+                            self.selected.contains(&a.id) && self.doc.atom_visible(a.id)
+                        })
+                    {
+                        if let Some(index) = a
+                            .handles()
+                            .iter()
+                            .position(|q| q.distance(p) < 8.0 / self.camera.zoom)
+                        {
+                            state.gesture = Some(Gesture::ArrowHandle { id: a.id, index });
+                            return Some(Action::request_redraw().and_capture());
+                        }
+                    }
+                }
+                if self.tool == Tool::EditPoints {
+                    if let Some(indicator) = moruno::atom_labels::indicators(self.doc)
+                        .into_iter()
+                        .find(|i| {
+                            i.owner.selected(self.selected)
+                                && i.center.distance(p) < 9. / self.camera.zoom
+                        })
+                    {
+                        state.gesture = Some(Gesture::AtomIndicator {
+                            owner: indicator.owner,
+                        });
+                        return Some(Action::request_redraw().and_capture());
+                    }
+                    for a in
+                        self.doc.atoms.iter().filter(|a| {
+                            self.selected.contains(&a.id) && self.doc.atom_visible(a.id)
+                        })
+                    {
+                        if let Some(index) = a.marks.iter().position(|m| {
+                            a.position.offset(m.offset.x, m.offset.y).distance(p)
+                                < 8. / self.camera.zoom
+                        }) {
+                            state.gesture = Some(Gesture::AtomMark { id: a.id, index });
+                            return Some(Action::request_redraw().and_capture());
+                        }
+                    }
+                }
+                if self.tool == Tool::EditPoints {
+                    for g in self
+                        .doc
+                        .graphics
+                        .iter()
+                        .filter(|g| self.selected.contains(&g.id))
+                    {
+                        if let Some((index, _)) = g
+                            .commands()
+                            .iter()
+                            .flat_map(PathCommand::points)
+                            .enumerate()
+                            .find(|(_, q)| q.distance(p) < 8.0 / self.camera.zoom)
+                        {
+                            state.gesture = Some(Gesture::GraphicPoint { id: g.id, index });
+                            return Some(Action::request_redraw().and_capture());
+                        }
+                    }
+                }
+                if self.tool.selects()
                     && let Some(selection) =
                         SelectionBox::new(self.doc, self.selected, self.camera, bounds)
                     && let Some(handle) = selection.hit(point?)
@@ -212,30 +510,68 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                     return Some(Action::request_redraw().and_capture());
                 }
                 let mut hit = hit_selection(self.doc, p, 10.0 / self.camera.zoom);
-                if self.tool == Tool::Select && hit.is_empty() {
+                if self.tool.selects() && hit.is_empty() {
                     hit = moruno::editing::ring_at(self.doc, p).unwrap_or_default();
                 }
+                if self.tool.selects() {
+                    hit = if state.modifiers.alt() {
+                        self.doc.expand_integral_groups(&hit)
+                    } else {
+                        self.doc.expand_groups(&hit)
+                    };
+                }
                 state.gesture = match self.tool {
-                    Tool::Select => Some(if !hit.is_empty() {
+                    Tool::Chain(mode) => {
+                        let source = self.doc.nearest(p, 10.0 / self.camera.zoom);
+                        let start = source
+                            .and_then(|id| self.doc.atom(id).map(|a| a.position))
+                            .unwrap_or(p);
+                        Some(Gesture::Chain {
+                            start,
+                            pressed: p,
+                            source,
+                            points: vec![start],
+                            snaking: mode == ChainMode::Snaking,
+                            dragged: false,
+                        })
+                    }
+                    Tool::Graphic(_) => Some(Gesture::Graphic { start: p }),
+                    Tool::EditPoints => {
+                        return Some(Action::publish(Edit::Select(hit)).and_capture());
+                    }
+                    Tool::Select | Tool::Lasso => Some(if !hit.is_empty() {
                         Gesture::Move {
                             start: p,
-                            ids: if hit.iter().all(|id| self.selected.contains(id)) {
+                            ids: if state.modifiers.shift() {
+                                moruno::selection_region::combine(self.selected, &hit, true, false)
+                            } else if !state.modifiers.alt()
+                                && hit.iter().all(|id| self.selected.contains(id))
+                            {
                                 self.selected.to_vec()
                             } else {
                                 hit.clone()
                             },
                             clicked: hit,
                         }
+                    } else if self.tool == Tool::Lasso {
+                        Gesture::Lasso { points: vec![p] }
                     } else {
                         Gesture::Select { start: p }
                     }),
-                    Tool::Bond(_) | Tool::Wedge | Tool::Hash | Tool::Wavy | Tool::Arrow => {
-                        Some(Gesture::Draw {
-                            start: p,
-                            id: self.doc.nearest(p, 10.0 / self.camera.zoom),
-                        })
-                    }
-                    Tool::Ring => Some(Gesture::Ring {
+                    Tool::Bond(_)
+                    | Tool::StyledBond(_)
+                    | Tool::Wedge
+                    | Tool::Hash
+                    | Tool::Wavy
+                    | Tool::Arrow => Some(Gesture::Draw {
+                        start: p,
+                        id: if self.tool == Tool::Arrow {
+                            None
+                        } else {
+                            self.doc.nearest(p, 10.0 / self.camera.zoom)
+                        },
+                    }),
+                    Tool::Ring | Tool::RingPreset(_) | Tool::Template => Some(Gesture::Ring {
                         start: p,
                         attached: self.doc.nearest(p, 10.0 / self.camera.zoom).is_some()
                             || moruno::editing::nearest_bond(self.doc, p, 10.0 / self.camera.zoom)
@@ -246,6 +582,48 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                 Some(Action::request_redraw().and_capture())
             }
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
+                if let Some(Gesture::Chain {
+                    start,
+                    source,
+                    points,
+                    snaking,
+                    pressed,
+                    dragged,
+                }) = &mut state.gesture
+                {
+                    let p = self.camera.world(point?, bounds);
+                    *dragged |= pressed.distance(p) > 3.0 / self.camera.zoom;
+                    let bond = self.bond_drawing.unconstrained(state.modifiers.alt());
+                    *snaking |= state.modifiers.control();
+                    if *snaking {
+                        chains::snake(
+                            points,
+                            p,
+                            source.is_some(),
+                            bond,
+                            self.chain_drawing,
+                            state.modifiers.shift(),
+                        );
+                    } else {
+                        *points = chains::straight(
+                            *start,
+                            p,
+                            source.is_some(),
+                            bond,
+                            self.chain_drawing,
+                            state.modifiers.shift(),
+                        );
+                    }
+                }
+                if let Some(Gesture::Lasso { points }) = &mut state.gesture {
+                    let p = self.camera.world(point?, bounds);
+                    if points
+                        .last()
+                        .is_none_or(|last| last.distance(p) > 2.0 / self.camera.zoom)
+                    {
+                        points.push(p);
+                    }
+                }
                 if let Some(Gesture::Pan { last }) = &mut state.gesture {
                     let p = point?;
                     let delta = p - *last;
@@ -259,7 +637,12 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                     );
                 }
                 if state.gesture.is_some() || inside || was_inside {
-                    Some(Action::request_redraw())
+                    let hover = if inside && state.gesture.is_none() {
+                        point.map(|p| self.camera.world(p, bounds))
+                    } else {
+                        None
+                    };
+                    Some(Action::publish(Edit::Hover(hover)))
                 } else {
                     None
                 }
@@ -268,6 +651,76 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                 let gesture = state.gesture.take()?;
                 let p = self.camera.world(point?, bounds);
                 let edit = match gesture {
+                    Gesture::Chain {
+                        start,
+                        pressed,
+                        source,
+                        points,
+                        snaking,
+                        dragged,
+                    } => {
+                        if !inside {
+                            return Some(Action::request_redraw().and_capture());
+                        }
+                        let (points, target) = self.chain_plan(
+                            (start, pressed),
+                            source,
+                            &points,
+                            (snaking, dragged),
+                            p,
+                            state.modifiers,
+                        );
+                        if dragged && points.len() < 2 {
+                            return Some(Action::request_redraw().and_capture());
+                        }
+                        Edit::Chain {
+                            points,
+                            source,
+                            target,
+                        }
+                    }
+                    Gesture::Graphic { start } => {
+                        if !inside
+                            || (start.distance(p) < 3.0 / self.camera.zoom
+                                && !matches!(
+                                    self.tool,
+                                    Tool::Graphic(GraphicKind::Symbol(_) | GraphicKind::Orbital(_))
+                                ))
+                        {
+                            return Some(Action::request_redraw().and_capture());
+                        }
+                        Edit::Graphic(start, p, state.modifiers.shift())
+                    }
+                    Gesture::ArrowHandle { id, index } => {
+                        if !inside {
+                            return Some(Action::request_redraw().and_capture());
+                        }
+                        let end = if index < 2 {
+                            self.doc
+                                .arrows
+                                .iter()
+                                .find(|a| a.id == id)
+                                .map(|a| {
+                                    arrow_endpoint(
+                                        if index == 0 { a.end } else { a.start },
+                                        p,
+                                        self.bond_drawing.fixed_angles && !state.modifiers.alt(),
+                                    )
+                                })
+                                .unwrap_or(p)
+                        } else {
+                            p
+                        };
+                        Edit::ArrowHandle(id, index, end)
+                    }
+                    Gesture::AtomMark { id, index } => {
+                        if !inside {
+                            return Some(Action::request_redraw().and_capture());
+                        }
+                        Edit::AtomMark(id, index, p)
+                    }
+                    Gesture::AtomIndicator { owner } => Edit::AtomIndicator(owner, p),
+                    Gesture::GraphicPoint { id, index } => Edit::GraphicPoint(id, index, p),
                     Gesture::Transform(drag) => {
                         let (scale, rotation) = drag.values(p, state.modifiers.shift());
                         Edit::Transform {
@@ -281,9 +734,29 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                         if !inside {
                             return Some(Action::request_redraw().and_capture());
                         }
-                        let (anchor, direction) =
-                            ring_gesture(start, p, attached, 10.0 / self.camera.zoom);
-                        Edit::Ring(anchor, direction)
+                        let (anchor, direction) = ring_gesture(
+                            start,
+                            p,
+                            attached
+                                || self.tool == Tool::Template
+                                || matches!(self.tool, Tool::RingPreset(_)),
+                            10.0 / self.camera.zoom,
+                        );
+                        if self.tool == Tool::Template {
+                            let (anchor, direction) =
+                                self.template_gesture(start, p, state.modifiers);
+                            Edit::Template(anchor, direction)
+                        } else if let Tool::RingPreset(preset) = self.tool {
+                            Edit::RingPreset(
+                                preset,
+                                anchor,
+                                direction,
+                                state.modifiers.alt(),
+                                state.modifiers.shift(),
+                            )
+                        } else {
+                            Edit::Ring(anchor, direction)
+                        }
                     }
                     Gesture::Draw { start, id } => {
                         if start.distance(p) < 3.0 / self.camera.zoom {
@@ -293,9 +766,23 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                                 .and_then(|id| self.doc.atom(id).map(|a| a.position))
                                 .unwrap_or(start);
                             let (end, target) = if self.tool == Tool::Arrow {
-                                (p, None)
+                                (
+                                    arrow_endpoint(
+                                        start,
+                                        p,
+                                        self.bond_drawing.fixed_angles && !state.modifiers.alt(),
+                                    ),
+                                    None,
+                                )
                             } else {
-                                bond_target(self.doc, origin, p, id, 12.0 / self.camera.zoom)
+                                bond_target_with(
+                                    self.doc,
+                                    origin,
+                                    p,
+                                    id,
+                                    12.0 / self.camera.zoom,
+                                    self.bond_drawing.unconstrained(state.modifiers.alt()),
+                                )
                             };
                             Edit::Bond(origin, end, id, target)
                         }
@@ -327,52 +814,40 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                                 }
                                 state.last_click = Some((now, atom));
                             }
-                            Edit::Select(clicked)
+                            if state.modifiers.shift() {
+                                let remove = clicked.iter().all(|id| self.selected.contains(id));
+                                Edit::Select(moruno::selection_region::combine(
+                                    self.selected,
+                                    &clicked,
+                                    true,
+                                    remove,
+                                ))
+                            } else {
+                                Edit::Select(clicked)
+                            }
                         } else {
                             state.last_click = None;
                             Edit::Move(ids, p.x - start.x, p.y - start.y)
                         }
                     }
                     Gesture::Select { start } => {
-                        let min = World::new(start.x.min(p.x), start.y.min(p.y));
-                        let max = World::new(start.x.max(p.x), start.y.max(p.y));
-                        Edit::Select(
-                            self.doc
-                                .atoms
-                                .iter()
-                                .filter(|a| {
-                                    a.position.x >= min.x
-                                        && a.position.x <= max.x
-                                        && a.position.y >= min.y
-                                        && a.position.y <= max.y
-                                })
-                                .map(|a| a.id)
-                                .chain(
-                                    self.doc
-                                        .annotations
-                                        .iter()
-                                        .filter(|a| {
-                                            a.position.x >= min.x
-                                                && a.position.x <= max.x
-                                                && a.position.y >= min.y
-                                                && a.position.y <= max.y
-                                        })
-                                        .map(|a| a.id),
-                                )
-                                .chain(
-                                    self.doc
-                                        .arrows
-                                        .iter()
-                                        .filter(|a| {
-                                            a.start.x >= min.x
-                                                && a.start.x <= max.x
-                                                && a.start.y >= min.y
-                                                && a.start.y <= max.y
-                                        })
-                                        .map(|a| a.id),
-                                )
-                                .collect(),
-                        )
+                        let polygon =
+                            vec![start, World::new(p.x, start.y), p, World::new(start.x, p.y)];
+                        Edit::Select(region_selection(
+                            self.doc,
+                            self.selected,
+                            &polygon,
+                            state.modifiers,
+                        ))
+                    }
+                    Gesture::Lasso { mut points } => {
+                        points.push(p);
+                        Edit::Select(region_selection(
+                            self.doc,
+                            self.selected,
+                            &points,
+                            state.modifiers,
+                        ))
                     }
                     Gesture::Pan { .. } => return Some(Action::request_redraw()),
                 };
@@ -390,6 +865,88 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
         cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
         let mut frame = Frame::new(renderer, bounds.size());
+        let paper = self.guides.paper(bounds);
+        let offset = Vector::new(paper.x - bounds.x, paper.y - bounds.y);
+        frame.with_clip(
+            Rectangle {
+                x: offset.x,
+                y: offset.y,
+                ..paper
+            },
+            |frame| {
+                frame.translate(offset);
+                self.draw_paper(frame, state, paper, cursor);
+            },
+        );
+        let pointer = state
+            .cursor
+            .filter(|p| paper.contains(*p))
+            .map(|p| Point::new(p.x - paper.x, p.y - paper.y));
+        self.guides.draw_rulers(&mut frame, self.camera, pointer);
+        vec![frame.into_geometry()]
+    }
+    fn mouse_interaction(
+        &self,
+        state: &State,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) -> mouse::Interaction {
+        let bounds = self.guides.paper(bounds);
+        if let Some(Gesture::Transform(drag)) = &state.gesture {
+            return if matches!(drag.handle, Handle::Rotate) {
+                mouse::Interaction::Grabbing
+            } else {
+                drag.handle.cursor()
+            };
+        }
+        if matches!(state.gesture, Some(Gesture::ArrowHandle { .. })) {
+            return mouse::Interaction::Grabbing;
+        }
+        if self.selected.len() == 1
+            && let Some(p) = cursor.position_in(bounds)
+        {
+            let p = self.camera.world(p, bounds);
+            if self
+                .doc
+                .arrows
+                .iter()
+                .filter(|a| self.selected.contains(&a.id) && self.doc.atom_visible(a.id))
+                .any(|a| {
+                    a.handles()
+                        .iter()
+                        .any(|q| q.distance(p) < 8. / self.camera.zoom)
+                })
+            {
+                return mouse::Interaction::Grab;
+            }
+        }
+        if cursor.is_over(bounds) {
+            if self.tool.selects() {
+                if let Some(selection) =
+                    SelectionBox::new(self.doc, self.selected, self.camera, bounds)
+                    && let Some(p) = cursor.position()
+                    && let Some(handle) = selection.hit(Point::new(p.x - bounds.x, p.y - bounds.y))
+                {
+                    return handle.cursor();
+                }
+                mouse::Interaction::default()
+            } else {
+                mouse::Interaction::Crosshair
+            }
+        } else {
+            mouse::Interaction::default()
+        }
+    }
+}
+
+impl MoleculeCanvas<'_> {
+    fn draw_paper(
+        &self,
+        frame: &mut Frame,
+        state: &State,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) {
         frame.fill_rectangle(
             Point::ORIGIN,
             bounds.size(),
@@ -413,8 +970,176 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                 }
             }
         }
+        self.guides.draw_crosshair(
+            frame,
+            self.camera,
+            state
+                .cursor
+                .filter(|p| bounds.contains(*p))
+                .map(|p| Point::new(p.x - bounds.x, p.y - bounds.y)),
+        );
         let mut preview = self.doc.clone();
         let mut ring_selection = None;
+        let mut chain_badge = None;
+        let mut template_notice = None;
+        if let (
+            Some(Gesture::Chain {
+                start,
+                pressed,
+                source,
+                points,
+                snaking,
+                dragged,
+            }),
+            Some(p),
+        ) = (&state.gesture, state.cursor)
+        {
+            let cursor = self
+                .camera
+                .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
+            let (points, target) = self.chain_plan(
+                (*start, *pressed),
+                *source,
+                points,
+                (*snaking, *dragged),
+                cursor,
+                state.modifiers,
+            );
+            let endpoint = target
+                .and_then(|id| self.doc.atom(id).map(|a| a.position))
+                .or_else(|| points.last().copied())
+                .unwrap_or(*start);
+            let added = points
+                .len()
+                .saturating_sub(usize::from(source.is_some()))
+                .saturating_sub(usize::from(target.is_some() && points.len() > 1));
+            let cancelled = *dragged && points.len() < 2;
+            let placement = if cancelled {
+                Ok((self.doc.clone(), vec![]))
+            } else {
+                chains::place(self.doc, &points, *source, target, 10.0 / self.camera.zoom)
+            };
+            match placement {
+                Ok((doc, ids)) => {
+                    preview = doc;
+                    ring_selection = Some(ids);
+                    chain_badge = Some((
+                        endpoint,
+                        if cancelled {
+                            "Release to cancel".into()
+                        } else {
+                            format!("{added} new C · {} bonds", points.len().saturating_sub(1))
+                        },
+                        true,
+                    ));
+                }
+                Err(_) => {
+                    for pair in points.windows(2) {
+                        let [a, b] = pair else { continue };
+                        frame.stroke(
+                            &Path::line(
+                                self.camera.screen(*a, bounds),
+                                self.camera.screen(*b, bounds),
+                            ),
+                            Stroke::default()
+                                .with_width(1.5)
+                                .with_color(rgb([182, 66, 61])),
+                        );
+                    }
+                    chain_badge = Some((endpoint, "Overlap · change direction".into(), false));
+                }
+            }
+        }
+        if let Some(p) = state.cursor {
+            let end = self
+                .camera
+                .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
+            if let (Some(Gesture::Graphic { start }), Tool::Graphic(kind)) =
+                (&state.gesture, self.tool)
+            {
+                if matches!(kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_)) {
+                    let drawing = moruno::scientific::Drawing {
+                        kind,
+                        style: self.graphic_style.clone(),
+                        phase: self.orbital_phase,
+                        flipped: self.phase_flipped,
+                        attach: self.attach_symbols,
+                    };
+                    if let Ok(id) = drawing.place(
+                        &mut preview,
+                        *start,
+                        end,
+                        state.modifiers.shift(),
+                        10. / self.camera.zoom,
+                    ) {
+                        ring_selection = Some(vec![id]);
+                    }
+                } else {
+                    let id = preview.next_id();
+                    preview.graphics.push(Graphic::dragged(
+                        id,
+                        kind,
+                        *start,
+                        end,
+                        self.graphic_style.clone(),
+                        self.bracket_sides,
+                        state.modifiers.shift(),
+                    ));
+                    ring_selection = Some(vec![id]);
+                }
+            }
+            if let Some(Gesture::AtomMark { id, index }) = &state.gesture
+                && let Some(a) = preview.atom_mut(*id)
+                && let Some(mark) = a.marks.get_mut(*index)
+            {
+                mark.offset = World::new(end.x - a.position.x, end.y - a.position.y);
+            }
+            if let Some(Gesture::ArrowHandle { id, index }) = &state.gesture
+                && let Some(a) = preview.arrows.iter_mut().find(|a| a.id == *id)
+            {
+                let end = if *index < 2 {
+                    arrow_endpoint(
+                        if *index == 0 { a.end } else { a.start },
+                        end,
+                        self.bond_drawing.fixed_angles && !state.modifiers.alt(),
+                    )
+                } else {
+                    end
+                };
+                a.edit_handle(*index, end);
+            }
+            if let Some(Gesture::Draw { start, .. }) = &state.gesture
+                && self.tool == Tool::Arrow
+                && start.distance(end) >= 3.0 / self.camera.zoom
+            {
+                let end = arrow_endpoint(
+                    *start,
+                    end,
+                    self.bond_drawing.fixed_angles && !state.modifiers.alt(),
+                );
+                let id = preview.next_id();
+                preview.arrows.push(moruno::document::Arrow::new(
+                    id,
+                    *start,
+                    end,
+                    self.arrow_preset,
+                    self.arrow_style.clone(),
+                ));
+            }
+            if let Some(Gesture::AtomIndicator { owner }) = &state.gesture
+                && let Some(anchor) = owner.anchor(&preview)
+            {
+                owner.set_offset(
+                    &mut preview,
+                    Some(World::new(end.x - anchor.x, end.y - anchor.y)),
+                );
+            }
+            if let Some(Gesture::GraphicPoint { id, index }) = &state.gesture
+                && let Some(g) = preview.graphics.iter_mut().find(|g| g.id == *id)
+            {
+                g.edit_point(*index, end);
+            }
+        }
         if let (Some(Gesture::Transform(drag)), Some(p)) = (&state.gesture, state.cursor) {
             let end = self
                 .camera
@@ -425,6 +1150,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
         }
         if let (Some(Gesture::Ring { start, attached }), Some(p)) = (&state.gesture, state.cursor)
             && bounds.contains(p)
+            && self.tool == Tool::Ring
         {
             let end = self
                 .camera
@@ -438,6 +1164,117 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                 10.0 / self.camera.zoom,
                 direction,
             ));
+        }
+        if let Tool::RingPreset(preset) = self.tool
+            && let Some(p) = state.cursor.filter(|p| bounds.contains(*p))
+        {
+            let end = self
+                .camera
+                .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
+            let (anchor, direction) = if let Some(Gesture::Ring { start, .. }) = &state.gesture {
+                ring_gesture(*start, end, true, 10. / self.camera.zoom)
+            } else {
+                (end, None)
+            };
+            let drawing = moruno::rings::Drawing {
+                preset,
+                length: self.bond_drawing.length,
+                alternate: state.modifiers.shift(),
+                connect: state.modifiers.alt(),
+            };
+            match drawing.place(self.doc, anchor, direction, 10. / self.camera.zoom) {
+                Ok((doc, ids)) => {
+                    preview = doc;
+                    for b in &mut preview.bonds {
+                        if self.doc.atom(b.a).is_none() || self.doc.atom(b.b).is_none() {
+                            b.color = [17, 126, 108];
+                        }
+                    }
+                    ring_selection = Some(ids);
+                    template_notice = Some((
+                        format!(
+                            "{preset} · Drag to orient · Alt connects by a bond · Escape cancels"
+                        ),
+                        true,
+                    ));
+                }
+                Err(error) => template_notice = Some((error.into(), false)),
+            }
+        }
+        if self.tool == Tool::Template
+            && let Some((template, source_anchor)) = self.template
+            && let Some(p) = state.cursor.filter(|p| bounds.contains(*p))
+        {
+            let end = self
+                .camera
+                .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
+            let (anchor, direction) = if let Some(Gesture::Ring { start, .. }) = &state.gesture {
+                self.template_gesture(*start, end, state.modifiers)
+            } else {
+                (end, None)
+            };
+            match moruno::templates::place_with_mode(
+                self.doc,
+                template,
+                anchor,
+                direction,
+                10.0 / self.camera.zoom,
+                source_anchor,
+                self.template_connection,
+            ) {
+                Ok((document, ids)) => {
+                    template_notice = Some((
+                        format!(
+                            "Preview · {} new objects ({} atoms) · Shift/Ctrl drag snaps 15° · Escape cancels",
+                            document.all_ids().len() - self.doc.all_ids().len(),
+                            document.atoms.len() - self.doc.atoms.len()
+                        ),
+                        true,
+                    ));
+                    preview = document;
+                    // Tint only transient objects. Commit calls the same pure
+                    // placement operation again and retains saved/JACS colors.
+                    let existing: std::collections::HashSet<_> =
+                        self.doc.all_ids().into_iter().collect();
+                    let tint = [17, 126, 108];
+                    for atom in &mut preview.atoms {
+                        if !existing.contains(&atom.id) {
+                            atom.text_style.get_or_insert_with(Default::default).color = tint;
+                        }
+                    }
+                    for bond in &mut preview.bonds {
+                        if !existing.contains(&bond.a) || !existing.contains(&bond.b) {
+                            bond.color = tint;
+                        }
+                    }
+                    for label in &mut preview.annotations {
+                        if !existing.contains(&label.id) {
+                            label.format.style.color = tint;
+                            for span in &mut label.format.spans {
+                                span.style.color = tint;
+                            }
+                        }
+                    }
+                    for graphic in &mut preview.graphics {
+                        if !existing.contains(&graphic.id) {
+                            graphic.style.stroke = tint;
+                            if graphic.style.fill.is_some() {
+                                graphic.style.fill = Some([220, 239, 233]);
+                            }
+                        }
+                    }
+                    ring_selection = Some(ids);
+                }
+                Err(error) => {
+                    template_notice = Some((error.to_string(), false));
+                    frame.stroke(
+                        &Path::circle(self.camera.screen(anchor, bounds), 10.0),
+                        Stroke::default()
+                            .with_width(2.0)
+                            .with_color(Color::from_rgb8(182, 66, 61)),
+                    );
+                }
+            }
         }
         if let (Some(Gesture::Move { start, ids, .. }), Some(p)) = (&state.gesture, state.cursor) {
             let p = self
@@ -457,8 +1294,80 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                 ring_selection = Some(ids.clone());
             }
         }
+        if let Some(p) = state.cursor {
+            let end = self
+                .camera
+                .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
+            let polygon = match &state.gesture {
+                Some(Gesture::Select { start }) => Some(vec![
+                    *start,
+                    World::new(end.x, start.y),
+                    end,
+                    World::new(start.x, end.y),
+                ]),
+                Some(Gesture::Lasso { points }) => {
+                    let mut p = points.clone();
+                    p.push(end);
+                    Some(p)
+                }
+                _ => None,
+            };
+            if let Some(polygon) = polygon {
+                ring_selection = Some(region_selection(
+                    self.doc,
+                    self.selected,
+                    &polygon,
+                    state.modifiers,
+                ));
+            }
+        }
+        if let (Some(Gesture::Draw { start, id }), Some(cursor), Some(preset)) =
+            (&state.gesture, state.cursor, self.tool.bond_preset())
+        {
+            let end = self
+                .camera
+                .world(Point::new(cursor.x - bounds.x, cursor.y - bounds.y), bounds);
+            if start.distance(end) >= 3.0 / self.camera.zoom {
+                let origin = id
+                    .and_then(|id| self.doc.atom(id).map(|a| a.position))
+                    .unwrap_or(*start);
+                let (end, target) = bond_target_with(
+                    self.doc,
+                    origin,
+                    end,
+                    *id,
+                    12.0 / self.camera.zoom,
+                    self.bond_drawing.unconstrained(state.modifiers.alt()),
+                );
+                if preset != moruno::bonds::BondPreset::Dotted
+                    || id
+                        .zip(target)
+                        .is_some_and(|(a, b)| moruno::bonds::hydrogen_endpoints(self.doc, a, b))
+                {
+                    let a = id.unwrap_or_else(|| preview.add_atom("C", origin));
+                    let z = target.unwrap_or_else(|| preview.add_atom("C", end));
+                    let (order, display, _) = preset.parts();
+                    preview.add_bond(a, z, order, display);
+                    if let Some(b) = preview
+                        .bonds
+                        .iter_mut()
+                        .find(|b| (b.a == a && b.b == z) || (b.a == z && b.b == a))
+                    {
+                        preset.apply(b);
+                    }
+                    ring_selection = Some(vec![a, z]);
+                } else {
+                    frame.stroke(
+                        &Path::circle(self.camera.screen(end, bounds), 8.0),
+                        Stroke::default()
+                            .with_width(1.5)
+                            .with_color(rgb([182, 66, 61])),
+                    );
+                }
+            }
+        }
         let selected = ring_selection.as_deref().unwrap_or(self.selected);
-        draw_atom_markers(&mut frame, &preview, selected, self.camera, bounds, true);
+        draw_atom_markers(frame, &preview, selected, self.camera, bounds, true);
         for id in selected {
             for a in preview.annotations.iter().filter(|a| a.id == *id) {
                 frame.stroke(
@@ -472,71 +1381,174 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                     Stroke::default().with_color(Color::from_rgb8(20, 130, 112)),
                 );
             }
-            for a in preview.arrows.iter().filter(|a| a.id == *id) {
-                for p in [a.start, a.end] {
+        }
+        draw_document(frame, &preview, self.camera, bounds);
+        if selected.len() == 1
+            && (self.tool.selects() || matches!(self.tool, Tool::Arrow | Tool::EditPoints))
+        {
+            for a in preview.arrows.iter().filter(|a| selected.contains(&a.id)) {
+                for (i, p) in a.handles().into_iter().enumerate() {
+                    let p = self.camera.screen(p, bounds);
+                    let path = if i == 2 {
+                        Path::rectangle(p - Vector::new(4., 4.), iced::Size::new(8., 8.))
+                    } else {
+                        Path::circle(p, 4.)
+                    };
+                    frame.fill(&path, Color::WHITE);
                     frame.stroke(
-                        &Path::circle(self.camera.screen(p, bounds), 5.0),
-                        Stroke::default().with_color(rgb([19, 135, 116])),
+                        &path,
+                        Stroke::default()
+                            .with_width(1.5)
+                            .with_color(rgb([19, 135, 116])),
                     );
                 }
             }
         }
-        for primitive in primitives(&preview) {
-            match primitive {
-                Primitive::Line(a, b, width) => frame.stroke(
-                    &Path::line(self.camera.screen(a, bounds), self.camera.screen(b, bounds)),
-                    Stroke::default()
-                        .with_width(width * self.camera.zoom)
-                        .with_color(Color::BLACK),
-                ),
-                Primitive::Polygon(points) => {
-                    let path = Path::new(|builder| {
-                        if let Some(p) = points.first() {
-                            builder.move_to(self.camera.screen(*p, bounds));
-                            for p in &points[1..] {
-                                builder.line_to(self.camera.screen(*p, bounds));
-                            }
-                            builder.close();
-                        }
-                    });
-                    frame.fill(&path, Color::BLACK);
+        if let Some((content, valid)) = template_notice {
+            let position = Point::new(14., (bounds.height - 30.).max(4.));
+            frame.fill_rectangle(
+                position - Vector::new(5., 4.),
+                iced::Size::new((bounds.width - 18.).max(1.), 25.),
+                rgb(if valid {
+                    [225, 242, 237]
+                } else {
+                    [253, 235, 233]
+                }),
+            );
+            frame.fill_text(canvas::Text {
+                content,
+                position,
+                color: rgb(if valid { [30, 100, 85] } else { [160, 50, 45] }),
+                size: 12.into(),
+                ..Default::default()
+            });
+        }
+        if let Some((point, content, valid)) = chain_badge {
+            let p = self.camera.screen(point, bounds);
+            let position = Point::new(
+                (p.x + 14.).clamp(4., (bounds.width - 200.).max(4.)),
+                (p.y + 18.).clamp(20., (bounds.height - 30.).max(20.)),
+            );
+            frame.fill_rectangle(
+                position - Vector::new(5., 4.),
+                iced::Size::new(196., 24.),
+                rgb(if valid {
+                    [225, 242, 237]
+                } else {
+                    [253, 235, 233]
+                }),
+            );
+            frame.fill_text(canvas::Text {
+                content,
+                position,
+                color: rgb(if valid { [30, 100, 85] } else { [160, 50, 45] }),
+                size: 12.into(),
+                ..Default::default()
+            });
+        }
+        if self.tool == Tool::EditPoints {
+            for indicator in moruno::atom_labels::indicators(&preview)
+                .into_iter()
+                .filter(|i| i.owner.selected(selected))
+            {
+                if let Some(anchor) = indicator.owner.anchor(&preview) {
+                    let center = self.camera.screen(indicator.center, bounds);
+                    frame.stroke(
+                        &Path::line(self.camera.screen(anchor, bounds), center),
+                        Stroke::default().with_color(rgb([120, 170, 155])),
+                    );
+                    let path = Path::circle(center, 4.);
+                    frame.fill(&path, Color::WHITE);
+                    frame.stroke(
+                        &path,
+                        Stroke::default()
+                            .with_width(1.5)
+                            .with_color(rgb([19, 135, 116])),
+                    );
                 }
-                Primitive::Text {
-                    position,
-                    text,
-                    size,
-                    color,
-                } => {
-                    let t = canvas::Text {
-                        content: text,
-                        position: self.camera.screen(position, bounds),
-                        size: (size * self.camera.zoom).into(),
-                        font: iced::Font::with_name(&moruno::style::DEFAULT.font_family),
-                        line_height: iced::widget::text::LineHeight::Relative(1.0),
-                        color: rgb(color),
-                        shaping: iced::widget::text::Shaping::Advanced,
-                        ..Default::default()
-                    };
-                    t.draw_with(|path, color| frame.fill(&path, color));
+            }
+            for a in preview
+                .atoms
+                .iter()
+                .filter(|a| selected.contains(&a.id) && preview.atom_visible(a.id))
+            {
+                for m in &a.marks {
+                    let center = self
+                        .camera
+                        .screen(a.position.offset(m.offset.x, m.offset.y), bounds);
+                    frame.stroke(
+                        &Path::line(self.camera.screen(a.position, bounds), center),
+                        Stroke::default().with_color(rgb([120, 170, 155])),
+                    );
+                    let path = Path::circle(center, 4.);
+                    frame.fill(&path, Color::WHITE);
+                    frame.stroke(
+                        &path,
+                        Stroke::default()
+                            .with_width(1.5)
+                            .with_color(rgb([19, 135, 116])),
+                    );
+                }
+            }
+        }
+        if self.tool == Tool::EditPoints {
+            for graphic in preview.graphics.iter().filter(|g| selected.contains(&g.id)) {
+                let mut anchor = World::default();
+                for c in graphic.commands() {
+                    let points = c.points();
+                    if let PathCommand::Cubic(a, b, end) = c {
+                        for (from, to) in [(anchor, a), (b, end)] {
+                            frame.stroke(
+                                &Path::line(
+                                    self.camera.screen(from, bounds),
+                                    self.camera.screen(to, bounds),
+                                ),
+                                Stroke::default().with_color(rgb([19, 135, 116])),
+                            );
+                        }
+                        anchor = end;
+                    } else if let Some(p) = points.last() {
+                        anchor = *p;
+                    }
+                    for p in points {
+                        let path = Path::circle(self.camera.screen(p, bounds), 4.0);
+                        frame.fill(&path, Color::WHITE);
+                        frame.stroke(
+                            &path,
+                            Stroke::default()
+                                .with_width(1.5)
+                                .with_color(rgb([19, 135, 116])),
+                        );
+                    }
                 }
             }
         }
         if let Some(p) = state.cursor {
             let p = Point::new(p.x - bounds.x, p.y - bounds.y);
             match &state.gesture {
-                Some(Gesture::Draw { start, id }) => {
+                Some(Gesture::Draw { start, id })
+                    if self.tool.bond_preset().is_none() && self.tool != Tool::Arrow =>
+                {
                     let origin = id
                         .and_then(|id| self.doc.atom(id).map(|a| a.position))
                         .unwrap_or(*start);
                     let end = self.camera.world(p, bounds);
                     // A preview exists only during an actual drag, never while idle.
                     if start.distance(end) < 3.0 / self.camera.zoom {
-                        return vec![frame.into_geometry()];
+                        return;
                     }
                     let end = if self.tool == Tool::Arrow {
                         end
                     } else {
-                        bond_target(self.doc, origin, end, *id, 12.0 / self.camera.zoom).0
+                        bond_target_with(
+                            self.doc,
+                            origin,
+                            end,
+                            *id,
+                            12.0 / self.camera.zoom,
+                            self.bond_drawing.unconstrained(state.modifiers.alt()),
+                        )
+                        .0
                     };
                     frame.stroke(
                         &Path::line(
@@ -547,6 +1559,20 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                             .with_width(2.0)
                             .with_color(rgb([19, 135, 116])),
                     );
+                }
+                Some(Gesture::Lasso { points }) => {
+                    if let Some(first) = points.first() {
+                        let path = Path::new(|b| {
+                            b.move_to(self.camera.screen(*first, bounds));
+                            for point in points.iter().skip(1) {
+                                b.line_to(self.camera.screen(*point, bounds));
+                            }
+                            b.line_to(p);
+                            b.close();
+                        });
+                        frame.fill(&path, Color::from_rgba8(19, 135, 116, 0.08));
+                        frame.stroke(&path, Stroke::default().with_color(rgb([19, 135, 116])));
+                    }
                 }
                 Some(Gesture::Select { start }) => {
                     let a = self.camera.screen(*start, bounds);
@@ -561,15 +1587,18 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                 None if cursor.is_over(bounds) => {
                     let point = self.camera.world(p, bounds);
                     let mut hit = hit_selection(self.doc, point, 10.0 / self.camera.zoom);
-                    if self.tool == Tool::Select && hit.is_empty() {
+                    if self.tool.selects() && hit.is_empty() {
                         hit = moruno::editing::ring_at(self.doc, point).unwrap_or_default();
                     }
-                    draw_atom_markers(&mut frame, self.doc, &hit, self.camera, bounds, false);
+                    if self.tool.selects() && !state.modifiers.alt() {
+                        hit = self.doc.expand_groups(&hit);
+                    }
+                    draw_atom_markers(frame, self.doc, &hit, self.camera, bounds, false);
                 }
                 _ => {}
             }
         }
-        if self.tool == Tool::Select {
+        if self.tool.selects() {
             if let (Some(Gesture::Transform(drag)), Some(p)) = (&state.gesture, state.cursor)
                 && matches!(drag.handle, Handle::Rotate)
             {
@@ -577,45 +1606,24 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                     .camera
                     .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
                 drag.selection
-                    .draw(&mut frame, drag.values(end, state.modifiers.shift()).1);
+                    .draw(frame, drag.values(end, state.modifiers.shift()).1);
             } else if let Some(selection) =
                 SelectionBox::new(&preview, selected, self.camera, bounds)
             {
-                selection.draw(&mut frame, 0.0);
+                selection.draw(frame, 0.0);
             }
         }
-        vec![frame.into_geometry()]
     }
-    fn mouse_interaction(
-        &self,
-        state: &State,
-        bounds: Rectangle,
-        cursor: mouse::Cursor,
-    ) -> mouse::Interaction {
-        if let Some(Gesture::Transform(drag)) = &state.gesture {
-            return if matches!(drag.handle, Handle::Rotate) {
-                mouse::Interaction::Grabbing
-            } else {
-                drag.handle.cursor()
-            };
-        }
-        if cursor.is_over(bounds) {
-            if self.tool == Tool::Select {
-                if let Some(selection) =
-                    SelectionBox::new(self.doc, self.selected, self.camera, bounds)
-                    && let Some(p) = cursor.position()
-                    && let Some(handle) = selection.hit(Point::new(p.x - bounds.x, p.y - bounds.y))
-                {
-                    return handle.cursor();
-                }
-                mouse::Interaction::default()
-            } else {
-                mouse::Interaction::Crosshair
-            }
-        } else {
-            mouse::Interaction::default()
-        }
-    }
+}
+
+fn region_selection(
+    doc: &Document,
+    selected: &[u64],
+    polygon: &[World],
+    mods: iced::keyboard::Modifiers,
+) -> Vec<u64> {
+    let hits = doc.expand_groups(&moruno::selection_region::objects(doc, polygon));
+    moruno::selection_region::combine(selected, &hits, mods.shift(), mods.alt())
 }
 
 fn draw_atom_markers(
@@ -626,7 +1634,7 @@ fn draw_atom_markers(
     bounds: Rectangle,
     selected: bool,
 ) {
-    for bond in &doc.bonds {
+    for bond in doc.bonds.iter().filter(|b| doc.bond_visible(b.a, b.b)) {
         if ids.contains(&bond.a)
             && ids.contains(&bond.b)
             && let Some((a, b)) = doc.atom(bond.a).zip(doc.atom(bond.b))
@@ -643,7 +1651,7 @@ fn draw_atom_markers(
         }
     }
     for id in ids {
-        if let Some(atom) = doc.atom(*id) {
+        if let Some(atom) = doc.atom(*id).filter(|a| doc.atom_visible(a.id)) {
             let circle = Path::circle(camera.screen(atom.position, bounds), 8.0);
             if selected {
                 frame.fill(&circle, Color::from_rgba8(19, 135, 116, 0.12));
@@ -668,21 +1676,27 @@ fn ring_gesture(start: World, end: World, attached: bool, radius: f32) -> (World
 
 /// Bonds are manipulated through their two endpoint atoms; they have no separate ID.
 fn hit_selection(doc: &Document, p: World, r: f32) -> Vec<u64> {
+    if let Some(i) = moruno::atom_labels::indicators(doc).into_iter().find(|i| {
+        (p.x - i.center.x).abs() < i.width / 2. + r && (p.y - i.center.y).abs() < i.height / 2. + r
+    }) {
+        return match i.owner {
+            moruno::atom_labels::Owner::Number(id) | moruno::atom_labels::Owner::AtomStereo(id) => {
+                vec![id]
+            }
+            moruno::atom_labels::Owner::BondStereo(a, b) => vec![a, b],
+        };
+    }
     if let Some(id) = hit_object(doc, p, r) {
         return vec![id];
     }
     moruno::editing::nearest_bond(doc, p, r * 0.7)
-        .map(|i| vec![doc.bonds[i].a, doc.bonds[i].b])
+        .and_then(|i| doc.bonds.get(i))
+        .map(|b| vec![b.a, b.b])
         .unwrap_or_default()
-}
-pub fn snap(start: World, end: World) -> World {
-    let angle = ((end.y - start.y).atan2(end.x - start.x) / (std::f32::consts::PI / 6.0)).round()
-        * (std::f32::consts::PI / 6.0);
-    let length = moruno::style::DEFAULT.bond_length_world;
-    start.offset(angle.cos() * length, angle.sin() * length)
 }
 /// Use the same attachment resolution for the drag preview and committed bond.
 /// Excluding the source lets short drags grow a bond rather than snap to themselves.
+#[cfg(test)]
 fn bond_target(
     doc: &Document,
     start: World,
@@ -690,13 +1704,25 @@ fn bond_target(
     source: Option<u64>,
     radius: f32,
 ) -> (World, Option<u64>) {
+    bond_target_with(doc, start, end, source, radius, BondDrawing::default())
+}
+fn bond_target_with(
+    doc: &Document,
+    start: World,
+    end: World,
+    source: Option<u64>,
+    radius: f32,
+    drawing: BondDrawing,
+) -> (World, Option<u64>) {
     let nearest = |p: World| {
         doc.atoms
             .iter()
-            .filter(|a| Some(a.id) != source && a.position.distance(p) < radius)
+            .filter(|a| {
+                doc.atom_visible(a.id) && Some(a.id) != source && a.position.distance(p) < radius
+            })
             .min_by(|a, b| a.position.distance(p).total_cmp(&b.position.distance(p)))
     };
-    let snapped = snap(start, end);
+    let snapped = drawing.endpoint(start, end);
     if let Some(atom) = nearest(end).or_else(|| nearest(snapped)) {
         (atom.position, Some(atom.id))
     } else {
@@ -704,7 +1730,34 @@ fn bond_target(
     }
 }
 pub fn hit_object(doc: &Document, p: World, r: f32) -> Option<u64> {
-    doc.nearest(p, r)
+    let graphic = |front| {
+        doc.graphics
+            .iter()
+            .enumerate()
+            .filter(|(_, g)| (g.layer >= 0) == front && g.hit(p, r))
+            .max_by_key(|(i, g)| (g.layer, *i))
+            .map(|(_, g)| g.id)
+    };
+    graphic(true)
+        .or_else(|| {
+            doc.atoms
+                .iter()
+                .rev()
+                .find(|a| {
+                    doc.atom_visible(a.id)
+                        && moruno::scientific::mark_parts(a).iter().any(|part| {
+                            moruno::graphics::flattened(&part.commands)
+                                .iter()
+                                .any(|points| {
+                                    points.windows(2).any(
+                                    |q| matches!(q, [a, b] if distance_to_segment(p, *a, *b) < r),
+                                )
+                                })
+                        })
+                })
+                .map(|a| a.id)
+        })
+        .or_else(|| doc.nearest(p, r))
         .or_else(|| {
             doc.annotations
                 .iter()
@@ -717,34 +1770,13 @@ pub fn hit_object(doc: &Document, p: World, r: f32) -> Option<u64> {
                 })
                 .map(|a| a.id)
         })
+        .or_else(|| doc.arrows.iter().rev().find(|a| a.hit(p, r)).map(|a| a.id))
         .or_else(|| {
-            doc.arrows
-                .iter()
-                .rev()
-                .find(|a| {
-                    if a.kind != "curved" {
-                        return distance_to_segment(p, a.start, a.end) < r;
-                    }
-                    let control = World::new(
-                        (a.start.x + a.end.x) / 2.0 - (a.end.y - a.start.y) * 0.5,
-                        (a.start.y + a.end.y) / 2.0 + (a.end.x - a.start.x) * 0.5,
-                    );
-                    let mut prev = a.start;
-                    for i in 1..=32 {
-                        let t = i as f32 / 32.0;
-                        let u = 1.0 - t;
-                        let end = World::new(
-                            u * u * a.start.x + 2.0 * u * t * control.x + t * t * a.end.x,
-                            u * u * a.start.y + 2.0 * u * t * control.y + t * t * a.end.y,
-                        );
-                        if distance_to_segment(p, prev, end) < r {
-                            return true;
-                        }
-                        prev = end;
-                    }
-                    false
-                })
-                .map(|a| a.id)
+            if moruno::editing::nearest_bond(doc, p, r * 0.7).is_none() {
+                graphic(false)
+            } else {
+                None
+            }
         })
 }
 pub fn distance_to_segment(p: World, a: World, b: World) -> f32 {
@@ -757,10 +1789,1079 @@ pub fn distance_to_segment(p: World, a: World, b: World) -> f32 {
     p.distance(a.offset(v.x * t, v.y * t))
 }
 
+fn draw_document(frame: &mut Frame, doc: &Document, camera: Camera, bounds: Rectangle) {
+    for primitive in primitives(doc) {
+        match primitive {
+            Primitive::Path {
+                commands,
+                style,
+                filled,
+            } => {
+                let path = Path::new(|b| {
+                    for c in commands {
+                        match c {
+                            PathCommand::Move(p) => b.move_to(camera.screen(p, bounds)),
+                            PathCommand::Line(p) => b.line_to(camera.screen(p, bounds)),
+                            PathCommand::Cubic(a, z, p) => b.bezier_curve_to(
+                                camera.screen(a, bounds),
+                                camera.screen(z, bounds),
+                                camera.screen(p, bounds),
+                            ),
+                            PathCommand::Close => b.close(),
+                        }
+                    }
+                });
+                if filled && let Some(c) = style.fill {
+                    frame.fill(&path, rgb(c));
+                }
+                let dashes: Vec<_> = style.dashes().iter().map(|v| v * camera.zoom).collect();
+                let stroke = Stroke {
+                    line_dash: canvas::LineDash {
+                        segments: &dashes,
+                        offset: 0,
+                    },
+                    ..Stroke::default()
+                }
+                .with_color(rgb(style.stroke))
+                .with_width(style.width() * camera.zoom)
+                .with_line_cap(canvas::LineCap::Round)
+                .with_line_join(canvas::LineJoin::Round);
+                frame.stroke(&path, stroke);
+            }
+            Primitive::Line(a, b, width) => frame.stroke(
+                &Path::line(camera.screen(a, bounds), camera.screen(b, bounds)),
+                Stroke::default()
+                    .with_width(width * camera.zoom)
+                    .with_color(Color::BLACK),
+            ),
+            Primitive::Polygon(points) => {
+                let path = Path::new(|builder| {
+                    if let Some(p) = points.first() {
+                        builder.move_to(camera.screen(*p, bounds));
+                        for p in points.iter().skip(1) {
+                            builder.line_to(camera.screen(*p, bounds));
+                        }
+                        builder.close();
+                    }
+                });
+                frame.fill(&path, Color::BLACK);
+            }
+            Primitive::Text {
+                position,
+                text,
+                size,
+                color,
+                style,
+            } => {
+                let t = canvas::Text {
+                    content: text,
+                    position: camera.screen(position, bounds),
+                    size: (size * camera.zoom).into(),
+                    font: iced::Font {
+                        family: iced::font::Family::Name(moruno::style::font_name(&style.family)),
+                        weight: if style.bold {
+                            iced::font::Weight::Bold
+                        } else {
+                            iced::font::Weight::Normal
+                        },
+                        style: if style.italic {
+                            iced::font::Style::Italic
+                        } else {
+                            iced::font::Style::Normal
+                        },
+                        ..Default::default()
+                    },
+                    line_height: iced::widget::text::LineHeight::Relative(1.0),
+                    color: rgb(color),
+                    shaping: iced::widget::text::Shaping::Advanced,
+                    ..Default::default()
+                };
+                t.draw_with(|path, color| frame.fill(&path, color));
+                if style.underline {
+                    let width = moruno::style::styled_text_width(&t.content, size, &style);
+                    frame.stroke(
+                        &Path::line(
+                            camera.screen(position.offset(0.0, size * 0.95), bounds),
+                            camera.screen(position.offset(width, size * 0.95), bounds),
+                        ),
+                        Stroke::default()
+                            .with_width((size * 0.045 * camera.zoom).max(0.5))
+                            .with_color(rgb(color)),
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// Noninteractive thumbnail rendered from the same molecule and scene as placement.
+pub struct TemplateThumbnail<'a>(pub &'a Document);
+impl<Message> canvas::Program<Message> for TemplateThumbnail<'_> {
+    type State = ();
+    fn draw(
+        &self,
+        _: &(),
+        renderer: &Renderer,
+        _: &Theme,
+        bounds: Rectangle,
+        _: mouse::Cursor,
+    ) -> Vec<Geometry> {
+        let mut frame = Frame::new(renderer, bounds.size());
+        let (lo, hi) = moruno::scene::selection_bounds(self.0, &self.0.all_ids())
+            .unwrap_or_else(|| self.0.bounds());
+        let camera = Camera {
+            center: World::new((lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5),
+            zoom: ((bounds.width - (bounds.width * 0.16).min(24.0)) / (hi.x - lo.x).max(60.0))
+                .min((bounds.height - (bounds.height * 0.14).min(20.0)) / (hi.y - lo.y).max(50.0))
+                .min(0.85),
+        };
+        draw_document(&mut frame, self.0, camera, bounds);
+        vec![frame.into_geometry()]
+    }
+}
+
+/// Owns a temporary diagram for a tool inspector preview.
+pub struct DrawingThumbnail(pub Document);
+impl<Message> canvas::Program<Message> for DrawingThumbnail {
+    type State = ();
+    fn draw(
+        &self,
+        state: &(),
+        renderer: &Renderer,
+        theme: &Theme,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) -> Vec<Geometry> {
+        <TemplateThumbnail<'_> as canvas::Program<Message>>::draw(
+            &TemplateThumbnail(&self.0),
+            state,
+            renderer,
+            theme,
+            bounds,
+            cursor,
+        )
+    }
+}
+
+/// The source diagram is a real hit-tested canvas, so anchors identify the
+/// exact atom/bond the user picked rather than a nearest compatible substitute.
+pub struct TemplateAnchorPreview<'a> {
+    pub document: &'a Document,
+    pub anchor: moruno::templates::Anchor,
+}
+impl TemplateAnchorPreview<'_> {
+    fn camera(&self, bounds: Rectangle) -> Camera {
+        let (lo, hi) = moruno::scene::selection_bounds(self.document, &self.document.all_ids())
+            .unwrap_or_else(|| self.document.bounds());
+        Camera {
+            center: World::new((lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5),
+            zoom: ((bounds.width - 30.) / (hi.x - lo.x).max(60.))
+                .min((bounds.height - 30.) / (hi.y - lo.y).max(50.))
+                .min(1.2),
+        }
+    }
+    fn hit(&self, p: Point, bounds: Rectangle) -> Option<moruno::templates::Anchor> {
+        let camera = self.camera(bounds);
+        let p = camera.world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
+        self.document
+            .nearest(p, 8. / camera.zoom)
+            .map(moruno::templates::Anchor::Atom)
+            .or_else(|| {
+                moruno::editing::nearest_bond(self.document, p, 6. / camera.zoom)
+                    .and_then(|i| self.document.bonds.get(i))
+                    .map(|b| moruno::templates::Anchor::Bond(b.a, b.b))
+            })
+    }
+}
+impl canvas::Program<moruno::templates::Anchor> for TemplateAnchorPreview<'_> {
+    type State = Option<moruno::templates::Anchor>;
+    fn update(
+        &self,
+        state: &mut Self::State,
+        event: &Event,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) -> Option<Action<moruno::templates::Anchor>> {
+        let p = match event {
+            Event::Mouse(mouse::Event::CursorMoved { position }) => Some(*position),
+            _ => cursor.position(),
+        };
+        let hit = p
+            .filter(|p| bounds.contains(*p))
+            .and_then(|p| self.hit(p, bounds));
+        match event {
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
+                hit.map(|anchor| Action::publish(anchor).and_capture())
+            }
+            Event::Mouse(mouse::Event::CursorMoved { .. } | mouse::Event::CursorLeft) => {
+                if *state != hit {
+                    *state = hit;
+                    Some(Action::request_redraw())
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
+    fn mouse_interaction(
+        &self,
+        _: &Self::State,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) -> mouse::Interaction {
+        if cursor
+            .position()
+            .filter(|p| bounds.contains(*p))
+            .and_then(|p| self.hit(p, bounds))
+            .is_some()
+        {
+            mouse::Interaction::Pointer
+        } else {
+            mouse::Interaction::default()
+        }
+    }
+    fn draw(
+        &self,
+        state: &Self::State,
+        renderer: &Renderer,
+        _: &Theme,
+        bounds: Rectangle,
+        _: mouse::Cursor,
+    ) -> Vec<Geometry> {
+        let mut frame = Frame::new(renderer, bounds.size());
+        let camera = self.camera(bounds);
+        frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::WHITE);
+        draw_document(&mut frame, self.document, camera, bounds);
+        for (anchor, color) in [
+            (Some(self.anchor), Color::from_rgb8(17, 126, 108)),
+            (*state, Color::from_rgba8(17, 126, 108, 0.45)),
+        ] {
+            match anchor {
+                Some(moruno::templates::Anchor::Atom(id)) => {
+                    if let Some(a) = self.document.atom(id) {
+                        frame.stroke(
+                            &Path::circle(camera.screen(a.position, bounds), 9.),
+                            Stroke::default().with_color(color).with_width(2.),
+                        );
+                    }
+                }
+                Some(moruno::templates::Anchor::Bond(a, b)) => {
+                    if let (Some(a), Some(b)) = (self.document.atom(a), self.document.atom(b)) {
+                        frame.stroke(
+                            &Path::line(
+                                camera.screen(a.position, bounds),
+                                camera.screen(b.position, bounds),
+                            ),
+                            Stroke::default().with_color(color).with_width(5.),
+                        );
+                    }
+                }
+                _ => {}
+            }
+        }
+        vec![frame.into_geometry()]
+    }
+}
+
+fn arrow_endpoint(start: World, cursor: World, fixed_angles: bool) -> World {
+    if !fixed_angles {
+        return cursor;
+    }
+    let step = std::f32::consts::PI / 12.;
+    let angle = ((cursor.y - start.y).atan2(cursor.x - start.x) / step).round() * step;
+    let length = start.distance(cursor);
+    start.offset(length * angle.cos(), length * angle.sin())
+}
+
+pub struct ArrowPreview {
+    pub arrow: moruno::document::Arrow,
+}
+impl canvas::Program<crate::app::Message> for ArrowPreview {
+    type State = ();
+    fn draw(
+        &self,
+        _: &(),
+        renderer: &Renderer,
+        _: &Theme,
+        bounds: Rectangle,
+        _: mouse::Cursor,
+    ) -> Vec<Geometry> {
+        let mut frame = Frame::new(renderer, bounds.size());
+        let mut doc = Document::default();
+        doc.arrows.push(self.arrow.clone());
+        let (lo, hi) = self.arrow.bounds();
+        let camera = Camera {
+            center: World::new((lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5),
+            zoom: ((bounds.width - 22.) / (hi.x - lo.x).max(1.))
+                .min((bounds.height - 18.) / (hi.y - lo.y).max(1.))
+                .min(1.4),
+        };
+        draw_document(&mut frame, &doc, camera, bounds);
+        vec![frame.into_geometry()]
+    }
+}
+
+/// The inspector uses the same geometry and phase fills as the drawing/export.
+pub struct ScientificPreview(pub moruno::graphics::Graphic);
+impl canvas::Program<crate::app::Message> for ScientificPreview {
+    type State = ();
+    fn draw(
+        &self,
+        _: &(),
+        renderer: &Renderer,
+        _: &Theme,
+        bounds: Rectangle,
+        _: mouse::Cursor,
+    ) -> Vec<Geometry> {
+        let mut frame = Frame::new(renderer, bounds.size());
+        let (lo, hi) = self.0.bounds();
+        let camera = Camera {
+            center: World::new((lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5),
+            zoom: ((bounds.width - 24.) / (hi.x - lo.x).max(1.))
+                .min((bounds.height - 20.) / (hi.y - lo.y).max(1.))
+                .min(1.4),
+        };
+        let doc = Document {
+            graphics: vec![self.0.clone()],
+            ..Document::default()
+        };
+        draw_document(&mut frame, &doc, camera, bounds);
+        vec![frame.into_geometry()]
+    }
+}
+
+/// Shared, read-only preview for palettes and reviewed drawing proposals.
+pub struct DrawingPreview<'a>(pub &'a Document);
+impl canvas::Program<crate::app::Message> for DrawingPreview<'_> {
+    type State = ();
+    fn draw(
+        &self,
+        _: &(),
+        renderer: &Renderer,
+        _: &Theme,
+        bounds: Rectangle,
+        _: mouse::Cursor,
+    ) -> Vec<Geometry> {
+        let mut frame = Frame::new(renderer, bounds.size());
+        frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::WHITE);
+        let (lo, hi) =
+            moruno::scene::selection_bounds(self.0, &self.0.all_ids()).unwrap_or_default();
+        let camera = Camera {
+            center: World::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.),
+            zoom: ((bounds.width - 24.) / (hi.x - lo.x).max(1.))
+                .min((bounds.height - 24.) / (hi.y - lo.y).max(1.))
+                .clamp(0.001, 1.4),
+        };
+        draw_document(&mut frame, self.0, camera, bounds);
+        vec![frame.into_geometry()]
+    }
+}
+
+pub struct OwnedDrawingPreview(pub Document);
+impl canvas::Program<crate::app::Message> for OwnedDrawingPreview {
+    type State = ();
+    fn draw(
+        &self,
+        state: &(),
+        renderer: &Renderer,
+        theme: &Theme,
+        bounds: Rectangle,
+        cursor: mouse::Cursor,
+    ) -> Vec<Geometry> {
+        DrawingPreview(&self.0).draw(state, renderer, theme, bounds, cursor)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use iced::widget::canvas::Program;
+
+    #[test]
+    fn rulers_exclude_editing_and_pointer_coordinates_use_the_inset_paper() {
+        let doc = Document::default();
+        let canvas = MoleculeCanvas {
+            tool: Tool::Atom,
+            guides: guides::Guides {
+                rulers: true,
+                crosshair: true,
+                ..Default::default()
+            },
+            ..chain_canvas(&doc, ChainMode::Straight)
+        };
+        let bounds = Rectangle::new(Point::new(20., 50.), iced::Size::new(400., 300.));
+        let mut state = State::default();
+        for p in [Point::new(45., 200.), Point::new(200., 63.)] {
+            let cursor = mouse::Cursor::Available(p);
+            canvas.update(
+                &mut state,
+                &Event::Mouse(mouse::Event::CursorMoved { position: p }),
+                bounds,
+                cursor,
+            );
+            assert!(
+                canvas
+                    .update(
+                        &mut state,
+                        &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+                        bounds,
+                        cursor
+                    )
+                    .is_none()
+            );
+            assert!(state.gesture.is_none());
+        }
+        let p = Point::new(239., 213.);
+        canvas.update(
+            &mut state,
+            &Event::Mouse(mouse::Event::CursorMoved { position: p }),
+            bounds,
+            mouse::Cursor::Available(p),
+        );
+        let click = canvas
+            .update(
+                &mut state,
+                &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+                bounds,
+                mouse::Cursor::Available(p),
+            )
+            .expect("atom click on paper");
+        assert!(matches!(
+            click.into_inner().0,
+            Some(Edit::Click(World { x: 0., y: 0. }))
+        ));
+        let action = canvas
+            .update(
+                &mut state,
+                &Event::Mouse(mouse::Event::WheelScrolled {
+                    delta: mouse::ScrollDelta::Lines { x: 0., y: 1. },
+                }),
+                bounds,
+                mouse::Cursor::Available(p),
+            )
+            .expect("zoom on drawing");
+        assert!(matches!(
+            action.into_inner().0,
+            Some(Edit::Zoom(_, World { x: 0., y: 0. }))
+        ));
+        canvas.update(
+            &mut state,
+            &Event::Mouse(mouse::Event::CursorLeft),
+            bounds,
+            mouse::Cursor::Unavailable,
+        );
+        assert!(state.cursor.is_none());
+    }
+
+    #[test]
+    fn free_ring_preset_drag_keeps_its_start_as_rotation_anchor() {
+        let doc = Document::default();
+        let canvas = MoleculeCanvas {
+            tool: Tool::RingPreset(moruno::rings::Preset::ChairUp),
+            camera: Camera {
+                center: World::default(),
+                zoom: 1.,
+            },
+            ..chain_canvas(&doc, ChainMode::Straight)
+        };
+        assert!(matches!(
+            pointer_gesture(&canvas, Point::new(200., 150.), Point::new(200., 80.)),
+            Edit::RingPreset(
+                moruno::rings::Preset::ChairUp,
+                World { x: 0., y: 0. },
+                Some(World { x: 0., y: -70. }),
+                false,
+                false
+            )
+        ));
+        assert!(doc.atoms.is_empty());
+    }
+
+    #[test]
+    fn arrow_handle_drag_is_one_edit_and_midpoint_hit_follows_curve() {
+        use moruno::arrows::{ArrowStyle, Preset};
+        let mut doc = Document::default();
+        doc.arrows.push(moruno::document::Arrow::new(
+            1,
+            World::new(-60., 0.),
+            World::new(60., 0.),
+            Preset::Forward,
+            ArrowStyle::default(),
+        ));
+        let canvas = MoleculeCanvas {
+            tool: Tool::Select,
+            selected: &[1],
+            camera: Camera {
+                center: World::default(),
+                zoom: 1.,
+            },
+            ..chain_canvas(&doc, ChainMode::Straight)
+        };
+        assert!(matches!(
+            pointer_gesture(&canvas, Point::new(200., 150.), Point::new(200., 95.)),
+            Edit::ArrowHandle(1, 2, World { x: 0., y: -55. })
+        ));
+        assert!(doc.arrows[0].control.is_none());
+        doc.arrows[0].edit_handle(2, World::new(0., -55.));
+        assert_eq!(hit_object(&doc, World::new(0., -55.), 4.), Some(1));
+        assert_eq!(hit_object(&doc, World::new(0., 0.), 4.), None);
+        let canvas = MoleculeCanvas {
+            tool: Tool::Arrow,
+            selected: &[1],
+            camera: Camera {
+                center: World::default(),
+                zoom: 1.,
+            },
+            ..chain_canvas(&doc, ChainMode::Straight)
+        };
+        assert!(matches!(
+            pointer_gesture(&canvas, Point::new(260., 150.), Point::new(300., 150.)),
+            Edit::ArrowHandle(1, 1, World { x: 100., y: 0. })
+        ));
+    }
+
+    #[test]
+    fn template_anchor_preview_hit_tests_atoms_bonds_and_empty_space() {
+        use moruno::templates::Anchor;
+        let mut doc = Document::default();
+        let a = doc.add_atom("N", World::new(-42., 0.));
+        let b = doc.add_atom("C", World::new(42., 0.));
+        doc.add_bond(a, b, 1, "plain");
+        let preview = TemplateAnchorPreview {
+            document: &doc,
+            anchor: Anchor::Auto,
+        };
+        let bounds = Rectangle::new(Point::new(20., 30.), iced::Size::new(220., 150.));
+        let camera = preview.camera(bounds);
+        for (point, expected) in [
+            (World::new(-42., 0.), Anchor::Atom(a)),
+            (World::default(), Anchor::Bond(a, b)),
+        ] {
+            let p = camera.screen(point, bounds) + Vector::new(bounds.x, bounds.y);
+            let action = preview
+                .update(
+                    &mut None,
+                    &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+                    bounds,
+                    mouse::Cursor::Available(p),
+                )
+                .unwrap();
+            assert_eq!(action.into_inner().0, Some(expected));
+        }
+        assert!(
+            preview
+                .update(
+                    &mut None,
+                    &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+                    bounds,
+                    mouse::Cursor::Available(Point::new(21., 31.))
+                )
+                .is_none()
+        );
+    }
+
+    fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_> {
+        static STYLE: std::sync::LazyLock<GraphicStyle> =
+            std::sync::LazyLock::new(GraphicStyle::default);
+        MoleculeCanvas {
+            doc,
+            selected: &[],
+            tool: Tool::Chain(mode),
+            camera: Camera {
+                center: World::default(),
+                zoom: 1.,
+            },
+            grid: false,
+            guides: Default::default(),
+            ring_size: 6,
+            aromatic_ring: false,
+            template_connection: moruno::templates::Connection::Auto,
+            template: None,
+            arrow_preset: Default::default(),
+            arrow_style: &moruno::arrows::ArrowStyle::DEFAULT,
+            orbital_phase: Default::default(),
+            phase_flipped: false,
+            attach_symbols: true,
+            graphic_style: &STYLE,
+            bracket_sides: BracketSides::Both,
+            bond_drawing: Default::default(),
+            chain_drawing: Default::default(),
+        }
+    }
+
+    #[test]
+    fn chain_click_and_fast_drag_keep_attachment_count_and_preview_geometry() {
+        let mut doc = Document::default();
+        let source = doc.add_atom("N", World::new(-120., 0.));
+        let target = doc.add_atom("O", World::new(120., 0.));
+        let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+        canvas.chain_drawing.atoms = Some(7);
+        let Edit::Chain {
+            points,
+            source: a,
+            target: b,
+        } = pointer_gesture(&canvas, Point::new(80., 150.), Point::new(320., 150.))
+        else {
+            panic!("chain gesture")
+        };
+        assert_eq!((a, b), (Some(source), Some(target)));
+        assert_eq!(points.len(), 7);
+        let (preview, preview_target) = canvas.chain_plan(
+            (World::new(-120., 0.), World::new(-120., 0.)),
+            Some(source),
+            &[World::new(-120., 0.)],
+            (false, true),
+            World::new(120., 0.),
+            iced::keyboard::Modifiers::empty(),
+        );
+        assert_eq!(preview, points);
+        assert_eq!(preview_target, b);
+        canvas.chain_drawing.atoms = Some(4);
+        let Edit::Chain {
+            points,
+            source: a,
+            target: b,
+        } = pointer_gesture(&canvas, Point::new(84., 153.), Point::new(84., 153.))
+        else {
+            panic!("attached click")
+        };
+        assert_eq!(a, Some(source));
+        assert_eq!(b, None);
+        assert_eq!(points.len(), 4);
+        assert_eq!(points[0], doc.atom(source).unwrap().position);
+
+        let initial = chains::straight(
+            World::default(),
+            World::new(200., 0.),
+            false,
+            BondDrawing::default(),
+            ChainDrawing {
+                atoms: Some(6),
+                ..Default::default()
+            },
+            false,
+        );
+        let (doc, ids) = chains::place(&Document::default(), &initial, None, None, 8.).unwrap();
+        let canvas = chain_canvas(&doc, ChainMode::Straight);
+        let last = *initial.last().unwrap();
+        let (extension, _) = canvas.chain_plan(
+            (last, last),
+            ids.last().copied(),
+            &[last],
+            (false, false),
+            last,
+            iced::keyboard::Modifiers::empty(),
+        );
+        assert_eq!(extension.len(), 6);
+        assert!(extension.iter().all(|p| p.y.abs() <= 21.001));
+        assert!(extension.windows(2).all(|p| p[1].x > p[0].x));
+    }
+
+    #[test]
+    fn snaking_gesture_bends_with_control_and_cancels_on_focus_loss() {
+        let doc = Document::default();
+        let canvas = chain_canvas(&doc, ChainMode::Straight);
+        let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(600., 500.));
+        let mut state = State::default();
+        let positions = [
+            Point::new(100., 280.),
+            Point::new(325., 280.),
+            Point::new(325., 80.),
+        ];
+        let cursor = mouse::Cursor::Available(positions[2]);
+        canvas.update(
+            &mut state,
+            &Event::Mouse(mouse::Event::CursorMoved {
+                position: positions[0],
+            }),
+            bounds,
+            cursor,
+        );
+        canvas.update(
+            &mut state,
+            &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            bounds,
+            cursor,
+        );
+        canvas.update(
+            &mut state,
+            &Event::Mouse(mouse::Event::CursorMoved {
+                position: positions[1],
+            }),
+            bounds,
+            cursor,
+        );
+        canvas.update(
+            &mut state,
+            &Event::Keyboard(iced::keyboard::Event::ModifiersChanged(
+                iced::keyboard::Modifiers::CTRL,
+            )),
+            bounds,
+            cursor,
+        );
+        canvas.update(
+            &mut state,
+            &Event::Mouse(mouse::Event::CursorMoved {
+                position: positions[2],
+            }),
+            bounds,
+            cursor,
+        );
+        let Some(Gesture::Chain {
+            points, snaking, ..
+        }) = &state.gesture
+        else {
+            panic!()
+        };
+        assert!(*snaking);
+        assert!(points.len() > 7);
+        assert!(points.last().unwrap().y < -100.);
+        canvas.update(
+            &mut state,
+            &Event::Window(iced::window::Event::Unfocused),
+            bounds,
+            cursor,
+        );
+        assert!(
+            canvas
+                .update(
+                    &mut state,
+                    &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                    bounds,
+                    cursor
+                )
+                .is_none()
+        );
+        assert!(doc.atoms.is_empty());
+    }
+
+    #[test]
+    fn alt_temporarily_frees_bond_constraints_without_changing_tool_preferences() {
+        let doc = Document::default();
+        let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+        canvas.tool = Tool::Bond(1);
+        let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(400., 300.));
+        let mut state = State::default();
+        let start = Point::new(120., 150.);
+        let end = Point::new(246., 202.);
+        let cursor = mouse::Cursor::Available(end);
+        canvas.update(
+            &mut state,
+            &Event::Keyboard(iced::keyboard::Event::ModifiersChanged(
+                iced::keyboard::Modifiers::ALT,
+            )),
+            bounds,
+            cursor,
+        );
+        for event in [
+            mouse::Event::CursorMoved { position: start },
+            mouse::Event::ButtonPressed(mouse::Button::Left),
+            mouse::Event::CursorMoved { position: end },
+        ] {
+            canvas.update(&mut state, &Event::Mouse(event), bounds, cursor);
+        }
+        let edit = canvas
+            .update(
+                &mut state,
+                &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                bounds,
+                cursor,
+            )
+            .unwrap()
+            .into_inner()
+            .0
+            .unwrap();
+        let Edit::Bond(a, b, None, None) = edit else {
+            panic!()
+        };
+        assert_eq!(a, World::new(-80., 0.));
+        assert_eq!(b, World::new(46., 52.));
+        assert!(canvas.bond_drawing.fixed_length && canvas.bond_drawing.fixed_angles);
+    }
+
+    #[test]
+    fn freeform_selection_tracks_events_adds_subtracts_and_cancels() {
+        let mut doc = Document::default();
+        doc.add_atom("C", World::new(-50., 0.));
+        doc.add_atom("O", World::new(50., 0.));
+        let style = GraphicStyle::default();
+        let canvas = MoleculeCanvas {
+            bond_drawing: Default::default(),
+            chain_drawing: Default::default(),
+            doc: &doc,
+            selected: &[2],
+            tool: Tool::Lasso,
+            camera: Camera {
+                center: World::default(),
+                zoom: 1.,
+            },
+            grid: false,
+            guides: Default::default(),
+            ring_size: 6,
+            aromatic_ring: false,
+            template_connection: moruno::templates::Connection::Auto,
+            template: None,
+            arrow_preset: Default::default(),
+            arrow_style: &moruno::arrows::ArrowStyle::DEFAULT,
+            orbital_phase: Default::default(),
+            phase_flipped: false,
+            attach_symbols: true,
+            graphic_style: &style,
+            bracket_sides: BracketSides::Both,
+        };
+        let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(400., 300.));
+        let points = [
+            Point::new(100., 100.),
+            Point::new(190., 100.),
+            Point::new(190., 190.),
+            Point::new(100., 190.),
+            Point::new(100., 100.),
+        ];
+        for (mods, expected) in [
+            (iced::keyboard::Modifiers::empty(), vec![1]),
+            (iced::keyboard::Modifiers::SHIFT, vec![2, 1]),
+        ] {
+            let mut state = State {
+                modifiers: mods,
+                ..Default::default()
+            };
+            for (i, p) in points.iter().enumerate() {
+                canvas.update(
+                    &mut state,
+                    &Event::Mouse(mouse::Event::CursorMoved { position: *p }),
+                    bounds,
+                    mouse::Cursor::Available(*p),
+                );
+                if i == 0 {
+                    canvas.update(
+                        &mut state,
+                        &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+                        bounds,
+                        mouse::Cursor::Available(*p),
+                    );
+                }
+            }
+            let result = canvas
+                .update(
+                    &mut state,
+                    &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                    bounds,
+                    mouse::Cursor::Available(points[0]),
+                )
+                .unwrap()
+                .into_inner()
+                .0
+                .unwrap();
+            let Edit::Select(ids) = result else {
+                panic!("expected region selection")
+            };
+            assert_eq!(ids, expected);
+        }
+        assert_eq!(
+            region_selection(
+                &doc,
+                &[1, 2],
+                &[
+                    World::new(-100., -50.),
+                    World::new(0., -50.),
+                    World::new(0., 50.),
+                    World::new(-100., 50.)
+                ],
+                iced::keyboard::Modifiers::ALT
+            ),
+            vec![2]
+        );
+        let mut state = State {
+            gesture: Some(Gesture::Lasso {
+                points: vec![World::default()],
+            }),
+            ..Default::default()
+        };
+        canvas.update(
+            &mut state,
+            &Event::Window(iced::window::Event::Unfocused),
+            bounds,
+            mouse::Cursor::Unavailable,
+        );
+        assert!(state.gesture.is_none());
+        assert_eq!(doc.atoms.len(), 2);
+    }
+
+    #[test]
+    fn group_clicks_move_all_members_and_alt_selects_a_member() {
+        let mut doc = Document::default();
+        doc.add_atom("C", World::new(-50., 0.));
+        doc.add_atom("O", World::new(50., 0.));
+        doc.group_selection(&[1, 2]).unwrap();
+        let style = GraphicStyle::default();
+        let canvas = MoleculeCanvas {
+            bond_drawing: Default::default(),
+            chain_drawing: Default::default(),
+            doc: &doc,
+            selected: &[],
+            tool: Tool::Select,
+            camera: Camera {
+                center: World::default(),
+                zoom: 1.,
+            },
+            grid: false,
+            guides: Default::default(),
+            ring_size: 6,
+            aromatic_ring: false,
+            template_connection: moruno::templates::Connection::Auto,
+            template: None,
+            arrow_preset: Default::default(),
+            arrow_style: &moruno::arrows::ArrowStyle::DEFAULT,
+            orbital_phase: Default::default(),
+            phase_flipped: false,
+            attach_symbols: true,
+            graphic_style: &style,
+            bracket_sides: BracketSides::Both,
+        };
+        let result = pointer_gesture(&canvas, Point::new(150., 150.), Point::new(170., 170.));
+        let Edit::Move(ids, dx, dy) = result else {
+            panic!("expected group move")
+        };
+        assert_eq!(ids, vec![1, 2]);
+        assert_eq!((dx, dy), (20., 20.));
+        let mut state = State {
+            modifiers: iced::keyboard::Modifiers::ALT,
+            ..Default::default()
+        };
+        let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(400., 300.));
+        let cursor = mouse::Cursor::Available(Point::new(150., 150.));
+        canvas.update(
+            &mut state,
+            &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            bounds,
+            cursor,
+        );
+        let result = canvas
+            .update(
+                &mut state,
+                &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                bounds,
+                cursor,
+            )
+            .unwrap()
+            .into_inner()
+            .0
+            .unwrap();
+        let Edit::Select(ids) = result else {
+            panic!("expected member selection")
+        };
+        assert_eq!(ids, vec![1]);
+
+        // Alt-drag edits a member immediately, even when its group is selected.
+        let selected = [1, 2];
+        let canvas = MoleculeCanvas {
+            bond_drawing: Default::default(),
+            chain_drawing: Default::default(),
+            selected: &selected,
+            ..canvas
+        };
+        canvas.update(
+            &mut state,
+            &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            bounds,
+            cursor,
+        );
+        let result = canvas
+            .update(
+                &mut state,
+                &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                bounds,
+                mouse::Cursor::Available(Point::new(175., 150.)),
+            )
+            .unwrap()
+            .into_inner()
+            .0
+            .unwrap();
+        let Edit::Move(ids, dx, dy) = result else {
+            panic!("expected member move")
+        };
+        assert_eq!(ids, vec![1]);
+        assert_eq!((dx, dy), (25., 0.));
+    }
+
+    #[test]
+    fn filled_background_leaves_atoms_and_bonds_selectable() {
+        let mut doc = Document::default();
+        let a = doc.add_atom("C", World::new(-20., 0.));
+        let b = doc.add_atom("O", World::new(20., 0.));
+        doc.add_bond(a, b, 1, "plain");
+        let mut g = Graphic::dragged(
+            3,
+            moruno::graphics::GraphicKind::Rectangle,
+            World::new(-50., -50.),
+            World::new(50., 50.),
+            GraphicStyle::default(),
+            BracketSides::Both,
+            false,
+        );
+        g.style.fill = Some([220, 239, 233]);
+        doc.graphics.push(g);
+        assert_eq!(hit_selection(&doc, World::new(-20., 0.), 5.), vec![a]);
+        assert_eq!(hit_selection(&doc, World::default(), 5.), vec![a, b]);
+        assert_eq!(hit_selection(&doc, World::new(0., 30.), 5.), vec![3]);
+        doc.graphics[0].layer = 1;
+        assert_eq!(hit_selection(&doc, World::default(), 5.), vec![3]);
+    }
+
+    #[test]
+    fn graphic_and_curve_point_drags_publish_one_edit_and_do_not_mutate_preview() {
+        let doc = Document::default();
+        let style = GraphicStyle::default();
+        let mut canvas = MoleculeCanvas {
+            bond_drawing: Default::default(),
+            chain_drawing: Default::default(),
+            doc: &doc,
+            selected: &[],
+            tool: Tool::Graphic(moruno::graphics::GraphicKind::Rectangle),
+            camera: Camera {
+                center: World::default(),
+                zoom: 1.,
+            },
+            grid: false,
+            guides: Default::default(),
+            ring_size: 6,
+            aromatic_ring: false,
+            template_connection: moruno::templates::Connection::Auto,
+            template: None,
+            arrow_preset: Default::default(),
+            arrow_style: &moruno::arrows::ArrowStyle::DEFAULT,
+            orbital_phase: Default::default(),
+            phase_flipped: false,
+            attach_symbols: true,
+            graphic_style: &style,
+            bracket_sides: BracketSides::Both,
+        };
+        assert!(matches!(
+            pointer_gesture(&canvas, Point::new(150., 100.), Point::new(250., 200.)),
+            Edit::Graphic(World { x: -50., y: -50. }, World { x: 50., y: 50. }, false)
+        ));
+        assert!(doc.graphics.is_empty());
+        let mut with_curve = doc.clone();
+        with_curve.graphics.push(Graphic::dragged(
+            1,
+            moruno::graphics::GraphicKind::Curve,
+            World::new(-50., 0.),
+            World::new(50., 0.),
+            style.clone(),
+            BracketSides::Both,
+            false,
+        ));
+        canvas.doc = &with_curve;
+        canvas.tool = Tool::EditPoints;
+        canvas.selected = &[1];
+        let original = with_curve.clone();
+        assert!(matches!(
+            pointer_gesture(&canvas, Point::new(183., 100.), Point::new(200., 80.)),
+            Edit::GraphicPoint(1, 1, _)
+        ));
+        assert_eq!(with_curve, original);
+    }
 
     fn pointer_gesture(canvas: &MoleculeCanvas<'_>, start: Point, end: Point) -> Edit {
         let mut state = State::default();
@@ -787,6 +2888,143 @@ mod tests {
     }
 
     #[test]
+    fn template_drag_uses_the_target_bond_and_can_be_cancelled() {
+        let mut doc = Document::default();
+        let a = doc.add_atom("C", World::new(-30.0, 0.0));
+        let b = doc.add_atom("C", World::new(30.0, 0.0));
+        doc.add_bond(a, b, 1, "plain");
+        let canvas = MoleculeCanvas {
+            bond_drawing: Default::default(),
+            chain_drawing: Default::default(),
+            doc: &doc,
+            selected: &[],
+            tool: Tool::Template,
+            camera: Camera {
+                center: World::default(),
+                zoom: 1.0,
+            },
+            grid: false,
+            guides: Default::default(),
+            ring_size: 6,
+            aromatic_ring: false,
+            template_connection: moruno::templates::Connection::Auto,
+            template: Some((
+                &moruno::templates::LIBRARY[0].document,
+                moruno::templates::Anchor::Auto,
+            )),
+            arrow_preset: Default::default(),
+            arrow_style: &moruno::arrows::ArrowStyle::DEFAULT,
+            orbital_phase: Default::default(),
+            phase_flipped: false,
+            attach_symbols: true,
+            graphic_style: &GraphicStyle::default(),
+            bracket_sides: BracketSides::Both,
+        };
+        let start = Point::new(200.0, 150.0);
+        let end = Point::new(200.0, 200.0);
+        let Edit::Template(anchor, direction) = pointer_gesture(&canvas, start, end) else {
+            panic!("expected template placement")
+        };
+        assert_eq!(anchor, World::default());
+        assert_eq!(direction, Some(World::new(0.0, 50.0)));
+        // Snap about the actual attachment atom, including an off-center click.
+        let origin = doc.atom(a).unwrap().position;
+        let pressed = origin.offset(2., 1.);
+        let target = origin.offset(52., 23.);
+        use iced::keyboard::Modifiers;
+        for modifiers in [Modifiers::SHIFT, Modifiers::CTRL] {
+            let (anchor, direction) = canvas.template_gesture(pressed, target, modifiers);
+            assert_eq!(anchor, pressed);
+            let direction = direction.unwrap();
+            let expected = BondDrawing {
+                fixed_length: false,
+                ..Default::default()
+            }
+            .endpoint(origin, target);
+            assert!(direction.distance(expected) < 0.0001);
+            assert!((chains::direction(origin, direction).to_degrees() - 30.).abs() < 0.0001);
+            assert!(
+                canvas
+                    .template_gesture(pressed, pressed, modifiers)
+                    .1
+                    .is_none()
+            );
+        }
+        assert_eq!(
+            canvas
+                .template_gesture(pressed, target, Modifiers::empty())
+                .1,
+            Some(target)
+        );
+        assert_eq!(
+            canvas
+                .template_gesture(pressed, target, Modifiers::SHIFT | Modifiers::ALT)
+                .1,
+            Some(target)
+        );
+        let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(400., 300.));
+        for button in [mouse::Button::Left, mouse::Button::Right] {
+            let mut drag = State {
+                modifiers: Modifiers::CTRL,
+                ..Default::default()
+            };
+            let cursor = mouse::Cursor::Available(Point::new(252., 173.));
+            for event in [
+                mouse::Event::CursorMoved {
+                    position: Point::new(200., 150.),
+                },
+                mouse::Event::ButtonPressed(button),
+                mouse::Event::CursorMoved {
+                    position: Point::new(252., 173.),
+                },
+            ] {
+                canvas.update(&mut drag, &Event::Mouse(event), bounds, cursor);
+            }
+            let result = canvas
+                .update(
+                    &mut drag,
+                    &Event::Mouse(mouse::Event::ButtonReleased(button)),
+                    bounds,
+                    cursor,
+                )
+                .unwrap()
+                .into_inner()
+                .0
+                .unwrap();
+            let Edit::Template(anchor, Some(direction)) = result else {
+                panic!("Expected constrained template, not pan")
+            };
+            assert!((chains::direction(anchor, direction).to_degrees() - 30.).abs() < 0.0001);
+        }
+        let mut state = State::default();
+        let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(400.0, 300.0));
+        let cursor = mouse::Cursor::Available(start);
+        canvas.update(
+            &mut state,
+            &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            bounds,
+            cursor,
+        );
+        canvas.update(
+            &mut state,
+            &Event::Window(iced::window::Event::Unfocused),
+            bounds,
+            cursor,
+        );
+        assert!(
+            canvas
+                .update(
+                    &mut state,
+                    &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                    bounds,
+                    cursor
+                )
+                .is_none()
+        );
+        assert_eq!(doc.atoms.len(), 2);
+    }
+
+    #[test]
     fn selection_handles_resize_and_rotate_without_moving_or_merging_atoms() {
         let mut doc = Document::default();
         let a = doc.add_atom("C", World::new(-20.0, -10.0));
@@ -794,6 +3032,8 @@ mod tests {
         doc.add_bond(a, b, 1, "plain");
         let original = doc.clone();
         let canvas = MoleculeCanvas {
+            bond_drawing: Default::default(),
+            chain_drawing: Default::default(),
             doc: &doc,
             selected: &[a, b],
             tool: Tool::Select,
@@ -802,8 +3042,18 @@ mod tests {
                 zoom: 1.0,
             },
             grid: false,
+            guides: Default::default(),
             ring_size: 6,
             aromatic_ring: false,
+            template_connection: moruno::templates::Connection::Auto,
+            template: None,
+            arrow_preset: Default::default(),
+            arrow_style: &moruno::arrows::ArrowStyle::DEFAULT,
+            orbital_phase: Default::default(),
+            phase_flipped: false,
+            attach_symbols: true,
+            graphic_style: &GraphicStyle::default(),
+            bracket_sides: BracketSides::Both,
         };
         for (start, end, expected_pivot, expected_scale, expected_rotation) in [
             (
@@ -877,6 +3127,8 @@ mod tests {
         assert_eq!(hit_selection(&doc, World::default(), 10.0), vec![a, b]);
         assert_eq!(hit_selection(&doc, World::new(-20.0, 0.0), 10.0), vec![a]);
         let canvas = MoleculeCanvas {
+            bond_drawing: Default::default(),
+            chain_drawing: Default::default(),
             doc: &doc,
             selected: &[],
             tool: Tool::Select,
@@ -885,8 +3137,18 @@ mod tests {
                 zoom: 1.0,
             },
             grid: false,
+            guides: Default::default(),
             ring_size: 6,
             aromatic_ring: false,
+            template_connection: moruno::templates::Connection::Auto,
+            template: None,
+            arrow_preset: Default::default(),
+            arrow_style: &moruno::arrows::ArrowStyle::DEFAULT,
+            orbital_phase: Default::default(),
+            phase_flipped: false,
+            attach_symbols: true,
+            graphic_style: &GraphicStyle::default(),
+            bracket_sides: BracketSides::Both,
         };
         assert!(
             matches!(pointer_gesture(&canvas, Point::new(200.0, 150.0), Point::new(200.0, 150.0)), Edit::Select(ids) if ids == vec![a, b])
@@ -896,6 +3158,8 @@ mod tests {
         );
         let selected = [a, b];
         let canvas = MoleculeCanvas {
+            bond_drawing: Default::default(),
+            chain_drawing: Default::default(),
             selected: &selected,
             ..canvas
         };
@@ -914,6 +3178,8 @@ mod tests {
         let b = doc.add_atom("C", World::new(21.0, 0.0));
         doc.add_bond(a, b, 1, "plain");
         let canvas = MoleculeCanvas {
+            bond_drawing: Default::default(),
+            chain_drawing: Default::default(),
             doc: &doc,
             selected: &[],
             tool: Tool::Ring,
@@ -922,8 +3188,18 @@ mod tests {
                 zoom: 1.0,
             },
             grid: false,
+            guides: Default::default(),
             ring_size: 5,
             aromatic_ring: false,
+            template_connection: moruno::templates::Connection::Auto,
+            template: None,
+            arrow_preset: Default::default(),
+            arrow_style: &moruno::arrows::ArrowStyle::DEFAULT,
+            orbital_phase: Default::default(),
+            phase_flipped: false,
+            attach_symbols: true,
+            graphic_style: &GraphicStyle::default(),
+            bracket_sides: BracketSides::Both,
         };
         assert!(
             matches!(pointer_gesture(&canvas, Point::new(100.0, 50.0), Point::new(200.0, 150.0)), Edit::Ring(anchor, None) if anchor == World::default())
@@ -937,13 +3213,25 @@ mod tests {
     fn leaving_the_canvas_requests_a_redraw_and_leaving_the_window_clears_hover() {
         let doc = Document::default();
         let canvas = MoleculeCanvas {
+            bond_drawing: Default::default(),
+            chain_drawing: Default::default(),
             doc: &doc,
             selected: &[],
             tool: Tool::Bond(1),
             camera: Camera::default(),
             grid: false,
+            guides: Default::default(),
             ring_size: 6,
             aromatic_ring: false,
+            template_connection: moruno::templates::Connection::Auto,
+            template: None,
+            arrow_preset: Default::default(),
+            arrow_style: &moruno::arrows::ArrowStyle::DEFAULT,
+            orbital_phase: Default::default(),
+            phase_flipped: false,
+            attach_symbols: true,
+            graphic_style: &GraphicStyle::default(),
+            bracket_sides: BracketSides::Both,
         };
         let bounds = Rectangle::new(Point::new(100.0, 100.0), iced::Size::new(400.0, 300.0));
         let mut state = State {
@@ -976,6 +3264,8 @@ mod tests {
         let mut doc = Document::default();
         let source = doc.add_atom("C", World::default());
         let canvas = MoleculeCanvas {
+            bond_drawing: Default::default(),
+            chain_drawing: Default::default(),
             doc: &doc,
             selected: &[],
             tool: Tool::Bond(1),
@@ -984,8 +3274,18 @@ mod tests {
                 zoom: 1.0,
             },
             grid: false,
+            guides: Default::default(),
             ring_size: 6,
             aromatic_ring: false,
+            template_connection: moruno::templates::Connection::Auto,
+            template: None,
+            arrow_preset: Default::default(),
+            arrow_style: &moruno::arrows::ArrowStyle::DEFAULT,
+            orbital_phase: Default::default(),
+            phase_flipped: false,
+            attach_symbols: true,
+            graphic_style: &GraphicStyle::default(),
+            bracket_sides: BracketSides::Both,
         };
         let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(400.0, 300.0));
         let mut state = State::default();
@@ -1032,6 +3332,8 @@ mod tests {
     fn fast_drag_uses_each_motion_event_instead_of_final_cursor_snapshot() {
         let doc = Document::default();
         let canvas = MoleculeCanvas {
+            bond_drawing: Default::default(),
+            chain_drawing: Default::default(),
             doc: &doc,
             selected: &[],
             tool: Tool::Bond(1),
@@ -1040,8 +3342,18 @@ mod tests {
                 zoom: 1.0,
             },
             grid: false,
+            guides: Default::default(),
             ring_size: 6,
             aromatic_ring: false,
+            template_connection: moruno::templates::Connection::Auto,
+            template: None,
+            arrow_preset: Default::default(),
+            arrow_style: &moruno::arrows::ArrowStyle::DEFAULT,
+            orbital_phase: Default::default(),
+            phase_flipped: false,
+            attach_symbols: true,
+            graphic_style: &GraphicStyle::default(),
+            bracket_sides: BracketSides::Both,
         };
         let mut state = State::default();
         let bounds = Rectangle {

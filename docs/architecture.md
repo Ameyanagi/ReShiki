@@ -28,18 +28,21 @@ flowchart LR
 | `src/engine.rs` | Chemistry interface, worker lifecycle, timeout and response validation |
 | `src/editing.rs` | Clipboard remapping, transforms, component arrangement and ring placement |
 | `src/recovery.rs` | Atomic session snapshots and recovery candidates |
+| `src/clipboard.rs`, `src/app/clipboard.rs` | Native multi-format Copy/Paste, asynchronous completion guards and safe Cut |
+| `native/macos/Clipboard.swift` | Bounded single-item AppKit pasteboard bridge |
+| `engine/cdx_exchange.py` | Checked binary drawing conversion through the supported CDXML subset |
 | `src/export.rs` | Vector PDF and raster PNG from the shared SVG scene |
 | `src/storage.rs` | Write complete files beside the destination, then atomically replace |
 | `src/style.rs` and `engine/drawing_style.json` | Shared JACS / ACS defaults, publication units and font advances |
 | `engine/worker.py` | Molecular parsing, sanitization, descriptors, depiction and exchange formats |
 
-Document coordinates use screen-style positive-down Y, with 28 world units per RDKit coordinate unit. The default single bond is 42 world units, representing 14.4 publication points in the JACS / ACS preset. The camera never changes stored coordinates or export size. Native documents use JSON format version 2 and accept version 1 when reading. Arrow styles prompted the version bump so an older editor rejects unsupported new documents. History and camera are session state.
+Document coordinates use screen-style positive-down Y, with 28 world units per RDKit coordinate unit. The default single bond is 42 world units, representing 14.4 publication points in the JACS / ACS preset. The camera never changes stored coordinates or export size. Native documents use JSON format version 11 and accept supported versions 1–10 when reading. New presentation fields prompted version increments so older editors reject unsupported documents. History and camera are session state.
 
-Atoms retain formal charge, isotope, explicit-H count, implicit-H policy, map number and tetrahedral winding. Winding refers to an explicit ordered list of stable neighbor IDs. The worker compensates for permutation when constructing a toolkit molecule, preventing array reordering from reversing a stereocenter. Double-bond stereo stores its reference atoms separately. Topology edits invalidate affected stereo and derived hydrogen labels; the next structure check recomputes chemistry.
+Atoms retain formal charge, isotope, explicit-H count, implicit-H policy, map number and tetrahedral winding. Winding refers to an explicit ordered list of stable neighbor IDs. The worker compensates for permutation when constructing a toolkit molecule, preventing array reordering from reversing a stereocenter. Double-bond stereo stores its reference atoms separately. Topology edits invalidate affected stereo and derived labels; a background refresh recomputes chemistry. Explicit Check also refreshes computed properties.
 
 ## Worker protocol
 
-One JSON object per line on stdin/stdout. Diagnostics use stderr. Requests and responses include a numeric request ID; requests also have `protocol: 1`. Supported operations are `import`, `analyze`, `clean`, and `export`.
+One JSON object per line on stdin/stdout. Diagnostics use stderr. Requests and responses include a numeric request ID; requests also have `protocol: 1`. Supported operations are `import`, `analyze`, `clean`, `abbreviate`, and `export`.
 
 ```json
 {"id":1,"protocol":1,"operation":"import","format":"smiles","text":"CCO"}
@@ -66,3 +69,21 @@ The current app instantiates `PythonEngine`, which implements `ChemistryEngine`.
 First move graph checks, formula/mass and simple descriptors into Rust. Then add parsers, aromaticity, stereochemistry and canonical identifiers with a reference corpus. Move 2D coordinate generation separately from depiction. Keep Python as a selectable verification backend until stereo, charges, isotopes, salts and interchange pass differential tests. Retiring the Python runtime is a later packaging milestone, not an existing capability.
 
 Standalone bundles use a PyInstaller worker in `Contents/Resources/chemistry`. The Rust bridge discovers it relative to the executable, then falls back to development Python when no bundled worker exists. The chemistry protocol remains version 1 independently of the native document version.
+
+## Native clipboard
+
+On macOS, explicit Copy/Paste starts a bundled AppKit helper with JSON on stdin/stdout and base64 representations. The helper prepares one item with a private Moruno document, supported editable binary drawing data and PDF/PNG/SVG alternatives. Copy Image omits the editable structure and adds an embedded raster drawing object with physical bounds for readers that ignore PNG resolution metadata. The helper does not monitor clipboard changes or read previous contents during Copy.
+
+The worker accepts `format: "cdx"` with base64 input/output and converts through the existing CDXML checks. The binary codec bounds input, nesting, object count and property count. Unsupported object properties and query predicates return errors.
+
+Clipboard tasks capture document epoch and revision. Cut removes the captured selection only after a successful write and only if the drawing remains unchanged. Paste validates and inserts in one Undo step, rejecting stale results. Rendering uses a snapshot and runs off the UI thread. The build script compiles the Swift helper beside the app executable; development builds use the helper compiled by Cargo's build script. Non-macOS builds retain text clipboard exchange.
+
+Chemical abbreviations store presentation metadata over the complete atom/bond graph. Cleanup requires selected atoms in the desktop. The worker splits connected components, redraws the requested atoms/molecules, pins unselected atoms and preserves each component’s placement. Cleanup results remain transient until Apply; a revision and document epoch reject stale previews, and Apply commits one history step. Template connection preview and insertion use the same pure geometry operation.
+
+Aromatic circles are derived from closed cycles of aromatic bonds (order 4), without a detached graphic in the native model. Display toggles validate chemical identity in the worker. Editable exchange emits aromatic bonds and owned circle graphics; import recognizes these circles while retaining independent ovals. Contextual atom/bond shortcuts run only after focused widgets have ignored a key.
+
+## Reviewed assistant proposals
+
+The optional Codex panel uses a local app-server child with structured output. The child has an isolated temporary working directory, shell and external integrations disabled, bounded JSONL transport, cancellation, and a turn timeout. Finder launches receive known executable search directories without evaluating shell startup files. Moruno imports proposed SMILES through the existing chemistry worker and builds typed drawing objects with current styles. Chat and previews are transient; document epoch/revision checks protect Apply, which commits one ordinary history entry. The assistant never owns the live document.
+
+Bond Z order is presentation metadata. A bounded sweep detects unconnected crossings, then clips lower-bond line/polygon geometry. Canvas and exports share these primitives. Elbow arrows use two line segments and retain a movable corner through native and supported editable interchange.

@@ -1,0 +1,912 @@
+[
+  {
+    "group": "Rings",
+    "name": "Benzene",
+    "query": "Benzene",
+    "smiles": "C1=CC=CC=C1",
+    "formula": "C6H6",
+    "inchikey": "UHOVQNZJYSORNB-UHFFFAOYSA-N",
+    "pubchem_cid": 241,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/241"
+  },
+  {
+    "group": "Rings",
+    "name": "Pyridine",
+    "query": "Pyridine",
+    "smiles": "C1=CC=NC=C1",
+    "formula": "C5H5N",
+    "inchikey": "JUJWROOIHBZHMG-UHFFFAOYSA-N",
+    "pubchem_cid": 1049,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/1049"
+  },
+  {
+    "group": "Rings",
+    "name": "Pyrrole",
+    "query": "Pyrrole",
+    "smiles": "C1=CNC=C1",
+    "formula": "C4H5N",
+    "inchikey": "KAESVJOAVNADME-UHFFFAOYSA-N",
+    "pubchem_cid": 8027,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8027"
+  },
+  {
+    "group": "Rings",
+    "name": "Furan",
+    "query": "Furan",
+    "smiles": "C1=COC=C1",
+    "formula": "C4H4O",
+    "inchikey": "YLQBMQCUIZJEEH-UHFFFAOYSA-N",
+    "pubchem_cid": 8029,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8029"
+  },
+  {
+    "group": "Rings",
+    "name": "Thiophene",
+    "query": "Thiophene",
+    "smiles": "C1=CSC=C1",
+    "formula": "C4H4S",
+    "inchikey": "YTPLMLYBLZKORZ-UHFFFAOYSA-N",
+    "pubchem_cid": 8030,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8030"
+  },
+  {
+    "group": "Rings",
+    "name": "Cyclopentane",
+    "query": "Cyclopentane",
+    "smiles": "C1CCCC1",
+    "formula": "C5H10",
+    "inchikey": "RGSFGYAAUTVSQA-UHFFFAOYSA-N",
+    "pubchem_cid": 9253,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9253"
+  },
+  {
+    "group": "Rings",
+    "name": "Cyclohexane",
+    "query": "Cyclohexane",
+    "smiles": "C1CCCCC1",
+    "formula": "C6H12",
+    "inchikey": "XDTMQSROBMDMFD-UHFFFAOYSA-N",
+    "pubchem_cid": 8078,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8078"
+  },
+  {
+    "group": "Rings",
+    "name": "Naphthalene",
+    "query": "Naphthalene",
+    "smiles": "C1=CC=C2C=CC=CC2=C1",
+    "formula": "C10H8",
+    "inchikey": "UFWIBTONFRDIAS-UHFFFAOYSA-N",
+    "pubchem_cid": 931,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/931"
+  },
+  {
+    "group": "Small molecules",
+    "name": "Acetaldehyde",
+    "query": "Acetaldehyde",
+    "smiles": "CC=O",
+    "formula": "C2H4O",
+    "inchikey": "IKHGUXGNUITLKF-UHFFFAOYSA-N",
+    "pubchem_cid": 177,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/177"
+  },
+  {
+    "group": "Small molecules",
+    "name": "Acetic acid",
+    "query": "Acetic acid",
+    "smiles": "CC(=O)O",
+    "formula": "C2H4O2",
+    "inchikey": "QTBSBXVTEAMEQO-UHFFFAOYSA-N",
+    "pubchem_cid": 176,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/176"
+  },
+  {
+    "group": "Small molecules",
+    "name": "Methylamine",
+    "query": "Methylamine",
+    "smiles": "CN",
+    "formula": "CH5N",
+    "inchikey": "BAVYZALUXZFZLV-UHFFFAOYSA-N",
+    "pubchem_cid": 6329,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/6329"
+  },
+  {
+    "group": "Small molecules",
+    "name": "Methanol",
+    "query": "Methanol",
+    "smiles": "CO",
+    "formula": "CH4O",
+    "inchikey": "OKKJLVBELUTLKV-UHFFFAOYSA-N",
+    "pubchem_cid": 887,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/887"
+  },
+  {
+    "group": "Cycloalkanes",
+    "name": "Cyclopropane",
+    "query": "Cyclopropane",
+    "smiles": "C1CC1",
+    "formula": "C3H6",
+    "inchikey": "LVZWSLJZHVFIQJ-UHFFFAOYSA-N",
+    "pubchem_cid": 6351,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/6351"
+  },
+  {
+    "group": "Cycloalkanes",
+    "name": "Cyclobutane",
+    "query": "Cyclobutane",
+    "smiles": "C1CCC1",
+    "formula": "C4H8",
+    "inchikey": "PMPVIKIVABFJJI-UHFFFAOYSA-N",
+    "pubchem_cid": 9250,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9250"
+  },
+  {
+    "group": "Cycloalkanes",
+    "name": "Cycloheptane",
+    "query": "Cycloheptane",
+    "smiles": "C1CCCCCC1",
+    "formula": "C7H14",
+    "inchikey": "DMEGYFMYUHOHGS-UHFFFAOYSA-N",
+    "pubchem_cid": 9265,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9265"
+  },
+  {
+    "group": "Cycloalkanes",
+    "name": "Cyclooctane",
+    "query": "Cyclooctane",
+    "smiles": "C1CCCCCCC1",
+    "formula": "C8H16",
+    "inchikey": "WJTCGQSWYFHTAC-UHFFFAOYSA-N",
+    "pubchem_cid": 9266,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9266"
+  },
+  {
+    "group": "Unsaturated rings",
+    "name": "Cyclopentadiene",
+    "query": "Cyclopentadiene",
+    "smiles": "C1C=CC=C1",
+    "formula": "C5H6",
+    "inchikey": "ZSWFCLXCOIISFI-UHFFFAOYSA-N",
+    "pubchem_cid": 7612,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/7612"
+  },
+  {
+    "group": "Unsaturated rings",
+    "name": "Cyclohexene",
+    "query": "Cyclohexene",
+    "smiles": "C1CCC=CC1",
+    "formula": "C6H10",
+    "inchikey": "HGCIXCUEYOPUTN-UHFFFAOYSA-N",
+    "pubchem_cid": 8079,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8079"
+  },
+  {
+    "group": "Unsaturated rings",
+    "name": "1,3-Cyclohexadiene",
+    "query": "1,3-Cyclohexadiene",
+    "smiles": "C1CC=CC=C1",
+    "formula": "C6H8",
+    "inchikey": "MGNZXYYWBUKAII-UHFFFAOYSA-N",
+    "pubchem_cid": 11605,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/11605"
+  },
+  {
+    "group": "Heterocycles",
+    "name": "Pyridazine",
+    "query": "Pyridazine",
+    "smiles": "C1=CC=NN=C1",
+    "formula": "C4H4N2",
+    "inchikey": "PBMFSQRYOILNGV-UHFFFAOYSA-N",
+    "pubchem_cid": 9259,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9259"
+  },
+  {
+    "group": "Heterocycles",
+    "name": "Pyrimidine",
+    "query": "Pyrimidine",
+    "smiles": "C1=CN=CN=C1",
+    "formula": "C4H4N2",
+    "inchikey": "CZPWVGJYEJSRLH-UHFFFAOYSA-N",
+    "pubchem_cid": 9260,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9260"
+  },
+  {
+    "group": "Heterocycles",
+    "name": "Pyrazine",
+    "query": "Pyrazine",
+    "smiles": "C1=CN=CC=N1",
+    "formula": "C4H4N2",
+    "inchikey": "KYQCOXFCLRTKLS-UHFFFAOYSA-N",
+    "pubchem_cid": 9261,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9261"
+  },
+  {
+    "group": "Heterocycles",
+    "name": "Pyrazole",
+    "query": "Pyrazole",
+    "smiles": "C1=CNN=C1",
+    "formula": "C3H4N2",
+    "inchikey": "WTKZEGDFNFYCGP-UHFFFAOYSA-N",
+    "pubchem_cid": 1048,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/1048"
+  },
+  {
+    "group": "Heterocycles",
+    "name": "Imidazole",
+    "query": "Imidazole",
+    "smiles": "C1=CN=CN1",
+    "formula": "C3H4N2",
+    "inchikey": "RAXXELZNTBOGNW-UHFFFAOYSA-N",
+    "pubchem_cid": 795,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/795"
+  },
+  {
+    "group": "Heterocycles",
+    "name": "Oxazole",
+    "query": "Oxazole",
+    "smiles": "C1=COC=N1",
+    "formula": "C3H3NO",
+    "inchikey": "ZCQWOFVYLHDMMC-UHFFFAOYSA-N",
+    "pubchem_cid": 9255,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9255"
+  },
+  {
+    "group": "Heterocycles",
+    "name": "Isoxazole",
+    "query": "Isoxazole",
+    "smiles": "C1=CON=C1",
+    "formula": "C3H3NO",
+    "inchikey": "CTAPFRYPJLPFDF-UHFFFAOYSA-N",
+    "pubchem_cid": 9254,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9254"
+  },
+  {
+    "group": "Heterocycles",
+    "name": "Thiazole",
+    "query": "Thiazole",
+    "smiles": "C1=CSC=N1",
+    "formula": "C3H3NS",
+    "inchikey": "FZWLAAWBMGSTSO-UHFFFAOYSA-N",
+    "pubchem_cid": 9256,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9256"
+  },
+  {
+    "group": "Heterocycles",
+    "name": "Isothiazole",
+    "query": "Isothiazole",
+    "smiles": "C1=CSN=C1",
+    "formula": "C3H3NS",
+    "inchikey": "ZLTPDFXIESTBQG-UHFFFAOYSA-N",
+    "pubchem_cid": 67515,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/67515"
+  },
+  {
+    "group": "Heterocycles",
+    "name": "Indole",
+    "query": "Indole",
+    "smiles": "C1=CC=C2C(=C1)C=CN2",
+    "formula": "C8H7N",
+    "inchikey": "SIKJAQJRHWYJAI-UHFFFAOYSA-N",
+    "pubchem_cid": 798,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/798"
+  },
+  {
+    "group": "Heterocycles",
+    "name": "Quinoline",
+    "query": "Quinoline",
+    "smiles": "C1=CC=C2C(=C1)C=CC=N2",
+    "formula": "C9H7N",
+    "inchikey": "SMWDFEZZVXVKRB-UHFFFAOYSA-N",
+    "pubchem_cid": 7047,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/7047"
+  },
+  {
+    "group": "Heterocycles",
+    "name": "Isoquinoline",
+    "query": "Isoquinoline",
+    "smiles": "C1=CC=C2C=NC=CC2=C1",
+    "formula": "C9H7N",
+    "inchikey": "AWJUIBRHMBBTKR-UHFFFAOYSA-N",
+    "pubchem_cid": 8405,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8405"
+  },
+  {
+    "group": "Heterocycles",
+    "name": "Benzofuran",
+    "query": "Benzofuran",
+    "smiles": "C1=CC=C2C(=C1)C=CO2",
+    "formula": "C8H6O",
+    "inchikey": "IANQTJSKSUMEQM-UHFFFAOYSA-N",
+    "pubchem_cid": 9223,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9223"
+  },
+  {
+    "group": "Heterocycles",
+    "name": "Benzothiophene",
+    "query": "Benzothiophene",
+    "smiles": "C1=CC=C2C(=C1)C=CS2",
+    "formula": "C8H6S",
+    "inchikey": "FCEHBMOGCRZNNI-UHFFFAOYSA-N",
+    "pubchem_cid": 7221,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/7221"
+  },
+  {
+    "group": "Heterocycles",
+    "name": "Purine",
+    "query": "Purine",
+    "smiles": "C1=C2C(=NC=N1)N=CN2",
+    "formula": "C5H4N4",
+    "inchikey": "KDCGOANMDULRCW-UHFFFAOYSA-N",
+    "pubchem_cid": 1044,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/1044"
+  },
+  {
+    "group": "Heterocycles",
+    "name": "Pyrrolidine",
+    "query": "Pyrrolidine",
+    "smiles": "C1CCNC1",
+    "formula": "C4H9N",
+    "inchikey": "RWRDLPDLKQPQOW-UHFFFAOYSA-N",
+    "pubchem_cid": 31268,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/31268"
+  },
+  {
+    "group": "Heterocycles",
+    "name": "Piperidine",
+    "query": "Piperidine",
+    "smiles": "C1CCNCC1",
+    "formula": "C5H11N",
+    "inchikey": "NQRYJNQNLNOLGT-UHFFFAOYSA-N",
+    "pubchem_cid": 8082,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8082"
+  },
+  {
+    "group": "Heterocycles",
+    "name": "Piperazine",
+    "query": "Piperazine",
+    "smiles": "C1CNCCN1",
+    "formula": "C4H10N2",
+    "inchikey": "GLUUGHFHXGJENI-UHFFFAOYSA-N",
+    "pubchem_cid": 4837,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/4837"
+  },
+  {
+    "group": "Heterocycles",
+    "name": "Morpholine",
+    "query": "Morpholine",
+    "smiles": "C1COCCN1",
+    "formula": "C4H9NO",
+    "inchikey": "YNAVUWVOSKDBBP-UHFFFAOYSA-N",
+    "pubchem_cid": 8083,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8083"
+  },
+  {
+    "group": "Heterocycles",
+    "name": "Tetrahydrofuran",
+    "query": "Tetrahydrofuran",
+    "smiles": "C1CCOC1",
+    "formula": "C4H8O",
+    "inchikey": "WYURNTSHIVDZCO-UHFFFAOYSA-N",
+    "pubchem_cid": 8028,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8028"
+  },
+  {
+    "group": "Heterocycles",
+    "name": "Tetrahydropyran",
+    "query": "Tetrahydropyran",
+    "smiles": "C1CCOCC1",
+    "formula": "C5H10O",
+    "inchikey": "DHXVGJBLRPWPCS-UHFFFAOYSA-N",
+    "pubchem_cid": 8894,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8894"
+  },
+  {
+    "group": "Heterocycles",
+    "name": "1,4-Dioxane",
+    "query": "1,4-Dioxane",
+    "smiles": "C1COCCO1",
+    "formula": "C4H8O2",
+    "inchikey": "RYHBNJHYFVUHQT-UHFFFAOYSA-N",
+    "pubchem_cid": 31275,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/31275"
+  },
+  {
+    "group": "Bicyclics and cages",
+    "name": "Norbornane",
+    "query": "Norbornane",
+    "smiles": "C1CC2CCC1C2",
+    "formula": "C7H12",
+    "inchikey": "UMRZSTCPUPJPOJ-UHFFFAOYSA-N",
+    "pubchem_cid": 9233,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9233"
+  },
+  {
+    "group": "Bicyclics and cages",
+    "name": "Bicyclo[1.1.1]pentane",
+    "query": "Bicyclo[1.1.1]pentane",
+    "smiles": "C1C2CC1C2",
+    "formula": "C5H8",
+    "inchikey": "MKCBRYIXFFGIKN-UHFFFAOYSA-N",
+    "pubchem_cid": 136153,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/136153"
+  },
+  {
+    "group": "Bicyclics and cages",
+    "name": "Adamantane",
+    "query": "Adamantane",
+    "smiles": "C1C2CC3CC1CC(C2)C3",
+    "formula": "C10H16",
+    "inchikey": "ORILYTVJVMAKLC-UHFFFAOYSA-N",
+    "pubchem_cid": 9238,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9238"
+  },
+  {
+    "group": "Bicyclics and cages",
+    "name": "Cubane",
+    "query": "Cubane",
+    "smiles": "C12C3C4C1C5C2C3C45",
+    "formula": "C8H8",
+    "inchikey": "TXWRERCHRDBNLG-UHFFFAOYSA-N",
+    "pubchem_cid": 136090,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/136090"
+  },
+  {
+    "group": "Bicyclics and cages",
+    "name": "Decalin",
+    "query": "Decalin",
+    "smiles": "C1CCC2CCCCC2C1",
+    "formula": "C10H18",
+    "inchikey": "NNBZCPXTIHJBJL-UHFFFAOYSA-N",
+    "pubchem_cid": 7044,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/7044"
+  },
+  {
+    "group": "Nucleobases",
+    "name": "Adenine",
+    "query": "Adenine",
+    "smiles": "C1=NC2=NC=NC(=C2N1)N",
+    "formula": "C5H5N5",
+    "inchikey": "GFFGJBXGBJISGV-UHFFFAOYSA-N",
+    "pubchem_cid": 190,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/190"
+  },
+  {
+    "group": "Nucleobases",
+    "name": "Guanine",
+    "query": "Guanine",
+    "smiles": "C1=NC2=C(N1)C(=O)NC(=N2)N",
+    "formula": "C5H5N5O",
+    "inchikey": "UYTPUPDQBNUYGX-UHFFFAOYSA-N",
+    "pubchem_cid": 135398634,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/135398634"
+  },
+  {
+    "group": "Nucleobases",
+    "name": "Cytosine",
+    "query": "Cytosine",
+    "smiles": "C1=C(NC(=O)N=C1)N",
+    "formula": "C4H5N3O",
+    "inchikey": "OPTASPLRGRRNAP-UHFFFAOYSA-N",
+    "pubchem_cid": 597,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/597"
+  },
+  {
+    "group": "Nucleobases",
+    "name": "Thymine",
+    "query": "Thymine",
+    "smiles": "CC1=CNC(=O)NC1=O",
+    "formula": "C5H6N2O2",
+    "inchikey": "RWQNBRDOKXIBIV-UHFFFAOYSA-N",
+    "pubchem_cid": 1135,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/1135"
+  },
+  {
+    "group": "Nucleobases",
+    "name": "Uracil",
+    "query": "Uracil",
+    "smiles": "C1=CNC(=O)NC1=O",
+    "formula": "C4H4N2O2",
+    "inchikey": "ISAKRJDGNUQOIC-UHFFFAOYSA-N",
+    "pubchem_cid": 1174,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/1174"
+  },
+  {
+    "group": "Small molecules",
+    "name": "Acetone",
+    "query": "Acetone",
+    "smiles": "CC(=O)C",
+    "formula": "C3H6O",
+    "inchikey": "CSCPPACGZOOCGX-UHFFFAOYSA-N",
+    "pubchem_cid": 180,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/180"
+  },
+  {
+    "group": "Small molecules",
+    "name": "Acetonitrile",
+    "query": "Acetonitrile",
+    "smiles": "CC#N",
+    "formula": "C2H3N",
+    "inchikey": "WEVYAHXRMPXWCK-UHFFFAOYSA-N",
+    "pubchem_cid": 6342,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/6342"
+  },
+  {
+    "group": "Small molecules",
+    "name": "Ethyl acetate",
+    "query": "Ethyl acetate",
+    "smiles": "CCOC(=O)C",
+    "formula": "C4H8O2",
+    "inchikey": "XEKOWRVHYACXOJ-UHFFFAOYSA-N",
+    "pubchem_cid": 8857,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/8857"
+  },
+  {
+    "group": "Small molecules",
+    "name": "Acetamide",
+    "query": "Acetamide",
+    "smiles": "CC(=O)N",
+    "formula": "C2H5NO",
+    "inchikey": "DLFVBJFMPXGRIB-UHFFFAOYSA-N",
+    "pubchem_cid": 178,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/178"
+  },
+  {
+    "group": "Small molecules",
+    "name": "Benzaldehyde",
+    "query": "Benzaldehyde",
+    "smiles": "C1=CC=C(C=C1)C=O",
+    "formula": "C7H6O",
+    "inchikey": "HUMNYLRZRPPJDN-UHFFFAOYSA-N",
+    "pubchem_cid": 240,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/240"
+  },
+  {
+    "group": "Small molecules",
+    "name": "Phenol",
+    "query": "Phenol",
+    "smiles": "C1=CC=C(C=C1)O",
+    "formula": "C6H6O",
+    "inchikey": "ISWSIDIOOBJBQZ-UHFFFAOYSA-N",
+    "pubchem_cid": 996,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/996"
+  },
+  {
+    "group": "Small molecules",
+    "name": "Aniline",
+    "query": "Aniline",
+    "smiles": "C1=CC=C(C=C1)N",
+    "formula": "C6H7N",
+    "inchikey": "PAYRUJLWNCNPSJ-UHFFFAOYSA-N",
+    "pubchem_cid": 6115,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/6115"
+  },
+  {
+    "group": "Small molecules",
+    "name": "Benzoic acid",
+    "query": "Benzoic acid",
+    "smiles": "C1=CC=C(C=C1)C(=O)O",
+    "formula": "C7H6O2",
+    "inchikey": "WPYMKLBDIGXBTP-UHFFFAOYSA-N",
+    "pubchem_cid": 243,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/243"
+  },
+  {
+    "group": "Amino acids",
+    "name": "L-Alanine",
+    "query": "L-Alanine",
+    "sequence": "A",
+    "keywords": [
+      "Ala",
+      "A"
+    ],
+    "note": "Neutral free amino acid. L stereochemistry.",
+    "smiles": "C[C@@H](C(=O)O)N",
+    "formula": "C3H7NO2",
+    "inchikey": "QNAYBMKLOCPYGJ-REOHCLBHSA-N",
+    "pubchem_cid": 5950,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/5950"
+  },
+  {
+    "group": "Amino acids",
+    "name": "L-Arginine",
+    "query": "L-Arginine",
+    "sequence": "R",
+    "keywords": [
+      "Arg",
+      "R"
+    ],
+    "note": "Neutral free amino acid. L stereochemistry.",
+    "smiles": "C(C[C@@H](C(=O)O)N)CN=C(N)N",
+    "formula": "C6H14N4O2",
+    "inchikey": "ODKSFYDXXFIFQN-BYPYZUCNSA-N",
+    "pubchem_cid": 6322,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/6322"
+  },
+  {
+    "group": "Amino acids",
+    "name": "L-Asparagine",
+    "query": "L-Asparagine",
+    "sequence": "N",
+    "keywords": [
+      "Asn",
+      "N"
+    ],
+    "note": "Neutral free amino acid. L stereochemistry.",
+    "smiles": "C([C@@H](C(=O)O)N)C(=O)N",
+    "formula": "C4H8N2O3",
+    "inchikey": "DCXYFEDJOCDNAF-REOHCLBHSA-N",
+    "pubchem_cid": 6267,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/6267"
+  },
+  {
+    "group": "Amino acids",
+    "name": "L-Aspartic acid",
+    "query": "L-Aspartic acid",
+    "sequence": "D",
+    "keywords": [
+      "Asp",
+      "D"
+    ],
+    "note": "Neutral free amino acid. L stereochemistry.",
+    "smiles": "C([C@@H](C(=O)O)N)C(=O)O",
+    "formula": "C4H7NO4",
+    "inchikey": "CKLJMWTZIZZHCS-REOHCLBHSA-N",
+    "pubchem_cid": 5960,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/5960"
+  },
+  {
+    "group": "Amino acids",
+    "name": "L-Cysteine",
+    "query": "L-Cysteine",
+    "sequence": "C",
+    "keywords": [
+      "Cys",
+      "C"
+    ],
+    "note": "Neutral free amino acid. L stereochemistry.",
+    "smiles": "C([C@@H](C(=O)O)N)S",
+    "formula": "C3H7NO2S",
+    "inchikey": "XUJNEKJLAYXESH-REOHCLBHSA-N",
+    "pubchem_cid": 5862,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/5862"
+  },
+  {
+    "group": "Amino acids",
+    "name": "L-Glutamine",
+    "query": "L-Glutamine",
+    "sequence": "Q",
+    "keywords": [
+      "Gln",
+      "Q"
+    ],
+    "note": "Neutral free amino acid. L stereochemistry.",
+    "smiles": "C(CC(=O)N)[C@@H](C(=O)O)N",
+    "formula": "C5H10N2O3",
+    "inchikey": "ZDXPYRJPNDTMRX-VKHMYHEASA-N",
+    "pubchem_cid": 5961,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/5961"
+  },
+  {
+    "group": "Amino acids",
+    "name": "L-Glutamic acid",
+    "query": "L-Glutamic acid",
+    "sequence": "E",
+    "keywords": [
+      "Glu",
+      "E"
+    ],
+    "note": "Neutral free amino acid. L stereochemistry.",
+    "smiles": "C(CC(=O)O)[C@@H](C(=O)O)N",
+    "formula": "C5H9NO4",
+    "inchikey": "WHUUTDBJXJRKMK-VKHMYHEASA-N",
+    "pubchem_cid": 33032,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/33032"
+  },
+  {
+    "group": "Amino acids",
+    "name": "Glycine",
+    "query": "Glycine",
+    "sequence": "G",
+    "keywords": [
+      "Gly",
+      "G"
+    ],
+    "note": "Neutral free amino acid. Achiral.",
+    "smiles": "C(C(=O)O)N",
+    "formula": "C2H5NO2",
+    "inchikey": "DHMQDGOQFOQNFH-UHFFFAOYSA-N",
+    "pubchem_cid": 750,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/750"
+  },
+  {
+    "group": "Amino acids",
+    "name": "L-Histidine",
+    "query": "L-Histidine",
+    "sequence": "H",
+    "keywords": [
+      "His",
+      "H"
+    ],
+    "note": "Neutral free amino acid. L stereochemistry.",
+    "smiles": "C1=C(NC=N1)C[C@@H](C(=O)O)N",
+    "formula": "C6H9N3O2",
+    "inchikey": "HNDVDQJCIGZPNO-YFKPBYRVSA-N",
+    "pubchem_cid": 6274,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/6274"
+  },
+  {
+    "group": "Amino acids",
+    "name": "L-Isoleucine",
+    "query": "L-Isoleucine",
+    "sequence": "I",
+    "keywords": [
+      "Ile",
+      "I"
+    ],
+    "note": "Neutral free amino acid. L stereochemistry.",
+    "smiles": "CC[C@H](C)[C@@H](C(=O)O)N",
+    "formula": "C6H13NO2",
+    "inchikey": "AGPKZVBTJJNPAG-WHFBIAKZSA-N",
+    "pubchem_cid": 6306,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/6306"
+  },
+  {
+    "group": "Amino acids",
+    "name": "L-Leucine",
+    "query": "L-Leucine",
+    "sequence": "L",
+    "keywords": [
+      "Leu",
+      "L"
+    ],
+    "note": "Neutral free amino acid. L stereochemistry.",
+    "smiles": "CC(C)C[C@@H](C(=O)O)N",
+    "formula": "C6H13NO2",
+    "inchikey": "ROHFNLRQFUQHCH-YFKPBYRVSA-N",
+    "pubchem_cid": 6106,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/6106"
+  },
+  {
+    "group": "Amino acids",
+    "name": "L-Lysine",
+    "query": "L-Lysine",
+    "sequence": "K",
+    "keywords": [
+      "Lys",
+      "K"
+    ],
+    "note": "Neutral free amino acid. L stereochemistry.",
+    "smiles": "C(CCN)C[C@@H](C(=O)O)N",
+    "formula": "C6H14N2O2",
+    "inchikey": "KDXKERNSBIXSRK-YFKPBYRVSA-N",
+    "pubchem_cid": 5962,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/5962"
+  },
+  {
+    "group": "Amino acids",
+    "name": "L-Methionine",
+    "query": "L-Methionine",
+    "sequence": "M",
+    "keywords": [
+      "Met",
+      "M"
+    ],
+    "note": "Neutral free amino acid. L stereochemistry.",
+    "smiles": "CSCC[C@@H](C(=O)O)N",
+    "formula": "C5H11NO2S",
+    "inchikey": "FFEARJCKVFRZRR-BYPYZUCNSA-N",
+    "pubchem_cid": 6137,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/6137"
+  },
+  {
+    "group": "Amino acids",
+    "name": "L-Phenylalanine",
+    "query": "L-Phenylalanine",
+    "sequence": "F",
+    "keywords": [
+      "Phe",
+      "F"
+    ],
+    "note": "Neutral free amino acid. L stereochemistry.",
+    "smiles": "C1=CC=C(C=C1)C[C@@H](C(=O)O)N",
+    "formula": "C9H11NO2",
+    "inchikey": "COLNVLDHVKWLRT-QMMMGPOBSA-N",
+    "pubchem_cid": 6140,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/6140"
+  },
+  {
+    "group": "Amino acids",
+    "name": "L-Proline",
+    "query": "L-Proline",
+    "sequence": "P",
+    "keywords": [
+      "Pro",
+      "P"
+    ],
+    "note": "Neutral free amino acid. L stereochemistry.",
+    "smiles": "C1C[C@H](NC1)C(=O)O",
+    "formula": "C5H9NO2",
+    "inchikey": "ONIBWKKTOPOVIA-BYPYZUCNSA-N",
+    "pubchem_cid": 145742,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/145742"
+  },
+  {
+    "group": "Amino acids",
+    "name": "L-Serine",
+    "query": "L-Serine",
+    "sequence": "S",
+    "keywords": [
+      "Ser",
+      "S"
+    ],
+    "note": "Neutral free amino acid. L stereochemistry.",
+    "smiles": "C([C@@H](C(=O)O)N)O",
+    "formula": "C3H7NO3",
+    "inchikey": "MTCFGRXMJLQNBG-REOHCLBHSA-N",
+    "pubchem_cid": 5951,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/5951"
+  },
+  {
+    "group": "Amino acids",
+    "name": "L-Threonine",
+    "query": "L-Threonine",
+    "sequence": "T",
+    "keywords": [
+      "Thr",
+      "T"
+    ],
+    "note": "Neutral free amino acid. L stereochemistry.",
+    "smiles": "C[C@H]([C@@H](C(=O)O)N)O",
+    "formula": "C4H9NO3",
+    "inchikey": "AYFVYJQAPQTCCC-GBXIJSLDSA-N",
+    "pubchem_cid": 6288,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/6288"
+  },
+  {
+    "group": "Amino acids",
+    "name": "L-Tryptophan",
+    "query": "L-Tryptophan",
+    "sequence": "W",
+    "keywords": [
+      "Trp",
+      "W"
+    ],
+    "note": "Neutral free amino acid. L stereochemistry.",
+    "smiles": "C1=CC=C2C(=C1)C(=CN2)C[C@@H](C(=O)O)N",
+    "formula": "C11H12N2O2",
+    "inchikey": "QIVBCDIJIAJPQS-VIFPVBQESA-N",
+    "pubchem_cid": 6305,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/6305"
+  },
+  {
+    "group": "Amino acids",
+    "name": "L-Tyrosine",
+    "query": "L-Tyrosine",
+    "sequence": "Y",
+    "keywords": [
+      "Tyr",
+      "Y"
+    ],
+    "note": "Neutral free amino acid. L stereochemistry.",
+    "smiles": "C1=CC(=CC=C1C[C@@H](C(=O)O)N)O",
+    "formula": "C9H11NO3",
+    "inchikey": "OUYCCCASQSFEME-QMMMGPOBSA-N",
+    "pubchem_cid": 6057,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/6057"
+  },
+  {
+    "group": "Amino acids",
+    "name": "L-Valine",
+    "query": "L-Valine",
+    "sequence": "V",
+    "keywords": [
+      "Val",
+      "V"
+    ],
+    "note": "Neutral free amino acid. L stereochemistry.",
+    "smiles": "CC(C)[C@@H](C(=O)O)N",
+    "formula": "C5H11NO2",
+    "inchikey": "KZSNJWFQEVHDMF-BYPYZUCNSA-N",
+    "pubchem_cid": 6287,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/6287"
+  }
+]

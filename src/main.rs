@@ -1,24 +1,57 @@
+#![forbid(unsafe_code)]
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::unreachable,
+        clippy::todo,
+        clippy::unimplemented,
+        clippy::indexing_slicing
+    )
+)]
+
 mod app;
 mod canvas;
 
 fn main() -> iced::Result {
     if std::env::args().any(|arg| arg == "--engine-check") {
-        let runtime = tokio::runtime::Runtime::new().expect("Tokio runtime");
+        let runtime = match tokio::runtime::Runtime::new() {
+            Ok(runtime) => runtime,
+            Err(error) => {
+                use std::io::Write;
+                let _ = writeln!(
+                    std::io::stderr(),
+                    "Could not start chemistry runtime: {error}"
+                );
+                std::process::exit(1);
+            }
+        };
         match runtime.block_on(
             moruno::engine::PythonEngine::default()
                 .request(moruno::engine::Request::import_smiles("CCO")),
         ) {
             Ok(response) => {
-                println!("{}", serde_json::to_string_pretty(&response).unwrap());
+                use std::io::Write;
+                if let Err(error) = serde_json::to_writer_pretty(std::io::stdout(), &response) {
+                    let _ = writeln!(
+                        std::io::stderr(),
+                        "Could not write engine response: {error}"
+                    );
+                    std::process::exit(1);
+                }
                 return Ok(());
             }
             Err(error) => {
-                eprintln!("{error}");
+                use std::io::Write;
+                let _ = writeln!(std::io::stderr(), "{error}");
                 std::process::exit(1);
             }
         }
     }
     iced::application(app::App::new, app::App::update, app::App::view)
+        .default_font(iced::Font::with_name(moruno::style::ui_font_family()))
         .title(app::App::title)
         .theme(app::App::theme)
         .subscription(app::App::subscription)

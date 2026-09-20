@@ -29,7 +29,7 @@ pub(super) struct SelectionBox {
 
 impl SelectionBox {
     pub fn new(doc: &Document, ids: &[u64], camera: Camera, bounds: Rectangle) -> Option<Self> {
-        if ids.len() == 1 && doc.atom(ids[0]).is_some() {
+        if matches!(ids, [id] if doc.atom(*id).is_some()) {
             return None;
         }
         let (lo, hi) = scene::selection_bounds(doc, ids)?;
@@ -43,9 +43,11 @@ impl SelectionBox {
 
     fn grips(self) -> [Point; 4] {
         let offsets = [(-12.0, -12.0), (12.0, -12.0), (12.0, 12.0), (-12.0, 12.0)];
-        std::array::from_fn(|i| {
-            let p = self.camera.screen(self.corners[i], self.bounds);
-            Point::new(p.x + offsets[i].0, p.y + offsets[i].1)
+        let mut pairs = self.corners.into_iter().zip(offsets);
+        std::array::from_fn(|_| {
+            let (corner, (x, y)) = pairs.next().unwrap_or((self.pivot, (0., 0.)));
+            let p = self.camera.screen(corner, self.bounds);
+            Point::new(p.x + x, p.y + y)
         })
     }
 
@@ -119,7 +121,14 @@ impl TransformDrag {
     pub fn new(selection: SelectionBox, handle: Handle, start: World, ids: &[u64]) -> Self {
         let (pivot, corner) = match handle {
             Handle::Rotate => (selection.pivot, start),
-            Handle::Resize(i) => (selection.corners[(i + 2) % 4], selection.corners[i]),
+            Handle::Resize(i) => (
+                selection
+                    .corners
+                    .get((i % 4 + 2) % 4)
+                    .copied()
+                    .unwrap_or(selection.pivot),
+                selection.corners.get(i).copied().unwrap_or(start),
+            ),
         };
         Self {
             ids: ids.to_vec(),

@@ -4,21 +4,73 @@ use moruno::{
     document::{Annotation, Arrow, Document, History, Point},
     editing::{self, Arrange, Transform},
     engine::{Analysis, ChemistryEngine, PythonEngine, Request, Response},
+    graphics::{BracketSides, Graphic, GraphicChange, GraphicStyle},
     recovery::{Candidate, Recovery},
 };
 use std::path::PathBuf;
+mod abbreviations;
+mod arrows;
+mod assistant;
+mod atom_labels;
+mod cleanup;
+mod clipboard;
+mod file_shortcuts;
+mod graphics;
 mod icons;
+mod palettes;
+mod shortcuts;
+mod template_library;
+mod typography;
 mod workspace;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum InspectorTab {
+    Assistant,
+    Abbreviations,
     Properties,
+    Labels,
     Templates,
     Export,
 }
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    Palette(palettes::Action),
+    Assistant(assistant::Action),
+    ContextKey(String),
+    AromaticDisplay,
+    Abbreviations(abbreviations::Action),
+    Labels(atom_labels::Action),
+    RefreshLabels,
+    Templates(template_library::Action),
+    TemplateNavigate(bool),
+    InspectorScroll(f32),
+    ResetBondDrawing,
+    FixedLength(bool),
+    FixedAngles(bool),
+    DrawingLength(String),
+    ChainAtoms(String),
+    ChainAngle(String),
+    ApplyBondPreset(moruno::bonds::BondPreset),
+    BondPosition(moruno::bonds::DoublePosition),
+    BondColor(String),
+    ApplyBondColor,
+    GraphicStyle(GraphicChange),
+    GraphicWidth(String),
+    ApplyGraphicWidth,
+    GraphicStroke(String),
+    ApplyGraphicStroke,
+    GraphicFill(String),
+    ApplyGraphicFill,
+    GraphicSides(BracketSides),
+    ScientificKind(moruno::graphics::GraphicKind),
+    OrbitalPhase(moruno::scientific::Phase),
+    FlipPhase(bool),
+    AttachSymbols(bool),
+    RemoveMark(u64, usize),
+    RotateMark(u64, usize),
+    AtomRadical(u8),
+    GraphicLayer(bool),
     ToggleInspector,
     Inspector(InspectorTab),
     ToggleImport,
@@ -28,17 +80,41 @@ pub enum Message {
     Canvas(Edit),
     Tool(Tool),
     Element(String),
-    Caption(String),
+    CaptionAction(iced::widget::text_editor::Action),
+    TextStyle(moruno::typography::StyleChange),
+    FontSize(String),
+    ApplyFontSize,
+    ColorScope(typography::ColorScope),
+    TextColor(String),
+    ApplyTextColor,
+    TextAlign(moruno::typography::TextAlign),
+    TextSpacing(f32),
+    TextWidth(String),
+    ApplyTextWidth,
     Smiles(String),
     Import,
     Example(&'static str),
     Clean,
+    ApplyCleanup,
+    CancelCleanup,
+    CleanupOriginal(bool),
+    CleanupScope(moruno::cleanup::Scope),
+    CleanupOrientation(bool),
     Analyze,
     Undo,
     Redo,
     Delete,
     SelectAll,
+    InvertSelection,
+    Group,
+    Ungroup,
+    IntegralGroup(bool),
+    AddFrame(moruno::graphics::GraphicKind),
     Grid,
+    ToggleView,
+    Rulers(bool),
+    Crosshair(bool),
+    RulerUnit(canvas::guides::Unit),
     Fit,
     Zoom(f32),
     New,
@@ -47,20 +123,33 @@ pub enum Message {
     Export(&'static str),
     CopySmiles,
     Copy(bool),
+    CopyImage,
+    ClipboardWritten {
+        epoch: u64,
+        revision: u64,
+        cut_ids: Vec<u64>,
+        result: Result<moruno::clipboard::CopyOutcome, String>,
+    },
+    ClipboardRead {
+        epoch: u64,
+        revision: u64,
+        result: Box<Result<Document, String>>,
+    },
     Paste,
     Pasted(Option<String>),
     Duplicate,
     Transform(Transform),
     Arrange(Arrange),
     ReverseBonds,
+    BondDepth(bool),
     RingSize(u8),
     AromaticRing(bool),
     ToggleAromaticRing,
-    ArrowStyle(&'static str),
+    ArrowStyle(moruno::arrows::Preset),
+    ArrowAction(arrows::Action),
     CustomElement(String),
     ApplyElement,
-    InsertTemplate(&'static str),
-    UpdateLabel,
+    InsertTemplate(usize),
     SaveAs,
     Tick,
     Restore,
@@ -82,12 +171,15 @@ pub enum Message {
 }
 #[derive(Debug, Clone)]
 pub enum Job {
+    AromaticDisplay,
+    Abbreviate,
     Import,
     ImportFile,
     Insert,
     Startup,
     Analyze,
-    Clean,
+    RefreshLabels,
+    Clean(cleanup::CleanupJob),
     Export(&'static str),
 }
 #[derive(Debug, Clone)]
@@ -97,7 +189,39 @@ enum Pending {
     Close(iced::window::Id),
 }
 
+struct CleanupPreview {
+    job: cleanup::CleanupJob,
+    warnings: Vec<String>,
+    document: Document,
+    analysis: Option<Analysis>,
+    revision: u64,
+    epoch: u64,
+    original: bool,
+}
+
 pub struct App {
+    palette: Option<palettes::Family>,
+    assistant: assistant::State,
+    hover: Option<(Point, u64)>,
+    cleanup: Option<CleanupPreview>,
+    cleanup_serial: u64,
+    abbreviations: abbreviations::State,
+    labels: atom_labels::State,
+    refresh_due: Option<std::time::Instant>,
+    chemistry_notice: Option<String>,
+    bond_drawing: moruno::chains::BondDrawing,
+    chain_drawing: moruno::chains::ChainDrawing,
+    drawing_length_input: String,
+    chain_atoms_input: String,
+    chain_angle_input: String,
+    graphic_style: GraphicStyle,
+    orbital_phase: moruno::scientific::Phase,
+    phase_flipped: bool,
+    attach_symbols: bool,
+    graphic_width_input: String,
+    graphic_stroke_input: String,
+    graphic_fill_input: String,
+    bracket_sides: BracketSides,
     doc: Document,
     history: History,
     selected: Vec<u64>,
@@ -105,13 +229,25 @@ pub struct App {
     tool: Tool,
     element: String,
     caption: String,
+    caption_editor: iced::widget::text_editor::Content,
+    caption_format: moruno::typography::TextFormat,
+    caption_target: Option<u64>,
+    font_options: iced::widget::combo_box::State<String>,
+    font_size_input: String,
+    text_color_input: String,
+    color_scope: typography::ColorScope,
+    text_width_input: String,
+    bond_color_input: String,
     smiles: String,
     isotope: String,
     grid: bool,
+    guides: canvas::guides::Guides,
+    view_open: bool,
     analysis: Option<Analysis>,
     engine: PythonEngine,
     revision: u64,
     busy: bool,
+    clipboard_busy: bool,
     status: String,
     error: bool,
     path: Option<PathBuf>,
@@ -120,7 +256,8 @@ pub struct App {
     file_epoch: u64,
     ring_size: u8,
     aromatic_ring: bool,
-    arrow_style: &'static str,
+    arrow_style: moruno::arrows::Preset,
+    arrows: arrows::State,
     custom_element: String,
     recovery: Option<Recovery>,
     recovered: Vec<Candidate>,
@@ -132,6 +269,8 @@ pub struct App {
     help_open: bool,
     viewport: iced::Size,
     fit_to_view: bool,
+    template_index: usize,
+    templates: template_library::State,
 }
 impl App {
     pub fn new() -> (Self, Task<Message>) {
@@ -145,6 +284,28 @@ impl App {
             .map(|r| r.candidates())
             .unwrap_or_default();
         let mut app = Self {
+            palette: None,
+            assistant: assistant::State::new(),
+            hover: None,
+            cleanup: None,
+            cleanup_serial: 0,
+            labels: Default::default(),
+            abbreviations: Default::default(),
+            refresh_due: None,
+            chemistry_notice: None,
+            bond_drawing: Default::default(),
+            chain_drawing: Default::default(),
+            drawing_length_input: moruno::style::DEFAULT.bond_length_pt.to_string(),
+            chain_atoms_input: String::new(),
+            chain_angle_input: "120".into(),
+            graphic_style: GraphicStyle::default(),
+            orbital_phase: Default::default(),
+            phase_flipped: false,
+            attach_symbols: true,
+            graphic_width_input: "0.6".into(),
+            graphic_stroke_input: "#000000".into(),
+            graphic_fill_input: "#DCEFE9".into(),
+            bracket_sides: BracketSides::Both,
             doc: Document::default(),
             history: History::default(),
             selected: vec![],
@@ -152,13 +313,30 @@ impl App {
             tool: Tool::Select,
             element: "C".into(),
             caption: "Reaction conditions".into(),
+            caption_editor: iced::widget::text_editor::Content::with_text("Reaction conditions"),
+            caption_format: Default::default(),
+            caption_target: None,
+            font_options: iced::widget::combo_box::State::new(
+                moruno::style::font_families()
+                    .iter()
+                    .map(|s| (*s).to_owned())
+                    .collect(),
+            ),
+            font_size_input: "10".into(),
+            text_color_input: "#000000".into(),
+            color_scope: Default::default(),
+            bond_color_input: "#000000".into(),
+            text_width_input: String::new(),
             smiles: "CC(=O)Oc1ccccc1C(=O)O".into(),
             isotope: String::new(),
             grid: false,
+            guides: Default::default(),
+            view_open: false,
             analysis: None,
             engine: PythonEngine::default(),
             revision: 0,
             busy: false,
+            clipboard_busy: false,
             status: "Starting chemistry…".into(),
             error: false,
             path: None,
@@ -167,7 +345,8 @@ impl App {
             file_epoch: 0,
             ring_size: 6,
             aromatic_ring: false,
-            arrow_style: "Forward",
+            arrow_style: Default::default(),
+            arrows: Default::default(),
             custom_element: String::new(),
             recovery,
             recovered,
@@ -179,8 +358,34 @@ impl App {
             help_open: false,
             viewport: iced::Size::new(850.0, 600.0),
             fit_to_view: true,
+            template_index: 0,
+            templates: template_library::State::load(),
         };
-        let task = app.run(Request::import_smiles(&app.smiles), Job::Startup);
+        let startup_path = if cfg!(test) {
+            None
+        } else {
+            let mut args = std::env::args_os().skip(1);
+            args.find(|arg| arg == "--open")
+                .and_then(|_| args.next())
+                .map(PathBuf::from)
+        };
+        let task = if let Some(path) = startup_path {
+            Task::perform(
+                async move {
+                    let read_path = path.clone();
+                    let result = tokio::task::spawn_blocking(move || {
+                        std::fs::read_to_string(read_path).map_err(|e| e.to_string())
+                    })
+                    .await
+                    .map_err(|e| e.to_string())
+                    .and_then(|r| r);
+                    Some((path, result))
+                },
+                Message::Opened,
+            )
+        } else {
+            app.run(Request::import_smiles(&app.smiles), Job::Startup)
+        };
         (app, task)
     }
     pub fn title(&self) -> String {
@@ -209,12 +414,18 @@ impl App {
     }
     pub fn subscription(&self) -> Subscription<Message> {
         Subscription::batch([
+            iced::time::every(std::time::Duration::from_millis(200))
+                .map(|_| Message::Assistant(assistant::Action::Poll)),
+            iced::time::every(std::time::Duration::from_millis(250))
+                .map(|_| Message::RefreshLabels),
             iced::time::every(std::time::Duration::from_secs(5)).map(|_| Message::Tick),
             iced::window::close_requests().map(Message::Close),
             iced::event::listen_with(|event, status, _window| {
                 use iced::keyboard::{Key, key::Named};
-                if status == iced::event::Status::Captured {
-                    return None;
+                if status == iced::event::Status::Ignored
+                    && let Some(forward) = template_library::navigation_event(&event)
+                {
+                    return Some(Message::TemplateNavigate(forward));
                 }
                 let iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
                     key,
@@ -224,6 +435,9 @@ impl App {
                 else {
                     return None;
                 };
+                if status == iced::event::Status::Captured {
+                    return None;
+                }
                 match key {
                     Key::Character(c) if mods.command() => match c.as_str() {
                         "z" => Some(if mods.shift() {
@@ -231,15 +445,21 @@ impl App {
                         } else {
                             Message::Undo
                         }),
-                        "s" => Some(if mods.shift() {
-                            Message::SaveAs
+                        "a" => Some(if mods.shift() {
+                            Message::InvertSelection
                         } else {
-                            Message::Save
+                            Message::SelectAll
                         }),
-                        "o" => Some(Message::Open),
-                        "n" => Some(Message::New),
-                        "a" => Some(Message::SelectAll),
-                        "c" => Some(Message::Copy(false)),
+                        "g" => Some(if mods.shift() {
+                            Message::Ungroup
+                        } else {
+                            Message::Group
+                        }),
+                        "c" | "C" => Some(if mods.shift() && cfg!(target_os = "macos") {
+                            Message::CopyImage
+                        } else {
+                            Message::Copy(false)
+                        }),
                         "x" => Some(Message::Copy(true)),
                         "v" => Some(Message::Paste),
                         "d" => Some(Message::Duplicate),
@@ -256,16 +476,26 @@ impl App {
                         Some(Message::ToggleAromaticRing)
                     }
                     Key::Character(c) if !mods.control() && !mods.alt() => match c.as_str() {
+                        "x" | "X" => Some(Message::Tool(Tool::Chain(if mods.shift() {
+                            moruno::chains::ChainMode::Snaking
+                        } else {
+                            moruno::chains::ChainMode::Straight
+                        }))),
                         "v" => Some(Message::Tool(Tool::Select)),
+                        "l" => Some(Message::Tool(Tool::Lasso)),
                         "b" | "1" => Some(Message::Tool(Tool::Bond(1))),
                         "2" => Some(Message::Tool(Tool::Bond(2))),
                         "3" => Some(Message::Tool(Tool::Bond(3))),
+                        "4" => Some(Message::Tool(Tool::StyledBond(
+                            moruno::bonds::BondPreset::Quadruple,
+                        ))),
                         "r" => Some(Message::Tool(Tool::Ring)),
-                        "a" => Some(Message::Tool(Tool::Arrow)),
-                        "t" => Some(Message::Tool(Tool::Text)),
+
                         "e" => Some(Message::Tool(Tool::Erase)),
-                        "c" | "n" | "o" | "s" | "p" | "f" => {
-                            Some(Message::Element(c.to_uppercase()))
+                        c if ["c", "n", "o", "s", "p", "f", "h", "d", "t", "a"]
+                            .contains(&c.to_ascii_lowercase().as_str()) =>
+                        {
+                            Some(Message::ContextKey(c.to_ascii_uppercase()))
                         }
                         "?" => Some(Message::ToggleHelp),
                         _ => None,
@@ -278,7 +508,7 @@ impl App {
         ])
     }
     fn dirty(&self) -> bool {
-        self.doc != self.saved
+        !same_drawing(&self.doc, &self.saved)
     }
     fn clear_recovery(&mut self) {
         if let Some(recovery) = &self.recovery {
@@ -292,8 +522,10 @@ impl App {
             return Task::none();
         }
         self.busy = true;
-        self.error = false;
-        self.status = "Working…".into();
+        if !matches!(kind, Job::RefreshLabels) {
+            self.error = false;
+            self.status = "Working…".into();
+        }
         let engine = self.engine.clone();
         let revision = self.revision;
         Task::perform(
@@ -306,9 +538,26 @@ impl App {
         )
     }
     fn changed(&mut self, before: Document) {
-        let chemistry_changed = before.atoms != self.doc.atoms || before.bonds != self.doc.bonds;
+        self.cleanup = None;
+        self.doc.reconcile_abbreviations(&before);
+        if self.doc != before {
+            if let Err(error) = self.doc.validate() {
+                self.doc = before;
+                self.error = true;
+                self.status = format!("Edit cancelled: {error}");
+                return;
+            }
+            self.doc.reconcile_molecule_groups();
+        }
+        let chemistry_changed = chemistry_changed(&before, &self.doc);
+        if chemistry_changed {
+            moruno::atom_labels::clear_computed(&mut self.doc);
+            self.refresh_due =
+                Some(std::time::Instant::now() + std::time::Duration::from_millis(350));
+            self.chemistry_notice = None;
+        }
         if self.history.commit(before, &self.doc) {
-            self.revision += 1;
+            self.revision = self.revision.wrapping_add(1);
             if chemistry_changed {
                 self.analysis = None;
             }
@@ -323,10 +572,11 @@ impl App {
         self.selected.retain(|id| self.doc.all_ids().contains(id));
     }
     fn fit(&mut self) {
-        let (lo, hi) = self.doc.bounds();
+        let (lo, hi) = self.display_document().bounds();
         self.camera.center = Point::new((lo.x + hi.x) / 2.0, (lo.y + hi.y) / 2.0);
-        self.camera.zoom = ((self.viewport.width - 80.0).max(100.0) / (hi.x - lo.x).max(240.0))
-            .min((self.viewport.height - 80.0).max(100.0) / (hi.y - lo.y).max(200.0))
+        let viewport = self.guides.paper(iced::Rectangle::with_size(self.viewport));
+        self.camera.zoom = ((viewport.width - 80.0).max(100.0) / (hi.x - lo.x).max(240.0))
+            .min((viewport.height - 80.0).max(100.0) / (hi.y - lo.y).max(200.0))
             .clamp(0.25, 2.5);
         self.fit_to_view = true;
     }
@@ -341,9 +591,12 @@ impl App {
     fn perform(&mut self, action: Pending) -> Task<Message> {
         match action {
             Pending::New => {
+                self.labels = Default::default();
+                self.refresh_due = None;
+                self.chemistry_notice = None;
                 self.clear_recovery();
-                self.file_epoch += 1;
-                self.revision += 1;
+                self.file_epoch = self.file_epoch.wrapping_add(1);
+                self.revision = self.revision.wrapping_add(1);
                 let before = self.doc.clone();
                 self.doc = Document::default();
                 self.changed(before);
@@ -351,8 +604,34 @@ impl App {
                 self.path = None;
                 self.selected.clear();
                 self.camera = Camera::default();
+                self.fit_to_view = true;
+                self.analysis = None;
+                self.error = false;
+                self.bond_drawing = Default::default();
+                self.chain_drawing = Default::default();
+                self.drawing_length_input = moruno::style::DEFAULT.bond_length_pt.to_string();
+                self.chain_atoms_input.clear();
+                self.chain_angle_input = "120".into();
+                self.caption_format = Default::default();
+                self.caption = "Reaction conditions".into();
+                self.caption_target = None;
+                self.graphic_style = Default::default();
+                self.orbital_phase = Default::default();
+                self.phase_flipped = false;
+                self.attach_symbols = true;
+                self.arrow_style = Default::default();
+                self.arrows = Default::default();
+                self.graphic_width_input = moruno::style::DEFAULT.line_width_pt.to_string();
+                self.graphic_stroke_input = "#000000".into();
+                self.graphic_fill_input = "#DCEFE9".into();
+                self.color_scope = Default::default();
+                self.bond_color_input = "#000000".into();
+                self.tool = Tool::Select;
+                self.sync_typography();
                 self.status = "New document".into();
-                Task::none()
+                iced::advanced::widget::operate(
+                    iced::advanced::widget::operation::focusable::unfocus(),
+                )
             }
             Pending::Open => Task::perform(
                 async {
@@ -374,10 +653,501 @@ impl App {
             }
         }
     }
+    fn display_document(&self) -> &Document {
+        self.cleanup
+            .as_ref()
+            .filter(|p| !p.original && p.revision == self.revision && p.epoch == self.file_epoch)
+            .map(|p| &p.document)
+            .unwrap_or(&self.doc)
+    }
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        if let Message::Palette(action) = message {
+            return self.palette_action(action);
+        }
+        if self.palette.is_some() && matches!(message, Message::Tool(Tool::Select)) {
+            self.palette = None;
+            return Task::none();
+        }
+        if self.assistant.menu.is_some() && matches!(message, Message::Tool(Tool::Select)) {
+            self.assistant.menu = None;
+            return Task::none();
+        }
+        if let Message::Assistant(action) = message {
+            return self.assistant_action(action);
+        }
+        if self.cleanup.is_some() {
+            if matches!(message, Message::Tool(Tool::Select)) {
+                return self.update(Message::CancelCleanup);
+            }
+            if !matches!(
+                &message,
+                Message::ApplyCleanup
+                    | Message::CancelCleanup
+                    | Message::CleanupOriginal(_)
+                    | Message::CleanupScope(_)
+                    | Message::CleanupOrientation(_)
+                    | Message::Canvas(Edit::Pan(..) | Edit::Zoom(..) | Edit::Hover(_))
+                    | Message::InspectorScroll(_)
+                    | Message::Viewport(_)
+                    | Message::Fit
+                    | Message::Zoom(_)
+                    | Message::ToggleInspector
+                    | Message::Inspector(_)
+                    | Message::ToggleView
+                    | Message::Grid
+                    | Message::Rulers(_)
+                    | Message::Crosshair(_)
+                    | Message::RulerUnit(_)
+                    | Message::Tick
+                    | Message::EngineDone { .. }
+                    | Message::Close(_)
+                    | Message::Discard
+                    | Message::Cancel
+                    | Message::Saved(..)
+                    | Message::Exported(_)
+                    | Message::Opened(_)
+                    | Message::ClipboardRead { .. }
+                    | Message::ClipboardWritten { .. }
+            ) {
+                if !matches!(message, Message::RefreshLabels | Message::Canvas(_)) {
+                    self.status = "Apply or cancel the cleanup preview to continue editing".into();
+                }
+                return Task::none();
+            }
+        }
+        if matches!(
+            &message,
+            Message::Charge(_) | Message::AtomRadical(_) | Message::ApplyIsotope
+        ) && self
+            .doc
+            .abbreviations
+            .iter()
+            .any(|g| g.members.iter().any(|id| self.selected.contains(id)))
+        {
+            self.status =
+                "Expand the selected abbreviation before changing individual atom properties"
+                    .into();
+            self.error = true;
+            return Task::none();
+        }
+        let reveal_inspector = matches!(
+            &message,
+            Message::Inspector(_)
+                | Message::InsertTemplate(_)
+                | Message::Tool(
+                    Tool::Text
+                        | Tool::Arrow
+                        | Tool::Graphic(_)
+                        | Tool::EditPoints
+                        | Tool::RingPreset(_)
+                )
+        ) || (self.inspector_tab != InspectorTab::Templates
+            && matches!(&message, Message::Canvas(Edit::Select(ids)) if ids.iter().any(|id| self.doc.annotations.iter().any(|a| a.id == *id) || self.doc.graphics.iter().any(|g|g.id==*id))))
+            || (self.tool == Tool::Text && matches!(&message, Message::Canvas(Edit::Click(_))));
         match message {
+            Message::Assistant(_) | Message::Palette(_) => {}
+            Message::ContextKey(key) => return self.context_key(&key),
+            Message::AromaticDisplay => {
+                if self.selected.is_empty() {
+                    self.status = "Select an aromatic ring first".into();
+                    return Task::none();
+                }
+                let mut request = Request::molecule("aromatic", self.doc.clone());
+                request.selected_ids = Some(self.selected.clone());
+                return self.run(request, Job::AromaticDisplay);
+            }
+            Message::Abbreviations(action) => return self.abbreviation_action(action),
+            Message::Labels(action) => self.label_action(action),
+            Message::RefreshLabels => {
+                if !self.busy
+                    && self
+                        .refresh_due
+                        .is_some_and(|due| std::time::Instant::now() >= due)
+                {
+                    self.refresh_due = None;
+                    if !self.doc.atoms.is_empty() {
+                        return self.run(
+                            Request::molecule("analyze", self.doc.clone()),
+                            Job::RefreshLabels,
+                        );
+                    }
+                }
+            }
+            Message::InspectorScroll(y) => {
+                if self.inspector_tab == InspectorTab::Templates && y.is_finite() {
+                    self.templates.scroll = y.max(0.);
+                }
+            }
+            Message::TemplateNavigate(forward) => {
+                if self.inspector_open && self.inspector_tab == InspectorTab::Templates {
+                    return self.template_action(if forward {
+                        template_library::Action::Forward
+                    } else {
+                        template_library::Action::Browse
+                    });
+                }
+            }
+            Message::Templates(action) => {
+                if let Some(task) = self.template_async(&action) {
+                    return task;
+                }
+                return self.template_action(action);
+            }
+            Message::ResetBondDrawing => {
+                self.bond_drawing = Default::default();
+                self.drawing_length_input = moruno::style::DEFAULT.bond_length_pt.to_string();
+                self.chain_drawing.angle = 120.;
+                self.chain_angle_input = "120".into();
+                self.status = "JACS / ACS bond defaults · 14.4 pt length · 120° chain angle".into();
+                self.error = false;
+            }
+            Message::FixedLength(on) => self.bond_drawing.fixed_length = on,
+            Message::FixedAngles(on) => self.bond_drawing.fixed_angles = on,
+            Message::DrawingLength(value) => {
+                self.drawing_length_input = value;
+                if let Ok(points) = self.drawing_length_input.parse::<f32>()
+                    && points.is_finite()
+                    && (1.0..=300.0).contains(&points)
+                {
+                    self.bond_drawing.length = moruno::style::DEFAULT.world(points);
+                    self.error = false;
+                } else {
+                    self.status = "Bond length must be between 1 and 300 pt".into();
+                    self.error = true;
+                }
+            }
+            Message::ChainAtoms(value) => {
+                self.chain_atoms_input = value;
+                if self.chain_atoms_input.is_empty() {
+                    self.chain_drawing.atoms = None;
+                    self.error = false;
+                } else if let Ok(count) = self.chain_atoms_input.parse::<usize>()
+                    && (1..=moruno::chains::MAX_ATOMS).contains(&count)
+                {
+                    self.chain_drawing.atoms = Some(count);
+                    self.error = false;
+                } else {
+                    self.status =
+                        "Enter 1–512 chain atoms, or clear the field for automatic length".into();
+                    self.error = true;
+                }
+            }
+            Message::ChainAngle(value) => {
+                self.chain_angle_input = value;
+                if let Ok(angle) = self.chain_angle_input.parse::<f32>()
+                    && angle.is_finite()
+                    && (1.0..=179.0).contains(&angle)
+                {
+                    self.chain_drawing.angle = angle;
+                    self.error = false;
+                } else {
+                    self.status = "Chain angle must be between 1° and 179°".into();
+                    self.error = true;
+                }
+            }
+            Message::ApplyBondPreset(preset) => {
+                if preset == moruno::bonds::BondPreset::Dotted
+                    && self.doc.bonds.iter().any(|b| {
+                        self.selected.contains(&b.a)
+                            && self.selected.contains(&b.b)
+                            && !moruno::bonds::hydrogen_endpoints(&self.doc, b.a, b.b)
+                    })
+                {
+                    self.status = "Hydrogen bonds need a bonded explicit H and an acceptor".into();
+                    self.error = true;
+                    return Task::none();
+                }
+                let before = self.doc.clone();
+                self.doc.invalidate_chemistry(&self.selected);
+                for bond in &mut self.doc.bonds {
+                    if self.selected.contains(&bond.a) && self.selected.contains(&bond.b) {
+                        preset.apply(bond);
+                    }
+                }
+                self.changed(before);
+            }
+            Message::BondPosition(position) => {
+                let before = self.doc.clone();
+                for bond in &mut self.doc.bonds {
+                    if [2, 7].contains(&bond.order)
+                        && self.selected.contains(&bond.a)
+                        && self.selected.contains(&bond.b)
+                    {
+                        bond.double_position = position;
+                    }
+                }
+                self.changed(before);
+            }
+            Message::BondColor(value) => self.bond_color_input = value,
+            Message::ApplyBondColor => {
+                if let Some(color) = graphics::parse_color(&self.bond_color_input) {
+                    let before = self.doc.clone();
+                    for bond in &mut self.doc.bonds {
+                        if self.selected.contains(&bond.a) && self.selected.contains(&bond.b) {
+                            bond.color = color;
+                        }
+                    }
+                    self.changed(before);
+                } else {
+                    self.error = true;
+                    self.status = "Enter a six-digit bond color, such as #205091".into();
+                }
+            }
+            Message::AddFrame(kind) => {
+                let mut ids = self.doc.complete_selection(&self.selected);
+                if let Some((lo, hi)) = moruno::scene::selection_bounds(&self.doc, &ids) {
+                    let before = self.doc.clone();
+                    let id = self.doc.next_id();
+                    let padding = moruno::style::DEFAULT.world(6.0);
+                    self.doc.graphics.push(Graphic::dragged(
+                        id,
+                        kind,
+                        lo.offset(-padding, -padding),
+                        hi.offset(padding, padding),
+                        GraphicStyle::default(),
+                        BracketSides::Both,
+                        false,
+                    ));
+                    ids.push(id);
+                    if let Ok(ids) = self.doc.group_selection(&ids) {
+                        self.selected = ids;
+                    }
+                    self.changed(before);
+                    self.tool = Tool::Select;
+                    self.status = "Frame added and grouped with the selection".into();
+                }
+            }
+            Message::Group => {
+                let before = self.doc.clone();
+                match self.doc.group_selection(&self.selected) {
+                    Ok(ids) => {
+                        self.selected = ids;
+                        self.changed(before);
+                        self.tool = Tool::Select;
+                        self.status="Grouped · Option/Alt-click selects a member · Shift+Cmd/Ctrl+G ungroups".into();
+                    }
+                    Err(e) => {
+                        self.status = e;
+                        self.error = true;
+                    }
+                }
+            }
+            Message::Ungroup => {
+                let before = self.doc.clone();
+                if self.doc.ungroup_selection(&self.selected) {
+                    self.changed(before);
+                    self.status = "Ungrouped one level".into();
+                }
+            }
+            Message::IntegralGroup(integral) => {
+                let before = self.doc.clone();
+                let ids = self.doc.outer_selected_groups(&self.selected);
+                for g in &mut self.doc.groups {
+                    if ids.contains(&g.id) {
+                        g.integral = integral;
+                    }
+                }
+                self.changed(before);
+            }
+            Message::InvertSelection => {
+                let selected = self.doc.expand_groups(&self.selected);
+                self.selected = self
+                    .doc
+                    .all_ids()
+                    .into_iter()
+                    .filter(|id| !selected.contains(id))
+                    .collect();
+                self.tool = Tool::Select;
+                self.sync_typography();
+                self.sync_graphics();
+                self.sync_arrows();
+            }
+            Message::GraphicStyle(change) => self.apply_graphic_style(change),
+            Message::GraphicWidth(s) => self.graphic_width_input = s,
+            Message::ApplyGraphicWidth => match self.graphic_width_input.parse::<f32>() {
+                Ok(w) if w.is_finite() && (0.1..=12.0).contains(&w) => {
+                    self.apply_graphic_style(GraphicChange::Width(w))
+                }
+                _ => {
+                    self.error = true;
+                    self.status = "Line width must be 0.1–12 pt".into();
+                }
+            },
+            Message::GraphicStroke(s) => self.graphic_stroke_input = s,
+            Message::ApplyGraphicStroke => {
+                if let Some(c) = graphics::parse_color(&self.graphic_stroke_input) {
+                    self.apply_graphic_style(GraphicChange::Stroke(c));
+                } else {
+                    self.error = true;
+                    self.status = "Enter a six-digit hex color, such as #117E6C".into();
+                }
+            }
+            Message::GraphicFill(s) => self.graphic_fill_input = s,
+            Message::ApplyGraphicFill => {
+                if let Some(c) = graphics::parse_color(&self.graphic_fill_input) {
+                    self.apply_graphic_style(GraphicChange::Fill(Some(c)));
+                } else {
+                    self.error = true;
+                    self.status = "Enter a six-digit hex color, such as #DCEFE9".into();
+                }
+            }
+            Message::ScientificKind(kind) => {
+                let before = self.doc.clone();
+                for g in self
+                    .doc
+                    .graphics
+                    .iter_mut()
+                    .filter(|g| self.selected.contains(&g.id))
+                {
+                    if matches!(
+                        (g.kind, kind),
+                        (
+                            moruno::graphics::GraphicKind::Symbol(_),
+                            moruno::graphics::GraphicKind::Symbol(_)
+                        ) | (
+                            moruno::graphics::GraphicKind::Orbital(_),
+                            moruno::graphics::GraphicKind::Orbital(_)
+                        )
+                    ) {
+                        g.kind = kind;
+                    }
+                }
+                self.tool = Tool::Graphic(kind);
+                self.changed(before);
+            }
+            Message::OrbitalPhase(phase) => {
+                self.orbital_phase = phase;
+                let before = self.doc.clone();
+                for g in self
+                    .doc
+                    .graphics
+                    .iter_mut()
+                    .filter(|g| self.selected.contains(&g.id))
+                {
+                    g.phase = phase;
+                }
+                self.changed(before);
+            }
+            Message::FlipPhase(value) => {
+                self.phase_flipped = value;
+                let before = self.doc.clone();
+                for g in self
+                    .doc
+                    .graphics
+                    .iter_mut()
+                    .filter(|g| self.selected.contains(&g.id))
+                {
+                    g.phase_flipped = value;
+                }
+                self.changed(before);
+            }
+            Message::AttachSymbols(value) => self.attach_symbols = value,
+            Message::RotateMark(id, index) => {
+                let before = self.doc.clone();
+                if let Some(a) = self.doc.atom_mut(id)
+                    && let Some(m) = a.marks.get_mut(index)
+                {
+                    m.angle = (m.angle + 45.).rem_euclid(360.);
+                }
+                self.changed(before);
+            }
+            Message::RemoveMark(id, index) => {
+                let before = self.doc.clone();
+                if let Some(a) = self.doc.atom_mut(id)
+                    && index < a.marks.len()
+                {
+                    let mark = a.marks.remove(index);
+                    if mark.kind.charge() {
+                        a.charge = 0;
+                    }
+                    if mark.kind.radical() {
+                        a.radical_electrons = 0;
+                    }
+                    if mark.kind.charge() || mark.kind.radical() {
+                        a.explicit_h = 0;
+                        a.no_implicit = false;
+                        self.doc.invalidate_chemistry(&[id]);
+                    }
+                }
+                self.changed(before);
+            }
+            Message::AtomRadical(value) => {
+                let before = self.doc.clone();
+                self.doc.invalidate_chemistry(&self.selected);
+                for atom in self
+                    .doc
+                    .atoms
+                    .iter_mut()
+                    .filter(|a| self.selected.contains(&a.id))
+                {
+                    atom.radical_electrons = value;
+                    atom.explicit_h = 0;
+                    atom.no_implicit = false;
+                }
+                self.changed(before);
+            }
+            Message::GraphicSides(sides) => {
+                let before = self.doc.clone();
+                self.bracket_sides = sides;
+                for g in &mut self.doc.graphics {
+                    if self.selected.contains(&g.id) {
+                        g.sides = sides;
+                    }
+                }
+                self.changed(before);
+            }
+            Message::GraphicLayer(front) => {
+                let before = self.doc.clone();
+                let edge = if front {
+                    self.doc
+                        .graphics
+                        .iter()
+                        .map(|g| g.layer)
+                        .max()
+                        .unwrap_or(0)
+                        .max(0)
+                        .saturating_add(1)
+                } else {
+                    self.doc
+                        .graphics
+                        .iter()
+                        .map(|g| g.layer)
+                        .min()
+                        .unwrap_or(0)
+                        .min(0)
+                        .saturating_sub(1)
+                };
+                for g in &mut self.doc.graphics {
+                    if self.selected.contains(&g.id) {
+                        g.layer = edge;
+                    }
+                }
+                self.changed(before);
+            }
             Message::ToggleInspector => self.inspector_open = !self.inspector_open,
             Message::Inspector(tab) => {
+                if tab == InspectorTab::Labels {
+                    let atoms: Vec<_> = self
+                        .doc
+                        .atoms
+                        .iter()
+                        .filter(|a| self.selected.contains(&a.id))
+                        .collect();
+                    self.labels.scope = if atoms.is_empty() {
+                        atom_labels::Scope::Drawing
+                    } else {
+                        atom_labels::Scope::Selection
+                    };
+                    self.labels.number = if let [atom] = atoms.as_slice() {
+                        atom.display
+                            .number
+                            .as_ref()
+                            .map(|n| n.text.clone())
+                            .unwrap_or_default()
+                    } else {
+                        String::new()
+                    };
+                }
                 self.inspector_tab = tab;
                 self.inspector_open = true;
             }
@@ -403,12 +1173,75 @@ impl App {
             Message::Tool(tool) => {
                 self.tool = tool;
                 self.error = false;
+                if matches!(tool, Tool::Graphic(_) | Tool::RingPreset(_)) {
+                    self.selected.clear();
+                }
+                if matches!(
+                    tool,
+                    Tool::Text
+                        | Tool::Arrow
+                        | Tool::Graphic(_)
+                        | Tool::EditPoints
+                        | Tool::RingPreset(_)
+                ) {
+                    self.inspector_open = true;
+                    self.inspector_tab = InspectorTab::Properties;
+                }
             }
             Message::Element(e) => {
                 self.element = e;
                 self.tool = Tool::Atom;
             }
-            Message::Caption(s) => self.caption = s,
+            Message::CaptionAction(action) => self.caption_action(action),
+            Message::TextStyle(change) => self.apply_text_style(change),
+            Message::FontSize(value) => self.font_size_input = value,
+            Message::ApplyFontSize => match self.font_size_input.parse::<f32>() {
+                Ok(size) if size.is_finite() && (4.0..=144.0).contains(&size) => {
+                    self.apply_text_style(moruno::typography::StyleChange::Size(size))
+                }
+                _ => {
+                    self.error = true;
+                    self.status = "Enter a font size from 4 to 144 pt".into();
+                }
+            },
+            Message::ColorScope(scope) => {
+                self.color_scope = scope;
+                self.sync_color_input();
+            }
+            Message::TextColor(value) => self.text_color_input = value,
+            Message::ApplyTextColor => {
+                let hex = self.text_color_input.trim().trim_start_matches('#');
+                if hex.len() == 6
+                    && let Ok(value) = u32::from_str_radix(hex, 16)
+                {
+                    self.apply_text_style(moruno::typography::StyleChange::Color([
+                        (value >> 16) as u8,
+                        (value >> 8) as u8,
+                        value as u8,
+                    ]));
+                } else {
+                    self.error = true;
+                    self.status = "Enter a color such as #174A7E".into();
+                }
+            }
+            Message::TextAlign(alignment) => self.apply_paragraph(Some(alignment), None, None),
+            Message::TextSpacing(spacing) => self.apply_paragraph(None, Some(spacing), None),
+            Message::TextWidth(value) => self.text_width_input = value,
+            Message::ApplyTextWidth => {
+                let width = self.text_width_input.trim();
+                if width.is_empty() {
+                    self.apply_paragraph(None, None, Some(None));
+                } else if let Ok(width) = width.parse::<f32>()
+                    && width.is_finite()
+                    && (10.0..=2000.0).contains(&width)
+                {
+                    self.apply_paragraph(None, None, Some(Some(width)));
+                } else {
+                    self.error = true;
+                    self.status =
+                        "Text width must be 10–2000 pt, or blank for automatic width".into();
+                }
+            }
             Message::Smiles(s) => self.smiles = s,
             Message::Isotope(s) => self.isotope = s,
             Message::RingSize(n) => {
@@ -427,15 +1260,22 @@ impl App {
             }
             Message::ArrowStyle(style) => {
                 self.arrow_style = style;
+                self.arrows.style = moruno::arrows::ArrowStyle::preset(style);
                 self.tool = Tool::Arrow;
+                self.inspector_open = true;
+                self.inspector_tab = InspectorTab::Properties;
                 let before = self.doc.clone();
                 for a in &mut self.doc.arrows {
                     if self.selected.contains(&a.id) {
-                        a.kind = arrow_kind(style).into();
+                        a.kind = style.kind().into();
+                        a.control = None;
+                        a.style = Some(self.arrows.style.clone());
                     }
                 }
                 self.changed(before);
+                self.sync_arrows();
             }
+            Message::ArrowAction(action) => self.arrow_action(action),
             Message::CustomElement(s) => self.custom_element = s,
             Message::ApplyElement => {
                 let symbol = self.custom_element.trim();
@@ -449,7 +1289,22 @@ impl App {
                     self.error = true;
                 }
             }
+            Message::CopyImage => return self.copy_native(false, true),
+            Message::ClipboardWritten {
+                epoch,
+                revision,
+                cut_ids,
+                result,
+            } => self.clipboard_written(epoch, revision, cut_ids, result),
+            Message::ClipboardRead {
+                epoch,
+                revision,
+                result,
+            } => self.clipboard_read(epoch, revision, *result),
             Message::Copy(cut) => {
+                if cfg!(target_os = "macos") {
+                    return self.copy_native(cut, false);
+                }
                 if self.selected.is_empty() {
                     self.status = "Select objects to copy".into();
                     return Task::none();
@@ -471,7 +1326,12 @@ impl App {
                     return iced::clipboard::write(format!("{}{json}", editing::CLIPBOARD_PREFIX));
                 }
             }
-            Message::Paste => return iced::clipboard::read().map(Message::Pasted),
+            Message::Paste => {
+                if cfg!(target_os = "macos") {
+                    return self.paste_native();
+                }
+                return iced::clipboard::read().map(Message::Pasted);
+            }
             Message::Pasted(contents) => {
                 if let Some(contents) = contents.filter(|s| !s.trim().is_empty()) {
                     if let Some(json) = contents.strip_prefix(editing::CLIPBOARD_PREFIX) {
@@ -523,29 +1383,68 @@ impl App {
                 editing::arrange(&mut self.doc, &self.selected, arrange);
                 self.changed(before);
             }
+            Message::BondDepth(front) => {
+                let before = self.doc.clone();
+                let z = if front {
+                    self.doc
+                        .bonds
+                        .iter()
+                        .map(|b| b.z_order)
+                        .max()
+                        .unwrap_or(0)
+                        .saturating_add(1)
+                } else {
+                    self.doc
+                        .bonds
+                        .iter()
+                        .map(|b| b.z_order)
+                        .min()
+                        .unwrap_or(0)
+                        .saturating_sub(1)
+                };
+                for bond in &mut self.doc.bonds {
+                    if self.selected.contains(&bond.a) && self.selected.contains(&bond.b) {
+                        bond.z_order = z;
+                    }
+                }
+                self.changed(before);
+            }
             Message::ReverseBonds => {
                 let before = self.doc.clone();
                 self.doc.invalidate_chemistry(&self.selected);
                 for b in &mut self.doc.bonds {
                     if self.selected.contains(&b.a) && self.selected.contains(&b.b) {
-                        std::mem::swap(&mut b.a, &mut b.b);
-                        b.stereo_atoms.reverse();
+                        b.reverse();
                     }
                 }
                 self.changed(before);
             }
-            Message::InsertTemplate(smiles) => {
-                return self.run(Request::import_smiles(smiles), Job::Insert);
-            }
-            Message::UpdateLabel => {
-                let before = self.doc.clone();
-                let caption = self.caption.replace("\\n", "\n");
-                for a in &mut self.doc.annotations {
-                    if self.selected.contains(&a.id) {
-                        a.text = caption.clone();
-                    }
+            Message::InsertTemplate(index) => {
+                if self.templates.library.get(index).is_some()
+                    && (!self.templates.active || self.template_index != index)
+                {
+                    self.templates.remember(self.template_index);
                 }
-                self.changed(before);
+                if let Some(template) = self.templates.library.get(index) {
+                    if !self.templates.active || self.template_index != index {
+                        self.templates.anchor = template.anchor;
+                        if matches!(template.anchor, moruno::templates::Anchor::Bond(..)) {
+                            self.templates.connection = moruno::templates::Connection::FuseBond;
+                        } else if matches!(template.anchor, moruno::templates::Anchor::Atom(_))
+                            && self.templates.connection == moruno::templates::Connection::FuseBond
+                        {
+                            self.templates.connection = moruno::templates::Connection::Connect;
+                        }
+                    }
+                    self.template_index = index;
+                    self.templates.active = true;
+                    self.tool = Tool::Template;
+                    self.error = false;
+                    self.status = format!(
+                        "{} · {} · Escape cancels",
+                        template.name, self.templates.connection
+                    );
+                }
             }
             Message::Tick => {
                 if self.dirty() && self.autosaved_revision != Some(self.revision) {
@@ -571,12 +1470,12 @@ impl App {
                 if let Some(candidate) = self.recovered.first().cloned() {
                     let before = self.doc.clone();
                     self.doc = candidate.snapshot.document;
-                    self.doc.version = 2;
+                    self.doc.version = 11;
                     self.path = None;
                     self.saved = Document::default();
-                    self.file_epoch += 1;
+                    self.file_epoch = self.file_epoch.wrapping_add(1);
                     self.changed(before);
-                    self.revision += 1;
+                    self.revision = self.revision.wrapping_add(1);
                     self.fit();
                     self.selected.clear();
                     if let Some(store) = &self.recovery
@@ -593,6 +1492,15 @@ impl App {
             }
             Message::Canvas(edit) => self.edit(edit),
             Message::Grid => self.grid = !self.grid,
+            Message::ToggleView => self.view_open = !self.view_open,
+            Message::Rulers(enabled) => {
+                self.guides.rulers = enabled;
+                if self.fit_to_view {
+                    self.fit();
+                }
+            }
+            Message::Crosshair(enabled) => self.guides.crosshair = enabled,
+            Message::RulerUnit(unit) => self.guides.unit = unit,
             Message::Fit => self.fit(),
             Message::Zoom(f) => {
                 self.fit_to_view = false;
@@ -606,17 +1514,58 @@ impl App {
             Message::Analyze => {
                 return self.run(Request::molecule("analyze", self.doc.clone()), Job::Analyze);
             }
-            Message::Clean => {
-                return self.run(Request::molecule("clean", self.doc.clone()), Job::Clean);
+            Message::CleanupScope(scope) => return self.begin_cleanup(Some(scope), None),
+            Message::CleanupOrientation(on) => return self.begin_cleanup(None, Some(on)),
+            Message::CleanupOriginal(original) => {
+                if let Some(preview) = &mut self.cleanup {
+                    preview.original = original;
+                }
             }
+            Message::CancelCleanup => {
+                self.cleanup_serial = self.cleanup_serial.wrapping_add(1);
+                self.cleanup = None;
+                self.status = "Cleanup cancelled · Drawing unchanged".into();
+                self.error = false;
+            }
+            Message::ApplyCleanup => {
+                if self.busy {
+                    return Task::none();
+                }
+                if let Some(preview) = self.cleanup.take() {
+                    if preview.revision != self.revision || preview.epoch != self.file_epoch {
+                        self.status = "Drawing changed · Run cleanup again".into();
+                        return Task::none();
+                    }
+                    let before = self.doc.clone();
+                    self.doc = preview.document;
+                    self.changed(before);
+                    if !self.error {
+                        self.analysis = preview.analysis;
+                        self.status = "Cleanup applied · Undo restores the original layout".into();
+                    }
+                }
+            }
+            Message::Clean => return self.begin_cleanup(None, None),
             Message::EngineDone {
                 revision,
                 kind,
                 result,
             } => {
                 self.busy = false;
+                if matches!(&kind, Job::Clean(job) if job.serial != self.cleanup_serial || job.epoch != self.file_epoch)
+                {
+                    return Task::none();
+                }
                 match *result {
                     Err(e) => {
+                        if matches!(kind, Job::RefreshLabels) {
+                            if self.revision == revision {
+                                self.chemistry_notice = Some(e);
+                            } else {
+                                self.refresh_due = Some(std::time::Instant::now());
+                            }
+                            return Task::none();
+                        }
                         self.error = true;
                         self.status = e;
                     }
@@ -625,7 +1574,32 @@ impl App {
                             return export_file(response.output.unwrap_or_default(), format);
                         }
                         if self.revision != revision {
+                            if matches!(kind, Job::RefreshLabels) {
+                                self.refresh_due = Some(std::time::Instant::now());
+                                return Task::none();
+                            }
                             self.status="Operation finished; newer edits were preserved. Run it again to update.".into();
+                            return Task::none();
+                        }
+                        if let Job::Clean(job) = &kind {
+                            if let Some(document) = response.document {
+                                if let Err(error) = document.validate() {
+                                    self.status = error;
+                                    self.error = true;
+                                } else {
+                                    self.cleanup = Some(CleanupPreview {
+                                        job: job.clone(),
+                                        warnings: response.warnings,
+                                        document,
+                                        analysis: response.analysis,
+                                        revision,
+                                        epoch: self.file_epoch,
+                                        original: false,
+                                    });
+                                    self.status = "Cleanup preview · Compare with the original, then Apply or Cancel".into();
+                                    self.error = false;
+                                }
+                            }
                             return Task::none();
                         }
                         if matches!(kind, Job::Insert) {
@@ -647,10 +1621,66 @@ impl App {
                             }
                             return Task::none();
                         }
+                        if matches!(kind, Job::AromaticDisplay) {
+                            if let Some(document) = response.document {
+                                let before = self.doc.clone();
+                                self.doc = document.clone();
+                                self.changed(before);
+                                if self.error {
+                                    return Task::none();
+                                }
+                                moruno::atom_labels::refresh_computed(&mut self.doc, &document);
+                                self.refresh_due = None;
+                                self.analysis = response.analysis;
+                                self.tool = Tool::Select;
+                                self.status =
+                                    "Aromatic display changed · Molecular identity retained".into();
+                            }
+                            return Task::none();
+                        }
+                        if matches!(kind, Job::Abbreviate) {
+                            if let Some(document) = response.document {
+                                let before = self.doc.clone();
+                                let count = document.abbreviations.len();
+                                self.doc = document;
+                                self.selected =
+                                    self.doc.expand_abbreviation_selection(&self.selected);
+                                self.changed(before);
+                                self.analysis = response.analysis;
+                                self.tool = Tool::Select;
+                                self.status = if count == 0 {
+                                    "No matching common groups in this selection".into()
+                                } else {
+                                    format!(
+                                        "{count} abbreviation{} · Full chemistry retained · Expand to edit internal atoms",
+                                        if count == 1 { "" } else { "s" }
+                                    )
+                                };
+                            }
+                            return Task::none();
+                        }
+                        if matches!(kind, Job::Analyze | Job::RefreshLabels) {
+                            // Checking is a read-only chemistry operation. Refresh
+                            // computed H labels without rewriting the user's bond
+                            // orders/stereo or inserting a step into Undo/Redo.
+                            if let Some(document) = response.document {
+                                moruno::atom_labels::refresh_computed(&mut self.doc, &document);
+                            }
+                            self.analysis = response.analysis;
+                            self.chemistry_notice = None;
+                            if matches!(kind, Job::Analyze) {
+                                self.status = "No chemistry errors found".into();
+                                self.error = false;
+                            }
+                            return Task::none();
+                        }
                         if let Some(document) = response.document {
                             let before = self.doc.clone();
-                            self.doc = document;
+                            self.doc = document.clone();
                             self.changed(before);
+                            moruno::atom_labels::refresh_computed(&mut self.doc, &document);
+                            self.refresh_due = None;
+                            self.chemistry_notice = None;
                             self.selected.clear();
                             if matches!(kind, Job::Startup | Job::Import | Job::ImportFile) {
                                 self.fit();
@@ -658,7 +1688,7 @@ impl App {
                             if matches!(kind, Job::ImportFile) {
                                 self.path = None;
                                 self.saved = Document::default();
-                                self.file_epoch += 1;
+                                self.file_epoch = self.file_epoch.wrapping_add(1);
                             }
                             if matches!(kind, Job::Startup) {
                                 self.saved = self.doc.clone();
@@ -667,8 +1697,8 @@ impl App {
                         }
                         self.analysis = response.analysis;
                         self.status = match kind {
-                            Job::Clean => "Structure cleaned",
-                            Job::Analyze => "No chemistry errors found",
+                            Job::Clean(_) => "Structure cleaned",
+                            Job::Analyze | Job::RefreshLabels => "No chemistry errors found",
                             Job::Startup => {
                                 "Ready · Try editing the example or start a new drawing"
                             }
@@ -680,15 +1710,43 @@ impl App {
                 }
             }
             Message::Undo | Message::Redo => {
+                self.cleanup = None;
+                let before = self.doc.clone();
+                let selected_group = !before.outer_selected_groups(&self.selected).is_empty();
                 let changed = if matches!(message, Message::Undo) {
                     self.history.undo(&mut self.doc)
                 } else {
                     self.history.redo(&mut self.doc)
                 };
                 if changed {
-                    self.revision += 1;
-                    self.analysis = None;
-                    self.selected.clear();
+                    self.revision = self.revision.wrapping_add(1);
+                    if chemistry_changed(&before, &self.doc) {
+                        self.analysis = None;
+                        moruno::atom_labels::clear_computed(&mut self.doc);
+                        self.refresh_due = Some(std::time::Instant::now());
+                    }
+                    let ids = self.doc.all_ids();
+                    self.selected.retain(|id| ids.contains(id));
+                    let previous_ids = before.all_ids();
+                    let restored_group = self.doc.groups.iter().any(|group| {
+                        group.members.iter().any(|id| self.selected.contains(id))
+                            && group
+                                .members
+                                .iter()
+                                .all(|id| self.selected.contains(id) || !previous_ids.contains(id))
+                    });
+                    if selected_group || restored_group {
+                        self.selected = self.doc.expand_groups(&self.selected);
+                    }
+                    if self.selected.is_empty()
+                        && let Some(id) = self.caption_target.filter(|id| ids.contains(id))
+                    {
+                        self.selected.push(id);
+                    }
+                    self.sync_typography();
+                    self.sync_graphics();
+                    self.sync_arrows();
+                    self.sync_bonds();
                     self.status = "History restored".into();
                     self.error = false;
                 }
@@ -701,13 +1759,19 @@ impl App {
             Message::SelectAll => {
                 self.selected = self.doc.all_ids();
                 self.tool = Tool::Select;
+                self.sync_typography();
+                self.sync_graphics();
+                self.sync_arrows();
+                self.sync_bonds();
             }
             Message::Charge(delta) => {
                 let before = self.doc.clone();
                 self.doc.invalidate_chemistry(&self.selected);
                 for id in &self.selected {
                     if let Some(a) = self.doc.atom_mut(*id) {
-                        a.charge = (a.charge + delta).clamp(-8, 8);
+                        a.charge = a.charge.saturating_add(delta).clamp(-8, 8);
+                        a.explicit_h = 0;
+                        a.no_implicit = false;
                     }
                 }
                 self.changed(before);
@@ -762,15 +1826,17 @@ impl App {
                                         Ok(doc)
                                     }) {
                                     Ok(mut doc) => {
-                                        doc.version = 2;
+                                        doc.version = 11;
+                                        moruno::atom_labels::clear_computed(&mut doc);
                                         self.clear_recovery();
-                                        self.file_epoch += 1;
+                                        self.file_epoch = self.file_epoch.wrapping_add(1);
                                         self.doc = doc;
                                         self.saved = self.doc.clone();
                                         self.path = Some(path);
                                         self.history = History::default();
-                                        self.revision += 1;
+                                        self.revision = self.revision.wrapping_add(1);
                                         self.analysis = None;
+                                        self.refresh_due = Some(std::time::Instant::now());
                                         self.selected.clear();
                                         self.fit();
                                         self.status = "Document opened".into();
@@ -859,8 +1925,10 @@ impl App {
             Message::Export(format) => {
                 if ["svg", "pdf", "png"].contains(&format) {
                     let doc = self.doc.clone();
+                    let engine = self.engine.clone();
                     return Task::perform(
                         async move {
+                            let doc = moruno::export::checked_document(&engine, doc).await?;
                             let bytes = tokio::task::spawn_blocking(move || {
                                 moruno::export::drawing(&doc, format)
                             })
@@ -890,11 +1958,165 @@ impl App {
                 }
             },
         }
-        Task::none()
+        if reveal_inspector {
+            iced::widget::operation::snap_to(
+                "inspector-content",
+                iced::widget::operation::RelativeOffset::START,
+            )
+        } else {
+            Task::none()
+        }
     }
     fn edit(&mut self, edit: Edit) {
+        if let Edit::Hover(point) = edit {
+            self.hover = point.map(|p| (p, self.file_epoch));
+            return;
+        }
+        if matches!(edit, Edit::Pan(..) | Edit::Zoom(..)) {
+            self.hover = None;
+        }
+        if self.cleanup.is_some() {
+            match edit {
+                Edit::Pan(dx, dy) => {
+                    self.camera.center = self
+                        .camera
+                        .center
+                        .offset(-dx / self.camera.zoom, -dy / self.camera.zoom);
+                    self.fit_to_view = false;
+                }
+                Edit::Zoom(factor, _) => {
+                    self.camera.zoom = (self.camera.zoom * factor).clamp(0.25, 5.);
+                    self.fit_to_view = false;
+                }
+                _ => {}
+            }
+            return;
+        }
         let before = self.doc.clone();
         match edit {
+            Edit::Hover(_) => return,
+            Edit::Chain {
+                points,
+                source,
+                target,
+            } => {
+                match moruno::chains::place(
+                    &self.doc,
+                    &points,
+                    source,
+                    target,
+                    10.0 / self.camera.zoom,
+                ) {
+                    Ok((doc, ids)) => {
+                        self.doc = doc;
+                        self.selected = ids;
+                    }
+                    Err(error) => {
+                        self.status = error;
+                        self.error = true;
+                        return;
+                    }
+                }
+            }
+            Edit::Graphic(start, end, constrain) => {
+                if let Tool::Graphic(kind) = self.tool {
+                    if matches!(
+                        kind,
+                        moruno::graphics::GraphicKind::Symbol(_)
+                            | moruno::graphics::GraphicKind::Orbital(_)
+                    ) {
+                        let drawing = moruno::scientific::Drawing {
+                            kind,
+                            style: self.graphic_style.clone(),
+                            phase: self.orbital_phase,
+                            flipped: self.phase_flipped,
+                            attach: self.attach_symbols,
+                        };
+                        match drawing.place(
+                            &mut self.doc,
+                            start,
+                            end,
+                            constrain,
+                            10. / self.camera.zoom,
+                        ) {
+                            Ok(id) => self.selected = vec![id],
+                            Err(error) => {
+                                self.status = error;
+                                self.error = true;
+                                return;
+                            }
+                        }
+                    } else {
+                        let id = self.doc.next_id();
+                        self.doc.graphics.push(Graphic::dragged(
+                            id,
+                            kind,
+                            start,
+                            end,
+                            self.graphic_style.clone(),
+                            self.bracket_sides,
+                            constrain,
+                        ));
+                        self.selected = vec![id];
+                    }
+                    self.tool = Tool::Select;
+                }
+            }
+            Edit::AtomIndicator(owner, p) => {
+                if let Some(anchor) = owner.anchor(&self.doc) {
+                    owner.set_offset(
+                        &mut self.doc,
+                        Some(Point::new(p.x - anchor.x, p.y - anchor.y)),
+                    );
+                }
+            }
+            Edit::AtomMark(id, index, p) => {
+                if let Some(a) = self.doc.atom_mut(id)
+                    && let Some(mark) = a.marks.get_mut(index)
+                {
+                    mark.offset = Point::new(p.x - a.position.x, p.y - a.position.y);
+                }
+            }
+            Edit::ArrowHandle(id, index, p) => {
+                if let Some(a) = self.doc.arrows.iter_mut().find(|a| a.id == id) {
+                    a.edit_handle(index, p);
+                }
+            }
+            Edit::GraphicPoint(id, index, p) => {
+                if let Some(g) = self.doc.graphics.iter_mut().find(|g| g.id == id) {
+                    g.edit_point(index, p);
+                }
+            }
+            Edit::Template(anchor, direction) => {
+                if self.tool != Tool::Template {
+                    return;
+                }
+                let Some(template) = self.templates.library.get(self.template_index) else {
+                    return;
+                };
+                match moruno::templates::place_with_mode(
+                    &self.doc,
+                    &template.document,
+                    anchor,
+                    direction,
+                    10.0 / self.camera.zoom,
+                    self.templates.anchor,
+                    self.templates.connection,
+                ) {
+                    Ok((document, selected)) => {
+                        self.doc = document;
+                        self.selected = selected;
+                        if !self.templates.repeat {
+                            self.tool = Tool::Select;
+                        }
+                    }
+                    Err(error) => {
+                        self.status = error.into();
+                        self.error = true;
+                        return;
+                    }
+                }
+            }
             Edit::Transform {
                 ids,
                 pivot,
@@ -903,6 +2125,25 @@ impl App {
             } => {
                 editing::transform_about(&mut self.doc, &ids, pivot, scale, rotation);
                 self.selected = ids;
+            }
+            Edit::RingPreset(preset, anchor, direction, connect, alternate) => {
+                let drawing = moruno::rings::Drawing {
+                    preset,
+                    length: self.bond_drawing.length,
+                    alternate,
+                    connect,
+                };
+                match drawing.place(&self.doc, anchor, direction, 10. / self.camera.zoom) {
+                    Ok((doc, ids)) => {
+                        self.doc = doc;
+                        self.selected = ids;
+                    }
+                    Err(error) => {
+                        self.status = error.into();
+                        self.error = true;
+                        return;
+                    }
+                }
             }
             Edit::Ring(anchor, direction) => {
                 self.selected = editing::ring_oriented(
@@ -915,10 +2156,11 @@ impl App {
                 );
             }
             Edit::Select(ids) => {
-                if let Some(label) = self.doc.annotations.iter().find(|a| ids.contains(&a.id)) {
-                    self.caption = label.text.replace('\n', "\\n");
-                }
                 self.selected = ids;
+                self.sync_typography();
+                self.sync_graphics();
+                self.sync_arrows();
+                self.sync_bonds();
             }
             Edit::Move(ids, dx, dy) => {
                 if let Some(snapped) = editing::snap_ring(
@@ -948,20 +2190,32 @@ impl App {
                 );
             }
             Edit::Bond(start, end, a, b) => {
+                if self.tool.bond_preset() == Some(moruno::bonds::BondPreset::Dotted)
+                    && !a
+                        .zip(b)
+                        .is_some_and(|(a, b)| moruno::bonds::hydrogen_endpoints(&self.doc, a, b))
+                {
+                    self.status =
+                        "Drag from a bonded explicit H to an existing N, O, F or S acceptor".into();
+                    self.error = true;
+                    return;
+                }
                 if self.tool == Tool::Arrow {
                     let id = self.doc.next_id();
-                    self.doc.arrows.push(Arrow {
+                    self.doc.arrows.push(Arrow::new(
                         id,
                         start,
                         end,
-                        kind: arrow_kind(self.arrow_style).into(),
-                    });
+                        self.arrow_style,
+                        self.arrows.style.clone(),
+                    ));
                     self.selected = vec![id];
                 } else {
                     let a = a.unwrap_or_else(|| self.doc.add_atom("C", start));
                     let b = b.unwrap_or_else(|| self.doc.add_atom("C", end));
                     let (order, display) = self.bond_style();
                     self.doc.add_bond(a, b, order, display);
+                    self.apply_current_bond_preset(a, b);
                     self.selected = vec![b];
                 }
             }
@@ -984,7 +2238,13 @@ impl App {
                             self.selected = vec![id];
                         }
                     }
-                    Tool::Bond(_) | Tool::Wedge | Tool::Hash | Tool::Wavy => {
+                    tool if tool.bond_preset() == Some(moruno::bonds::BondPreset::Dotted) => {
+                        self.status =
+                            "Drag from a bonded explicit H to an existing acceptor".into();
+                        self.error = true;
+                        return;
+                    }
+                    Tool::Bond(_) | Tool::StyledBond(_) | Tool::Wedge | Tool::Hash | Tool::Wavy => {
                         let atom = self.doc.nearest(p, 10.0 / self.camera.zoom);
                         let bond =
                             self.doc
@@ -1000,7 +2260,48 @@ impl App {
                                 })
                                 .cloned();
                         if let Some(b) = bond.filter(|_| atom.is_none()) {
-                            let (order, display) = if matches!(self.tool, Tool::Bond(_)) {
+                            let shift_double = self.tool.bond_preset().is_some_and(|preset| {
+                                use moruno::bonds::BondPreset as P;
+                                matches!(
+                                    preset,
+                                    P::Double | P::BoldDouble | P::DashedDouble | P::DoubleDashed
+                                ) && P::of(&b) == Some(preset)
+                            });
+                            if shift_double {
+                                let position =
+                                    moruno::scene::effective_double_position(&self.doc, &b)
+                                        .cycled();
+                                if let Some(bond) = self
+                                    .doc
+                                    .bonds
+                                    .iter_mut()
+                                    .find(|bond| bond.a == b.a && bond.b == b.b)
+                                {
+                                    bond.double_position = position;
+                                }
+                                self.selected = vec![b.a, b.b];
+                                self.changed(before);
+                                self.status = format!(
+                                    "Double bond: {position} · Click again to shift its lines"
+                                );
+                                return;
+                            }
+                            let reverse = self.tool.bond_preset().is_some_and(|p| {
+                                use moruno::bonds::BondPreset as P;
+                                matches!(
+                                    p,
+                                    P::Wedge
+                                        | P::HashedWedge
+                                        | P::HollowWedge
+                                        | P::Hashed
+                                        | P::Bold
+                                        | P::Dative
+                                        | P::Dashed
+                                ) && P::of(&b) == Some(p)
+                            });
+                            let (order, display) = if self.tool == Tool::Bond(2) {
+                                (2, "plain")
+                            } else if matches!(self.tool, Tool::Bond(_)) {
                                 (
                                     match b.order {
                                         1 => 2,
@@ -1013,14 +2314,33 @@ impl App {
                                 self.bond_style()
                             };
                             self.doc.add_bond(b.a, b.b, order, display);
+                            self.apply_current_bond_preset(b.a, b.b);
+                            if reverse
+                                && let Some(bond) = self
+                                    .doc
+                                    .bonds
+                                    .iter_mut()
+                                    .find(|bond| bond.a == b.a && bond.b == b.b)
+                            {
+                                bond.reverse();
+                            }
                             self.selected = vec![b.a, b.b];
                         } else {
                             let (order, display) = self.bond_style();
                             let a = atom.unwrap_or_else(|| self.doc.add_atom("C", p));
-                            let start = self.doc.atom(a).unwrap().position;
+                            let Some(start) = self.doc.atom(a).map(|a| a.position) else {
+                                self.status = "The bond's starting atom is unavailable".into();
+                                self.error = true;
+                                return;
+                            };
                             let end = editing::bond_extension(&self.doc, start, Some(a), order);
+                            let ratio =
+                                self.bond_drawing.length / moruno::style::DEFAULT.bond_length_world;
+                            let end =
+                                start.offset((end.x - start.x) * ratio, (end.y - start.y) * ratio);
                             let b = self.doc.add_atom("C", end);
                             self.doc.add_bond(a, b, order, display);
+                            self.apply_current_bond_preset(a, b);
                             self.selected = vec![b];
                         }
                     }
@@ -1034,15 +2354,32 @@ impl App {
                         );
                     }
                     Tool::Text => {
+                        if let Some(label) =
+                            hit.filter(|id| self.doc.annotations.iter().any(|a| a.id == *id))
+                        {
+                            self.selected = vec![label];
+                            self.sync_typography();
+                            return;
+                        }
                         if !self.caption.trim().is_empty() {
                             let id = self.doc.next_id();
                             self.doc.annotations.push(Annotation {
                                 id,
                                 position: p,
-                                text: self.caption.replace("\\n", "\n"),
+                                text: self.caption.clone(),
+                                format: self.caption_format.clone(),
                             });
                             self.selected = vec![id];
+                            self.caption_target = Some(id);
+                            self.tool = Tool::Select;
                         }
+                    }
+                    Tool::Arrow => {
+                        self.selected = hit
+                            .filter(|id| self.doc.arrows.iter().any(|a| a.id == *id))
+                            .into_iter()
+                            .collect();
+                        self.sync_arrows();
                     }
                     Tool::Erase => {
                         if let Some(id) = hit {
@@ -1069,9 +2406,35 @@ impl App {
         }
         self.changed(before);
     }
+    fn sync_bonds(&mut self) {
+        if let Some(b) = self
+            .doc
+            .bonds
+            .iter()
+            .find(|b| self.selected.contains(&b.a) && self.selected.contains(&b.b))
+        {
+            let [r, g, b] = b.color;
+            self.bond_color_input = format!("#{r:02X}{g:02X}{b:02X}");
+        }
+    }
+    fn apply_current_bond_preset(&mut self, a: u64, b: u64) {
+        if let Tool::StyledBond(preset) = self.tool
+            && let Some(bond) = self
+                .doc
+                .bonds
+                .iter_mut()
+                .find(|bond| (bond.a == a && bond.b == b) || (bond.a == b && bond.b == a))
+        {
+            preset.apply(bond);
+        }
+    }
     fn bond_style(&self) -> (u8, &'static str) {
         match self.tool {
             Tool::Bond(n) => (n, "plain"),
+            Tool::StyledBond(preset) => {
+                let (n, s, _) = preset.parts();
+                (n, s)
+            }
             Tool::Wedge => (1, "wedge"),
             Tool::Hash => (1, "hash"),
             Tool::Wavy => (1, "wavy"),
@@ -1080,8 +2443,74 @@ impl App {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        self.workspace()
+        file_shortcuts::wrap(self.with_palette(self.workspace()))
     }
+}
+
+/// Hydrogen labels are a computed display cache, not unsaved drawing edits.
+fn same_drawing(a: &Document, b: &Document) -> bool {
+    a.version == b.version
+        && a.atom_labels == b.atom_labels
+        && a.bonds.len() == b.bonds.len()
+        && a.bonds.iter().zip(&b.bonds).all(|(a, b)| {
+            let mut a = a.clone();
+            let mut b = b.clone();
+            a.cip_label = None;
+            b.cip_label = None;
+            a == b
+        })
+        && a.annotations == b.annotations
+        && a.arrows == b.arrows
+        && a.graphics == b.graphics
+        && a.groups == b.groups
+        && a.abbreviations == b.abbreviations
+        && a.atoms.len() == b.atoms.len()
+        && a.atoms.iter().zip(&b.atoms).all(|(a, b)| {
+            let mut a = a.clone();
+            let mut b = b.clone();
+            a.label_h = 0;
+            b.label_h = 0;
+            a.cip_label = None;
+            b.cip_label = None;
+            a == b
+        })
+}
+
+fn chemistry_changed(before: &Document, after: &Document) -> bool {
+    before.bonds.len() != after.bonds.len()
+        || before.bonds.iter().zip(&after.bonds).any(|(a, b)| {
+            let mut a = a.clone();
+            let mut b = b.clone();
+            a.z_order = 0;
+            b.z_order = 0;
+            a.color = [0, 0, 0];
+            b.color = [0, 0, 0];
+            a.double_position = Default::default();
+            b.double_position = Default::default();
+            a.secondary_display = None;
+            b.secondary_display = None;
+            a.indicator = Default::default();
+            b.indicator = Default::default();
+            a.cip_label = None;
+            b.cip_label = None;
+            a != b
+        })
+        || before.atoms.len() != after.atoms.len()
+        || before.atoms.iter().zip(&after.atoms).any(|(a, b)| {
+            let mut a = a.clone();
+            let mut b = b.clone();
+            a.text_style = None;
+            b.text_style = None;
+            a.marks.clear();
+            b.marks.clear();
+            a.display = Default::default();
+            b.display = Default::default();
+            a.cip_label = None;
+            b.cip_label = None;
+            a.label_h = 0;
+            b.label_h = 0;
+            a != b
+        })
 }
 
 fn export_file(contents: String, format: &'static str) -> Task<Message> {
@@ -1103,30 +2532,949 @@ async fn save_export(bytes: Vec<u8>, format: &'static str) -> Result<Option<Path
     Ok(Some(path))
 }
 fn input_request(text: &str) -> Request {
-    let format = if text.trim_start().starts_with("InChI=") {
-        "inchi"
-    } else if text.contains("M  END") {
-        "mol"
-    } else if text.contains("<CDXML") {
-        "cdxml"
-    } else {
-        "smiles"
-    };
-    Request::import(format, text)
-}
-fn arrow_kind(style: &str) -> &str {
-    match style {
-        "Equilibrium" => "equilibrium",
-        "Resonance" => "resonance",
-        "Retrosynthesis" => "retro",
-        "Curved" => "curved",
-        _ => "forward",
-    }
+    moruno::clipboard::text_request(text)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn checked_labels(app: &mut App) {
+        let mut checked = app.doc.clone();
+        for atom in &mut checked.atoms {
+            atom.label_h = 2;
+        }
+        // A check must not adopt the engine's normalized bond depiction.
+        if let Some(bond) = checked.bonds.first_mut() {
+            bond.order = 4;
+        }
+        let _ = app.update(Message::EngineDone {
+            revision: app.revision,
+            kind: Job::Analyze,
+            result: Box::new(Ok(Response {
+                document: Some(checked),
+                analysis: None,
+                output: None,
+                engine_version: "test".into(),
+                warnings: vec![],
+            })),
+        });
+    }
+
+    #[test]
+    fn double_tool_cycles_only_line_position_and_preserves_chemistry() {
+        use moruno::bonds::DoublePosition as P;
+        let (mut app, _) = App::new();
+        app.busy = false;
+        app.tool = Tool::Bond(2);
+        let c = app.doc.add_atom("C", Point::default());
+        let o = app.doc.add_atom("O", Point::new(0., -42.));
+        let methyl = app.doc.add_atom("C", Point::new(36.373, 21.));
+        app.doc.add_bond(c, o, 2, "plain");
+        app.doc.add_bond(c, methyl, 1, "plain");
+        app.doc.bonds[0].color = [32, 80, 145];
+        app.doc.atom_mut(c).unwrap().label_h = 1;
+        let original = app.doc.clone();
+        let mut scenes = std::collections::BTreeSet::new();
+        for position in [P::Left, P::Right, P::Center] {
+            app.edit(Edit::Click(Point::new(0., -21.)));
+            let mut expected = original.clone();
+            expected.bonds[0].double_position = position;
+            assert_eq!(app.doc, expected);
+            assert!(!chemistry_changed(&original, &app.doc));
+            scenes.insert(moruno::scene::svg(&app.doc));
+        }
+        assert_eq!(scenes.len(), 3);
+        for _ in 0..3 {
+            let _ = app.update(Message::Undo);
+        }
+        assert_eq!(app.doc, original);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc.bonds[0].double_position, P::Left);
+        app.doc.bonds[0].order = 1;
+        app.edit(Edit::Click(Point::new(0., -21.)));
+        assert_eq!(app.doc.bonds[0].order, 2);
+    }
+
+    #[test]
+    fn cancelling_a_running_cleanup_refresh_prevents_late_preview_or_apply() {
+        let (mut app, _) = App::new();
+        app.busy = false;
+        let a = app.doc.add_atom("C", Point::default());
+        let b = app.doc.add_atom("C", Point::new(80., 0.));
+        app.doc.add_bond(a, b, 1, "plain");
+        app.selected = vec![b];
+        let original = app.doc.clone();
+        let _ = app.update(Message::Clean);
+        let job = cleanup::CleanupJob {
+            options: moruno::cleanup::Options {
+                scope: moruno::cleanup::Scope::SelectedAtoms,
+                ..Default::default()
+            },
+            selection: vec![b],
+            serial: app.cleanup_serial,
+            epoch: app.file_epoch,
+        };
+        let response = || {
+            Box::new(Ok(Response {
+                document: Some(original.clone()),
+                analysis: None,
+                output: None,
+                engine_version: "test".into(),
+                warnings: vec![],
+            }))
+        };
+        let _ = app.update(Message::EngineDone {
+            revision: app.revision,
+            kind: Job::Clean(job.clone()),
+            result: response(),
+        });
+        assert_eq!(
+            app.cleanup.as_ref().unwrap().job.options.scope,
+            moruno::cleanup::Scope::SelectedAtoms
+        );
+        let _ = app.update(Message::CleanupScope(
+            moruno::cleanup::Scope::SelectedMolecules,
+        ));
+        assert!(app.busy);
+        let mut pending = job;
+        pending.serial = app.cleanup_serial;
+        let _ = app.update(Message::ApplyCleanup);
+        assert_eq!(app.doc, original);
+        assert!(app.cleanup.is_some());
+        let _ = app.update(Message::CancelCleanup);
+        let _ = app.update(Message::EngineDone {
+            revision: app.revision,
+            kind: Job::Clean(pending),
+            result: response(),
+        });
+        assert!(app.cleanup.is_none());
+        assert_eq!(app.doc, original);
+        assert!(!app.history.can_undo());
+    }
+
+    #[test]
+    fn abbreviation_display_changes_are_unsaved_and_undoable() {
+        let (mut app, _) = App::new();
+        app.busy = false;
+        let a = app.doc.add_atom("C", Point::default());
+        let b = app.doc.add_atom("O", Point::new(42., 0.));
+        let c = app.doc.add_atom("C", Point::new(63., 36.));
+        app.doc.add_bond(a, b, 1, "plain");
+        app.doc.add_bond(b, c, 1, "plain");
+        app.doc.contract(&[b, c], "OMe", "MeO").unwrap();
+        app.saved = app.doc.clone();
+        let saved = app.doc.clone();
+        let _ = app.update(Message::Abbreviations(abbreviations::Action::ExpandAll));
+        assert!(app.dirty());
+        assert!(app.title().contains('•'));
+        assert!(app.doc.abbreviations.is_empty());
+        let _ = app.update(Message::Undo);
+        assert!(!app.dirty());
+        assert_eq!(app.doc, saved);
+        let _ = app.update(Message::Redo);
+        assert!(app.dirty());
+        assert!(app.doc.abbreviations.is_empty());
+    }
+
+    #[test]
+    fn cleanup_requires_apply_can_cancel_and_rejects_stale_results() {
+        let (mut app, _) = App::new();
+        app.busy = false;
+        let a = app.doc.add_atom("C", Point::default());
+        let b = app.doc.add_atom("O", Point::new(70., 12.));
+        app.doc.add_bond(a, b, 1, "plain");
+        app.saved = app.doc.clone();
+        app.selected = vec![a, b];
+        let original = app.doc.clone();
+        let mut cleaned = original.clone();
+        cleaned.atom_mut(b).unwrap().position = Point::new(42., 0.);
+        let response = || {
+            Box::new(Ok(Response {
+                document: Some(cleaned.clone()),
+                analysis: None,
+                output: None,
+                engine_version: "test".into(),
+                warnings: vec![],
+            }))
+        };
+        let _ = app.update(Message::EngineDone {
+            revision: app.revision,
+            kind: Job::Clean(cleanup::CleanupJob {
+                options: Default::default(),
+                selection: vec![a, b],
+                serial: app.cleanup_serial,
+                epoch: app.file_epoch,
+            }),
+            result: response(),
+        });
+        assert_eq!(app.doc, original);
+        assert_eq!(app.display_document(), &cleaned);
+        assert!(!app.dirty());
+        let _ = app.update(Message::Delete);
+        assert_eq!(app.doc, original);
+        let _ = app.update(Message::CleanupOriginal(true));
+        assert_eq!(app.display_document(), &original);
+        let _ = app.update(Message::CancelCleanup);
+        assert_eq!(app.doc, original);
+        assert!(!app.history.can_undo());
+        let _ = app.update(Message::EngineDone {
+            revision: app.revision,
+            kind: Job::Clean(cleanup::CleanupJob {
+                options: Default::default(),
+                selection: vec![a, b],
+                serial: app.cleanup_serial,
+                epoch: app.file_epoch,
+            }),
+            result: response(),
+        });
+        let _ = app.update(Message::ApplyCleanup);
+        assert_eq!(app.doc, cleaned);
+        assert_eq!(app.selected, vec![a, b]);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, original);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc, cleaned);
+        let _ = app.update(Message::EngineDone {
+            revision: app.revision.wrapping_sub(1),
+            kind: Job::Clean(cleanup::CleanupJob {
+                options: Default::default(),
+                selection: vec![a, b],
+                serial: app.cleanup_serial,
+                epoch: app.file_epoch,
+            }),
+            result: response(),
+        });
+        assert!(app.cleanup.is_none());
+    }
+
+    #[test]
+    fn label_edits_and_indicator_drags_are_atomic_and_do_not_change_chemistry() {
+        use atom_labels::Action;
+        use moruno::atom_labels::{Carbons, Owner};
+        let (mut app, _) = App::new();
+        let _ = app.perform(Pending::New);
+        let a = app.doc.add_atom("N", Point::default());
+        app.history = History::default();
+        let original = app.doc.clone();
+        app.label_action(Action::Number);
+        assert!(!chemistry_changed(&original, &app.doc));
+        let numbered = app.doc.clone();
+        app.edit(Edit::AtomIndicator(Owner::Number(a), Point::new(20., -30.)));
+        assert_eq!(
+            app.doc
+                .atom(a)
+                .unwrap()
+                .display
+                .number
+                .as_ref()
+                .unwrap()
+                .offset,
+            Some(Point::new(20., -30.))
+        );
+        let _ = app.update(Message::Undo);
+        assert!(same_drawing(&app.doc, &numbered));
+        let _ = app.update(Message::Undo);
+        assert!(same_drawing(&app.doc, &original));
+        let _ = app.update(Message::Redo);
+        assert!(same_drawing(&app.doc, &numbered));
+        app.label_action(Action::Carbons(Carbons::All));
+        app.label_action(Action::Hydrogens(false));
+        app.label_action(Action::Stereo(true));
+        let _ = app.perform(Pending::New);
+        assert_eq!(app.doc.atom_labels, Default::default());
+        assert_eq!(app.current_text_style().size_pt, 10.);
+        assert_eq!(app.current_text_style().family, "Arial");
+    }
+
+    #[test]
+    fn stale_refresh_is_rescheduled_and_derived_labels_do_not_dirty_the_document() {
+        let (mut app, _) = App::new();
+        let _ = app.perform(Pending::New);
+        let id = app.doc.add_atom("N", Point::default());
+        app.saved = app.doc.clone();
+        let mut computed = app.doc.clone();
+        computed.atom_mut(id).unwrap().cip_label = Some("S".into());
+        computed.atom_mut(id).unwrap().label_h = 3;
+        let response = Response {
+            document: Some(computed),
+            analysis: None,
+            output: None,
+            engine_version: "test".into(),
+            warnings: vec![],
+        };
+        let _ = app.update(Message::EngineDone {
+            revision: app.revision.wrapping_sub(1),
+            kind: Job::RefreshLabels,
+            result: Box::new(Ok(response.clone())),
+        });
+        assert!(app.refresh_due.is_some());
+        assert!(app.doc.atom(id).unwrap().cip_label.is_none());
+        let _ = app.update(Message::EngineDone {
+            revision: app.revision,
+            kind: Job::RefreshLabels,
+            result: Box::new(Ok(response)),
+        });
+        assert_eq!(app.doc.atom(id).unwrap().label_h, 3);
+        assert!(!app.dirty());
+    }
+
+    #[test]
+    fn invalid_edit_is_rolled_back_without_an_undo_entry() {
+        let (mut app, _) = App::new();
+        let _ = app.perform(Pending::New);
+        app.doc.add_atom("C", Point::default());
+        app.history = History::default();
+        let before = app.doc.clone();
+        app.doc.atoms[0].position.x = f32::NAN;
+        app.changed(before.clone());
+        assert_eq!(app.doc, before);
+        assert!(app.error);
+        assert!(!app.history.undo(&mut app.doc));
+        for color in ["αβγ", "💚AB", "#GG0000", "12345", "1234567"] {
+            assert!(graphics::parse_color(color).is_none());
+        }
+    }
+
+    #[test]
+    fn chemistry_check_keeps_placement_atomic_and_preserves_redo() {
+        use moruno::rings::Preset;
+        let (mut app, _) = App::new();
+        let _ = app.perform(Pending::New);
+        app.edit(Edit::RingPreset(
+            Preset::ChairUp,
+            Point::default(),
+            None,
+            false,
+            false,
+        ));
+        let first = app.doc.clone();
+        let selected = app.selected.clone();
+        let revision = app.revision;
+        checked_labels(&mut app);
+        assert_eq!(app.revision, revision);
+        assert_eq!(app.selected, selected);
+        assert!(same_drawing(&first, &app.doc));
+        assert!(app.doc.atoms.iter().all(|atom| atom.label_h == 2));
+        let checked_first = app.doc.clone();
+        let _ = app.update(Message::Undo);
+        assert!(app.doc.atoms.is_empty());
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc, checked_first);
+        app.edit(Edit::RingPreset(
+            Preset::ChairDown,
+            Point::new(300., 0.),
+            None,
+            false,
+            false,
+        ));
+        let second = app.doc.clone();
+        let _ = app.update(Message::Undo);
+        checked_labels(&mut app);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc, second);
+    }
+
+    #[test]
+    fn computed_hydrogen_labels_do_not_make_a_saved_drawing_dirty() {
+        use moruno::rings::Preset;
+        let (mut app, _) = App::new();
+        let _ = app.perform(Pending::New);
+        app.doc = Preset::ChairUp.document(42., false);
+        app.saved = app.doc.clone();
+        checked_labels(&mut app);
+        assert!(!app.dirty());
+        assert!(!app.history.can_undo());
+        assert_ne!(app.doc, app.saved);
+        app.doc.atoms[0].charge = 1;
+        assert!(app.dirty());
+        app.doc = app.saved.clone();
+        app.doc.atoms[0].position.x += 1.;
+        assert!(app.dirty());
+    }
+
+    #[test]
+    fn ring_presets_use_atomic_history_and_leave_invalid_hosts_untouched() {
+        use moruno::rings::Preset;
+        let (mut app, _) = App::new();
+        app.doc = Document::default();
+        let before = app.doc.clone();
+        app.edit(Edit::RingPreset(
+            Preset::ChairUp,
+            Point::default(),
+            Some(Point::new(0., 80.)),
+            false,
+            false,
+        ));
+        let placed = app.doc.clone();
+        assert_eq!(placed.atoms.len(), 6);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, before);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc, placed);
+        app.edit(Edit::RingPreset(
+            Preset::ChairDown,
+            Point::new(300., 0.),
+            None,
+            false,
+            false,
+        ));
+        assert_eq!(app.doc.atoms.len(), 12);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, placed);
+        let _ = app.update(Message::Tool(Tool::RingPreset(Preset::ChairUp)));
+        let _ = app.perform(Pending::New);
+        assert_eq!(app.tool, Tool::Select);
+        assert_eq!(app.bond_drawing.length, 42.);
+        let c = app.doc.add_atom("C", Point::default());
+        app.doc.atom_mut(c).unwrap().radical_electrons = 1;
+        let before = app.doc.clone();
+        app.edit(Edit::RingPreset(
+            Preset::ChairUp,
+            Point::default(),
+            None,
+            false,
+            false,
+        ));
+        assert_eq!(app.doc, before);
+        assert!(app.error);
+    }
+
+    #[test]
+    fn arrow_edits_keep_bend_history_and_new_resets_jacs_defaults() {
+        use arrows::{Action, Field};
+        use moruno::arrows::{ArrowStyle, Head, Preset};
+        let (mut app, _) = App::new();
+        app.doc = Document::default();
+        app.saved = app.doc.clone();
+        let _ = app.update(Message::ArrowStyle(Preset::Fishhook));
+        app.edit(Edit::Bond(
+            Point::new(0., 0.),
+            Point::new(120., 0.),
+            None,
+            None,
+        ));
+        let id = app.selected[0];
+        app.edit(Edit::ArrowHandle(id, 2, Point::new(60., -50.)));
+        let bent = app.doc.clone();
+        app.arrow_action(Action::Number(Field::Line, "1.5".into()));
+        app.arrow_action(Action::ApplyNumber(Field::Line));
+        assert_eq!(app.doc.arrows[0].appearance().width_pt, 1.5);
+        assert_eq!(app.doc.arrows[0].control, bent.arrows[0].control);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, bent);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.arrows.style.width_pt, 1.5);
+        app.arrow_action(Action::Tail(Head::Full));
+        app.arrow_action(Action::Reverse);
+        assert_eq!(app.doc.arrows[0].end, Point::default());
+        app.arrow_action(Action::Number(Field::Length, "NaN".into()));
+        let before = app.doc.clone();
+        app.arrow_action(Action::ApplyNumber(Field::Length));
+        assert_eq!(app.doc, before);
+        assert!(app.error);
+        let _ = app.perform(Pending::New);
+        assert_eq!(app.arrows.style, ArrowStyle::default());
+        assert_eq!(app.arrow_style, Preset::Forward);
+        assert_eq!(app.caption_format.style.family, "Arial");
+        assert_eq!(app.caption_format.style.size_pt, 10.);
+        assert_eq!(
+            app.bond_drawing.length,
+            moruno::style::DEFAULT.bond_length_world
+        );
+        assert!(app.doc.arrows.is_empty());
+    }
+
+    #[test]
+    fn library_authoring_is_independent_of_drawing_history_and_repeat_placement_keeps_anchor() {
+        use moruno::templates::Anchor;
+        use template_library::Action as A;
+        let (mut app, _) = App::new();
+        let a = app.doc.add_atom("C", Point::default());
+        let b = app.doc.add_atom("O", Point::new(42., 0.));
+        app.doc.add_bond(a, b, 1, "plain");
+        app.selected = vec![a, b];
+        let before = app.doc.clone();
+        let revision = app.revision;
+        let _ = app.update(Message::Templates(A::BeginSave));
+        app.selected.clear();
+        let _ = app.update(Message::Templates(A::Name("Methanol".into())));
+        let _ = app.update(Message::Templates(A::SaveDetails));
+        assert_eq!(app.templates.library.templates[0].document, before);
+        assert_eq!(app.doc, before);
+        assert_eq!(app.revision, revision);
+        let index = app.template_index;
+        let _ = app.update(Message::InsertTemplate(index));
+        let _ = app.update(Message::Templates(A::Anchor(Anchor::Atom(b))));
+        let _ = app.update(Message::Templates(A::RememberAnchor));
+        let _ = app.update(Message::Templates(A::Browse));
+        app.templates.connection = moruno::templates::Connection::FuseBond;
+        let _ = app.update(Message::InsertTemplate(index));
+        assert_eq!(app.templates.anchor, Anchor::Atom(b));
+        assert_eq!(
+            app.templates.connection,
+            moruno::templates::Connection::Connect
+        );
+        let _ = app.update(Message::Templates(A::Repeat(true)));
+        app.edit(Edit::Template(Point::new(250., 100.), None));
+        assert_eq!(app.tool, Tool::Template);
+        assert_eq!(app.doc.atoms.len(), 4);
+        assert_eq!(app.doc.atoms[3].position, Point::new(250., 100.));
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, before);
+        let _ = app.update(Message::Templates(A::Remove));
+        assert!(app.templates.library.templates.is_empty());
+        assert_eq!(app.doc, before);
+        let _ = app.update(Message::Templates(A::Restore));
+        assert_eq!(app.templates.library.templates.len(), 1);
+        assert_eq!(app.templates.library.templates[0].anchor, Anchor::Atom(b));
+        let caption = app.doc.next_id();
+        app.doc.annotations.push(Annotation {
+            id: caption,
+            position: Point::new(0., 60.),
+            text: "Label".into(),
+            format: Default::default(),
+        });
+        app.inspector_tab = InspectorTab::Templates;
+        let _ = app.update(Message::Canvas(Edit::Select(vec![caption])));
+        assert_eq!(app.inspector_tab, InspectorTab::Templates);
+    }
+
+    #[test]
+    fn attached_marks_are_single_history_edits_and_removal_updates_chemistry() {
+        use moruno::scientific::{MarkKind, SymbolKind};
+        let (mut app, _) = App::new();
+        app.doc = Document::default();
+        let id = app.doc.add_atom("N", Point::default());
+        let before = app.doc.clone();
+        app.tool = Tool::Graphic(moruno::graphics::GraphicKind::Symbol(
+            SymbolKind::CirclePlus,
+        ));
+        app.edit(Edit::Graphic(Point::default(), Point::default(), false));
+        assert_eq!(app.selected, vec![id]);
+        assert_eq!(app.doc.atoms[0].charge, 1);
+        assert_eq!(app.doc.atoms[0].marks[0].kind, MarkKind::CircledCharge);
+        let attached = app.doc.clone();
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, before);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc, attached);
+        app.edit(Edit::AtomMark(id, 0, Point::new(-30., 20.)));
+        assert_eq!(app.doc.atoms[0].marks[0].offset, Point::new(-30., 20.));
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, attached);
+        let _ = app.update(Message::RemoveMark(id, 0));
+        assert_eq!(app.doc.atoms[0].charge, 0);
+        assert!(app.doc.atoms[0].marks.is_empty());
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, attached);
+    }
+
+    #[test]
+    fn every_new_document_starts_with_jacs_drawing_and_typography_defaults() {
+        let (mut app, _) = App::new();
+        app.orbital_phase = moruno::scientific::Phase::Shaded;
+        app.phase_flipped = true;
+        app.attach_symbols = false;
+        app.graphic_style.width_pt = 3.;
+        app.caption_format.style.family = "Times New Roman".into();
+        app.caption_format.style.size_pt = 18.;
+        app.caption_format.style.color = [190, 30, 40];
+        app.caption_format.style.bold = true;
+        let _ = app.update(Message::DrawingLength("30".into()));
+        let _ = app.update(Message::FixedLength(false));
+        let _ = app.update(Message::FixedAngles(false));
+        let _ = app.update(Message::ChainAngle("90".into()));
+        let _ = app.perform(Pending::New);
+        assert_eq!(
+            app.caption_format.style,
+            moruno::typography::TextStyle::default()
+        );
+        assert_eq!(app.caption_format.style.family, "Arial");
+        assert_eq!(app.font_size_input, "10");
+        assert_eq!(app.text_color_input, "#000000");
+        assert_eq!(app.drawing_length_input, "14.4");
+        assert_eq!(app.bond_drawing.length, 42.);
+        assert_eq!(app.graphic_width_input, "0.6");
+        assert_eq!(app.orbital_phase, moruno::scientific::Phase::Solid);
+        assert!(!app.phase_flipped && app.attach_symbols);
+        assert_eq!(app.graphic_style.width_pt, 0.6);
+        assert_eq!(app.chain_drawing.angle, 120.);
+        assert!(app.bond_drawing.fixed_angles && app.bond_drawing.fixed_length);
+        assert_eq!(app.tool, Tool::Select);
+    }
+
+    #[test]
+    fn entire_chain_is_one_history_step_and_draw_settings_do_not_edit_the_document() {
+        let (mut app, _) = App::new();
+        app.doc = Document::default();
+        let before = app.doc.clone();
+        let _ = app.update(Message::ChainAtoms("8".into()));
+        let _ = app.update(Message::DrawingLength("20".into()));
+        let _ = app.update(Message::ChainAngle("110".into()));
+        assert_eq!(app.doc, before);
+        assert_eq!(app.revision, 0);
+        let points = moruno::chains::straight(
+            Point::default(),
+            Point::new(350., 0.),
+            false,
+            app.bond_drawing,
+            app.chain_drawing,
+            false,
+        );
+        app.tool = Tool::Chain(moruno::chains::ChainMode::Straight);
+        app.edit(Edit::Chain {
+            points,
+            source: None,
+            target: None,
+        });
+        assert_eq!((app.doc.atoms.len(), app.doc.bonds.len()), (8, 7));
+        let drawn = app.doc.clone();
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, before);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc, drawn);
+        app.edit(Edit::Chain {
+            points: vec![Point::default(), Point::new(42., 0.)],
+            source: None,
+            target: None,
+        });
+        assert!(app.error);
+        assert_eq!(app.doc, drawn);
+        app.tool = Tool::Bond(1);
+        let last = app.doc.atoms.last().unwrap().position;
+        app.edit(Edit::Click(last));
+        assert!(
+            (app.doc.atoms.last().unwrap().position.distance(last)
+                - moruno::style::DEFAULT.world(20.))
+            .abs()
+                < 0.001
+        );
+        let drawing = app.doc.clone();
+        let _ = app.update(Message::ResetBondDrawing);
+        assert_eq!(
+            app.bond_drawing.length,
+            moruno::style::DEFAULT.bond_length_world
+        );
+        assert_eq!(app.drawing_length_input, "14.4");
+        assert_eq!(app.chain_drawing.angle, 120.);
+        assert!(app.bond_drawing.fixed_length && app.bond_drawing.fixed_angles);
+        assert_eq!(app.doc, drawing);
+    }
+
+    #[test]
+    fn palette_keeps_text_range_formatting_and_recolors_graphics_only_in_all_scope() {
+        use iced::widget::text_editor::{Action, Motion};
+        use moruno::typography::StyleChange;
+        use typography::ColorScope;
+        let (mut app, _) = App::new();
+        app.doc = Document::default();
+        app.doc.annotations.push(Annotation {
+            id: 1,
+            position: Point::default(),
+            text: "AB CD".into(),
+            format: Default::default(),
+        });
+        app.doc.graphics.push(Graphic::dragged(
+            2,
+            moruno::graphics::GraphicKind::Rectangle,
+            Point::new(0., 80.),
+            Point::new(84., 120.),
+            GraphicStyle {
+                fill: Some([200, 200, 200]),
+                ..Default::default()
+            },
+            Default::default(),
+            false,
+        ));
+        app.selected = vec![1];
+        app.sync_typography();
+        app.caption_action(Action::Move(Motion::DocumentStart));
+        app.caption_action(Action::Select(Motion::Right));
+        app.caption_action(Action::Select(Motion::Right));
+        assert_eq!(app.text_range(), Some(0..2));
+        let original = app.doc.clone();
+        let red = [180, 50, 55];
+        let _ = app.update(Message::TextStyle(StyleChange::Color(red)));
+        assert_eq!(app.doc.annotations[0].format.at(0).color, red);
+        assert_eq!(app.doc.annotations[0].format.at(3).color, [0; 3]);
+        assert_eq!(app.doc.graphics, original.graphics);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, original);
+        // A stale range in the inspector must not constrain Select All.
+        let _ = app.update(Message::SelectAll);
+        let _ = app.update(Message::ColorScope(ColorScope::Text));
+        let _ = app.update(Message::TextStyle(StyleChange::Color(red)));
+        assert_eq!(app.doc.graphics, original.graphics);
+        assert_eq!(app.doc.annotations[0].format.at(3).color, red);
+        let _ = app.update(Message::ColorScope(ColorScope::All));
+        let _ = app.update(Message::TextStyle(StyleChange::Color(red)));
+        assert_eq!(app.doc.graphics[0].style.stroke, red);
+        assert_eq!(app.doc.graphics[0].style.fill, Some(red));
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc.graphics, original.graphics);
+    }
+
+    #[test]
+    fn palette_scopes_recolor_selected_bonds_and_objects_in_one_undo() {
+        use moruno::typography::StyleChange;
+        use typography::ColorScope;
+        let (mut app, _) = App::new();
+        app.doc = Document::default();
+        let a = app.doc.add_atom("C", Point::default());
+        let b = app.doc.add_atom("O", Point::new(42., 0.));
+        let c = app.doc.add_atom("N", Point::new(84., 0.));
+        app.doc.add_bond(a, b, 1, "plain");
+        app.doc.add_bond(b, c, 2, "plain");
+        app.doc.arrows.push(Arrow::new(
+            4,
+            Point::new(0., 80.),
+            Point::new(84., 80.),
+            Default::default(),
+            Default::default(),
+        ));
+        app.doc.annotations.push(Annotation {
+            id: 5,
+            position: Point::new(0., 120.),
+            text: "Label".into(),
+            format: Default::default(),
+        });
+        app.doc.atom_mut(b).unwrap().display.number = Some(moruno::atom_labels::Number {
+            text: "2".into(),
+            offset: None,
+            style: moruno::atom_labels::number_style(),
+        });
+        let original = app.doc.clone();
+        let blue = [32, 80, 145];
+        let red = [180, 50, 55];
+        let _ = app.update(Message::SelectAll);
+        let _ = app.update(Message::TextStyle(StyleChange::Color(blue)));
+        assert!(
+            app.doc
+                .bonds
+                .iter()
+                .all(|b| b.color == blue && b.indicator.style.color == blue)
+        );
+        assert!(
+            app.doc
+                .atoms
+                .iter()
+                .all(|a| a.text_style.as_ref().unwrap().color == blue)
+        );
+        assert_eq!(
+            app.doc
+                .atom(b)
+                .unwrap()
+                .display
+                .number
+                .as_ref()
+                .unwrap()
+                .style
+                .color,
+            blue
+        );
+        assert_eq!(app.doc.arrows[0].appearance().color, blue);
+        assert_eq!(app.doc.annotations[0].format.style.color, blue);
+        let recolored = app.doc.clone();
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, original);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc, recolored);
+        app.selected = vec![a, b];
+        let _ = app.update(Message::ColorScope(ColorScope::Bonds));
+        let _ = app.update(Message::TextColor("#B43237".into()));
+        let _ = app.update(Message::ApplyTextColor);
+        assert_eq!(app.doc.bonds[0].color, red);
+        assert_eq!(app.doc.bonds[1].color, blue);
+        assert_eq!(app.doc.atoms[1].text_style.as_ref().unwrap().color, blue);
+        assert_eq!(app.doc.arrows, recolored.arrows);
+        let _ = app.update(Message::ColorScope(ColorScope::Text));
+        let _ = app.update(Message::TextStyle(StyleChange::Color(red)));
+        assert_eq!(app.doc.atoms[0].text_style.as_ref().unwrap().color, red);
+        assert_eq!(app.doc.atoms[2], recolored.atoms[2]);
+        assert_eq!(app.doc.bonds[1].color, blue);
+        assert_eq!(app.doc.arrows, recolored.arrows);
+        // Selecting only one end of a bond does not recolor that bond.
+        app.selected = vec![c];
+        let _ = app.update(Message::ColorScope(ColorScope::All));
+        let _ = app.update(Message::TextStyle(StyleChange::Color(red)));
+        assert_eq!(app.doc.bonds[1].color, blue);
+    }
+
+    #[test]
+    fn bond_styles_position_color_and_direction_are_undoable() {
+        use moruno::bonds::{BondPreset, DoublePosition};
+        let (mut app, _) = App::new();
+        app.doc.add_atom("C", Point::new(0., 0.));
+        app.doc.add_atom("C", Point::new(84., 0.));
+        app.doc.add_atom("C", Point::new(168., 0.));
+        app.doc.add_bond(1, 2, 2, "plain");
+        app.doc.add_bond(2, 3, 1, "plain");
+        app.selected = vec![1, 2];
+        let other = app.doc.bonds[1].clone();
+        let _ = app.update(Message::BondPosition(DoublePosition::Left));
+        let _ = app.update(Message::BondColor("#205091".into()));
+        let _ = app.update(Message::ApplyBondColor);
+        assert_eq!(app.doc.bonds[0].color, [32, 80, 145]);
+        assert_eq!(app.doc.bonds[1], other);
+        let _ = app.update(Message::ApplyBondPreset(BondPreset::HollowWedge));
+        assert_eq!(app.doc.bonds[0].display, "hollow_wedge");
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc.bonds[0].order, 2);
+        let _ = app.update(Message::Redo);
+        app.tool = Tool::StyledBond(BondPreset::HollowWedge);
+        app.edit(Edit::Click(Point::new(42., 0.)));
+        assert_eq!((app.doc.bonds[0].a, app.doc.bonds[0].b), (2, 1));
+        let _ = app.update(Message::Undo);
+        assert_eq!((app.doc.bonds[0].a, app.doc.bonds[0].b), (1, 2));
+        let before = app.doc.clone();
+        app.tool = Tool::StyledBond(BondPreset::Dotted);
+        app.edit(Edit::Bond(
+            Point::new(0., 0.),
+            Point::new(168., 0.),
+            Some(1),
+            Some(3),
+        ));
+        assert!(app.error);
+        assert_eq!(app.doc, before);
+    }
+
+    #[test]
+    fn group_frame_and_ungroup_are_individually_undoable() {
+        let (mut app, _) = App::new();
+        let a = app.doc.add_atom("C", Point::default());
+        let b = app.doc.add_atom("O", Point::new(42., 0.));
+        app.doc.add_bond(a, b, 1, "plain");
+        app.selected = vec![a];
+        let initial = app.doc.clone();
+        let _ = app.update(Message::AddFrame(moruno::graphics::GraphicKind::Brackets));
+        assert_eq!(app.doc.groups.len(), 1);
+        assert_eq!(app.doc.graphics.len(), 1);
+        assert_eq!(app.selected.len(), 3);
+        assert_eq!(app.doc.atoms, initial.atoms);
+        let framed = app.doc.clone();
+        let _ = app.update(Message::Ungroup);
+        assert!(app.doc.groups.is_empty());
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, framed);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, initial);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc, framed);
+        assert_eq!(app.selected.len(), 3);
+        let _ = app.update(Message::InvertSelection);
+        assert!(app.selected.is_empty());
+    }
+
+    #[tokio::test]
+    async fn graphic_style_point_edits_and_undo_retain_editable_selection() {
+        use moruno::graphics::GraphicKind;
+        let (mut app, _) = App::new();
+        let result = app
+            .engine
+            .execute(Request::import_smiles("CCO"))
+            .await
+            .unwrap();
+        app.doc = result.document.unwrap();
+        app.analysis = result.analysis;
+        let _ = app.update(Message::Tool(Tool::Graphic(GraphicKind::Curve)));
+        app.edit(Edit::Graphic(
+            Point::default(),
+            Point::new(100., 40.),
+            false,
+        ));
+        let id = app.doc.graphics[0].id;
+        assert_eq!(app.tool, Tool::Select);
+        app.apply_graphic_style(GraphicChange::Stroke([32, 80, 145]));
+        let before = app.doc.clone();
+        let _ = app.update(Message::Tool(Tool::EditPoints));
+        app.edit(Edit::GraphicPoint(id, 1, Point::new(20., -50.)));
+        assert_eq!(app.doc.graphics[0].kind, GraphicKind::Path);
+        let after = app.doc.clone();
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, before);
+        assert_eq!(app.selected, vec![id]);
+        assert_eq!(app.analysis.as_ref().unwrap().formula, "C2H6O");
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc, after);
+        assert_eq!(app.selected, vec![id]);
+        assert!(app.analysis.is_some());
+        let _ = app.update(Message::Tool(Tool::Graphic(GraphicKind::Ellipse)));
+        assert!(app.selected.is_empty());
+        app.apply_graphic_style(GraphicChange::Stroke([180, 50, 55]));
+        assert_eq!(
+            app.doc, after,
+            "new drawing style must not change the previous object"
+        );
+    }
+
+    #[test]
+    fn partial_typography_edit_and_repeated_backspace_restore_with_undo() {
+        use iced::widget::text_editor::{Action, Edit as TextEdit, Motion};
+        use moruno::typography::{StyleChange, TextFormat};
+        let (mut app, _) = App::new();
+        app.doc.annotations.push(Annotation {
+            id: 1,
+            position: Point::default(),
+            text: "AAA".into(),
+            format: TextFormat::default(),
+        });
+        app.selected = vec![1];
+        app.sync_typography();
+        app.caption_action(Action::Move(Motion::DocumentStart));
+        app.caption_action(Action::Move(Motion::Right));
+        app.caption_action(Action::Select(Motion::Right));
+        assert_eq!(app.text_range(), Some(1..2));
+        app.apply_text_style(StyleChange::Bold(true));
+        assert!(!app.doc.annotations[0].format.at(0).bold);
+        assert!(app.doc.annotations[0].format.at(1).bold);
+        let styled = app.doc.clone();
+        app.caption_action(Action::Move(Motion::DocumentStart));
+        app.caption_action(Action::Move(Motion::Right));
+        app.caption_action(Action::Edit(TextEdit::Backspace));
+        assert_eq!(app.doc.annotations[0].text, "AA");
+        assert!(app.doc.annotations[0].format.at(0).bold);
+        assert!(!app.doc.annotations[0].format.at(1).bold);
+        let edited = app.doc.clone();
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, styled);
+        assert_eq!(app.caption, "AAA");
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc, edited);
+        assert_eq!(app.caption, "AA");
+    }
+
+    #[test]
+    fn template_choice_is_nonmutating_and_attachment_is_one_undo_step() {
+        let (mut app, _) = App::new();
+        app.busy = false;
+        let a = app.doc.add_atom("C", Point::new(-30.0, 0.0));
+        let b = app.doc.add_atom("C", Point::new(30.0, 0.0));
+        app.doc.add_bond(a, b, 1, "plain");
+        app.saved = app.doc.clone();
+        let before = app.doc.clone();
+        let index = moruno::templates::LIBRARY
+            .iter()
+            .position(|t| t.name == "Cyclopentane")
+            .unwrap();
+        let _ = app.update(Message::InsertTemplate(index));
+        assert_eq!(app.doc, before);
+        assert!(!app.dirty());
+        assert_eq!(app.tool, Tool::Template);
+        app.templates.connection = moruno::templates::Connection::FuseBond;
+        app.edit(Edit::Template(Point::default(), None));
+        assert_eq!(app.tool, Tool::Select);
+        let placed = app.doc.clone();
+        assert_eq!(placed.atoms.len(), 5);
+        assert_eq!(placed.bonds.len(), 5);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, before);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc, placed);
+        let _ = app.update(Message::Tool(Tool::Select));
+        app.edit(Edit::Template(Point::new(500.0, 500.0), None));
+        assert_eq!(app.doc, placed);
+    }
 
     #[test]
     fn selection_handle_transforms_preserve_other_objects_and_undo_in_one_step() {
@@ -1218,7 +3566,7 @@ mod tests {
 
     #[test]
     fn clicking_existing_bonds_cycles_order_and_can_be_undone() {
-        for tool in [Tool::Bond(1), Tool::Bond(2), Tool::Bond(3)] {
+        for tool in [Tool::Bond(1), Tool::Bond(3)] {
             let (mut app, _) = App::new();
             app.tool = tool;
             let a = app.doc.add_atom("C", Point::default());
@@ -1328,6 +3676,38 @@ mod tests {
         assert_eq!(app.camera.center, camera.center);
         assert_eq!(app.camera.zoom, camera.zoom);
         assert_eq!(app.doc, document);
+    }
+
+    #[test]
+    fn view_aids_preserve_drawing_selection_history_and_manual_camera() {
+        let (mut app, _) = App::new();
+        let id = app.doc.add_atom("O", Point::new(50., 20.));
+        app.selected = vec![id];
+        app.edit(Edit::Pan(60., -20.));
+        let document = app.doc.clone();
+        let camera = app.camera;
+        let revision = app.revision;
+        let history = app.history.can_undo();
+        let export = moruno::export::drawing(&app.doc, "svg").expect("SVG before view change");
+        for message in [
+            Message::ToggleView,
+            Message::Rulers(true),
+            Message::Crosshair(true),
+            Message::RulerUnit(canvas::guides::Unit::Inches),
+            Message::Grid,
+        ] {
+            let _ = app.update(message);
+        }
+        assert_eq!(app.doc, document);
+        assert_eq!(app.selected, [id]);
+        assert_eq!(app.revision, revision);
+        assert_eq!(app.history.can_undo(), history);
+        assert_eq!(app.camera.center, camera.center);
+        assert_eq!(app.camera.zoom, camera.zoom);
+        assert_eq!(
+            moruno::export::drawing(&app.doc, "svg").expect("SVG after view change"),
+            export
+        );
     }
 
     #[test]

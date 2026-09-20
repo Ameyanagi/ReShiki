@@ -2009,6 +2009,7 @@ dependencies = [
 name = "moruno"
 version = "0.2.0"
 dependencies = [
+ "base64",
  "directories-next",
  "iced",
  "png",

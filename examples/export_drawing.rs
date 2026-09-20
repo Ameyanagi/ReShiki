@@ -7,6 +7,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let output = std::path::PathBuf::from(args.next().ok_or("missing output prefix")?);
     let document: moruno::document::Document = serde_json::from_slice(&std::fs::read(input)?)?;
     document.validate()?;
+    let runtime = tokio::runtime::Runtime::new()?;
+    let document = runtime.block_on(moruno::export::checked_document(
+        &Default::default(),
+        document,
+    ))?;
     for format in ["svg", "pdf", "png"] {
         std::fs::write(
             output.with_extension(format),

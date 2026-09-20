@@ -1,8 +1,30 @@
 # Capability report
 
-Assessment date: 2026-09-16. Compared against the installed version 26 reference editor using native computer control, screenshots and menus, then tested Moruno through its actual desktop UI. Menu availability is evidence that a command exists, not proof that its full behavior was reproduced.
+Assessment date: 2026-09-16, with subsequent updates recorded below. Workflows were checked through the desktop app, saved documents, rendering and chemistry tests.
 
-**Moruno does not yet have full feature parity.** Version 0.2 adds everyday editing, recovery and standalone packaging. The table records the current boundary; the original desktop test record is retained below.
+**Several workflows remain incomplete.** Version 0.2 adds everyday editing, recovery and standalone packaging. The table records the current boundary; the original desktop test record is retained below.
+
+The [feature-status inventory](feature-status.md) records supported toolbar, typography, drawing, template, chemistry and document workflows, together with their remaining limitations.
+
+The [clipboard update](clipboard.md) adds native macOS editable Copy/Paste and Copy Image with publication-size bounds. Desktop checks cover a colored 13-atom/13-bond round-trip and image paste; **135 Rust tests**, **42 Python tests**, formatting and strict Clippy pass. [View controls](workspace-review.md) add independent rulers/crosshair/grid switches and physical units.
+
+The [Style toolbar update](typography.md) adds searchable fonts, rich text ranges, scripts, paragraph alignment/wrapping, text color and styled drawing/CDXML export. Verified through computer use in Moruno and through CDXML exchange, with **51 Rust tests and 15 Python tests**. The earlier counts below describe historical builds.
+
+The [graphics update](graphics.md) adds editable shapes, brackets, Bézier points, stroke/fill styling and graphic layers. That update passed **59 Rust and 18 Python tests**, plus actual desktop drawing and file-exchange checks.
+
+The [selection and grouping update](selection-and-groups.md) adds lasso and modifier selection, nested/integral groups, edge alignment, fitted frames and mixed-object CDXML groups. That update passed **68 Rust and 19 Python tests**, including desktop editing and CDXML exchange.
+
+The [bond tools update](bond-tools.md) adds 17 presets, selection styling, colors and double-line position, including hydrogen, dative and quadruple bond chemistry. That update passed **74 Rust and 23 Python tests**. Desktop checks include externally saved CDXML, Moruno drawing, click reversal, styling, Undo/Redo and native persistence. Partial bond depictions do not implement full tautomer/query or resonance behavior.
+
+The [chain tools update](chain-tools.md) adds straight/snaking gestures, count previews, exact/maximum atom counts, attachment, retracing and independent bond constraints. Every new document restores **JACS / ACS** typography and drawing defaults. That update passed **83 Rust and 23 Python tests**, with actual desktop chain creation, measured 14.4 pt bonds, check/save/reopen, and gesture Undo/Redo.
+
+The [template library update](template-library.md) adds exact source anchors, custom mixed-object templates, search/favorites, collection editing/import/export, and repeated placement. That update passed **89 Rust and 23 Python tests**, including native desktop persistence, grouped stamps, library replacement/undo, and attachment chemistry.
+
+The [arrow update](arrows.md) adds eight presets, shared live/export geometry, endpoint/bend editing, full/half heads, style/dimension controls, unequal equilibrium, dipole/no-go marks and a larger explicit CDXML subset. That update passed **96 Rust and 26 Python tests**, with Moruno desktop drawing/editing/export/default-style checks and externally saved exchange fixtures. Reaction/electron-flow semantics remain unimplemented.
+
+The [scientific-symbols update](scientific-symbols.md) adds seven orbital shapes, phase previews, 18 free symbols, positioned atom-owned marks and one/two-unpaired-electron chemistry. Native format 8 preserves these objects. That update passed **102 Rust and 30 Python tests**. H-dot/H-dash stereochemistry, semantic attachment markers, gradient shading and some CDXML styles remain unsupported.
+
+The [ring and catalog update](ring-presets.md) adds Chair A/B and Cyclopentadiene tools with previews, rotation, fusion and Alt connection by a bond. The library has **81 built-ins**, including 20 amino acids and five nucleobases, with frozen PubChem identity checks. Check structure refreshes computed labels/properties without adding an Undo step. Current validation is **111 Rust and 32 Python tests**. These are drawing projections and molecular building blocks; there is no 3D conformational solver or peptide/nucleotide assembly workflow.
 
 The subsequent [JACS / ACS default-style update](jacs-style.md) adds publication dimensions, measured atom labels, inset ring double bonds and 1200 dpi PNG output. That update passed 20 Rust tests and 10 Python tests; the historical counts below describe earlier builds.
 
@@ -15,18 +37,20 @@ The 2026-09-17 [selection and ring-placement update](selection-and-ring-placemen
 | Capability | Moruno status | Evidence or limitation |
 | --- | --- | --- |
 | Freehand atoms and bonds | Implemented; desktop tested | Drew ethanol from an empty canvas; 3 atoms, 2 bonds, `CCO` |
-| Chain growth and branching | Implemented; desktop tested | Endpoint clicks build a zigzag; either end can grow; branches use open angles; short drags extend; carbon bonds remain independent of the last atom label |
+| Chain growth and branching | Implemented subset; desktop tested | Endpoint growth plus straight/snaking chain drags, live counts, exact/capped sizes and attachment; retracing and cancellation; no drawing auto-pan or global obstacle routing. See [chain tools](chain-tools.md). |
+| Bond constraints and JACS defaults | Implemented subset; desktop tested | Independent Length/Angles, Alt free drawing, 15° snapping, custom chain angle and JACS reset. New documents restore Arial 10 pt, 14.4 pt bonds and 0.6 pt lines. |
 | Single/double/triple bonds | Implemented; desktop tested | With a plain bond tool, clicks on an existing bond cycle single → double → triple → single; new bonds use the selected tool's order |
-| Solid/hashed wedges | Implemented | Molecular stereo round-trip tests; manual creation needs broader UI testing |
+| Solid/hashed/hollow wedges and bold single bonds | Implemented subset | Visible tetrahedral stereo checked independently after cleanup and reflection; hollow-wedge drawing and reversal desktop tested |
+| Additional bond tools and styling | Implemented subset | 17 presets, color and double-line position; dative/coordination, explicit-H interactions and quadruple bonds; partial depictions lack full tautomer/query semantics. See [bond limits](bond-tools.md). |
 | Wavy/aromatic bonds | Implemented | Wavy palette tool; aromatic ring placement and rendering |
 | Ring placement | Implemented; desktop tested | 3–8 members; attached rings orient into open space and match local bond length; click/drag placement and side selection; existing isolated cycloalkanes can snap onto single bonds |
-| Charges and isotopes | Implemented | Selection controls; charged/isotopic structures covered by chemistry tests |
-| Selection and transforms | Implemented; desktop tested | Molecule double-click, rectangle select, move, erase, selection box with proportional corner resize and rotation handle, Shift 15° rotation snapping, stereo-preserving flip, component align/distribute |
+| Charges, isotopes and radicals | Implemented subset | Selection controls, attached charge/radical marks, positioned lone-pair annotations; one/two unpaired electrons with chemistry and exchange tests. See [scientific symbols](scientific-symbols.md). |
+| Selection and transforms | Implemented; desktop tested | Molecule double-click, rectangle/lasso selection, add/subtract/invert, nested/integral groups, move, erase, proportional resize/rotation handles, stereo-preserving flip, edge/center alignment, group/component distribution |
 | Undo/redo | Implemented; desktop tested | Snapshot history, up to 100 changes |
 | Pan, zoom, grid and fit | Implemented | Session camera only; no printable page layout |
-| Text and reaction arrows | Partial; desktop tested | Multiline editable labels and five arrow styles; no reaction semantics or rich typography |
+| Text and reaction arrows | Partial; desktop tested | Rich multiline labels, font/style/color controls, scripts, paragraph layout and eight editable arrow presets; no in-canvas text caret or reaction semantics |
 | Structure validation | Implemented; desktop tested | RDKit sanitization, invalid-valence error tests |
-| 2D cleanup | Implemented; desktop tested | Preserves stable IDs, molecular identity, drawing center and nonchemical objects |
+| 2D cleanup | Implemented; desktop tested | Requires selection. Preview selected atoms or selected molecules with original comparison, Apply/Cancel and one-step Undo. Unselected atoms stay fixed; each molecule keeps its center/orientation. |
 | Formula/mass/descriptors | Implemented | Formula, molecular/exact mass, cLogP, TPSA, HBD/HBA, rings |
 | SMILES | Implemented | Import/export and copy canonical SMILES |
 | InChI / InChIKey | Partial | InChI import/export in UI; key calculated by worker |
@@ -35,25 +59,29 @@ The 2026-09-17 [selection and ring-placement update](selection-and-ring-placemen
 | Native save/open | Implemented; desktop tested | Versioned `.moruno` JSON, complete graph and drawing objects |
 | SVG / PDF / PNG | Implemented; desktop and rendering tested | Vector SVG/PDF, PNG with 1200 dpi metadata; no TIFF or print dialog |
 | Default drawing style | JACS / ACS | Black, 10 pt Arial, 14.4 pt bonds, 0.6 pt lines; shared canvas and physical export settings |
-| Templates and named abbreviations | Partial | Twelve insertable molecular templates; no custom library or nickname expansion |
+| Templates and named abbreviations | Partial; desktop tested | 81 built-ins plus custom mixed-object collections, exact source anchors, new-bond/shared-atom/fused-edge modes, previews, search/favorites and collection exchange. Common abbreviations can contract, expand and replace endpoints; specialized content remains partial. See [template library](template-library.md). |
 | Reaction cleanup/mapping | Planned | Arrows are drawing objects; no reactant/product grouping or automatic mapping |
 | Query structures, R-groups, polymers | Planned | Unsupported constructs are rejected where detected |
 | Enhanced/non-tetrahedral stereo | Planned | Rejected by the worker |
 | Systematic chemical naming | Planned | No name-to-structure or structure-to-name engine |
 | Spectra / NMR | Planned | No prediction, assignment or spectrum objects |
-| Rich typography, curves, brackets | Partial | Multiline labels and curved arrows; no brackets or chemical rich-text editor |
-| Publication layout and printing | Partial | Cropped vector PDF output; no pages, journal styles or print dialog |
+| Rich typography, curves, brackets | Partial; desktop tested | Rich labels, nine graphic types, editable Bézier points, graphical brackets, colors/fills/strokes; nested groups and fitted frames; no freehand pen or polymer semantics |
+| Publication layout and printing | Partial | JACS / ACS default and cropped vector PDF; no multiple pages, journal-style library or print dialog |
 | Native binary drawing format | Planned | No binary CDX importer/exporter |
 | Clipboard drawing interchange | Implemented native subset | Native objects copy/cut/paste/duplicate; text SMILES, InChI, MOL and supported CDXML paste |
 | Script/plugin API | Planned | Worker protocol exists; no stable public automation API |
 | Accessibility | Incomplete | Canvas and Iced controls are not exposed as semantic macOS accessibility elements |
 | Distribution and recovery | Implemented local subset | Standalone Apple Silicon bundle, five-second recovery snapshots, restore as a new copy; not notarized |
 
+The [atom-label update](atom-labels.md) adds carbon/H display controls, owned atom numbering, computed R/S and E/Z indicators, manual positioning, and CDXML object-tag exchange. The [runtime safety audit](runtime-safety.md) bans unsafe code, panic calls and unchecked collection indexing in the production Rust crates. The combined update passed **125 Rust and 36 Python tests** plus strict Clippy; desktop evidence and remaining boundaries are recorded in those documents.
+
+The [selection color update](typography.md#selection-color-verification) adds All selected / Text / Bonds palette scopes and explicit bond counts in the selection summary. **127 Rust tests** and strict Clippy checks pass. Desktop checks cover whole-molecule color, independent bond/label color, Undo/Redo, save/reopen and exported colors.
+
 ## Format restrictions
 
-Native `.moruno` is the only supported complete save format for Moruno's object model. Molecular formats intentionally represent the molecular graph, not page annotations or reaction arrows. CDXML import accepts a single page with molecules, plain text and forward arrows. Other arrow styles, unknown drawing tags and multiple pages are rejected to avoid silently discarding them. It does not preserve arbitrary external formatting, attributes or unsupported chemistry. A successful small-file exchange does not establish compatibility with every external document.
+Native `.moruno` is the only supported complete save format for Moruno's object model. Molecular formats represent the molecular graph, not page annotations or reaction arrows. CDXML import accepts a single page with molecules, supported styled text and arrow styles, including text-only drawings, supported vector curves, nested mixed-object groups and basic graphics. Graphic exchange restrictions are in [graphics](graphics.md). Supported arrowheads, dimensions, equal equilibrium and quadratic curves are documented in [arrow exchange limits](arrows.md). Unsupported arrow combinations, unknown drawing tags and multiple pages are rejected. It does not preserve arbitrary external formatting, attributes or unsupported chemistry; text metrics can vary between applications. A successful small-file exchange does not establish compatibility with every external document.
 
-Query atoms, radicals, enhanced stereo groups and unsupported bond/stereo classes are rejected where RDKit exposes them. The finite test set cannot establish chemically complete support. Label typography, atom-label collision avoidance and dense drawings need more work.
+Query atoms, enhanced stereo groups and unsupported bond/stereo classes are rejected where RDKit exposes them. The finite test set cannot establish chemically complete support. Label typography, atom-label collision avoidance and dense drawings need more work.
 
 ## Desktop test record
 

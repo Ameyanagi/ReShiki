@@ -4,6 +4,7 @@ use iced::{Color, Point, Rectangle, Renderer, Theme, mouse};
 
 #[derive(Clone, Copy)]
 pub(super) enum Icon {
+    TextAlign(moruno::typography::TextAlign),
     Tool(Tool),
     New,
     Open,
@@ -56,6 +57,90 @@ impl<Message> canvas::Program<Message> for Glyph {
             f.fill(&path, ink);
         };
         match self.0 {
+            Icon::Tool(Tool::Chain(mode)) => {
+                if mode == moruno::chains::ChainMode::Straight {
+                    line(
+                        &mut f,
+                        &[(2., 15.), (7., 8.), (12., 15.), (17., 8.), (22., 15.)],
+                    );
+                } else {
+                    line(
+                        &mut f,
+                        &[
+                            (2., 19.),
+                            (7., 13.),
+                            (5., 6.),
+                            (12., 3.),
+                            (17., 9.),
+                            (23., 7.),
+                        ],
+                    );
+                }
+            }
+            Icon::Tool(Tool::Graphic(kind)) => {
+                use moruno::{
+                    document::Point as World,
+                    graphics::{BracketSides, Graphic, GraphicKind, GraphicStyle, PathCommand},
+                };
+                let (start, end) = match kind {
+                    GraphicKind::Orbital(_) => (World::new(12., 12.), World::new(12., 2.)),
+                    GraphicKind::Symbol(_) => (World::new(12., 12.), World::new(28., 12.)),
+                    _ => (World::new(4., 5.), World::new(21., 20.)),
+                };
+                let g = Graphic::dragged(
+                    1,
+                    kind,
+                    start,
+                    end,
+                    GraphicStyle::default(),
+                    BracketSides::Both,
+                    false,
+                );
+                let path = Path::new(|b| {
+                    for c in g.commands() {
+                        match c {
+                            PathCommand::Move(p) => b.move_to(Point::new(p.x, p.y)),
+                            PathCommand::Line(p) => b.line_to(Point::new(p.x, p.y)),
+                            PathCommand::Cubic(a, z, p) => b.bezier_curve_to(
+                                Point::new(a.x, a.y),
+                                Point::new(z.x, z.y),
+                                Point::new(p.x, p.y),
+                            ),
+                            PathCommand::Close => b.close(),
+                        }
+                    }
+                });
+                f.stroke(&path, Stroke::default().with_color(ink).with_width(1.5));
+            }
+            Icon::Tool(Tool::EditPoints) => {
+                line(&mut f, &[(4., 19.), (9., 5.), (20., 12.)]);
+                for p in [
+                    Point::new(4., 19.),
+                    Point::new(9., 5.),
+                    Point::new(20., 12.),
+                ] {
+                    f.fill(&Path::circle(p, 2.5), ink);
+                }
+            }
+            Icon::TextAlign(alignment) => {
+                for i in 0..4 {
+                    let width =
+                        if i % 2 == 0 || alignment == moruno::typography::TextAlign::Justified {
+                            16.0
+                        } else {
+                            10.0
+                        };
+                    let x = match alignment {
+                        moruno::typography::TextAlign::Right => 20.0 - width,
+                        moruno::typography::TextAlign::Center => (24.0 - width) / 2.0,
+                        _ => 4.0,
+                    };
+                    line(
+                        &mut f,
+                        &[(x, 5.0 + i as f32 * 4.5), (x + width, 5.0 + i as f32 * 4.5)],
+                    );
+                }
+            }
             Icon::Tool(Tool::Select) => {
                 line(
                     &mut f,
@@ -71,6 +156,27 @@ impl<Message> canvas::Program<Message> for Glyph {
                     ],
                 );
             }
+            Icon::Tool(Tool::Lasso) => {
+                let path = Path::new(|b| {
+                    b.move_to(Point::new(6., 17.));
+                    b.bezier_curve_to(
+                        Point::new(-1., 12.),
+                        Point::new(8., 1.),
+                        Point::new(16., 4.),
+                    );
+                    b.bezier_curve_to(
+                        Point::new(27., 8.),
+                        Point::new(17., 23.),
+                        Point::new(7., 17.),
+                    );
+                    b.bezier_curve_to(
+                        Point::new(1., 13.),
+                        Point::new(1., 23.),
+                        Point::new(9., 22.),
+                    );
+                });
+                f.stroke(&path, Stroke::default().with_width(1.6).with_color(ink));
+            }
             Icon::Tool(Tool::Bond(order)) => {
                 let offsets: &[f32] = match order {
                     2 => &[-2., 2.],
@@ -79,6 +185,62 @@ impl<Message> canvas::Program<Message> for Glyph {
                 };
                 for dy in offsets {
                     line(&mut f, &[(4., 18. + dy), (20., 6. + dy)]);
+                }
+            }
+            Icon::Tool(Tool::StyledBond(preset)) => {
+                use moruno::bonds::BondPreset as P;
+                match preset {
+                    P::Dative => {
+                        line(&mut f, &[(3., 19.), (20., 5.), (13., 6.)]);
+                        line(&mut f, &[(20., 5.), (18., 12.)]);
+                    }
+                    P::Quadruple => {
+                        for dy in [-4.5, -1.5, 1.5, 4.5] {
+                            line(&mut f, &[(4., 17. + dy), (20., 7. + dy)]);
+                        }
+                    }
+                    P::HollowWedge => line(&mut f, &[(4., 19.), (17., 3.), (22., 10.), (4., 19.)]),
+                    P::Bold => f.stroke(
+                        &Path::line(Point::new(4., 19.), Point::new(20., 5.)),
+                        Stroke::default().with_width(4.).with_color(ink),
+                    ),
+                    P::Dotted => {
+                        for i in 0..6 {
+                            let t = i as f32 / 5.;
+                            f.fill(
+                                &Path::circle(Point::new(4. + 16. * t, 19. - 14. * t), 1.1),
+                                ink,
+                            );
+                        }
+                    }
+                    P::Dashed => {
+                        for i in 0..4 {
+                            let t = i as f32 / 4.;
+                            line(
+                                &mut f,
+                                &[
+                                    (4. + 16. * t, 19. - 14. * t),
+                                    (4. + 16. * (t + 0.13), 19. - 14. * (t + 0.13)),
+                                ],
+                            );
+                        }
+                    }
+                    P::Hashed => {
+                        for i in 0..6 {
+                            let t = i as f32 / 5.;
+                            let x = 5. + 14. * t;
+                            let y = 19. - 13. * t;
+                            line(&mut f, &[(x - 2.5, y - 2.5), (x + 2.5, y + 2.5)]);
+                        }
+                    }
+                    P::CrossedDouble => {
+                        line(&mut f, &[(4., 19.), (20., 5.)]);
+                        line(&mut f, &[(4., 15.), (20., 9.)]);
+                    }
+                    _ => {
+                        line(&mut f, &[(4., 19.), (20., 7.)]);
+                        line(&mut f, &[(4., 15.), (20., 3.)]);
+                    }
                 }
             }
             Icon::Tool(Tool::Wedge) => polygon(&mut f, &[(4., 19.), (17., 3.), (22., 10.)]),
@@ -105,7 +267,26 @@ impl<Message> canvas::Program<Message> for Glyph {
                     .collect();
                 line(&mut f, &points);
             }
-            Icon::Tool(Tool::Ring) => {
+            Icon::Tool(Tool::RingPreset(preset)) => {
+                let doc = preset.document(7., false);
+                for bond in &doc.bonds {
+                    let (Some(a), Some(b)) = (doc.atom(bond.a), doc.atom(bond.b)) else {
+                        continue;
+                    };
+                    let (a, b) = (a.position, b.position);
+                    line(&mut f, &[(12. + a.x, 12. + a.y), (12. + b.x, 12. + b.y)]);
+                    if bond.order == 2 {
+                        line(
+                            &mut f,
+                            &[
+                                (12. + a.x * 0.68, 12. + a.y * 0.68),
+                                (12. + b.x * 0.68, 12. + b.y * 0.68),
+                            ],
+                        );
+                    }
+                }
+            }
+            Icon::Tool(Tool::Ring | Tool::Template) => {
                 let points: Vec<_> = (0..=6)
                     .map(|i| {
                         let a = i as f32 * std::f32::consts::TAU / 6.;

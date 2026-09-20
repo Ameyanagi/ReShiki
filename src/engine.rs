@@ -9,6 +9,12 @@ use tokio::{
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Request {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cleanup: Option<crate::cleanup::Options>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub selected_ids: Option<Vec<u64>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub atom_indicators: Option<Vec<crate::atom_labels::Indicator>>,
     pub protocol: u32,
     pub operation: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -17,6 +23,18 @@ pub struct Request {
     pub text: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub format: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text_layout: Option<std::collections::HashMap<u64, TextMetrics>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub graphic_paths: Option<std::collections::HashMap<u64, Vec<crate::graphics::PathCommand>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub graphic_parts: Option<std::collections::HashMap<u64, Vec<crate::scientific::Part>>>,
+}
+#[derive(Debug, Clone, Serialize)]
+pub struct TextMetrics {
+    pub width: f32,
+    pub height: f32,
+    pub baseline: f32,
 }
 impl Request {
     pub fn import_smiles(text: &str) -> Self {
@@ -24,20 +42,79 @@ impl Request {
     }
     pub fn import(format: &str, text: &str) -> Self {
         Self {
+            cleanup: None,
+            selected_ids: None,
+            atom_indicators: None,
             protocol: 1,
             operation: "import".into(),
             document: None,
             text: Some(text.into()),
             format: Some(format.into()),
+            text_layout: None,
+            graphic_paths: None,
+            graphic_parts: None,
         }
     }
     pub fn molecule(operation: &str, document: Document) -> Self {
+        let graphic_parts = (operation == "export").then(|| {
+            document
+                .graphics
+                .iter()
+                .filter(|g| {
+                    matches!(
+                        g.kind,
+                        crate::graphics::GraphicKind::Symbol(_)
+                            | crate::graphics::GraphicKind::Orbital(_)
+                    )
+                })
+                .map(|g| (g.id, g.parts()))
+                .collect()
+        });
+        let graphic_paths = (operation == "export").then(|| {
+            document
+                .graphics
+                .iter()
+                .map(|g| (g.id, g.commands()))
+                .collect()
+        });
+        // Exchange uses the renderer's measured text, avoiding a second font
+        // engine in Python and keeping centered/right-aligned captions in place.
+        let text_layout = (operation == "export").then(|| {
+            document
+                .annotations
+                .iter()
+                .map(|a| {
+                    let layout = crate::typography::layout(&a.text, &a.format);
+                    let scale = crate::style::DEFAULT.points_per_world();
+                    let baseline = layout
+                        .fragments
+                        .first()
+                        .map(|run| run.position.y + crate::style::text_ascent(&run.style))
+                        .unwrap_or_else(|| crate::style::text_ascent(&a.format.style));
+                    (
+                        a.id,
+                        TextMetrics {
+                            width: layout.width * scale,
+                            height: layout.height * scale,
+                            baseline: baseline * scale,
+                        },
+                    )
+                })
+                .collect()
+        });
         Self {
+            cleanup: None,
+            selected_ids: None,
+            atom_indicators: (operation == "export")
+                .then(|| crate::atom_labels::indicators(&document)),
             protocol: 1,
             operation: operation.into(),
             document: Some(document),
             text: None,
             format: None,
+            text_layout,
+            graphic_paths,
+            graphic_parts,
         }
     }
 }
@@ -52,6 +129,8 @@ pub struct Analysis {
     pub donors: u32,
     pub acceptors: u32,
     pub rings: u32,
+    #[serde(default)]
+    pub unpaired_electrons: u32,
     pub inchi: String,
     pub inchikey: String,
 }
@@ -137,11 +216,17 @@ impl PythonEngine {
             *slot = Some(Self::spawn().await?);
         }
         let result = tokio::time::timeout(Duration::from_secs(30), async {
-            let worker = slot.as_mut().unwrap();
+            let worker = slot.as_mut().ok_or("Chemistry worker is unavailable")?;
             let id = worker.next_id;
-            worker.next_id += 1;
+            worker.next_id = worker
+                .next_id
+                .checked_add(1)
+                .ok_or("Chemistry request counter exhausted; retry to restart the worker")?;
             let mut message = serde_json::to_value(request).map_err(|e| e.to_string())?;
-            message["id"] = id.into();
+            message
+                .as_object_mut()
+                .ok_or("Invalid chemistry request envelope")?
+                .insert("id".into(), id.into());
             let mut bytes = serde_json::to_vec(&message).map_err(|e| e.to_string())?;
             bytes.push(b'\n');
             worker
@@ -162,17 +247,23 @@ impl PythonEngine {
             }
             let value: serde_json::Value =
                 serde_json::from_str(&line).map_err(|e| e.to_string())?;
-            if value["id"].as_u64() != Some(id) {
+            if value.get("id").and_then(serde_json::Value::as_u64) != Some(id) {
                 return Err("Chemistry response ID mismatch".into());
             }
-            if value["ok"] != true {
-                return Err(value["error"]
-                    .as_str()
+            if value.get("ok").and_then(serde_json::Value::as_bool) != Some(true) {
+                return Err(value
+                    .get("error")
+                    .and_then(serde_json::Value::as_str)
                     .unwrap_or("Chemistry error")
                     .to_string());
             }
-            let response: Response =
-                serde_json::from_value(value["result"].clone()).map_err(|e| e.to_string())?;
+            let response: Response = serde_json::from_value(
+                value
+                    .get("result")
+                    .ok_or("Missing chemistry result")?
+                    .clone(),
+            )
+            .map_err(|e| e.to_string())?;
             if let Some(doc) = &response.document {
                 doc.validate()?;
             }

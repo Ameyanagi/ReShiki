@@ -1,9 +1,13 @@
-use crate::document::{Atom, Document, Point};
-use crate::style::{DEFAULT as STYLE, text_width};
-use std::fmt::Write;
+use crate::document::{Atom, Bond, Document, Point};
+use crate::style::DEFAULT as STYLE;
 
 #[derive(Debug, Clone)]
 pub enum Primitive {
+    Path {
+        commands: Vec<crate::graphics::PathCommand>,
+        style: crate::graphics::GraphicStyle,
+        filled: bool,
+    },
     Line(Point, Point, f32),
     Polygon(Vec<Point>),
     Text {
@@ -11,28 +15,76 @@ pub enum Primitive {
         text: String,
         size: f32,
         color: [u8; 3],
+        style: crate::typography::TextStyle,
     },
 }
 fn visible(a: &Atom, doc: &Document) -> bool {
-    a.element != "C"
-        || a.charge != 0
-        || a.isotope != 0
-        || !doc.bonds.iter().any(|b| b.a == a.id || b.b == a.id)
+    crate::atom_labels::visible(a, doc)
 }
-fn text(position: Point, text: String, size: f32) -> Primitive {
-    Primitive::Text {
-        position,
-        text,
-        size,
-        color: [0, 0, 0],
-    }
+
+pub(crate) fn atom_label_bounds(a: &Atom, doc: &Document) -> Option<(Point, Point)> {
+    text_bounds(&atom_label(a, doc))
 }
 
 fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
+    if !doc.atom_visible(a.id) {
+        return vec![];
+    }
+    if let Some(group) = doc.abbreviation(a.id) {
+        let style = crate::typography::TextStyle {
+            formula: true,
+            ..a.text_style.clone().unwrap_or_default()
+        };
+        let content = group.text(doc);
+        let size = STYLE.world(style.size_pt);
+        let layout = crate::typography::layout(
+            content,
+            &crate::typography::TextFormat {
+                style: style.clone(),
+                ..Default::default()
+            },
+        );
+        let anchor_character = if group.faces_left(doc) {
+            content.chars().last()
+        } else {
+            content.chars().next()
+        };
+        let half = anchor_character
+            .map(|c| crate::style::styled_text_width(&c.to_string(), size, &style) * 0.5)
+            .unwrap_or(0.0);
+        let origin = a.position.offset(
+            if group.faces_left(doc) {
+                half - layout.width
+            } else {
+                -half
+            },
+            -size * 0.58,
+        );
+        return layout
+            .fragments
+            .into_iter()
+            .map(|run| Primitive::Text {
+                position: origin.offset(run.position.x, run.position.y),
+                text: run.text,
+                size: run.style.size(),
+                color: run.style.color,
+                style: run.style,
+            })
+            .collect();
+    }
     if !visible(a, doc) {
         return vec![];
     }
-    let size = STYLE.font_size();
+    let style = a.text_style.clone().unwrap_or_default();
+    let text_width = |text: &str, size| crate::style::styled_text_width(text, size, &style);
+    let text = |position, content, size| Primitive::Text {
+        position,
+        text: content,
+        size,
+        color: style.color,
+        style: style.clone(),
+    };
+    let size = STYLE.world(style.size_pt);
     let small = size * 0.7;
     let element_width = text_width(&a.element, size);
     let origin = a.position.offset(-element_width / 2.0, -size * 0.58);
@@ -43,7 +95,7 @@ fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
     } else {
         0.0
     };
-    if a.element != "H" && a.label_h > 0 {
+    if a.element != "H" && a.label_h > 0 && crate::atom_labels::hydrogens(a, doc) {
         let count = if a.label_h > 1 {
             a.label_h.to_string()
         } else {
@@ -64,26 +116,34 @@ fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
                 }
             })
             .collect();
-        let left = !neighbors.is_empty()
+        let auto_left = !neighbors.is_empty()
             && neighbors
                 .iter()
                 .map(|n| n.position.x - a.position.x)
                 .sum::<f32>()
                 > 0.1;
-        let x = if left {
+        use crate::atom_labels::HydrogenPosition as H;
+        let left = a.display.hydrogen_position == H::Left
+            || (a.display.hydrogen_position == H::Auto && auto_left);
+        let vertical = matches!(a.display.hydrogen_position, H::Above | H::Below);
+        let x = if vertical {
+            a.position.x - width / 2.
+        } else if left {
             origin.x - isotope_width - width
         } else {
             right
         };
-        runs.push(text(Point::new(x, origin.y), "H".into(), size));
+        let y = origin.y
+            + match a.display.hydrogen_position {
+                H::Above => -size * 1.1,
+                H::Below => size * 1.1,
+                _ => 0.,
+            };
+        runs.push(text(Point::new(x, y), "H".into(), size));
         if !count.is_empty() {
-            runs.push(text(
-                Point::new(x + h_width, origin.y + size * 0.40),
-                count,
-                small,
-            ));
+            runs.push(text(Point::new(x + h_width, y + size * 0.40), count, small));
         }
-        if !left {
+        if !left && !vertical {
             right += width;
         }
     }
@@ -95,15 +155,34 @@ fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
             small,
         ));
     }
-    if a.charge != 0 {
-        let amount = if a.charge.abs() > 1 {
-            a.charge.abs().to_string()
+    if a.charge != 0
+        && !a.marks.iter().any(|m| {
+            m.kind.charge()
+                && (m.kind != crate::scientific::MarkKind::RadicalIon || a.radical_electrons > 0)
+        })
+    {
+        let amount = if a.charge.unsigned_abs() > 1 {
+            a.charge.unsigned_abs().to_string()
         } else {
             String::new()
         };
+        let label = format!("{amount}{}", if a.charge > 0 { "+" } else { "−" });
+        let width = text_width(&label, small);
         runs.push(text(
             Point::new(right, origin.y - size * 0.25),
-            format!("{amount}{}", if a.charge > 0 { "+" } else { "−" }),
+            label,
+            small,
+        ));
+        right += width;
+    }
+    if a.radical_electrons > 0
+        && !a.marks.iter().any(|m| {
+            m.kind.radical() && (m.kind != crate::scientific::MarkKind::RadicalIon || a.charge != 0)
+        })
+    {
+        runs.push(text(
+            Point::new(right, origin.y - size * 0.25),
+            "•".repeat(a.radical_electrons as usize),
             small,
         ));
     }
@@ -117,8 +196,12 @@ fn text_bounds(runs: &[Primitive]) -> Option<(Point, Point)> {
                 position,
                 text,
                 size,
+                style,
                 ..
-            } => Some((*position, position.offset(text_width(text, *size), *size))),
+            } => Some((
+                *position,
+                position.offset(crate::style::styled_text_width(text, *size, style), *size),
+            )),
             _ => None,
         })
         .reduce(|(lo, hi), (a, b)| {
@@ -132,8 +215,29 @@ fn text_bounds(runs: &[Primitive]) -> Option<(Point, Point)> {
 /// Visible selected extents, including atom labels in the original graph.
 pub fn selection_bounds(doc: &Document, ids: &[u64]) -> Option<(Point, Point)> {
     let mut points = Vec::new();
-    for atom in doc.atoms.iter().filter(|a| ids.contains(&a.id)) {
+    for label in crate::atom_labels::indicators(doc)
+        .into_iter()
+        .filter(|l| l.owner.selected(ids))
+    {
+        points.extend([label.origin, label.origin.offset(label.width, label.height)]);
+    }
+    for g in doc.graphics.iter().filter(|g| ids.contains(&g.id)) {
+        let (lo, hi) = g.bounds();
+        points.extend([lo, hi]);
+    }
+    for atom in doc
+        .atoms
+        .iter()
+        .filter(|a| ids.contains(&a.id) && doc.atom_visible(a.id))
+    {
         points.push(atom.position);
+        for part in crate::scientific::mark_parts(atom) {
+            points.extend(
+                part.commands
+                    .iter()
+                    .flat_map(crate::graphics::PathCommand::points),
+            );
+        }
         if let Some((lo, hi)) = text_bounds(&atom_label(atom, doc)) {
             points.extend([lo, hi]);
         }
@@ -142,13 +246,8 @@ pub fn selection_bounds(doc: &Document, ids: &[u64]) -> Option<(Point, Point)> {
         points.extend([a.position, a.position.offset(a.size().0, a.size().1)]);
     }
     for a in doc.arrows.iter().filter(|a| ids.contains(&a.id)) {
-        points.extend([a.start, a.end]);
-        if a.kind == "curved" {
-            points.push(Point::new(
-                (a.start.x + a.end.x) / 2.0 - (a.end.y - a.start.y) / 2.0,
-                (a.start.y + a.end.y) / 2.0 + (a.end.x - a.start.x) / 2.0,
-            ));
-        }
+        let (lo, hi) = a.bounds();
+        points.extend([lo, hi]);
     }
     points.into_iter().fold(None, |bounds, p| {
         Some(match bounds {
@@ -180,8 +279,30 @@ fn label_end(atom: &Atom, ux: f32, uy: f32, bounds: Option<(Point, Point)>, max:
     } else {
         f32::INFINITY
     };
-    let distance = dx.min(dy).clamp(0.0, max);
+    let distance = dx.min(dy).clamp(0.0, max.max(0.0));
     atom.position.offset(ux * distance, uy * distance)
+}
+
+/// Resolve automatic positioning identically for drawing and repeated-click edits.
+pub fn effective_double_position(doc: &Document, bond: &Bond) -> crate::bonds::DoublePosition {
+    use crate::bonds::DoublePosition as P;
+    match bond.double_position {
+        P::Auto => match automatic_double_side(doc, bond) {
+            Some(side) if side < 0. => P::Left,
+            Some(_) => P::Right,
+            None => P::Center,
+        },
+        position => position,
+    }
+}
+fn automatic_double_side(doc: &Document, bond: &Bond) -> Option<f32> {
+    let center = ring_center(doc, bond.a, bond.b)?;
+    let a = doc.atom(bond.a)?.position;
+    let b = doc.atom(bond.b)?.position;
+    let dx = b.x - a.x;
+    let dy = b.y - a.y;
+    let cross = (center.x - (a.x + b.x) * 0.5) * (-dy) + (center.y - (a.y + b.y) * 0.5) * dx;
+    Some(if cross >= 0. { 1. } else { -1. })
 }
 
 /// Find the smallest ring containing this edge, using the alternate path.
@@ -209,7 +330,7 @@ fn ring_center(doc: &Document, from: u64, to: u64) -> Option<Point> {
                 let mut path = vec![to];
                 let mut current = to;
                 while current != from {
-                    current = previous[&current];
+                    current = *previous.get(&current)?;
                     path.push(current);
                 }
                 let points: Vec<_> = path
@@ -229,6 +350,29 @@ fn ring_center(doc: &Document, from: u64, to: u64) -> Option<Point> {
 
 pub fn primitives(doc: &Document) -> Vec<Primitive> {
     let mut out = vec![];
+    let mut graphics: Vec<_> = doc.graphics.iter().collect();
+    graphics.sort_by_key(|g| g.layer);
+    let graphic_primitive = |g: &&crate::graphics::Graphic| {
+        g.parts().into_iter().map(|p| Primitive::Path {
+            commands: p.commands,
+            style: p.style,
+            filled: p.filled,
+        })
+    };
+    out.extend(
+        graphics
+            .iter()
+            .filter(|g| g.layer < 0)
+            .flat_map(graphic_primitive),
+    );
+    let circles = crate::aromatic::circles(doc);
+    out.extend(circles.iter().flat_map(|c| {
+        c.graphic().parts().into_iter().map(|p| Primitive::Path {
+            commands: p.commands,
+            style: p.style,
+            filled: p.filled,
+        })
+    }));
     let labels: std::collections::HashMap<_, _> = doc
         .atoms
         .iter()
@@ -238,7 +382,13 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
         .iter()
         .map(|(id, runs)| (*id, text_bounds(runs)))
         .collect();
-    for b in &doc.bonds {
+    let crossing_gaps = crate::crossings::gaps(doc);
+    for (bond_index, b) in doc
+        .bonds
+        .iter()
+        .enumerate()
+        .filter(|(_, b)| doc.bond_visible(b.a, b.b))
+    {
         let (Some(a), Some(z)) = (doc.atom(b.a), doc.atom(b.b)) else {
             continue;
         };
@@ -248,10 +398,23 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
         }
         let ux = (z.position.x - a.position.x) / length;
         let uy = (z.position.y - a.position.y) / length;
-        let start = label_end(a, ux, uy, label_bounds[&a.id], length * 0.45);
-        let end = label_end(z, -ux, -uy, label_bounds[&z.id], length * 0.45);
+        let start = label_end(
+            a,
+            ux,
+            uy,
+            label_bounds.get(&a.id).copied().flatten(),
+            length * 0.45,
+        );
+        let end = label_end(
+            z,
+            -ux,
+            -uy,
+            label_bounds.get(&z.id).copied().flatten(),
+            length * 0.45,
+        );
         let nx = -uy;
         let ny = ux;
+        let bond_start = out.len();
         match b.display.as_str() {
             "wedge" => out.push(Primitive::Polygon(vec![
                 start,
@@ -264,7 +427,21 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
                     -ny * STYLE.world(STYLE.bold_width_pt) / 2.0,
                 ),
             ])),
-            "hash" => {
+            "hollow_wedge" => {
+                let width = STYLE.world(STYLE.bold_width_pt) / 2.0;
+                let points = [
+                    start,
+                    end.offset(nx * width, ny * width),
+                    end.offset(-nx * width, -ny * width),
+                    start,
+                ];
+                for pair in points.windows(2) {
+                    if let [a, b] = pair {
+                        out.push(Primitive::Line(*a, *b, STYLE.line_width()));
+                    }
+                }
+            }
+            "hash" | "hashed" => {
                 let spacing = STYLE.world(STYLE.hash_spacing_pt);
                 let count = (start.distance(end) / spacing).floor().max(1.0) as u32;
                 for i in 1..=count {
@@ -273,6 +450,7 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
                         start.x + (end.x - start.x) * t,
                         start.y + (end.y - start.y) * t,
                     );
+                    let t = if b.display == "hashed" { 1.0 } else { t };
                     out.push(Primitive::Line(
                         p.offset(
                             nx * t * STYLE.world(STYLE.bold_width_pt) / 2.0,
@@ -282,6 +460,16 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
                             -nx * t * STYLE.world(STYLE.bold_width_pt) / 2.0,
                             -ny * t * STYLE.world(STYLE.bold_width_pt) / 2.0,
                         ),
+                        STYLE.line_width(),
+                    ));
+                }
+            }
+            "wavy" if b.order == 2 => {
+                let half = STYLE.bond_length_world * STYLE.bond_spacing_ratio / 2.0;
+                for sign in [-1.0, 1.0] {
+                    out.push(Primitive::Line(
+                        start.offset(nx * half * sign, ny * half * sign),
+                        end.offset(-nx * half * sign, -ny * half * sign),
                         STYLE.line_width(),
                     ));
                 }
@@ -301,43 +489,71 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             }
             _ => {
                 let spacing = STYLE.bond_length_world * STYLE.bond_spacing_ratio;
-                let ring = if b.order == 2 || b.order == 4 {
-                    ring_center(doc, b.a, b.b)
+                let inward = if b.order == 4 {
+                    automatic_double_side(doc, b).unwrap_or(1.)
                 } else {
-                    None
+                    1.
                 };
-                let inward = ring
-                    .map(|center| {
-                        let middle = Point::new(
-                            (a.position.x + z.position.x) / 2.0,
-                            (a.position.y + z.position.y) / 2.0,
-                        );
-                        if (center.x - middle.x) * nx + (center.y - middle.y) * ny >= 0.0 {
-                            1.0
-                        } else {
-                            -1.0
-                        }
-                    })
-                    .unwrap_or(1.0);
-                let offsets: &[f32] = match b.order {
-                    2 if ring.is_some() => &[0.0, spacing * inward],
-                    2 => &[-spacing / 2.0, spacing / 2.0],
-                    3 => &[-spacing, 0.0, spacing],
+                use crate::bonds::DoublePosition;
+                let position = if matches!(b.order, 2 | 7) {
+                    effective_double_position(doc, b)
+                } else {
+                    DoublePosition::Center
+                };
+                let side = match position {
+                    DoublePosition::Left => Some(-1.),
+                    DoublePosition::Right => Some(1.),
+                    DoublePosition::Auto | DoublePosition::Center => None,
+                };
+                let offsets: &[f32] = match (b.order, side) {
+                    (2 | 7, Some(side)) => &[0.0, spacing * side],
+                    (2 | 7, None) => &[-spacing / 2.0, spacing / 2.0],
+                    (6, _) => &[-spacing * 1.5, -spacing * 0.5, spacing * 0.5, spacing * 1.5],
+                    (3, _) => &[-spacing, 0.0, spacing],
                     _ => &[0.0],
                 };
-                for offset in offsets {
-                    let trim = if ring.is_some() && *offset != 0.0 {
+                for (index, offset) in offsets.iter().enumerate() {
+                    let trim = if side.is_some() && [2, 7].contains(&b.order) && *offset != 0.0 {
                         spacing * 0.75
                     } else {
                         0.0
                     };
-                    out.push(Primitive::Line(
-                        start.offset(nx * offset + ux * trim, ny * offset + uy * trim),
-                        end.offset(nx * offset - ux * trim, ny * offset - uy * trim),
-                        STYLE.line_width(),
-                    ));
+                    let display = if index == 1 {
+                        b.secondary_display.as_deref().unwrap_or(&b.display)
+                    } else {
+                        &b.display
+                    };
+                    let first = start.offset(nx * offset + ux * trim, ny * offset + uy * trim);
+                    let last = end.offset(nx * offset - ux * trim, ny * offset - uy * trim);
+                    if matches!(display, "dashed" | "dotted") {
+                        out.push(Primitive::Path {
+                            commands: vec![
+                                crate::graphics::PathCommand::Move(first),
+                                crate::graphics::PathCommand::Line(last),
+                            ],
+                            style: crate::graphics::GraphicStyle {
+                                pattern: if display == "dotted" {
+                                    crate::graphics::LinePattern::Dotted
+                                } else {
+                                    crate::graphics::LinePattern::Dashed
+                                },
+                                ..Default::default()
+                            },
+                            filled: false,
+                        });
+                    } else {
+                        out.push(Primitive::Line(
+                            first,
+                            last,
+                            if display == "bold" {
+                                STYLE.world(STYLE.bold_width_pt)
+                            } else {
+                                STYLE.line_width()
+                            },
+                        ));
+                    }
                 }
-                if b.order == 4 {
+                if b.order == 4 && !circles.iter().any(|c| c.contains_bond(b.a, b.b)) {
                     for i in 0..5 {
                         let t = i as f32 / 5.0;
                         let v = (i as f32 + 0.5) / 5.0;
@@ -356,105 +572,111 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
                 }
             }
         }
-    }
-    for a in &doc.atoms {
-        out.extend(labels[&a.id].iter().cloned());
-    }
-    for a in &doc.arrows {
-        let angle = (a.end.y - a.start.y).atan2(a.end.x - a.start.x);
-        let nx = -angle.sin();
-        let ny = angle.cos();
-        match a.kind.as_str() {
-            "equilibrium" => {
-                let a1 = a.start.offset(nx * 3.0, ny * 3.0);
-                let b1 = a.end.offset(nx * 3.0, ny * 3.0);
-                let a2 = a.end.offset(-nx * 3.0, -ny * 3.0);
-                let b2 = a.start.offset(-nx * 3.0, -ny * 3.0);
-                out.push(Primitive::Line(a1, b1, STYLE.line_width()));
-                head(&mut out, b1, angle, true);
-                out.push(Primitive::Line(a2, b2, STYLE.line_width()));
-                head(&mut out, b2, angle + std::f32::consts::PI, true);
-            }
-            "resonance" => {
-                out.push(Primitive::Line(a.start, a.end, STYLE.line_width()));
-                head(&mut out, a.end, angle, false);
-                head(&mut out, a.start, angle + std::f32::consts::PI, false);
-            }
-            "retro" => {
-                for offset in [-2.0, 2.0] {
-                    out.push(Primitive::Line(
-                        a.start.offset(nx * offset, ny * offset),
-                        a.end.offset(
-                            -angle.cos() * 5.0 + nx * offset,
-                            -angle.sin() * 5.0 + ny * offset,
-                        ),
-                        STYLE.line_width(),
-                    ));
+        if b.order == 5 && b.display == "plain" {
+            head(&mut out, end, uy.atan2(ux), false);
+        }
+        if let Some(gaps) = crossing_gaps.get(bond_index).filter(|g| !g.is_empty()) {
+            let bond_primitives = out.drain(bond_start..).collect();
+            out.extend(crate::crossings::cut(bond_primitives, gaps));
+        }
+        if b.color != [0, 0, 0] {
+            for primitive in out.iter_mut().skip(bond_start) {
+                use crate::graphics::{GraphicStyle, PathCommand};
+                match primitive {
+                    Primitive::Path { style, .. } => {
+                        style.stroke = b.color;
+                        if style.fill.is_some() {
+                            style.fill = Some(b.color);
+                        }
+                    }
+                    Primitive::Line(a, z, width) => {
+                        *primitive = Primitive::Path {
+                            commands: vec![PathCommand::Move(*a), PathCommand::Line(*z)],
+                            style: GraphicStyle {
+                                stroke: b.color,
+                                width_pt: *width * STYLE.points_per_world(),
+                                ..Default::default()
+                            },
+                            filled: false,
+                        };
+                    }
+                    Primitive::Polygon(points) => {
+                        let Some(first) = points.first() else {
+                            continue;
+                        };
+                        let mut commands = vec![PathCommand::Move(*first)];
+                        commands.extend(points.iter().skip(1).map(|p| PathCommand::Line(*p)));
+                        commands.push(PathCommand::Close);
+                        *primitive = Primitive::Path {
+                            commands,
+                            style: GraphicStyle {
+                                stroke: b.color,
+                                fill: Some(b.color),
+                                width_pt: 0.0,
+                                ..Default::default()
+                            },
+                            filled: true,
+                        };
+                    }
+                    _ => {}
                 }
-                for sign in [-1.0, 1.0] {
-                    out.push(Primitive::Line(
-                        a.end,
-                        a.end.offset(
-                            -angle.cos() * 10.0 + nx * sign * 7.0,
-                            -angle.sin() * 10.0 + ny * sign * 7.0,
-                        ),
-                        STYLE.line_width(),
-                    ));
-                }
-            }
-            "curved" => {
-                let control = Point::new((a.start.x + a.end.x) / 2.0, (a.start.y + a.end.y) / 2.0)
-                    .offset(
-                        nx * a.start.distance(a.end) * 0.5,
-                        ny * a.start.distance(a.end) * 0.5,
-                    );
-                let mut prev = a.start;
-                for i in 1..=32 {
-                    let t = i as f32 / 32.0;
-                    let u = 1.0 - t;
-                    let p = Point::new(
-                        u * u * a.start.x + 2.0 * u * t * control.x + t * t * a.end.x,
-                        u * u * a.start.y + 2.0 * u * t * control.y + t * t * a.end.y,
-                    );
-                    out.push(Primitive::Line(prev, p, STYLE.line_width()));
-                    prev = p;
-                }
-                head(
-                    &mut out,
-                    a.end,
-                    (a.end.y - control.y).atan2(a.end.x - control.x),
-                    false,
-                );
-            }
-            _ => {
-                out.push(Primitive::Line(a.start, a.end, STYLE.line_width()));
-                head(&mut out, a.end, angle, false);
             }
         }
     }
+    for a in doc.atoms.iter().filter(|a| doc.atom_visible(a.id)) {
+        out.extend(labels.get(&a.id).into_iter().flatten().cloned());
+        out.extend(
+            crate::scientific::mark_parts(a)
+                .into_iter()
+                .map(|p| Primitive::Path {
+                    commands: p.commands,
+                    style: p.style,
+                    filled: p.filled,
+                }),
+        );
+    }
+    out.extend(
+        crate::atom_labels::indicators(doc)
+            .iter()
+            .map(|l| l.primitive()),
+    );
+    for a in &doc.arrows {
+        out.extend(a.paths().into_iter().map(|p| Primitive::Path {
+            commands: p.commands,
+            style: p.style,
+            filled: p.filled,
+        }));
+    }
     for a in &doc.annotations {
-        for (i, line) in a.text.lines().enumerate() {
+        for fragment in crate::typography::layout(&a.text, &a.format).fragments {
             out.push(Primitive::Text {
-                position: a.position.offset(0.0, i as f32 * STYLE.line_height()),
-                text: line.into(),
-                size: STYLE.font_size(),
-                color: [0, 0, 0],
+                position: a.position.offset(fragment.position.x, fragment.position.y),
+                text: fragment.text,
+                size: fragment.style.size(),
+                color: fragment.style.color,
+                style: fragment.style,
             });
         }
     }
+    out.extend(
+        graphics
+            .iter()
+            .filter(|g| g.layer >= 0)
+            .flat_map(graphic_primitive),
+    );
     out
 }
 fn head(out: &mut Vec<Primitive>, end: Point, angle: f32, half: bool) {
     let a = end.offset(
-        -angle.cos() * 10.0 - angle.sin() * 3.5,
-        -angle.sin() * 10.0 + angle.cos() * 3.5,
+        -angle.cos() * 10. - angle.sin() * 3.5,
+        -angle.sin() * 10. + angle.cos() * 3.5,
     );
     if half {
         out.push(Primitive::Line(end, a, STYLE.line_width()));
     } else {
         let b = end.offset(
-            -angle.cos() * 10.0 + angle.sin() * 3.5,
-            -angle.sin() * 10.0 - angle.cos() * 3.5,
+            -angle.cos() * 10. + angle.sin() * 3.5,
+            -angle.sin() * 10. - angle.cos() * 3.5,
         );
         out.push(Primitive::Polygon(vec![end, a, b]));
     }
@@ -469,15 +691,33 @@ fn bounds(drawing: &[Primitive]) -> (Point, Point) {
     let mut points = vec![];
     for p in drawing {
         match p {
+            Primitive::Path {
+                commands, style, ..
+            } => {
+                let pad = style.width() * 0.5;
+                for p in commands
+                    .iter()
+                    .flat_map(crate::graphics::PathCommand::points)
+                {
+                    points.extend([p.offset(-pad, -pad), p.offset(pad, pad)]);
+                }
+            }
             Primitive::Line(a, b, _) => points.extend([*a, *b]),
             Primitive::Polygon(p) => points.extend(p),
             Primitive::Text {
                 position,
                 text,
                 size,
+                style,
                 ..
             } => {
-                points.extend([*position, position.offset(text_width(text, *size), *size)]);
+                points.extend([
+                    *position,
+                    position.offset(
+                        crate::style::styled_text_width(text, *size, style),
+                        *size * 1.1,
+                    ),
+                ]);
             }
         }
     }
@@ -507,28 +747,66 @@ pub fn svg(doc: &Document) -> String {
     );
     for p in drawing {
         match p {
+            Primitive::Path {
+                commands,
+                style,
+                filled,
+            } => {
+                use crate::graphics::PathCommand;
+                let mut path = String::new();
+                for c in commands {
+                    match c {
+                        PathCommand::Move(p) => path.push_str(&format!("M{} {} ", p.x, p.y)),
+                        PathCommand::Line(p) => path.push_str(&format!("L{} {} ", p.x, p.y)),
+                        PathCommand::Cubic(a, b, c) => path.push_str(&format!(
+                            "C{} {} {} {} {} {} ",
+                            a.x, a.y, b.x, b.y, c.x, c.y
+                        )),
+                        PathCommand::Close => path.push_str("Z "),
+                    }
+                }
+                let fill = if filled {
+                    style
+                        .fill
+                        .map(|c| format!("rgb({},{},{})", c[0], c[1], c[2]))
+                        .unwrap_or_else(|| "none".into())
+                } else {
+                    "none".into()
+                };
+                let dashes = style
+                    .dashes()
+                    .iter()
+                    .map(f32::to_string)
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let dash = if dashes.is_empty() {
+                    String::new()
+                } else {
+                    format!(" stroke-dasharray=\"{dashes}\"")
+                };
+                s.push_str(&format!("<path d=\"{path}\" fill=\"{fill}\" stroke=\"rgb({},{},{})\" stroke-width=\"{}\" stroke-linecap=\"round\" stroke-linejoin=\"round\"{dash}/>",style.stroke[0],style.stroke[1],style.stroke[2],style.width()));
+            }
             Primitive::Line(a, b, w) => {
-                writeln!(s,"<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"#000000\" stroke-width=\"{w}\" stroke-linecap=\"round\"/>",a.x,a.y,b.x,b.y).unwrap();
+                s.push_str(&format!("<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"#000000\" stroke-width=\"{w}\" stroke-linecap=\"round\"/>",a.x,a.y,b.x,b.y));
             }
             Primitive::Polygon(points) => {
-                writeln!(
-                    s,
+                s.push_str(&format!(
                     "<polygon points=\"{}\" fill=\"#000000\"/>",
                     points
                         .iter()
                         .map(|p| format!("{},{}", p.x, p.y))
                         .collect::<Vec<_>>()
                         .join(" ")
-                )
-                .unwrap();
+                ));
             }
             Primitive::Text {
                 position,
                 text,
                 size,
                 color,
+                style,
             } => {
-                writeln!(s,"<text x=\"{}\" y=\"{}\" font-family=\"{}, Helvetica, sans-serif\" font-size=\"{size}\" fill=\"rgb({},{},{})\" dominant-baseline=\"text-before-edge\">{}</text>",position.x,position.y,escape(&STYLE.font_family),color[0],color[1],color[2],escape(&text)).unwrap();
+                s.push_str(&format!("<text xml:space=\"preserve\" x=\"{}\" y=\"{}\" font-family=\"{}\" font-size=\"{size}\" font-weight=\"{}\" font-style=\"{}\" text-decoration=\"{}\" fill=\"rgb({},{},{})\" dominant-baseline=\"text-before-edge\">{}</text>",position.x,position.y,escape(&style.family),if style.bold {"bold"} else {"normal"},if style.italic {"italic"} else {"normal"},if style.underline {"underline"} else {"none"},color[0],color[1],color[2],escape(&text)));
             }
         }
     }
@@ -546,6 +824,7 @@ mod tests {
             id: 1,
             position: Point::default(),
             text: "A < B & C".into(),
+            format: Default::default(),
         });
         let xml = svg(&d);
         assert!(xml.contains("A &lt; B &amp; C"));

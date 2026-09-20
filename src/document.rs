@@ -1,3 +1,4 @@
+use crate::typography::{TextFormat, TextStyle};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
@@ -27,11 +28,22 @@ pub struct AtomStereo {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Atom {
+    #[serde(
+        default,
+        skip_serializing_if = "crate::atom_labels::AtomDisplay::is_default"
+    )]
+    pub display: crate::atom_labels::AtomDisplay,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cip_label: Option<String>,
     pub id: u64,
     pub element: String,
     pub position: Point,
     #[serde(default)]
     pub charge: i32,
+    #[serde(default)]
+    pub radical_electrons: u8,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub marks: Vec<crate::scientific::AtomMark>,
     #[serde(default)]
     pub isotope: u32,
     #[serde(default)]
@@ -46,12 +58,24 @@ pub struct Atom {
     pub map_num: u32,
     #[serde(default)]
     pub label_h: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text_style: Option<TextStyle>,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Bond {
+    #[serde(default)]
+    pub z_order: i16,
+    #[serde(
+        default,
+        skip_serializing_if = "crate::atom_labels::StereoDisplay::is_default"
+    )]
+    pub indicator: crate::atom_labels::StereoDisplay,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cip_label: Option<String>,
     pub a: u64,
     pub b: u64,
-    /// 1, 2, 3 = bond order; 4 = aromatic.
+    /// 0 = hydrogen interaction; 1–3 = order; 4 = aromatic; 5 = dative;
+    /// 6 = quadruple; 7 = nonaromatic partial order 1.5.
     pub order: u8,
     #[serde(default = "plain")]
     pub display: String,
@@ -59,6 +83,12 @@ pub struct Bond {
     pub stereo: Option<String>,
     #[serde(default)]
     pub stereo_atoms: Vec<u64>,
+    #[serde(default)]
+    pub double_position: crate::bonds::DoublePosition,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub secondary_display: Option<String>,
+    #[serde(default)]
+    pub color: [u8; 3],
 }
 fn plain() -> String {
     "plain".into()
@@ -68,16 +98,13 @@ pub struct Annotation {
     pub id: u64,
     pub position: Point,
     pub text: String,
+    #[serde(default)]
+    pub format: TextFormat,
 }
 impl Annotation {
     pub fn size(&self) -> (f32, f32) {
-        (
-            self.text
-                .lines()
-                .map(|l| crate::style::text_width(l, crate::style::DEFAULT.font_size()))
-                .fold(0.0, f32::max),
-            self.text.lines().count().max(1) as f32 * crate::style::DEFAULT.line_height(),
-        )
+        let layout = crate::typography::layout(&self.text, &self.format);
+        (layout.width, layout.height)
     }
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -87,6 +114,10 @@ pub struct Arrow {
     pub end: Point,
     #[serde(default = "forward")]
     pub kind: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub control: Option<Point>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub style: Option<crate::arrows::ArrowStyle>,
 }
 fn forward() -> String {
     "forward".into()
@@ -94,6 +125,10 @@ fn forward() -> String {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Document {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub abbreviations: Vec<crate::abbreviations::Abbreviation>,
+    #[serde(default)]
+    pub atom_labels: crate::atom_labels::Settings,
     pub version: u32,
     pub atoms: Vec<Atom>,
     pub bonds: Vec<Bond>,
@@ -101,15 +136,23 @@ pub struct Document {
     pub annotations: Vec<Annotation>,
     #[serde(default)]
     pub arrows: Vec<Arrow>,
+    #[serde(default)]
+    pub graphics: Vec<crate::graphics::Graphic>,
+    #[serde(default)]
+    pub groups: Vec<crate::grouping::Group>,
 }
 impl Default for Document {
     fn default() -> Self {
         Self {
-            version: 2,
+            version: 11,
+            abbreviations: vec![],
+            atom_labels: Default::default(),
             atoms: vec![],
             bonds: vec![],
             annotations: vec![],
             arrows: vec![],
+            graphics: vec![],
+            groups: vec![],
         }
     }
 }
@@ -120,17 +163,23 @@ impl Document {
             .map(|a| a.id)
             .chain(self.annotations.iter().map(|a| a.id))
             .chain(self.arrows.iter().map(|a| a.id))
+            .chain(self.graphics.iter().map(|a| a.id))
+            .chain(self.groups.iter().map(|a| a.id))
             .max()
             .unwrap_or(0)
-            + 1
+            .saturating_add(1)
     }
     pub fn add_atom(&mut self, element: &str, position: Point) -> u64 {
         let id = self.next_id();
         self.atoms.push(Atom {
+            display: Default::default(),
+            cip_label: None,
             id,
             element: element.into(),
             position,
             charge: 0,
+            radical_electrons: 0,
+            marks: vec![],
             isotope: 0,
             explicit_h: 0,
             no_implicit: false,
@@ -138,6 +187,7 @@ impl Document {
             stereo: None,
             map_num: 0,
             label_h: 0,
+            text_style: None,
         });
         id
     }
@@ -150,13 +200,14 @@ impl Document {
     pub fn nearest(&self, point: Point, radius: f32) -> Option<u64> {
         self.atoms
             .iter()
-            .filter(|a| a.position.distance(point) < radius)
+            .filter(|a| self.atom_visible(a.id) && a.position.distance(point) < radius)
             .min_by(|a, b| {
                 a.position
                     .distance(point)
                     .total_cmp(&b.position.distance(point))
             })
             .map(|a| a.id)
+            .or_else(|| crate::abbreviations::label_hit(self, point, radius))
     }
     pub fn add_bond(&mut self, a: u64, b: u64, order: u8, display: &str) {
         if a == b || self.atom(a).is_none() || self.atom(b).is_none() {
@@ -169,21 +220,33 @@ impl Document {
             .find(|x| (x.a == a && x.b == b) || (x.a == b && x.b == a))
         {
             *bond = Bond {
+                z_order: bond.z_order,
+                indicator: bond.indicator.clone(),
+                cip_label: None,
                 a,
                 b,
                 order,
                 display: display.into(),
                 stereo: None,
                 stereo_atoms: vec![],
+                double_position: bond.double_position,
+                secondary_display: None,
+                color: bond.color,
             };
         } else {
             self.bonds.push(Bond {
+                z_order: 0,
+                indicator: Default::default(),
+                cip_label: None,
                 a,
                 b,
                 order,
                 display: display.into(),
                 stereo: None,
                 stereo_atoms: vec![],
+                double_position: Default::default(),
+                secondary_display: None,
+                color: [0, 0, 0],
             });
         }
     }
@@ -191,6 +254,7 @@ impl Document {
         if !self.atoms.iter().any(|a| affected.contains(&a.id)) {
             return;
         }
+        crate::atom_labels::clear_computed(self);
         for atom in &mut self.atoms {
             atom.label_h = 0;
             if affected.contains(&atom.id)
@@ -213,14 +277,26 @@ impl Document {
         }
     }
     pub fn delete(&mut self, ids: &[u64]) {
+        let ids = self.expand_abbreviation_selection(ids);
+        let ids = ids.as_slice();
+        self.expand_abbreviations(ids);
         self.invalidate_chemistry(ids);
         self.atoms.retain(|a| !ids.contains(&a.id));
         self.bonds
             .retain(|b| !ids.contains(&b.a) && !ids.contains(&b.b));
         self.annotations.retain(|a| !ids.contains(&a.id));
         self.arrows.retain(|a| !ids.contains(&a.id));
+        self.graphics.retain(|a| !ids.contains(&a.id));
+        self.prune_groups();
     }
     pub fn translate(&mut self, ids: &[u64], dx: f32, dy: f32) {
+        let ids = self.expand_abbreviation_selection(ids);
+        let ids = ids.as_slice();
+        for graphic in &mut self.graphics {
+            if ids.contains(&graphic.id) {
+                graphic.origin = graphic.origin.offset(dx, dy);
+            }
+        }
         for a in &mut self.atoms {
             if ids.contains(&a.id) {
                 a.position = a.position.offset(dx, dy);
@@ -233,8 +309,7 @@ impl Document {
         }
         for a in &mut self.arrows {
             if ids.contains(&a.id) {
-                a.start = a.start.offset(dx, dy);
-                a.end = a.end.offset(dx, dy);
+                a.map_points(|p| p.offset(dx, dy));
             }
         }
     }
@@ -244,12 +319,15 @@ impl Document {
             .map(|a| a.id)
             .chain(self.annotations.iter().map(|a| a.id))
             .chain(self.arrows.iter().map(|a| a.id))
+            .chain(self.graphics.iter().map(|a| a.id))
             .collect()
     }
     pub fn validate(&self) -> Result<(), String> {
-        if ![1, 2].contains(&self.version) {
+        if ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].contains(&self.version) {
             return Err(format!("Unsupported document version {}", self.version));
         }
+        self.validate_groups()?;
+        self.validate_abbreviations()?;
         let mut ids = HashSet::new();
         for id in self.all_ids() {
             if id == 0 || id == u64::MAX || !ids.insert(id) {
@@ -257,6 +335,28 @@ impl Document {
             }
         }
         for a in &self.atoms {
+            a.display.validate()?;
+            if a.cip_label
+                .as_ref()
+                .is_some_and(|s| !["R", "S", "r", "s"].contains(&s.as_str()))
+            {
+                return Err("Unsupported atom CIP label".into());
+            }
+            if a.radical_electrons > 2
+                || a.marks.len() > 12
+                || a.marks.iter().any(|m| {
+                    !m.offset.x.is_finite()
+                        || !m.offset.y.is_finite()
+                        || !m.angle.is_finite()
+                        || m.size_pt
+                            .is_some_and(|n| !n.is_finite() || !(0.5..=96.).contains(&n))
+                })
+            {
+                return Err("Invalid atom radical count or mark position".into());
+            }
+            if let Some(style) = &a.text_style {
+                style.validate()?;
+            }
             if !a.position.x.is_finite() || !a.position.y.is_finite() {
                 return Err("Non-finite atom position".into());
             }
@@ -287,19 +387,20 @@ impl Document {
         }
         let mut pairs = HashSet::new();
         for b in &self.bonds {
-            if b.a == b.b
-                || self.atom(b.a).is_none()
-                || self.atom(b.b).is_none()
-                || !(1..=4).contains(&b.order)
+            b.indicator.validate()?;
+            if b.cip_label
+                .as_ref()
+                .is_some_and(|s| !["E", "Z"].contains(&s.as_str()))
             {
+                return Err("Unsupported bond CIP label".into());
+            }
+            if b.a == b.b || self.atom(b.a).is_none() || self.atom(b.b).is_none() || b.order > 7 {
                 return Err("Invalid bond endpoints or order".into());
             }
             if !pairs.insert((b.a.min(b.b), b.a.max(b.b))) {
                 return Err("Duplicate bond".into());
             }
-            if !["plain", "wedge", "hash", "wavy"].contains(&b.display.as_str()) {
-                return Err("Unsupported bond display".into());
-            }
+            b.validate_appearance()?;
             if b.stereo.is_some()
                 && (b.stereo_atoms.len() != 2
                     || b.stereo_atoms.iter().any(|id| self.atom(*id).is_none()))
@@ -317,45 +418,22 @@ impl Document {
                 return Err("Non-finite drawing position".into());
             }
         }
-        if self.arrows.iter().any(|a| {
-            !["forward", "equilibrium", "resonance", "retro", "curved"].contains(&a.kind.as_str())
-        }) {
-            return Err("Unsupported arrow style".into());
+        for a in &self.annotations {
+            a.format.validate(&a.text)?;
+        }
+        for graphic in &self.graphics {
+            graphic.validate()?;
+        }
+        for arrow in &self.arrows {
+            arrow.validate()?;
         }
         Ok(())
     }
     pub fn bounds(&self) -> (Point, Point) {
-        let points: Vec<_> = self
-            .atoms
-            .iter()
-            .map(|a| a.position)
-            .chain(
-                self.annotations
-                    .iter()
-                    .flat_map(|a| [a.position, a.position.offset(a.size().0, a.size().1)]),
-            )
-            .chain(self.arrows.iter().flat_map(|a| {
-                let mid = Point::new((a.start.x + a.end.x) / 2.0, (a.start.y + a.end.y) / 2.0);
-                let control = if a.kind == "curved" {
-                    mid.offset(-(a.end.y - a.start.y) * 0.5, (a.end.x - a.start.x) * 0.5)
-                } else {
-                    mid
-                };
-                [a.start, a.end, control]
-            }))
-            .collect();
-        if points.is_empty() {
-            return (Point::new(-100.0, -75.0), Point::new(100.0, 75.0));
+        match crate::scene::selection_bounds(self, &self.all_ids()) {
+            Some((lo, hi)) => (lo.offset(-30., -30.), hi.offset(80., 30.)),
+            None => (Point::new(-100., -75.), Point::new(100., 75.)),
         }
-        let mut lo = points[0];
-        let mut hi = lo;
-        for p in points {
-            lo.x = lo.x.min(p.x);
-            lo.y = lo.y.min(p.y);
-            hi.x = hi.x.max(p.x);
-            hi.y = hi.y.max(p.y);
-        }
-        (lo.offset(-30.0, -30.0), hi.offset(80.0, 30.0))
     }
 }
 
@@ -425,12 +503,18 @@ mod tests {
         let mut doc = Document::default();
         let a = doc.add_atom("C", Point::default());
         doc.bonds.push(Bond {
+            z_order: 0,
+            indicator: Default::default(),
+            cip_label: None,
             a,
             b: 50,
             order: 1,
             display: plain(),
             stereo: None,
             stereo_atoms: vec![],
+            double_position: Default::default(),
+            secondary_display: None,
+            color: [0, 0, 0],
         });
         assert!(doc.validate().is_err());
         doc.bonds.clear();
