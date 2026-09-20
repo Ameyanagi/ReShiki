@@ -6,7 +6,7 @@ use crate::{
     style::DEFAULT as STYLE,
 };
 use serde::{Deserialize, Serialize};
-use std::{io::Write, path::PathBuf, process::Stdio, sync::Arc};
+use std::{collections::HashSet, io::Write, path::PathBuf, process::Stdio, sync::Arc};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     process::Command,
@@ -41,11 +41,29 @@ pub fn available() -> bool {
 pub fn snapshot(doc: &Document, ids: &[u64], scope: Scope) -> Result<Document, String> {
     doc.validate()?;
     let selection = scope == Scope::Selection;
-    if selection && (ids.is_empty() || ids.iter().any(|id| !doc.all_ids().contains(id))) {
-        return Err("Select drawing objects to print.".into());
+    if selection {
+        let available: HashSet<_> = doc.all_ids().into_iter().collect();
+        if ids.is_empty() || ids.iter().any(|id| !available.contains(id)) {
+            return Err("Select drawing objects to print.".into());
+        }
     }
     let mut result = if selection {
-        crate::editing::selection(doc, ids)
+        let mut part = crate::editing::selection(doc, ids);
+        // Removing unselected molecules invalidates computed labels for editing.
+        // A print snapshot must retain the visible hydrogens and stereo labels.
+        crate::atom_labels::refresh_computed(&mut part, doc);
+        for indicator in crate::atom_labels::indicators(doc) {
+            if let Some(anchor) = indicator.owner.anchor(&part) {
+                indicator.owner.set_offset(
+                    &mut part,
+                    Some(Point::new(
+                        indicator.center.x - anchor.x,
+                        indicator.center.y - anchor.y,
+                    )),
+                );
+            }
+        }
+        part
     } else {
         doc.clone()
     };

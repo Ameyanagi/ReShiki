@@ -17,6 +17,7 @@ Alignment moves connected selected atoms together; it does not collapse a molecu
 
 - A recovery snapshot is saved every five seconds while there are changes. Startup offers drafts from interrupted sessions. Restore creates an unsaved copy and never overwrites the original source file. The most recent five seconds of work may not yet be in the draft.
 - Save As and atomic replacement for native and export files. Native format version 2 retains arrow styles; version 1 documents still open and are upgraded when saved.
+- Native macOS printing with 100% scale by default, page-range controls, Save to PDF and selection-only printing. Printing stays independent of canvas editing and preserves page placement and visible chemical labels.
 - Vector PDF and 1200 dpi PNG export from the same scene used for SVG. Drawing exports are cropped to the content; publication pages add standard/custom paper, margins, a page grid and multipage vector PDF.
 - Basic CDXML text and forward arrows now import with their molecular drawing. Unsupported arrow styles and other drawing classes are rejected explicitly.
 - A standalone Apple Silicon macOS bundle includes the Python runtime and RDKit. It remains a local development build signed ad hoc, without a notarized installer or Finder document association.
@@ -27,4 +28,4 @@ Automated tests cover stereo-preserving copy/flip/rotation, all ring sizes, fuse
 
 Desktop tests exercised fused naphthalene drawing and validation, clipboard paste, molecule movement, rotation/reflection/alignment, multiline annotation and equilibrium-arrow creation, and native saving. Additional rendering and recovery checks are recorded in the capability report.
 
-Systematic naming, NMR prediction, semantic reaction mapping, polymers/query structures, full rich-text caret layout, advanced page composition, native printing and full accessibility remain substantial work. See `roadmap.md`; ruviz's likely role is documented in `ruviz-integration.md`.
+Systematic naming, NMR prediction, semantic reaction mapping, polymers/query structures, full rich-text caret layout, advanced page composition, printing on other platforms and full accessibility remain substantial work. See `roadmap.md`; ruviz's likely role is documented in `ruviz-integration.md`.

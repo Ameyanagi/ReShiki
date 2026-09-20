@@ -27,7 +27,7 @@ print_bundle = bundle / 'Contents/Helpers/Moruno Print.app'
 print_executable = print_bundle / 'Contents/MacOS/moruno-print'
 print_executable.parent.mkdir(parents=True, exist_ok=True)
 print_temporary = print_executable.with_suffix('.new')
-subprocess.run(['swiftc', '-O', str(root / 'native/macos/Print.swift'), '-o', str(print_temporary)], check=True)
+subprocess.run(['swiftc', '-O', str(root / 'native/macos/PrintSupport.swift'), str(root / 'native/macos/Print.swift'), '-o', str(print_temporary)], check=True)
 print_temporary.replace(print_executable)
 with (print_bundle / 'Contents/Info.plist').open('wb') as stream:
     plistlib.dump({'CFBundleName': 'Moruno Print', 'CFBundleDisplayName': 'Moruno Print',

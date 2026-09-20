@@ -106,7 +106,7 @@ Tests cover molecular identity, tetrahedral and E/Z stereo, stable atom IDs, cle
 
 ## Publication pages
 
-Open **View → Page setup…** for paper sizes, margins and a page grid. Navigate or fit individual pages, center selected content without changing its physical scale, and export a multipage vector PDF. Page settings are saved with the drawing and are undoable. [Page workflow and limits](docs/publication-pages.md).
+Open **View → Page setup…** for paper sizes, margins and a page grid. Navigate or fit individual pages, center selected content without changing its physical scale, and export a multipage vector PDF. Page settings are saved with the drawing and are undoable. On macOS, **⌘P** opens the native print dialog at 100% scale; **Export → Print selection…** prints selected content on one sheet. The canvas stays editable while the print dialog is open. [Page workflow and limits](docs/publication-pages.md).
 
 ## Design
 

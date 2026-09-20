@@ -4,10 +4,10 @@ Updated 2026-09-20 for Moruno 0.2.0. This inventory records supported workflows,
 explicit limitations and planned work. A supported subset is not a claim of
 complete coverage for every chemical structure or document.
 
-The largest remaining everyday gaps include imported images, native printing,
-document styles and broader clipboard interchange. Canvas text editing supports drafts
-and a caret; full rich-text caret layout remains partial. Advanced reaction, query, polymer and spectroscopy workflows also
-remain incomplete.
+The largest remaining everyday gaps include imported images, document styles
+and broader clipboard interchange. Canvas text editing supports drafts and a
+caret; full rich-text caret layout remains partial. Advanced reaction, query,
+polymer and spectroscopy workflows also remain incomplete.
 
 Evidence comes from Moruno source, regression tests, saved interchange fixtures
 and desktop editing checks. Detailed feature documents record the tests and
@@ -18,7 +18,7 @@ applicable boundaries.
 | Feature | Moruno status | Behavior and remaining work |
 | --- | --- | --- |
 | Main toolbar with persistent drawing tools | Partial | Compact palette exists; some drawing-tool families remain unimplemented. |
-| General toolbar | Partial | New/open/save/undo/redo/check/cleanup exist. Print, recent documents and broader native commands are missing. |
+| General toolbar | Partial | New/open/save/undo/redo/check/cleanup exist. macOS Print is available; recent documents and broader native commands are missing. |
 | Style toolbar | Supported | Persistent formatting row; applied through stored style data and shared rendering. Desktop tested. |
 | Font family selector | Supported | Searchable installed fonts; label and atom-label overrides. |
 | Font size selector | Supported | 4–144 pt, selected labels/ranges/atom labels. |
@@ -106,7 +106,7 @@ Template placement offers explicit new-bond connection, shared-atom and fused-bo
 | Rulers / crosshair | Supported | View controls independently toggle rulers, pointer crosshair and grid. Rulers and coordinate readout use mm, cm, inches or points at the physical drawing/export scale, following zoom and pan. Canvas aids do not change or export with the document. |
 | Actual-size view | Missing | Zoom is a viewport magnification, not calibrated screen-to-paper size. |
 | Page size / margins / multipage layout | Supported subset | Standard/custom paper, four margins, a uniform page grid, canvas guides, navigation and multipage vector PDF; no automatic pagination or per-sheet sizes. [Publication pages](publication-pages.md). |
-| Print / page setup | Partial | Page setup and physical multipage PDF exist. Native printer selection and print dialogs remain missing. |
+| Print / page setup | Supported macOS subset | Native asynchronous print dialog, page ranges, scale, Save to PDF and selection printing; preserves publication dimensions and placement. Physical printer output and other platforms remain unverified. [Workflow and checks](publication-pages.md). |
 | Editable document/object styles | Partial | Stored text and graphic overrides; no editable document-wide bond/label preset. |
 | Journal stationery / reusable settings | Missing | No selectable journal formats or custom stationery. |
 | Document annotations / attached data | Missing | No structured document metadata or object-data attachments. |
@@ -162,7 +162,7 @@ Template placement offers explicit new-bond connection, shared-atom and fused-bo
 
 1. Broader clipboard compatibility, canvas image import, Office verification and cross-platform exchange.
 2. Broader chemical nicknames and full rich-text caret layout.
-3. Native printing, document styles, stationery, calibrated actual-size view and advanced page composition.
+3. Document styles, stationery, calibrated actual-size view, advanced page composition and printing on other platforms.
 4. Reaction roles, atom mapping, query/polymer data, naming and spectra.
 5. Native menus, accessibility, document tabs and release distribution.
 

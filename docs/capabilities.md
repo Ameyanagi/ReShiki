@@ -57,7 +57,7 @@ The 2026-09-17 [selection and ring-placement update](selection-and-ring-placemen
 | MOL | Implemented molecular subset | Parse/export; stereo identity tests; no reactions or drawing annotations |
 | CDXML | Partial; exchange desktop tested | Molecular import, basic molecule/text/arrow export; see restrictions below |
 | Native save/open | Implemented; desktop tested | Versioned `.moruno` JSON, complete graph and drawing objects |
-| SVG / PDF / PNG | Implemented; desktop and rendering tested | Vector SVG/PDF, PNG with 1200 dpi metadata; no TIFF or print dialog |
+| SVG / PDF / PNG | Implemented; desktop and rendering tested | Vector SVG/PDF, PNG with 1200 dpi metadata; no TIFF; native macOS print dialog available |
 | Default drawing style | JACS / ACS | Black, 10 pt Arial, 14.4 pt bonds, 0.6 pt lines; shared canvas and physical export settings |
 | Templates and named abbreviations | Partial; desktop tested | 81 built-ins plus custom mixed-object collections, exact source anchors, new-bond/shared-atom/fused-edge modes, previews, search/favorites and collection exchange. Common abbreviations can contract, expand and replace endpoints; specialized content remains partial. See [template library](template-library.md). |
 | Reaction cleanup/mapping | Planned | Arrows are drawing objects; no reactant/product grouping or automatic mapping |
@@ -66,7 +66,7 @@ The 2026-09-17 [selection and ring-placement update](selection-and-ring-placemen
 | Systematic chemical naming | Planned | No name-to-structure or structure-to-name engine |
 | Spectra / NMR | Planned | No prediction, assignment or spectrum objects |
 | Rich typography, curves, brackets | Partial; desktop tested | Rich labels, nine graphic types, editable Bézier points, graphical brackets, colors/fills/strokes; nested groups and fitted frames; no freehand pen or polymer semantics |
-| Publication layout and printing | Partial | JACS / ACS default, physical page setup and multipage vector PDF; no journal-style library or native print dialog |
+| Publication layout and printing | Partial | JACS / ACS default, physical page setup, multipage vector PDF and native macOS Print/Print selection; no journal-style library. Native print-to-PDF tested, physical printer output unverified |
 | Native binary drawing format | Planned | No binary CDX importer/exporter |
 | Clipboard drawing interchange | Implemented native subset | Native objects copy/cut/paste/duplicate; text SMILES, InChI, MOL and supported CDXML paste |
 | Script/plugin API | Planned | Worker protocol exists; no stable public automation API |

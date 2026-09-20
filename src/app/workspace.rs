@@ -2342,7 +2342,7 @@ impl App {
 
     fn shortcut_drawer(&self) -> Element<'_, Message> {
         container(row![
-            column![text("Draw without leaving the canvas").size(13),text("V Select   L Lasso   B / 1 Bond   2 Double   3 Triple   4 Quadruple").size(12),text("Hover / select bond: S Single · D Double (repeat shifts lines) · T Triple").size(12),text("Selected aromatic ring: A Circle / alternating bonds").size(12),text("X Chain   Shift+X Snaking chain   Alt Free bond drawing").size(12),text("R Ring   A Arrow   T Text   E Erase   Shift+R Aromatic ring").size(12),text("⌘G Group   ⇧⌘G Ungroup   ⇧⌘A Invert selection").size(12),text("Hover atom: C / N / O / S / P / F / H   ⌘I Import   ⌘E Export   ⌘D Duplicate   Esc Select").size(12)].spacing(5),
+            column![text("Draw without leaving the canvas").size(13),text("V Select   L Lasso   B / 1 Bond   2 Double   3 Triple   4 Quadruple").size(12),text("Hover / select bond: S Single · D Double (repeat shifts lines) · T Triple").size(12),text("Selected aromatic ring: A Circle / alternating bonds").size(12),text("X Chain   Shift+X Snaking chain   Alt Free bond drawing").size(12),text("R Ring   A Arrow   T Text   E Erase   Shift+R Aromatic ring").size(12),text("⌘G Group   ⇧⌘G Ungroup   ⇧⌘A Invert selection").size(12),text("Hover atom: C / N / O / S / P / F / H   ⌘I Import   ⌘E Export   ⌘P Print   ⌘D Duplicate   Esc Select").size(12)].spacing(5),
             Space::new().width(Length::Fill),icon_button(Icon::Close,"Close shortcuts",Some(Message::ToggleHelp),false)
         ].align_y(Alignment::Center)).padding([12,18]).style(panel).into()
     }
