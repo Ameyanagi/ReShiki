@@ -1,6 +1,7 @@
 """Regression checks for release identity, archive naming, and secret handling."""
 
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -60,6 +61,10 @@ class ReleaseTests(unittest.TestCase):
                 ["cargo", "build", "--release", "--locked", "--target", target], cwd=root
             )
             package = root / "dist/releases/moruno-1.2.3-windows-arm64.zip"
+            checksum = Path(str(package) + ".sha256").read_bytes()
+            digest = hashlib.sha256(package.read_bytes()).hexdigest()
+            # The Linux publisher must be able to verify Windows-generated manifests.
+            self.assertEqual(checksum, f"{digest}  {package.name}\n".encode("ascii"))
             with zipfile.ZipFile(package) as stream:
                 metadata = json.loads(stream.read("moruno-1.2.3-windows-arm64/build.json"))
                 self.assertEqual(metadata["architecture"], "arm64")

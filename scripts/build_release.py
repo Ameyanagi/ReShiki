@@ -379,7 +379,9 @@ def main():
     verify_archive(output, args.sign)
     with output.open("rb") as stream:
         digest = hashlib.file_digest(stream, "sha256").hexdigest()
-    Path(str(output) + ".sha256").write_text(f"{digest}  {output.name}\n")
+    Path(str(output) + ".sha256").write_text(
+        f"{digest}  {output.name}\n", encoding="ascii", newline="\n"
+    )
     print(output)
 
 

@@ -156,7 +156,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          cat *.sha256 > SHA256SUMS
+          cat *.sha256 | tr -d '\r' > SHA256SUMS
           sha256sum --check SHA256SUMS
           test "$(wc -l < SHA256SUMS)" -eq 5
           args=()
