@@ -196,6 +196,7 @@ impl Prepared {
             group.members.dedup();
         }
         placed.reconcile_molecule_groups();
+        crate::reactions::reconcile(&mut placed)?;
         placed.validate()?;
         Ok((placed, ids.into_iter().map(original_id).collect()))
     }

@@ -31,6 +31,7 @@ export default defineConfig({
             "fragment-joining",
             "abbreviations",
             "arrows",
+            "reactions",
           ].map((name) => ({ slug: `reference/${name}` })),
         },
         {

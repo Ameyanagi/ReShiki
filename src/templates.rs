@@ -236,7 +236,7 @@ pub fn place_with_mode(
             };
             result.add_bond(id, added, 1, "plain");
             result.reconcile_molecule_groups();
-            if result.validate().is_ok() {
+            if crate::reactions::reconcile(&mut result).is_ok() && result.validate().is_ok() {
                 best = Some((score, result, ids));
             }
         }
@@ -546,7 +546,7 @@ pub fn place_anchored(
                 group.members.dedup();
             }
             result.reconcile_molecule_groups();
-            if result.validate().is_err() {
+            if crate::reactions::reconcile(&mut result).is_err() || result.validate().is_err() {
                 return;
             }
             best = Some((score, result, ids.into_iter().map(mapped).collect()));

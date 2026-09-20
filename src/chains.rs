@@ -260,6 +260,7 @@ pub fn place(
         selected.push(id);
     }
     candidate.reconcile_molecule_groups();
+    crate::reactions::reconcile(&mut candidate)?;
     candidate.validate()?;
     Ok((candidate, selected))
 }

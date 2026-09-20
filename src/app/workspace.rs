@@ -1274,6 +1274,9 @@ impl App {
     }
 
     fn inspector(&self) -> Element<'_, Message> {
+        if self.inspector_tab == InspectorTab::Reactions {
+            return self.reactions_inspector();
+        }
         if self.inspector_tab == InspectorTab::DrawingStyle {
             return container(self.drawing_style_panel())
                 .width(320)
@@ -1302,7 +1305,8 @@ impl App {
                             || (tab == InspectorTab::Properties
                                 && matches!(
                                     self.inspector_tab,
-                                    InspectorTab::Labels
+                                    InspectorTab::Reactions
+                                        | InspectorTab::Labels
                                         | InspectorTab::Abbreviations
                                         | InspectorTab::Pages
                                         | InspectorTab::DrawingStyle
@@ -1312,6 +1316,7 @@ impl App {
             );
         }
         let body = match self.inspector_tab {
+            InspectorTab::Reactions => self.reactions_panel(),
             InspectorTab::Assistant => self.assistant_panel(),
             InspectorTab::Pages => self.pages_panel(),
             InspectorTab::DrawingStyle => self.drawing_style_panel(),
@@ -1332,11 +1337,16 @@ impl App {
             ]
             .spacing(4),
         )
-        .width(if self.inspector_tab == InspectorTab::DrawingStyle {
-            320
-        } else {
-            256
-        })
+        .width(
+            if matches!(
+                self.inspector_tab,
+                InspectorTab::DrawingStyle | InspectorTab::Reactions
+            ) {
+                320
+            } else {
+                256
+            },
+        )
         .height(Length::Fill)
         .style(panel)
         .into()
@@ -1408,6 +1418,10 @@ impl App {
         {
             body = column![self.text_panel(), horizontal_line(), body].spacing(12);
         }
+        body = body.push(command(
+            "Reaction roles…",
+            Message::Reaction(super::reactions::Action::Open),
+        ));
         body = body.push(command(
             "Atom labels & numbering…",
             Message::Inspector(InspectorTab::Labels),
@@ -2219,6 +2233,10 @@ impl App {
 
     fn export_panel(&self) -> Element<'_, Message> {
         let mut body = column![
+            command(
+                "Reaction roles & export…",
+                Message::Reaction(super::reactions::Action::Open)
+            ),
             section("DRAWING"),
             text(format!(
                 "{} · physical publication size",

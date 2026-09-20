@@ -20,7 +20,7 @@ This supports reusable drawing settings. Complete stationery documents combining
 
 ## Persistence and exchange
 
-Native document format 14 stores drawing settings. Supported older documents open with JACS / ACS defaults. Cleanup, aromatic display changes, copy selection, recovery, and Undo/Redo retain the document style. Assistant previews use the current style.
+Native document format 14 and later store drawing settings. Supported older documents open with JACS / ACS defaults. Cleanup, aromatic display changes, copy selection, recovery, and Undo/Redo retain the document style. Assistant previews use the current style.
 
 SVG, PDF, and PNG use the same styled scene as the canvas. Supported CDXML/CDX document-level fonts and bond dimensions are written and read in physical units. Import preserves the declared physical size instead of normalizing every molecule to 14.4 pt bonds. A style's descriptive name is native metadata; editable exchange may call it **Imported style**. Pasting into an existing document uses the destination's bond style while retaining supported explicit object overrides.
 

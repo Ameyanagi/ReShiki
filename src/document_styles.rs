@@ -105,7 +105,7 @@ pub fn apply(
             }
         }
     }
-    doc.version = 14;
+    doc.version = 15;
     doc.drawing_style = style;
     doc.validate()?;
     Ok(doc)

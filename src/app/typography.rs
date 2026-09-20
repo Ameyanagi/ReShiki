@@ -165,7 +165,10 @@ impl App {
             self.caption_editor = iced::widget::text_editor::Content::with_text(&self.caption);
             self.caption_format = label.format.clone();
             self.caption_target = Some(label.id);
-            if self.inspector_tab != InspectorTab::Templates {
+            if !matches!(
+                self.inspector_tab,
+                InspectorTab::Templates | InspectorTab::Reactions
+            ) {
                 self.inspector_open = true;
                 self.inspector_tab = InspectorTab::Properties;
             }

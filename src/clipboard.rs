@@ -362,10 +362,14 @@ fn mol_text(data: &[u8]) -> Result<String, String> {
 pub fn text_request(text: &str) -> Request {
     let format = if text.trim_start().starts_with("InChI=") {
         "inchi"
+    } else if text.trim_start().starts_with("$RXN") {
+        "rxn"
     } else if text.contains("M  END") {
         "mol"
     } else if text.contains("<CDXML") {
         "cdxml"
+    } else if text.replace("->", "").matches('>').count() == 2 {
+        "rsmi"
     } else {
         "smiles"
     };

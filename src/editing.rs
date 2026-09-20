@@ -35,6 +35,8 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Document {
     let ids = doc.expand_abbreviation_selection(ids);
     let ids = ids.as_slice();
     let mut part = doc.clone();
+    part.reactions
+        .retain(|r| r.ids().iter().all(|id| ids.contains(id)));
     part.groups
         .retain(|g| g.members.iter().all(|id| ids.contains(id)));
     let removed: Vec<_> = doc
@@ -163,6 +165,11 @@ pub fn append(doc: &mut Document, source: &Document, offset: Point) -> Vec<u64> 
             *id = mapped;
         }
     }
+    for reaction in &mut part.reactions {
+        if reaction.remap(&mapping).is_none() {
+            return vec![];
+        }
+    }
     let ids = part.all_ids();
     doc.atoms.extend(part.atoms);
     doc.bonds.extend(part.bonds);
@@ -171,6 +178,10 @@ pub fn append(doc: &mut Document, source: &Document, offset: Point) -> Vec<u64> 
     doc.graphics.extend(part.graphics);
     doc.groups.extend(part.groups);
     doc.abbreviations.extend(part.abbreviations);
+    doc.reactions.extend(part.reactions);
+    if !doc.reactions.is_empty() {
+        doc.version = 15;
+    }
     if !doc.abbreviations.is_empty() {
         doc.version = doc.version.max(11);
     }

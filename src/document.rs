@@ -147,11 +147,13 @@ pub struct Document {
     pub graphics: Vec<crate::graphics::Graphic>,
     #[serde(default)]
     pub groups: Vec<crate::grouping::Group>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reactions: Vec<crate::reactions::Reaction>,
 }
 impl Default for Document {
     fn default() -> Self {
         Self {
-            version: 14,
+            version: 15,
             drawing_style: Default::default(),
             page_layout: None,
             abbreviations: vec![],
@@ -162,6 +164,7 @@ impl Default for Document {
             arrows: vec![],
             graphics: vec![],
             groups: vec![],
+            reactions: vec![],
         }
     }
 }
@@ -297,6 +300,7 @@ impl Document {
         self.arrows.retain(|a| !ids.contains(&a.id));
         self.graphics.retain(|a| !ids.contains(&a.id));
         self.prune_groups();
+        crate::reactions::prune(self);
     }
     pub fn translate(&mut self, ids: &[u64], dx: f32, dy: f32) {
         let ids = self.expand_abbreviation_selection(ids);
@@ -343,13 +347,14 @@ impl Document {
                 return Err("Drawing pictures exceed 64 MB or 64 million pixels".into());
             }
         }
-        if !(1..=14).contains(&self.version) {
+        if !(1..=15).contains(&self.version) {
             return Err(format!("Unsupported document version {}", self.version));
         }
         if let Some(layout) = &self.page_layout {
             layout.validate()?;
         }
         self.validate_groups()?;
+        crate::reactions::validate(self)?;
         self.validate_abbreviations()?;
         let mut ids = HashSet::new();
         for id in self.all_ids() {

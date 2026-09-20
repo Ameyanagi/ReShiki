@@ -196,7 +196,7 @@ def clean(doc, options, selection, read, write, analyze, scale, bond_length):
         raise ValueError("Draw or select a molecule first")
     result["atoms"] = [updated_atoms.get(a["id"], a) for a in result["atoms"]]
     result["bonds"] = [updated_bonds.get(frozenset((b["a"], b["b"])), b) for b in result["bonds"]]
-    result["version"] = 14
+    result["version"] = 15
     warnings = (
         [f"{crossed} double bond(s) use a crossed depiction to keep unspecified stereochemistry."]
         if crossed

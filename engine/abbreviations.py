@@ -123,7 +123,7 @@ def find(doc, mol, selection, label=None):
             )
         )
         used.update(members)
-    result["version"] = 14
+    result["version"] = 15
     validate(result)
     return result
 
@@ -214,9 +214,16 @@ def replace(doc, selection, label, to_document):
     result["abbreviations"] = [
         g for g in result.get("abbreviations", []) if not remove.intersection(g["members"])
     ]
+    for reaction in result.get("reactions", []):
+        for role in ("reactants", "products", "agents"):
+            for participant in reaction.get(role, []):
+                if target in participant["atoms"]:
+                    participant["atoms"] = [
+                        i for i in participant["atoms"] if i not in remove
+                    ] + members
     result["abbreviations"].append(
         dict(label=label, reverse_label=PRESETS[label][1], anchor=target, members=members)
     )
-    result["version"] = 14
+    result["version"] = 15
     validate(result)
     return result

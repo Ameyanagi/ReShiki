@@ -45,6 +45,10 @@ async fn reaction_is_editable_validated_styled_and_exchangeable() {
         .await
         .unwrap();
     assert_eq!(doc.arrows.len(), 1);
+    assert_eq!(doc.reactions.len(), 1);
+    assert_eq!(doc.reactions[0].reactants.len(), 2);
+    assert_eq!(doc.reactions[0].products.len(), 2);
+    assert_eq!(doc.reactions[0].arrow, doc.arrows[0].id);
     assert_eq!(doc.atoms.len(), 14);
     assert!(doc.bonds.iter().all(|b| b.color == settings.bond_color));
     assert!(

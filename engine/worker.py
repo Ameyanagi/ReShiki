@@ -12,7 +12,14 @@ from rdkit import Chem, rdBase
 from rdkit.Chem import rdCIPLabeler, rdDepictor, rdMolDescriptors
 
 if TYPE_CHECKING or __package__:
-    from . import abbreviations, abbreviations_exchange, aromatic, cleanup, drawing_styles
+    from . import (
+        abbreviations,
+        abbreviations_exchange,
+        aromatic,
+        cleanup,
+        drawing_styles,
+        reactions,
+    )
     from .arrows_exchange import read_arrow, write_arrow
     from .bonds_exchange import chemistry_xml, read_bonds, write_bond, write_crossings
     from .cdx_exchange import LIMIT as CDX_LIMIT
@@ -28,6 +35,7 @@ else:
     import aromatic
     import cleanup
     import drawing_styles
+    import reactions
     from arrows_exchange import read_arrow, write_arrow
     from bonds_exchange import chemistry_xml, read_bonds, write_bond, write_crossings
     from cdx_exchange import LIMIT as CDX_LIMIT
@@ -97,7 +105,8 @@ def check_supported(mol):
 
 
 def from_document(doc):
-    if doc.get("version") not in range(1, 15):
+    reactions.validate(doc)
+    if doc.get("version") not in range(1, 16):
         raise ValueError("Unsupported document version")
     drawing_styles.checked(doc.get("drawing_style"))
     abbreviations.validate(doc)
@@ -312,7 +321,7 @@ def to_document(mol, base=None, rewedge=False):
     }
     bonds.sort(key=lambda b: old_order.get(frozenset((b["a"], b["b"])), len(old_order)))
     return {
-        "version": 14,
+        "version": 15,
         "drawing_style": drawing_styles.checked((base or {}).get("drawing_style")),
         "atoms": atoms,
         "bonds": bonds,
@@ -327,6 +336,7 @@ def to_document(mol, base=None, rewedge=False):
         "arrows": (base or {}).get("arrows", []),
         "graphics": (base or {}).get("graphics", []),
         "groups": (base or {}).get("groups", []),
+        "reactions": (base or {}).get("reactions", []),
     }
 
 
@@ -909,6 +919,20 @@ def handle(request):
         raise ValueError("Unsupported protocol version")
     operation = request["operation"]
     response = {"engine_version": rdBase.rdkitVersion, "warnings": []}
+    if operation == "import" and request.get("format") in ("rxn", "rsmi"):
+        doc = reactions.import_reaction(
+            request.get("text", ""), request["format"], to_document, check_supported
+        )
+        response.update(document=doc, analysis=analyze(from_document(doc)))
+        return response
+    if operation == "export" and request.get("format") in ("rxn", "rsmi"):
+        response["output"] = reactions.export(
+            request["document"], request.get("selected_ids"), request["format"], from_document
+        )
+        response["warnings"].append(
+            "Reaction files preserve participants, atom maps and stereo. Save .moruno to retain captions, arrow appearance and drawing layout."
+        )
+        return response
     if operation == "aromatic":
         result, mol = aromatic.toggle(
             request["document"], request.get("selected_ids"), from_document, to_document
@@ -988,6 +1012,10 @@ def handle(request):
         response.update(document=result_doc, analysis=analyze(mol))
         if operation == "export":
             fmt = request["format"]
+            if doc.get("reactions"):
+                response["warnings"].append(
+                    "This drawing or molecule format does not retain reaction roles. Use RXN/reaction SMILES for reaction data, or .moruno for the complete scheme."
+                )
             exotic = {b["order"] for b in result_doc["bonds"]} & {0, 5, 6, 7}
             if (
                 (fmt == "mol" and exotic & {0, 6, 7})

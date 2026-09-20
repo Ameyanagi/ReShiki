@@ -25,3 +25,7 @@ Implementation follows the official [Codex app-server protocol](https://learn.ch
 ## Canvas-assisted scheme verification
 
 A live run with Latest (GPT-6-Astra), Low reasoning and Standard service inspected a saved canvas image, called the preview tool, and produced a general triglyceride hydrolysis scheme. The result used one water structure with coefficient 3, six editable R-group labels, separated products and centered conditions. Automated tests cover coefficients, disconnected fragments, R-group native exchange, live canvas images, invalid/stale replacement targets and automatic application with Undo/Redo.
+
+## Chemical reaction roles
+
+Generated reaction steps retain explicit reactant/product membership and coefficients. Open **Properties → Reaction roles…** to inspect them, add chemical reagents, and export RXN or reaction SMILES. Applying and undoing an assistant proposal includes this data. See [reaction workflow and exchange limits](reactions.md).

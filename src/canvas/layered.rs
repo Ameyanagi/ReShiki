@@ -7,7 +7,7 @@ use iced::advanced::{
     widget::{Tree, tree},
 };
 use iced::widget::canvas::{self, Program};
-use iced::{Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vector};
+use iced::{Element, Event, Length, Rectangle, Renderer, Size, Theme, Vector};
 use std::rc::Rc;
 
 struct Shared<P>(Rc<P>);
@@ -114,19 +114,26 @@ impl<P: Program<M>, M> Widget<M, Theme, Renderer> for LayeredCanvas<P, M> {
         _style: &renderer::Style,
         layout: Layout<'_>,
         cursor: mouse::Cursor,
-        _viewport: &Rectangle,
+        viewport: &Rectangle,
     ) {
         let bounds = layout.bounds();
         if bounds.width < 1. || bounds.height < 1. {
             return;
         }
+        let Some(visible) = bounds.intersection(viewport) else {
+            return;
+        };
+        let clip = Rectangle {
+            x: visible.x - bounds.x,
+            y: visible.y - bounds.y,
+            width: visible.width,
+            height: visible.height,
+        };
         let state = tree.state.downcast_ref::<P::State>();
         let layers = self.program.draw(state, renderer, theme, bounds, cursor);
         renderer.with_translation(Vector::new(bounds.x, bounds.y), |renderer| {
             for geometry in layers {
-                renderer.with_layer(Rectangle::new(Point::ORIGIN, bounds.size()), |renderer| {
-                    renderer.draw_geometry(geometry)
-                });
+                renderer.with_layer(clip, |renderer| renderer.draw_geometry(geometry));
             }
         });
     }

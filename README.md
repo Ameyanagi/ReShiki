@@ -35,6 +35,7 @@ The default development bundle uses this checkout's `engine/worker.py` and `.ven
 
 ## Use
 
+- Open **Properties → Reaction roles…** to assign reactants, products and chemical reagents to an arrow. Assistant schemes retain their roles automatically. Import/export RXN or reaction SMILES, select a complete reaction, and undo role edits. [Reaction workflow and limits](docs/reactions.md).
 - Open **Assistant** to ask Codex for editable molecules or reaction schemes. Review, Apply or Reject the proposal; one Undo restores the previous drawing. [Assistant workflow and connection](docs/assistant.md).
 - Click **C**, a bond, a ring or the reaction-arrow tool for floating visual choices. Arrows include editable elbows. Select a crossing bond and use Properties → Bond in front / Bond behind to control the small gap. [Tool palettes and crossing depth](docs/tool-palettes.md).
 - The two-column palette keeps drawing tools visible. Hover an icon for its name and shortcut; options for the selected tool appear above the canvas.

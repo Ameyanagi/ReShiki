@@ -189,7 +189,8 @@ fn place_row(
     caption_y: f32,
     settings: &DrawingSettings,
     separators: bool,
-) -> Result<f32, String> {
+) -> Result<(f32, Vec<crate::reactions::Participant>), String> {
+    let mut participants = Vec::new();
     let gap = settings.bond_length;
     let mut bottom = caption_y;
     for (index, part) in parts.iter().enumerate() {
@@ -235,6 +236,13 @@ fn place_row(
         if ids.is_empty() {
             return Err("Could not place proposed molecule".into());
         }
+        participants.push(crate::reactions::Participant {
+            atoms: ids
+                .into_iter()
+                .filter(|id| doc.atom(*id).is_some())
+                .collect(),
+            coefficient: part.coefficient,
+        });
         caption(
             doc,
             &part.label,
@@ -245,7 +253,7 @@ fn place_row(
             .max(caption_y + crate::typography::layout(&part.label, &part.label_format).height);
         *x += part.width;
     }
-    Ok(bottom)
+    Ok((bottom, participants))
 }
 pub async fn render(
     engine: &PythonEngine,
@@ -278,9 +286,11 @@ pub async fn render(
             y + height / 2. + gap * 0.6,
             &settings,
             false,
-        )? + gap * 2.;
+        )?
+        .0 + gap * 2.;
     }
     for reaction in &proposal.reactions {
+        let first_id = doc.next_id();
         let left = prepare_all(engine, &reaction.reactants, &settings).await?;
         let right = prepare_all(engine, &reaction.products, &settings).await?;
         let height = left
@@ -290,7 +300,8 @@ pub async fn render(
             .fold(gap, f32::max);
         let caption_y = y + height / 2. + gap * 0.6;
         let mut x = 0.;
-        let left_bottom = place_row(&mut doc, &left, &mut x, y, caption_y, &settings, true)?;
+        let (left_bottom, reactants) =
+            place_row(&mut doc, &left, &mut x, y, caption_y, &settings, true)?;
         x += gap;
         let mut conditions_format = settings.format.clone();
         conditions_format.alignment = TextAlign::Center;
@@ -306,8 +317,9 @@ pub async fn render(
         style.head = preset_style.head;
         style.tail = preset_style.tail;
         style.shape = preset_style.shape;
+        let arrow_id = doc.next_id();
         doc.arrows.push(Arrow::new(
-            doc.next_id(),
+            arrow_id,
             Point::new(x, y),
             Point::new(x + width, y),
             preset,
@@ -320,7 +332,20 @@ pub async fn render(
             &conditions_format,
         );
         x += width + gap;
-        let right_bottom = place_row(&mut doc, &right, &mut x, y, caption_y, &settings, true)?;
+        let (right_bottom, products) =
+            place_row(&mut doc, &right, &mut x, y, caption_y, &settings, true)?;
+        doc.reactions.push(crate::reactions::Reaction {
+            arrow: arrow_id,
+            reactants,
+            products,
+            agents: vec![],
+            annotations: doc
+                .annotations
+                .iter()
+                .filter(|a| a.id >= first_id)
+                .map(|a| a.id)
+                .collect(),
+        });
         y = left_bottom.max(right_bottom) + gap * 3.;
     }
     doc.validate()?;

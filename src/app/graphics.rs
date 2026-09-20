@@ -23,7 +23,10 @@ impl App {
             self.orbital_phase = g.phase;
             self.phase_flipped = g.phase_flipped;
             self.bracket_sides = g.sides;
-            if self.inspector_tab != InspectorTab::Templates {
+            if !matches!(
+                self.inspector_tab,
+                InspectorTab::Templates | InspectorTab::Reactions
+            ) {
                 self.inspector_open = true;
                 self.inspector_tab = InspectorTab::Properties;
             }

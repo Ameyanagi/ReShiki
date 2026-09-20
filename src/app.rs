@@ -24,6 +24,7 @@ mod pages;
 mod palettes;
 mod pictures;
 mod printing;
+mod reactions;
 mod shortcuts;
 mod template_library;
 mod typography;
@@ -31,6 +32,7 @@ mod workspace;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum InspectorTab {
+    Reactions,
     DrawingStyle,
     Assistant,
     Pages,
@@ -43,6 +45,7 @@ pub enum InspectorTab {
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    Reaction(reactions::Action),
     DrawingStyle(document_styles::Action),
     InlineText(inline_text::Action),
     Join(joining::Action),
@@ -252,6 +255,7 @@ pub struct App {
     inline_text: Option<inline_text::State>,
     joining: Option<joining::State>,
     pages: pages::State,
+    reactions: reactions::State,
     printing: printing::State,
     pictures: pictures::State,
     font_options: iced::widget::combo_box::State<String>,
@@ -307,6 +311,7 @@ impl App {
             .unwrap_or_default();
         let mut app = Self {
             styles: Default::default(),
+            reactions: Default::default(),
             palette: None,
             assistant: assistant::State::new(),
             hover: None,
@@ -574,6 +579,12 @@ impl App {
     fn changed(&mut self, before: Document) {
         self.cleanup = None;
         self.doc.reconcile_abbreviations(&before);
+        if let Err(error) = moruno::reactions::reconcile(&mut self.doc) {
+            self.doc = before;
+            self.error = true;
+            self.status = error;
+            return;
+        }
         if self.doc != before {
             if let Err(error) = self.doc.validate() {
                 self.doc = before;
@@ -680,7 +691,7 @@ impl App {
                     // Accept supported extensions without relying on macOS
                     // type registration; validate the selected content below.
                     let file = rfd::AsyncFileDialog::new()
-                        .set_title("Open a Moruno, MOL, CDXML, or SMILES document")
+                        .set_title("Open a Moruno, MOL, RXN, CDXML, or SMILES document")
                         .pick_file()
                         .await?;
                     let path = file.path().to_path_buf();
@@ -879,6 +890,7 @@ impl App {
                     });
                 }
             }
+            Message::Reaction(action) => return self.reaction_action(action),
             Message::Templates(action) => {
                 if let Some(task) = self.template_async(&action) {
                     return task;
@@ -1572,7 +1584,7 @@ impl App {
                 if let Some(candidate) = self.recovered.first().cloned() {
                     let before = self.doc.clone();
                     self.doc = candidate.snapshot.document;
-                    self.doc.version = 14;
+                    self.doc.version = 15;
                     self.sync_drawing_defaults();
                     self.styles.editor = None;
                     self.path = None;
@@ -1949,7 +1961,7 @@ impl App {
                                         Ok(doc)
                                     }) {
                                     Ok(mut doc) => {
-                                        doc.version = 14;
+                                        doc.version = 15;
                                         moruno::atom_labels::clear_computed(&mut doc);
                                         self.clear_recovery();
                                         self.file_epoch = self.file_epoch.wrapping_add(1);
@@ -1980,6 +1992,8 @@ impl App {
                             } else {
                                 let format = match extension.as_str() {
                                     "mol" => "mol",
+                                    "rxn" => "rxn",
+                                    "rsmi" => "rsmi",
                                     "cdxml" => "cdxml",
                                     "inchi" => "inchi",
                                     _ => "smiles",
@@ -2629,6 +2643,7 @@ fn same_drawing(a: &Document, b: &Document) -> bool {
         && a.arrows == b.arrows
         && a.graphics == b.graphics
         && a.groups == b.groups
+        && a.reactions == b.reactions
         && a.abbreviations == b.abbreviations
         && a.atoms.len() == b.atoms.len()
         && a.atoms.iter().zip(&b.atoms).all(|(a, b)| {

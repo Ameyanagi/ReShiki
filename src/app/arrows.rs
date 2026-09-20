@@ -91,7 +91,10 @@ impl App {
         {
             self.arrow_style = Preset::from_kind(&a.kind);
             self.arrows.style = a.appearance();
-            if self.inspector_tab != InspectorTab::Templates {
+            if !matches!(
+                self.inspector_tab,
+                InspectorTab::Templates | InspectorTab::Reactions
+            ) {
                 self.inspector_open = true;
                 self.inspector_tab = InspectorTab::Properties;
             }
@@ -165,6 +168,13 @@ impl App {
                         return;
                     }
                     a.style = Some(appearance);
+                }
+            }
+        }
+        if matches!(action, Action::Reverse) {
+            for reaction in &mut next.reactions {
+                if self.selected.contains(&reaction.arrow) {
+                    std::mem::swap(&mut reaction.reactants, &mut reaction.products);
                 }
             }
         }
