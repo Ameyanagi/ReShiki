@@ -67,4 +67,6 @@ uv sync --locked --group packaging --python 3.12
 uv run --locked python scripts/build_release.py
 ```
 
+Intel macOS uses RDKit 2025.9.2, the last compatible wheel release; other targets use the newer version recorded in `uv.lock`. The lock resolver requires wheels for all four release targets, and every native build runs the Python regression suite before packaging.
+
 Build on the target operating system; PyInstaller is not a cross-compiler. Archives are written to `dist/releases/`. On macOS, `scripts/build_macos_app.py` still builds the development app, and `--standalone --release` builds an optimized app with the worker included.

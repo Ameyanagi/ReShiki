@@ -2,8 +2,16 @@ version = 1
 revision = 3
 requires-python = ">=3.11, <3.14"
 resolution-markers = [
-    "python_full_version >= '3.12'",
-    "python_full_version < '3.12'",
+    "(python_full_version >= '3.12' and platform_machine != 'x86_64') or (python_full_version >= '3.12' and sys_platform != 'darwin')",
+    "(python_full_version < '3.12' and platform_machine != 'x86_64') or (python_full_version < '3.12' and sys_platform != 'darwin')",
+    "python_full_version >= '3.12' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+]
+required-markers = [
+    "platform_machine == 'x86_64' and sys_platform == 'darwin'",
+    "platform_machine == 'arm64' and sys_platform == 'darwin'",
+    "platform_machine == 'AMD64' and sys_platform == 'win32'",
+    "platform_machine == 'x86_64' and sys_platform == 'linux'",
 ]
 
 [[package]]
@@ -33,7 +41,8 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "pillow" },
-    { name = "rdkit" },
+    { name = "rdkit", version = "2025.9.2", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'" },
+    { name = "rdkit", version = "2026.3.6", source = { registry = "https://pypi.org/simple" }, marker = "platform_machine != 'x86_64' or sys_platform != 'darwin'" },
 ]
 
 [package.dev-dependencies]
@@ -48,7 +57,8 @@ packaging = [
 [package.metadata]
 requires-dist = [
     { name = "pillow", specifier = ">=12.3,<13" },
-    { name = "rdkit", specifier = ">=2025.9,<2027" },
+    { name = "rdkit", marker = "platform_machine != 'x86_64' or sys_platform != 'darwin'", specifier = ">=2025.9,<2027" },
+    { name = "rdkit", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'", specifier = "==2025.9.2" },
 ]
 
 [package.metadata.requires-dev]
@@ -63,7 +73,8 @@ name = "numpy"
 version = "2.4.6"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version < '3.12'",
+    "(python_full_version < '3.12' and platform_machine != 'x86_64') or (python_full_version < '3.12' and sys_platform != 'darwin')",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/d0/ad/fed0499ce6a338d2a03ebae59cd15093910c8875328855781952abf6c2fe/numpy-2.4.6.tar.gz", hash = "sha256:f3a3570c4a2a16746ac2c31a7c7c7b0c186b95ce902e33db6f28094ed7387dda", size = 20735807, upload-time = "2026-05-18T23:37:14.07Z" }
 wheels = [
@@ -124,7 +135,8 @@ name = "numpy"
 version = "2.5.3"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version >= '3.12'",
+    "(python_full_version >= '3.12' and platform_machine != 'x86_64') or (python_full_version >= '3.12' and sys_platform != 'darwin')",
+    "python_full_version >= '3.12' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/13/01/11703282db468b85f6f7b8c7f22d058de5970d5c7e60a3a8aaa313c3de36/numpy-2.5.3.tar.gz", hash = "sha256:df2d5874ff183595a4ba404edd04f6bd9b5505c1d7708573f6a6c17489a67563", size = 20791231, upload-time = "2026-09-06T16:27:47.073Z" }
 wheels = [
@@ -264,8 +276,31 @@ wheels = [
 
 [[package]]
 name = "rdkit"
+version = "2025.9.2"
+source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "python_full_version >= '3.12' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+    "python_full_version < '3.12' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
+]
+dependencies = [
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "pillow" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a8/6b/4b4c630e9c15b514b5fff719bff6d8590d4e6ce9fb28d77cf04703dd4d8c/rdkit-2025.9.2-cp311-cp311-macosx_10_15_x86_64.whl", hash = "sha256:5001036986440dfdccb62580a60a79664bda86c4bc56e1c903af8816dba7aef5", size = 31699593, upload-time = "2025-12-01T15:18:01.843Z" },
+    { url = "https://files.pythonhosted.org/packages/c6/c2/283b1bf04a17f6b9eb39d03fbacf7900c83886267a262cb8bf1ccc632b14/rdkit-2025.9.2-cp312-cp312-macosx_10_15_x86_64.whl", hash = "sha256:5d54b99e58badd15894fd5a85dc6ca6a5057dfa796f50b07716f12b8cebd20e3", size = 31773869, upload-time = "2025-12-01T15:18:20.85Z" },
+    { url = "https://files.pythonhosted.org/packages/fa/3b/f75547403f4b04ce0e72d68ff438c5daf0517614b294007a03e9cc84b8a7/rdkit-2025.9.2-cp313-cp313-macosx_10_15_x86_64.whl", hash = "sha256:fda996e16240f14e3d4047061e6cd4108eb71c31a3cb1ca4bcf2b9fa44e6a630", size = 31772861, upload-time = "2025-12-01T15:18:42.88Z" },
+]
+
+[[package]]
+name = "rdkit"
 version = "2026.3.6"
 source = { registry = "https://pypi.org/simple" }
+resolution-markers = [
+    "(python_full_version >= '3.12' and platform_machine != 'x86_64') or (python_full_version >= '3.12' and sys_platform != 'darwin')",
+    "(python_full_version < '3.12' and platform_machine != 'x86_64') or (python_full_version < '3.12' and sys_platform != 'darwin')",
+]
 dependencies = [
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },

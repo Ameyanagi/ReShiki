@@ -56,6 +56,8 @@ jobs:
       - run: rustup toolchain install 1.95.0 --profile minimal
       - run: rustup default 1.95.0
       - run: uv sync --locked --group packaging
+      - name: Test chemistry and packaging on this platform
+        run: uv run --locked python -m unittest discover -s tests -p 'test_*.py'
       - name: Build and test extracted portable archive
         env:
           MACOSX_DEPLOYMENT_TARGET: "14.0"

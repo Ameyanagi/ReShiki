@@ -3,7 +3,11 @@ name = "moruno-engine"
 version = "0.1.0"
 description = "Local chemistry worker for Moruno"
 requires-python = ">=3.11,<3.14"
-dependencies = ["rdkit>=2025.9,<2027", "pillow>=12.3,<13"]
+dependencies = [
+  "rdkit>=2025.9,<2027; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+  "rdkit==2025.9.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+  "pillow>=12.3,<13",
+]
 
 [dependency-groups]
 dev = ["ruff>=0.16.8", "ty>=0.0.82"]
@@ -11,6 +15,12 @@ packaging = ["pyinstaller>=6.16,<7"]
 
 [tool.uv]
 package = false
+required-environments = [
+  "sys_platform == 'darwin' and platform_machine == 'x86_64'",
+  "sys_platform == 'darwin' and platform_machine == 'arm64'",
+  "sys_platform == 'win32' and platform_machine == 'AMD64'",
+  "sys_platform == 'linux' and platform_machine == 'x86_64'",
+]
 
 [tool.ruff]
 target-version = "py312"
