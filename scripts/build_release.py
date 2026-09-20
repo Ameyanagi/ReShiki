@@ -196,16 +196,24 @@ def verify_archive(archive_path, signed=False):
         environment = dict(os.environ)
         environment.pop("MORUNO_PYTHON", None)
         environment["MORUNO_ROOT"] = str(extracted / "no-checkout")
-        response = run(
-            [binary, "--engine-check"],
-            cwd=extracted,
-            env=environment,
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
+        try:
+            response = run(
+                [binary, "--engine-check"],
+                cwd=extracted,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+        except subprocess.CalledProcessError as error:
+            raise RuntimeError(
+                f"Packaged engine check failed:\n{error.stdout}\n{error.stderr}"
+            ) from error
         result = json.loads(response.stdout)
-        if result.get("analysis", {}).get("formula") != "C2H6O":
+        if (
+            result.get("analysis", {}).get("formula") != "C2H6O"
+            or result.get("analysis", {}).get("smiles") != "CCO"
+        ):
             raise ValueError("Packaged chemistry engine did not return ethanol")
         print("Extracted application and bundled chemistry engine verified.")
 
@@ -265,7 +273,8 @@ def main():
     )
     output = archive(folder, ROOT / "dist/releases" / name)
     verify_archive(output, args.sign)
-    digest = hashlib.file_digest(output.open("rb"), "sha256").hexdigest()
+    with output.open("rb") as stream:
+        digest = hashlib.file_digest(stream, "sha256").hexdigest()
     Path(str(output) + ".sha256").write_text(f"{digest}  {output.name}\n")
     print(output)
 
