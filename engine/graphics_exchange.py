@@ -195,6 +195,8 @@ def write_graphics(page, graphics, paths, scale, position, color_id, next_id, pa
         return groups
 
     for index, g in enumerate(ordered):
+        if g.get("kind") == "picture":
+            raise ValueError("Pictures are preserved in native/SVG/PDF/PNG; embedded picture exchange is not supported yet")
         styled_parts=(parts or {}).get(str(g['id']))
         if styled_parts is None:
             if isinstance(g.get('kind'),dict):

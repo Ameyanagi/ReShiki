@@ -1532,7 +1532,7 @@ impl App {
                 if let Some(candidate) = self.recovered.first().cloned() {
                     let before = self.doc.clone();
                     self.doc = candidate.snapshot.document;
-                    self.doc.version = 12;
+                    self.doc.version = 13;
                     self.path = None;
                     self.saved = Document::default();
                     self.file_epoch = self.file_epoch.wrapping_add(1);
@@ -1903,7 +1903,7 @@ impl App {
                                         Ok(doc)
                                     }) {
                                     Ok(mut doc) => {
-                                        doc.version = 12;
+                                        doc.version = 13;
                                         moruno::atom_labels::clear_computed(&mut doc);
                                         self.clear_recovery();
                                         self.file_epoch = self.file_epoch.wrapping_add(1);

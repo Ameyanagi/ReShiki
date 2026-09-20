@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GraphicKind {
+    Picture,
     Symbol(crate::scientific::SymbolKind),
     Orbital(crate::scientific::OrbitalKind),
     Rectangle,
@@ -55,6 +56,7 @@ impl std::fmt::Display for GraphicKind {
             Self::Braces => "Braces",
             Self::Curve => "Bézier curve",
             Self::Path => "Custom path",
+            Self::Picture => "Picture",
         })
     }
 }
@@ -175,6 +177,8 @@ impl PathCommand {
 /// An affine frame preserves rotated and reflected shapes without flattening them.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Graphic {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub picture: Option<crate::pictures::Picture>,
     pub id: u64,
     pub kind: GraphicKind,
     pub origin: Point,
@@ -233,6 +237,7 @@ impl Graphic {
                 Point::new(length * angle.cos(), length * angle.sin())
             };
             return Self {
+                picture: None,
                 id,
                 kind,
                 origin: start,
@@ -275,6 +280,7 @@ impl Graphic {
             )
         };
         Self {
+            picture: None,
             id,
             kind,
             origin,
@@ -304,7 +310,7 @@ impl Graphic {
         let p = Point::new;
         let k = 0.552_284_8;
         let local = match self.kind {
-            GraphicKind::Rectangle => vec![
+            GraphicKind::Rectangle | GraphicKind::Picture => vec![
                 Move(p(0., 0.)),
                 Line(p(1., 0.)),
                 Line(p(1., 1.)),
@@ -421,7 +427,11 @@ impl Graphic {
             hi.x = hi.x.max(p.x);
             hi.y = hi.y.max(p.y);
         }
-        let pad = self.style.width() * 0.5;
+        let pad = if self.kind == GraphicKind::Picture {
+            0.
+        } else {
+            self.style.width() * 0.5
+        };
         (lo.offset(-pad, -pad), hi.offset(pad, pad))
     }
     pub fn filled(&self) -> bool {
@@ -433,6 +443,14 @@ impl Graphic {
                     .any(|c| matches!(c, PathCommand::Close)))
     }
     pub fn hit(&self, p: Point, r: f32) -> bool {
+        if self.kind == GraphicKind::Picture {
+            return flattened(&self.commands()).iter().any(|path| {
+                inside_polygon(p, path)
+                    || path
+                        .windows(2)
+                        .any(|pair| matches!(pair,[a,b] if segment_distance(p,*a,*b)<r))
+            });
+        }
         self.parts().iter().any(|part| {
             flattened(&part.commands).iter().any(|path| {
                 path.windows(2).any(|pair| matches!(pair,[a,b] if segment_distance(p,*a,*b)<r+self.style.width()*0.5)) || (part.filled && inside_polygon(p, path))
@@ -441,6 +459,9 @@ impl Graphic {
     }
 
     pub fn edit_point(&mut self, index: usize, p: Point) {
+        if self.kind == GraphicKind::Picture {
+            return;
+        }
         let mut commands = self.commands();
         let mut n = 0;
         for c in &mut commands {
@@ -458,6 +479,20 @@ impl Graphic {
     }
     pub fn validate(&self) -> Result<(), String> {
         self.style.validate()?;
+        if (self.kind == GraphicKind::Picture) != self.picture.is_some() {
+            return Err("Picture data does not match the graphic kind".into());
+        }
+        if self.picture.is_some() {
+            let x = self.axis_x.distance(Point::default());
+            let y = self.axis_y.distance(Point::default());
+            let dot = self.axis_x.x * self.axis_y.x + self.axis_x.y * self.axis_y.y;
+            if !(0.01..=1_000_000.).contains(&x)
+                || !(0.01..=1_000_000.).contains(&y)
+                || dot.abs() > x * y * 0.0001
+            {
+                return Err("Picture frames must be rectangular with positive dimensions".into());
+            }
+        }
         if self.path.len() > 20_000
             || (self.kind == GraphicKind::Path
                 && !matches!(self.path.first(), Some(PathCommand::Move(_))))

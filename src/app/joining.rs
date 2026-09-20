@@ -1,6 +1,7 @@
 use super::{App, InspectorTab, Message};
+use crate::canvas::layered::canvas;
 use crate::canvas::{TemplateAnchorPreview, Tool};
-use iced::widget::{button, canvas, column, container, pick_list, row, text};
+use iced::widget::{button, column, container, pick_list, row, text};
 use iced::{Element, Length, Task};
 use moruno::{
     joining::Prepared,

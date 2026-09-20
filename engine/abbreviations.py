@@ -68,7 +68,7 @@ def find(doc,mol,selection,label=None):
         name=g.GetProp('LABEL')
         groups.append(dict(label=name,reverse_label=PRESETS[name][1],anchor=ids[points[0].aIdx],members=members))
         used.update(members)
-    result['version']=12
+    result['version']=13
     validate(result)
     return result
 
@@ -125,6 +125,6 @@ def replace(doc,selection,label,to_document):
         if target in group['members']:group['members']=[i for i in group['members'] if i not in remove]+members
     result['abbreviations']=[g for g in result.get('abbreviations',[]) if not remove.intersection(g['members'])]
     result['abbreviations'].append(dict(label=label,reverse_label=PRESETS[label][1],anchor=target,members=members))
-    result['version']=12
+    result['version']=13
     validate(result)
     return result

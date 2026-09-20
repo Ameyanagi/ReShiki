@@ -96,7 +96,7 @@ Template placement offers explicit new-bond connection, shared-atom and fused-bo
 | Orbitals | Supported subset | Seven node-based shapes, outline/solid/flat-gray phases, phase reversal, inspector preview and vector exports. No gradient shading or 3D orbital model. |
 | TLC / gel electrophoresis plates | Missing | No chromatography objects. |
 | Tables | Missing | No editable table object. |
-| Imported pictures | Missing | No image object/import path. |
+| Imported pictures | In progress | Embedded picture model and layered rendering groundwork; native save/reopen and SVG/PDF/PNG rendering are covered by regression tests. Import/paste UI and external editable picture exchange remain missing. |
 | Group / ungroup / integral groups | Supported | Nested groups with whole-molecule boundaries, member editing, integral selection and native/CDXML persistence. Molecular growth extends membership; joining grouped molecules unites overlapping groups and retains captions. |
 | Add frame | Supported | Fitted brackets, parentheses, braces and boxes; grouped with selection in one undoable action. |
 | Bring forward / send backward | Supported subset | Graphics can go to back/front relative to chemistry and other graphics; no general object stacking UI. |

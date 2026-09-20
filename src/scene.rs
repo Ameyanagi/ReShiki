@@ -3,6 +3,7 @@ use crate::style::DEFAULT as STYLE;
 
 #[derive(Debug, Clone)]
 pub enum Primitive {
+    Picture(crate::graphics::Graphic),
     Path {
         commands: Vec<crate::graphics::PathCommand>,
         style: crate::graphics::GraphicStyle,
@@ -353,11 +354,18 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
     let mut graphics: Vec<_> = doc.graphics.iter().collect();
     graphics.sort_by_key(|g| g.layer);
     let graphic_primitive = |g: &&crate::graphics::Graphic| {
-        g.parts().into_iter().map(|p| Primitive::Path {
-            commands: p.commands,
-            style: p.style,
-            filled: p.filled,
-        })
+        if g.kind == crate::graphics::GraphicKind::Picture {
+            vec![Primitive::Picture((*g).clone())]
+        } else {
+            g.parts()
+                .into_iter()
+                .map(|p| Primitive::Path {
+                    commands: p.commands,
+                    style: p.style,
+                    filled: p.filled,
+                })
+                .collect()
+        }
     };
     out.extend(
         graphics
@@ -691,6 +699,10 @@ pub(crate) fn bounds(drawing: &[Primitive]) -> (Point, Point) {
     let mut points = vec![];
     for p in drawing {
         match p {
+            Primitive::Picture(g) => {
+                let (lo, hi) = g.bounds();
+                points.extend([lo, hi]);
+            }
             Primitive::Path {
                 commands, style, ..
             } => {
@@ -747,6 +759,13 @@ pub fn svg(doc: &Document) -> String {
     );
     for p in drawing {
         match p {
+            Primitive::Picture(g) => {
+                use base64::Engine as _;
+                if let Some(picture) = &g.picture {
+                    let data = base64::engine::general_purpose::STANDARD.encode(picture.png());
+                    s.push_str(&format!("<image width=\"1\" height=\"1\" preserveAspectRatio=\"none\" transform=\"matrix({} {} {} {} {} {})\" href=\"data:image/png;base64,{}\"/>",g.axis_x.x,g.axis_x.y,g.axis_y.x,g.axis_y.y,g.origin.x,g.origin.y,data));
+                }
+            }
             Primitive::Path {
                 commands,
                 style,

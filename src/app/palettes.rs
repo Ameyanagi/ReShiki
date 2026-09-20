@@ -1,8 +1,9 @@
 //! Compact visual flyouts for toolbar families.
 use super::{App, Message};
+use crate::canvas::layered::canvas;
 use crate::canvas::{ArrowPreview, OwnedDrawingPreview, Tool};
 use iced::widget::{
-    Space, button, canvas, column, container, mouse_area, opaque, row, stack, text, tooltip,
+    Space, button, column, container, mouse_area, opaque, row, stack, text, tooltip,
 };
 use iced::{Alignment, Border, Color, Element, Length};
 use moruno::{

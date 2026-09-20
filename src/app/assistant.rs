@@ -1,7 +1,8 @@
 use super::{App, InspectorTab, Message};
+use crate::canvas::layered::canvas;
 use iced::widget::{
-    Space, button, canvas, checkbox, column, container, mouse_area, opaque, row, scrollable, stack,
-    text, text_editor, text_input, tooltip,
+    Space, button, checkbox, column, container, mouse_area, opaque, row, scrollable, stack, text,
+    text_editor, text_input, tooltip,
 };
 use iced::{Alignment, Border, Color, Element, Length, Task};
 use moruno::assistant::settings::{Preferences, effort_label};

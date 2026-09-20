@@ -146,7 +146,7 @@ pub struct Document {
 impl Default for Document {
     fn default() -> Self {
         Self {
-            version: 12,
+            version: 13,
             page_layout: None,
             abbreviations: vec![],
             atom_labels: Default::default(),
@@ -326,7 +326,17 @@ impl Document {
             .collect()
     }
     pub fn validate(&self) -> Result<(), String> {
-        if ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].contains(&self.version) {
+        let mut picture_bytes = 0_usize;
+        let mut picture_pixels = 0_u64;
+        for picture in self.graphics.iter().filter_map(|g| g.picture.as_ref()) {
+            picture_bytes = picture_bytes.saturating_add(picture.png().len());
+            picture_pixels = picture_pixels
+                .saturating_add(u64::from(picture.width()) * u64::from(picture.height()));
+            if picture_bytes > 64 * 1024 * 1024 || picture_pixels > 64_000_000 {
+                return Err("Drawing pictures exceed 64 MB or 64 million pixels".into());
+            }
+        }
+        if ![1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].contains(&self.version) {
             return Err(format!("Unsupported document version {}", self.version));
         }
         if let Some(layout) = &self.page_layout {

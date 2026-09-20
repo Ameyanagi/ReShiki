@@ -1,4 +1,5 @@
 use super::*;
+use crate::canvas::layered::canvas;
 use moruno::arrows::{ArrowStyle, Head, HeadShape, NoGo, Preset};
 use moruno::graphics::LinePattern;
 
@@ -168,7 +169,7 @@ impl App {
     }
     pub(super) fn arrow_panel(&self) -> Element<'_, Message> {
         use super::workspace::{muted, section};
-        use iced::widget::{button, canvas, checkbox, column, pick_list, row, text, text_input};
+        use iced::widget::{button, checkbox, column, pick_list, row, text, text_input};
         use iced::{Alignment, Length};
         let s = &self.arrows.style;
         let has_selection = self

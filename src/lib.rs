@@ -30,6 +30,7 @@ pub mod graphics;
 pub mod grouping;
 pub mod joining;
 pub mod pages;
+pub mod pictures;
 pub mod printing;
 pub mod recovery;
 pub mod rings;

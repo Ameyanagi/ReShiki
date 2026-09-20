@@ -5,7 +5,7 @@ edition = "2024"
 description = "A molecular drawing workspace"
 
 [dependencies]
-iced = { version = "0.14", default-features = false, features = ["wgpu", "canvas", "tokio", "advanced", "advanced-shaping", "x11", "wayland"] }
+iced = { version = "0.14", default-features = false, features = ["wgpu", "canvas", "tokio", "advanced", "advanced-shaping", "image-without-codecs", "x11", "wayland"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 base64 = "0.22"
@@ -15,9 +15,10 @@ tempfile = "3"
 directories-next = "2"
 resvg = "0.45"
 png = "0.17"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "tiff", "webp"] }
 pdf-writer = "0.12.1"
 ttf-parser = "0.25"
-svg2pdf = { version = "0.13", default-features = false, features = ["text"] }
+svg2pdf = { version = "0.13", default-features = false, features = ["text", "image"] }
 
 [profile.dev]
 debug = 1

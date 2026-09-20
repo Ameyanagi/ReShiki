@@ -2,10 +2,11 @@ use super::{
     App, InspectorTab, Message,
     icons::{Glyph, Icon},
 };
+use crate::canvas::layered::canvas;
 use crate::canvas::{Edit, MoleculeCanvas, Tool};
 use iced::widget::{
-    Space, button, canvas, checkbox, column, combo_box, container, pick_list, row, scrollable,
-    sensor, text, text_editor, text_input, tooltip,
+    Space, button, checkbox, column, combo_box, container, pick_list, row, scrollable, sensor,
+    text, text_editor, text_input, tooltip,
 };
 use iced::{Alignment, Border, Color, Element, Length, Theme};
 use moruno::bonds::{BondPreset, DoublePosition};

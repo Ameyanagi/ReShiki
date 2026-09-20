@@ -7,6 +7,7 @@ use moruno::{
     scene::{Primitive, primitives},
 };
 pub mod guides;
+pub mod layered;
 mod pages;
 mod selection;
 use selection::{Handle, SelectionBox, TransformDrag};
@@ -882,26 +883,27 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
-        let mut frame = Frame::new(renderer, bounds.size());
         let paper = self.guides.paper(bounds);
         let offset = Vector::new(paper.x - bounds.x, paper.y - bounds.y);
-        frame.with_clip(
+        let mut frame = layered::Frame::clipped(
+            renderer,
             Rectangle {
                 x: offset.x,
                 y: offset.y,
                 ..paper
             },
-            |frame| {
-                frame.translate(offset);
-                self.draw_paper(frame, state, paper, cursor);
-            },
+            offset,
         );
+        self.draw_paper(&mut frame, state, paper, cursor);
+        let mut layers = frame.finish();
+        let mut frame = Frame::new(renderer, bounds.size());
         let pointer = state
             .cursor
             .filter(|p| paper.contains(*p))
             .map(|p| Point::new(p.x - paper.x, p.y - paper.y));
         self.guides.draw_rulers(&mut frame, self.camera, pointer);
-        vec![frame.into_geometry()]
+        layers.push(frame.into_geometry());
+        layers
     }
     fn mouse_interaction(
         &self,
@@ -960,7 +962,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
 impl MoleculeCanvas<'_> {
     fn draw_paper(
         &self,
-        frame: &mut Frame,
+        frame: &mut layered::Frame<'_>,
         state: &State,
         bounds: Rectangle,
         cursor: mouse::Cursor,
@@ -1843,9 +1845,41 @@ pub fn distance_to_segment(p: World, a: World, b: World) -> f32 {
     p.distance(a.offset(v.x * t, v.y * t))
 }
 
-fn draw_document(frame: &mut Frame, doc: &Document, camera: Camera, bounds: Rectangle) {
+fn draw_document(
+    frame: &mut layered::Frame<'_>,
+    doc: &Document,
+    camera: Camera,
+    bounds: Rectangle,
+) {
     for primitive in primitives(doc) {
         match primitive {
+            Primitive::Picture(g) => {
+                if let Some(picture) = &g.picture {
+                    let flip = g.axis_x.x * g.axis_y.y - g.axis_x.y * g.axis_y.x < 0.;
+                    if let Some(handle) = picture.handle(flip) {
+                        let width = g.axis_x.distance(World::default()) * camera.zoom;
+                        let height = g.axis_y.distance(World::default()) * camera.zoom;
+                        let center = camera.screen(
+                            g.origin.offset(
+                                (g.axis_x.x + g.axis_y.x) / 2.,
+                                (g.axis_x.y + g.axis_y.y) / 2.,
+                            ),
+                            bounds,
+                        );
+                        frame.split();
+                        frame.draw_image(
+                            Rectangle {
+                                x: center.x - width / 2.,
+                                y: center.y - height / 2.,
+                                width,
+                                height,
+                            },
+                            canvas::Image::new(handle).rotation(g.axis_x.y.atan2(g.axis_x.x)),
+                        );
+                        frame.split();
+                    }
+                }
+            }
             Primitive::Path {
                 commands,
                 style,
@@ -1960,7 +1994,7 @@ impl<Message> canvas::Program<Message> for TemplateThumbnail<'_> {
         bounds: Rectangle,
         _: mouse::Cursor,
     ) -> Vec<Geometry> {
-        let mut frame = Frame::new(renderer, bounds.size());
+        let mut frame = layered::Frame::new(renderer, bounds.size());
         let (lo, hi) = moruno::scene::selection_bounds(self.0, &self.0.all_ids())
             .unwrap_or_else(|| self.0.bounds());
         let camera = Camera {
@@ -1970,7 +2004,7 @@ impl<Message> canvas::Program<Message> for TemplateThumbnail<'_> {
                 .min(0.85),
         };
         draw_document(&mut frame, self.0, camera, bounds);
-        vec![frame.into_geometry()]
+        frame.finish()
     }
 }
 
@@ -2083,7 +2117,7 @@ impl canvas::Program<moruno::templates::Anchor> for TemplateAnchorPreview<'_> {
         bounds: Rectangle,
         _: mouse::Cursor,
     ) -> Vec<Geometry> {
-        let mut frame = Frame::new(renderer, bounds.size());
+        let mut frame = layered::Frame::new(renderer, bounds.size());
         let camera = self.camera(bounds);
         frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::WHITE);
         draw_document(&mut frame, self.document, camera, bounds);
@@ -2114,7 +2148,7 @@ impl canvas::Program<moruno::templates::Anchor> for TemplateAnchorPreview<'_> {
                 _ => {}
             }
         }
-        vec![frame.into_geometry()]
+        frame.finish()
     }
 }
 
@@ -2141,7 +2175,7 @@ impl canvas::Program<crate::app::Message> for ArrowPreview {
         bounds: Rectangle,
         _: mouse::Cursor,
     ) -> Vec<Geometry> {
-        let mut frame = Frame::new(renderer, bounds.size());
+        let mut frame = layered::Frame::new(renderer, bounds.size());
         let mut doc = Document::default();
         doc.arrows.push(self.arrow.clone());
         let (lo, hi) = self.arrow.bounds();
@@ -2152,7 +2186,7 @@ impl canvas::Program<crate::app::Message> for ArrowPreview {
                 .min(1.4),
         };
         draw_document(&mut frame, &doc, camera, bounds);
-        vec![frame.into_geometry()]
+        frame.finish()
     }
 }
 
@@ -2168,7 +2202,7 @@ impl canvas::Program<crate::app::Message> for ScientificPreview {
         bounds: Rectangle,
         _: mouse::Cursor,
     ) -> Vec<Geometry> {
-        let mut frame = Frame::new(renderer, bounds.size());
+        let mut frame = layered::Frame::new(renderer, bounds.size());
         let (lo, hi) = self.0.bounds();
         let camera = Camera {
             center: World::new((lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5),
@@ -2181,7 +2215,7 @@ impl canvas::Program<crate::app::Message> for ScientificPreview {
             ..Document::default()
         };
         draw_document(&mut frame, &doc, camera, bounds);
-        vec![frame.into_geometry()]
+        frame.finish()
     }
 }
 
@@ -2197,7 +2231,7 @@ impl canvas::Program<crate::app::Message> for DrawingPreview<'_> {
         bounds: Rectangle,
         _: mouse::Cursor,
     ) -> Vec<Geometry> {
-        let mut frame = Frame::new(renderer, bounds.size());
+        let mut frame = layered::Frame::new(renderer, bounds.size());
         frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::WHITE);
         let (lo, hi) =
             moruno::scene::selection_bounds(self.0, &self.0.all_ids()).unwrap_or_default();
@@ -2208,7 +2242,7 @@ impl canvas::Program<crate::app::Message> for DrawingPreview<'_> {
                 .clamp(0.001, 1.4),
         };
         draw_document(&mut frame, self.0, camera, bounds);
-        vec![frame.into_geometry()]
+        frame.finish()
     }
 }
 

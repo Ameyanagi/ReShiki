@@ -1,7 +1,8 @@
 //! In-place caption drafts. Applying is one document edit; Escape is nonmutating.
 use super::{App, Message};
+use crate::canvas::layered::canvas;
 use iced::widget::{
-    Space, button, canvas, column, container, mouse_area, opaque, row, stack, text, text_editor,
+    Space, button, column, container, mouse_area, opaque, row, stack, text, text_editor,
 };
 use iced::{Alignment, Border, Color, Element, Length, Task};
 use moruno::{
