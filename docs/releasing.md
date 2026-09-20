@@ -1,6 +1,6 @@
 # Release builds and macOS signing
 
-The Release builds workflow produces native portable packages for Apple Silicon macOS, Intel macOS, Windows x64 and Linux x64. Users install uv. Packages include the chemistry source and a dependency lockfile; uv installs Python and chemistry libraries into a local user environment on first use. Build outputs contain dependency notices, source/version metadata and SHA-256 checksums.
+The Release builds workflow produces native portable packages for Apple Silicon macOS, Windows x64/ARM64 and Linux x64/ARM64. Intel macOS is not supported. Users install uv. Packages include the chemistry source and a dependency lockfile; uv installs Python and chemistry libraries into a local user environment on first use. Build outputs contain dependency notices, source/version metadata and SHA-256 checksums.
 
 ## Test a build
 
@@ -14,7 +14,7 @@ gh workflow run release.yml --ref main -f sign_macos=true
 
 Each archive is extracted into a temporary directory with spaces outside the checkout. The extracted executable must report clear missing-uv instructions, set up a fresh local environment and return the expected ethanol formula and SMILES. A second launch must work with uv in offline mode. On macOS, the app signature is verified again after setup. This is a packaging check, not a complete graphical acceptance test. Test the GUI on each supported operating system before announcing a release.
 
-The [2026-09-20 packaging run](https://github.com/Ameyanagi/moruno/actions/runs/35504965288) passed these checks on all four targets. It was an unsigned test run; Developer ID signing and notarization still require the Apple account credentials described below.
+The [2026-09-20 signing test](https://github.com/Ameyanagi/moruno/actions/runs/35508449077) passed Developer ID signing, Apple notarization, stapling, Gatekeeper assessment, and extracted-package chemistry checks on Apple Silicon. It did not publish a release. That run preceded the ARM Windows/Linux additions; those targets require their own successful runner checks.
 
 ## Publish a version
 
@@ -27,7 +27,7 @@ git tag -a v0.2.0 -m "Moruno 0.2.0"
 git push origin v0.2.0
 ```
 
-A `v*` tag triggers builds. A mismatched version fails before packaging. Both macOS archives must be signed, notarized, stapled and verified before the release publishes; missing credentials fail the job instead of silently publishing unsigned macOS downloads. All four targets must succeed. Tags containing a prerelease suffix create a GitHub prerelease. Manual builds never publish a release.
+A `v*` tag triggers builds. A mismatched version fails before packaging. The macOS archive must be signed, notarized, stapled and verified before the release publishes; missing credentials fail the job instead of silently publishing an unsigned macOS download. All five targets must succeed. Windows and Linux packages remain unsigned. Tags containing a prerelease suffix create a GitHub prerelease. Manual builds never publish a release.
 
 ## Configure macOS signing
 
@@ -69,6 +69,8 @@ uv sync --locked --python 3.12
 uv run --locked python scripts/build_release.py
 ```
 
-Intel macOS uses RDKit 2025.9.2, the last compatible wheel release; other targets use the newer version recorded in `uv.lock`. The lock resolver requires wheels for all four release targets, and every native build runs the Python regression suite before packaging.
+Windows ARM uses a native ARM64 application and an x64 Python/RDKit worker through Windows 11's built-in emulation, because RDKit does not publish Windows ARM wheels. Linux ARM uses native aarch64 chemistry packages. The lock resolver checks the supported chemistry environments. Packaging checks the CPU architecture of both the application and its installed worker, and every build runs the Python regression suite before packaging.
+
+Build runners are macOS 14, Windows Server 2022 x64, Windows 11 ARM, Ubuntu 22.04 x64, and Ubuntu 24.04 ARM. Pass `--target` to `scripts/build_release.py` to select the explicit Rust target; package names derive from that target, including when packaging Python uses a different architecture.
 
 Build on the target operating system. Python and RDKit are installed by the user’s uv at runtime. Archives are written to `dist/releases/`. On macOS, `scripts/build_macos_app.py` still builds the development app, and `--portable --release` builds an optimized app with the worker source and lockfile included.

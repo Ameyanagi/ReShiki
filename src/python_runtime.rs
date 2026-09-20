@@ -10,6 +10,16 @@ use tokio::process::Command;
 
 const INSTALL_UV: &str = "Moruno needs uv to set up local chemistry packages. Install uv from https://docs.astral.sh/uv/getting-started/installation/, then retry. A separate Python installation is not required.";
 
+fn python_request(os: &str, arch: &str) -> &'static str {
+    // RDKit's Windows wheels are x64. The ARM UI uses a separate x64 worker
+    // through Windows 11's built-in emulation; the drawing process stays native.
+    if os == "windows" && arch == "aarch64" {
+        "cpython-3.12-windows-x86_64-none"
+    } else {
+        "3.12"
+    }
+}
+
 pub(crate) fn packaged_project(executable: &Path) -> Option<PathBuf> {
     let directory = executable.parent()?;
     let project = if cfg!(target_os = "macos") {
@@ -74,6 +84,7 @@ fn environment_path(project: &Path, cache: &Path) -> Result<PathBuf, String> {
     lock.hash(&mut hash);
     std::env::consts::ARCH.hash(&mut hash);
     std::env::consts::OS.hash(&mut hash);
+    python_request(std::env::consts::OS, std::env::consts::ARCH).hash(&mut hash);
     Ok(cache.join(format!(
         "{}-{:016x}",
         env!("CARGO_PKG_VERSION"),
@@ -104,7 +115,7 @@ pub(crate) async fn prepare(project: &Path) -> Result<PathBuf, String> {
             "--locked",
             "--no-dev",
             "--python",
-            "3.12",
+            python_request(std::env::consts::OS, std::env::consts::ARCH),
             "--project",
         ])
         .arg(project)
@@ -142,6 +153,22 @@ pub(crate) async fn prepare(project: &Path) -> Result<PathBuf, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn windows_arm_requests_an_x64_worker_and_other_platforms_remain_native() {
+        assert_eq!(
+            python_request("windows", "aarch64"),
+            "cpython-3.12-windows-x86_64-none"
+        );
+        for (os, arch) in [
+            ("windows", "x86_64"),
+            ("linux", "aarch64"),
+            ("linux", "x86_64"),
+            ("macos", "aarch64"),
+        ] {
+            assert_eq!(python_request(os, arch), "3.12");
+        }
+    }
 
     #[test]
     fn detects_a_relocated_worker_project_only_when_complete() {

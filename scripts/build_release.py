@@ -15,6 +15,13 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+RELEASE_TARGETS = {
+    "aarch64-apple-darwin": ("macos", "arm64"),
+    "x86_64-pc-windows-msvc": ("windows", "x64"),
+    "aarch64-pc-windows-msvc": ("windows", "arm64"),
+    "x86_64-unknown-linux-gnu": ("linux", "x64"),
+    "aarch64-unknown-linux-gnu": ("linux", "arm64"),
+}
 
 
 def run(command, **kwargs):
@@ -28,6 +35,47 @@ def version():
 def check_tag(tag):
     if tag != f"v{version()}":
         raise ValueError(f"Tag {tag!r} must match Cargo.toml version v{version()}")
+
+
+def release_platform(target):
+    """Name the native application, independently of the packaging Python process."""
+    try:
+        return RELEASE_TARGETS[target]
+    except KeyError as error:
+        raise ValueError(f"Unsupported release target: {target}") from error
+
+
+def host_target():
+    result = run(["rustc", "-vV"], capture_output=True, text=True)
+    for line in result.stdout.splitlines():
+        if line.startswith("host: "):
+            return line.removeprefix("host: ").strip()
+    raise ValueError("rustc did not report its host target")
+
+
+def chemistry_architecture(system, architecture):
+    # Windows 11 ARM runs the available RDKit x64 wheel in a separate process.
+    return "x64" if system == "windows" else architecture
+
+
+def verify_binary(binary, system, architecture):
+    """Reject an accidentally packaged host binary in an ARM release, or vice versa."""
+    machine = None
+    with Path(binary).open("rb") as stream:
+        header = stream.read(64)
+        if system == "macos" and header[:4] == b"\xcf\xfa\xed\xfe":
+            machine = {0x0100000C: "arm64", 0x01000007: "x64"}.get(
+                int.from_bytes(header[4:8], "little")
+            )
+        elif system == "linux" and header[:6] == b"\x7fELF\x02\x01":
+            machine = {183: "arm64", 62: "x64"}.get(int.from_bytes(header[18:20], "little"))
+        elif system == "windows" and len(header) == 64 and header[:2] == b"MZ":
+            stream.seek(int.from_bytes(header[60:64], "little"))
+            pe = stream.read(6)
+            if pe[:4] == b"PE\0\0":
+                machine = {0xAA64: "arm64", 0x8664: "x64"}.get(int.from_bytes(pe[4:6], "little"))
+    if machine != architecture:
+        raise ValueError(f"Expected {system} {architecture} executable, found {machine}: {binary}")
 
 
 def runtime_project():
@@ -62,11 +110,12 @@ def notices(destination):
                 shutil.copy2(candidate, folder / candidate.name)
 
 
-def mac_bundle(destination, profile, worker=None):
+def mac_bundle(destination, profile, worker=None, target=None):
     executable = destination / "Contents/MacOS/moruno"
     executable.parent.mkdir(parents=True, exist_ok=True)
     staged = executable.with_suffix(".new")
-    shutil.copy2(ROOT / "target" / profile / "moruno", staged)
+    build = ROOT / "target" / target if target else ROOT / "target"
+    shutil.copy2(build / profile / "moruno", staged)
     staged.replace(executable)
     print_app = destination / "Contents/Helpers/Moruno Print.app"
     helpers = [
@@ -151,6 +200,7 @@ def verify_archive(archive_path, signed=False):
         if len(folders) != 1:
             raise ValueError("Expected one application directory")
         folder = folders[0]
+        metadata = json.loads((folder / "build.json").read_text(encoding="utf-8"))
         if platform.system() == "Darwin":
             app = folder / "Moruno.app"
             binary = app / "Contents/MacOS/moruno"
@@ -161,6 +211,7 @@ def verify_archive(archive_path, signed=False):
                 verify_app(app)
         else:
             binary = folder / ("moruno.exe" if os.name == "nt" else "moruno")
+        verify_binary(binary, metadata["platform"], metadata["architecture"])
         environment = dict(os.environ)
         environment.pop("MORUNO_PYTHON", None)
         environment["MORUNO_RUNTIME_DIR"] = str(extracted / "user runtime")
@@ -194,6 +245,15 @@ def verify_archive(archive_path, signed=False):
             or result.get("analysis", {}).get("smiles") != "CCO"
         ):
             raise ValueError("Packaged chemistry engine did not return ethanol")
+        python_name = "Scripts/python.exe" if os.name == "nt" else "bin/python"
+        interpreters = list((extracted / "user runtime").glob(f"*/{python_name}"))
+        if len(interpreters) != 1:
+            raise ValueError("Expected one locally installed chemistry interpreter")
+        verify_binary(
+            interpreters[0],
+            metadata["platform"],
+            chemistry_architecture(metadata["platform"], metadata["architecture"]),
+        )
         # Reuse exactly this environment with network disabled on the next launch.
         environment["UV_OFFLINE"] = "1"
         offline = run(
@@ -217,6 +277,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tag")
     parser.add_argument("--sign", action="store_true")
+    parser.add_argument("--target", choices=sorted(RELEASE_TARGETS))
     parser.add_argument("--check-tag-only", action="store_true")
     args = parser.parse_args()
     if args.tag:
@@ -225,31 +286,39 @@ def main():
         return
     if args.sign and platform.system() != "Darwin":
         raise ValueError("Developer ID signing requires macOS")
-    system = {"Darwin": "macos", "Windows": "windows", "Linux": "linux"}[platform.system()]
-    arch = "arm64" if platform.machine().lower() in {"arm64", "aarch64"} else "x64"
+    target = args.target or host_target()
+    system, arch = release_platform(target)
+    if {"Darwin": "macos", "Windows": "windows", "Linux": "linux"}.get(platform.system()) != system:
+        raise ValueError(
+            "Build and verify a release on a runner with the matching operating system"
+        )
     name = f"moruno-{version()}-{system}-{arch}"
     # This staging tree is separate from the app a developer may have open in dist/.
     folder = ROOT / "target/release-bundles" / name
     if folder.exists():
         shutil.rmtree(folder)
     folder.mkdir(parents=True)
-    run(["cargo", "build", "--release", "--locked"], cwd=ROOT)
+    run(["cargo", "build", "--release", "--locked", "--target", target], cwd=ROOT)
+    build = ROOT / "target" / target / "release"
+    binary_name = "moruno.exe" if system == "windows" else "moruno"
+    verify_binary(build / binary_name, system, arch)
     worker = runtime_project()
     if system == "macos":
-        app = mac_bundle(folder / "Moruno.app", "release", worker)
+        app = mac_bundle(folder / "Moruno.app", "release", worker, target=target)
         if args.sign:
             from sign_macos import sign_and_notarize
 
             sign_and_notarize(app)
     else:
-        binary = "moruno.exe" if os.name == "nt" else "moruno"
-        shutil.copy2(ROOT / "target/release" / binary, folder / binary)
+        shutil.copy2(build / binary_name, folder / binary_name)
         shutil.copytree(worker, folder / "chemistry", symlinks=True)
         notices(folder / "Licenses")
     metadata = dict(
         version=version(),
         platform=system,
         architecture=arch,
+        rust_target=target,
+        chemistry_architecture=chemistry_architecture(system, arch),
         signed=args.sign,
         notarized=args.sign,
         commit=os.environ.get("GITHUB_SHA", "local"),
@@ -262,6 +331,12 @@ def main():
         "First setup requires internet access; later use works offline.\n"
         "Keep the entire extracted folder together.\n"
         "Documentation: https://ameyanagi.github.io/moruno/\n"
+        + (
+            "Windows 11 on ARM is required. The app is native ARM64; its local chemistry\n"
+            "worker uses Windows' built-in x64 emulation.\n"
+            if system == "windows" and arch == "arm64"
+            else ""
+        )
         + (
             "macOS application signed with Developer ID and notarized by Apple.\n"
             if args.sign

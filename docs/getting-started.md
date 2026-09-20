@@ -6,14 +6,15 @@ Moruno is a desktop workspace for editable chemical drawings. Molecule processin
 
 Download a package for your computer from [GitHub Releases](https://github.com/Ameyanagi/moruno/releases). If no release is listed yet, use the source instructions below. The release workflow builds these packages:
 
-| Computer          | Package            | Open         |
-| ----------------- | ------------------ | ------------ |
-| Apple Silicon Mac | `macos-arm64.zip`  | `Moruno.app` |
-| Intel Mac         | `macos-x64.zip`    | `Moruno.app` |
-| Windows x64       | `windows-x64.zip`  | `moruno.exe` |
-| Linux x64         | `linux-x64.tar.gz` | `./moruno`   |
+| Computer          | Package              | Open         |
+| ----------------- | -------------------- | ------------ |
+| Apple Silicon Mac | `macos-arm64.zip`    | `Moruno.app` |
+| Windows x64       | `windows-x64.zip`    | `moruno.exe` |
+| Windows ARM       | `windows-arm64.zip`  | `moruno.exe` |
+| Linux x64         | `linux-x64.tar.gz`   | `./moruno`   |
+| Linux ARM         | `linux-arm64.tar.gz` | `./moruno`   |
 
-Extract the archive before opening the app, and keep its contents together. On macOS, move the included app to Applications. **Install uv before opening Moruno.** Moruno uses it to create a local Python/RDKit environment on first chemistry use; a separate Python installation is unnecessary. macOS release builds target macOS 14 or later. Linux packages are built on Ubuntu 22.04 and need a desktop session with compatible system graphics libraries. Windows packages target Windows 10/11 x64.
+Extract the archive before opening the app, and keep its contents together. On macOS, move the included app to Applications. **Install uv before opening Moruno.** Moruno uses it to create a local Python/RDKit environment on first chemistry use; a separate Python installation is unnecessary. macOS release builds target Apple Silicon with macOS 14 or later; Intel Macs are unsupported. Linux packages target Ubuntu 22.04+ on x64 and 24.04+ on ARM, with a desktop session and compatible graphics libraries. Windows x64 targets Windows 10/11. Windows ARM requires Windows 11; the app is native ARM64 and its local chemistry worker uses built-in x64 emulation.
 
 Tagged macOS releases require Developer ID signing and Apple notarization. Windows and Linux packages do not currently have publisher signatures. Manual workflow builds may be unsigned and are intended for testing. Packaging smoke tests check local dependency setup and offline chemistry reuse; they do not establish feature parity or full graphical compatibility on every operating system. Native clipboard and printing features currently have macOS-specific support.
 

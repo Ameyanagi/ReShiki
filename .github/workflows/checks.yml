@@ -22,14 +22,26 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, macos-14, macos-15-intel, windows-2022]
+        include:
+          - os: macos-14
+            python: "3.12"
+          - os: windows-2022
+            python: cpython-3.12-windows-x86_64-none
+          - os: windows-11-arm
+            python: cpython-3.12-windows-x86_64-none
+          - os: ubuntu-22.04
+            python: "3.12"
+          - os: ubuntu-24.04-arm
+            python: "3.12"
     runs-on: ${{ matrix.os }}
+    env:
+      UV_PYTHON: ${{ matrix.python }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
           version: "0.12.3"
-          python-version: "3.12"
+          python-version: ${{ matrix.python }}
       - run: uv sync --locked
       - run: uv run --locked ruff check engine scripts tests
       - run: uv run --locked ruff format --check engine scripts tests

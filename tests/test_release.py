@@ -1,5 +1,8 @@
 """Regression checks for release identity, archive naming, and secret handling."""
 
+import contextlib
+import io
+import json
 import os
 import subprocess
 import sys
@@ -10,11 +13,83 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from build_release import archive, check_tag, version
+from build_release import archive, check_tag, main, release_platform, verify_binary, version
 from sign_macos import is_macho, private_run
 
 
 class ReleaseTests(unittest.TestCase):
+    @staticmethod
+    def pe_image(machine):
+        header = bytearray(64)
+        header[:2] = b"MZ"
+        header[60:64] = (64).to_bytes(4, "little")
+        return header + b"PE\0\0" + machine.to_bytes(2, "little")
+
+    def test_windows_arm_package_uses_rust_target_under_x64_python(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = "aarch64-pc-windows-msvc"
+            binary = root / "target" / target / "release/moruno.exe"
+            binary.parent.mkdir(parents=True)
+            binary.write_bytes(self.pe_image(0xAA64))
+            worker = root / "worker"
+            worker.mkdir()
+            (worker / "pyproject.toml").write_text("fixture")
+            with (
+                patch("build_release.ROOT", root),
+                patch("build_release.version", return_value="1.2.3"),
+                patch("build_release.platform.system", return_value="Windows"),
+                patch("build_release.platform.machine", return_value="AMD64"),
+                patch("build_release.runtime_project", return_value=worker),
+                patch("build_release.notices"),
+                patch("build_release.verify_archive"),
+                patch("build_release.run") as run,
+                patch("sys.argv", ["build_release.py", "--target", target]),
+                contextlib.redirect_stdout(io.StringIO()),
+            ):
+                main()
+            run.assert_called_once_with(
+                ["cargo", "build", "--release", "--locked", "--target", target], cwd=root
+            )
+            package = root / "dist/releases/moruno-1.2.3-windows-arm64.zip"
+            with zipfile.ZipFile(package) as stream:
+                metadata = json.loads(stream.read("moruno-1.2.3-windows-arm64/build.json"))
+                self.assertEqual(metadata["architecture"], "arm64")
+                self.assertEqual(metadata["rust_target"], target)
+                self.assertEqual(metadata["chemistry_architecture"], "x64")
+                self.assertFalse(metadata["signed"])
+                self.assertIn(
+                    b"Windows 11 on ARM is required",
+                    stream.read("moruno-1.2.3-windows-arm64/README.txt"),
+                )
+
+    def test_native_headers_reject_mislabeled_or_damaged_archives(self):
+        elf = bytearray(64)
+        elf[:6] = b"\x7fELF\x02\x01"
+        elf[18:20] = (183).to_bytes(2, "little")
+        fixtures = [
+            ("windows", self.pe_image(0xAA64)),
+            ("linux", elf),
+            ("macos", b"\xcf\xfa\xed\xfe" + (0x0100000C).to_bytes(4, "little")),
+        ]
+        with tempfile.TemporaryDirectory() as temporary:
+            binary = Path(temporary) / "native"
+            for system, data in fixtures:
+                with self.subTest(system=system):
+                    binary.write_bytes(data)
+                    verify_binary(binary, system, "arm64")
+                    with self.assertRaisesRegex(ValueError, "Expected .* x64 executable"):
+                        verify_binary(binary, system, "x64")
+                    binary.write_bytes(data[:4])
+                    with self.assertRaises(ValueError):
+                        verify_binary(binary, system, "arm64")
+
+    def test_release_targets_do_not_include_intel_mac_or_guess_unknown_architectures(self):
+        self.assertEqual(release_platform("aarch64-unknown-linux-gnu"), ("linux", "arm64"))
+        for target in ["x86_64-apple-darwin", "riscv64gc-unknown-linux-gnu"]:
+            with self.assertRaisesRegex(ValueError, "Unsupported release target"):
+                release_platform(target)
+
     def test_tag_must_match_package_version(self):
         check_tag(f"v{version()}")
         with self.assertRaisesRegex(ValueError, "must match"):
