@@ -11,7 +11,6 @@ dependencies = [
 
 [dependency-groups]
 dev = ["ruff>=0.16.8", "ty>=0.0.82"]
-packaging = ["pyinstaller>=6.16,<7"]
 
 [tool.uv]
 package = false

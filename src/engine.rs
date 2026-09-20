@@ -162,47 +162,32 @@ struct Worker {
 pub struct PythonEngine {
     worker: Arc<Mutex<Option<Worker>>>,
 }
-fn bundled_worker(executable: &std::path::Path) -> Option<PathBuf> {
-    let directory = executable.parent()?;
-    let worker = if cfg!(target_os = "macos") {
-        directory
-            .parent()?
-            .join("Resources/chemistry/moruno-engine")
-    } else {
-        directory.join("chemistry").join(if cfg!(windows) {
-            "moruno-engine.exe"
-        } else {
-            "moruno-engine"
-        })
-    };
-    worker.is_file().then_some(worker)
-}
-
 impl PythonEngine {
     async fn spawn() -> Result<Worker, String> {
-        let bundled = std::env::current_exe()
+        let packaged = std::env::current_exe()
             .ok()
-            .and_then(|exe| bundled_worker(&exe));
-        let root = std::env::var_os("MORUNO_ROOT")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")));
-        let default_python = if cfg!(windows) {
-            root.join(".venv/Scripts/python.exe")
+            .and_then(|exe| crate::python_runtime::packaged_project(&exe));
+        let root = packaged.clone().unwrap_or_else(|| {
+            std::env::var_os("MORUNO_ROOT")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")))
+        });
+        let python = if let Some(path) = std::env::var_os("MORUNO_PYTHON") {
+            PathBuf::from(path)
+        } else if let Some(project) = &packaged {
+            crate::python_runtime::prepare(project).await?
         } else {
-            root.join(".venv/bin/python")
+            root.join(if cfg!(windows) {
+                ".venv/Scripts/python.exe"
+            } else {
+                ".venv/bin/python"
+            })
         };
-        let python = std::env::var_os("MORUNO_PYTHON")
-            .map(PathBuf::from)
-            .unwrap_or(default_python);
-        let mut command = if let Some(executable) =
-            bundled.filter(|_| std::env::var_os("MORUNO_PYTHON").is_none())
-        {
-            Command::new(executable)
-        } else {
-            let mut command = Command::new(&python);
-            command.arg("-u").arg(root.join("engine/worker.py"));
-            command
-        };
+        let mut command = Command::new(python);
+        command
+            .arg("-u")
+            .arg(root.join("engine/worker.py"))
+            .env("PYTHONDONTWRITEBYTECODE", "1");
         // A GUI launch on Windows must not open a console for the local worker.
         #[cfg(windows)]
         command.creation_flags(0x08000000);
@@ -229,10 +214,14 @@ impl PythonEngine {
             doc.validate()?;
         }
         let mut slot = self.worker.lock().await;
-        if slot.is_none() {
+        let starting = slot.is_none();
+        if starting {
             *slot = Some(Self::spawn().await?);
         }
-        let result = tokio::time::timeout(Duration::from_secs(30), async {
+        // A newly installed RDKit environment may need additional time for the
+        // operating system to load and validate its native libraries once.
+        let timeout_seconds = if starting { 120 } else { 30 };
+        let result = tokio::time::timeout(Duration::from_secs(timeout_seconds), async {
             let worker = slot.as_mut().ok_or("Chemistry worker is unavailable")?;
             let id = worker.next_id;
             worker.next_id = worker
@@ -287,7 +276,11 @@ impl PythonEngine {
             Ok(response)
         })
         .await
-        .unwrap_or_else(|_| Err("Chemistry operation timed out after 30 seconds".into()));
+        .unwrap_or_else(|_| {
+            Err(format!(
+                "Chemistry operation timed out after {timeout_seconds} seconds"
+            ))
+        });
         // Reset also on chemistry errors: the next request always has a clean stream.
         if result.is_err() {
             *slot = None;
@@ -298,33 +291,5 @@ impl PythonEngine {
 impl ChemistryEngine for PythonEngine {
     async fn execute(&self, request: Request) -> Result<Response, String> {
         self.request(request).await
-    }
-}
-
-#[cfg(test)]
-mod packaging_tests {
-    use super::bundled_worker;
-
-    #[test]
-    fn discovers_the_bundled_worker_in_a_relocated_directory() {
-        let temp = tempfile::tempdir().unwrap();
-        let root = temp.path().join("Moruno with spaces");
-        let (exe, worker) = if cfg!(target_os = "macos") {
-            (
-                root.join("Contents/MacOS/moruno"),
-                root.join("Contents/Resources/chemistry/moruno-engine"),
-            )
-        } else if cfg!(windows) {
-            (
-                root.join("Moruno.exe"),
-                root.join("chemistry/moruno-engine.exe"),
-            )
-        } else {
-            (root.join("moruno"), root.join("chemistry/moruno-engine"))
-        };
-        assert_eq!(bundled_worker(&exe), None);
-        std::fs::create_dir_all(worker.parent().unwrap()).unwrap();
-        std::fs::write(&worker, b"fixture").unwrap();
-        assert_eq!(bundled_worker(&exe), Some(worker));
     }
 }

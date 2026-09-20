@@ -13,9 +13,34 @@ Download a package for your computer from [GitHub Releases](https://github.com/A
 | Windows x64       | `windows-x64.zip`  | `moruno.exe` |
 | Linux x64         | `linux-x64.tar.gz` | `./moruno`   |
 
-Extract the archive before opening the app, and keep its contents together. On macOS, move the included app to Applications. Each package includes Python and RDKit; a separate Python installation is unnecessary. macOS release builds target macOS 14 or later. Linux packages are built on Ubuntu 22.04 and need a desktop session with compatible system graphics libraries. Windows packages target Windows 10/11 x64.
+Extract the archive before opening the app, and keep its contents together. On macOS, move the included app to Applications. **Install uv before opening Moruno.** Moruno uses it to create a local Python/RDKit environment on first chemistry use; a separate Python installation is unnecessary. macOS release builds target macOS 14 or later. Linux packages are built on Ubuntu 22.04 and need a desktop session with compatible system graphics libraries. Windows packages target Windows 10/11 x64.
 
-Tagged macOS releases require Developer ID signing and Apple notarization. Windows and Linux packages do not currently have publisher signatures. Manual workflow builds may be unsigned and are intended for testing. Packaging smoke tests check the bundled chemistry engine; they do not establish feature parity or full graphical compatibility on every operating system. Native clipboard and printing features currently have macOS-specific support.
+Tagged macOS releases require Developer ID signing and Apple notarization. Windows and Linux packages do not currently have publisher signatures. Manual workflow builds may be unsigned and are intended for testing. Packaging smoke tests check local dependency setup and offline chemistry reuse; they do not establish feature parity or full graphical compatibility on every operating system. Native clipboard and printing features currently have macOS-specific support.
+
+## Install uv
+
+Follow the [official uv installation instructions](https://docs.astral.sh/uv/getting-started/installation/), or use a package manager:
+
+```sh
+# macOS with Homebrew
+brew install uv
+```
+
+```powershell
+# Windows with WinGet
+winget install --id astral-sh.uv -e
+```
+
+```sh
+# Linux (also supported on macOS)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Restart your terminal after installation and run `uv --version` to verify it. Then open Moruno. The app also searches uv's standard installation directory when launched from Finder or a desktop shortcut.
+
+On first chemistry use, Moruno runs uv in the background to install Python 3.12 and the exact chemistry dependencies from the release's lockfile. Allow an internet connection for this setup. The drawing canvas remains responsive; failed setup reports an actionable error and you can retry the chemistry operation. Once installed, the local packages support offline use.
+
+The environment is stored in Moruno's per-user cache, outside the application bundle. Different dependency sets receive separate environments. Advanced overrides: `MORUNO_UV` selects a uv executable, `MORUNO_RUNTIME_DIR` selects an absolute cache directory, and `MORUNO_PYTHON` selects an already prepared external Python environment.
 
 ## Draw your first molecule
 

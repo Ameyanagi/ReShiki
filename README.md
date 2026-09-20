@@ -8,9 +8,11 @@ The default drawing style is **JACS / ACS**: black bonds and labels, 10 pt Arial
 
 [Documentation](https://ameyanagi.github.io/moruno/) · [Downloads](https://github.com/Ameyanagi/moruno/releases) · [Development and pre-commit hooks](docs/development.md)
 
+Desktop downloads require [uv](https://docs.astral.sh/uv/getting-started/installation/). See [installation](docs/getting-started.md) for platform commands and first-use setup.
+
 ## Run
 
-Requires a current Rust toolchain and [uv](https://docs.astral.sh/uv/). Tested on Apple Silicon macOS with Rust 1.95, Iced 0.14, Python 3.12, and RDKit 2026.3.6. Release CI builds native macOS, Windows and Linux packages and verifies their bundled chemistry engines. Full graphical workflows are currently verified on macOS; see [installation and platform limits](docs/getting-started.md).
+Requires a current Rust toolchain and [uv](https://docs.astral.sh/uv/). Tested on Apple Silicon macOS with Rust 1.95, Iced 0.14, Python 3.12, and RDKit 2026.3.6. Release CI builds native macOS, Windows and Linux packages and verifies local uv setup and offline chemistry reuse. Full graphical workflows are currently verified on macOS; see [installation and platform limits](docs/getting-started.md).
 
 ```sh
 cd ~/dev/moruno
@@ -24,12 +26,12 @@ Build a macOS app bundle:
 python3 scripts/build_macos_app.py
 open target/debug/Moruno.app
 
-# Includes Python and RDKit; can be moved outside the checkout
-python3 scripts/build_macos_app.py --standalone
+# Portable app; requires uv and sets up local chemistry on first use
+python3 scripts/build_macos_app.py --portable
 open dist/Moruno.app
 ```
 
-The default development bundle uses this checkout's `engine/worker.py` and `.venv`. The `--standalone` bundle includes its chemistry worker and needs neither the checkout nor an installed Python. Add `--release` for an optimized Rust build. This local bundle is signed ad hoc. Tagged releases use Developer ID signing and Apple notarization; see [release setup](docs/releasing.md). `MORUNO_ROOT` overrides the development worker directory; `MORUNO_PYTHON` explicitly selects an external Python even in a standalone bundle. All molecule processing runs locally, without a chemistry service account.
+The default development bundle uses this checkout's `engine/worker.py` and `.venv`. The `--portable` bundle includes the worker source and dependency lockfile. Users install **uv** first; Moruno then creates a local Python/RDKit environment asynchronously on first use. Initial setup requires internet access. Later use works offline and the signed app bundle stays unchanged. Add `--release` for an optimized Rust build. This local bundle is signed ad hoc. Tagged releases use Developer ID signing and Apple notarization; see [release setup](docs/releasing.md). `MORUNO_ROOT` overrides the development worker directory; `MORUNO_PYTHON` explicitly selects an external Python even in a portable bundle. All molecule processing runs locally, without a chemistry service account.
 
 ## Use
 

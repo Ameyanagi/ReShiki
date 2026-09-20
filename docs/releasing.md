@@ -1,6 +1,6 @@
 # Release builds and macOS signing
 
-The Release builds workflow produces native portable packages for Apple Silicon macOS, Intel macOS, Windows x64 and Linux x64. Python, RDKit and required Python libraries are included. Build outputs contain dependency notices, source/version metadata and SHA-256 checksums.
+The Release builds workflow produces native portable packages for Apple Silicon macOS, Intel macOS, Windows x64 and Linux x64. Users install uv. Packages include the chemistry source and a dependency lockfile; uv installs Python and chemistry libraries into a local user environment on first use. Build outputs contain dependency notices, source/version metadata and SHA-256 checksums.
 
 ## Test a build
 
@@ -12,7 +12,7 @@ gh workflow run release.yml --ref main
 gh workflow run release.yml --ref main -f sign_macos=true
 ```
 
-Each archive is extracted into a temporary directory with spaces outside the checkout. The extracted executable must start the included worker and return the expected ethanol formula. This is a packaging check, not a complete graphical acceptance test. Test the GUI on each supported operating system before announcing a release.
+Each archive is extracted into a temporary directory with spaces outside the checkout. The extracted executable must report clear missing-uv instructions, set up a fresh local environment and return the expected ethanol formula and SMILES. A second launch must work with uv in offline mode. On macOS, the app signature is verified again after setup. This is a packaging check, not a complete graphical acceptance test. Test the GUI on each supported operating system before announcing a release.
 
 ## Publish a version
 
@@ -56,17 +56,17 @@ uv run --locked python scripts/configure_macos_signing.py
 
 Create an app-specific password at [Apple Account](https://account.apple.com/). Do not use your normal account password. GitHub secrets cannot be read back or copied directly from another repository. Keep the original encrypted certificate and password in your secure credential store.
 
-The configuration script limits the environment to main and `v*` tags. Signing jobs are separate from compilation and use a temporary keychain that is removed afterward. Every bundled native Python extension, library, helper and app is signed from the inside out with Hardened Runtime and a timestamp. Signing verifies the input archive's checksum and commit before submitting to Apple. The final extracted app must pass signature, stapling, Gatekeeper and chemistry checks.
+The configuration script limits the environment to main and `v*` tags. Signing jobs are separate from compilation and use a temporary keychain that is removed afterward. Every bundled native helper and app is signed from the inside out with Hardened Runtime and a timestamp. Signing verifies the input archive's checksum and commit before submitting to Apple. The final extracted app must pass signature, stapling, Gatekeeper and chemistry checks.
 
 Setup references: [Apple notarization](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution) and [GitHub certificate guidance](https://docs.github.com/en/actions/how-tos/deploy/deploy-to-third-party-platforms/sign-xcode-applications).
 
 ## Build locally
 
 ```sh
-uv sync --locked --group packaging --python 3.12
+uv sync --locked --python 3.12
 uv run --locked python scripts/build_release.py
 ```
 
 Intel macOS uses RDKit 2025.9.2, the last compatible wheel release; other targets use the newer version recorded in `uv.lock`. The lock resolver requires wheels for all four release targets, and every native build runs the Python regression suite before packaging.
 
-Build on the target operating system; PyInstaller is not a cross-compiler. Archives are written to `dist/releases/`. On macOS, `scripts/build_macos_app.py` still builds the development app, and `--standalone --release` builds an optimized app with the worker included.
+Build on the target operating system. Python and RDKit are installed by the user’s uv at runtime. Archives are written to `dist/releases/`. On macOS, `scripts/build_macos_app.py` still builds the development app, and `--portable --release` builds an optimized app with the worker source and lockfile included.

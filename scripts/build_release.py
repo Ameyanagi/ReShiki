@@ -1,4 +1,4 @@
-"""Build and verify a portable native Moruno distribution, including RDKit."""
+"""Build and verify a portable native Moruno distribution, with a uv-managed local chemistry environment."""
 
 import argparse
 import hashlib
@@ -30,41 +30,20 @@ def check_tag(tag):
         raise ValueError(f"Tag {tag!r} must match Cargo.toml version v{version()}")
 
 
-def freeze_worker():
-    work = ROOT / "target/pyinstaller"
-    work.mkdir(parents=True, exist_ok=True)
-    run(
-        [
-            "uv",
-            "run",
-            "--locked",
-            "--group",
-            "packaging",
-            "pyinstaller",
-            "--noconfirm",
-            "--clean",
-            "--onedir",
-            "--name",
-            "moruno-engine",
-            "--paths",
-            ROOT / "engine",
-            "--collect-all",
-            "rdkit",
-            "--collect-all",
-            "numpy",
-            "--add-data",
-            str(ROOT / "engine/drawing_style.json") + os.pathsep + ".",
-            "--distpath",
-            work / "dist",
-            "--workpath",
-            work / "build",
-            "--specpath",
-            work,
-            ROOT / "engine/worker.py",
-        ],
-        cwd=ROOT,
+def runtime_project():
+    """Package source and locked dependencies; users provide uv, not Python."""
+    destination = ROOT / "target/runtime-project"
+    if destination.exists():
+        shutil.rmtree(destination)
+    destination.mkdir(parents=True)
+    for name in ["pyproject.toml", "uv.lock"]:
+        shutil.copy2(ROOT / name, destination / name)
+    shutil.copytree(
+        ROOT / "engine",
+        destination / "engine",
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
     )
-    return work / "dist/moruno-engine"
+    return destination
 
 
 def notices(destination):
@@ -81,22 +60,6 @@ def notices(destination):
                 folder = destination / "rust" / f"{package['name']}-{package['version']}"
                 folder.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(candidate, folder / candidate.name)
-    # Query the locked environment; layout differs between Windows and Unix.
-    result = run(
-        [
-            "uv",
-            "run",
-            "--locked",
-            "python",
-            "-c",
-            "import sysconfig; print(sysconfig.get_path('purelib'))",
-        ],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-    )
-    for entry in Path(result.stdout.strip()).glob("*.dist-info"):
-        shutil.copytree(entry, destination / "python" / entry.name, dirs_exist_ok=True)
 
 
 def mac_bundle(destination, profile, worker=None):
@@ -200,7 +163,18 @@ def verify_archive(archive_path, signed=False):
             binary = folder / ("moruno.exe" if os.name == "nt" else "moruno")
         environment = dict(os.environ)
         environment.pop("MORUNO_PYTHON", None)
+        environment["MORUNO_RUNTIME_DIR"] = str(extracted / "user runtime")
         environment["MORUNO_ROOT"] = str(extracted / "no-checkout")
+        missing_uv = subprocess.run(
+            [str(binary), "--engine-check"],
+            cwd=extracted,
+            env={**environment, "MORUNO_UV": str(extracted / "missing-uv")},
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if missing_uv.returncode == 0 or "Install uv" not in missing_uv.stderr:
+            raise ValueError("Missing-uv setup instructions were not reported")
         try:
             response = run(
                 [binary, "--engine-check"],
@@ -208,7 +182,7 @@ def verify_archive(archive_path, signed=False):
                 env=environment,
                 capture_output=True,
                 text=True,
-                timeout=120,
+                timeout=660,
             )
         except subprocess.CalledProcessError as error:
             raise RuntimeError(
@@ -220,7 +194,23 @@ def verify_archive(archive_path, signed=False):
             or result.get("analysis", {}).get("smiles") != "CCO"
         ):
             raise ValueError("Packaged chemistry engine did not return ethanol")
-        print("Extracted application and bundled chemistry engine verified.")
+        # Reuse exactly this environment with network disabled on the next launch.
+        environment["UV_OFFLINE"] = "1"
+        offline = run(
+            [binary, "--engine-check"],
+            cwd=extracted,
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if json.loads(offline.stdout).get("analysis", {}).get("smiles") != "CCO":
+            raise ValueError("Offline chemistry environment reuse failed")
+        if platform.system() == "Darwin":
+            run(["codesign", "--verify", "--deep", "--strict", app])
+        print(
+            "Extracted application, missing-uv guidance, first-use setup, and offline reuse verified."
+        )
 
 
 def main():
@@ -244,7 +234,7 @@ def main():
         shutil.rmtree(folder)
     folder.mkdir(parents=True)
     run(["cargo", "build", "--release", "--locked"], cwd=ROOT)
-    worker = freeze_worker()
+    worker = runtime_project()
     if system == "macos":
         app = mac_bundle(folder / "Moruno.app", "release", worker)
         if args.sign:
@@ -267,7 +257,10 @@ def main():
     (folder / "build.json").write_text(json.dumps(metadata, indent=2) + "\n")
     (folder / "README.txt").write_text(
         "Moruno — molecular drawing workspace\n\n"
-        "Keep the entire extracted folder together. Python and RDKit are included.\n"
+        "Install uv first: https://docs.astral.sh/uv/getting-started/installation/\n"
+        "Moruno installs Python and RDKit into its local user environment on first use.\n"
+        "First setup requires internet access; later use works offline.\n"
+        "Keep the entire extracted folder together.\n"
         "Documentation: https://ameyanagi.github.io/moruno/\n"
         + (
             "macOS application signed with Developer ID and notarized by Apple.\n"

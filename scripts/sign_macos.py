@@ -154,7 +154,7 @@ def sign_and_notarize(app):
                 "runtime",
                 "--timestamp",
             ]
-            # Sign native Python extensions and libraries inside-out, then bundles.
+            # Sign native helpers and libraries inside-out, then app bundles.
             # All dependencies have the same team, so library validation stays enabled.
             for entry in sorted(app.rglob("*"), key=lambda p: len(p.parts), reverse=True):
                 if is_macho(entry) or (

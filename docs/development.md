@@ -41,7 +41,7 @@ uv run --locked python -m unittest discover -s tests -p 'test_*.py'
 cargo run --locked -- --engine-check
 ```
 
-Native macOS tests skip on other systems. CI runs Rust checks/tests on macOS, Python checks/tests on Linux, and web checks on Linux. Release packaging separately verifies the bundled worker on all four native targets.
+Native macOS tests skip on other systems. CI runs Rust checks/tests on macOS, Python checks/tests on Linux, and web checks on Linux. Release packaging separately verifies first-use uv setup and offline reuse on all four native targets.
 
 ## Documentation
 

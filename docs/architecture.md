@@ -68,7 +68,7 @@ The current app instantiates `PythonEngine`, which implements `ChemistryEngine`.
 
 First move graph checks, formula/mass and simple descriptors into Rust. Then add parsers, aromaticity, stereochemistry and canonical identifiers with a reference corpus. Move 2D coordinate generation separately from depiction. Keep Python as a selectable verification backend until stereo, charges, isotopes, salts and interchange pass differential tests. Retiring the Python runtime is a later packaging milestone, not an existing capability.
 
-Standalone bundles use a PyInstaller worker in `Contents/Resources/chemistry`. The Rust bridge discovers it relative to the executable, then falls back to development Python when no bundled worker exists. The chemistry protocol remains version 1 independently of the native document version.
+Portable packages include the worker project and `uv.lock` in `Contents/Resources/chemistry` on macOS or a sibling `chemistry` directory on Windows/Linux. The Rust bridge discovers it relative to the executable and asynchronously runs `uv sync --locked --no-dev --python 3.12` into a separate per-user cache. uv is an installation prerequisite. Python dependencies are reused offline after initial setup, and setup does not modify the signed bundle. Development checkouts use their local `.venv`. The chemistry protocol remains version 1 independently of the native document version.
 
 ## Native clipboard
 

@@ -1,5 +1,7 @@
 # Moruno feature status and remaining work
 
+Current release packages require uv and create a local chemistry environment on first use; see [installation](getting-started.md) and [release signing](releasing.md). Earlier desktop verification records below include self-contained QA builds.
+
 Updated 2026-09-20 for Moruno 0.2.0. This inventory records supported workflows,
 explicit limitations and planned work. A supported subset is not a claim of
 complete coverage for every chemical structure or document.
@@ -156,7 +158,7 @@ Template placement offers explicit new-bond connection, shared-atom and fused-bo
 | AppleScript / public scripting interface       | Missing                    | Only an internal worker protocol exists; there is no public document scripting interface.                                                                                                                                                                                                                                                                                                                                   |
 | Plugin/add-in integration                      | Missing                    | No stable extension interface.                                                                                                                                                                                                                                                                                                                                                                                              |
 | Accessibility / keyboard-only drawing          | Incomplete                 | Iced workspace lacks semantic macOS controls for most drawing operations.                                                                                                                                                                                                                                                                                                                                                   |
-| Release distribution                           | Partial                    | Local standalone Apple Silicon bundle; no notarized installer/updater or verified cross-platform packaging.                                                                                                                                                                                                                                                                                                                 |
+| Release distribution                           | Partial                    | Tagged native build workflows, local uv setup and macOS Developer ID signing configured. Cross-platform package checks are in progress; notarization awaits account credentials. No updater.                                                                                                                                                                                                                                |
 
 ## Next work
 

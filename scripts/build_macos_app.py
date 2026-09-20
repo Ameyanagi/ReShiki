@@ -1,22 +1,28 @@
-"""Build a development bundle, or a relocatable bundle with --standalone."""
+"""Build a development bundle, or a portable bundle with --portable (requires uv)."""
 
 import argparse
 import platform
 
-from build_release import ROOT, freeze_worker, mac_bundle, run
+from build_release import ROOT, mac_bundle, run, runtime_project
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--standalone", action="store_true", help="Bundle Python and RDKit")
+    parser.add_argument(
+        "--portable",
+        "--standalone",
+        dest="portable",
+        action="store_true",
+        help="Include worker project; uv is required",
+    )
     parser.add_argument("--release", action="store_true", help="Use an optimized Rust binary")
     args = parser.parse_args()
     if platform.system() != "Darwin":
         raise SystemExit("Use scripts/build_release.py for Windows or Linux")
     profile = "release" if args.release else "debug"
     run(["cargo", "build", "--locked", *(["--release"] if args.release else [])], cwd=ROOT)
-    destination = ROOT / ("dist/Moruno.app" if args.standalone else f"target/{profile}/Moruno.app")
-    print(mac_bundle(destination, profile, freeze_worker() if args.standalone else None))
+    destination = ROOT / ("dist/Moruno.app" if args.portable else f"target/{profile}/Moruno.app")
+    print(mac_bundle(destination, profile, runtime_project() if args.portable else None))
 
 
 if __name__ == "__main__":
