@@ -13,7 +13,15 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from build_release import archive, check_tag, main, release_platform, verify_binary, version
+from build_release import (
+    archive,
+    check_tag,
+    main,
+    release_platform,
+    verify_binary,
+    verify_interpreter,
+    version,
+)
 from sign_macos import is_macho, private_run
 
 
@@ -89,6 +97,38 @@ class ReleaseTests(unittest.TestCase):
         for target in ["x86_64-apple-darwin", "riscv64gc-unknown-linux-gnu"]:
             with self.assertRaisesRegex(ValueError, "Unsupported release target"):
                 release_platform(target)
+
+    def test_interpreter_check_uses_the_running_python_not_the_uv_launcher(self):
+        fixtures = [
+            (
+                "windows",
+                "x64",
+                {"system": "Windows", "machine": "ARM64", "platform": "win-amd64", "bits": 64},
+            ),
+            (
+                "macos",
+                "arm64",
+                {
+                    "system": "Darwin",
+                    "machine": "arm64",
+                    "platform": "macosx-11.0-universal2",
+                    "bits": 64,
+                },
+            ),
+        ]
+        with tempfile.TemporaryDirectory() as temporary:
+            launcher = Path(temporary) / "python"
+            # A launcher is not necessarily the actual interpreter executable.
+            launcher.write_text("launcher fixture")
+            for system, architecture, details in fixtures:
+                with self.subTest(system=system):
+                    response = subprocess.CompletedProcess([], 0, stdout=json.dumps(details))
+                    with patch("build_release.run", return_value=response) as run:
+                        verify_interpreter(launcher, system, architecture)
+                        self.assertEqual(run.call_args.args[0][0:2], [launcher, "-c"])
+                        wrong_arch = "arm64" if architecture == "x64" else "x64"
+                        with self.assertRaisesRegex(ValueError, "Python interpreter"):
+                            verify_interpreter(launcher, system, wrong_arch)
 
     def test_tag_must_match_package_version(self):
         check_tag(f"v{version()}")

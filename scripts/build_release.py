@@ -78,6 +78,36 @@ def verify_binary(binary, system, architecture):
         raise ValueError(f"Expected {system} {architecture} executable, found {machine}: {binary}")
 
 
+def verify_interpreter(python, system, architecture, environment=None):
+    """Inspect the running Python, since uv's launcher may use a different CPU."""
+    response = run(
+        [
+            python,
+            "-c",
+            "import json, platform, struct, sysconfig; "
+            "print(json.dumps({'system': platform.system(), 'machine': platform.machine(), "
+            "'platform': sysconfig.get_platform(), 'bits': struct.calcsize('P') * 8}))",
+        ],
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    details = json.loads(response.stdout)
+    actual_system = {"Darwin": "macos", "Windows": "windows", "Linux": "linux"}.get(
+        details.get("system")
+    )
+    if actual_system == "windows":
+        # platform.machine() can describe the ARM host under x64 emulation.
+        actual_arch = {"win-amd64": "x64", "win-arm64": "arm64"}.get(details.get("platform"))
+    else:
+        actual_arch = {"arm64": "arm64", "aarch64": "arm64", "x86_64": "x64"}.get(
+            details.get("machine")
+        )
+    if actual_system != system or actual_arch != architecture or details.get("bits") != 64:
+        raise ValueError(f"Expected {system} {architecture} Python interpreter, found {details}")
+
+
 def runtime_project():
     """Package source and locked dependencies; users provide uv, not Python."""
     destination = ROOT / "target/runtime-project"
@@ -249,10 +279,11 @@ def verify_archive(archive_path, signed=False):
         interpreters = list((extracted / "user runtime").glob(f"*/{python_name}"))
         if len(interpreters) != 1:
             raise ValueError("Expected one locally installed chemistry interpreter")
-        verify_binary(
+        verify_interpreter(
             interpreters[0],
             metadata["platform"],
             chemistry_architecture(metadata["platform"], metadata["architecture"]),
+            environment,
         )
         # Reuse exactly this environment with network disabled on the next launch.
         environment["UV_OFFLINE"] = "1"
