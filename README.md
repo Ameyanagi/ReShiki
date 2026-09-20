@@ -6,6 +6,9 @@ Draw molecules, build reaction schemes, and prepare figures on an editable canva
 
 [Download](https://github.com/Ameyanagi/ReShiki/releases) · [Visual manual](https://reshiki.com/guide/first-molecule/) · [Development](https://reshiki.com/developer/development/)
 
+[![Sponsor this work](website/public/badges/sponsor.svg)](https://github.com/sponsors/Ameyanagi)
+[![Star on GitHub](website/public/badges/star.svg)](https://github.com/Ameyanagi/ReShiki)
+
 [![ReShiki's molecular drawing workspace](website/public/manual/workspace.png)](https://reshiki.com/)
 
 Start with JACS / ACS styling. Attach templates, refine selected structures, or ask the assistant to propose a drawing. Review edits and undo changes. Copy editable structures or export SVG, PDF, and PNG.

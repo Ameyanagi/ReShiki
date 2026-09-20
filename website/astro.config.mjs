@@ -47,7 +47,14 @@ export default defineConfig({
     starlight({
       title: "ReShiki",
       description: "Draw molecules, build reaction schemes, and prepare publication figures.",
-      social: [{ icon: "github", label: "GitHub", href: "https://github.com/Ameyanagi/ReShiki" }],
+      social: [
+        { icon: "github", label: "Star on GitHub", href: "https://github.com/Ameyanagi/ReShiki" },
+        {
+          icon: "heart",
+          label: "Sponsor this work",
+          href: "https://github.com/sponsors/Ameyanagi",
+        },
+      ],
       customCss: ["./src/styles/custom.css"],
       sidebar: [
         {

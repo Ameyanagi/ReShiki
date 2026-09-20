@@ -1,4 +1,6 @@
 ---
+import { Icon } from "@astrojs/starlight/components";
+
 const workflows = [
   {
     number: "01",
@@ -33,6 +35,17 @@ const guides = [
     <span aria-hidden="true">/</span>
     <a href="/guide/install/">Install uv first</a>
   </p>
+
+  <nav class="home-support" aria-label="Support ReShiki">
+    <a href="https://github.com/sponsors/Ameyanagi">
+      <Icon name="heart" size="1.1rem" />
+      Sponsor this work
+    </a>
+    <a href="https://github.com/Ameyanagi/ReShiki">
+      <Icon name="star" size="1.1rem" />
+      Star on GitHub
+    </a>
+  </nav>
 
   <figure class="home-workspace">
     <a href="/manual/workspace.png" aria-label="View the workspace screenshot at full size">

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="174" height="32" viewBox="0 0 174 32" role="img" aria-label="Sponsor this work">
+  <rect x=".5" y=".5" width="173" height="31" rx="6" fill="#f2f6f3" stroke="#b8ccc4"/>
+  <path d="M17 23l-6-6a4 4 0 0 1 6-5 4 4 0 0 1 6 5z" fill="none" stroke="#287866" stroke-width="1.5" stroke-linejoin="round"/>
+  <text x="34" y="21" fill="#184f44" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" font-size="13">Sponsor this work</text>
+</svg>
