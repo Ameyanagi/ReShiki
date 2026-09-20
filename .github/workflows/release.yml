@@ -22,11 +22,12 @@ jobs:
         with:
           version: "0.12.3"
           python-version: "3.12"
+          enable-cache: false
       - name: Require tag and package versions to match
         if: github.event_name == 'push'
         env:
           RELEASE_TAG: ${{ github.ref_name }}
-        run: uv run --locked python scripts/build_release.py --tag "$RELEASE_TAG" --check-tag-only
+        run: uv run --no-project --python 3.12 python scripts/build_release.py --tag "$RELEASE_TAG" --check-tag-only
   build:
     needs: validate
     timeout-minutes: 100
