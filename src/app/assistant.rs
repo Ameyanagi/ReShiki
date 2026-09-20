@@ -56,6 +56,7 @@ pub enum Menu {
 
 #[derive(Default)]
 pub struct State {
+    waiting_for_text: bool,
     input: text_editor::Content,
     pub draft: Option<Draft>,
     messages: Vec<(String, String)>,
@@ -125,6 +126,9 @@ impl App {
             }
             Action::Replace(value) => self.assistant.replace = value,
             Action::AutoApply(value) => {
+                if !value {
+                    self.assistant.waiting_for_text = false;
+                }
                 self.assistant.preferences.auto_apply = value;
                 self.assistant.preferences_dirty = true;
                 self.assistant.menu = None;
@@ -169,6 +173,7 @@ impl App {
                 }
             }
             Action::Reset => {
+                self.assistant.waiting_for_text = false;
                 self.assistant.cancel.stop();
                 let serial = self.assistant.serial.wrapping_add(1);
                 self.assistant.draft = None;
@@ -182,6 +187,7 @@ impl App {
                 self.assistant.started = None;
             }
             Action::Stop => {
+                self.assistant.waiting_for_text = false;
                 self.assistant.cancel.stop();
                 self.assistant.serial = self.assistant.serial.wrapping_add(1);
                 self.assistant.busy = false;
@@ -231,6 +237,10 @@ impl App {
                 }
             }
             Action::Poll => {
+                if self.assistant.waiting_for_text && self.inline_text.is_none() {
+                    self.assistant.waiting_for_text = false;
+                    return self.assistant_action(Action::Apply);
+                }
                 if self.assistant.busy
                     && let Some(canvas) = &self.assistant.canvas
                     && let Ok(mut snapshot) = canvas.write()
@@ -278,6 +288,7 @@ impl App {
                 }
             }
             Action::Reject => {
+                self.assistant.waiting_for_text = false;
                 self.assistant.draft = None;
                 self.assistant.record(
                     "Moruno",
@@ -287,6 +298,12 @@ impl App {
             }
             Action::Apply => {
                 if self.assistant.busy || self.cleanup.is_some() {
+                    return Task::none();
+                }
+                if self.inline_text.is_some() {
+                    self.assistant.waiting_for_text = true;
+                    self.assistant.status =
+                        "Ready · Finish or cancel the current text edit to apply".into();
                     return Task::none();
                 }
                 let Some(draft) = &self.assistant.draft else {
@@ -344,6 +361,7 @@ impl App {
                 if prompt.is_empty() {
                     return Task::none();
                 }
+                self.assistant.waiting_for_text = false;
                 if prompt.len() > 12_000 {
                     self.assistant.error = true;
                     self.assistant.status =
@@ -963,6 +981,32 @@ fn card() -> container::Style {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn automatic_canvas_edits_wait_for_a_text_draft_and_keep_separate_undo_steps() {
+        let (mut app, _) = App::new();
+        app.busy = false;
+        app.assistant.preferences.auto_apply = true;
+        let _ = app.inline_action(super::super::inline_text::Action::Begin(
+            None,
+            moruno::document::Point::default(),
+        ));
+        app.caption_action(text_editor::Action::Edit(text_editor::Edit::Paste(
+            String::from("Current label").into(),
+        )));
+        ready(&mut app);
+        assert!(app.doc.atoms.is_empty());
+        assert!(app.assistant.waiting_for_text);
+        assert_eq!(app.caption, "Current label");
+        assert!(app.finish_inline(true));
+        let text_document = app.doc.clone();
+        let _ = app.assistant_action(Action::Poll);
+        assert_eq!(app.doc.atoms.len(), 1);
+        assert_eq!(app.doc.annotations, text_document.annotations);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, text_document);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, Document::default());
+    }
     fn ready(app: &mut App) {
         let mut fragment = Document::default();
         fragment.add_atom("O", moruno::document::Point::default());

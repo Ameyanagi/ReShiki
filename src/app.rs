@@ -17,6 +17,7 @@ mod clipboard;
 mod file_shortcuts;
 mod graphics;
 mod icons;
+mod inline_text;
 mod palettes;
 mod shortcuts;
 mod template_library;
@@ -35,6 +36,8 @@ pub enum InspectorTab {
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    InlineText(inline_text::Action),
+    Escape,
     Palette(palettes::Action),
     Assistant(assistant::Action),
     ContextKey(String),
@@ -232,6 +235,7 @@ pub struct App {
     caption_editor: iced::widget::text_editor::Content,
     caption_format: moruno::typography::TextFormat,
     caption_target: Option<u64>,
+    inline_text: Option<inline_text::State>,
     font_options: iced::widget::combo_box::State<String>,
     font_size_input: String,
     text_color_input: String,
@@ -316,6 +320,7 @@ impl App {
             caption_editor: iced::widget::text_editor::Content::with_text("Reaction conditions"),
             caption_format: Default::default(),
             caption_target: None,
+            inline_text: None,
             font_options: iced::widget::combo_box::State::new(
                 moruno::style::font_families()
                     .iter()
@@ -501,14 +506,17 @@ impl App {
                         _ => None,
                     },
                     Key::Named(Named::Delete | Named::Backspace) => Some(Message::Delete),
-                    Key::Named(Named::Escape) => Some(Message::Tool(Tool::Select)),
+                    Key::Named(Named::Enter) if mods.command() => {
+                        Some(Message::InlineText(inline_text::Action::Finish(true)))
+                    }
+                    Key::Named(Named::Escape) => Some(Message::Escape),
                     _ => None,
                 }
             }),
         ])
     }
     fn dirty(&self) -> bool {
-        !same_drawing(&self.doc, &self.saved)
+        self.inline_changed() || !same_drawing(&self.doc, &self.saved)
     }
     fn clear_recovery(&mut self) {
         if let Some(recovery) = &self.recovery {
@@ -661,6 +669,32 @@ impl App {
             .unwrap_or(&self.doc)
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        if let Message::InlineText(action) = message {
+            return self.inline_action(action);
+        }
+        if matches!(message, Message::Escape) {
+            return if self.inline_text.is_some() {
+                self.inline_action(inline_text::Action::Finish(false))
+            } else {
+                self.update(Message::Tool(Tool::Select))
+            };
+        }
+        if self.inline_text.is_some() && matches!(message, Message::Undo | Message::Redo) {
+            return self.inline_action(inline_text::Action::Undo(matches!(message, Message::Redo)));
+        }
+        if let Message::Canvas(Edit::BeginText(id)) = message {
+            return self.inline_action(inline_text::Action::Begin(Some(id), Point::default()));
+        }
+        if let Message::Canvas(Edit::Click(p)) = message
+            && self.tool == Tool::Text
+        {
+            let id = canvas::hit_object(&self.doc, p, 8. / self.camera.zoom)
+                .filter(|id| self.doc.annotations.iter().any(|a| a.id == *id));
+            return self.inline_action(inline_text::Action::Begin(id, p));
+        }
+        if inline_text::commits_draft(&message) && !self.finish_inline(true) {
+            return Task::none();
+        }
         if let Message::Palette(action) = message {
             return self.palette_action(action);
         }
@@ -735,17 +769,15 @@ impl App {
             Message::Inspector(_)
                 | Message::InsertTemplate(_)
                 | Message::Tool(
-                    Tool::Text
-                        | Tool::Arrow
-                        | Tool::Graphic(_)
-                        | Tool::EditPoints
-                        | Tool::RingPreset(_)
+                    Tool::Arrow | Tool::Graphic(_) | Tool::EditPoints | Tool::RingPreset(_)
                 )
         ) || (self.inspector_tab != InspectorTab::Templates
-            && matches!(&message, Message::Canvas(Edit::Select(ids)) if ids.iter().any(|id| self.doc.annotations.iter().any(|a| a.id == *id) || self.doc.graphics.iter().any(|g|g.id==*id))))
-            || (self.tool == Tool::Text && matches!(&message, Message::Canvas(Edit::Click(_))));
+            && matches!(&message, Message::Canvas(Edit::Select(ids)) if ids.iter().any(|id| self.doc.annotations.iter().any(|a| a.id == *id) || self.doc.graphics.iter().any(|g|g.id==*id))));
         match message {
-            Message::Assistant(_) | Message::Palette(_) => {}
+            Message::Assistant(_)
+            | Message::Palette(_)
+            | Message::InlineText(_)
+            | Message::Escape => {}
             Message::ContextKey(key) => return self.context_key(&key),
             Message::AromaticDisplay => {
                 if self.selected.is_empty() {
@@ -1178,11 +1210,7 @@ impl App {
                 }
                 if matches!(
                     tool,
-                    Tool::Text
-                        | Tool::Arrow
-                        | Tool::Graphic(_)
-                        | Tool::EditPoints
-                        | Tool::RingPreset(_)
+                    Tool::Arrow | Tool::Graphic(_) | Tool::EditPoints | Tool::RingPreset(_)
                 ) {
                     self.inspector_open = true;
                     self.inspector_tab = InspectorTab::Properties;
@@ -1449,7 +1477,7 @@ impl App {
             Message::Tick => {
                 if self.dirty() && self.autosaved_revision != Some(self.revision) {
                     if let Some(recovery) = &self.recovery {
-                        match recovery.save(&self.doc, self.path.clone()) {
+                        match recovery.save(&self.recovery_document(), self.path.clone()) {
                             Ok(()) => {
                                 self.autosaved_revision = Some(self.revision);
                                 self.autosave_status = "Recovery draft saved".into();
@@ -1994,7 +2022,7 @@ impl App {
         }
         let before = self.doc.clone();
         match edit {
-            Edit::Hover(_) => return,
+            Edit::Hover(_) | Edit::BeginText(_) => return,
             Edit::Chain {
                 points,
                 source,

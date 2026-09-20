@@ -52,12 +52,24 @@ impl App {
     pub(super) fn current_text_style(&self) -> &TextStyle {
         if let Some(range) = self.text_range() {
             self.caption_format.at(range.start)
+        } else if self.inline_text.is_some() || self.caption_target.is_some() {
+            let cursor = self.caption_editor.cursor().position;
+            let offset = self
+                .caption
+                .split_inclusive('\n')
+                .take(cursor.line)
+                .map(str::len)
+                .sum::<usize>()
+                + cursor.column;
+            self.caption_format
+                .at(offset.min(self.caption.len().saturating_sub(1)))
         } else {
             &self.caption_format.style
         }
     }
     pub(super) fn current_selection_color(&self) -> Option<[u8; 3]> {
-        if self.selected.is_empty()
+        if (self.inline_text.is_some() && self.color_scope != ColorScope::Bonds)
+            || self.selected.is_empty()
             || (self.text_range().is_some()
                 && self.selected.len() == 1
                 && self.color_scope != ColorScope::Bonds)
@@ -79,8 +91,11 @@ impl App {
                 .iter()
                 .filter(|a| self.selected.contains(&a.id))
             {
-                colors.push(a.format.style.color);
-                colors.extend(a.format.spans.iter().map(|s| s.style.color));
+                if a.text.is_empty() {
+                    colors.push(a.format.style.color);
+                } else {
+                    colors.extend(a.text.char_indices().map(|(i, _)| a.format.at(i).color));
+                }
             }
         }
         if self.color_scope != ColorScope::Text {
@@ -122,6 +137,10 @@ impl App {
             .unwrap_or_default();
     }
     pub(super) fn sync_typography(&mut self) {
+        if self.inline_text.is_some() {
+            self.sync_style_inputs();
+            return;
+        }
         let mut selected_atoms = self
             .doc
             .atoms
@@ -167,7 +186,7 @@ impl App {
         }
         self.sync_style_inputs();
     }
-    fn sync_style_inputs(&mut self) {
+    pub(super) fn sync_style_inputs(&mut self) {
         let style = self.current_text_style();
         let size = style.size_pt.to_string();
         self.font_size_input = size;
@@ -180,6 +199,9 @@ impl App {
     }
     pub(super) fn caption_action(&mut self, action: iced::widget::text_editor::Action) {
         let changed = action.is_edit();
+        if changed {
+            self.inline_checkpoint();
+        }
         let selection = self.text_range();
         let deletion = matches!(
             action,
@@ -217,6 +239,10 @@ impl App {
             });
             self.caption_format.edited(&self.caption, &text, replaced);
             self.caption = text;
+            if self.inline_text.is_some() {
+                self.sync_style_inputs();
+                return;
+            }
             let before = self.doc.clone();
             if let Some(label) = self
                 .doc
@@ -237,9 +263,14 @@ impl App {
             return;
         }
         let range = self.text_range();
+        self.inline_checkpoint();
         let before = self.doc.clone();
         self.caption_format
             .apply(&self.caption, range.clone(), &change);
+        if self.inline_text.is_some() {
+            self.sync_style_inputs();
+            return;
+        }
         for label in &mut self.doc.annotations {
             if self.selected.contains(&label.id) {
                 let target_range = if Some(label.id) == self.caption_target {
@@ -263,6 +294,18 @@ impl App {
         self.sync_style_inputs();
     }
     pub(super) fn apply_selection_color(&mut self, color: [u8; 3]) {
+        if self.inline_text.is_some() {
+            if self.color_scope != ColorScope::Bonds {
+                self.inline_checkpoint();
+                self.caption_format.apply(
+                    &self.caption,
+                    self.text_range(),
+                    &StyleChange::Color(color),
+                );
+                self.sync_style_inputs();
+            }
+            return;
+        }
         let before = self.doc.clone();
         let range = self.text_range().filter(|_| {
             self.selected.len() == 1
@@ -352,6 +395,7 @@ impl App {
         spacing: Option<f32>,
         width: Option<Option<f32>>,
     ) {
+        self.inline_checkpoint();
         let update = |format: &mut TextFormat| {
             if let Some(value) = alignment {
                 format.alignment = value;
@@ -364,6 +408,10 @@ impl App {
             }
         };
         update(&mut self.caption_format);
+        if self.inline_text.is_some() {
+            self.sync_style_inputs();
+            return;
+        }
         let before = self.doc.clone();
         for label in &mut self.doc.annotations {
             if self.selected.contains(&label.id) {

@@ -5,7 +5,7 @@ Implemented and desktop-tested on 2026-09-20. The workflow and remaining limitat
 ## Editing workflow
 
 - The persistent Style row offers searchable installed font families, point size, bold/italic/underline, chemical-formula formatting, subscript/superscript, paragraph alignment, five color swatches and a custom RGB hex field.
-- Choose Text, write a multiline label in the Properties inspector, choose formatting, then click the canvas. Select an existing label to edit it live. Select part of its text to format that range; with no text range selected, formatting applies to the selected label(s).
+- Choose Text and click the canvas to start typing. Click an existing label with Text, or double-click it with Select, to edit it in place. Select part of its text to format that range; with no text range selected, formatting applies to the whole draft. Done, Cmd/Ctrl+Enter, or a click outside the canvas editor applies the draft as one document Undo step. Escape cancels it. Undo/Redo inside the editor tracks text and formatting without changing the document history.
 - Selecting a label reveals the text editor at the top of the inspector. Switching inspector tabs also resets the scroll position so controls do not remain hidden below an unrelated panel's previous scroll offset.
 - Cmd/Ctrl+B, I and U format the selected text while the editor has focus. Font size, custom color and wrap width apply with Enter. Paragraph controls include left/center/right/justified alignment, line spacing and wrapping width in points.
 - Selected atom labels accept font, size, emphasis and color. Their hydrogen counts, isotope and charge scripts remain derived from chemical data.
@@ -36,7 +36,7 @@ Development and standalone bundles were rebuilt. The standalone bundle's signatu
 
 ## Remaining limits
 
-- Text editing is in the inspector. There is no canvas caret yet, and the editor itself displays plain text; the canvas shows the resulting formatting.
+- The canvas editor displays fonts, bold/italic and colors with a caret. Formula scripts, mixed sizes, underline, paragraph alignment and explicit wrapping are shown in a separate Appearance preview; the caret editor is not fully WYSIWYG for those properties. The optional inspector editor remains plain text.
 - Formula formatting is a heuristic for common formulas. Use explicit superscript for ambiguous charge notation such as the `3+` in `Fe3+`.
 - There is no character picker, list/tab-stop editor, arbitrary text rotation, font-outline/shadow effect, or separate document-wide font-default editor.
 - Font availability and paragraph metrics can differ between applications. CDXML supports the implemented style runs and common paragraph properties; it is not a pixel-identical round trip for every external text object. Unsupported outline/shadow, rotation and incompatible paragraph settings are rejected on import. Supported graphics and groups have separate workflows; multipage CDXML remains unsupported.
@@ -51,3 +51,9 @@ Desktop checks on 2026-09-20 used a separate QA window: Select All plus blue col
 ## Japanese text
 
 The interface explicitly chooses an installed Japanese sans-serif font (Hiragino Sans on macOS). Drawing styles retain their selected family and JACS/ACS defaults. When a glyph is absent from that font, shared layout resolves a sans-serif fallback and uses its actual advances for positioning and wrapping; canvas, SVG, PDF and PNG receive the same resolved text runs. This avoids half-width measurements for full-width Japanese characters.
+
+## Canvas editing verification
+
+Canvas drafts are separate from the document until applied. File and tool commands finish the draft first, recovery snapshots include it, and cancellation keeps unrelated edits. A changed/deleted label or switched document rejects a stale draft. Background assistant proposals wait until text editing finishes; text and assistant changes retain separate Undo steps.
+
+Regression checks cover click-to-type, Unicode ranges and font highlighting, draft Undo/Redo, cancellation, recovery, grouped-label deletion, independent and conflicting edits, and double-click versus drag behavior. Desktop checks in the isolated `artifacts/inline-text-qa/` window exercised double-click editing, multiline typing, Japanese-label bold/color changes, Escape cancellation, atomic Undo, formula preview, Cmd+Enter after toolbar use, and native Save. The editor stays within the viewport; applying pans just enough to reveal the finished label without changing zoom. Native Japanese IME composition has not been separately verified.

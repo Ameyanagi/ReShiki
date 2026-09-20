@@ -75,7 +75,7 @@ impl Tool {
             Self::Arrow => {
                 "Drag to draw · Drag an endpoint to resize or the middle handle to bend · Alt frees angles"
             }
-            Self::Text => "Enter a label above the canvas, then click to place it",
+            Self::Text => "Click to type a label · Double-click a label to edit · Escape cancels",
             Self::Erase => "Click an atom, bond, label, or arrow to erase",
             Self::Graphic(GraphicKind::Symbol(_)) => {
                 "Click an atom to attach · Drag from an atom to position · Click empty space for a free symbol"
@@ -92,6 +92,7 @@ impl Tool {
 }
 #[derive(Debug, Clone)]
 pub enum Edit {
+    BeginText(u64),
     Hover(Option<World>),
     Chain {
         points: Vec<World>,
@@ -133,7 +134,7 @@ impl Default for Camera {
     }
 }
 impl Camera {
-    fn screen(self, p: World, bounds: Rectangle) -> Point {
+    pub(crate) fn screen(self, p: World, bounds: Rectangle) -> Point {
         Point::new(
             (p.x - self.center.x) * self.zoom + bounds.width / 2.0,
             (p.y - self.center.y) * self.zoom + bounds.height / 2.0,
@@ -206,6 +207,7 @@ enum Gesture {
     },
 }
 pub struct MoleculeCanvas<'a> {
+    pub hidden_annotation: Option<u64>,
     pub bond_drawing: BondDrawing,
     pub chain_drawing: ChainDrawing,
     pub doc: &'a Document,
@@ -793,7 +795,21 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                         clicked,
                     } => {
                         if start.distance(p) < 1.0 / self.camera.zoom {
-                            if let Some(atom) = clicked
+                            if !state.modifiers.shift()
+                                && let Some(label) = hit_object(self.doc, p, 8. / self.camera.zoom)
+                                    .filter(|id| self.doc.annotations.iter().any(|a| a.id == *id))
+                            {
+                                let now = std::time::Instant::now();
+                                if state.last_click.is_some_and(|(time, id)| {
+                                    id == label && now.duration_since(time).as_millis() < 450
+                                }) {
+                                    state.last_click = None;
+                                    return Some(
+                                        Action::publish(Edit::BeginText(label)).and_capture(),
+                                    );
+                                }
+                                state.last_click = Some((now, label));
+                            } else if let Some(atom) = clicked
                                 .first()
                                 .copied()
                                 .filter(|id| self.doc.atom(*id).is_some())
@@ -1366,6 +1382,9 @@ impl MoleculeCanvas<'_> {
                 }
             }
         }
+        preview
+            .annotations
+            .retain(|a| Some(a.id) != self.hidden_annotation);
         let selected = ring_selection.as_deref().unwrap_or(self.selected);
         draw_atom_markers(frame, &preview, selected, self.camera, bounds, true);
         for id in selected {
@@ -2182,6 +2201,7 @@ mod tests {
     fn rulers_exclude_editing_and_pointer_coordinates_use_the_inset_paper() {
         let doc = Document::default();
         let canvas = MoleculeCanvas {
+            hidden_annotation: None,
             tool: Tool::Atom,
             guides: guides::Guides {
                 rulers: true,
@@ -2258,6 +2278,7 @@ mod tests {
     fn free_ring_preset_drag_keeps_its_start_as_rotation_anchor() {
         let doc = Document::default();
         let canvas = MoleculeCanvas {
+            hidden_annotation: None,
             tool: Tool::RingPreset(moruno::rings::Preset::ChairUp),
             camera: Camera {
                 center: World::default(),
@@ -2290,6 +2311,7 @@ mod tests {
             ArrowStyle::default(),
         ));
         let canvas = MoleculeCanvas {
+            hidden_annotation: None,
             tool: Tool::Select,
             selected: &[1],
             camera: Camera {
@@ -2307,6 +2329,7 @@ mod tests {
         assert_eq!(hit_object(&doc, World::new(0., -55.), 4.), Some(1));
         assert_eq!(hit_object(&doc, World::new(0., 0.), 4.), None);
         let canvas = MoleculeCanvas {
+            hidden_annotation: None,
             tool: Tool::Arrow,
             selected: &[1],
             camera: Camera {
@@ -2365,6 +2388,7 @@ mod tests {
         static STYLE: std::sync::LazyLock<GraphicStyle> =
             std::sync::LazyLock::new(GraphicStyle::default);
         MoleculeCanvas {
+            hidden_annotation: None,
             doc,
             selected: &[],
             tool: Tool::Chain(mode),
@@ -2587,6 +2611,7 @@ mod tests {
         doc.add_atom("O", World::new(50., 0.));
         let style = GraphicStyle::default();
         let canvas = MoleculeCanvas {
+            hidden_annotation: None,
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),
             doc: &doc,
@@ -2696,6 +2721,7 @@ mod tests {
         doc.group_selection(&[1, 2]).unwrap();
         let style = GraphicStyle::default();
         let canvas = MoleculeCanvas {
+            hidden_annotation: None,
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),
             doc: &doc,
@@ -2756,6 +2782,7 @@ mod tests {
         // Alt-drag edits a member immediately, even when its group is selected.
         let selected = [1, 2];
         let canvas = MoleculeCanvas {
+            hidden_annotation: None,
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),
             selected: &selected,
@@ -2814,6 +2841,7 @@ mod tests {
         let doc = Document::default();
         let style = GraphicStyle::default();
         let mut canvas = MoleculeCanvas {
+            hidden_annotation: None,
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),
             doc: &doc,
@@ -2863,6 +2891,79 @@ mod tests {
         assert_eq!(with_curve, original);
     }
 
+    #[test]
+    fn double_click_edits_grouped_labels_but_drag_moves_the_group() {
+        let mut doc = Document::default();
+        let atom = doc.add_atom("C", World::new(-100., -80.));
+        let label = doc.next_id();
+        doc.annotations.push(moruno::document::Annotation {
+            id: label,
+            position: World::default(),
+            text: "Reaction conditions".into(),
+            format: Default::default(),
+        });
+        doc.group_selection(&[atom, label]).unwrap();
+        let style = GraphicStyle::default();
+        let canvas = MoleculeCanvas {
+            hidden_annotation: None,
+            bond_drawing: Default::default(),
+            chain_drawing: Default::default(),
+            doc: &doc,
+            selected: &[],
+            tool: Tool::Select,
+            camera: Camera {
+                center: World::default(),
+                zoom: 1.,
+            },
+            grid: false,
+            guides: Default::default(),
+            ring_size: 6,
+            aromatic_ring: false,
+            template_connection: moruno::templates::Connection::Auto,
+            template: None,
+            arrow_preset: Default::default(),
+            arrow_style: &moruno::arrows::ArrowStyle::DEFAULT,
+            orbital_phase: Default::default(),
+            phase_flipped: false,
+            attach_symbols: true,
+            graphic_style: &style,
+            bracket_sides: BracketSides::Both,
+        };
+        let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(400., 300.));
+        let point = Point::new(230., 160.);
+        let cursor = mouse::Cursor::Available(point);
+        let mut state = State::default();
+        for second in [false, true] {
+            canvas.update(
+                &mut state,
+                &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+                bounds,
+                cursor,
+            );
+            let edit = canvas
+                .update(
+                    &mut state,
+                    &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                    bounds,
+                    cursor,
+                )
+                .unwrap()
+                .into_inner()
+                .0
+                .unwrap();
+            if second {
+                assert!(matches!(edit, Edit::BeginText(id) if id == label));
+            } else {
+                assert!(
+                    matches!(edit, Edit::Select(ids) if ids.contains(&label) && ids.contains(&atom))
+                );
+            }
+        }
+        assert!(
+            matches!(pointer_gesture(&canvas, point, Point::new(245., 180.)), Edit::Move(ids, _, _) if ids.contains(&label) && ids.contains(&atom))
+        );
+    }
+
     fn pointer_gesture(canvas: &MoleculeCanvas<'_>, start: Point, end: Point) -> Edit {
         let mut state = State::default();
         let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(400.0, 300.0));
@@ -2894,6 +2995,7 @@ mod tests {
         let b = doc.add_atom("C", World::new(30.0, 0.0));
         doc.add_bond(a, b, 1, "plain");
         let canvas = MoleculeCanvas {
+            hidden_annotation: None,
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),
             doc: &doc,
@@ -3032,6 +3134,7 @@ mod tests {
         doc.add_bond(a, b, 1, "plain");
         let original = doc.clone();
         let canvas = MoleculeCanvas {
+            hidden_annotation: None,
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),
             doc: &doc,
@@ -3127,6 +3230,7 @@ mod tests {
         assert_eq!(hit_selection(&doc, World::default(), 10.0), vec![a, b]);
         assert_eq!(hit_selection(&doc, World::new(-20.0, 0.0), 10.0), vec![a]);
         let canvas = MoleculeCanvas {
+            hidden_annotation: None,
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),
             doc: &doc,
@@ -3158,6 +3262,7 @@ mod tests {
         );
         let selected = [a, b];
         let canvas = MoleculeCanvas {
+            hidden_annotation: None,
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),
             selected: &selected,
@@ -3178,6 +3283,7 @@ mod tests {
         let b = doc.add_atom("C", World::new(21.0, 0.0));
         doc.add_bond(a, b, 1, "plain");
         let canvas = MoleculeCanvas {
+            hidden_annotation: None,
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),
             doc: &doc,
@@ -3213,6 +3319,7 @@ mod tests {
     fn leaving_the_canvas_requests_a_redraw_and_leaving_the_window_clears_hover() {
         let doc = Document::default();
         let canvas = MoleculeCanvas {
+            hidden_annotation: None,
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),
             doc: &doc,
@@ -3264,6 +3371,7 @@ mod tests {
         let mut doc = Document::default();
         let source = doc.add_atom("C", World::default());
         let canvas = MoleculeCanvas {
+            hidden_annotation: None,
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),
             doc: &doc,
@@ -3332,6 +3440,7 @@ mod tests {
     fn fast_drag_uses_each_motion_event_instead_of_final_cursor_snapshot() {
         let doc = Document::default();
         let canvas = MoleculeCanvas {
+            hidden_annotation: None,
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),
             doc: &doc,

@@ -413,6 +413,61 @@ impl App {
     }
 
     fn text_panel(&self) -> Element<'_, Message> {
+        if self.inline_text.is_some() {
+            return column![
+                section("EDITING ON CANVAS"),
+                text("Select text in the canvas editor, then use the Style toolbar to format it.")
+                    .size(12)
+                    .color(muted()),
+                row![
+                    command(
+                        "Cancel",
+                        Message::InlineText(super::inline_text::Action::Finish(false))
+                    ),
+                    command(
+                        "Done",
+                        Message::InlineText(super::inline_text::Action::Finish(true))
+                    )
+                ]
+                .spacing(8),
+                row![
+                    text("Line spacing").size(11).width(Length::Fill),
+                    pick_list(
+                        [1.0_f32, 1.2, 1.5, 2.0],
+                        Some(self.caption_format.line_spacing),
+                        Message::TextSpacing
+                    )
+                    .text_size(12)
+                    .padding(5)
+                ],
+                row![
+                    text("Wrap width (pt)").size(11).width(Length::Fill),
+                    text_input("Auto", &self.text_width_input)
+                        .on_input(Message::TextWidth)
+                        .on_submit(Message::ApplyTextWidth)
+                        .size(12)
+                        .width(72)
+                        .padding(6)
+                ]
+            ]
+            .spacing(10)
+            .into();
+        }
+        if self.tool == Tool::Text {
+            return column![
+                section("TEXT LABELS"),
+                text(
+                    "Click the canvas to type a new label, or click an existing label to edit it."
+                )
+                .size(12)
+                .color(muted()),
+                text("Use the Style toolbar for fonts, colors and chemical formulas.")
+                    .size(11)
+                    .color(muted()),
+            ]
+            .spacing(9)
+            .into();
+        }
         let selected = self
             .caption_target
             .is_some_and(|id| self.selected.contains(&id));
@@ -532,6 +587,7 @@ impl App {
             );
         }
         let drawing: Element<'_, Edit> = canvas(MoleculeCanvas {
+            hidden_annotation: self.inline_label_id(),
             bond_drawing: self.bond_drawing,
             chain_drawing: self.chain_drawing,
             graphic_style: &self.graphic_style,
@@ -542,7 +598,7 @@ impl App {
             arrow_style: &self.arrows.style,
             bracket_sides: self.bracket_sides,
             doc: self.display_document(),
-            selected: if self.cleanup.is_some() {
+            selected: if self.cleanup.is_some() || self.inline_text.is_some() {
                 &[]
             } else {
                 &self.selected
@@ -568,7 +624,7 @@ impl App {
         .width(Length::Fill)
         .height(Length::Fill)
         .into();
-        let paper = sensor(drawing.map(Message::Canvas))
+        let paper = sensor(self.with_inline_text(drawing.map(Message::Canvas)))
             .on_show(Message::Viewport)
             .on_resize(Message::Viewport);
         let context: Element<'_, Message> = if let Some(preview) = &self.cleanup {
@@ -661,13 +717,17 @@ impl App {
             icon_button(
                 Icon::Undo,
                 "Undo · ⌘Z",
-                self.history.can_undo().then_some(Message::Undo),
+                self.text_history_available(false)
+                    .unwrap_or_else(|| self.history.can_undo())
+                    .then_some(Message::Undo),
                 false
             ),
             icon_button(
                 Icon::Redo,
                 "Redo · ⇧⌘Z",
-                self.history.can_redo().then_some(Message::Redo),
+                self.text_history_available(true)
+                    .unwrap_or_else(|| self.history.can_redo())
+                    .then_some(Message::Redo),
                 false
             ),
             Space::new().width(8),
@@ -1107,7 +1167,7 @@ impl App {
             }
             Tool::Text => {
                 options = options.push(
-                    text("Write in the Text panel, then click the canvas to place")
+                    text("Click to type · Double-click a label to edit · Escape cancels")
                         .size(11)
                         .color(muted()),
                 );

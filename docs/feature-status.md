@@ -4,9 +4,9 @@ Updated 2026-09-20 for Moruno 0.2.0. This inventory records supported workflows,
 explicit limitations and planned work. A supported subset is not a claim of
 complete coverage for every chemical structure or document.
 
-The largest remaining everyday gaps are direct canvas text editing, general
-fragment joining, document layout and broader clipboard
-interchange. Advanced reaction, query, polymer and spectroscopy workflows also
+The largest remaining everyday gaps are general fragment joining, document
+layout and broader clipboard interchange. Canvas text editing supports drafts
+and a caret; full rich-text caret layout remains partial. Advanced reaction, query, polymer and spectroscopy workflows also
 remain incomplete.
 
 Evidence comes from Moruno source, regression tests, saved interchange fixtures
@@ -75,7 +75,7 @@ Typography includes stored styles, selection-aware editing, text measurement and
 | Custom template authoring and libraries | Supported subset | Save mixed selections, edit metadata, replace drawing, remember anchor, remove/undo, persistence and Moruno collection import/export. No third-party palette or cloud-library interchange. [Evidence](template-library.md). |
 | Broad chemistry template content | Expanded subset | 81 built-ins: common heterocycles, bicyclic/cage rings, 20 amino acids, five nucleobases, small molecules and two chair projections. Chemical identities are checked against frozen PubChem records. Sugars, nucleotide/peptide assemblies, polymers and specialized families remain missing. |
 | Abbreviations / nicknames | Supported subset | 29 common endpoint replacements, common-group contraction, custom labels over a selected single-attachment fragment, and expansion. Full graph retained; native/CDX/CDXML exchange tested. Multiattachment and nested labels remain unsupported. [Details](abbreviations.md). |
-| Direct rich-text editing on canvas | Partial | Live inspector editor has range formatting; canvas displays results, but has no in-place caret. |
+| Direct rich-text editing on canvas | Supported subset | Click-to-type and double-click revision, local draft history, recovery and one-step document Undo. Fonts/emphasis/colors appear at the caret; complex typography uses an Appearance preview. |
 | Terminal-carbon / hydrogen display controls | Supported | Skeletal, terminal, internal or all carbons; implied-H visibility and five placement choices, scoped to drawing or selection. Chemistry remains unchanged. [Atom labels](atom-labels.md). |
 | Automatic atom numbering / stereochemical labels | Supported subset | Numeric/prefix/Latin/Greek sequences, custom numbers, owned draggable indicators and computed tetrahedral R/S/r/s and alkene E/Z. No allene/atropisomer/enhanced-stereo labels. [Atom labels](atom-labels.md). |
 
@@ -161,7 +161,7 @@ Template placement offers explicit new-bond connection, shared-atom and fused-bo
 ## Next work
 
 1. Broader clipboard compatibility, canvas image import, Office verification and cross-platform exchange.
-2. Chemical nicknames, expansion/contraction, general fragment joining and direct canvas text editing.
+2. General fragment joining, broader chemical nicknames and full rich-text caret layout.
 3. Publication pages, document styles, stationery, actual-size view and printing.
 4. Reaction roles, atom mapping, query/polymer data, naming and spectra.
 5. Native menus, accessibility, document tabs and release distribution.
