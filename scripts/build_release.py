@@ -46,6 +46,8 @@ def freeze_worker():
             "--onedir",
             "--name",
             "moruno-engine",
+            "--paths",
+            ROOT / "engine",
             "--collect-all",
             "rdkit",
             "--collect-all",
