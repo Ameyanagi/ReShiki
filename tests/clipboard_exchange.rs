@@ -1,4 +1,4 @@
-use moruno::engine::{PythonEngine, Request};
+use reshiki::engine::{PythonEngine, Request};
 
 #[tokio::test]
 async fn binary_exchange_keeps_supported_structure_and_figure_objects() {
@@ -33,7 +33,7 @@ async fn binary_exchange_keeps_supported_structure_and_figure_objects() {
             .output
             .unwrap();
         // Scientific graphics intentionally exchange as editable vector groups.
-        // Compare those objects with the XML path, not their Moruno-only presets.
+        // Compare those objects with the XML path, not their ReShiki-only presets.
         let exchange = engine
             .request(Request::import("cdxml", &xml))
             .await

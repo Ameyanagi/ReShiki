@@ -1,7 +1,7 @@
 use super::{App, InspectorTab, Message};
 use crate::canvas::Tool;
 use iced::Task;
-use moruno::{
+use reshiki::{
     document::Document,
     editing,
     template_library::{Library, standard_path},
@@ -62,7 +62,7 @@ struct Location {
     scroll: f32,
 }
 
-pub fn category(template: &moruno::templates::Template) -> &str {
+pub fn category(template: &reshiki::templates::Template) -> &str {
     if template.id.starts_with("builtin:") {
         if matches!(template.group.as_str(), "Rings" | "Heterocycles")
             && template
@@ -173,7 +173,7 @@ impl State {
     }
     pub fn load() -> Self {
         let mut state = Self {
-            notice: moruno::templates::builtin_error().map(str::to_owned),
+            notice: reshiki::templates::builtin_error().map(str::to_owned),
             ..Self::default()
         };
         if !cfg!(test) {
@@ -207,7 +207,7 @@ impl State {
         self.undo = None;
         Ok(())
     }
-    pub fn matches(&self, index: usize, t: &moruno::templates::Template) -> bool {
+    pub fn matches(&self, index: usize, t: &reshiki::templates::Template) -> bool {
         let query = self.query.to_lowercase();
         (match self.filter {
             Filter::All => true,
@@ -227,7 +227,7 @@ impl State {
                 .contains(word)
             })
     }
-    pub fn search_rank(&self, t: &moruno::templates::Template) -> u8 {
+    pub fn search_rank(&self, t: &reshiki::templates::Template) -> u8 {
         let query = self.query.trim().to_lowercase();
         let name = t.name.to_lowercase();
         if name == query || t.keywords.iter().any(|s| s.eq_ignore_ascii_case(&query)) {
@@ -289,7 +289,7 @@ impl App {
             Action::Import => Some(Task::perform(
                 async {
                     let Some(file) = rfd::AsyncFileDialog::new()
-                        .set_title("Import a Moruno template collection")
+                        .set_title("Import a ReShiki template collection")
                         .pick_file()
                         .await
                     else {
@@ -306,7 +306,7 @@ impl App {
                     async move {
                         let Some(file) = rfd::AsyncFileDialog::new()
                             .set_title("Export my templates and favorites")
-                            .set_file_name("My templates.moruno-templates")
+                            .set_file_name("My templates.reshiki-templates")
                             .save_file()
                             .await
                         else {

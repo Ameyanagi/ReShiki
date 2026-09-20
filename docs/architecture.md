@@ -1,6 +1,6 @@
 # Architecture
 
-Moruno owns its editable document in Rust. RDKit is a local computation service; its Python objects are never serialized into native files.
+ReShiki owns its editable document in Rust. RDKit is a local computation service; its Python objects are never serialized into native files.
 
 ```mermaid
 flowchart LR
@@ -72,7 +72,7 @@ Portable packages include the worker project and `uv.lock` in `Contents/Resource
 
 ## Native clipboard
 
-On macOS, explicit Copy/Paste starts a bundled AppKit helper with JSON on stdin/stdout and base64 representations. The helper prepares one item with a private Moruno document, supported editable binary drawing data and PDF/PNG/SVG alternatives. Copy Image omits the editable structure and adds an embedded raster drawing object with physical bounds for readers that ignore PNG resolution metadata. The helper does not monitor clipboard changes or read previous contents during Copy.
+On macOS, explicit Copy/Paste starts a bundled AppKit helper with JSON on stdin/stdout and base64 representations. The helper prepares one item with a private ReShiki document, supported editable binary drawing data and PDF/PNG/SVG alternatives. Copy Image omits the editable structure and adds an embedded raster drawing object with physical bounds for readers that ignore PNG resolution metadata. The helper does not monitor clipboard changes or read previous contents during Copy.
 
 The worker accepts `format: "cdx"` with base64 input/output and converts through the existing CDXML checks. The binary codec bounds input, nesting, object count and property count. Unsupported object properties and query predicates return errors.
 
@@ -84,6 +84,6 @@ Aromatic circles are derived from closed cycles of aromatic bonds (order 4), wit
 
 ## Reviewed assistant proposals
 
-The optional Codex panel uses a local app-server child with structured output. The child has an isolated temporary working directory, shell and external integrations disabled, bounded JSONL transport, cancellation, and a turn timeout. Finder launches receive known executable search directories without evaluating shell startup files. Moruno imports proposed SMILES through the existing chemistry worker and builds typed drawing objects with current styles. Chat and previews are transient; document epoch/revision checks protect Apply, which commits one ordinary history entry. The assistant never owns the live document.
+The optional Codex panel uses a local app-server child with structured output. The child has an isolated temporary working directory, shell and external integrations disabled, bounded JSONL transport, cancellation, and a turn timeout. Finder launches receive known executable search directories without evaluating shell startup files. ReShiki imports proposed SMILES through the existing chemistry worker and builds typed drawing objects with current styles. Chat and previews are transient; document epoch/revision checks protect Apply, which commits one ordinary history entry. The assistant never owns the live document.
 
 Bond Z order is presentation metadata. A bounded sweep detects unconnected crossings, then clips lower-bond line/polygon geometry. Canvas and exports share these primitives. Elbow arrows use two line segments and retain a movable corner through native and supported editable interchange.

@@ -168,11 +168,11 @@ impl PythonEngine {
             .ok()
             .and_then(|exe| crate::python_runtime::packaged_project(&exe));
         let root = packaged.clone().unwrap_or_else(|| {
-            std::env::var_os("MORUNO_ROOT")
+            crate::compatibility::environment("ROOT")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")))
         });
-        let python = if let Some(path) = std::env::var_os("MORUNO_PYTHON") {
+        let python = if let Some(path) = crate::compatibility::environment("PYTHON") {
             PathBuf::from(path)
         } else if let Some(project) = &packaged {
             crate::python_runtime::prepare(project).await?

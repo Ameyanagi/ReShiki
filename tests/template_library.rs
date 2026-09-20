@@ -1,4 +1,4 @@
-use moruno::{
+use reshiki::{
     document::{Annotation, Document, Point},
     editing,
     engine::{ChemistryEngine, PythonEngine, Request},

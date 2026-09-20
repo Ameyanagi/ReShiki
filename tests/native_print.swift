@@ -50,7 +50,7 @@ struct NativePrintTests {
         let app=NSApplication.shared
         app.setActivationPolicy(.prohibited)
         app.finishLaunching()
-        let directory=FileManager.default.temporaryDirectory.appendingPathComponent("moruno-print-tests-"+UUID().uuidString)
+        let directory=FileManager.default.temporaryDirectory.appendingPathComponent("reshiki-print-tests-"+UUID().uuidString)
         try FileManager.default.createDirectory(at:directory,withIntermediateDirectories:true)
         defer { try? FileManager.default.removeItem(at:directory) }
         let sizes=[CGSize(width:595.2756,height:841.8898),CGSize(width:792,height:612),CGSize(width:360,height:480)]

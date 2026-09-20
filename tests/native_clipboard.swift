@@ -6,7 +6,7 @@ enum ClipboardTests {
     static func main() throws {
         let board = NSPasteboard.withUniqueName()
         defer { board.releaseGlobally() }
-        let native = Representation(type: "dev.moruno.drawing", data: Data("native".utf8))
+        let native = Representation(type: "dev.reshiki.drawing", data: Data("native".utf8))
         let png = Representation(type: "public.png", data: Data("png".utf8))
         let text = Representation(type: "public.utf8-plain-text", data: Data("https://example.invalid/picture".utf8))
         func check(_ condition: Bool, _ message: String) throws {
@@ -15,6 +15,14 @@ enum ClipboardTests {
         _ = try write(board, [text, png, native])
         var result = try read(board).representations
         try check(result.count == 1 && result.first?.type == native.type, "Editable data must take priority")
+        let legacy = Representation(type: "dev.moruno.drawing", data: Data("legacy".utf8))
+        _ = try write(board, [legacy, native])
+        result = try read(board).representations
+        try check(result.first?.type == native.type, "Current native format must precede legacy data")
+        _ = try write(board, [legacy, png])
+        result = try read(board).representations
+        try check(result.first?.type == legacy.type, "Legacy native structures must remain editable")
+        _ = try write(board, [text, png, native])
         result = try read(board, imageOnly: true).representations
         try check(result.count == 1 && result.first?.data == png.data, "Explicit picture paste must bypass editable data")
         _ = try write(board, [text, png])

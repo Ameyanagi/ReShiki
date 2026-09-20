@@ -4,48 +4,48 @@ const workflows = [
     number: "01",
     title: "Build a molecule",
     description: "Draw bonds, choose atoms, and attach a template.",
-    href: "/moruno/guide/first-molecule/",
+    href: "/guide/first-molecule/",
   },
   {
     number: "02",
     title: "Arrange a reaction",
     description: "Place molecules and arrows, then assign reaction roles.",
-    href: "/moruno/guide/reactions/",
+    href: "/guide/reactions/",
   },
   {
     number: "03",
     title: "Share your figure",
     description: "Copy editable structures or export SVG, PDF, and PNG.",
-    href: "/moruno/guide/sharing/",
+    href: "/guide/sharing/",
   },
 ];
 const guides = [
-  { title: "Templates", href: "/moruno/guide/templates/" },
-  { title: "Editing", href: "/moruno/guide/editing/" },
-  { title: "Assistant", href: "/moruno/guide/assistant/" },
-  { title: "Figures", href: "/moruno/guide/figures/" },
+  { title: "Templates", href: "/guide/templates/" },
+  { title: "Editing", href: "/guide/editing/" },
+  { title: "Assistant", href: "/guide/assistant/" },
+  { title: "Figures", href: "/guide/figures/" },
 ];
 ---
 
-<div class="moruno-home not-content">
+<div class="reshiki-home not-content">
   <p class="home-platforms">
     macOS · Windows · Linux
     <span aria-hidden="true">/</span>
-    <a href="/moruno/guide/install/">Install uv first</a>
+    <a href="/guide/install/">Install uv first</a>
   </p>
 
   <figure class="home-workspace">
-    <a href="/moruno/manual/workspace.png" aria-label="View the workspace screenshot at full size">
+    <a href="/manual/workspace.png" aria-label="View the workspace screenshot at full size">
       <img
-        src="/moruno/manual/workspace.png"
-        alt="Moruno's canvas with an editable chemical drawing and its drawing tools."
+        src="/manual/workspace.png"
+        alt="ReShiki's canvas with an editable chemical drawing and its drawing tools."
         width="2560"
         height="1704"
         fetchpriority="high"
         decoding="async"
       />
     </a>
-    <figcaption>Moruno · JACS / ACS drawing style</figcaption>
+    <figcaption>ReShiki · JACS / ACS drawing style</figcaption>
   </figure>
 
   <section class="home-manual" aria-labelledby="manual-title">
@@ -70,7 +70,11 @@ const guides = [
   </section>
 
   <div class="home-developers">
-    <span>Building with Moruno?</span>
-    <a href="/moruno/developer/development/">Developer docs <span aria-hidden="true">→</span></a>
+    <span>Building with ReShiki?</span>
+    <a href="/developer/development/">Developer docs <span aria-hidden="true">→</span></a>
   </div>
+  <p class="home-name">
+    ReShiki <span lang="ja">（リシキ）</span> · REinvention of the wheel for drawing chemical structure.
+    Shiki is <span lang="ja">式</span>, as in chemical equation. R is also Rust; RE is also reaction.
+  </p>
 </div>

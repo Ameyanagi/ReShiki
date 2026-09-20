@@ -1,4 +1,4 @@
-"""Configure the Moruno GitHub signing environment without logging credentials."""
+"""Configure the ReShiki GitHub signing environment without logging credentials."""
 
 import argparse
 import base64
@@ -7,7 +7,7 @@ import json
 import subprocess
 from pathlib import Path
 
-REPOSITORY = "Ameyanagi/moruno"
+REPOSITORY = "Ameyanagi/ReShiki"
 ENVIRONMENT = "macos-signing"
 
 

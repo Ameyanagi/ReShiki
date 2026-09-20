@@ -4,7 +4,7 @@ use iced::{Color, Point, Rectangle, Renderer, Theme, mouse};
 
 #[derive(Clone, Copy)]
 pub(super) enum Icon {
-    TextAlign(moruno::typography::TextAlign),
+    TextAlign(reshiki::typography::TextAlign),
     Tool(Tool),
     New,
     Open,
@@ -58,7 +58,7 @@ impl<Message> canvas::Program<Message> for Glyph {
         };
         match self.0 {
             Icon::Tool(Tool::Chain(mode)) => {
-                if mode == moruno::chains::ChainMode::Straight {
+                if mode == reshiki::chains::ChainMode::Straight {
                     line(
                         &mut f,
                         &[(2., 15.), (7., 8.), (12., 15.), (17., 8.), (22., 15.)],
@@ -78,7 +78,7 @@ impl<Message> canvas::Program<Message> for Glyph {
                 }
             }
             Icon::Tool(Tool::Graphic(kind)) => {
-                use moruno::{
+                use reshiki::{
                     document::Point as World,
                     graphics::{BracketSides, Graphic, GraphicKind, GraphicStyle, PathCommand},
                 };
@@ -125,14 +125,14 @@ impl<Message> canvas::Program<Message> for Glyph {
             Icon::TextAlign(alignment) => {
                 for i in 0..4 {
                     let width =
-                        if i % 2 == 0 || alignment == moruno::typography::TextAlign::Justified {
+                        if i % 2 == 0 || alignment == reshiki::typography::TextAlign::Justified {
                             16.0
                         } else {
                             10.0
                         };
                     let x = match alignment {
-                        moruno::typography::TextAlign::Right => 20.0 - width,
-                        moruno::typography::TextAlign::Center => (24.0 - width) / 2.0,
+                        reshiki::typography::TextAlign::Right => 20.0 - width,
+                        reshiki::typography::TextAlign::Center => (24.0 - width) / 2.0,
                         _ => 4.0,
                     };
                     line(
@@ -188,7 +188,7 @@ impl<Message> canvas::Program<Message> for Glyph {
                 }
             }
             Icon::Tool(Tool::StyledBond(preset)) => {
-                use moruno::bonds::BondPreset as P;
+                use reshiki::bonds::BondPreset as P;
                 match preset {
                     P::Dative => {
                         line(&mut f, &[(3., 19.), (20., 5.), (13., 6.)]);

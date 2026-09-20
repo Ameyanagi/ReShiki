@@ -143,7 +143,7 @@ def import_reaction(text, format, to_document, check_supported):
             if not molecule.GetNumConformers():
                 rdDepictor.Compute2DCoords(molecule)
             for atom in molecule.GetAtoms():
-                atom.SetProp("moruno_id", str(next_id))
+                atom.SetProp("reshiki_id", str(next_id))
                 next_id += 1
             part = to_document(molecule)
             # Reserve label room for heteroatoms and implicit hydrogens.

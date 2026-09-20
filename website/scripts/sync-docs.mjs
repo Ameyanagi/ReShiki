@@ -55,10 +55,10 @@ for (const name of (await readdir(source)).filter((name) => name.endsWith(".md")
     const resolved = path.resolve(source, file);
     const fragment = anchor ? `#${anchor}` : "";
     if (path.dirname(resolved) === source && file.endsWith(".md")) {
-      return `](/moruno/developer/${path.basename(file, ".md")}/${fragment}${suffix})`;
+      return `](/developer/${path.basename(file, ".md")}/${fragment}${suffix})`;
     }
     const relative = path.relative(root, resolved).split(path.sep).join("/");
-    return `](https://github.com/Ameyanagi/moruno/blob/main/${relative}${fragment}${suffix})`;
+    return `](https://github.com/Ameyanagi/ReShiki/blob/main/${relative}${fragment}${suffix})`;
   });
   const topic = path.basename(name, ".md");
   const pagination = topic === "development" ? "prev: false\n" : "";
@@ -66,12 +66,12 @@ for (const name of (await readdir(source)).filter((name) => name.endsWith(".md")
   // Keep archived implementation checks from outranking the visual manual.
   const search = guide || historicalTopics.has(topic) ? "pagefind: false\n" : "";
   const note = guide
-    ? `\nImplementation notes and historical checks. [Open the visual guide →](/moruno/guide/${guide}/).\n`
+    ? `\nImplementation notes and historical checks. [Open the visual guide →](/guide/${guide}/).\n`
     : historicalTopics.has(topic)
       ? "\nEngineering notes and historical checks.\n"
       : "";
   await writeFile(
     path.join(destination, name),
-    `---\ntitle: ${JSON.stringify(title)}\nslug: developer/${topic}\n${pagination}${search}editUrl: https://github.com/Ameyanagi/moruno/edit/main/docs/${name}\n---\n${note}${body}`,
+    `---\ntitle: ${JSON.stringify(title)}\nslug: developer/${topic}\n${pagination}${search}editUrl: https://github.com/Ameyanagi/ReShiki/edit/main/docs/${name}\n---\n${note}${body}`,
   );
 }

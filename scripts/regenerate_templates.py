@@ -1,4 +1,4 @@
-"""Regenerate preview/placement coordinates with Moruno's own chemistry worker.
+"""Regenerate preview/placement coordinates with ReShiki's own chemistry worker.
 
 Run: uv run --locked python scripts/regenerate_templates.py
 The catalog contains frozen PubChem chemical facts and source URLs. Amino acids

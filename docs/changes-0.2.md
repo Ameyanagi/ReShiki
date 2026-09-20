@@ -1,6 +1,6 @@
-# Moruno 0.2.0
+# Version 0.2.0
 
-The first public release includes editable molecular drawings, reaction schemes, and a [visual manual](https://ameyanagi.github.io/moruno/).
+The first public release includes editable molecular drawings, reaction schemes, and a [visual manual](https://reshiki.com/).
 
 - Draw atoms, bonds, chains, and rings with JACS / ACS defaults.
 - Attach templates through a chosen atom or bond; save reusable fragments.
@@ -10,7 +10,7 @@ The first public release includes editable molecular drawings, reaction schemes,
 
 ## Downloads
 
-Install [uv](https://docs.astral.sh/uv/getting-started/installation/) first. Moruno installs its chemistry tools locally on first use.
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/) first. ReShiki installs its chemistry tools locally on first use.
 
 | Platform      | Architecture                                            |
 | ------------- | ------------------------------------------------------- |
@@ -21,4 +21,4 @@ Install [uv](https://docs.astral.sh/uv/getting-started/installation/) first. Mor
 
 Intel Macs are not supported. Native system clipboard exchange and printing currently target macOS; Windows and Linux use file exports for these workflows.
 
-All five packages passed extracted-archive startup, fresh chemistry setup, and offline reuse checks. Desktop workflow checks used macOS. Moruno remains under active development; review generated chemistry before using a figure.
+All five packages passed extracted-archive startup, fresh chemistry setup, and offline reuse checks. Desktop workflow checks used macOS. ReShiki remains under active development; review generated chemistry before using a figure.

@@ -101,7 +101,7 @@ func printOperation(document:PDFDocument,title:String) throws -> NSPrintOperatio
     // the printer's imageable margins even when NSPrintInfo margins are zero.
     let view=PublicationPrintView(document:document,pageSize:bounds.size)
     let operation=NSPrintOperation(view:view,printInfo:info)
-    operation.jobTitle=title.isEmpty ? "Moruno drawing" : title
+    operation.jobTitle=title.isEmpty ? "ReShiki drawing" : title
     operation.showsPrintPanel=true
     operation.showsProgressPanel=true
     operation.printPanel.options=[.showsCopies,.showsPageRange,.showsPaperSize,.showsOrientation,.showsScaling,.showsPreview]

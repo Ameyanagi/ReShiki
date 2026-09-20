@@ -1,5 +1,5 @@
 use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
-use moruno::{
+use reshiki::{
     document::{Document, History, Point},
     editing::{self, Transform},
     engine::{ChemistryEngine, PythonEngine, Request},
@@ -57,7 +57,7 @@ fn invalid_data_and_picture_frames_are_rejected_without_panicking() {
     for bytes in [&b""[..], &b"not a picture"[..], &b"\x89PNG\r\n\x1a\n"[..]] {
         assert!(Picture::import(bytes).is_err());
     }
-    assert!(Picture::import(&vec![0; moruno::pictures::MAX_BYTES + 1]).is_err());
+    assert!(Picture::import(&vec![0; reshiki::pictures::MAX_BYTES + 1]).is_err());
     assert!(
         Picture::import(&encoded(
             &DynamicImage::new_rgba8(8193, 1),
@@ -119,12 +119,12 @@ fn picture_transforms_selection_copy_and_undo_preserve_embedded_data() {
 }
 
 fn sample_quadrants(doc: &Document) -> Vec<[u8; 4]> {
-    let png = moruno::export::drawing(doc, "png").unwrap();
+    let png = reshiki::export::drawing(doc, "png").unwrap();
     let pixels = image::load_from_memory(&png).unwrap().to_rgba8();
     // Scene exports have fixed outer padding; sample within each colored area.
     let center_x = pixels.width() / 2;
     let center_y = pixels.height() / 2;
-    let radius = (moruno::style::DEFAULT.points_per_world() * 10. * 1200. / 72.) as u32;
+    let radius = (reshiki::style::DEFAULT.points_per_world() * 10. * 1200. / 72.) as u32;
     [
         (center_x - radius, center_y - radius),
         (center_x + radius, center_y - radius),
@@ -172,10 +172,10 @@ fn exported_pictures_preserve_pixels_transparency_rotation_and_layer_order() {
             [255, 0, 0, 255]
         ]
     );
-    let pdf = moruno::export::drawing(&doc, "pdf").unwrap();
+    let pdf = reshiki::export::drawing(&doc, "pdf").unwrap();
     assert!(String::from_utf8_lossy(&pdf).contains("/Subtype /Image"));
     doc.page_layout = Some(Default::default());
-    let pdf = moruno::export::pages_pdf(&doc).unwrap();
+    let pdf = reshiki::export::pages_pdf(&doc).unwrap();
     assert!(String::from_utf8_lossy(&pdf).contains("/Subtype /Image"));
     let mut cover = Graphic::dragged(
         2,

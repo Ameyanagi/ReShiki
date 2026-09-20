@@ -9,9 +9,9 @@ use iced::widget::{
     text, text_editor, text_input, tooltip,
 };
 use iced::{Alignment, Border, Color, Element, Length, Theme};
-use moruno::bonds::{BondPreset, DoublePosition};
-use moruno::editing::{Arrange, Transform};
-use moruno::typography::{Script, StyleChange, TextAlign};
+use reshiki::bonds::{BondPreset, DoublePosition};
+use reshiki::editing::{Arrange, Transform};
+use reshiki::typography::{Script, StyleChange, TextAlign};
 
 impl App {
     fn selection_summary(&self) -> String {
@@ -67,7 +67,7 @@ impl App {
             })
     }
     fn graphic_panel(&self) -> Element<'_, Message> {
-        use moruno::graphics::{BracketSides, GraphicChange, GraphicKind, LinePattern};
+        use reshiki::graphics::{BracketSides, GraphicChange, GraphicKind, LinePattern};
         let selected: Vec<_> = self
             .doc
             .graphics
@@ -142,11 +142,11 @@ impl App {
         .spacing(9);
         if matches!(kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_)) {
             let mut preview = selected.first().map(|g| (*g).clone()).unwrap_or_else(|| {
-                moruno::graphics::Graphic::dragged(
+                reshiki::graphics::Graphic::dragged(
                     1,
                     kind,
-                    moruno::document::Point::default(),
-                    moruno::document::Point::default(),
+                    reshiki::document::Point::default(),
+                    reshiki::document::Point::default(),
                     self.graphic_style.clone(),
                     self.bracket_sides,
                     false,
@@ -162,14 +162,14 @@ impl App {
         }
         match kind {
             GraphicKind::Symbol(kind) => {
-                panel=panel.push(pick_list(moruno::scientific::SymbolKind::ALL,Some(kind),|k|Message::ScientificKind(GraphicKind::Symbol(k))).text_size(12).padding(6).width(Length::Fill))
+                panel=panel.push(pick_list(reshiki::scientific::SymbolKind::ALL,Some(kind),|k|Message::ScientificKind(GraphicKind::Symbol(k))).text_size(12).padding(6).width(Length::Fill))
                     .push(checkbox(self.attach_symbols).label("Attach to atoms").on_toggle(Message::AttachSymbols).size(14).text_size(12))
                     .push(text("Attached charges and radicals update chemistry. Lone pairs annotate the atom. H and attachment symbols use free placement.").size(11).color(muted()));
             }
             GraphicKind::Orbital(kind) => {
-                panel=panel.push(pick_list(moruno::scientific::OrbitalKind::ALL,Some(kind),|k|Message::ScientificKind(GraphicKind::Orbital(k))).text_size(12).padding(6).width(Length::Fill))
-                    .push(pick_list(moruno::scientific::Phase::ALL,Some(self.orbital_phase),Message::OrbitalPhase).text_size(12).padding(6).width(Length::Fill))
-                    .push(checkbox(self.phase_flipped).label("Reverse phases").on_toggle_maybe((!matches!(kind, moruno::scientific::OrbitalKind::S | moruno::scientific::OrbitalKind::Sigma | moruno::scientific::OrbitalKind::Lobe)).then_some(Message::FlipPhase)).size(14).text_size(12))
+                panel=panel.push(pick_list(reshiki::scientific::OrbitalKind::ALL,Some(kind),|k|Message::ScientificKind(GraphicKind::Orbital(k))).text_size(12).padding(6).width(Length::Fill))
+                    .push(pick_list(reshiki::scientific::Phase::ALL,Some(self.orbital_phase),Message::OrbitalPhase).text_size(12).padding(6).width(Length::Fill))
+                    .push(checkbox(self.phase_flipped).label("Reverse phases").on_toggle_maybe((!matches!(kind, reshiki::scientific::OrbitalKind::S | reshiki::scientific::OrbitalKind::Sigma | reshiki::scientific::OrbitalKind::Lobe)).then_some(Message::FlipPhase)).size(14).text_size(12))
                     .push(text("Drag from the orbital node to set direction and size. Click uses one bond length. Shift snaps to 15°. Group with a molecule to move them together.").size(11).color(muted()));
             }
             _ => {}
@@ -179,7 +179,7 @@ impl App {
                 && selected.iter().any(|g| {
                     g.commands()
                         .iter()
-                        .any(|c| matches!(c, moruno::graphics::PathCommand::Close))
+                        .any(|c| matches!(c, reshiki::graphics::PathCommand::Close))
                 }))
         {
             panel = panel
@@ -639,7 +639,7 @@ impl App {
             .on_show(Message::Viewport)
             .on_resize(Message::Viewport);
         let context: Element<'_, Message> = if let Some(preview) = &self.cleanup {
-            use moruno::cleanup::Scope;
+            use reshiki::cleanup::Scope;
             let scopes = vec![Scope::SelectedAtoms, Scope::SelectedMolecules];
             let mut bar = column![
                 row![
@@ -718,7 +718,7 @@ impl App {
             .map(|p| p.to_string_lossy().into_owned())
             .unwrap_or_else(|| "Untitled".into());
         let bar = row![
-            text("moruno").size(21).color(Color::from_rgb8(22, 91, 81)),
+            text("ReShiki").size(21).color(Color::from_rgb8(22, 91, 81)),
             divider(),
             icon_button(Icon::New, "New · ⌘N", Some(Message::New), false),
             icon_button(Icon::Open, "Open · ⌘O", Some(Message::Open), false),
@@ -816,59 +816,59 @@ impl App {
             ),
             (Tool::StyledBond(BondPreset::Hashed), "Hashed bond"),
             (
-                Tool::Chain(moruno::chains::ChainMode::Straight),
+                Tool::Chain(reshiki::chains::ChainMode::Straight),
                 "Straight chain · X",
             ),
             (
-                Tool::Chain(moruno::chains::ChainMode::Snaking),
+                Tool::Chain(reshiki::chains::ChainMode::Snaking),
                 "Snaking chain · Shift+X",
             ),
             (Tool::Ring, "Ring · R / Aromatic · Shift+R"),
             (
-                Tool::RingPreset(moruno::rings::Preset::Cyclopentadiene),
+                Tool::RingPreset(reshiki::rings::Preset::Cyclopentadiene),
                 "Cyclopentadiene · Shift moves double bonds",
             ),
             (
-                Tool::RingPreset(moruno::rings::Preset::ChairUp),
+                Tool::RingPreset(reshiki::rings::Preset::ChairUp),
                 "Cyclohexane chair A · Alt connects by a bond",
             ),
             (
-                Tool::RingPreset(moruno::rings::Preset::ChairDown),
+                Tool::RingPreset(reshiki::rings::Preset::ChairDown),
                 "Cyclohexane chair B · Alt connects by a bond",
             ),
             (Tool::Arrow, "Reaction arrow · A"),
             (Tool::Text, "Text label · T"),
             (Tool::Erase, "Eraser · E"),
             (
-                Tool::Graphic(moruno::graphics::GraphicKind::Rectangle),
+                Tool::Graphic(reshiki::graphics::GraphicKind::Rectangle),
                 "Rectangle / rounded rectangle",
             ),
             (
-                Tool::Graphic(moruno::graphics::GraphicKind::Ellipse),
+                Tool::Graphic(reshiki::graphics::GraphicKind::Ellipse),
                 "Ellipse / circle · Shift constrains",
             ),
             (
-                Tool::Graphic(moruno::graphics::GraphicKind::Brackets),
+                Tool::Graphic(reshiki::graphics::GraphicKind::Brackets),
                 "Brackets / parentheses / braces",
             ),
             (
-                Tool::Graphic(moruno::graphics::GraphicKind::Line),
+                Tool::Graphic(reshiki::graphics::GraphicKind::Line),
                 "Graphic line",
             ),
             (
-                Tool::Graphic(moruno::graphics::GraphicKind::Curve),
+                Tool::Graphic(reshiki::graphics::GraphicKind::Curve),
                 "Bézier curve",
             ),
-            (Tool::Graphic(moruno::graphics::GraphicKind::Arc), "Arc"),
+            (Tool::Graphic(reshiki::graphics::GraphicKind::Arc), "Arc"),
             (
-                Tool::Graphic(moruno::graphics::GraphicKind::Symbol(
-                    moruno::scientific::SymbolKind::CirclePlus,
+                Tool::Graphic(reshiki::graphics::GraphicKind::Symbol(
+                    reshiki::scientific::SymbolKind::CirclePlus,
                 )),
                 "Chemical symbols",
             ),
             (
-                Tool::Graphic(moruno::graphics::GraphicKind::Orbital(
-                    moruno::scientific::OrbitalKind::P,
+                Tool::Graphic(reshiki::graphics::GraphicKind::Orbital(
+                    reshiki::scientific::OrbitalKind::P,
                 )),
                 "Orbitals",
             ),
@@ -1000,8 +1000,8 @@ impl App {
                     .push(
                         pick_list(
                             [
-                                moruno::chains::ChainMode::Straight,
-                                moruno::chains::ChainMode::Snaking,
+                                reshiki::chains::ChainMode::Straight,
+                                reshiki::chains::ChainMode::Snaking,
                             ],
                             Some(mode),
                             |m| Message::Tool(Tool::Chain(m)),
@@ -1010,7 +1010,7 @@ impl App {
                         .padding(5),
                     )
                     .push(
-                        text(if mode == moruno::chains::ChainMode::Snaking {
+                        text(if mode == reshiki::chains::ChainMode::Snaking {
                             "Max atoms"
                         } else {
                             "Atoms"
@@ -1037,24 +1037,24 @@ impl App {
             }
             Tool::Graphic(kind) => {
                 let chooser: Element<'_, Message> = match kind {
-                    moruno::graphics::GraphicKind::Symbol(k) => {
-                        pick_list(moruno::scientific::SymbolKind::ALL, Some(k), |k| {
-                            Message::ScientificKind(moruno::graphics::GraphicKind::Symbol(k))
+                    reshiki::graphics::GraphicKind::Symbol(k) => {
+                        pick_list(reshiki::scientific::SymbolKind::ALL, Some(k), |k| {
+                            Message::ScientificKind(reshiki::graphics::GraphicKind::Symbol(k))
                         })
                         .text_size(12)
                         .padding(5)
                         .into()
                     }
-                    moruno::graphics::GraphicKind::Orbital(k) => {
-                        pick_list(moruno::scientific::OrbitalKind::ALL, Some(k), |k| {
-                            Message::ScientificKind(moruno::graphics::GraphicKind::Orbital(k))
+                    reshiki::graphics::GraphicKind::Orbital(k) => {
+                        pick_list(reshiki::scientific::OrbitalKind::ALL, Some(k), |k| {
+                            Message::ScientificKind(reshiki::graphics::GraphicKind::Orbital(k))
                         })
                         .text_size(12)
                         .padding(5)
                         .into()
                     }
                     _ => pick_list(
-                        moruno::graphics::GraphicKind::DRAWABLE,
+                        reshiki::graphics::GraphicKind::DRAWABLE,
                         Some(kind),
                         |kind| Message::Tool(Tool::Graphic(kind)),
                     )
@@ -1064,10 +1064,10 @@ impl App {
                 };
                 options = options.push(chooser).push(
                     text(match kind {
-                        moruno::graphics::GraphicKind::Symbol(_) => {
+                        reshiki::graphics::GraphicKind::Symbol(_) => {
                             "Click to place/attach · Drag to position · Escape cancels"
                         }
-                        moruno::graphics::GraphicKind::Orbital(_) => {
+                        reshiki::graphics::GraphicKind::Orbital(_) => {
                             "Drag from node · Click for default size · Shift snaps to 15°"
                         }
                         _ => "Drag to draw · Shift constrains · Escape cancels",
@@ -1104,11 +1104,11 @@ impl App {
                 let preset = if let Tool::RingPreset(p) = self.tool {
                     p
                 } else {
-                    moruno::rings::Preset::Regular
+                    reshiki::rings::Preset::Regular
                 };
                 options = options.push(
-                    pick_list(moruno::rings::Preset::ALL, Some(preset), |p| {
-                        Message::Tool(if p == moruno::rings::Preset::Regular {
+                    pick_list(reshiki::rings::Preset::ALL, Some(preset), |p| {
+                        Message::Tool(if p == reshiki::rings::Preset::Regular {
                             Tool::Ring
                         } else {
                             Tool::RingPreset(p)
@@ -1117,7 +1117,7 @@ impl App {
                     .text_size(12)
                     .padding(5),
                 );
-                if preset == moruno::rings::Preset::Regular {
+                if preset == reshiki::rings::Preset::Regular {
                     options = options
                         .push(text("Size").size(11).color(muted()))
                         .push(
@@ -1139,7 +1139,7 @@ impl App {
                         .push(text("Click / drag to attach").size(11).color(muted()));
                 } else {
                     options = options.push(
-                        text(if preset == moruno::rings::Preset::Cyclopentadiene {
+                        text(if preset == reshiki::rings::Preset::Cyclopentadiene {
                             "Click / drag · Alt connects · Shift swaps double bonds"
                         } else {
                             "Click / drag · Alt connects by a bond"
@@ -1153,7 +1153,7 @@ impl App {
                 options = options
                     .push(
                         pick_list(
-                            moruno::arrows::Preset::ALL,
+                            reshiki::arrows::Preset::ALL,
                             Some(self.arrow_style),
                             Message::ArrowStyle,
                         )
@@ -1381,7 +1381,7 @@ impl App {
             body=column![section("RING PREVIEW"),text(preset.to_string()).size(14),canvas(crate::canvas::DrawingThumbnail(preset.document(self.bond_drawing.length,false))).width(Length::Fill).height(98),
                 text("Click to place. Drag to rotate a free ring or choose an attachment side. Click an existing atom to share it, or a bond to fuse.").size(12),
                 text("Hold Alt/Option on an atom to connect the complete ring with a new bond. Each placement is one Undo step.").size(11).color(muted()),
-                text(if preset==moruno::rings::Preset::Cyclopentadiene {"Hold Shift to move the double bonds."} else {"Chair A/B are drawing projections; they do not assign stereochemistry. Cleanup may redraw the ring as a regular hexagon."}).size(11).color(muted()),
+                text(if preset==reshiki::rings::Preset::Cyclopentadiene {"Hold Shift to move the double bonds."} else {"Chair A/B are drawing projections; they do not assign stereochemistry. Cleanup may redraw the ring as a regular hexagon."}).size(11).color(muted()),
                 horizontal_line(),body].spacing(10);
         }
         if matches!(self.tool, Tool::Graphic(_))
@@ -1549,13 +1549,13 @@ impl App {
             command("Invert selection", Message::InvertSelection),
             pick_list(
                 [
-                    moruno::graphics::GraphicKind::Brackets,
-                    moruno::graphics::GraphicKind::Parentheses,
-                    moruno::graphics::GraphicKind::Braces,
-                    moruno::graphics::GraphicKind::Rectangle,
-                    moruno::graphics::GraphicKind::RoundedRectangle
+                    reshiki::graphics::GraphicKind::Brackets,
+                    reshiki::graphics::GraphicKind::Parentheses,
+                    reshiki::graphics::GraphicKind::Braces,
+                    reshiki::graphics::GraphicKind::Rectangle,
+                    reshiki::graphics::GraphicKind::RoundedRectangle
                 ],
-                None::<moruno::graphics::GraphicKind>,
+                None::<reshiki::graphics::GraphicKind>,
                 Message::AddFrame
             )
             .placeholder("Add frame…")
@@ -1712,12 +1712,12 @@ impl App {
                     atom_controls = atom_controls.push(
                         row![
                             text(match mark.kind {
-                                moruno::scientific::MarkKind::Charge => "Charge",
-                                moruno::scientific::MarkKind::CircledCharge => "Circled charge",
-                                moruno::scientific::MarkKind::Radical => "Radical",
-                                moruno::scientific::MarkKind::RadicalIon => "Radical ion",
-                                moruno::scientific::MarkKind::LonePair => "Lone pair",
-                                moruno::scientific::MarkKind::LonePairBar => "Lone pair bar",
+                                reshiki::scientific::MarkKind::Charge => "Charge",
+                                reshiki::scientific::MarkKind::CircledCharge => "Circled charge",
+                                reshiki::scientific::MarkKind::Radical => "Radical",
+                                reshiki::scientific::MarkKind::RadicalIon => "Radical ion",
+                                reshiki::scientific::MarkKind::LonePair => "Lone pair",
+                                reshiki::scientific::MarkKind::LonePairBar => "Lone pair bar",
                             })
                             .size(11)
                             .width(Length::Fill),
@@ -1852,7 +1852,7 @@ impl App {
         if state.active
             && let Some(t) = state.library.get(self.template_index)
         {
-            let preview: Element<'_, moruno::templates::Anchor> =
+            let preview: Element<'_, reshiki::templates::Anchor> =
                 canvas(crate::canvas::TemplateAnchorPreview {
                     document: &t.document,
                     anchor: state.anchor,
@@ -1866,9 +1866,9 @@ impl App {
                 .push(
                     pick_list(
                         [
-                            moruno::templates::Connection::Connect,
-                            moruno::templates::Connection::ShareAtom,
-                            moruno::templates::Connection::FuseBond,
+                            reshiki::templates::Connection::Connect,
+                            reshiki::templates::Connection::ShareAtom,
+                            reshiki::templates::Connection::FuseBond,
                         ],
                         Some(state.connection),
                         |mode| Message::Templates(A::Connection(mode)),
@@ -1881,7 +1881,7 @@ impl App {
                 .push(
                     row![
                         text(state.anchor.to_string()).size(11).width(Length::Fill),
-                        command("Auto", action(A::Anchor(moruno::templates::Anchor::Auto)))
+                        command("Auto", action(A::Anchor(reshiki::templates::Anchor::Auto)))
                     ]
                     .align_y(Alignment::Center),
                 )
@@ -1909,7 +1909,7 @@ impl App {
             if !t.note.is_empty() {
                 body = body.push(text(&t.note).size(11).color(muted()));
             }
-            if self.template_index >= moruno::templates::LIBRARY.len() {
+            if self.template_index >= reshiki::templates::LIBRARY.len() {
                 body = body
                     .push(
                         row![
@@ -1936,9 +1936,10 @@ impl App {
                 && state.query.trim().is_empty()
                 && state.filter == Filter::All
             {
-                let mut categories =
-                    std::collections::BTreeMap::<&str, (usize, &moruno::templates::Template)>::new(
-                    );
+                let mut categories = std::collections::BTreeMap::<
+                    &str,
+                    (usize, &reshiki::templates::Template),
+                >::new();
                 for template in state.library.iter() {
                     let name = super::template_library::category(template);
                     let entry = categories.entry(name).or_insert((0, template));
@@ -2034,7 +2035,7 @@ impl App {
             .iter()
             .filter(|g| g.members.iter().any(|id| self.selected.contains(id)))
             .collect();
-        let choices: Vec<String> = moruno::abbreviations::PRESETS
+        let choices: Vec<String> = reshiki::abbreviations::PRESETS
             .iter()
             .map(|s| (*s).into())
             .collect();
@@ -2076,7 +2077,7 @@ impl App {
 
     fn atom_labels_panel(&self) -> Element<'_, Message> {
         use super::atom_labels::{Action as A, Scope};
-        use moruno::atom_labels::{Carbons, HydrogenPosition};
+        use reshiki::atom_labels::{Carbons, HydrogenPosition};
         let ids = self.label_ids();
         let atoms: Vec<_> = self
             .doc
@@ -2101,7 +2102,7 @@ impl App {
         } else {
             atoms
                 .iter()
-                .all(|a| moruno::atom_labels::hydrogens(a, &self.doc))
+                .all(|a| reshiki::atom_labels::hydrogens(a, &self.doc))
         };
         let stereo = if atoms.is_empty() {
             self.doc.atom_labels.stereo
@@ -2287,16 +2288,16 @@ impl App {
                 Message::Pages(super::pages::Action::Export),
             ));
         }
-        if moruno::printing::available() {
+        if reshiki::printing::available() {
             body = body.push(
                 command(
                     "Print… · ⌘P",
                     Message::Printing(super::printing::Action::Start(
-                        moruno::printing::Scope::Document,
+                        reshiki::printing::Scope::Document,
                     )),
                 )
                 .on_press_maybe(self.printing.active.is_none().then_some(Message::Printing(
-                    super::printing::Action::Start(moruno::printing::Scope::Document),
+                    super::printing::Action::Start(reshiki::printing::Scope::Document),
                 )))
                 .width(Length::Fill),
             );
@@ -2305,11 +2306,11 @@ impl App {
                     command(
                         "Print selection…",
                         Message::Printing(super::printing::Action::Start(
-                            moruno::printing::Scope::Selection,
+                            reshiki::printing::Scope::Selection,
                         )),
                     )
                     .on_press_maybe(self.printing.active.is_none().then_some(Message::Printing(
-                        super::printing::Action::Start(moruno::printing::Scope::Selection),
+                        super::printing::Action::Start(reshiki::printing::Scope::Selection),
                     )))
                     .width(Length::Fill),
                 );
@@ -2329,7 +2330,7 @@ impl App {
             );
         }
         body.push(
-            text("Save as .moruno to retain the complete editable drawing.")
+            text("Save as .reshiki to retain the complete editable drawing.")
                 .size(11)
                 .color(muted()),
         )

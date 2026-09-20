@@ -1,6 +1,6 @@
 use crate::canvas::{self, Camera, Edit, Tool};
 use iced::{Color, Element, Subscription, Task, Theme};
-use moruno::{
+use reshiki::{
     document::{Annotation, Arrow, Document, History, Point},
     editing::{self, Arrange, Transform},
     engine::{Analysis, ChemistryEngine, PythonEngine, Request, Response},
@@ -69,8 +69,8 @@ pub enum Message {
     DrawingLength(String),
     ChainAtoms(String),
     ChainAngle(String),
-    ApplyBondPreset(moruno::bonds::BondPreset),
-    BondPosition(moruno::bonds::DoublePosition),
+    ApplyBondPreset(reshiki::bonds::BondPreset),
+    BondPosition(reshiki::bonds::DoublePosition),
     BondColor(String),
     ApplyBondColor,
     GraphicStyle(GraphicChange),
@@ -81,8 +81,8 @@ pub enum Message {
     GraphicFill(String),
     ApplyGraphicFill,
     GraphicSides(BracketSides),
-    ScientificKind(moruno::graphics::GraphicKind),
-    OrbitalPhase(moruno::scientific::Phase),
+    ScientificKind(reshiki::graphics::GraphicKind),
+    OrbitalPhase(reshiki::scientific::Phase),
     FlipPhase(bool),
     AttachSymbols(bool),
     RemoveMark(u64, usize),
@@ -99,13 +99,13 @@ pub enum Message {
     Tool(Tool),
     Element(String),
     CaptionAction(iced::widget::text_editor::Action),
-    TextStyle(moruno::typography::StyleChange),
+    TextStyle(reshiki::typography::StyleChange),
     FontSize(String),
     ApplyFontSize,
     ColorScope(typography::ColorScope),
     TextColor(String),
     ApplyTextColor,
-    TextAlign(moruno::typography::TextAlign),
+    TextAlign(reshiki::typography::TextAlign),
     TextSpacing(f32),
     TextWidth(String),
     ApplyTextWidth,
@@ -116,7 +116,7 @@ pub enum Message {
     ApplyCleanup,
     CancelCleanup,
     CleanupOriginal(bool),
-    CleanupScope(moruno::cleanup::Scope),
+    CleanupScope(reshiki::cleanup::Scope),
     CleanupOrientation(bool),
     Analyze,
     Undo,
@@ -127,7 +127,7 @@ pub enum Message {
     Group,
     Ungroup,
     IntegralGroup(bool),
-    AddFrame(moruno::graphics::GraphicKind),
+    AddFrame(reshiki::graphics::GraphicKind),
     Grid,
     ToggleView,
     Rulers(bool),
@@ -146,7 +146,7 @@ pub enum Message {
         epoch: u64,
         revision: u64,
         cut_ids: Vec<u64>,
-        result: Result<moruno::clipboard::CopyOutcome, String>,
+        result: Result<reshiki::clipboard::CopyOutcome, String>,
     },
     ClipboardRead {
         epoch: u64,
@@ -164,7 +164,7 @@ pub enum Message {
     RingSize(u8),
     AromaticRing(bool),
     ToggleAromaticRing,
-    ArrowStyle(moruno::arrows::Preset),
+    ArrowStyle(reshiki::arrows::Preset),
     ArrowAction(arrows::Action),
     CustomElement(String),
     ApplyElement,
@@ -229,13 +229,13 @@ pub struct App {
     labels: atom_labels::State,
     refresh_due: Option<std::time::Instant>,
     chemistry_notice: Option<String>,
-    bond_drawing: moruno::chains::BondDrawing,
-    chain_drawing: moruno::chains::ChainDrawing,
+    bond_drawing: reshiki::chains::BondDrawing,
+    chain_drawing: reshiki::chains::ChainDrawing,
     drawing_length_input: String,
     chain_atoms_input: String,
     chain_angle_input: String,
     graphic_style: GraphicStyle,
-    orbital_phase: moruno::scientific::Phase,
+    orbital_phase: reshiki::scientific::Phase,
     phase_flipped: bool,
     attach_symbols: bool,
     graphic_width_input: String,
@@ -250,7 +250,7 @@ pub struct App {
     element: String,
     caption: String,
     caption_editor: iced::widget::text_editor::Content,
-    caption_format: moruno::typography::TextFormat,
+    caption_format: reshiki::typography::TextFormat,
     caption_target: Option<u64>,
     inline_text: Option<inline_text::State>,
     joining: Option<joining::State>,
@@ -282,7 +282,7 @@ pub struct App {
     file_epoch: u64,
     ring_size: u8,
     aromatic_ring: bool,
-    arrow_style: moruno::arrows::Preset,
+    arrow_style: reshiki::arrows::Preset,
     arrows: arrows::State,
     custom_element: String,
     recovery: Option<Recovery>,
@@ -323,7 +323,7 @@ impl App {
             chemistry_notice: None,
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),
-            drawing_length_input: moruno::style::DEFAULT.bond_length_pt.to_string(),
+            drawing_length_input: reshiki::style::DEFAULT.bond_length_pt.to_string(),
             chain_atoms_input: String::new(),
             chain_angle_input: "120".into(),
             graphic_style: GraphicStyle::default(),
@@ -350,7 +350,7 @@ impl App {
             printing: printing::State::default(),
             pictures: pictures::State::default(),
             font_options: iced::widget::combo_box::State::new(
-                moruno::style::font_families()
+                reshiki::style::font_families()
                     .iter()
                     .map(|s| (*s).to_owned())
                     .collect(),
@@ -423,7 +423,7 @@ impl App {
     }
     pub fn title(&self) -> String {
         format!(
-            "{}{} — Moruno",
+            "{}{} — ReShiki",
             self.path
                 .as_ref()
                 .and_then(|p| p.file_name())
@@ -434,7 +434,7 @@ impl App {
     }
     pub fn theme(&self) -> Theme {
         Theme::custom(
-            "Moruno",
+            "ReShiki",
             iced::theme::Palette {
                 background: Color::from_rgb8(239, 241, 244),
                 text: Color::from_rgb8(37, 43, 51),
@@ -513,9 +513,9 @@ impl App {
                     }
                     Key::Character(c) if !mods.control() && !mods.alt() => match c.as_str() {
                         "x" | "X" => Some(Message::Tool(Tool::Chain(if mods.shift() {
-                            moruno::chains::ChainMode::Snaking
+                            reshiki::chains::ChainMode::Snaking
                         } else {
-                            moruno::chains::ChainMode::Straight
+                            reshiki::chains::ChainMode::Straight
                         }))),
                         "v" => Some(Message::Tool(Tool::Select)),
                         "l" => Some(Message::Tool(Tool::Lasso)),
@@ -523,7 +523,7 @@ impl App {
                         "2" => Some(Message::Tool(Tool::Bond(2))),
                         "3" => Some(Message::Tool(Tool::Bond(3))),
                         "4" => Some(Message::Tool(Tool::StyledBond(
-                            moruno::bonds::BondPreset::Quadruple,
+                            reshiki::bonds::BondPreset::Quadruple,
                         ))),
                         "r" => Some(Message::Tool(Tool::Ring)),
 
@@ -579,7 +579,7 @@ impl App {
     fn changed(&mut self, before: Document) {
         self.cleanup = None;
         self.doc.reconcile_abbreviations(&before);
-        if let Err(error) = moruno::reactions::reconcile(&mut self.doc) {
+        if let Err(error) = reshiki::reactions::reconcile(&mut self.doc) {
             self.doc = before;
             self.error = true;
             self.status = error;
@@ -597,7 +597,7 @@ impl App {
         let drawing_style_changed = before.drawing_style != self.doc.drawing_style;
         let chemistry_changed = chemistry_changed(&before, &self.doc);
         if chemistry_changed {
-            moruno::atom_labels::clear_computed(&mut self.doc);
+            reshiki::atom_labels::clear_computed(&mut self.doc);
             self.refresh_due =
                 Some(std::time::Instant::now() + std::time::Duration::from_millis(350));
             self.chemistry_notice = None;
@@ -662,7 +662,7 @@ impl App {
                 self.error = false;
                 self.bond_drawing = Default::default();
                 self.chain_drawing = Default::default();
-                self.drawing_length_input = moruno::style::DEFAULT.bond_length_pt.to_string();
+                self.drawing_length_input = reshiki::style::DEFAULT.bond_length_pt.to_string();
                 self.chain_atoms_input.clear();
                 self.chain_angle_input = "120".into();
                 self.caption_format = Default::default();
@@ -674,7 +674,7 @@ impl App {
                 self.attach_symbols = true;
                 self.arrow_style = Default::default();
                 self.arrows = Default::default();
-                self.graphic_width_input = moruno::style::DEFAULT.line_width_pt.to_string();
+                self.graphic_width_input = reshiki::style::DEFAULT.line_width_pt.to_string();
                 self.graphic_stroke_input = "#000000".into();
                 self.graphic_fill_input = "#DCEFE9".into();
                 self.color_scope = Default::default();
@@ -691,7 +691,7 @@ impl App {
                     // Accept supported extensions without relying on macOS
                     // type registration; validate the selected content below.
                     let file = rfd::AsyncFileDialog::new()
-                        .set_title("Open a Moruno, MOL, RXN, CDXML, or SMILES document")
+                        .set_title("Open a ReShiki, MOL, RXN, CDXML, or SMILES document")
                         .pick_file()
                         .await?;
                     let path = file.path().to_path_buf();
@@ -917,7 +917,7 @@ impl App {
                     && points.is_finite()
                     && (1.0..=300.0).contains(&points)
                 {
-                    self.bond_drawing.length = moruno::style::DEFAULT.world(points);
+                    self.bond_drawing.length = reshiki::style::DEFAULT.world(points);
                     self.error = false;
                 } else {
                     self.status = "Bond length must be between 1 and 300 pt".into();
@@ -930,7 +930,7 @@ impl App {
                     self.chain_drawing.atoms = None;
                     self.error = false;
                 } else if let Ok(count) = self.chain_atoms_input.parse::<usize>()
-                    && (1..=moruno::chains::MAX_ATOMS).contains(&count)
+                    && (1..=reshiki::chains::MAX_ATOMS).contains(&count)
                 {
                     self.chain_drawing.atoms = Some(count);
                     self.error = false;
@@ -954,11 +954,11 @@ impl App {
                 }
             }
             Message::ApplyBondPreset(preset) => {
-                if preset == moruno::bonds::BondPreset::Dotted
+                if preset == reshiki::bonds::BondPreset::Dotted
                     && self.doc.bonds.iter().any(|b| {
                         self.selected.contains(&b.a)
                             && self.selected.contains(&b.b)
-                            && !moruno::bonds::hydrogen_endpoints(&self.doc, b.a, b.b)
+                            && !reshiki::bonds::hydrogen_endpoints(&self.doc, b.a, b.b)
                     })
                 {
                     self.status = "Hydrogen bonds need a bonded explicit H and an acceptor".into();
@@ -1003,10 +1003,10 @@ impl App {
             }
             Message::AddFrame(kind) => {
                 let mut ids = self.doc.complete_selection(&self.selected);
-                if let Some((lo, hi)) = moruno::scene::selection_bounds(&self.doc, &ids) {
+                if let Some((lo, hi)) = reshiki::scene::selection_bounds(&self.doc, &ids) {
                     let before = self.doc.clone();
                     let id = self.doc.next_id();
-                    let padding = moruno::style::DEFAULT.world(6.0);
+                    let padding = reshiki::style::DEFAULT.world(6.0);
                     self.doc.graphics.push(Graphic::dragged(
                         id,
                         kind,
@@ -1113,11 +1113,11 @@ impl App {
                     if matches!(
                         (g.kind, kind),
                         (
-                            moruno::graphics::GraphicKind::Symbol(_),
-                            moruno::graphics::GraphicKind::Symbol(_)
+                            reshiki::graphics::GraphicKind::Symbol(_),
+                            reshiki::graphics::GraphicKind::Symbol(_)
                         ) | (
-                            moruno::graphics::GraphicKind::Orbital(_),
-                            moruno::graphics::GraphicKind::Orbital(_)
+                            reshiki::graphics::GraphicKind::Orbital(_),
+                            reshiki::graphics::GraphicKind::Orbital(_)
                         )
                     ) {
                         g.kind = kind;
@@ -1309,7 +1309,7 @@ impl App {
             Message::FontSize(value) => self.font_size_input = value,
             Message::ApplyFontSize => match self.font_size_input.parse::<f32>() {
                 Ok(size) if size.is_finite() && (4.0..=144.0).contains(&size) => {
-                    self.apply_text_style(moruno::typography::StyleChange::Size(size))
+                    self.apply_text_style(reshiki::typography::StyleChange::Size(size))
                 }
                 _ => {
                     self.error = true;
@@ -1326,7 +1326,7 @@ impl App {
                 if hex.len() == 6
                     && let Ok(value) = u32::from_str_radix(hex, 16)
                 {
-                    self.apply_text_style(moruno::typography::StyleChange::Color([
+                    self.apply_text_style(reshiki::typography::StyleChange::Color([
                         (value >> 16) as u8,
                         (value >> 8) as u8,
                         value as u8,
@@ -1372,7 +1372,7 @@ impl App {
             }
             Message::ArrowStyle(style) => {
                 self.arrow_style = style;
-                self.arrows.style = moruno::arrows::ArrowStyle::preset(style);
+                self.arrows.style = reshiki::arrows::ArrowStyle::preset(style);
                 self.arrows.style.width_pt = self.doc.drawing_style.line_width_pt;
                 self.tool = Tool::Arrow;
                 self.inspector_open = true;
@@ -1448,7 +1448,7 @@ impl App {
             }
             Message::Pasted(contents) => {
                 if let Some(contents) = contents.filter(|s| !s.trim().is_empty()) {
-                    if let Some(json) = contents.strip_prefix(editing::CLIPBOARD_PREFIX) {
+                    if let Some(json) = editing::clipboard_json(&contents) {
                         match serde_json::from_str::<Document>(json)
                             .map_err(|e| e.to_string())
                             .and_then(|d| {
@@ -1542,12 +1542,12 @@ impl App {
                 if let Some(template) = self.templates.library.get(index) {
                     if !self.templates.active || self.template_index != index {
                         self.templates.anchor = template.anchor;
-                        if matches!(template.anchor, moruno::templates::Anchor::Bond(..)) {
-                            self.templates.connection = moruno::templates::Connection::FuseBond;
-                        } else if matches!(template.anchor, moruno::templates::Anchor::Atom(_))
-                            && self.templates.connection == moruno::templates::Connection::FuseBond
+                        if matches!(template.anchor, reshiki::templates::Anchor::Bond(..)) {
+                            self.templates.connection = reshiki::templates::Connection::FuseBond;
+                        } else if matches!(template.anchor, reshiki::templates::Anchor::Atom(_))
+                            && self.templates.connection == reshiki::templates::Connection::FuseBond
                         {
-                            self.templates.connection = moruno::templates::Connection::Connect;
+                            self.templates.connection = reshiki::templates::Connection::Connect;
                         }
                     }
                     self.template_index = index;
@@ -1597,7 +1597,7 @@ impl App {
                     if let Some(store) = &self.recovery
                         && store.save(&self.doc, None).is_ok()
                     {
-                        let _ = moruno::recovery::remove(&candidate.path);
+                        let _ = reshiki::recovery::remove(&candidate.path);
                         self.recovered.remove(0);
                     }
                     self.status = "Recovered drawing · Save to keep a new copy".into();
@@ -1746,7 +1746,7 @@ impl App {
                                 if self.error {
                                     return Task::none();
                                 }
-                                moruno::atom_labels::refresh_computed(&mut self.doc, &document);
+                                reshiki::atom_labels::refresh_computed(&mut self.doc, &document);
                                 self.refresh_due = None;
                                 self.analysis = response.analysis;
                                 self.tool = Tool::Select;
@@ -1781,7 +1781,7 @@ impl App {
                             // computed H labels without rewriting the user's bond
                             // orders/stereo or inserting a step into Undo/Redo.
                             if let Some(document) = response.document {
-                                moruno::atom_labels::refresh_computed(&mut self.doc, &document);
+                                reshiki::atom_labels::refresh_computed(&mut self.doc, &document);
                             }
                             self.analysis = response.analysis;
                             self.chemistry_notice = None;
@@ -1795,7 +1795,7 @@ impl App {
                             let before = self.doc.clone();
                             self.doc = document.clone();
                             self.changed(before);
-                            moruno::atom_labels::refresh_computed(&mut self.doc, &document);
+                            reshiki::atom_labels::refresh_computed(&mut self.doc, &document);
                             self.refresh_due = None;
                             self.chemistry_notice = None;
                             self.selected.clear();
@@ -1839,7 +1839,7 @@ impl App {
                     self.revision = self.revision.wrapping_add(1);
                     if chemistry_changed(&before, &self.doc) {
                         self.analysis = None;
-                        moruno::atom_labels::clear_computed(&mut self.doc);
+                        reshiki::atom_labels::clear_computed(&mut self.doc);
                         self.refresh_due = Some(std::time::Instant::now());
                     }
                     let ids = self.doc.all_ids();
@@ -1953,7 +1953,7 @@ impl App {
                                 .and_then(|e| e.to_str())
                                 .unwrap_or_default()
                                 .to_ascii_lowercase();
-                            if extension == "moruno" {
+                            if reshiki::compatibility::is_native_extension(&extension) {
                                 match serde_json::from_str::<Document>(&contents)
                                     .map_err(|e| e.to_string())
                                     .and_then(|doc| {
@@ -1962,7 +1962,7 @@ impl App {
                                     }) {
                                     Ok(mut doc) => {
                                         doc.version = 15;
-                                        moruno::atom_labels::clear_computed(&mut doc);
+                                        reshiki::atom_labels::clear_computed(&mut doc);
                                         self.clear_recovery();
                                         self.file_epoch = self.file_epoch.wrapping_add(1);
                                         self.doc = doc;
@@ -2027,7 +2027,7 @@ impl App {
                             p
                         } else {
                             let Some(file) = rfd::AsyncFileDialog::new()
-                                .set_file_name("Untitled.moruno")
+                                .set_file_name("Untitled.reshiki")
                                 .save_file()
                                 .await
                             else {
@@ -2035,7 +2035,7 @@ impl App {
                             };
                             file.path().to_path_buf()
                         };
-                        moruno::storage::write_atomic(&path, &bytes)?;
+                        reshiki::storage::write_atomic(&path, &bytes)?;
                         Ok(Some(path))
                     },
                     move |result| Message::Saved(epoch, Box::new(snapshot.clone()), result),
@@ -2072,9 +2072,9 @@ impl App {
                     let engine = self.engine.clone();
                     return Task::perform(
                         async move {
-                            let doc = moruno::export::checked_document(&engine, doc).await?;
+                            let doc = reshiki::export::checked_document(&engine, doc).await?;
                             let bytes = tokio::task::spawn_blocking(move || {
-                                moruno::export::drawing(&doc, format)
+                                reshiki::export::drawing(&doc, format)
                             })
                             .await
                             .map_err(|e| e.to_string())??;
@@ -2147,7 +2147,7 @@ impl App {
                 source,
                 target,
             } => {
-                match moruno::chains::place(
+                match reshiki::chains::place(
                     &self.doc,
                     &points,
                     source,
@@ -2169,10 +2169,10 @@ impl App {
                 if let Tool::Graphic(kind) = self.tool {
                     if matches!(
                         kind,
-                        moruno::graphics::GraphicKind::Symbol(_)
-                            | moruno::graphics::GraphicKind::Orbital(_)
+                        reshiki::graphics::GraphicKind::Symbol(_)
+                            | reshiki::graphics::GraphicKind::Orbital(_)
                     ) {
-                        let drawing = moruno::scientific::Drawing {
+                        let drawing = reshiki::scientific::Drawing {
                             kind,
                             style: self.graphic_style.clone(),
                             phase: self.orbital_phase,
@@ -2272,7 +2272,7 @@ impl App {
                 let Some(template) = self.templates.library.get(self.template_index) else {
                     return;
                 };
-                match moruno::templates::place_with_mode(
+                match reshiki::templates::place_with_mode(
                     &self.doc,
                     &template.document,
                     anchor,
@@ -2305,7 +2305,7 @@ impl App {
                 self.selected = ids;
             }
             Edit::RingPreset(preset, anchor, direction, connect, alternate) => {
-                let drawing = moruno::rings::Drawing {
+                let drawing = reshiki::rings::Drawing {
                     preset,
                     length: self.bond_drawing.length,
                     alternate,
@@ -2368,10 +2368,10 @@ impl App {
                 );
             }
             Edit::Bond(start, end, a, b) => {
-                if self.tool.bond_preset() == Some(moruno::bonds::BondPreset::Dotted)
+                if self.tool.bond_preset() == Some(reshiki::bonds::BondPreset::Dotted)
                     && !a
                         .zip(b)
-                        .is_some_and(|(a, b)| moruno::bonds::hydrogen_endpoints(&self.doc, a, b))
+                        .is_some_and(|(a, b)| reshiki::bonds::hydrogen_endpoints(&self.doc, a, b))
                 {
                     self.status =
                         "Drag from a bonded explicit H to an existing N, O, F or S acceptor".into();
@@ -2416,7 +2416,7 @@ impl App {
                             self.selected = vec![id];
                         }
                     }
-                    tool if tool.bond_preset() == Some(moruno::bonds::BondPreset::Dotted) => {
+                    tool if tool.bond_preset() == Some(reshiki::bonds::BondPreset::Dotted) => {
                         self.status =
                             "Drag from a bonded explicit H to an existing acceptor".into();
                         self.error = true;
@@ -2439,7 +2439,7 @@ impl App {
                                 .cloned();
                         if let Some(b) = bond.filter(|_| atom.is_none()) {
                             let shift_double = self.tool.bond_preset().is_some_and(|preset| {
-                                use moruno::bonds::BondPreset as P;
+                                use reshiki::bonds::BondPreset as P;
                                 matches!(
                                     preset,
                                     P::Double | P::BoldDouble | P::DashedDouble | P::DoubleDashed
@@ -2447,7 +2447,7 @@ impl App {
                             });
                             if shift_double {
                                 let position =
-                                    moruno::scene::effective_double_position(&self.doc, &b)
+                                    reshiki::scene::effective_double_position(&self.doc, &b)
                                         .cycled();
                                 if let Some(bond) = self
                                     .doc
@@ -2465,7 +2465,7 @@ impl App {
                                 return;
                             }
                             let reverse = self.tool.bond_preset().is_some_and(|p| {
-                                use moruno::bonds::BondPreset as P;
+                                use reshiki::bonds::BondPreset as P;
                                 matches!(
                                     p,
                                     P::Wedge
@@ -2512,8 +2512,8 @@ impl App {
                                 return;
                             };
                             let end = editing::bond_extension(&self.doc, start, Some(a), order);
-                            let ratio =
-                                self.bond_drawing.length / moruno::style::DEFAULT.bond_length_world;
+                            let ratio = self.bond_drawing.length
+                                / reshiki::style::DEFAULT.bond_length_world;
                             let end =
                                 start.offset((end.x - start.x) * ratio, (end.y - start.y) * ratio);
                             let b = self.doc.add_atom("C", end);
@@ -2709,11 +2709,11 @@ async fn save_export(bytes: Vec<u8>, format: &'static str) -> Result<Option<Path
         return Ok(None);
     };
     let path = file.path().to_path_buf();
-    moruno::storage::write_atomic(&path, &bytes)?;
+    reshiki::storage::write_atomic(&path, &bytes)?;
     Ok(Some(path))
 }
 fn input_request(text: &str) -> Request {
-    moruno::clipboard::text_request(text)
+    reshiki::clipboard::text_request(text)
 }
 
 #[cfg(test)]
@@ -2744,7 +2744,7 @@ mod tests {
 
     #[test]
     fn double_tool_cycles_only_line_position_and_preserves_chemistry() {
-        use moruno::bonds::DoublePosition as P;
+        use reshiki::bonds::DoublePosition as P;
         let (mut app, _) = App::new();
         app.busy = false;
         app.tool = Tool::Bond(2);
@@ -2763,7 +2763,7 @@ mod tests {
             expected.bonds[0].double_position = position;
             assert_eq!(app.doc, expected);
             assert!(!chemistry_changed(&original, &app.doc));
-            scenes.insert(moruno::scene::svg(&app.doc));
+            scenes.insert(reshiki::scene::svg(&app.doc));
         }
         assert_eq!(scenes.len(), 3);
         for _ in 0..3 {
@@ -2788,8 +2788,8 @@ mod tests {
         let original = app.doc.clone();
         let _ = app.update(Message::Clean);
         let job = cleanup::CleanupJob {
-            options: moruno::cleanup::Options {
-                scope: moruno::cleanup::Scope::SelectedAtoms,
+            options: reshiki::cleanup::Options {
+                scope: reshiki::cleanup::Scope::SelectedAtoms,
                 ..Default::default()
             },
             selection: vec![b],
@@ -2812,10 +2812,10 @@ mod tests {
         });
         assert_eq!(
             app.cleanup.as_ref().unwrap().job.options.scope,
-            moruno::cleanup::Scope::SelectedAtoms
+            reshiki::cleanup::Scope::SelectedAtoms
         );
         let _ = app.update(Message::CleanupScope(
-            moruno::cleanup::Scope::SelectedMolecules,
+            reshiki::cleanup::Scope::SelectedMolecules,
         ));
         assert!(app.busy);
         let mut pending = job;
@@ -2932,7 +2932,7 @@ mod tests {
     #[test]
     fn label_edits_and_indicator_drags_are_atomic_and_do_not_change_chemistry() {
         use atom_labels::Action;
-        use moruno::atom_labels::{Carbons, Owner};
+        use reshiki::atom_labels::{Carbons, Owner};
         let (mut app, _) = App::new();
         let _ = app.perform(Pending::New);
         let a = app.doc.add_atom("N", Point::default());
@@ -3019,7 +3019,7 @@ mod tests {
 
     #[test]
     fn chemistry_check_keeps_placement_atomic_and_preserves_redo() {
-        use moruno::rings::Preset;
+        use reshiki::rings::Preset;
         let (mut app, _) = App::new();
         let _ = app.perform(Pending::New);
         app.edit(Edit::RingPreset(
@@ -3058,7 +3058,7 @@ mod tests {
 
     #[test]
     fn computed_hydrogen_labels_do_not_make_a_saved_drawing_dirty() {
-        use moruno::rings::Preset;
+        use reshiki::rings::Preset;
         let (mut app, _) = App::new();
         let _ = app.perform(Pending::New);
         app.doc = Preset::ChairUp.document(42., false);
@@ -3076,7 +3076,7 @@ mod tests {
 
     #[test]
     fn ring_presets_use_atomic_history_and_leave_invalid_hosts_untouched() {
-        use moruno::rings::Preset;
+        use reshiki::rings::Preset;
         let (mut app, _) = App::new();
         app.doc = Document::default();
         let before = app.doc.clone();
@@ -3124,7 +3124,7 @@ mod tests {
     #[test]
     fn arrow_edits_keep_bend_history_and_new_resets_jacs_defaults() {
         use arrows::{Action, Field};
-        use moruno::arrows::{ArrowStyle, Head, Preset};
+        use reshiki::arrows::{ArrowStyle, Head, Preset};
         let (mut app, _) = App::new();
         app.doc = Document::default();
         app.saved = app.doc.clone();
@@ -3161,14 +3161,14 @@ mod tests {
         assert_eq!(app.caption_format.style.size_pt, 10.);
         assert_eq!(
             app.bond_drawing.length,
-            moruno::style::DEFAULT.bond_length_world
+            reshiki::style::DEFAULT.bond_length_world
         );
         assert!(app.doc.arrows.is_empty());
     }
 
     #[test]
     fn library_authoring_is_independent_of_drawing_history_and_repeat_placement_keeps_anchor() {
-        use moruno::templates::Anchor;
+        use reshiki::templates::Anchor;
         use template_library::Action as A;
         let (mut app, _) = App::new();
         let a = app.doc.add_atom("C", Point::default());
@@ -3189,12 +3189,12 @@ mod tests {
         let _ = app.update(Message::Templates(A::Anchor(Anchor::Atom(b))));
         let _ = app.update(Message::Templates(A::RememberAnchor));
         let _ = app.update(Message::Templates(A::Browse));
-        app.templates.connection = moruno::templates::Connection::FuseBond;
+        app.templates.connection = reshiki::templates::Connection::FuseBond;
         let _ = app.update(Message::InsertTemplate(index));
         assert_eq!(app.templates.anchor, Anchor::Atom(b));
         assert_eq!(
             app.templates.connection,
-            moruno::templates::Connection::Connect
+            reshiki::templates::Connection::Connect
         );
         let _ = app.update(Message::Templates(A::Repeat(true)));
         app.edit(Edit::Template(Point::new(250., 100.), None));
@@ -3223,12 +3223,12 @@ mod tests {
 
     #[test]
     fn attached_marks_are_single_history_edits_and_removal_updates_chemistry() {
-        use moruno::scientific::{MarkKind, SymbolKind};
+        use reshiki::scientific::{MarkKind, SymbolKind};
         let (mut app, _) = App::new();
         app.doc = Document::default();
         let id = app.doc.add_atom("N", Point::default());
         let before = app.doc.clone();
-        app.tool = Tool::Graphic(moruno::graphics::GraphicKind::Symbol(
+        app.tool = Tool::Graphic(reshiki::graphics::GraphicKind::Symbol(
             SymbolKind::CirclePlus,
         ));
         app.edit(Edit::Graphic(Point::default(), Point::default(), false));
@@ -3254,7 +3254,7 @@ mod tests {
     #[test]
     fn every_new_document_starts_with_jacs_drawing_and_typography_defaults() {
         let (mut app, _) = App::new();
-        app.orbital_phase = moruno::scientific::Phase::Shaded;
+        app.orbital_phase = reshiki::scientific::Phase::Shaded;
         app.phase_flipped = true;
         app.attach_symbols = false;
         app.graphic_style.width_pt = 3.;
@@ -3269,7 +3269,7 @@ mod tests {
         let _ = app.perform(Pending::New);
         assert_eq!(
             app.caption_format.style,
-            moruno::typography::TextStyle::default()
+            reshiki::typography::TextStyle::default()
         );
         assert_eq!(app.caption_format.style.family, "Arial");
         assert_eq!(app.font_size_input, "10");
@@ -3277,7 +3277,7 @@ mod tests {
         assert_eq!(app.drawing_length_input, "14.4");
         assert_eq!(app.bond_drawing.length, 42.);
         assert_eq!(app.graphic_width_input, "0.6");
-        assert_eq!(app.orbital_phase, moruno::scientific::Phase::Solid);
+        assert_eq!(app.orbital_phase, reshiki::scientific::Phase::Solid);
         assert!(!app.phase_flipped && app.attach_symbols);
         assert_eq!(app.graphic_style.width_pt, 0.6);
         assert_eq!(app.chain_drawing.angle, 120.);
@@ -3295,7 +3295,7 @@ mod tests {
         let _ = app.update(Message::ChainAngle("110".into()));
         assert_eq!(app.doc, before);
         assert_eq!(app.revision, 0);
-        let points = moruno::chains::straight(
+        let points = reshiki::chains::straight(
             Point::default(),
             Point::new(350., 0.),
             false,
@@ -3303,7 +3303,7 @@ mod tests {
             app.chain_drawing,
             false,
         );
-        app.tool = Tool::Chain(moruno::chains::ChainMode::Straight);
+        app.tool = Tool::Chain(reshiki::chains::ChainMode::Straight);
         app.edit(Edit::Chain {
             points,
             source: None,
@@ -3327,7 +3327,7 @@ mod tests {
         app.edit(Edit::Click(last));
         assert!(
             (app.doc.atoms.last().unwrap().position.distance(last)
-                - moruno::style::DEFAULT.world(20.))
+                - reshiki::style::DEFAULT.world(20.))
             .abs()
                 < 0.001
         );
@@ -3335,7 +3335,7 @@ mod tests {
         let _ = app.update(Message::ResetBondDrawing);
         assert_eq!(
             app.bond_drawing.length,
-            moruno::style::DEFAULT.bond_length_world
+            reshiki::style::DEFAULT.bond_length_world
         );
         assert_eq!(app.drawing_length_input, "14.4");
         assert_eq!(app.chain_drawing.angle, 120.);
@@ -3346,7 +3346,7 @@ mod tests {
     #[test]
     fn palette_keeps_text_range_formatting_and_recolors_graphics_only_in_all_scope() {
         use iced::widget::text_editor::{Action, Motion};
-        use moruno::typography::StyleChange;
+        use reshiki::typography::StyleChange;
         use typography::ColorScope;
         let (mut app, _) = App::new();
         app.doc = Document::default();
@@ -3358,7 +3358,7 @@ mod tests {
         });
         app.doc.graphics.push(Graphic::dragged(
             2,
-            moruno::graphics::GraphicKind::Rectangle,
+            reshiki::graphics::GraphicKind::Rectangle,
             Point::new(0., 80.),
             Point::new(84., 120.),
             GraphicStyle {
@@ -3398,7 +3398,7 @@ mod tests {
 
     #[test]
     fn palette_scopes_recolor_selected_bonds_and_objects_in_one_undo() {
-        use moruno::typography::StyleChange;
+        use reshiki::typography::StyleChange;
         use typography::ColorScope;
         let (mut app, _) = App::new();
         app.doc = Document::default();
@@ -3420,10 +3420,10 @@ mod tests {
             text: "Label".into(),
             format: Default::default(),
         });
-        app.doc.atom_mut(b).unwrap().display.number = Some(moruno::atom_labels::Number {
+        app.doc.atom_mut(b).unwrap().display.number = Some(reshiki::atom_labels::Number {
             text: "2".into(),
             offset: None,
-            style: moruno::atom_labels::number_style(),
+            style: reshiki::atom_labels::number_style(),
         });
         let original = app.doc.clone();
         let blue = [32, 80, 145];
@@ -3484,7 +3484,7 @@ mod tests {
 
     #[test]
     fn bond_styles_position_color_and_direction_are_undoable() {
-        use moruno::bonds::{BondPreset, DoublePosition};
+        use reshiki::bonds::{BondPreset, DoublePosition};
         let (mut app, _) = App::new();
         app.doc.add_atom("C", Point::new(0., 0.));
         app.doc.add_atom("C", Point::new(84., 0.));
@@ -3528,7 +3528,7 @@ mod tests {
         app.doc.add_bond(a, b, 1, "plain");
         app.selected = vec![a];
         let initial = app.doc.clone();
-        let _ = app.update(Message::AddFrame(moruno::graphics::GraphicKind::Brackets));
+        let _ = app.update(Message::AddFrame(reshiki::graphics::GraphicKind::Brackets));
         assert_eq!(app.doc.groups.len(), 1);
         assert_eq!(app.doc.graphics.len(), 1);
         assert_eq!(app.selected.len(), 3);
@@ -3549,7 +3549,7 @@ mod tests {
 
     #[tokio::test]
     async fn graphic_style_point_edits_and_undo_retain_editable_selection() {
-        use moruno::graphics::GraphicKind;
+        use reshiki::graphics::GraphicKind;
         let (mut app, _) = App::new();
         let result = app
             .engine
@@ -3592,7 +3592,7 @@ mod tests {
     #[test]
     fn partial_typography_edit_and_repeated_backspace_restore_with_undo() {
         use iced::widget::text_editor::{Action, Edit as TextEdit, Motion};
-        use moruno::typography::{StyleChange, TextFormat};
+        use reshiki::typography::{StyleChange, TextFormat};
         let (mut app, _) = App::new();
         app.doc.annotations.push(Annotation {
             id: 1,
@@ -3634,7 +3634,7 @@ mod tests {
         app.doc.add_bond(a, b, 1, "plain");
         app.saved = app.doc.clone();
         let before = app.doc.clone();
-        let index = moruno::templates::LIBRARY
+        let index = reshiki::templates::LIBRARY
             .iter()
             .position(|t| t.name == "Cyclopentane")
             .unwrap();
@@ -3642,7 +3642,7 @@ mod tests {
         assert_eq!(app.doc, before);
         assert!(!app.dirty());
         assert_eq!(app.tool, Tool::Template);
-        app.templates.connection = moruno::templates::Connection::FuseBond;
+        app.templates.connection = reshiki::templates::Connection::FuseBond;
         app.edit(Edit::Template(Point::default(), None));
         assert_eq!(app.tool, Tool::Select);
         let placed = app.doc.clone();
@@ -3869,7 +3869,7 @@ mod tests {
         let camera = app.camera;
         let revision = app.revision;
         let history = app.history.can_undo();
-        let export = moruno::export::drawing(&app.doc, "svg").expect("SVG before view change");
+        let export = reshiki::export::drawing(&app.doc, "svg").expect("SVG before view change");
         for message in [
             Message::ToggleView,
             Message::Rulers(true),
@@ -3886,7 +3886,7 @@ mod tests {
         assert_eq!(app.camera.center, camera.center);
         assert_eq!(app.camera.zoom, camera.zoom);
         assert_eq!(
-            moruno::export::drawing(&app.doc, "svg").expect("SVG after view change"),
+            reshiki::export::drawing(&app.doc, "svg").expect("SVG after view change"),
             export
         );
     }
@@ -3899,7 +3899,7 @@ mod tests {
         let _ = app.update(Message::Saved(
             0,
             Box::new(snapshot),
-            Ok(Some("example.moruno".into())),
+            Ok(Some("example.reshiki".into())),
         ));
         assert!(app.dirty());
     }
@@ -3912,7 +3912,7 @@ mod tests {
         let _ = app.update(Message::Saved(
             0,
             Box::new(snapshot),
-            Ok(Some("previous.moruno".into())),
+            Ok(Some("previous.reshiki".into())),
         ));
         assert!(app.path.is_none());
     }

@@ -11,7 +11,7 @@ from pathlib import Path
 class NativeClipboardTests(unittest.TestCase):
     def test_picture_formats_and_priorities_on_private_pasteboard(self):
         root = Path(__file__).resolve().parents[1]
-        with tempfile.TemporaryDirectory(prefix="moruno-clipboard-tests-") as directory:
+        with tempfile.TemporaryDirectory(prefix="reshiki-clipboard-tests-") as directory:
             binary = Path(directory) / "clipboard-tests"
             compiled = subprocess.run(
                 [

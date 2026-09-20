@@ -94,7 +94,7 @@ def find(doc, mol, selection, label=None):
     result = copy.deepcopy(doc)
     groups = result.setdefault("abbreviations", [])
     used = {i for g in groups for i in g["members"]}
-    ids = {a.GetIdx(): int(a.GetProp("moruno_id")) for a in mol.GetAtoms()}
+    ids = {a.GetIdx(): int(a.GetProp("reshiki_id")) for a in mol.GetAtoms()}
     atoms = {a["id"]: a for a in doc["atoms"]}
     labeled = rdAbbreviations.LabelMolAbbreviations(mol, definitions, 1.0)
     for g in Chem.GetMolSubstanceGroups(labeled):
@@ -183,7 +183,7 @@ def replace(doc, selection, label, to_document):
             next_id += 1
         if identifier >= 2**64 - 1:
             raise ValueError("Object ID limit exceeded")
-        a.SetProp("moruno_id", str(identifier))
+        a.SetProp("reshiki_id", str(identifier))
         p = conf.GetAtomPosition(a.GetIdx())
         x = (p.x - root_point.x) * scale
         y = -(p.y - root_point.y) * scale
@@ -194,7 +194,7 @@ def replace(doc, selection, label, to_document):
     rw.RemoveAtom(dummy.GetIdx())
     fragment = rw.GetMol()
     for a in fragment.GetAtoms():
-        if a.HasProp("moruno_id") and int(a.GetProp("moruno_id")) == target:
+        if a.HasProp("reshiki_id") and int(a.GetProp("reshiki_id")) == target:
             a.SetNoImplicit(False)
             a.SetNumRadicalElectrons(0)
     Chem.SanitizeMol(fragment)

@@ -5,7 +5,7 @@ use iced::widget::{
     Space, button, column, container, mouse_area, opaque, row, stack, text, text_editor,
 };
 use iced::{Alignment, Border, Color, Element, Length, Task};
-use moruno::{
+use reshiki::{
     document::{Annotation, Document, Point},
     typography::{StyleChange, TextAlign, TextFormat, TextStyle},
 };
@@ -235,7 +235,7 @@ impl App {
         let paper = self.guides.paper(iced::Rectangle::with_size(self.viewport));
         let position = self.camera.screen(state.position, paper);
         let size = (self.caption_format.style.size() * self.camera.zoom).clamp(12., 56.);
-        let natural = moruno::typography::layout(&self.caption, &self.caption_format);
+        let natural = reshiki::typography::layout(&self.caption, &self.caption_format);
         let old = state.original.as_ref().map(|a| a.size().0).unwrap_or(0.);
         let complex = complex_format(&self.caption_format) && self.viewport.height >= 240.;
         let extra = if complex { 120. } else { 40. };
@@ -252,7 +252,7 @@ impl App {
         let editor_height = (bounds.height - extra).max(24.);
         let editor = text_editor(&self.caption_editor)
             .id("inline-caption")
-            .font(iced::Font::with_name(moruno::style::font_name(
+            .font(iced::Font::with_name(reshiki::style::font_name(
                 &self.caption_format.style.family,
             )))
             .size(size)
@@ -268,7 +268,7 @@ impl App {
                     iced::advanced::text::highlighter::Format {
                         color: Some(Color::from_rgb8(r, g, b)),
                         font: Some(iced::Font {
-                            family: iced::font::Family::Name(moruno::style::font_name(
+                            family: iced::font::Family::Name(reshiki::style::font_name(
                                 &style.family,
                             )),
                             weight: if style.bold {
@@ -428,7 +428,7 @@ impl iced::advanced::text::Highlighter for CaptionHighlighter {
         line.char_indices()
             .map(|(index, c)| {
                 let mut style = self.settings.1.at(offset + index).clone();
-                style.family = moruno::style::glyph_metrics(c, &style).0.into();
+                style.family = reshiki::style::glyph_metrics(c, &style).0.into();
                 (index..index + c.len_utf8(), style)
             })
             .collect::<Vec<_>>()
@@ -441,12 +441,12 @@ fn complex_format(format: &TextFormat) -> bool {
         || format.alignment != TextAlign::Left
         || format.style.formula
         || format.style.underline
-        || format.style.script != moruno::typography::Script::Normal
+        || format.style.script != reshiki::typography::Script::Normal
         || format.spans.iter().any(|s| {
             s.style.size_pt != format.style.size_pt
                 || s.style.underline
                 || s.style.formula
-                || s.style.script != moruno::typography::Script::Normal
+                || s.style.script != reshiki::typography::Script::Normal
         })
 }
 
@@ -729,18 +729,18 @@ mod tests {
     fn recovery_includes_drafts_and_cancel_removes_them() {
         let mut app = app();
         let dir = tempfile::tempdir().unwrap();
-        app.recovery = Some(moruno::recovery::Recovery::in_directory(dir.path()).unwrap());
+        app.recovery = Some(reshiki::recovery::Recovery::in_directory(dir.path()).unwrap());
         begin(&mut app, None);
         type_text(&mut app, "Unsaved label");
         let _ = app.update(Message::Tick);
         let path = app.recovery.as_ref().unwrap().session.clone();
-        let snapshot: moruno::recovery::Snapshot =
+        let snapshot: reshiki::recovery::Snapshot =
             serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
         assert_eq!(snapshot.document.annotations[0].text, "Unsaved label");
         assert!(app.doc.annotations.is_empty());
         type_text(&mut app, " updated");
         let _ = app.update(Message::Tick);
-        let snapshot: moruno::recovery::Snapshot =
+        let snapshot: reshiki::recovery::Snapshot =
             serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
         assert_eq!(
             snapshot.document.annotations[0].text,

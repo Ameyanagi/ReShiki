@@ -13,7 +13,7 @@ use tokio::{
     process::Command,
 };
 
-const NATIVE: &str = "dev.moruno.drawing";
+const NATIVE: &str = "dev.reshiki.drawing";
 const LIMIT: usize = 64 * 1024 * 1024;
 const JSON_LIMIT: usize = LIMIT * 2;
 const CDX_TYPES: [&str; 3] = [
@@ -118,12 +118,12 @@ fn embedded_png(png: &[u8]) -> Result<Vec<u8>, String> {
 
 fn helper() -> Result<PathBuf, String> {
     let bundled = std::env::current_exe().ok().and_then(|exe| {
-        let path = exe.parent()?.join("moruno-clipboard");
+        let path = exe.parent()?.join("reshiki-clipboard");
         path.is_file().then_some(path)
     });
     bundled
         .or_else(|| {
-            option_env!("MORUNO_CLIPBOARD_HELPER")
+            option_env!("RESHIKI_CLIPBOARD_HELPER")
                 .map(PathBuf::from)
                 .filter(|p| p.is_file())
         })
@@ -305,7 +305,7 @@ fn copy_images(
     })
     .collect();
     if image_only && let Some((_, Ok(png))) = images.iter().find(|(format, _)| *format == "png") {
-        // Keep Copy Image pasteable inside Moruno as one picture, with the
+        // Keep Copy Image pasteable inside ReShiki as one picture, with the
         // same physical dimensions as the exported 1200 dpi raster.
         let native = png.bytes().and_then(|bytes| {
             let picture = crate::pictures::Picture::import(&bytes)?;
@@ -387,7 +387,7 @@ async fn paste_packet(engine: PythonEngine, packet: Packet) -> Result<Document, 
         .first()
         .ok_or("No supported drawing on the clipboard")?;
     let data = item.bytes()?;
-    if item.kind == NATIVE {
+    if item.kind == NATIVE || item.kind == "dev.moruno.drawing" {
         return tokio::task::spawn_blocking(move || native_document(&data))
             .await
             .map_err(|e| e.to_string())?;
@@ -414,7 +414,7 @@ async fn paste_packet(engine: PythonEngine, packet: Packet) -> Result<Document, 
         "public.utf8-plain-text" | "org.opensmiles.smiles"
     ) {
         let text = std::str::from_utf8(&data).map_err(|_| "Invalid clipboard text encoding")?;
-        if let Some(json) = text.strip_prefix(editing::CLIPBOARD_PREFIX) {
+        if let Some(json) = editing::clipboard_json(text) {
             return native_document(json.as_bytes());
         }
         text_request(text)
@@ -438,10 +438,40 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    async fn previous_native_and_text_clipboards_remain_editable()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let json = include_str!("../tests/fixtures/legacy-drawing.moruno");
+        let expected: Document = serde_json::from_str(json)?;
+        expected.validate()?;
+        for (kind, contents) in [
+            ("dev.moruno.drawing", json.to_owned()),
+            (NATIVE, json.to_owned()),
+            (
+                "public.utf8-plain-text",
+                format!("MORUNO_DRAWING_V1\n{json}"),
+            ),
+            (
+                "public.utf8-plain-text",
+                format!("{}{json}", editing::CLIPBOARD_PREFIX),
+            ),
+        ] {
+            let restored = paste_packet(
+                PythonEngine::default(),
+                Packet {
+                    representations: vec![Representation::new(kind, contents.as_bytes())],
+                },
+            )
+            .await?;
+            assert_eq!(restored, expected);
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn raster_paste_and_copy_image_preserve_pixels_and_physical_size_without_a_clipboard_write()
      {
         let doc: Document =
-            serde_json::from_str(include_str!("../tests/fixtures/ui-drawn-ethanol.moruno"))
+            serde_json::from_str(include_str!("../tests/fixtures/ui-drawn-ethanol.reshiki"))
                 .unwrap();
         let images = copy_images(&doc, true);
         let native = images
@@ -530,7 +560,7 @@ mod tests {
     #[test]
     fn raster_clipboard_object_preserves_bytes_and_publication_size() {
         let doc: Document =
-            serde_json::from_str(include_str!("../tests/fixtures/ui-drawn-ethanol.moruno"))
+            serde_json::from_str(include_str!("../tests/fixtures/ui-drawn-ethanol.reshiki"))
                 .unwrap();
         let png = export::drawing(&doc, "png").unwrap();
         let drawing = embedded_png(&png).unwrap();

@@ -12,7 +12,7 @@ The subsequent typography build also permits saturated ring templates on plain d
 
 Verified this addition through computer use in the final build: drew a double bond, selected Cyclopentane, dragged upward from the bond midpoint, then checked the result. The inspector reported 5 atoms, 5 bonds, `C5H8`, canonical `C1=CCCC1`. Saved the native drawing and screenshot under `artifacts/style-qa-20260920/`.
 
-The source structures in `assets/templates.json` were generated from Moruno's existing SMILES library with its RDKit worker. Thumbnails use the same scene renderer and structure data as placement. Regenerate coordinates with `uv run --locked python scripts/regenerate_templates.py`.
+The source structures in `assets/templates.json` were generated from ReShiki's existing SMILES library with its RDKit worker. Thumbnails use the same scene renderer and structure data as placement. Regenerate coordinates with `uv run --locked python scripts/regenerate_templates.py`.
 
 ## Verification
 

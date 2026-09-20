@@ -1,4 +1,4 @@
-"""Build and verify a portable native Moruno distribution, with a uv-managed local chemistry environment."""
+"""Build and verify a portable native ReShiki distribution, with a uv-managed local chemistry environment."""
 
 import argparse
 import hashlib
@@ -141,16 +141,16 @@ def notices(destination):
 
 
 def mac_bundle(destination, profile, worker=None, target=None):
-    executable = destination / "Contents/MacOS/moruno"
+    executable = destination / "Contents/MacOS/reshiki"
     executable.parent.mkdir(parents=True, exist_ok=True)
     staged = executable.with_suffix(".new")
     build = ROOT / "target" / target if target else ROOT / "target"
-    shutil.copy2(build / profile / "moruno", staged)
+    shutil.copy2(build / profile / "reshiki", staged)
     staged.replace(executable)
-    print_app = destination / "Contents/Helpers/Moruno Print.app"
+    print_app = destination / "Contents/Helpers/ReShiki Print.app"
     helpers = [
-        ("Clipboard", executable.with_name("moruno-clipboard")),
-        ("Print", print_app / "Contents/MacOS/moruno-print"),
+        ("Clipboard", executable.with_name("reshiki-clipboard")),
+        ("Print", print_app / "Contents/MacOS/reshiki-print"),
     ]
     for name, binary in helpers:
         binary.parent.mkdir(parents=True, exist_ok=True)
@@ -167,8 +167,8 @@ def mac_bundle(destination, profile, worker=None, target=None):
         )
         staged.replace(binary)
     for bundle, name, identifier, binary in [
-        (destination, "Moruno", "dev.moruno.editor", "moruno"),
-        (print_app, "Moruno Print", "dev.moruno.print", "moruno-print"),
+        (destination, "ReShiki", "dev.reshiki.editor", "reshiki"),
+        (print_app, "ReShiki Print", "dev.reshiki.print", "reshiki-print"),
     ]:
         info = dict(
             CFBundleName=name,
@@ -216,7 +216,7 @@ def archive(folder, output):
 
 
 def verify_archive(archive_path, signed=False):
-    with tempfile.TemporaryDirectory(prefix="Moruno package check ") as temporary:
+    with tempfile.TemporaryDirectory(prefix="ReShiki package check ") as temporary:
         extracted = Path(temporary)
         if platform.system() == "Darwin":
             run(["ditto", "-x", "-k", archive_path, extracted])
@@ -232,24 +232,25 @@ def verify_archive(archive_path, signed=False):
         folder = folders[0]
         metadata = json.loads((folder / "build.json").read_text(encoding="utf-8"))
         if platform.system() == "Darwin":
-            app = folder / "Moruno.app"
-            binary = app / "Contents/MacOS/moruno"
+            app = folder / "ReShiki.app"
+            binary = app / "Contents/MacOS/reshiki"
             run(["codesign", "--verify", "--deep", "--strict", app])
             if signed:
                 from sign_macos import verify_app
 
                 verify_app(app)
         else:
-            binary = folder / ("moruno.exe" if os.name == "nt" else "moruno")
+            binary = folder / ("reshiki.exe" if os.name == "nt" else "reshiki")
         verify_binary(binary, metadata["platform"], metadata["architecture"])
         environment = dict(os.environ)
+        environment.pop("RESHIKI_PYTHON", None)
         environment.pop("MORUNO_PYTHON", None)
-        environment["MORUNO_RUNTIME_DIR"] = str(extracted / "user runtime")
-        environment["MORUNO_ROOT"] = str(extracted / "no-checkout")
+        environment["RESHIKI_RUNTIME_DIR"] = str(extracted / "user runtime")
+        environment["RESHIKI_ROOT"] = str(extracted / "no-checkout")
         missing_uv = subprocess.run(
             [str(binary), "--engine-check"],
             cwd=extracted,
-            env={**environment, "MORUNO_UV": str(extracted / "missing-uv")},
+            env={**environment, "RESHIKI_UV": str(extracted / "missing-uv")},
             capture_output=True,
             text=True,
             timeout=30,
@@ -323,7 +324,7 @@ def main():
         raise ValueError(
             "Build and verify a release on a runner with the matching operating system"
         )
-    name = f"moruno-{version()}-{system}-{arch}"
+    name = f"reshiki-{version()}-{system}-{arch}"
     # This staging tree is separate from the app a developer may have open in dist/.
     folder = ROOT / "target/release-bundles" / name
     if folder.exists():
@@ -331,11 +332,11 @@ def main():
     folder.mkdir(parents=True)
     run(["cargo", "build", "--release", "--locked", "--target", target], cwd=ROOT)
     build = ROOT / "target" / target / "release"
-    binary_name = "moruno.exe" if system == "windows" else "moruno"
+    binary_name = "reshiki.exe" if system == "windows" else "reshiki"
     verify_binary(build / binary_name, system, arch)
     worker = runtime_project()
     if system == "macos":
-        app = mac_bundle(folder / "Moruno.app", "release", worker, target=target)
+        app = mac_bundle(folder / "ReShiki.app", "release", worker, target=target)
         if args.sign:
             from sign_macos import sign_and_notarize
 
@@ -356,12 +357,12 @@ def main():
     )
     (folder / "build.json").write_text(json.dumps(metadata, indent=2) + "\n")
     (folder / "README.txt").write_text(
-        "Moruno — molecular drawing workspace\n\n"
+        "ReShiki — molecular drawing workspace\n\n"
         "Install uv first: https://docs.astral.sh/uv/getting-started/installation/\n"
-        "Moruno installs Python and RDKit into its local user environment on first use.\n"
+        "ReShiki installs Python and RDKit into its local user environment on first use.\n"
         "First setup requires internet access; later use works offline.\n"
         "Keep the entire extracted folder together.\n"
-        "Documentation: https://ameyanagi.github.io/moruno/\n"
+        "Documentation: https://reshiki.com/\n"
         + (
             "Windows 11 on ARM is required. The app is native ARM64; its local chemistry\n"
             "worker uses Windows' built-in x64 emulation.\n"

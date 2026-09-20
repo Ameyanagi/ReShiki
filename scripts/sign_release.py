@@ -21,7 +21,7 @@ def main():
         != f"{digest}  {source.name}"
     ):
         raise ValueError("Archive checksum mismatch")
-    with tempfile.TemporaryDirectory(prefix="moruno-release-sign-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="reshiki-release-sign-") as temporary:
         directory = Path(temporary)
         run(["ditto", "-x", "-k", source, directory])
         folder = directory / source.stem
@@ -33,7 +33,7 @@ def main():
             or metadata.get("commit") != os.environ["GITHUB_SHA"]
         ):
             raise ValueError("Archive source does not match this release run")
-        sign_and_notarize(folder / "Moruno.app")
+        sign_and_notarize(folder / "ReShiki.app")
         metadata.update(signed=True, notarized=True, unsigned_sha256=digest)
         (folder / "build.json").write_text(json.dumps(metadata, indent=2) + "\n")
         readme = folder / "README.txt"

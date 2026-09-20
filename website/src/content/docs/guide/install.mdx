@@ -1,13 +1,13 @@
 ---
-title: Install Moruno
-description: Install uv, download Moruno, and open your first drawing.
+title: Install ReShiki
+description: Install uv, download ReShiki, and open your first drawing.
 ---
 
 import Screenshot from "../../../components/Screenshot.astro";
 
 ## 1. Install uv
 
-Moruno uses **uv** to set up its chemistry tools on your computer. You do not need to install Python separately.
+ReShiki uses **uv** to set up its chemistry tools on your computer. You do not need to install Python separately.
 
 import { Code, Tabs, TabItem } from "@astrojs/starlight/components";
 
@@ -33,27 +33,29 @@ import { Code, Tabs, TabItem } from "@astrojs/starlight/components";
 
 ## 2. Download and open
 
-[Choose a download on GitHub Releases](https://github.com/Ameyanagi/moruno/releases).
+[Choose a download on GitHub Releases](https://github.com/Ameyanagi/ReShiki/releases).
 
 | Your computer     | Package              | Open after extracting |
 | ----------------- | -------------------- | --------------------- |
-| Apple Silicon Mac | `macos-arm64.zip`    | `Moruno.app`          |
-| Windows x64       | `windows-x64.zip`    | `moruno.exe`          |
-| Windows ARM       | `windows-arm64.zip`  | `moruno.exe`          |
-| Linux x64         | `linux-x64.tar.gz`   | `moruno`              |
-| Linux ARM         | `linux-arm64.tar.gz` | `moruno`              |
+| Apple Silicon Mac | `macos-arm64.zip`    | `ReShiki.app`         |
+| Windows x64       | `windows-x64.zip`    | `reshiki.exe`         |
+| Windows ARM       | `windows-arm64.zip`  | `reshiki.exe`         |
+| Linux x64         | `linux-x64.tar.gz`   | `reshiki`             |
+| Linux ARM         | `linux-arm64.tar.gz` | `reshiki`             |
 
-Keep the extracted contents together. On Mac, you can move **Moruno.app** to Applications.
+Keep the extracted contents together. On Mac, you can move **ReShiki.app** to Applications.
+
+Upgrading from Moruno? Open your existing `.moruno` drawings normally. Templates, assistant preferences, and recovery drafts are copied on first launch; the originals stay in place. New drawings use `.reshiki`.
 
 Mac requires Apple Silicon and macOS 14+. Windows x64 requires Windows 10/11; Windows ARM requires Windows 11 and uses its built-in x64 emulation for chemistry. Linux builds target Ubuntu 22.04+ on x64 and 24.04+ on ARM. Intel Macs are not supported.
 
 ## 3. Start drawing
 
 <Screenshot
-  src="/moruno/manual/workspace.png"
-  alt="Moruno opens with an editable example molecule and the drawing tools beside it."
+  src="/manual/workspace.png"
+  alt="ReShiki opens with an editable example molecule and the drawing tools beside it."
 />
 
 First use needs internet access to install the chemistry tools. Later drawing and chemistry checks work offline. The optional assistant needs a Codex connection.
 
-[Draw your first molecule →](/moruno/guide/first-molecule/)
+[Draw your first molecule →](/guide/first-molecule/)

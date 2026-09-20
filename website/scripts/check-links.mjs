@@ -9,8 +9,8 @@ async function visit(directory) {
     if (entry.isDirectory()) await visit(file);
     else if (entry.name.endsWith(".html")) {
       const html = await readFile(file, "utf8");
-      for (const match of html.matchAll(/(?:href|src)="(\/moruno\/[^"?#]*)(?:[?#][^"]*)?"/g)) {
-        let target = path.join(output, decodeURIComponent(match[1].slice("/moruno/".length)));
+      for (const match of html.matchAll(/(?:href|src)="(\/(?!\/)[^"?#]*)(?:[?#][^"]*)?"/g)) {
+        let target = path.join(output, decodeURIComponent(match[1].slice("/".length)));
         if (target.endsWith(path.sep)) target += "index.html";
         await access(target).catch(() => {
           throw new Error(`Broken link in ${file}: ${match[1]}`);

@@ -1,6 +1,6 @@
 # Selection, groups and composition
 
-Implemented on 2026-09-20 and checked through the Moruno desktop app and CDXML exchange.
+Implemented on 2026-09-20 and checked through the ReShiki desktop app and CDXML exchange.
 
 ## Workflow
 
@@ -27,4 +27,4 @@ Desktop testing used a freeform native pointer gesture to select part of aspirin
 
 Current checks: **68 Rust tests and 19 Python tests**, formatting, Clippy and standalone bundle signature verification. Tests cover nested/integral groups, complete-molecule expansion, ID remapping, deletion repair, malformed membership, bounds-based alignment, concave lasso regions, modifier gestures, individual member dragging, group/frame history, multi-fragment chemistry initialization and mixed-object CDXML round trips. Local QA files are under ignored `artifacts/selection-qa-20260920/`.
 
-The final desktop pass reopened the saved drawing, added a rectangle frame to the second group, undid/redid it, moved it by its caption, ungrouped/undid, aligned both framed groups and saved. The screenshot is `composition-desktop.jpg` and the native file is `framed-aspirin.moruno` in that QA directory. The standalone worker imported the externally saved fixture from `/tmp`, retaining both groups and formula `C18H16O8`; the application engine check also passed with `MORUNO_ROOT=/nonexistent`.
+The final desktop pass reopened the saved drawing, added a rectangle frame to the second group, undid/redid it, moved it by its caption, ungrouped/undid, aligned both framed groups and saved. The screenshot is `composition-desktop.jpg` and the native file is `framed-aspirin.reshiki` in that QA directory. The standalone worker imported the externally saved fixture from `/tmp`, retaining both groups and formula `C18H16O8`; the application engine check also passed with `RESHIKI_ROOT=/nonexistent`.

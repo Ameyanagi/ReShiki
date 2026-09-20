@@ -124,7 +124,7 @@ def from_document(doc):
         a.SetNoImplicit(item.get("no_implicit", False))
         a.SetIsAromatic(item.get("aromatic", False))
         a.SetAtomMapNum(item.get("map_num", 0))
-        a.SetProp("moruno_id", str(atom_id))
+        a.SetProp("reshiki_id", str(atom_id))
         ids[atom_id] = rw.AddAtom(a)
     for item in doc["bonds"]:
         if item["order"] == 0:
@@ -162,7 +162,7 @@ def from_document(doc):
         a = mol.GetAtomWithIdx(ids[item["id"]])
         stereo = item.get("stereo")
         if stereo:
-            current = [int(n.GetProp("moruno_id")) for n in a.GetNeighbors()]
+            current = [int(n.GetProp("reshiki_id")) for n in a.GetNeighbors()]
             given = stereo["neighbors"]
             if set(current) != set(given) or len(current) != len(given):
                 raise ValueError("Stereocenter neighbor mapping changed")
@@ -217,7 +217,7 @@ def to_document(mol, base=None, rewedge=False):
             item.ClearProp("_CIPCode")
     rdCIPLabeler.AssignCIPLabels(work, maxRecursiveIterations=1_250_000)
     ids = {
-        a.GetIdx(): int(a.GetProp("moruno_id")) if a.HasProp("moruno_id") else a.GetIdx() + 1
+        a.GetIdx(): int(a.GetProp("reshiki_id")) if a.HasProp("reshiki_id") else a.GetIdx() + 1
         for a in work.GetAtoms()
     }
     atoms: list[dict[str, Any]] = []
@@ -802,7 +802,7 @@ def export_cdxml(
                     }
                 )
             # Invisible skeletal carbons need no text object. Keep their dormant
-            # style on the node for Moruno's editable CDXML round trip.
+            # style on the node for ReShiki's editable CDXML round trip.
             hidden = not label_visible(a, doc)
             if hidden:
                 face = int(s["bold"]) + 2 * int(s["italic"]) + 4 * int(s["underline"])
@@ -930,7 +930,7 @@ def handle(request):
             request["document"], request.get("selected_ids"), request["format"], from_document
         )
         response["warnings"].append(
-            "Reaction files preserve participants, atom maps and stereo. Save .moruno to retain captions, arrow appearance and drawing layout."
+            "Reaction files preserve participants, atom maps and stereo. Save .reshiki to retain captions, arrow appearance and drawing layout."
         )
         return response
     if operation == "aromatic":
@@ -1014,7 +1014,7 @@ def handle(request):
             fmt = request["format"]
             if doc.get("reactions"):
                 response["warnings"].append(
-                    "This drawing or molecule format does not retain reaction roles. Use RXN/reaction SMILES for reaction data, or .moruno for the complete scheme."
+                    "This drawing or molecule format does not retain reaction roles. Use RXN/reaction SMILES for reaction data, or .reshiki for the complete scheme."
                 )
             exotic = {b["order"] for b in result_doc["bonds"]} & {0, 5, 6, 7}
             if (

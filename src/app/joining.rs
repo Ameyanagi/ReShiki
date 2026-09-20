@@ -3,7 +3,7 @@ use crate::canvas::layered::canvas;
 use crate::canvas::{TemplateAnchorPreview, Tool};
 use iced::widget::{button, column, container, pick_list, row, text};
 use iced::{Element, Length, Task};
-use moruno::{
+use reshiki::{
     joining::Prepared,
     templates::{Anchor, Connection},
 };
@@ -170,7 +170,7 @@ pub(super) fn cancels_draft(message: &Message) -> bool {
 mod tests {
     use super::*;
     use crate::canvas::Edit;
-    use moruno::document::{Document, Point};
+    use reshiki::document::{Document, Point};
 
     fn ready() -> App {
         let (mut app, _) = App::new();

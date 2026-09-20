@@ -5,8 +5,8 @@ use iced::widget::{
     text_editor, text_input, tooltip,
 };
 use iced::{Alignment, Border, Color, Element, Length, Task};
-use moruno::assistant::settings::{Preferences, effort_label};
-use moruno::{
+use reshiki::assistant::settings::{Preferences, effort_label};
+use reshiki::{
     assistant::{self, DrawingSettings, Proposal, codex},
     document::Document,
 };
@@ -197,7 +197,7 @@ impl App {
                 self.assistant.started = None;
                 self.assistant.status = "Stopped · Your drawing is unchanged".into();
                 self.assistant
-                    .record("Moruno", "Stopped. You can send another request.".into());
+                    .record("ReShiki", "Stopped. You can send another request.".into());
             }
             Action::Connect => {
                 if self.assistant.busy {
@@ -295,7 +295,7 @@ impl App {
                 self.assistant.waiting_for_canvas_edit = false;
                 self.assistant.draft = None;
                 self.assistant.record(
-                    "Moruno",
+                    "ReShiki",
                     "Proposal rejected. The drawing was not changed.".into(),
                 );
                 self.assistant.status = "Rejected · Your drawing is unchanged".into();
@@ -329,9 +329,9 @@ impl App {
                         self.assistant.draft = None;
                         self.tool = crate::canvas::Tool::Select;
                         if let Some((lo, hi)) =
-                            moruno::scene::selection_bounds(&self.doc, &self.selected)
+                            reshiki::scene::selection_bounds(&self.doc, &self.selected)
                         {
-                            self.camera.center = moruno::document::Point::new(
+                            self.camera.center = reshiki::document::Point::new(
                                 (lo.x + hi.x) / 2.,
                                 (lo.y + hi.y) / 2.,
                             );
@@ -344,7 +344,7 @@ impl App {
                             self.fit_to_view = false;
                         }
                         self.assistant.record(
-                            "Moruno",
+                            "ReShiki",
                             "Applied to the drawing. Undo restores the previous drawing.".into(),
                         );
                         self.assistant.status = "Applied · Undo is available".into();
@@ -380,7 +380,7 @@ impl App {
                 let context = if self.selected.is_empty() {
                     self.doc.clone()
                 } else {
-                    moruno::editing::selection(&self.doc, &self.selected)
+                    reshiki::editing::selection(&self.doc, &self.selected)
                 };
                 if context.atoms.len() > 1000 {
                     self.assistant.error = true;
@@ -397,7 +397,7 @@ impl App {
                     arrow_style: self.arrows.style.clone(),
                     labels: self.doc.atom_labels.clone(),
                 };
-                let request = json!({"request":prompt,"conversation":self.assistant.messages,"previous_proposal":self.assistant.draft.as_ref().map(|d|&d.proposal),"drawing_summary":{"atoms":context.atoms.len(),"bonds":context.bonds.len(),"arrows":context.arrows.len()},"selected_ids":self.selected,"placement":if self.assistant.replace {"replace selected objects"} else {"add new drawing objects"},"style":{"name":self.doc.drawing_style.name,"bond_length_pt":self.bond_drawing.length * moruno::style::DEFAULT.points_per_world(),"text":settings.format,"bond_color":settings.bond_color}}).to_string();
+                let request = json!({"request":prompt,"conversation":self.assistant.messages,"previous_proposal":self.assistant.draft.as_ref().map(|d|&d.proposal),"drawing_summary":{"atoms":context.atoms.len(),"bonds":context.bonds.len(),"arrows":context.arrows.len()},"selected_ids":self.selected,"placement":if self.assistant.replace {"replace selected objects"} else {"add new drawing objects"},"style":{"name":self.doc.drawing_style.name,"bond_length_pt":self.bond_drawing.length * reshiki::style::DEFAULT.points_per_world(),"text":settings.format,"bond_color":settings.bond_color}}).to_string();
                 let replace = if self.assistant.replace {
                     self.doc.expand_abbreviation_selection(&self.selected)
                 } else {
@@ -438,7 +438,7 @@ impl App {
                 self.assistant.started = Some(std::time::Instant::now());
                 self.assistant.menu = None;
                 // A cancelled proposal must not interrupt the editor's chemistry stream.
-                let engine = moruno::engine::PythonEngine::default();
+                let engine = reshiki::engine::PythonEngine::default();
                 return Task::perform(
                     async move {
                         let proposal = codex::propose(
@@ -547,7 +547,7 @@ impl App {
                         .width(Length::Fill)
                         .style(|_| surface(Color::from_rgb8(234, 241, 239), 12.)),
                 );
-            } else if role == "Moruno" {
+            } else if role == "ReShiki" {
                 chat = chat.push(text(message).size(11).color(super::workspace::muted()));
             } else {
                 chat = chat.push(
@@ -989,7 +989,7 @@ mod tests {
     #[test]
     fn selecting_and_styling_a_scheme_keeps_the_assistant_open_for_replacement() {
         use crate::canvas::Edit;
-        use moruno::{
+        use reshiki::{
             arrows::{ArrowStyle, Preset},
             document::{Annotation, Arrow, Point},
             graphics::{Graphic, GraphicKind, GraphicStyle},
@@ -1081,7 +1081,7 @@ mod tests {
         app.assistant.preferences.auto_apply = true;
         let _ = app.inline_action(super::super::inline_text::Action::Begin(
             None,
-            moruno::document::Point::default(),
+            reshiki::document::Point::default(),
         ));
         app.caption_action(text_editor::Action::Edit(text_editor::Edit::Paste(
             String::from("Current label").into(),
@@ -1102,7 +1102,7 @@ mod tests {
     }
     fn ready(app: &mut App) {
         let mut fragment = Document::default();
-        fragment.add_atom("O", moruno::document::Point::default());
+        fragment.add_atom("O", reshiki::document::Point::default());
         let proposal = Proposal {
             replace_ids: vec![],
             explanation: "Water".into(),
@@ -1126,7 +1126,7 @@ mod tests {
     fn proposal_apply_is_one_undo_and_reject_is_nonmutating() {
         let (mut app, _) = App::new();
         app.busy = false;
-        app.doc.add_atom("C", moruno::document::Point::default());
+        app.doc.add_atom("C", reshiki::document::Point::default());
         let before = app.doc.clone();
         ready(&mut app);
         assert_eq!(app.doc, before);
@@ -1146,7 +1146,7 @@ mod tests {
         let (mut app, _) = App::new();
         ready(&mut app);
         let before = app.doc.clone();
-        app.doc.add_atom("N", moruno::document::Point::default());
+        app.doc.add_atom("N", reshiki::document::Point::default());
         app.changed(before);
         let edited = app.doc.clone();
         if let Some(draft) = &mut app.assistant.draft {
@@ -1182,7 +1182,7 @@ mod tests {
         let before = app.doc.clone();
         let atom = app
             .doc
-            .add_atom("N", moruno::document::Point::new(120., 120.));
+            .add_atom("N", reshiki::document::Point::new(120., 120.));
         app.changed(before);
         let edited = app.doc.clone();
         let _ = app.assistant_action(Action::Example("Next request while waiting"));

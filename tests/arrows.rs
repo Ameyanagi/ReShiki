@@ -1,4 +1,4 @@
-use moruno::{
+use reshiki::{
     arrows::{ArrowStyle, Head, HeadShape, NoGo, Preset},
     document::{Arrow, Document, Point},
     editing,
@@ -73,7 +73,7 @@ fn all_arrow_parts_participate_in_bounds_selection_and_exports() {
         let bounds = a.bounds();
         assert_eq!(scene::selection_bounds(&doc, &[a.id]), Some(bounds));
         for path in a.paths() {
-            for p in moruno::graphics::flattened(&path.commands)
+            for p in reshiki::graphics::flattened(&path.commands)
                 .into_iter()
                 .flatten()
             {
@@ -88,7 +88,7 @@ fn all_arrow_parts_participate_in_bounds_selection_and_exports() {
     }
     let outline = [p(-30., -20.), p(160., -20.), p(160., 750.), p(-30., 750.)];
     assert_eq!(
-        moruno::selection_region::objects(&doc, &outline),
+        reshiki::selection_region::objects(&doc, &outline),
         doc.all_ids()
     );
     doc.validate().unwrap();
@@ -137,13 +137,13 @@ fn legacy_curves_materialize_before_reflection_and_invalid_styles_fail() {
     assert!(a.validate().is_err());
     assert_eq!(
         ArrowStyle::default().width_pt,
-        moruno::style::DEFAULT.line_width_pt
+        reshiki::style::DEFAULT.line_width_pt
     );
 }
 
 #[tokio::test]
 async fn arrow_styles_and_controls_survive_chemistry_and_cdxml_round_trip() {
-    use moruno::engine::{PythonEngine, Request};
+    use reshiki::engine::{PythonEngine, Request};
     let engine = PythonEngine::default();
     let mut doc = engine
         .request(Request::import_smiles("CCO"))

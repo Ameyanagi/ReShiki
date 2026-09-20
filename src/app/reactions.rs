@@ -2,7 +2,7 @@ use super::{App, InspectorTab, Job, Message, Request, Tool};
 use crate::canvas::{DrawingThumbnail, layered::canvas};
 use iced::widget::{button, column, container, row, scrollable, text};
 use iced::{Element, Length, Task};
-use moruno::reactions::{Reaction, Role};
+use reshiki::reactions::{Reaction, Role};
 
 #[derive(Default)]
 pub struct State {
@@ -13,8 +13,8 @@ pub struct State {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use moruno::document::{Arrow, Point};
-    use moruno::engine::{ChemistryEngine, PythonEngine};
+    use reshiki::document::{Arrow, Point};
+    use reshiki::engine::{ChemistryEngine, PythonEngine};
 
     #[test]
     fn role_edits_are_undoable_and_arrow_reversal_swaps_roles() {
@@ -85,7 +85,7 @@ mod tests {
         let directory = std::path::Path::new("artifacts/reaction-qa");
         std::fs::create_dir_all(directory).unwrap();
         std::fs::write(
-            directory.join("esterification.moruno"),
+            directory.join("esterification.reshiki"),
             serde_json::to_vec_pretty(&app.doc).unwrap(),
         )
         .unwrap();
@@ -93,7 +93,7 @@ mod tests {
             app.viewport = iced::Size::new(width as f32 - 410., height as f32 - 200.);
             app.fit();
             let mut renderer = <iced::Renderer as Headless>::new(
-                iced::Font::with_name(moruno::style::ui_font_family()),
+                iced::Font::with_name(reshiki::style::ui_font_family()),
                 iced::Pixels(16.),
                 None,
             )
@@ -237,7 +237,7 @@ impl App {
         match action {
             Action::Assign(role) => {
                 if let Err(error) =
-                    moruno::reactions::assign(&mut self.doc, arrow, &self.selected, role)
+                    reshiki::reactions::assign(&mut self.doc, arrow, &self.selected, role)
                 {
                     self.error = true;
                     self.status = error;
@@ -310,7 +310,7 @@ impl App {
                     })
                     .size(12),
                     exports,
-                    text("Save .moruno to retain the complete scheme and captions.")
+                    text("Save .reshiki to retain the complete scheme and captions.")
                         .size(11)
                         .color(muted())
                 ]
@@ -375,7 +375,7 @@ impl App {
             .spacing(5);
             for (index, part) in parts.iter().enumerate() {
                 let selected = part.atoms.iter().all(|id| self.selected.contains(id));
-                let mut preview = moruno::editing::selection(&self.doc, &part.atoms);
+                let mut preview = reshiki::editing::selection(&self.doc, &part.atoms);
                 for atom in &mut preview.atoms {
                     if let Some(source) = self.doc.atom(atom.id) {
                         atom.label_h = source.label_h;

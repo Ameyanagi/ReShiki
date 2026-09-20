@@ -38,7 +38,7 @@ class ReleaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             target = "aarch64-pc-windows-msvc"
-            binary = root / "target" / target / "release/moruno.exe"
+            binary = root / "target" / target / "release/reshiki.exe"
             binary.parent.mkdir(parents=True)
             binary.write_bytes(self.pe_image(0xAA64))
             worker = root / "worker"
@@ -60,20 +60,20 @@ class ReleaseTests(unittest.TestCase):
             run.assert_called_once_with(
                 ["cargo", "build", "--release", "--locked", "--target", target], cwd=root
             )
-            package = root / "dist/releases/moruno-1.2.3-windows-arm64.zip"
+            package = root / "dist/releases/reshiki-1.2.3-windows-arm64.zip"
             checksum = Path(str(package) + ".sha256").read_bytes()
             digest = hashlib.sha256(package.read_bytes()).hexdigest()
             # The Linux publisher must be able to verify Windows-generated manifests.
             self.assertEqual(checksum, f"{digest}  {package.name}\n".encode("ascii"))
             with zipfile.ZipFile(package) as stream:
-                metadata = json.loads(stream.read("moruno-1.2.3-windows-arm64/build.json"))
+                metadata = json.loads(stream.read("reshiki-1.2.3-windows-arm64/build.json"))
                 self.assertEqual(metadata["architecture"], "arm64")
                 self.assertEqual(metadata["rust_target"], target)
                 self.assertEqual(metadata["chemistry_architecture"], "x64")
                 self.assertFalse(metadata["signed"])
                 self.assertIn(
                     b"Windows 11 on ARM is required",
-                    stream.read("moruno-1.2.3-windows-arm64/README.txt"),
+                    stream.read("reshiki-1.2.3-windows-arm64/README.txt"),
                 )
 
     def test_native_headers_reject_mislabeled_or_damaged_archives(self):
@@ -143,20 +143,20 @@ class ReleaseTests(unittest.TestCase):
     def test_archive_name_preserves_all_version_components(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            folder = root / "moruno-1.2.3-macos-arm64"
+            folder = root / "reshiki-1.2.3-macos-arm64"
             folder.mkdir()
             with (
                 patch("build_release.platform.system", return_value="Darwin"),
                 patch("build_release.run") as run,
             ):
-                output = archive(folder, root / "output/moruno-1.2.3-macos-arm64")
-            self.assertEqual(output.name, "moruno-1.2.3-macos-arm64.zip")
+                output = archive(folder, root / "output/reshiki-1.2.3-macos-arm64")
+            self.assertEqual(output.name, "reshiki-1.2.3-macos-arm64.zip")
             self.assertIn("--keepParent", run.call_args.args[0])
 
     def test_windows_archive_accepts_reproducible_wheel_timestamps(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            folder = root / "moruno-1.2.3-windows-x64"
+            folder = root / "reshiki-1.2.3-windows-x64"
             folder.mkdir()
             library = folder / "runtime.dll"
             library.write_bytes(b"library")

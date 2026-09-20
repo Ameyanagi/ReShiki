@@ -18,7 +18,7 @@ The live molecular/graphic preview is tinted green and a preview strip distingui
 
 1. Select the desired atoms, captions, arrows and/or graphics, then choose **Save selection as template**. Existing nested/integral groups are retained when their members are included. The form captures this selection immediately.
 2. Enter a name and collection, then Save. This writes the library without editing the drawing or its history.
-3. Choose an attachment point in the source preview and **Remember anchor** to make it the custom template's default. Favorites and remembered anchors survive restarting Moruno.
+3. Choose an attachment point in the source preview and **Remember anchor** to make it the custom template's default. Favorites and remembered anchors survive restarting ReShiki.
 4. **Edit** changes the name or collection. To revise the drawing, edit an instance on the canvas, select the revised objects, and choose **Replace from selection**. Replacement resets the source anchor to Auto because object IDs may have changed.
 5. **Remove template** removes only the library entry. **Undo library change** restores the most recent replacement, anchor change or removal until another library write occurs. Existing drawing instances remain independent.
 
@@ -26,13 +26,13 @@ Selecting a caption or graphic keeps the Templates inspector open, so authoring 
 
 ## Persistence and exchange
 
-Custom entries and favorite IDs are stored in `templates.json` in Moruno's local application data directory, or `MORUNO_DATA_DIR` when specified. Writes use a complete temporary file and atomic replacement. OS file locking serializes local library writes; a stale editor must Reload before writing. Invalid/corrupt collections are reported and never silently overwritten.
+Custom entries and favorite IDs are stored in `templates.json` in ReShiki's local application data directory, or `RESHIKI_DATA_DIR` when specified. Writes use a complete temporary file and atomic replacement. OS file locking serializes local library writes; a stale editor must Reload before writing. Invalid/corrupt collections are reported and never silently overwritten.
 
-**Export** writes custom entries and favorites as a versioned `.moruno-templates` JSON collection. **Import** validates the whole collection before merging it. Identical templates are deduplicated, repeated imports are idempotent, and conflicting edited versions are kept as separate entries with distinct IDs. Import/export does not modify the current drawing. Collections use Moruno's own file format.
+**Export** writes custom entries and favorites as a versioned `.reshiki-templates` JSON collection. **Import** validates the whole collection before merging it. Identical templates are deduplicated, repeated imports are idempotent, and conflicting edited versions are kept as separate entries with distinct IDs. Import/export does not modify the current drawing. Collections use ReShiki's own file format.
 
 ## Verification
 
-Moruno desktop checks, using an isolated library directory:
+ReShiki desktop checks, using an isolated library directory:
 
 - Searched for Pyridine, chose source bond 5–6 in its preview, and attached it to a drawn double bond. Check returned `C5H5N`, six atoms and six bonds; the original two endpoint IDs were retained.
 - Added a caption, grouped it with the molecule, and saved **Tagged pyridine** in **Catalysts**. The persisted template contained six atoms, one caption and one group.

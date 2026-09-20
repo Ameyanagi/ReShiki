@@ -1,4 +1,4 @@
-use moruno::{
+use reshiki::{
     document::{Annotation, Document, Point},
     typography::{self, Script, StyleChange, TextAlign, TextFormat, TextSpan, TextStyle},
 };
@@ -99,7 +99,7 @@ fn styled_labels_survive_native_save_and_vector_and_raster_exports() {
     doc.validate().unwrap();
     let roundtrip: Document = serde_json::from_str(&serde_json::to_string(&doc).unwrap()).unwrap();
     assert_eq!(roundtrip, doc);
-    let svg = moruno::scene::svg(&doc);
+    let svg = reshiki::scene::svg(&doc);
     for value in [
         "font-family=\"Helvetica\"",
         "font-weight=\"bold\"",
@@ -110,7 +110,7 @@ fn styled_labels_survive_native_save_and_vector_and_raster_exports() {
     ] {
         assert!(svg.contains(value), "{value}");
     }
-    let bytes = moruno::export::drawing(&doc, "png").unwrap();
+    let bytes = reshiki::export::drawing(&doc, "png").unwrap();
     let mut reader = png::Decoder::new(std::io::Cursor::new(bytes))
         .read_info()
         .unwrap();
@@ -125,18 +125,18 @@ fn styled_labels_survive_native_save_and_vector_and_raster_exports() {
             > 100
     );
     assert!(
-        moruno::export::drawing(&doc, "pdf")
+        reshiki::export::drawing(&doc, "pdf")
             .unwrap()
             .starts_with(b"%PDF-")
     );
     let old: Document =
-        serde_json::from_str(include_str!("fixtures/ui-drawn-ethanol.moruno")).unwrap();
+        serde_json::from_str(include_str!("fixtures/ui-drawn-ethanol.reshiki")).unwrap();
     assert_eq!(old.annotations[0].format, TextFormat::default());
 }
 
 #[tokio::test]
 async fn cdxml_uses_rendered_text_metrics_and_keeps_caption_position() {
-    use moruno::engine::{ChemistryEngine, PythonEngine, Request};
+    use reshiki::engine::{ChemistryEngine, PythonEngine, Request};
     let engine = PythonEngine::default();
     let mut doc = engine
         .execute(Request::import_smiles("CCO"))
@@ -158,7 +158,7 @@ async fn cdxml_uses_rendered_text_metrics_and_keeps_caption_position() {
     let metrics = &request.text_layout.as_ref().unwrap()[&10];
     let expected = typography::layout(&doc.annotations[0].text, &doc.annotations[0].format);
     assert!(
-        (metrics.width - expected.width * moruno::style::DEFAULT.points_per_world()).abs() < 0.001
+        (metrics.width - expected.width * reshiki::style::DEFAULT.points_per_world()).abs() < 0.001
     );
     let xml = engine.execute(request).await.unwrap().output.unwrap();
     assert!(xml.contains("CaptionJustification=\"Center\""));
@@ -181,7 +181,7 @@ async fn cdxml_uses_rendered_text_metrics_and_keeps_caption_position() {
 #[test]
 fn japanese_fallback_uses_real_advances_and_keeps_document_styles() {
     let style = TextStyle::default();
-    let (family, advance) = moruno::style::glyph_metrics('水', &style);
+    let (family, advance) = reshiki::style::glyph_metrics('水', &style);
     if family == "Arial" {
         return;
     } // Minimal CI images may not install any CJK font.
@@ -201,7 +201,7 @@ fn japanese_fallback_uses_real_advances_and_keeps_document_styles() {
             .iter()
             .any(|r| r.style.family == "Arial" && r.text.contains("H"))
     );
-    let measured = moruno::style::styled_text_width("水素化 H₂O", style.size(), &style);
+    let measured = reshiki::style::styled_text_width("水素化 H₂O", style.size(), &style);
     assert!((layout.width - measured).abs() < 0.01);
     let mut doc = Document::default();
     doc.annotations.push(Annotation {
@@ -210,7 +210,7 @@ fn japanese_fallback_uses_real_advances_and_keeps_document_styles() {
         text: "水素化 H₂O".into(),
         format,
     });
-    let svg = moruno::scene::svg(&doc);
+    let svg = reshiki::scene::svg(&doc);
     assert!(svg.contains(&format!("font-family=\"{family}\"")));
     assert!(svg.contains("水素化"));
     assert!(svg.contains("xml:space=\"preserve\""));

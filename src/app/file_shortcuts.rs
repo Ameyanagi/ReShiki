@@ -82,7 +82,7 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
         {
             let message = match c.to_ascii_lowercase().as_str() {
                 "p" => Some(Message::Printing(super::printing::Action::Start(
-                    moruno::printing::Scope::Document,
+                    reshiki::printing::Scope::Document,
                 ))),
                 "n" => Some(Message::New),
                 "o" => Some(Message::Open),

@@ -1,6 +1,6 @@
 use super::{App, Message, Point, Tool, editing};
 use iced::Task;
-use moruno::{clipboard::CopyOutcome, document::Document};
+use reshiki::{clipboard::CopyOutcome, document::Document};
 
 impl App {
     pub(super) fn copy_native(&mut self, cut: bool, image_only: bool) -> Task<Message> {
@@ -23,7 +23,7 @@ impl App {
         self.error = false;
         self.status = "Preparing clipboard…".into();
         Task::perform(
-            moruno::clipboard::copy(self.engine.clone(), snapshot, image_only),
+            reshiki::clipboard::copy(self.engine.clone(), snapshot, image_only),
             move |result| Message::ClipboardWritten {
                 epoch,
                 revision,
@@ -43,7 +43,7 @@ impl App {
         self.status = "Reading clipboard…".into();
         let (epoch, revision) = (self.file_epoch, self.revision);
         Task::perform(
-            moruno::clipboard::paste(self.engine.clone(), image_only),
+            reshiki::clipboard::paste(self.engine.clone(), image_only),
             move |result| Message::ClipboardRead {
                 epoch,
                 revision,
@@ -88,7 +88,7 @@ impl App {
         } else if outcome.external_editable {
             "Editable drawing and images copied"
         } else {
-            "Moruno drawing and images copied"
+            "ReShiki drawing and images copied"
         };
         self.status = std::iter::once(action.to_owned())
             .chain(outcome.notices.iter().cloned())

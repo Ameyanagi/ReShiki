@@ -14,17 +14,17 @@ gh workflow run release.yml --ref main -f sign_macos=true
 
 Each archive is extracted into a temporary directory with spaces outside the checkout. The extracted executable must report clear missing-uv instructions, set up a fresh local environment and return the expected ethanol formula and SMILES. A second launch must work with uv in offline mode. On macOS, the app signature is verified again after setup. This is a packaging check, not a complete graphical acceptance test. Record desktop checks separately from package verification.
 
-The [2026-09-20 release validation](https://github.com/Ameyanagi/moruno/actions/runs/35510386732) passed all five package checks, including native ARM Windows/Linux applications, fresh chemistry setup, and offline reuse. Apple Silicon also passed Developer ID signing, notarization, stapling, and Gatekeeper assessment. This manual run did not publish a release.
+The [2026-09-20 release validation](https://github.com/Ameyanagi/ReShiki/actions/runs/35510386732) passed all five package checks, including native ARM Windows/Linux applications, fresh chemistry setup, and offline reuse. Apple Silicon also passed Developer ID signing, notarization, stapling, and Gatekeeper assessment. This manual run did not publish a release.
 
 ## Publish a version
 
 1. Update the package version in `Cargo.toml`, update `Cargo.lock`, and record release changes.
 2. Run the checks and a manual release build. Review the resulting packages.
-3. Commit and push, then create and push a matching tag, for example `v0.2.0` for version `0.2.0`.
+3. Commit and push, then create and push a matching tag, for example `v0.3.0` for version `0.3.0`.
 
 ```sh
-git tag -a v0.2.0 -m "Moruno 0.2.0"
-git push origin v0.2.0
+git tag -a v0.3.0 -m "ReShiki 0.3.0"
+git push origin v0.3.0
 ```
 
 A `v*` tag triggers builds. A mismatched version fails before packaging. The macOS archive must be signed, notarized, stapled and verified before the release publishes; missing credentials fail the job instead of silently publishing an unsigned macOS download. All five targets must succeed. Windows and Linux packages remain unsigned. Tags containing a prerelease suffix create a GitHub prerelease. Manual builds never publish a release.

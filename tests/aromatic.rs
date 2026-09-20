@@ -1,4 +1,4 @@
-use moruno::{
+use reshiki::{
     aromatic,
     document::Point,
     editing,
@@ -33,7 +33,7 @@ async fn circles_follow_ring_geometry_copy_color_and_editable_exchange() {
                 .all(|c| c.color == [27, 110, 100])
         );
         let primitives = scene::primitives(&circled);
-        assert_eq!(primitives.iter().filter(|p| matches!(p,scene::Primitive::Path { commands,.. } if commands.iter().any(|p|matches!(p,moruno::graphics::PathCommand::Cubic(..))))).count(),count);
+        assert_eq!(primitives.iter().filter(|p| matches!(p,scene::Primitive::Path { commands,.. } if commands.iter().any(|p|matches!(p,reshiki::graphics::PathCommand::Cubic(..))))).count(),count);
         let fragment = editing::selection(&circled, &circled.all_ids());
         let mut doubled = circled.clone();
         editing::append(&mut doubled, &fragment, Point::new(250., 100.));
@@ -78,7 +78,7 @@ async fn displayed_carbon_nitrogen_and_oxygen_hydrogens_follow_bond_valence() {
             .document
             .unwrap();
         for a in &mut doc.atoms {
-            a.display.carbons = Some(moruno::atom_labels::Carbons::All);
+            a.display.carbons = Some(reshiki::atom_labels::Carbons::All);
             a.display.hydrogens = Some(true);
         }
         let checked = engine

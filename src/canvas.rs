@@ -1,6 +1,6 @@
 use iced::widget::canvas::{self, Action, Frame, Geometry, Path, Stroke};
 use iced::{Color, Event, Point, Rectangle, Renderer, Theme, Vector, mouse};
-use moruno::{
+use reshiki::{
     chains::{self, BondDrawing, ChainDrawing, ChainMode},
     document::{Document, Point as World},
     graphics::{BracketSides, Graphic, GraphicKind, GraphicStyle, PathCommand},
@@ -18,13 +18,13 @@ pub enum Tool {
     Lasso,
     Chain(ChainMode),
     Bond(u8),
-    StyledBond(moruno::bonds::BondPreset),
+    StyledBond(reshiki::bonds::BondPreset),
     Wedge,
     Hash,
     Wavy,
     Atom,
     Ring,
-    RingPreset(moruno::rings::Preset),
+    RingPreset(reshiki::rings::Preset),
     Template,
     Arrow,
     Text,
@@ -33,8 +33,8 @@ pub enum Tool {
     EditPoints,
 }
 impl Tool {
-    pub fn bond_preset(self) -> Option<moruno::bonds::BondPreset> {
-        use moruno::bonds::BondPreset as P;
+    pub fn bond_preset(self) -> Option<reshiki::bonds::BondPreset> {
+        use reshiki::bonds::BondPreset as P;
         Some(match self {
             Self::Bond(1) => P::Single,
             Self::Bond(2) => P::Double,
@@ -104,7 +104,7 @@ pub enum Edit {
     Graphic(World, World, bool),
     GraphicPoint(u64, usize, World),
     AtomMark(u64, usize, World),
-    AtomIndicator(moruno::atom_labels::Owner, World),
+    AtomIndicator(reshiki::atom_labels::Owner, World),
     ArrowHandle(u64, usize, World),
     Select(Vec<u64>),
     Move(Vec<u64>, f32, f32),
@@ -116,7 +116,7 @@ pub enum Edit {
     },
     Bond(World, World, Option<u64>, Option<u64>),
     Ring(World, Option<World>),
-    RingPreset(moruno::rings::Preset, World, Option<World>, bool, bool),
+    RingPreset(reshiki::rings::Preset, World, Option<World>, bool, bool),
     Template(World, Option<World>),
     Click(World),
     Pan(f32, f32),
@@ -170,7 +170,7 @@ enum Gesture {
         start: World,
     },
     AtomIndicator {
-        owner: moruno::atom_labels::Owner,
+        owner: reshiki::atom_labels::Owner,
     },
     AtomMark {
         id: u64,
@@ -209,7 +209,7 @@ enum Gesture {
     },
 }
 pub struct MoleculeCanvas<'a> {
-    pub joining: Option<&'a moruno::joining::Prepared>,
+    pub joining: Option<&'a reshiki::joining::Prepared>,
     pub hidden_annotation: Option<u64>,
     pub bond_drawing: BondDrawing,
     pub chain_drawing: ChainDrawing,
@@ -221,11 +221,11 @@ pub struct MoleculeCanvas<'a> {
     pub guides: guides::Guides,
     pub ring_size: u8,
     pub aromatic_ring: bool,
-    pub template_connection: moruno::templates::Connection,
-    pub template: Option<(&'a Document, moruno::templates::Anchor)>,
-    pub arrow_preset: moruno::arrows::Preset,
-    pub arrow_style: &'a moruno::arrows::ArrowStyle,
-    pub orbital_phase: moruno::scientific::Phase,
+    pub template_connection: reshiki::templates::Connection,
+    pub template: Option<(&'a Document, reshiki::templates::Anchor)>,
+    pub arrow_preset: reshiki::arrows::Preset,
+    pub arrow_style: &'a reshiki::arrows::ArrowStyle,
+    pub orbital_phase: reshiki::scientific::Phase,
     pub phase_flipped: bool,
     pub attach_symbols: bool,
     pub graphic_style: &'a GraphicStyle,
@@ -287,7 +287,7 @@ impl MoleculeCanvas<'_> {
         };
         let end = if click {
             bond.fixed_length = true;
-            let first = moruno::editing::bond_extension(self.doc, start, source, 1);
+            let first = reshiki::editing::bond_extension(self.doc, start, source, 1);
             let half = (180. - chain.angle).to_radians() / 2.;
             let first_angle = chains::direction(start, first);
             let mut axis = first_angle + half;
@@ -455,7 +455,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                     }
                 }
                 if self.tool == Tool::EditPoints {
-                    if let Some(indicator) = moruno::atom_labels::indicators(self.doc)
+                    if let Some(indicator) = reshiki::atom_labels::indicators(self.doc)
                         .into_iter()
                         .find(|i| {
                             i.owner.selected(self.selected)
@@ -516,7 +516,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                 }
                 let mut hit = hit_selection(self.doc, p, 10.0 / self.camera.zoom);
                 if self.tool.selects() && hit.is_empty() {
-                    hit = moruno::editing::ring_at(self.doc, p).unwrap_or_default();
+                    hit = reshiki::editing::ring_at(self.doc, p).unwrap_or_default();
                 }
                 if self.tool.selects() {
                     hit = if state.modifiers.alt() {
@@ -548,7 +548,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                         Gesture::Move {
                             start: p,
                             ids: if state.modifiers.shift() {
-                                moruno::selection_region::combine(self.selected, &hit, true, false)
+                                reshiki::selection_region::combine(self.selected, &hit, true, false)
                             } else if !state.modifiers.alt()
                                 && hit.iter().all(|id| self.selected.contains(id))
                             {
@@ -579,7 +579,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                     Tool::Ring | Tool::RingPreset(_) | Tool::Template => Some(Gesture::Ring {
                         start: p,
                         attached: self.doc.nearest(p, 10.0 / self.camera.zoom).is_some()
-                            || moruno::editing::nearest_bond(self.doc, p, 10.0 / self.camera.zoom)
+                            || reshiki::editing::nearest_bond(self.doc, p, 10.0 / self.camera.zoom)
                                 .is_some(),
                     }),
                     _ => return Some(Action::publish(Edit::Click(p)).and_capture()),
@@ -823,7 +823,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                                 }) {
                                     state.last_click = None;
                                     let connected =
-                                        moruno::editing::groups(self.doc, &self.doc.all_ids())
+                                        reshiki::editing::groups(self.doc, &self.doc.all_ids())
                                             .into_iter()
                                             .find(|g| g.contains(&atom))
                                             .unwrap_or(ids);
@@ -835,7 +835,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                             }
                             if state.modifiers.shift() {
                                 let remove = clicked.iter().all(|id| self.selected.contains(id));
-                                Edit::Select(moruno::selection_region::combine(
+                                Edit::Select(reshiki::selection_region::combine(
                                     self.selected,
                                     &clicked,
                                     true,
@@ -1081,7 +1081,7 @@ impl MoleculeCanvas<'_> {
                 (&state.gesture, self.tool)
             {
                 if matches!(kind, GraphicKind::Symbol(_) | GraphicKind::Orbital(_)) {
-                    let drawing = moruno::scientific::Drawing {
+                    let drawing = reshiki::scientific::Drawing {
                         kind,
                         style: self.graphic_style.clone(),
                         phase: self.orbital_phase,
@@ -1141,7 +1141,7 @@ impl MoleculeCanvas<'_> {
                     self.bond_drawing.fixed_angles && !state.modifiers.alt(),
                 );
                 let id = preview.next_id();
-                preview.arrows.push(moruno::document::Arrow::new(
+                preview.arrows.push(reshiki::document::Arrow::new(
                     id,
                     *start,
                     end,
@@ -1168,7 +1168,7 @@ impl MoleculeCanvas<'_> {
                 .camera
                 .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
             let (scale, rotation) = drag.values(end, state.modifiers.shift());
-            moruno::editing::transform_about(&mut preview, &drag.ids, drag.pivot, scale, rotation);
+            reshiki::editing::transform_about(&mut preview, &drag.ids, drag.pivot, scale, rotation);
             ring_selection = Some(drag.ids.clone());
         }
         if let (Some(Gesture::Ring { start, attached }), Some(p)) = (&state.gesture, state.cursor)
@@ -1179,7 +1179,7 @@ impl MoleculeCanvas<'_> {
                 .camera
                 .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
             let (anchor, direction) = ring_gesture(*start, end, *attached, 10.0 / self.camera.zoom);
-            ring_selection = Some(moruno::editing::ring_oriented(
+            ring_selection = Some(reshiki::editing::ring_oriented(
                 &mut preview,
                 anchor,
                 self.ring_size,
@@ -1199,7 +1199,7 @@ impl MoleculeCanvas<'_> {
             } else {
                 (end, None)
             };
-            let drawing = moruno::rings::Drawing {
+            let drawing = reshiki::rings::Drawing {
                 preset,
                 length: self.bond_drawing.length,
                 alternate: state.modifiers.shift(),
@@ -1245,7 +1245,7 @@ impl MoleculeCanvas<'_> {
                     self.template_connection,
                 )
             } else {
-                moruno::templates::place_with_mode(
+                reshiki::templates::place_with_mode(
                     self.doc,
                     template,
                     anchor,
@@ -1330,7 +1330,7 @@ impl MoleculeCanvas<'_> {
                 .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
             if start.distance(p) < 1.0 / self.camera.zoom {
                 ring_selection = Some(ids.clone());
-            } else if let Some(snapped) = moruno::editing::snap_ring(
+            } else if let Some(snapped) = reshiki::editing::snap_ring(
                 &mut preview,
                 ids,
                 World::new(p.x - start.x, p.y - start.y),
@@ -1387,10 +1387,10 @@ impl MoleculeCanvas<'_> {
                     12.0 / self.camera.zoom,
                     self.bond_drawing.unconstrained(state.modifiers.alt()),
                 );
-                if preset != moruno::bonds::BondPreset::Dotted
+                if preset != reshiki::bonds::BondPreset::Dotted
                     || id
                         .zip(target)
-                        .is_some_and(|(a, b)| moruno::bonds::hydrogen_endpoints(self.doc, a, b))
+                        .is_some_and(|(a, b)| reshiki::bonds::hydrogen_endpoints(self.doc, a, b))
                 {
                     let a = id.unwrap_or_else(|| preview.add_atom("C", origin));
                     let z = target.unwrap_or_else(|| preview.add_atom("C", end));
@@ -1498,7 +1498,7 @@ impl MoleculeCanvas<'_> {
             });
         }
         if self.tool == Tool::EditPoints {
-            for indicator in moruno::atom_labels::indicators(&preview)
+            for indicator in reshiki::atom_labels::indicators(&preview)
                 .into_iter()
                 .filter(|i| i.owner.selected(selected))
             {
@@ -1639,7 +1639,7 @@ impl MoleculeCanvas<'_> {
                     let point = self.camera.world(p, bounds);
                     let mut hit = hit_selection(self.doc, point, 10.0 / self.camera.zoom);
                     if self.tool.selects() && hit.is_empty() {
-                        hit = moruno::editing::ring_at(self.doc, point).unwrap_or_default();
+                        hit = reshiki::editing::ring_at(self.doc, point).unwrap_or_default();
                     }
                     if self.tool.selects() && !state.modifiers.alt() {
                         hit = self.doc.expand_groups(&hit);
@@ -1673,8 +1673,8 @@ fn region_selection(
     polygon: &[World],
     mods: iced::keyboard::Modifiers,
 ) -> Vec<u64> {
-    let hits = doc.expand_groups(&moruno::selection_region::objects(doc, polygon));
-    moruno::selection_region::combine(selected, &hits, mods.shift(), mods.alt())
+    let hits = doc.expand_groups(&reshiki::selection_region::objects(doc, polygon));
+    reshiki::selection_region::combine(selected, &hits, mods.shift(), mods.alt())
 }
 
 fn draw_atom_markers(
@@ -1732,20 +1732,21 @@ fn ring_gesture(start: World, end: World, attached: bool, radius: f32) -> (World
 
 /// Bonds are manipulated through their two endpoint atoms; they have no separate ID.
 fn hit_selection(doc: &Document, p: World, r: f32) -> Vec<u64> {
-    if let Some(i) = moruno::atom_labels::indicators(doc).into_iter().find(|i| {
+    if let Some(i) = reshiki::atom_labels::indicators(doc).into_iter().find(|i| {
         (p.x - i.center.x).abs() < i.width / 2. + r && (p.y - i.center.y).abs() < i.height / 2. + r
     }) {
         return match i.owner {
-            moruno::atom_labels::Owner::Number(id) | moruno::atom_labels::Owner::AtomStereo(id) => {
+            reshiki::atom_labels::Owner::Number(id)
+            | reshiki::atom_labels::Owner::AtomStereo(id) => {
                 vec![id]
             }
-            moruno::atom_labels::Owner::BondStereo(a, b) => vec![a, b],
+            reshiki::atom_labels::Owner::BondStereo(a, b) => vec![a, b],
         };
     }
     if let Some(id) = hit_object(doc, p, r) {
         return vec![id];
     }
-    moruno::editing::nearest_bond(doc, p, r * 0.7)
+    reshiki::editing::nearest_bond(doc, p, r * 0.7)
         .and_then(|i| doc.bonds.get(i))
         .map(|b| vec![b.a, b.b])
         .unwrap_or_default()
@@ -1801,10 +1802,10 @@ pub fn hit_object(doc: &Document, p: World, r: f32) -> Option<u64> {
                 .rev()
                 .find(|a| {
                     doc.atom_visible(a.id)
-                        && moruno::scientific::styled_mark_parts(a, &doc.drawing_style)
+                        && reshiki::scientific::styled_mark_parts(a, &doc.drawing_style)
                             .iter()
                             .any(|part| {
-                                moruno::graphics::flattened(&part.commands)
+                                reshiki::graphics::flattened(&part.commands)
                                     .iter()
                                     .any(|points| {
                                         points.windows(2).any(
@@ -1830,7 +1831,7 @@ pub fn hit_object(doc: &Document, p: World, r: f32) -> Option<u64> {
         })
         .or_else(|| doc.arrows.iter().rev().find(|a| a.hit(p, r)).map(|a| a.id))
         .or_else(|| {
-            if moruno::editing::nearest_bond(doc, p, r * 0.7).is_none() {
+            if reshiki::editing::nearest_bond(doc, p, r * 0.7).is_none() {
                 graphic(false)
             } else {
                 None
@@ -1948,7 +1949,7 @@ fn draw_document(
                     position: camera.screen(position, bounds),
                     size: (size * camera.zoom).into(),
                     font: iced::Font {
-                        family: iced::font::Family::Name(moruno::style::font_name(&style.family)),
+                        family: iced::font::Family::Name(reshiki::style::font_name(&style.family)),
                         weight: if style.bold {
                             iced::font::Weight::Bold
                         } else {
@@ -1968,7 +1969,7 @@ fn draw_document(
                 };
                 t.draw_with(|path, color| frame.fill(&path, color));
                 if style.underline {
-                    let width = moruno::style::styled_text_width(&t.content, size, &style);
+                    let width = reshiki::style::styled_text_width(&t.content, size, &style);
                     frame.stroke(
                         &Path::line(
                             camera.screen(position.offset(0.0, size * 0.95), bounds),
@@ -1997,7 +1998,7 @@ impl<Message> canvas::Program<Message> for TemplateThumbnail<'_> {
         _: mouse::Cursor,
     ) -> Vec<Geometry> {
         let mut frame = layered::Frame::new(renderer, bounds.size());
-        let (lo, hi) = moruno::scene::selection_bounds(self.0, &self.0.all_ids())
+        let (lo, hi) = reshiki::scene::selection_bounds(self.0, &self.0.all_ids())
             .unwrap_or_else(|| self.0.bounds());
         let camera = Camera {
             center: World::new((lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5),
@@ -2037,11 +2038,11 @@ impl<Message> canvas::Program<Message> for DrawingThumbnail {
 /// exact atom/bond the user picked rather than a nearest compatible substitute.
 pub struct TemplateAnchorPreview<'a> {
     pub document: &'a Document,
-    pub anchor: moruno::templates::Anchor,
+    pub anchor: reshiki::templates::Anchor,
 }
 impl TemplateAnchorPreview<'_> {
     fn camera(&self, bounds: Rectangle) -> Camera {
-        let (lo, hi) = moruno::scene::selection_bounds(self.document, &self.document.all_ids())
+        let (lo, hi) = reshiki::scene::selection_bounds(self.document, &self.document.all_ids())
             .unwrap_or_else(|| self.document.bounds());
         Camera {
             center: World::new((lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5),
@@ -2050,28 +2051,28 @@ impl TemplateAnchorPreview<'_> {
                 .min(1.2),
         }
     }
-    fn hit(&self, p: Point, bounds: Rectangle) -> Option<moruno::templates::Anchor> {
+    fn hit(&self, p: Point, bounds: Rectangle) -> Option<reshiki::templates::Anchor> {
         let camera = self.camera(bounds);
         let p = camera.world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
         self.document
             .nearest(p, 8. / camera.zoom)
-            .map(moruno::templates::Anchor::Atom)
+            .map(reshiki::templates::Anchor::Atom)
             .or_else(|| {
-                moruno::editing::nearest_bond(self.document, p, 6. / camera.zoom)
+                reshiki::editing::nearest_bond(self.document, p, 6. / camera.zoom)
                     .and_then(|i| self.document.bonds.get(i))
-                    .map(|b| moruno::templates::Anchor::Bond(b.a, b.b))
+                    .map(|b| reshiki::templates::Anchor::Bond(b.a, b.b))
             })
     }
 }
-impl canvas::Program<moruno::templates::Anchor> for TemplateAnchorPreview<'_> {
-    type State = Option<moruno::templates::Anchor>;
+impl canvas::Program<reshiki::templates::Anchor> for TemplateAnchorPreview<'_> {
+    type State = Option<reshiki::templates::Anchor>;
     fn update(
         &self,
         state: &mut Self::State,
         event: &Event,
         bounds: Rectangle,
         cursor: mouse::Cursor,
-    ) -> Option<Action<moruno::templates::Anchor>> {
+    ) -> Option<Action<reshiki::templates::Anchor>> {
         let p = match event {
             Event::Mouse(mouse::Event::CursorMoved { position }) => Some(*position),
             _ => cursor.position(),
@@ -2128,7 +2129,7 @@ impl canvas::Program<moruno::templates::Anchor> for TemplateAnchorPreview<'_> {
             (*state, Color::from_rgba8(17, 126, 108, 0.45)),
         ] {
             match anchor {
-                Some(moruno::templates::Anchor::Atom(id)) => {
+                Some(reshiki::templates::Anchor::Atom(id)) => {
                     if let Some(a) = self.document.atom(id) {
                         frame.stroke(
                             &Path::circle(camera.screen(a.position, bounds), 9.),
@@ -2136,7 +2137,7 @@ impl canvas::Program<moruno::templates::Anchor> for TemplateAnchorPreview<'_> {
                         );
                     }
                 }
-                Some(moruno::templates::Anchor::Bond(a, b)) => {
+                Some(reshiki::templates::Anchor::Bond(a, b)) => {
                     if let (Some(a), Some(b)) = (self.document.atom(a), self.document.atom(b)) {
                         frame.stroke(
                             &Path::line(
@@ -2165,7 +2166,7 @@ fn arrow_endpoint(start: World, cursor: World, fixed_angles: bool) -> World {
 }
 
 pub struct ArrowPreview {
-    pub arrow: moruno::document::Arrow,
+    pub arrow: reshiki::document::Arrow,
 }
 impl canvas::Program<crate::app::Message> for ArrowPreview {
     type State = ();
@@ -2193,7 +2194,7 @@ impl canvas::Program<crate::app::Message> for ArrowPreview {
 }
 
 /// The inspector uses the same geometry and phase fills as the drawing/export.
-pub struct ScientificPreview(pub moruno::graphics::Graphic);
+pub struct ScientificPreview(pub reshiki::graphics::Graphic);
 impl canvas::Program<crate::app::Message> for ScientificPreview {
     type State = ();
     fn draw(
@@ -2236,7 +2237,7 @@ impl canvas::Program<crate::app::Message> for DrawingPreview<'_> {
         let mut frame = layered::Frame::new(renderer, bounds.size());
         frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::WHITE);
         let (lo, hi) =
-            moruno::scene::selection_bounds(self.0, &self.0.all_ids()).unwrap_or_default();
+            reshiki::scene::selection_bounds(self.0, &self.0.all_ids()).unwrap_or_default();
         let camera = Camera {
             center: World::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.),
             zoom: ((bounds.width - 24.) / (hi.x - lo.x).max(1.))
@@ -2352,7 +2353,7 @@ mod tests {
         let canvas = MoleculeCanvas {
             joining: None,
             hidden_annotation: None,
-            tool: Tool::RingPreset(moruno::rings::Preset::ChairUp),
+            tool: Tool::RingPreset(reshiki::rings::Preset::ChairUp),
             camera: Camera {
                 center: World::default(),
                 zoom: 1.,
@@ -2362,7 +2363,7 @@ mod tests {
         assert!(matches!(
             pointer_gesture(&canvas, Point::new(200., 150.), Point::new(200., 80.)),
             Edit::RingPreset(
-                moruno::rings::Preset::ChairUp,
+                reshiki::rings::Preset::ChairUp,
                 World { x: 0., y: 0. },
                 Some(World { x: 0., y: -70. }),
                 false,
@@ -2374,9 +2375,9 @@ mod tests {
 
     #[test]
     fn arrow_handle_drag_is_one_edit_and_midpoint_hit_follows_curve() {
-        use moruno::arrows::{ArrowStyle, Preset};
+        use reshiki::arrows::{ArrowStyle, Preset};
         let mut doc = Document::default();
-        doc.arrows.push(moruno::document::Arrow::new(
+        doc.arrows.push(reshiki::document::Arrow::new(
             1,
             World::new(-60., 0.),
             World::new(60., 0.),
@@ -2421,7 +2422,7 @@ mod tests {
 
     #[test]
     fn template_anchor_preview_hit_tests_atoms_bonds_and_empty_space() {
-        use moruno::templates::Anchor;
+        use reshiki::templates::Anchor;
         let mut doc = Document::default();
         let a = doc.add_atom("N", World::new(-42., 0.));
         let b = doc.add_atom("C", World::new(42., 0.));
@@ -2476,10 +2477,10 @@ mod tests {
             guides: Default::default(),
             ring_size: 6,
             aromatic_ring: false,
-            template_connection: moruno::templates::Connection::Auto,
+            template_connection: reshiki::templates::Connection::Auto,
             template: None,
             arrow_preset: Default::default(),
-            arrow_style: &moruno::arrows::ArrowStyle::DEFAULT,
+            arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
             orbital_phase: Default::default(),
             phase_flipped: false,
             attach_symbols: true,
@@ -2702,10 +2703,10 @@ mod tests {
             guides: Default::default(),
             ring_size: 6,
             aromatic_ring: false,
-            template_connection: moruno::templates::Connection::Auto,
+            template_connection: reshiki::templates::Connection::Auto,
             template: None,
             arrow_preset: Default::default(),
-            arrow_style: &moruno::arrows::ArrowStyle::DEFAULT,
+            arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
             orbital_phase: Default::default(),
             phase_flipped: false,
             attach_symbols: true,
@@ -2813,10 +2814,10 @@ mod tests {
             guides: Default::default(),
             ring_size: 6,
             aromatic_ring: false,
-            template_connection: moruno::templates::Connection::Auto,
+            template_connection: reshiki::templates::Connection::Auto,
             template: None,
             arrow_preset: Default::default(),
-            arrow_style: &moruno::arrows::ArrowStyle::DEFAULT,
+            arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
             orbital_phase: Default::default(),
             phase_flipped: false,
             attach_symbols: true,
@@ -2899,7 +2900,7 @@ mod tests {
         doc.add_bond(a, b, 1, "plain");
         let mut g = Graphic::dragged(
             3,
-            moruno::graphics::GraphicKind::Rectangle,
+            reshiki::graphics::GraphicKind::Rectangle,
             World::new(-50., -50.),
             World::new(50., 50.),
             GraphicStyle::default(),
@@ -2926,7 +2927,7 @@ mod tests {
             chain_drawing: Default::default(),
             doc: &doc,
             selected: &[],
-            tool: Tool::Graphic(moruno::graphics::GraphicKind::Rectangle),
+            tool: Tool::Graphic(reshiki::graphics::GraphicKind::Rectangle),
             camera: Camera {
                 center: World::default(),
                 zoom: 1.,
@@ -2935,10 +2936,10 @@ mod tests {
             guides: Default::default(),
             ring_size: 6,
             aromatic_ring: false,
-            template_connection: moruno::templates::Connection::Auto,
+            template_connection: reshiki::templates::Connection::Auto,
             template: None,
             arrow_preset: Default::default(),
-            arrow_style: &moruno::arrows::ArrowStyle::DEFAULT,
+            arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
             orbital_phase: Default::default(),
             phase_flipped: false,
             attach_symbols: true,
@@ -2953,7 +2954,7 @@ mod tests {
         let mut with_curve = doc.clone();
         with_curve.graphics.push(Graphic::dragged(
             1,
-            moruno::graphics::GraphicKind::Curve,
+            reshiki::graphics::GraphicKind::Curve,
             World::new(-50., 0.),
             World::new(50., 0.),
             style.clone(),
@@ -2976,7 +2977,7 @@ mod tests {
         let mut doc = Document::default();
         let atom = doc.add_atom("C", World::new(-100., -80.));
         let label = doc.next_id();
-        doc.annotations.push(moruno::document::Annotation {
+        doc.annotations.push(reshiki::document::Annotation {
             id: label,
             position: World::default(),
             text: "Reaction conditions".into(),
@@ -3000,10 +3001,10 @@ mod tests {
             guides: Default::default(),
             ring_size: 6,
             aromatic_ring: false,
-            template_connection: moruno::templates::Connection::Auto,
+            template_connection: reshiki::templates::Connection::Auto,
             template: None,
             arrow_preset: Default::default(),
-            arrow_style: &moruno::arrows::ArrowStyle::DEFAULT,
+            arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
             orbital_phase: Default::default(),
             phase_flipped: false,
             attach_symbols: true,
@@ -3091,13 +3092,13 @@ mod tests {
             guides: Default::default(),
             ring_size: 6,
             aromatic_ring: false,
-            template_connection: moruno::templates::Connection::Auto,
+            template_connection: reshiki::templates::Connection::Auto,
             template: Some((
-                &moruno::templates::LIBRARY[0].document,
-                moruno::templates::Anchor::Auto,
+                &reshiki::templates::LIBRARY[0].document,
+                reshiki::templates::Anchor::Auto,
             )),
             arrow_preset: Default::default(),
-            arrow_style: &moruno::arrows::ArrowStyle::DEFAULT,
+            arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
             orbital_phase: Default::default(),
             phase_flipped: false,
             attach_symbols: true,
@@ -3231,10 +3232,10 @@ mod tests {
             guides: Default::default(),
             ring_size: 6,
             aromatic_ring: false,
-            template_connection: moruno::templates::Connection::Auto,
+            template_connection: reshiki::templates::Connection::Auto,
             template: None,
             arrow_preset: Default::default(),
-            arrow_style: &moruno::arrows::ArrowStyle::DEFAULT,
+            arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
             orbital_phase: Default::default(),
             phase_flipped: false,
             attach_symbols: true,
@@ -3328,10 +3329,10 @@ mod tests {
             guides: Default::default(),
             ring_size: 6,
             aromatic_ring: false,
-            template_connection: moruno::templates::Connection::Auto,
+            template_connection: reshiki::templates::Connection::Auto,
             template: None,
             arrow_preset: Default::default(),
-            arrow_style: &moruno::arrows::ArrowStyle::DEFAULT,
+            arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
             orbital_phase: Default::default(),
             phase_flipped: false,
             attach_symbols: true,
@@ -3383,10 +3384,10 @@ mod tests {
             guides: Default::default(),
             ring_size: 5,
             aromatic_ring: false,
-            template_connection: moruno::templates::Connection::Auto,
+            template_connection: reshiki::templates::Connection::Auto,
             template: None,
             arrow_preset: Default::default(),
-            arrow_style: &moruno::arrows::ArrowStyle::DEFAULT,
+            arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
             orbital_phase: Default::default(),
             phase_flipped: false,
             attach_symbols: true,
@@ -3417,10 +3418,10 @@ mod tests {
             guides: Default::default(),
             ring_size: 6,
             aromatic_ring: false,
-            template_connection: moruno::templates::Connection::Auto,
+            template_connection: reshiki::templates::Connection::Auto,
             template: None,
             arrow_preset: Default::default(),
-            arrow_style: &moruno::arrows::ArrowStyle::DEFAULT,
+            arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
             orbital_phase: Default::default(),
             phase_flipped: false,
             attach_symbols: true,
@@ -3473,10 +3474,10 @@ mod tests {
             guides: Default::default(),
             ring_size: 6,
             aromatic_ring: false,
-            template_connection: moruno::templates::Connection::Auto,
+            template_connection: reshiki::templates::Connection::Auto,
             template: None,
             arrow_preset: Default::default(),
-            arrow_style: &moruno::arrows::ArrowStyle::DEFAULT,
+            arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
             orbital_phase: Default::default(),
             phase_flipped: false,
             attach_symbols: true,
@@ -3543,10 +3544,10 @@ mod tests {
             guides: Default::default(),
             ring_size: 6,
             aromatic_ring: false,
-            template_connection: moruno::templates::Connection::Auto,
+            template_connection: reshiki::templates::Connection::Auto,
             template: None,
             arrow_preset: Default::default(),
-            arrow_style: &moruno::arrows::ArrowStyle::DEFAULT,
+            arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
             orbital_phase: Default::default(),
             phase_flipped: false,
             attach_symbols: true,

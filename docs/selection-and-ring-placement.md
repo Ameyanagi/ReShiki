@@ -15,12 +15,12 @@ Moving an existing ring supports standalone, unlabelled saturated carbon rings o
 
 ## Verification
 
-The user's working drawing was preserved in `artifacts/selection-ring-session-20260917.moruno`. Desktop checks used a separate app instance and recovery directory while the user continued trying the main app.
+The user's working drawing was preserved in `artifacts/selection-ring-session-20260917.reshiki`. Desktop checks used a separate app instance and recovery directory while the user continued trying the main app.
 
 - Created a bond, selected its middle and inspected circles at both endpoints. Clicking one atom changed the selection count from two to one.
 - Attached a six-member ring to an ethane endpoint. The methyl group stayed outside; RDKit returned `CC1CCCCC1`, `C7H14`.
 - Created a longer target bond by moving its terminal atom. Drew cyclopentane elsewhere, selected its interior and dragged an edge to the target. The ring enlarged and rotated; the two shared atoms were reused. Counts changed from 14 atoms/13 bonds to 12/12 across the two fragments. Undo/Redo restored and reapplied the attachment.
 - Drew another target bond and used the five-member ring tool to drag from empty space onto its midpoint. The new ring snapped to the bond. The resulting three-fragment drawing had 17 atoms/17 bonds, formula `C17H34` and three rings.
-- Saved `artifacts/selection-ring-check.moruno` through the native dialog. Reading the file confirmed the counts and bond lengths of 42.00 and 68.76 world units, demonstrating that the rescaled ring matched the longer target while the other structures retained their dimensions.
+- Saved `artifacts/selection-ring-check.reshiki` through the native dialog. Reading the file confirmed the counts and bond lengths of 42.00 and 68.76 world units, demonstrating that the rescaled ring matched the longer target while the other structures retained their dimensions.
 
 Automated checks cover atom and bond pointer targets, click-versus-drag selection, hover clearing, ring drag anchors, 36 terminal orientation/scale combinations, requested fusion sides, rotation/rescaling and atom reuse, exact Undo/Redo restoration, and RDKit identities for methylcyclohexane, methylenecyclohexane and cyclopentane. Existing chemistry, file, rendering and history tests remain in the suite. The update passes 36 Rust tests, 10 Python tests, formatting, Clippy and bundle signature verification.

@@ -19,7 +19,7 @@ mod tests {
     #[test]
     fn replacing_a_longer_document_does_not_leave_old_bytes() {
         let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("drawing.moruno");
+        let path = directory.path().join("drawing.reshiki");
         write_atomic(&path, b"previous long document").unwrap();
         write_atomic(&path, b"{}").unwrap();
         assert_eq!(std::fs::read(&path).unwrap(), b"{}");

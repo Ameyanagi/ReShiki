@@ -1,7 +1,7 @@
 """Editable CDXML arrow exchange, checked against ChemDraw-saved objects.
 
 Circular/elliptical arcs and arbitrary splines are rejected rather than silently
-converted to a different curve. Moruno's single quadratic Bézier arrows use the
+converted to a different curve. ReShiki's single quadratic Bézier arrows use the
 CDXML curve object's exact cubic representation.
 """
 

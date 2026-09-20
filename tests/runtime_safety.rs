@@ -1,5 +1,5 @@
 //! Regression cases for user-controlled values and stale editing references.
-use moruno::{
+use reshiki::{
     document::{Document, Point},
     editing, scene,
     templates::{self, Anchor},
@@ -56,30 +56,30 @@ fn extreme_charge_and_stale_point_edits_do_not_panic() {
     for charge in [i32::MIN, i32::MAX] {
         doc.atom_mut(id).unwrap().charge = charge;
         assert!(!scene::svg(&doc).is_empty());
-        moruno::scientific::attach(
+        reshiki::scientific::attach(
             doc.atom_mut(id).unwrap(),
-            moruno::scientific::SymbolKind::Plus,
+            reshiki::scientific::SymbolKind::Plus,
             Point::default(),
         )
         .unwrap();
     }
-    moruno::atom_labels::Owner::Number(u64::MAX).set_offset(&mut doc, None);
-    moruno::atom_labels::Owner::BondStereo(id, u64::MAX).set_offset(&mut doc, None);
-    assert!(moruno::atom_labels::sequence("a", usize::MAX).is_err());
-    assert!(moruno::atom_labels::sequence("18446744073709551615", 2).is_err());
+    reshiki::atom_labels::Owner::Number(u64::MAX).set_offset(&mut doc, None);
+    reshiki::atom_labels::Owner::BondStereo(id, u64::MAX).set_offset(&mut doc, None);
+    assert!(reshiki::atom_labels::sequence("a", usize::MAX).is_err());
+    assert!(reshiki::atom_labels::sequence("18446744073709551615", 2).is_err());
 }
 
 #[test]
 fn invalid_geometry_and_unicode_ranges_return_safely() {
     let doc = Document::default();
-    let part = moruno::rings::Preset::ChairUp.document(42., false);
+    let part = reshiki::rings::Preset::ChairUp.document(42., false);
     for radius in [0., -1., f32::NAN, f32::INFINITY] {
         assert!(templates::place(&doc, &part, Point::default(), None, radius).is_err());
     }
     for length in [0., -1., f32::NAN, f32::INFINITY] {
         assert!(
-            moruno::rings::Drawing {
-                preset: moruno::rings::Preset::ChairUp,
+            reshiki::rings::Drawing {
+                preset: reshiki::rings::Preset::ChairUp,
                 length,
                 alternate: false,
                 connect: true
@@ -94,7 +94,7 @@ fn invalid_geometry_and_unicode_ranges_return_safely() {
         std::ops::Range { start: 7, end: 0 },
         1..2,
     ] {
-        let mut format = moruno::typography::TextFormat::default();
+        let mut format = reshiki::typography::TextFormat::default();
         format.edited("αβγ", "δγ", range);
         format.validate("δγ").unwrap();
     }
@@ -103,7 +103,7 @@ fn invalid_geometry_and_unicode_ranges_return_safely() {
 #[test]
 fn bundled_data_parses_and_retains_jacs_defaults() {
     assert!(templates::builtin_error().is_none());
-    let style: moruno::style::DrawingStyle =
+    let style: reshiki::style::DrawingStyle =
         serde_json::from_str(include_str!("../engine/drawing_style.json")).unwrap();
     assert_eq!(style.font_family, "Arial");
     assert_eq!(style.font_size_pt, 10.);

@@ -1,4 +1,4 @@
-use moruno::{
+use reshiki::{
     atom_labels::{self, Carbons, HydrogenPosition, Number, Owner},
     document::{Document, Point},
     editing,
@@ -163,7 +163,7 @@ async fn cip_is_computed_and_exports_refresh_stale_cached_labels() {
         );
         atom_labels::clear_computed(&mut doc);
         assert!(atom_labels::indicators(&doc).is_empty());
-        let refreshed = moruno::export::checked_document(&engine, doc)
+        let refreshed = reshiki::export::checked_document(&engine, doc)
             .await
             .unwrap();
         assert!(scene::svg(&refreshed).contains(&format!("({expected})")));

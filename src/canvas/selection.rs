@@ -1,7 +1,7 @@
 use super::{Camera, World, rgb};
 use iced::widget::canvas::{Frame, Path, Stroke};
 use iced::{Color, Point, Rectangle, Size, mouse};
-use moruno::{document::Document, editing, scene};
+use reshiki::{document::Document, editing, scene};
 
 #[derive(Clone, Copy, Debug)]
 pub(super) enum Handle {

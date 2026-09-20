@@ -26,7 +26,7 @@ New atoms remain in the groups of a molecule they extend. Joining separately gro
 
 Desktop checks exercised fixed constraints, free drawing, exact-count insertion and multi-segment snaking. An interchange fixture contains 16-, 6- and 20-carbon chains with a 14.40 pt bond length and coordinate rounding below 0.01 pt.
 
-Moruno desktop verification:
+ReShiki desktop verification:
 
 1. Drew a chain in one drag; Check returned `C6H14`, six atoms and five bonds. Reading the saved native file confirmed each bond is 42 world units, or 14.4 pt.
 2. Reopened it, set Atoms to four and clicked an endpoint. The original endpoint was reused and the result was a continuous nine-carbon chain, `C9H20`.
@@ -42,6 +42,6 @@ Current validation: **83 Rust tests and 23 Python tests**, plus formatting and C
 - Chains create carbon atoms connected by ordinary single bonds. Element replacement, bond-order editing and Check remain separate operations. Geometry checks do not replace full valence validation.
 - A gesture is limited to 512 chain atoms. There is no viewport auto-pan while drawing, global routing around obstacles, or automatic shortening of a chain at an interior collision.
 - Chain angle and length controls do not yet constitute a complete document style/stationery editor. They do not restyle existing molecules, rings or imported documents.
-- Moruno labels whether a count is exact or a cap and explicitly includes attachment atoms.
+- ReShiki labels whether a count is exact or a cap and explicitly includes attachment atoms.
 
 The [full gap audit](feature-status.md) tracks the remaining template, chemistry, layout and application workflows.

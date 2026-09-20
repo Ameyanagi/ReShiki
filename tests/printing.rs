@@ -1,4 +1,4 @@
-use moruno::{
+use reshiki::{
     document::{Document, Point},
     pages::{Layout, Margins},
     printing::{self, Scope},
@@ -24,7 +24,7 @@ fn printing_unpaged_documents_preserves_the_drawing_and_centers_a4_at_publicatio
     assert_eq!(snapshot.bonds, doc.bonds);
     assert_eq!(doc, before);
     assert!(doc.page_layout.is_none());
-    let (lo, hi) = moruno::scene::selection_bounds(&snapshot, &snapshot.all_ids()).unwrap();
+    let (lo, hi) = reshiki::scene::selection_bounds(&snapshot, &snapshot.all_ids()).unwrap();
     let (a, b) = layout.content_bounds(0).unwrap();
     assert!(((lo.x + hi.x) - (a.x + b.x)).abs() < 0.001);
     assert!(((lo.y + hi.y) - (a.y + b.y)).abs() < 0.001);
@@ -67,7 +67,7 @@ fn selection_printing_uses_one_custom_sheet_and_keeps_unselected_content_out() {
     assert_eq!(sheet.width_pt, layout.width_pt);
     assert_eq!(sheet.height_pt, layout.height_pt);
     assert_eq!(sheet.margins, layout.margins);
-    let (lo, hi) = moruno::scene::selection_bounds(&snapshot, &snapshot.all_ids()).unwrap();
+    let (lo, hi) = reshiki::scene::selection_bounds(&snapshot, &snapshot.all_ids()).unwrap();
     let (a, b) = sheet.content_bounds(0).unwrap();
     assert!(((lo.x + hi.x) - (a.x + b.x)).abs() < 0.001);
     assert!(((lo.y + hi.y) - (a.y + b.y)).abs() < 0.001);
@@ -111,7 +111,7 @@ fn preparing_a_print_retains_all_page_dimensions_and_bounds_the_title() {
 
 #[test]
 fn selected_molecules_keep_hydrogens_and_stereo_labels_after_other_molecules_are_removed() {
-    use moruno::atom_labels::{Number, number_style};
+    use reshiki::atom_labels::{Number, number_style};
     let mut doc = Document::default();
     let a = doc.add_atom("N", Point::default());
     let b = doc.add_atom("C", Point::new(42., 0.));
@@ -125,12 +125,12 @@ fn selected_molecules_keep_hydrogens_and_stereo_labels_after_other_molecules_are
         offset: None,
         style: number_style(),
     });
-    let original_indicators = moruno::atom_labels::indicators(&doc);
+    let original_indicators = reshiki::atom_labels::indicators(&doc);
     let snapshot = printing::snapshot(&doc, &[a, b], Scope::Selection).unwrap();
     assert!(snapshot.atom(excluded).is_none());
     assert_eq!(snapshot.atom(a).unwrap().label_h, 2);
     assert_eq!(snapshot.atom(b).unwrap().cip_label.as_deref(), Some("R"));
-    let printed_indicators = moruno::atom_labels::indicators(&snapshot);
+    let printed_indicators = reshiki::atom_labels::indicators(&snapshot);
     assert_eq!(printed_indicators.len(), original_indicators.len());
     for (actual, expected) in printed_indicators.iter().zip(&original_indicators) {
         assert_eq!(actual.text, expected.text);

@@ -1,4 +1,4 @@
-use moruno::{
+use reshiki::{
     document::{Document, Point},
     engine::{ChemistryEngine, PythonEngine, Request},
     templates::{LIBRARY, place},
@@ -177,7 +177,7 @@ fn dragging_selects_attachment_side_and_invalid_targets_are_unchanged() {
 
 #[tokio::test]
 async fn explicit_atom_connection_keeps_both_rings_and_exact_source_atom() {
-    use moruno::templates::{Anchor, Connection, place_with_mode};
+    use reshiki::templates::{Anchor, Connection, place_with_mode};
     let engine = PythonEngine::default();
     let benzene = template("Benzene");
     let furan = template("Furan");
@@ -239,7 +239,7 @@ async fn explicit_atom_connection_keeps_both_rings_and_exact_source_atom() {
 
 #[tokio::test]
 async fn chosen_aromatic_edges_fuse_regardless_of_kekule_phase() {
-    use moruno::templates::{Anchor, Connection, place_with_mode};
+    use reshiki::templates::{Anchor, Connection, place_with_mode};
     let engine = PythonEngine::default();
     let benzene = template("Benzene");
     for name in ["Furan", "Benzene"] {
@@ -300,7 +300,7 @@ async fn chosen_aromatic_edges_fuse_regardless_of_kekule_phase() {
 
 #[tokio::test]
 async fn circle_benzene_fuses_at_the_chosen_furan_edge_and_undo_restores_the_circle() {
-    use moruno::{
+    use reshiki::{
         document::History,
         editing,
         templates::{Anchor, Connection, place_with_mode},
@@ -308,7 +308,7 @@ async fn circle_benzene_fuses_at_the_chosen_furan_edge_and_undo_restores_the_cir
     let engine = PythonEngine::default();
     let mut original = Document::default();
     editing::ring(&mut original, Point::new(100., 100.), 6, true, 5.);
-    assert_eq!(moruno::aromatic::circles(&original).len(), 1);
+    assert_eq!(reshiki::aromatic::circles(&original).len(), 1);
     let furan = template("Furan");
     let source = Anchor::Bond(2, 3);
     for target in &original.bonds {
@@ -361,7 +361,7 @@ async fn circle_benzene_fuses_at_the_chosen_furan_edge_and_undo_restores_the_cir
 
 #[test]
 fn unsupported_circle_fusion_targets_and_anchors_remain_unchanged() {
-    use moruno::{
+    use reshiki::{
         editing,
         templates::{Anchor, Connection, place_with_mode},
     };
@@ -407,7 +407,7 @@ fn unsupported_circle_fusion_targets_and_anchors_remain_unchanged() {
 
 #[test]
 fn connected_phenyl_ring_has_120_degree_angles_at_every_source_vertex() {
-    use moruno::{
+    use reshiki::{
         editing,
         templates::{Anchor, Connection, place_with_mode},
     };

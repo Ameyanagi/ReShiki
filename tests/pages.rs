@@ -1,4 +1,4 @@
-use moruno::{
+use reshiki::{
     document::{Document, Point},
     pages::{Layout, Preset},
     style::DEFAULT as STYLE,
@@ -14,7 +14,7 @@ fn drawing() -> Document {
 #[test]
 fn legacy_documents_remain_unbounded_and_layout_roundtrips() {
     let legacy: Document =
-        serde_json::from_str(include_str!("fixtures/ui-drawn-ethanol.moruno")).unwrap();
+        serde_json::from_str(include_str!("fixtures/ui-drawn-ethanol.reshiki")).unwrap();
     assert!(legacy.page_layout.is_none());
     let mut doc = drawing();
     let before = doc.clone();
@@ -60,7 +60,7 @@ fn centering_respects_asymmetric_margins_and_keeps_whole_molecule_geometry() {
     };
     layout.margins.left = 72.;
     layout.center(&mut doc, &[1], 1).unwrap();
-    let (lo, hi) = moruno::scene::selection_bounds(&doc, &[1, 2]).unwrap();
+    let (lo, hi) = reshiki::scene::selection_bounds(&doc, &[1, 2]).unwrap();
     let (a, b) = layout.content_bounds(1).unwrap();
     assert!(((lo.x + hi.x) - (a.x + b.x)).abs() < 0.001);
     assert!(((lo.y + hi.y) - (a.y + b.y)).abs() < 0.001);
@@ -95,7 +95,7 @@ fn malformed_page_layouts_fail_without_mutating_drawing() {
             ..Default::default()
         },
         Layout {
-            margins: moruno::pages::Margins {
+            margins: reshiki::pages::Margins {
                 top: 1000.,
                 ..Default::default()
             },
@@ -107,14 +107,14 @@ fn malformed_page_layouts_fail_without_mutating_drawing() {
         assert_eq!(copy, doc);
         copy.page_layout = Some(layout);
         assert!(copy.validate().is_err());
-        assert!(moruno::export::pages_pdf(&copy).is_err());
+        assert!(reshiki::export::pages_pdf(&copy).is_err());
     }
 }
 #[test]
 fn page_pdf_uses_all_sheets_while_drawing_exports_stay_cropped() {
     let mut doc = drawing();
-    let cropped = moruno::scene::svg(&doc);
-    assert!(moruno::export::pages_pdf(&doc).is_err());
+    let cropped = reshiki::scene::svg(&doc);
+    assert!(reshiki::export::pages_pdf(&doc).is_err());
     doc.page_layout = Some(Layout {
         width_pt: 612.,
         height_pt: 792.,
@@ -122,8 +122,8 @@ fn page_pdf_uses_all_sheets_while_drawing_exports_stay_cropped() {
         rows: 2,
         ..Default::default()
     });
-    assert_eq!(moruno::scene::svg(&doc), cropped);
-    let pdf = moruno::export::pages_pdf(&doc).unwrap();
+    assert_eq!(reshiki::scene::svg(&doc), cropped);
+    let pdf = reshiki::export::pages_pdf(&doc).unwrap();
     let text = String::from_utf8_lossy(&pdf);
     assert!(text.starts_with("%PDF-"));
     assert!(text.contains("/Count 4"));
@@ -132,7 +132,7 @@ fn page_pdf_uses_all_sheets_while_drawing_exports_stay_cropped() {
 }
 #[tokio::test]
 async fn chemistry_analysis_and_selection_cleanup_preserve_page_metadata() {
-    use moruno::engine::{PythonEngine, Request};
+    use reshiki::engine::{PythonEngine, Request};
     let engine = PythonEngine::default();
     let mut doc = engine
         .request(Request::import_smiles("CCO"))

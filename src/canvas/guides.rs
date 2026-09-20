@@ -23,7 +23,7 @@ impl Unit {
     ];
 
     pub fn per_world(self) -> f64 {
-        let points = f64::from(moruno::style::DEFAULT.points_per_world());
+        let points = f64::from(reshiki::style::DEFAULT.points_per_world());
         points
             * match self {
                 Self::Millimetres => 25.4 / 72.,

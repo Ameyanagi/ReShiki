@@ -21,7 +21,7 @@ def main():
         raise SystemExit("Use scripts/build_release.py for Windows or Linux")
     profile = "release" if args.release else "debug"
     run(["cargo", "build", "--locked", *(["--release"] if args.release else [])], cwd=ROOT)
-    destination = ROOT / ("dist/Moruno.app" if args.portable else f"target/{profile}/Moruno.app")
+    destination = ROOT / ("dist/ReShiki.app" if args.portable else f"target/{profile}/ReShiki.app")
     print(mac_bundle(destination, profile, runtime_project() if args.portable else None))
 
 

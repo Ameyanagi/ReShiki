@@ -1,7 +1,7 @@
 use super::{App, Message};
 use crate::canvas::Tool;
 use iced::Task;
-use moruno::{atom_labels::Carbons, bonds::BondPreset};
+use reshiki::{atom_labels::Carbons, bonds::BondPreset};
 
 impl App {
     /// Called only for unhandled keys; focused editors keep ordinary typing.
@@ -17,7 +17,7 @@ impl App {
         });
         let bond = if hovered_atom.is_none() {
             point
-                .and_then(|p| moruno::editing::nearest_bond(&self.doc, p, 7. / self.camera.zoom))
+                .and_then(|p| reshiki::editing::nearest_bond(&self.doc, p, 7. / self.camera.zoom))
                 .and_then(|i| self.doc.bonds.get(i))
                 .map(|e| (e.a, e.b))
                 .or_else(|| match self.selected.as_slice() {
@@ -64,7 +64,7 @@ impl App {
                     .filter(|e| e.order == 2 && e.display != "wavy")
             {
                 let position =
-                    moruno::scene::effective_double_position(&self.doc, current).cycled();
+                    reshiki::scene::effective_double_position(&self.doc, current).cycled();
                 if let Some(e) = self.doc.bonds.iter_mut().find(|e| e.a == a && e.b == b) {
                     e.double_position = position;
                 }
@@ -151,7 +151,7 @@ impl App {
 mod tests {
     use super::*;
     use crate::canvas::Edit;
-    use moruno::document::{Document, Point};
+    use reshiki::document::{Document, Point};
 
     #[test]
     fn hover_atom_shortcuts_reveal_carbon_replace_elements_and_undo_once() {
@@ -254,7 +254,7 @@ mod tests {
             kind: Job::AromaticDisplay,
             result: Box::new(Ok(response.clone())),
         });
-        assert_eq!(moruno::aromatic::circles(&app.doc).len(), 1);
+        assert_eq!(reshiki::aromatic::circles(&app.doc).len(), 1);
         assert!(app.doc.atoms.iter().all(|a| a.label_h == 1));
         assert!(app.refresh_due.is_none());
         assert_eq!(app.selected, original.all_ids());

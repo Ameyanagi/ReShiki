@@ -1,6 +1,6 @@
 # Development
 
-Moruno uses Rust for the desktop application, Python/RDKit for chemistry, and Astro Starlight for this documentation site.
+ReShiki uses Rust for the desktop application, Python/RDKit for chemistry, and Astro Starlight for this documentation site.
 
 ## Set up
 
@@ -41,7 +41,7 @@ uv run --locked python -m unittest discover -s tests -p 'test_*.py'
 cargo run --locked -- --engine-check
 ```
 
-Native macOS tests skip on other systems. CI runs Rust checks/tests on macOS, Python checks/tests on all four release platforms, and web checks on Linux. Release packaging separately verifies first-use uv setup and offline reuse on all four native targets.
+Native macOS tests skip on other systems. CI runs Rust checks/tests on macOS, Python checks/tests on all five release targets, and web checks on Linux. Release packaging separately verifies first-use uv setup and offline reuse on all five native targets.
 
 ## Documentation
 
@@ -53,6 +53,6 @@ npm run docs:build
 
 Edit guide text in `docs/*.md`. A sync script creates Starlight pages, preserving links and pointing each Edit page action to the original Markdown. Generated copies are ignored by Git. Edit the landing page, navigation and theme in `website/`. The production build also checks local page and asset links.
 
-The Documentation workflow builds pull requests and deploys main to [GitHub Pages](https://ameyanagi.github.io/moruno/). Pages must use **GitHub Actions** as its source. Search, light/dark themes and responsive navigation are supplied by Starlight.
+The Documentation workflow builds pull requests and deploys main to [GitHub Pages](https://reshiki.com/). Pages must use **GitHub Actions** as its source. Search, light/dark themes and responsive navigation are supplied by Starlight.
 
 See [release builds and signing](releasing.md) for distribution setup.

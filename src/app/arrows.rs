@@ -1,7 +1,7 @@
 use super::*;
 use crate::canvas::layered::canvas;
-use moruno::arrows::{ArrowStyle, Head, HeadShape, NoGo, Preset};
-use moruno::graphics::LinePattern;
+use reshiki::arrows::{ArrowStyle, Head, HeadShape, NoGo, Preset};
+use reshiki::graphics::LinePattern;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Field {

@@ -2,7 +2,7 @@ use super::workspace::horizontal_line;
 use super::{App, InspectorTab, Message};
 use iced::widget::{button, column, pick_list, row, text, text_input};
 use iced::{Element, Length, Task};
-use moruno::{
+use reshiki::{
     document::Point,
     pages::{Layout, Preset},
 };
@@ -59,7 +59,7 @@ pub struct Editor {
     rows: String,
 }
 impl Editor {
-    pub(super) fn new(doc: &moruno::document::Document, epoch: u64) -> Self {
+    pub(super) fn new(doc: &reshiki::document::Document, epoch: u64) -> Self {
         let layout = doc
             .page_layout
             .clone()
@@ -128,7 +128,7 @@ impl Editor {
     }
 }
 impl App {
-    pub(super) fn print_document(&self) -> Result<moruno::document::Document, String> {
+    pub(super) fn print_document(&self) -> Result<reshiki::document::Document, String> {
         let mut snapshot = self.doc.clone();
         if let Some(editor) = &self.pages.editor {
             if editor.epoch != self.file_epoch || editor.original != self.doc.page_layout {
@@ -307,9 +307,9 @@ impl App {
                 let engine = self.engine.clone();
                 return Task::perform(
                     async move {
-                        let doc = moruno::export::checked_document(&engine, doc).await?;
+                        let doc = reshiki::export::checked_document(&engine, doc).await?;
                         let bytes =
-                            tokio::task::spawn_blocking(move || moruno::export::pages_pdf(&doc))
+                            tokio::task::spawn_blocking(move || reshiki::export::pages_pdf(&doc))
                                 .await
                                 .map_err(|e| e.to_string())??;
                         super::save_export(bytes, "pdf").await
@@ -385,12 +385,12 @@ impl App {
                         .on_press(Message::Pages(Action::Export))
                         .width(Length::Fill),
                 );
-            if moruno::printing::available() {
+            if reshiki::printing::available() {
                 body = body.push(
                     command("Print… · ⌘P")
                         .on_press_maybe(self.printing.active.is_none().then_some(
                             Message::Printing(super::printing::Action::Start(
-                                moruno::printing::Scope::Document,
+                                reshiki::printing::Scope::Document,
                             )),
                         ))
                         .width(Length::Fill),
@@ -540,12 +540,12 @@ impl App {
                         .on_press(Message::Pages(Action::Export))
                         .width(Length::Fill),
                 );
-            if moruno::printing::available() {
+            if reshiki::printing::available() {
                 body = body.push(
                     command("Print… · ⌘P")
                         .on_press_maybe(self.printing.active.is_none().then_some(
                             Message::Printing(super::printing::Action::Start(
-                                moruno::printing::Scope::Document,
+                                reshiki::printing::Scope::Document,
                             )),
                         ))
                         .width(Length::Fill),
@@ -571,7 +571,7 @@ mod tests {
     fn ready() -> App {
         let (mut app, _) = App::new();
         app.busy = false;
-        app.doc = moruno::document::Document::default();
+        app.doc = reshiki::document::Document::default();
         let a = app.doc.add_atom("C", Point::default());
         let b = app.doc.add_atom("O", Point::new(42., 0.));
         app.doc.add_bond(a, b, 1, "plain");
@@ -654,7 +654,7 @@ mod tests {
     #[test]
     fn selecting_page_artwork_keeps_page_controls_and_centers_only_the_selection() {
         use crate::canvas::Edit;
-        use moruno::{
+        use reshiki::{
             arrows::{ArrowStyle, Preset as ArrowPreset},
             document::{Annotation, Arrow},
             graphics::{Graphic, GraphicKind, GraphicStyle},
@@ -717,7 +717,7 @@ mod tests {
         assert_eq!(app.doc.arrows, before.arrows);
         assert_eq!(app.doc.graphics, before.graphics);
         assert_ne!(app.doc.atoms, before.atoms);
-        let (lo, hi) = moruno::scene::selection_bounds(&app.doc, &app.selected).unwrap();
+        let (lo, hi) = reshiki::scene::selection_bounds(&app.doc, &app.selected).unwrap();
         let (page_lo, page_hi) = app
             .doc
             .page_layout

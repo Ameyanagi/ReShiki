@@ -1,4 +1,4 @@
-use moruno::{
+use reshiki::{
     document::{Document, Point},
     editing,
     engine::{PythonEngine, Request},
@@ -41,7 +41,7 @@ fn all_orbital_phases_and_symbols_survive_native_and_vector_export() {
                 phase != Phase::Open
             );
             for part in graphic.parts() {
-                for point in moruno::graphics::flattened(&part.commands)
+                for point in reshiki::graphics::flattened(&part.commands)
                     .into_iter()
                     .flatten()
                 {
@@ -67,10 +67,10 @@ fn all_orbital_phases_and_symbols_survive_native_and_vector_export() {
     doc.validate().unwrap();
     let json = serde_json::to_string(&doc).unwrap();
     assert_eq!(serde_json::from_str::<Document>(&json).unwrap(), doc);
-    let svg = moruno::scene::svg(&doc);
+    let svg = reshiki::scene::svg(&doc);
     assert!(svg.contains("rgb(170,170,170)"));
     assert!(
-        moruno::export::drawing(&doc, "pdf")
+        reshiki::export::drawing(&doc, "pdf")
             .unwrap()
             .starts_with(b"%PDF")
     );
@@ -99,7 +99,7 @@ fn chemical_marks_follow_atoms_through_move_copy_rotation_and_validation() {
     editing::transform_about(&mut doc, &copied, pivot, 1., 90.);
     assert!(doc.atoms[1].marks[0].offset.distance(p(20., 20.)) < 0.001);
     assert_eq!(doc.atoms[1].charge, 1);
-    let (lo, hi) = moruno::scene::selection_bounds(&doc, &copied).unwrap();
+    let (lo, hi) = reshiki::scene::selection_bounds(&doc, &copied).unwrap();
     assert!(lo.x < pivot.x && hi.x > pivot.x + 20.);
     doc.validate().unwrap();
     doc.atoms[1].marks[0].angle = f32::NAN;

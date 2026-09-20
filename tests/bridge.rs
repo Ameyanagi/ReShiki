@@ -1,5 +1,5 @@
-use moruno::engine::{ChemistryEngine, PythonEngine, Request};
-use moruno::{
+use reshiki::engine::{ChemistryEngine, PythonEngine, Request};
+use reshiki::{
     document::{Document, Point},
     editing::{self, Transform},
 };

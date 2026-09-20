@@ -119,7 +119,7 @@ mod tests {
     #[test]
     fn reusable_style_files_are_validated_and_bounded() {
         let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().join("Presentation.moruno-style");
+        let path = directory.path().join("Presentation.reshiki-style");
         let style = Preset::Presentation.style();
         crate::storage::write_atomic(&path, &serde_json::to_vec_pretty(&style).unwrap()).unwrap();
         assert_eq!(load(&path).unwrap(), style);

@@ -116,12 +116,8 @@ impl Preferences {
             .or(Some("default"))
     }
     pub fn path() -> Option<PathBuf> {
-        std::env::var_os("MORUNO_DATA_DIR")
-            .map(PathBuf::from)
-            .or_else(|| {
-                directories_next::ProjectDirs::from("dev", "moruno", "Moruno")
-                    .map(|d| d.data_local_dir().to_path_buf())
-            })
+        crate::compatibility::data_directory()
+            .ok()
             .map(|p| p.join("assistant-preferences.json"))
     }
     pub fn load() -> Self {

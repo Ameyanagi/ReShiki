@@ -14,7 +14,7 @@ Atom labels without individual font overrides inherit the document style. **Upda
 
 ## Reuse a style
 
-**Save style…** saves the panel settings as a `.moruno-style` file without changing the drawing. **Load…** opens a saved style into the preview; Apply is still required. A style file contains settings only, not molecules or page contents. Files are validated before use and limited to 64 KB.
+**Save style…** saves the panel settings as a `.reshiki-style` file without changing the drawing. **Load…** opens a saved style into the preview; Apply is still required. A style file contains settings only, not molecules or page contents. Files are validated before use and limited to 64 KB.
 
 This supports reusable drawing settings. Complete stationery documents combining page layouts, objects, and styles are not yet implemented.
 

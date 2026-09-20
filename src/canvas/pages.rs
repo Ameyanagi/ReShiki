@@ -2,7 +2,7 @@ use super::{Camera, rgb};
 use iced::widget::canvas::{self, Frame, Path, Stroke};
 use iced::{Point, Rectangle, Size};
 
-pub fn draw(frame: &mut Frame, layout: &moruno::pages::Layout, camera: Camera, bounds: Rectangle) {
+pub fn draw(frame: &mut Frame, layout: &reshiki::pages::Layout, camera: Camera, bounds: Rectangle) {
     if layout.validate().is_err() {
         return;
     }

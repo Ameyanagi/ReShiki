@@ -150,7 +150,7 @@ mod tests {
     #[test]
     fn vector_pdf_and_png_contain_real_drawing_data() {
         let d: Document =
-            serde_json::from_str(include_str!("../tests/fixtures/ui-drawn-ethanol.moruno"))
+            serde_json::from_str(include_str!("../tests/fixtures/ui-drawn-ethanol.reshiki"))
                 .unwrap();
         let pdf = drawing(&d, "pdf").unwrap();
         assert!(pdf.starts_with(b"%PDF-"));

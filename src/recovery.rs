@@ -21,14 +21,7 @@ pub struct Recovery {
 }
 impl Recovery {
     pub fn standard() -> Result<Self, String> {
-        let root = if let Some(path) = std::env::var_os("MORUNO_DATA_DIR") {
-            PathBuf::from(path)
-        } else {
-            directories_next::ProjectDirs::from("dev", "moruno", "Moruno")
-                .ok_or("No application data directory")?
-                .data_local_dir()
-                .to_path_buf()
-        };
+        let root = crate::compatibility::data_directory()?;
         Self::in_directory(&root.join("recovery"))
     }
     pub fn in_directory(root: &Path) -> Result<Self, String> {

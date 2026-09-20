@@ -2053,8 +2053,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "moruno"
-version = "0.2.0"
+name = "reshiki"
+version = "0.3.0"
 dependencies = [
  "base64",
  "directories-next",

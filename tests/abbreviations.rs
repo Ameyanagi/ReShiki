@@ -1,4 +1,4 @@
-use moruno::{
+use reshiki::{
     document::{Document, History, Point},
     editing,
     engine::{PythonEngine, Request},
@@ -146,7 +146,7 @@ async fn checked_chemistry_cleanup_and_editable_exchange_keep_full_identity() {
         assert_eq!(restored.atoms.len(), 16);
     }
     assert!(
-        moruno::export::drawing(&collapsed, "pdf")
+        reshiki::export::drawing(&collapsed, "pdf")
             .unwrap()
             .starts_with(b"%PDF-")
     );

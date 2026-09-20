@@ -1,4 +1,4 @@
-use moruno::{
+use reshiki::{
     crossings,
     document::{Document, Point},
     scene::{self, Primitive},

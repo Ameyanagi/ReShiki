@@ -1,5 +1,5 @@
 use super::*;
-use moruno::typography::{Script, StyleChange, TextAlign, TextFormat, TextStyle};
+use reshiki::typography::{Script, StyleChange, TextAlign, TextFormat, TextStyle};
 use std::ops::Range;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

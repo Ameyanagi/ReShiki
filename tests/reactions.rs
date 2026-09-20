@@ -1,4 +1,4 @@
-use moruno::{
+use reshiki::{
     document::{Arrow, Document, History, Point},
     editing,
     engine::{ChemistryEngine, PythonEngine, Request},
@@ -121,19 +121,21 @@ async fn reaction_bridge_preserves_roles_stereo_mapping_and_cleanup() {
         assert_eq!(clean.arrows, doc.arrows);
     }
     assert_eq!(
-        moruno::clipboard::text_request("CCO>>CC=O")
+        reshiki::clipboard::text_request("CCO>>CC=O")
             .format
             .as_deref(),
         Some("rsmi")
     );
     assert_eq!(
-        moruno::clipboard::text_request("$RXN\nM  END")
+        reshiki::clipboard::text_request("$RXN\nM  END")
             .format
             .as_deref(),
         Some("rxn")
     );
     assert_eq!(
-        moruno::clipboard::text_request("N->[Fe]").format.as_deref(),
+        reshiki::clipboard::text_request("N->[Fe]")
+            .format
+            .as_deref(),
         Some("smiles")
     );
 }

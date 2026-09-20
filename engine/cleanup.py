@@ -117,7 +117,7 @@ def clean(doc, options, selection, read, write, analyze, scale, bond_length):
         fixed = {
             a.GetIdx(): Point2D(old[a.GetIdx()].x, old[a.GetIdx()].y)
             for a in mol.GetAtoms()
-            if int(a.GetProp("moruno_id")) not in moving
+            if int(a.GetProp("reshiki_id")) not in moving
         }
         rdDepictor.Compute2DCoords(
             mol,
@@ -160,8 +160,8 @@ def clean(doc, options, selection, read, write, analyze, scale, bond_length):
                 Chem.BondStereo.STEREONONE,
                 Chem.BondStereo.STEREOANY,
             ):
-                a = int(old_bond.GetBeginAtom().GetProp("moruno_id"))
-                b = int(old_bond.GetEndAtom().GetProp("moruno_id"))
+                a = int(old_bond.GetBeginAtom().GetProp("reshiki_id"))
+                b = int(old_bond.GetEndAtom().GetProp("reshiki_id"))
                 if not {a, b}.intersection(moving):
                     continue
                 by_edge[frozenset((a, b))].update(display="wavy", stereo=None, stereo_atoms=[])

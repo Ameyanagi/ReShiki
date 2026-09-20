@@ -1,5 +1,5 @@
 use super::*;
-use moruno::atom_labels::{self as labels, Carbons, HydrogenPosition, Number};
+use reshiki::atom_labels::{self as labels, Carbons, HydrogenPosition, Number};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Scope {
@@ -174,7 +174,7 @@ impl App {
                     None
                 };
                 let mut style = self.current_text_style().clone();
-                style.script = moruno::typography::Script::Normal;
+                style.script = reshiki::typography::Script::Normal;
                 style.formula = false;
                 for a in self.doc.atoms.iter_mut().filter(|a| ids.contains(&a.id)) {
                     for s in std::iter::once(&mut a.display.stereo.style)

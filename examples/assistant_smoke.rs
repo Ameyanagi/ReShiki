@@ -1,5 +1,5 @@
 //! Explicit, headless integration check. Does not open windows or touch clipboard.
-use moruno::{
+use reshiki::{
     assistant::{self, codex},
     engine::PythonEngine,
 };
@@ -65,13 +65,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         serde_json::to_string_pretty(&proposal)?,
     )?;
     std::fs::write(
-        output.join("proposal.moruno"),
+        output.join("proposal.reshiki"),
         serde_json::to_string_pretty(&document)?,
     )?;
-    std::fs::write(output.join("proposal.svg"), moruno::scene::svg(&document))?;
+    std::fs::write(output.join("proposal.svg"), reshiki::scene::svg(&document))?;
     std::fs::write(
         output.join("proposal.png"),
-        moruno::export::drawing(&document, "png")?,
+        reshiki::export::drawing(&document, "png")?,
     )?;
     writeln!(
         std::io::stdout(),

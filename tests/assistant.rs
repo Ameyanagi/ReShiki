@@ -1,4 +1,4 @@
-use moruno::{
+use reshiki::{
     assistant::{self, DrawingSettings, Molecule, Proposal, Step},
     document::{Document, Point},
     engine::{ChemistryEngine, PythonEngine, Request},
@@ -140,7 +140,7 @@ async fn water_names_remain_captions_while_only_duplicate_formulas_are_hidden() 
             assert!(caption.position.y > doc.atoms[0].position.y);
             assert_eq!(
                 caption.format.alignment,
-                moruno::typography::TextAlign::Center
+                reshiki::typography::TextAlign::Center
             );
         }
         if coefficient > 1 {
@@ -230,7 +230,7 @@ async fn hydrolysis_uses_coefficients_and_editable_r_groups_without_overlapping_
     assert_eq!(water.len(), 1);
     assert_eq!(
         water[0].display.hydrogen_position,
-        moruno::atom_labels::HydrogenPosition::Left
+        reshiki::atom_labels::HydrogenPosition::Left
     );
     assert!(doc.annotations.iter().any(|a| a.text == "3"));
     assert!(!doc.annotations.iter().any(|a| a.text == "3 H₂O"));
@@ -271,7 +271,7 @@ async fn canvas_tools_return_live_data_and_images_without_mutating_the_document(
     ))
     .write_to(&mut pixels, image::ImageFormat::Png)
     .unwrap();
-    let picture = moruno::pictures::Picture::import(&pixels.into_inner()).unwrap();
+    let picture = reshiki::pictures::Picture::import(&pixels.into_inner()).unwrap();
     document
         .graphics
         .push(picture.graphic(2, Point::new(100., 0.)));

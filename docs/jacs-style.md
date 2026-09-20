@@ -1,6 +1,6 @@
 # Default drawing style: JACS / ACS
 
-Moruno defaults to the ACS structure preset for JACS-oriented drawings. This applies to canvas drawings, annotations, SVG, PDF, PNG, and the supported CDXML exchange subset. The application controls keep their own interface theme.
+ReShiki defaults to the ACS structure preset for JACS-oriented drawings. This applies to canvas drawings, annotations, SVG, PDF, PNG, and the supported CDXML exchange subset. The application controls keep their own interface theme.
 
 | Setting                  | Default                    |
 | ------------------------ | -------------------------- |
@@ -18,7 +18,7 @@ The numeric structure settings come from the [ACS graphics preparation guide](ht
 
 ## Implementation
 
-`engine/drawing_style.json` is the shared definition, embedded in Rust and bundled alongside the Python worker. A normal 42-unit bond in Moruno represents 14.4 publication points. Existing document coordinates stay intact. SVG declares dimensions in points; PDF explicitly converts the SVG's 96 px/in coordinate system to 72 pt/in. PNG has matching physical dimensions and 1200 dpi metadata. Screen zoom never changes exported size.
+`engine/drawing_style.json` is the shared definition, embedded in Rust and bundled alongside the Python worker. A normal 42-unit bond in ReShiki represents 14.4 publication points. Existing document coordinates stay intact. SVG declares dimensions in points; PDF explicitly converts the SVG's 96 px/in coordinate system to 72 pt/in. PNG has matching physical dimensions and 1200 dpi metadata. Screen zoom never changes exported size.
 
 Atom labels use measured font advances and separate text runs for hydrogen subscripts, isotope masses and charges. Hydrogens choose a side based on neighboring bonds; ring double bonds use an inset second line. Annotation selection bounds and multiline spacing follow the larger default font. Arial must be available for exact font matching; fallback sans-serif metrics are used otherwise.
 
@@ -37,7 +37,7 @@ The 2026-09-20 chain update passed 83 Rust and 23 Python tests. The packaged app
 Headless export is available for repeatable checks:
 
 ```sh
-cargo run --locked --example export_drawing -- input.moruno output-prefix
+cargo run --locked --example export_drawing -- input.reshiki output-prefix
 ```
 
 The arrow update also resets arrow tool settings on New. A desktop check changed the text style to 20 pt, bold/red and the arrow tool to a custom unequal equilibrium, then verified New restored Arial 10 pt, black and the Forward arrow with a 0.6 pt line. See [arrow verification](arrows.md).

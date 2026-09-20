@@ -7,7 +7,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-changed=native/macos/PrintSupport.swift");
     if env::var("CARGO_CFG_TARGET_OS")? == "macos" {
         let helper = PathBuf::from(env::var_os("OUT_DIR").ok_or("Missing build output directory")?)
-            .join("moruno-clipboard");
+            .join("reshiki-clipboard");
         let status = Command::new("swiftc")
             .args([
                 "-O",
@@ -21,10 +21,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Err("Could not build the macOS clipboard helper".into());
         }
         println!(
-            "cargo:rustc-env=MORUNO_CLIPBOARD_HELPER={}",
+            "cargo:rustc-env=RESHIKI_CLIPBOARD_HELPER={}",
             helper.display()
         );
-        let print_helper = helper.with_file_name("moruno-print");
+        let print_helper = helper.with_file_name("reshiki-print");
         let status = Command::new("swiftc")
             .args([
                 "-O",
@@ -38,7 +38,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Err("Could not build the macOS print helper".into());
         }
         println!(
-            "cargo:rustc-env=MORUNO_PRINT_HELPER={}",
+            "cargo:rustc-env=RESHIKI_PRINT_HELPER={}",
             print_helper.display()
         );
     }

@@ -4,7 +4,7 @@ use iced::widget::{
     button, checkbox, column, combo_box, container, pick_list, row, scrollable, text, text_input,
 };
 use iced::{Alignment, Element, Length, Task};
-use moruno::{document_styles::Preset, style::DrawingStyle};
+use reshiki::{document_styles::Preset, style::DrawingStyle};
 
 fn command(label: &str) -> iced::widget::Button<'_, Message> {
     button(text(label).size(12)).padding([7, 9])
@@ -17,7 +17,7 @@ mod tests {
     #[test]
     fn preview_cancel_apply_and_history_preserve_the_document() {
         let (mut app, _) = App::new();
-        app.doc = moruno::rings::Preset::Regular.document(42., false);
+        app.doc = reshiki::rings::Preset::Regular.document(42., false);
         app.busy = false;
         app.history = Default::default();
         let before = app.doc.clone();
@@ -50,7 +50,7 @@ mod tests {
         assert!(!app.dirty());
         let _ = app.update(Message::Redo);
         assert_eq!(app.doc, after);
-        let _ = app.update(Message::ArrowStyle(moruno::arrows::Preset::Fishhook));
+        let _ = app.update(Message::ArrowStyle(reshiki::arrows::Preset::Fishhook));
         assert_eq!(app.arrows.style.width_pt, 1.);
         assert_eq!(app.arrows.numbers.first().map(String::as_str), Some("1"));
         send(&mut app, Action::Open);
@@ -70,7 +70,7 @@ mod tests {
     async fn drawing_style_headless_snapshot() {
         use iced::advanced::{layout, mouse, renderer::Headless, widget::Tree};
         let (mut app, _) = App::new();
-        app.doc = moruno::rings::Preset::Regular.document(42., false);
+        app.doc = reshiki::rings::Preset::Regular.document(42., false);
         app.busy = false;
         app.status = "Ready".into();
         let _ = app.update(Message::DrawingStyle(Action::Open));
@@ -79,7 +79,7 @@ mod tests {
         std::fs::create_dir_all(directory).unwrap();
         for (name, width, height) in [("desktop", 1280, 820), ("compact", 1040, 680)] {
             let mut renderer = <iced::Renderer as Headless>::new(
-                iced::Font::with_name(moruno::style::ui_font_family()),
+                iced::Font::with_name(reshiki::style::ui_font_family()),
                 iced::Pixels(16.),
                 None,
             )
@@ -217,7 +217,7 @@ impl Editor {
     fn new(style: &DrawingStyle, epoch: u64) -> Self {
         let mut editor = Self {
             font_options: iced::widget::combo_box::State::new(
-                moruno::style::font_families()
+                reshiki::style::font_families()
                     .iter()
                     .map(|name| (*name).to_owned())
                     .collect(),
@@ -279,7 +279,7 @@ impl App {
         let style = &self.doc.drawing_style;
         self.bond_drawing.length = style.bond_length_world;
         self.drawing_length_input = style.bond_length_pt.to_string();
-        self.caption_format = moruno::typography::TextFormat {
+        self.caption_format = reshiki::typography::TextFormat {
             style: style.text_style(),
             ..Default::default()
         };
@@ -318,7 +318,7 @@ impl App {
                     Err("The document style changed. Reopen Drawing style before applying.".into())
                 } else {
                     editor.candidate().and_then(|style| {
-                        moruno::document_styles::apply(
+                        reshiki::document_styles::apply(
                             &self.doc,
                             style,
                             editor.matching,
@@ -350,14 +350,17 @@ impl App {
                     async {
                         let Some(file) = rfd::AsyncFileDialog::new()
                             .set_title("Load drawing style")
-                            .add_filter("Moruno drawing style", &["moruno-style", "json"])
+                            .add_filter(
+                                "ReShiki drawing style",
+                                &["reshiki-style", "moruno-style", "json"],
+                            )
                             .pick_file()
                             .await
                         else {
                             return Ok(None);
                         };
                         let path = file.path().to_path_buf();
-                        tokio::task::spawn_blocking(move || moruno::document_styles::load(&path))
+                        tokio::task::spawn_blocking(move || reshiki::document_styles::load(&path))
                             .await
                             .map_err(|e| e.to_string())?
                             .map(Some)
@@ -398,8 +401,8 @@ impl App {
                             async move {
                                 let Some(file) = rfd::AsyncFileDialog::new()
                                     .set_title("Save drawing style")
-                                    .set_file_name("Drawing.moruno-style")
-                                    .add_filter("Moruno drawing style", &["moruno-style"])
+                                    .set_file_name("Drawing.reshiki-style")
+                                    .add_filter("ReShiki drawing style", &["reshiki-style"])
                                     .save_file()
                                     .await
                                 else {
@@ -407,7 +410,7 @@ impl App {
                                 };
                                 let path = file.path().to_path_buf();
                                 tokio::task::spawn_blocking(move || {
-                                    moruno::storage::write_atomic(&path, &bytes)
+                                    reshiki::storage::write_atomic(&path, &bytes)
                                 })
                                 .await
                                 .map_err(|e| e.to_string())??;
@@ -496,17 +499,17 @@ impl App {
         .spacing(10);
         if let Ok(style) = &candidate {
             let mut preview =
-                moruno::rings::Preset::Regular.document(style.bond_length_world, false);
+                reshiki::rings::Preset::Regular.document(style.bond_length_world, false);
             if let Some(atom) = preview.atoms.first() {
                 let (id, p) = (atom.id, atom.position);
                 let oxygen = preview.add_atom("O", p.offset(0., -style.bond_length_world));
                 preview.add_bond(id, oxygen, 2, "plain");
             }
             let ids = preview.all_ids();
-            moruno::editing::transform_about(
+            reshiki::editing::transform_about(
                 &mut preview,
                 &ids,
-                moruno::document::Point::default(),
+                reshiki::document::Point::default(),
                 1.,
                 90.,
             );

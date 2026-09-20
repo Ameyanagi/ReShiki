@@ -30,8 +30,8 @@ fn main() -> iced::Result {
             }
         };
         match runtime.block_on(
-            moruno::engine::PythonEngine::default()
-                .request(moruno::engine::Request::import_smiles("CCO")),
+            reshiki::engine::PythonEngine::default()
+                .request(reshiki::engine::Request::import_smiles("CCO")),
         ) {
             Ok(response) => {
                 use std::io::Write;
@@ -52,7 +52,7 @@ fn main() -> iced::Result {
         }
     }
     iced::application(app::App::new, app::App::update, app::App::view)
-        .default_font(iced::Font::with_name(moruno::style::ui_font_family()))
+        .default_font(iced::Font::with_name(reshiki::style::ui_font_family()))
         .title(app::App::title)
         .theme(app::App::theme)
         .subscription(app::App::subscription)

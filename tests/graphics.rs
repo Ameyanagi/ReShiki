@@ -1,4 +1,4 @@
-use moruno::{
+use reshiki::{
     document::{Document, History, Point},
     editing::{self, Transform},
     engine::{ChemistryEngine, PythonEngine, Request},
@@ -80,7 +80,7 @@ fn graphics_copy_delete_history_and_native_roundtrip_preserve_affine_frames() {
     let serialized = serde_json::to_string(&doc).unwrap();
     assert_eq!(serde_json::from_str::<Document>(&serialized).unwrap(), doc);
     let old: Document =
-        serde_json::from_str(include_str!("fixtures/ui-drawn-ethanol.moruno")).unwrap();
+        serde_json::from_str(include_str!("fixtures/ui-drawn-ethanol.reshiki")).unwrap();
     assert!(old.graphics.is_empty());
 }
 
@@ -119,17 +119,17 @@ fn all_graphics_render_in_vector_and_raster_exports_with_colors_and_dashes() {
         };
         doc.graphics.push(g);
     }
-    let svg = moruno::scene::svg(&doc);
+    let svg = reshiki::scene::svg(&doc);
     assert_eq!(svg.matches("<path ").count(), 9);
     assert!(svg.contains("stroke-dasharray="));
     assert!(svg.contains("rgb(32,80,145)"));
     assert!(svg.contains("rgb(249,223,225)"));
     assert!(
-        moruno::export::drawing(&doc, "pdf")
+        reshiki::export::drawing(&doc, "pdf")
             .unwrap()
             .starts_with(b"%PDF-")
     );
-    let png = moruno::export::drawing(&doc, "png").unwrap();
+    let png = reshiki::export::drawing(&doc, "png").unwrap();
     let mut reader = png::Decoder::new(std::io::Cursor::new(png))
         .read_info()
         .unwrap();

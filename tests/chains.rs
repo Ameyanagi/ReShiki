@@ -1,4 +1,4 @@
-use moruno::{
+use reshiki::{
     chains::{self, BondDrawing, ChainDrawing},
     document::{Annotation, Document, Point},
     engine::{ChemistryEngine, PythonEngine, Request},

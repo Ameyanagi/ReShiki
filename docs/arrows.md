@@ -1,6 +1,6 @@
 # Reaction and mechanism arrows
 
-Moruno now has eight arrow presets: forward, equilibrium, resonance, retrosynthesis, electron pair, single electron, dipole and no reaction. These are editable drawing objects; they do not infer a chemical reaction or change atom connectivity.
+ReShiki now has eight arrow presets: forward, equilibrium, resonance, retrosynthesis, electron pair, single electron, dipole and no reaction. These are editable drawing objects; they do not infer a chemical reaction or change atom connectivity.
 
 Choose **Arrow** (`A`), pick a preset, and drag. The live preview uses the same geometry and style as the committed object. Fixed Angles snaps to 15°; Option/Alt permits any angle. Arrow placement does not inherit the fixed bond length. Click an existing arrow to select it. With Select or Arrow active, drag its round endpoint handles to resize/reorient it, or drag the square middle handle to bend it. The square lies on the curve. Each completed drag is one Undo step; Escape cancels the pending gesture.
 
@@ -24,7 +24,7 @@ The importer rejects circular/elliptical arrow arcs, multi-segment or non-quadra
 
 Saved interchange fixtures cover arrow handles, head shapes and supported arrow variants. The [fixture directory](../tests/fixtures/) contains the editable CDXML records used by regression tests.
 
-Desktop checks in an isolated Moruno QA app:
+Desktop checks in an isolated ReShiki QA app:
 
 - Drew a forward arrow and bent it with the middle handle; Undo/Redo restored each complete edit.
 - Changed it to a blue half-head, reversed it, flipped the bend and dragged an endpoint. The inspector preview tracked the actual curve.

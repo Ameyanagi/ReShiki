@@ -752,7 +752,7 @@ class ChemistryTests(unittest.TestCase):
 
     def test_freehand_ui_saved_drawing_and_exports(self):
         fixtures = ROOT / "tests/fixtures"
-        doc = json.loads((fixtures / "ui-drawn-ethanol.moruno").read_text(encoding="utf-8"))
+        doc = json.loads((fixtures / "ui-drawn-ethanol.reshiki").read_text(encoding="utf-8"))
         self.assertEqual(Chem.MolToSmiles(from_document(doc)), "CCO")
         self.assertEqual(doc["annotations"][0]["text"], "oxidation")
         self.assertEqual(len(doc["arrows"]), 1)

@@ -1,7 +1,12 @@
 use crate::document::{Document, Point};
 use std::collections::{HashMap, HashSet};
 
-pub const CLIPBOARD_PREFIX: &str = "MORUNO_DRAWING_V1\n";
+pub const CLIPBOARD_PREFIX: &str = "RESHIKI_DRAWING_V1\n";
+pub fn clipboard_json(contents: &str) -> Option<&str> {
+    contents
+        .strip_prefix(CLIPBOARD_PREFIX)
+        .or_else(|| contents.strip_prefix("MORUNO_DRAWING_V1\n"))
+}
 pub const ELEMENTS: &[&str] = &[
     "H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne", "Na", "Mg", "Al", "Si", "P", "S", "Cl",
     "Ar", "K", "Ca", "Sc", "Ti", "V", "Cr", "Mn", "Fe", "Co", "Ni", "Cu", "Zn", "Ga", "Ge", "As",
@@ -1164,7 +1169,7 @@ mod tests {
     #[test]
     fn clipboard_remaps_stereo_ids_and_keeps_annotations() {
         let mut d: Document =
-            serde_json::from_str(include_str!("../tests/fixtures/ui-drawn-ethanol.moruno"))
+            serde_json::from_str(include_str!("../tests/fixtures/ui-drawn-ethanol.reshiki"))
                 .unwrap();
         let original = d.clone();
         let ids = append(&mut d, &original, Point::new(100.0, 100.0));

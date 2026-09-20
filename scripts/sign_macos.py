@@ -87,7 +87,7 @@ def signing_keychain(directory):
                 "xcrun",
                 "notarytool",
                 "store-credentials",
-                "moruno-release",
+                "reshiki-release",
                 "--keychain",
                 keychain,
                 "--apple-id",
@@ -140,7 +140,7 @@ def verify_app(app):
 
 
 def sign_and_notarize(app):
-    with tempfile.TemporaryDirectory(prefix="moruno-signing-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="reshiki-signing-") as temporary:
         directory = Path(temporary)
         with signing_keychain(directory) as keychain:
             command = [
@@ -165,7 +165,7 @@ def sign_and_notarize(app):
             run(["codesign", "--verify", "--deep", "--strict", app])
             submission = directory / "submission.zip"
             run(["ditto", "-c", "-k", "--keepParent", app, submission])
-            auth = ["--keychain-profile", "moruno-release", "--keychain", str(keychain)]
+            auth = ["--keychain-profile", "reshiki-release", "--keychain", str(keychain)]
             response = subprocess.run(
                 [
                     "xcrun",

@@ -12,7 +12,7 @@ from pathlib import Path
 class NativePrintingTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.temporary = tempfile.TemporaryDirectory(prefix="moruno-print-build-")
+        cls.temporary = tempfile.TemporaryDirectory(prefix="reshiki-print-build-")
         cls.addClassCleanup(cls.temporary.cleanup)
         cls.root = Path(__file__).resolve().parents[1]
         cls.directory = Path(cls.temporary.name)

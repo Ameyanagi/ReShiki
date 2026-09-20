@@ -1,4 +1,4 @@
-use moruno::{
+use reshiki::{
     document::{Annotation, Arrow, Document, History, Point},
     editing::{self, Arrange},
     graphics::{BracketSides, Graphic, GraphicKind, GraphicStyle},
@@ -147,7 +147,7 @@ fn alignment_moves_grouped_caption_and_molecule_without_internal_distortion() {
     editing::arrange(&mut d, &ids, Arrange::AlignLeft);
     let components = editing::groups(&d, &ids);
     assert_eq!(components.len(), 3);
-    let first_bounds = moruno::scene::selection_bounds(&d, &[1, 2, 3]).unwrap();
+    let first_bounds = reshiki::scene::selection_bounds(&d, &[1, 2, 3]).unwrap();
     let (graphic_lo, _) = d.graphics[0].bounds();
     assert!((graphic_lo.x - d.arrows[0].bounds().0.x).abs() < 0.001);
     assert!((first_bounds.0.x - graphic_lo.x).abs() < 0.001);
@@ -197,7 +197,7 @@ fn concave_lasso_encloses_whole_objects_and_supports_add_subtract() {
 
 #[tokio::test]
 async fn nested_mixed_groups_survive_chemistry_and_cdxml_roundtrip() {
-    use moruno::engine::{ChemistryEngine, PythonEngine, Request};
+    use reshiki::engine::{ChemistryEngine, PythonEngine, Request};
     let engine = PythonEngine::default();
     let mut d = drawing();
     let a = d.add_atom("N", Point::new(300., 0.));

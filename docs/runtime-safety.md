@@ -35,7 +35,7 @@ Clippy passed. The current application was exercised through native computer
 control for label editing, dragging, Undo/Redo and save/open. Logs are under
 `artifacts/atom-labels-qa-20260920/` (local, ignored by Git).
 
-These checks cover Moruno's runtime source and the exercised inputs. They do
+These checks cover ReShiki's runtime source and the exercised inputs. They do
 not prove that operating-system services or third-party libraries can never
 fail. The chemistry worker remains a separate process, and bridge errors are
 reported without replacing the current drawing.

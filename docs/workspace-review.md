@@ -1,12 +1,12 @@
 # Workspace review and redesign
 
-Reviewed Moruno's desktop workspace on 2026-09-16 using a controlled aspirin drawing. No existing research document was edited.
+Reviewed ReShiki's desktop workspace on 2026-09-16 using a controlled aspirin drawing. No existing research document was edited.
 
 ## Observations
 
 The workspace should devote most of the window to drawing, keep frequently used tools visible, and show properties relevant to the current selection.
 
-Moruno's previous layout used a large brand header, four rows above the canvas, a wide text-only tool list, and one long inspector combining properties, exports and templates. Some frequently used controls required scrolling. Ring and arrow options remained visible even while using unrelated tools.
+ReShiki's previous layout used a large brand header, four rows above the canvas, a wide text-only tool list, and one long inspector combining properties, exports and templates. Some frequently used controls required scrolling. Ring and arrow options remained visible even while using unrelated tools.
 
 ## Implemented changes
 
@@ -24,7 +24,7 @@ Moruno's previous layout used a large brand header, four rows above the canvas, 
 
 The same 1154 × 768 screenshot framing showed an approximately 805 × 579 pixel canvas with the inspector open, versus roughly 741 × 411 before the redesign: about 50% more drawing area. Hiding the inspector expanded it to roughly 1034 × 579, almost twice the earlier area. These measurements are screenshot estimates, not universal window-size guarantees.
 
-Moruno retains its own branding and icon artwork. JACS / ACS structure styling and physical export dimensions are unchanged. The white workspace is not a new printable page-layout system. Native accessibility coverage, native application menus, rich chemical labels, fragment attachment, and the broader chemistry roadmap remain separate work.
+ReShiki retains its own branding and icon artwork. JACS / ACS structure styling and physical export dimensions are unchanged. The white workspace is not a new printable page-layout system. Native accessibility coverage, native application menus, rich chemical labels, fragment attachment, and the broader chemistry roadmap remain separate work.
 
 ## Desktop checks
 

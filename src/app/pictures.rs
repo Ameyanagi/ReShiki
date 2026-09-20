@@ -1,7 +1,7 @@
 //! Asynchronous picture insertion and selection-aware size controls.
 use super::{App, InspectorTab, Message, Point, Tool};
 use iced::{Element, Task};
-use moruno::{graphics::Graphic, pictures::Picture};
+use reshiki::{graphics::Graphic, pictures::Picture};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy)]
@@ -56,7 +56,7 @@ async fn choose_picture() -> Result<Option<Picture>, String> {
         .map_err(|e| format!("Could not load picture: {e}"))?
 }
 fn millimetres(world: f32) -> f32 {
-    world * moruno::style::DEFAULT.points_per_world() * 25.4 / 72.
+    world * reshiki::style::DEFAULT.points_per_world() * 25.4 / 72.
 }
 
 impl App {
@@ -123,7 +123,7 @@ impl App {
             let width = g.axis_x.distance(Point::default());
             let height = g.axis_y.distance(Point::default());
             let scale = (width / picture.width() as f32).min(height / picture.height() as f32);
-            if let Err(error) = moruno::pictures::resize(
+            if let Err(error) = reshiki::pictures::resize(
                 g,
                 picture.width() as f32 * scale,
                 picture.height() as f32 * scale,
@@ -243,7 +243,7 @@ impl App {
                     g.axis_x.distance(Point::default()),
                     g.axis_y.distance(Point::default()),
                 );
-                let size = moruno::style::DEFAULT.world(size * 72. / 25.4);
+                let size = reshiki::style::DEFAULT.world(size * 72. / 25.4);
                 let dimensions = if width_changed {
                     (
                         size,
@@ -289,7 +289,7 @@ impl App {
         };
         let before = self.doc.clone();
         if let Some(g) = self.doc.graphics.iter_mut().find(|g| g.id == id)
-            && let Err(error) = moruno::pictures::resize(g, width, height)
+            && let Err(error) = reshiki::pictures::resize(g, width, height)
         {
             self.error = true;
             self.status = error;
@@ -369,7 +369,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use moruno::document::Document;
+    use reshiki::document::Document;
 
     fn picture(width: u32, height: u32) -> Picture {
         let mut bytes = std::io::Cursor::new(Vec::new());
@@ -437,9 +437,9 @@ mod tests {
         let mut app = ready();
         let job = ticket(&mut app, None);
         finish(&mut app, job, picture(120, 80));
-        let _ = app.update(Message::Transform(moruno::editing::Transform::Rotate(37.)));
+        let _ = app.update(Message::Transform(reshiki::editing::Transform::Rotate(37.)));
         let _ = app.update(Message::Transform(
-            moruno::editing::Transform::FlipHorizontal,
+            reshiki::editing::Transform::FlipHorizontal,
         ));
         let before = app.doc.clone();
         let old = &before.graphics[0];
@@ -489,7 +489,7 @@ mod tests {
         let _ = app.update(Message::Pictures(Action::RestoreAspect));
         assert_eq!(app.pictures.height, "40.00");
         let restored = app.doc.clone();
-        app.apply_graphic_style(moruno::graphics::GraphicChange::Stroke([255, 0, 0]));
+        app.apply_graphic_style(reshiki::graphics::GraphicChange::Stroke([255, 0, 0]));
         assert_eq!(app.doc, restored);
         assert_eq!(app.doc.atoms, before.atoms);
     }

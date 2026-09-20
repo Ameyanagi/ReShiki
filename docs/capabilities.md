@@ -14,19 +14,19 @@ The [feature-status inventory](feature-status.md) records supported toolbar, typ
 
 The [clipboard update](clipboard.md) adds native macOS editable Copy/Paste and Copy Image with publication-size bounds. Desktop checks cover a colored 13-atom/13-bond round-trip and image paste; **135 Rust tests**, **42 Python tests**, formatting and strict Clippy pass. [View controls](workspace-review.md) add independent rulers/crosshair/grid switches and physical units.
 
-The [Style toolbar update](typography.md) adds searchable fonts, rich text ranges, scripts, paragraph alignment/wrapping, text color and styled drawing/CDXML export. Verified through computer use in Moruno and through CDXML exchange, with **51 Rust tests and 15 Python tests**. The earlier counts below describe historical builds.
+The [Style toolbar update](typography.md) adds searchable fonts, rich text ranges, scripts, paragraph alignment/wrapping, text color and styled drawing/CDXML export. Verified through computer use in ReShiki and through CDXML exchange, with **51 Rust tests and 15 Python tests**. The earlier counts below describe historical builds.
 
 The [graphics update](graphics.md) adds editable shapes, brackets, Bézier points, stroke/fill styling and graphic layers. That update passed **59 Rust and 18 Python tests**, plus actual desktop drawing and file-exchange checks.
 
 The [selection and grouping update](selection-and-groups.md) adds lasso and modifier selection, nested/integral groups, edge alignment, fitted frames and mixed-object CDXML groups. That update passed **68 Rust and 19 Python tests**, including desktop editing and CDXML exchange.
 
-The [bond tools update](bond-tools.md) adds 17 presets, selection styling, colors and double-line position, including hydrogen, dative and quadruple bond chemistry. That update passed **74 Rust and 23 Python tests**. Desktop checks include externally saved CDXML, Moruno drawing, click reversal, styling, Undo/Redo and native persistence. Partial bond depictions do not implement full tautomer/query or resonance behavior.
+The [bond tools update](bond-tools.md) adds 17 presets, selection styling, colors and double-line position, including hydrogen, dative and quadruple bond chemistry. That update passed **74 Rust and 23 Python tests**. Desktop checks include externally saved CDXML, ReShiki drawing, click reversal, styling, Undo/Redo and native persistence. Partial bond depictions do not implement full tautomer/query or resonance behavior.
 
 The [chain tools update](chain-tools.md) adds straight/snaking gestures, count previews, exact/maximum atom counts, attachment, retracing and independent bond constraints. Every new document restores **JACS / ACS** typography and drawing defaults. That update passed **83 Rust and 23 Python tests**, with actual desktop chain creation, measured 14.4 pt bonds, check/save/reopen, and gesture Undo/Redo.
 
 The [template library update](template-library.md) adds exact source anchors, custom mixed-object templates, search/favorites, collection editing/import/export, and repeated placement. That update passed **89 Rust and 23 Python tests**, including native desktop persistence, grouped stamps, library replacement/undo, and attachment chemistry.
 
-The [arrow update](arrows.md) adds eight presets, shared live/export geometry, endpoint/bend editing, full/half heads, style/dimension controls, unequal equilibrium, dipole/no-go marks and a larger explicit CDXML subset. That update passed **96 Rust and 26 Python tests**, with Moruno desktop drawing/editing/export/default-style checks and externally saved exchange fixtures. Reaction/electron-flow semantics remain unimplemented.
+The [arrow update](arrows.md) adds eight presets, shared live/export geometry, endpoint/bend editing, full/half heads, style/dimension controls, unequal equilibrium, dipole/no-go marks and a larger explicit CDXML subset. That update passed **96 Rust and 26 Python tests**, with ReShiki desktop drawing/editing/export/default-style checks and externally saved exchange fixtures. Reaction/electron-flow semantics remain unimplemented.
 
 The [scientific-symbols update](scientific-symbols.md) adds seven orbital shapes, phase previews, 18 free symbols, positioned atom-owned marks and one/two-unpaired-electron chemistry. Native format 8 preserves these objects. That update passed **102 Rust and 30 Python tests**. H-dot/H-dash stereochemistry, semantic attachment markers, gradient shading and some CDXML styles remain unsupported.
 
@@ -40,7 +40,7 @@ The chain-growth fix adds graph-aware endpoint placement, a hover preview, and r
 
 The 2026-09-17 [selection and ring-placement update](selection-and-ring-placement.md) replaces the idle bond preview with clear atom/bond markers, fixes ring orientation at substituents, and adds drag attachment and rescaling. [Selection handles](selection-transforms.md) add proportional resizing and free rotation. Current validation: 39 Rust tests and 10 Python tests.
 
-| Capability                                       | Moruno status                             | Evidence or limitation                                                                                                                                                                                                                                                                                                 |
+| Capability                                       | ReShiki status                            | Evidence or limitation                                                                                                                                                                                                                                                                                                 |
 | ------------------------------------------------ | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Freehand atoms and bonds                         | Implemented; desktop tested               | Drew ethanol from an empty canvas; 3 atoms, 2 bonds, `CCO`                                                                                                                                                                                                                                                             |
 | Chain growth and branching                       | Implemented subset; desktop tested        | Endpoint growth plus straight/snaking chain drags, live counts, exact/capped sizes and attachment; retracing and cancellation; no drawing auto-pan or global obstacle routing. See [chain tools](chain-tools.md).                                                                                                      |
@@ -62,7 +62,7 @@ The 2026-09-17 [selection and ring-placement update](selection-and-ring-placemen
 | InChI / InChIKey                                 | Partial                                   | InChI import/export in UI; key calculated by worker                                                                                                                                                                                                                                                                    |
 | MOL                                              | Implemented molecular subset              | Parse/export; stereo identity tests; no reactions or drawing annotations                                                                                                                                                                                                                                               |
 | CDXML                                            | Partial; exchange desktop tested          | Molecular import, basic molecule/text/arrow export; see restrictions below                                                                                                                                                                                                                                             |
-| Native save/open                                 | Implemented; desktop tested               | Versioned `.moruno` JSON, complete graph and drawing objects                                                                                                                                                                                                                                                           |
+| Native save/open                                 | Implemented; desktop tested               | Versioned `.reshiki` JSON, complete graph and drawing objects                                                                                                                                                                                                                                                          |
 | SVG / PDF / PNG                                  | Implemented; desktop and rendering tested | Vector SVG/PDF, PNG with 1200 dpi metadata; no TIFF; native macOS print dialog available                                                                                                                                                                                                                               |
 | Default drawing style                            | JACS / ACS                                | Black, 10 pt Arial, 14.4 pt bonds, 0.6 pt lines; shared canvas and physical export settings                                                                                                                                                                                                                            |
 | Templates and named abbreviations                | Partial; desktop tested                   | 81 built-ins plus custom mixed-object collections, exact source anchors, new-bond/shared-atom/fused-edge modes, previews, search/favorites and collection exchange. Common abbreviations can contract, expand and replace endpoints; specialized content remains partial. See [template library](template-library.md). |
@@ -85,22 +85,22 @@ The [selection color update](typography.md#selection-color-verification) adds Al
 
 ## Format restrictions
 
-Native `.moruno` is the only supported complete save format for Moruno's object model. Molecular formats represent the molecular graph, not page annotations or reaction arrows. CDXML import accepts a single page with molecules, supported styled text and arrow styles, including text-only drawings, supported vector curves, nested mixed-object groups and basic graphics. Graphic exchange restrictions are in [graphics](graphics.md). Supported arrowheads, dimensions, equal equilibrium and quadratic curves are documented in [arrow exchange limits](arrows.md). Unsupported arrow combinations, unknown drawing tags and multiple pages are rejected. It does not preserve arbitrary external formatting, attributes or unsupported chemistry; text metrics can vary between applications. A successful small-file exchange does not establish compatibility with every external document.
+Native `.reshiki` is the only supported complete save format for ReShiki's object model. Molecular formats represent the molecular graph, not page annotations or reaction arrows. CDXML import accepts a single page with molecules, supported styled text and arrow styles, including text-only drawings, supported vector curves, nested mixed-object groups and basic graphics. Graphic exchange restrictions are in [graphics](graphics.md). Supported arrowheads, dimensions, equal equilibrium and quadratic curves are documented in [arrow exchange limits](arrows.md). Unsupported arrow combinations, unknown drawing tags and multiple pages are rejected. It does not preserve arbitrary external formatting, attributes or unsupported chemistry; text metrics can vary between applications. A successful small-file exchange does not establish compatibility with every external document.
 
 Query atoms, enhanced stereo groups and unsupported bond/stereo classes are rejected where RDKit exposes them. The finite test set cannot establish chemically complete support. Label typography, atom-label collision avoidance and dense drawings need more work.
 
 ## Desktop test record
 
 1. Opened the controlled `ethanol.mol` fixture in the installed editor. Selected and cleaned the molecule, ran structure checking ("No errors found."), and verified undo cleared the edited state. Saved `reference-ethanol.cdxml` through its native Save As dialog.
-2. Imported that XML in Moruno's chemistry backend: canonical `CCO`, formula `C2H6O`.
-3. Launched the Moruno app. Imported the ethanol example, validated it, moved the selected molecule, and cleaned its layout. Saved `ui-ethanol.moruno` through the native file dialog.
-4. Started a blank Moruno document, placed a six-membered ring, and replaced a ring vertex with oxygen.
+2. Imported that XML in ReShiki's chemistry backend: canonical `CCO`, formula `C2H6O`.
+3. Launched the ReShiki app. Imported the ethanol example, validated it, moved the selected molecule, and cleaned its layout. Saved `ui-ethanol.reshiki` through the native file dialog.
+4. Started a blank ReShiki document, placed a six-membered ring, and replaced a ring vertex with oxygen.
 5. Found a fast-drag bug through computer use. Fixed event-specific cursor tracking, then drew ethanol from scratch with two connected bond drags and terminal oxygen replacement. Structure checking returned `CCO`, `C2H6O`, 46.069 g/mol.
-6. Drew a reaction arrow and placed the text `oxidation`. Verified Cmd+Z removed the label and Cmd+Shift+Z restored it. Saved `ui-drawn-ethanol.moruno`, SVG and CDXML through the desktop export dialogs.
+6. Drew a reaction arrow and placed the text `oxidation`. Verified Cmd+Z removed the label and Cmd+Shift+Z restored it. Saved `ui-drawn-ethanol.reshiki`, SVG and CDXML through the desktop export dialogs.
 7. Opened the exported CDXML in the installed editor. The molecule, label and arrow all appeared. Its structure check returned "No errors found."
-8. Native reopening initially showed a disabled Open button for a selected valid file. Removed the extension filter and successfully reopened `ui-drawn-ethanol.moruno`; all 3 atoms, 2 bonds, text and arrow reappeared. Version 0.2 testing also observed delayed button enablement without filters, so the cause is not established.
+8. Native reopening initially showed a disabled Open button for a selected valid file. Removed the extension filter and successfully reopened `ui-drawn-ethanol.reshiki`; all 3 atoms, 2 bonds, text and arrow reappeared. Version 0.2 testing also observed delayed button enablement without filters, so the cause is not established.
 9. Verified the unsaved-change prompt when closing a disposable test drawing, and used Discard to close it.
-10. Entered invalid pentavalent-carbon SMILES in Moruno. Import failed with a visible error while the saved drawing stayed intact. A subsequent structure check recovered normally and the drawing saved successfully.
+10. Entered invalid pentavalent-carbon SMILES in ReShiki. Import failed with a visible error while the saved drawing stayed intact. A subsequent structure check recovered normally and the drawing saved successfully.
 
 Fixtures are under `tests/fixtures/`. The reference-produced file is retained as interoperability test data. Tests use synthetic examples; no existing user research documents were edited.
 
@@ -108,19 +108,19 @@ Original 0.1 checks: 10 Rust tests and 9 Python tests passed. Version 0.2 passes
 
 ## Observed reference features beyond this implementation
 
-The installed Structure menu exposed structure/reaction cleanup, label expansion/contraction, hydrogen/aromatic display toggles, multicenter/variable attachments, R-logic, reaction atom mapping and spectrum assignment. File/Edit menus exposed extensive templates and additional image, drawing and clipboard formats. These observations guided the roadmap; they are not claims that Moruno implements those commands.
+The installed Structure menu exposed structure/reaction cleanup, label expansion/contraction, hydrogen/aromatic display toggles, multicenter/variable attachments, R-logic, reaction atom mapping and spectrum assignment. File/Edit menus exposed extensive templates and additional image, drawing and clipboard formats. These observations guided the roadmap; they are not claims that ReShiki implements those commands.
 
 ## Version 0.2 desktop and packaging checks
 
 - Placed two fused aromatic rings and checked `C10H8`, 10 atoms, 11 bonds.
 - Copied and pasted the selected molecule; moved, rotated, reflected and aligned the copy. Structure checking returned `C20H16` for the two disconnected molecules.
-- Placed an equilibrium arrow and a multiline label, then saved `tests/fixtures/ui-expanded.moruno`.
+- Placed an equilibrium arrow and a multiline label, then saved `tests/fixtures/ui-expanded.reshiki`.
 - Started the app with a controlled interrupted-session recovery fixture. The banner offered restoration; restoring retained both molecules, the arrow style and both label lines as an unsaved new document.
 - Double-clicked an atom and verified that precisely its ten-atom connected molecule was selected.
 - Exported PDF from the actual GUI, rendered it with Poppler, and visually checked bonds, spacing, arrowheads and text. The PDF remained vector-based.
 - Saved the recovered drawing as a version 2 document and reopened it twice through the native Open dialog. Both molecules, multiline label and equilibrium arrow remained intact.
 - Exported PNG through the actual GUI, checked its 2893 × 1411 pixel dimensions and approximately 300 dpi metadata, and visually inspected a preview.
-- The standalone chemistry check succeeded from `/tmp` with `MORUNO_ROOT=/nonexistent`. This verifies use of the bundled Python/RDKit worker without the project's `.venv`.
+- The standalone chemistry check succeeded from `/tmp` with `RESHIKI_ROOT=/nonexistent`. This verifies use of the bundled Python/RDKit worker without the project's `.venv`.
 
 The recovery fixture was synthetic; this was not a forced termination of a user's document. The standalone build is approximately 233 MB on the tested Apple Silicon Mac. No ruviz files were modified; integration requirements are in `ruviz-integration.md`.
 
@@ -136,7 +136,7 @@ In the rebuilt standalone app:
 - Dragged an endpoint only six screenshot pixels; one full-length bond appeared, making 8 atoms and 7 bonds. Undid this extension.
 - Grew the opposite endpoint and clicked an internal vertex to branch. Check returned `CCCCC(C)CCC`, `C9H20`, with 9 atoms and 8 bonds.
 - Replaced the branch tip with O, switched back to the bond tool and extended it. The new endpoint was carbon; Check returned `C9H20O`.
-- Exercised Undo/Redo, restored the all-carbon example, checked it again and saved `artifacts/chain-growth-check.moruno` through the native dialog. Reading the file confirmed nine carbon atoms and eight bonds. The artifact is local and ignored by Git.
+- Exercised Undo/Redo, restored the all-carbon example, checked it again and saved `artifacts/chain-growth-check.reshiki` through the native dialog. Reading the file confirmed nine carbon atoms and eight bonds. The artifact is local and ignored by Git.
 
 All 27 Rust and 10 Python tests pass, as do formatting, Clippy and bundle signature verification. Six added regression tests cover connected-chain identity and geometry, Undo/Redo, growth from either end, branching and occupied positions, linear junctions, atom-label carryover, short pointer gestures, and attachment to existing atoms. Automatic chain placement is a local geometry heuristic; a single drag still creates one bond. Drag explicitly to choose another direction in a crowded drawing.
 

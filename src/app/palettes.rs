@@ -6,7 +6,7 @@ use iced::widget::{
     Space, button, column, container, mouse_area, opaque, row, stack, text, tooltip,
 };
 use iced::{Alignment, Border, Color, Element, Length};
-use moruno::{
+use reshiki::{
     arrows::{ArrowStyle, Preset as ArrowPreset},
     bonds::BondPreset,
     document::{Arrow, Document, Point},
@@ -128,7 +128,7 @@ impl App {
                         if symbol == "." {
                             line = line.push(Space::new().width(29).height(29));
                         } else {
-                            let number = moruno::editing::ELEMENTS
+                            let number = reshiki::editing::ELEMENTS
                                 .iter()
                                 .position(|e| *e == symbol)
                                 .map(|n| n + 1)
@@ -183,11 +183,11 @@ impl App {
                 let mut options = Vec::new();
                 for size in 3..=8 {
                     let mut doc = Document::default();
-                    moruno::editing::ring(&mut doc, Point::default(), size, false, 42.);
+                    reshiki::editing::ring(&mut doc, Point::default(), size, false, 42.);
                     options.push((doc, format!("{size}-membered"), Action::Ring(size, false)));
                 }
                 let mut aromatic = Document::default();
-                moruno::editing::ring(&mut aromatic, Point::default(), 6, true, 42.);
+                reshiki::editing::ring(&mut aromatic, Point::default(), 6, true, 42.);
                 options.push((aromatic, "Benzene".into(), Action::Ring(6, true)));
                 for p in [
                     RingPreset::ChairUp,

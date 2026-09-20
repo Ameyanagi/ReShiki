@@ -121,11 +121,11 @@ fn helper() -> Result<PathBuf, String> {
             let path = exe
                 .parent()?
                 .parent()?
-                .join("Helpers/Moruno Print.app/Contents/MacOS/moruno-print");
+                .join("Helpers/ReShiki Print.app/Contents/MacOS/reshiki-print");
             path.is_file().then_some(path)
         })
         .or_else(|| {
-            option_env!("MORUNO_PRINT_HELPER")
+            option_env!("RESHIKI_PRINT_HELPER")
                 .map(PathBuf::from)
                 .filter(|p| p.is_file())
         })
@@ -152,7 +152,7 @@ pub async fn show_dialog(job: Prepared) -> Result<Outcome, String> {
     }
     let helper = helper()?;
     let mut file = tempfile::Builder::new()
-        .prefix("moruno-print-")
+        .prefix("reshiki-print-")
         .suffix(".pdf")
         .tempfile()
         .map_err(|e| e.to_string())?;

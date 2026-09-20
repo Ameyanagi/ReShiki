@@ -13,7 +13,7 @@ required-markers = [
 ]
 
 [[package]]
-name = "moruno-engine"
+name = "reshiki-engine"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

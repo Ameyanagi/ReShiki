@@ -199,14 +199,7 @@ fn new_id() -> String {
     )
 }
 pub fn standard_path() -> Result<PathBuf, String> {
-    let root = if let Some(path) = std::env::var_os("MORUNO_DATA_DIR") {
-        PathBuf::from(path)
-    } else {
-        directories_next::ProjectDirs::from("dev", "moruno", "Moruno")
-            .ok_or("No application data directory")?
-            .data_local_dir()
-            .to_path_buf()
-    };
+    let root = crate::compatibility::data_directory()?;
     std::fs::create_dir_all(&root).map_err(|e| e.to_string())?;
     Ok(root.join("templates.json"))
 }

@@ -1,6 +1,6 @@
 use super::{App, Message};
 use iced::Task;
-use moruno::printing::{Outcome, Prepared, Scope};
+use reshiki::printing::{Outcome, Prepared, Scope};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Ticket {
@@ -51,7 +51,7 @@ impl App {
                     self.status = "A print dialog is already open or being prepared".into();
                     return Task::none();
                 }
-                if !moruno::printing::available() {
+                if !reshiki::printing::available() {
                     self.status = "Export a page PDF to print on this system".into();
                     return Task::none();
                 }
@@ -63,7 +63,7 @@ impl App {
                         return Task::none();
                     }
                 };
-                let snapshot = match moruno::printing::snapshot(&source, &self.selected, scope) {
+                let snapshot = match reshiki::printing::snapshot(&source, &self.selected, scope) {
                     Ok(doc) => doc,
                     Err(error) => {
                         if source.page_layout.is_none() && !source.all_ids().is_empty() {
@@ -95,7 +95,7 @@ impl App {
                 return Task::perform(
                     async move {
                         tokio::task::spawn_blocking(move || {
-                            moruno::printing::prepare(snapshot, title)
+                            reshiki::printing::prepare(snapshot, title)
                         })
                         .await
                         .map_err(|e| e.to_string())?
@@ -112,7 +112,7 @@ impl App {
                         if ticket.epoch == self.file_epoch && ticket.revision == self.revision {
                             self.status = "Print dialog open".into();
                         }
-                        return Task::perform(moruno::printing::show_dialog(job), move |result| {
+                        return Task::perform(reshiki::printing::show_dialog(job), move |result| {
                             Message::Printing(Action::Finished(ticket, result))
                         });
                     }
@@ -128,7 +128,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use moruno::document::{Document, Point};
+    use reshiki::document::{Document, Point};
     fn ready() -> App {
         let (mut app, _) = App::new();
         app.busy = false;

@@ -8,7 +8,7 @@ use std::{
 };
 use tokio::process::Command;
 
-const INSTALL_UV: &str = "Moruno needs uv to set up local chemistry packages. Install uv from https://docs.astral.sh/uv/getting-started/installation/, then retry. A separate Python installation is not required.";
+const INSTALL_UV: &str = "ReShiki needs uv to set up local chemistry packages. Install uv from https://docs.astral.sh/uv/getting-started/installation/, then retry. A separate Python installation is not required.";
 
 fn python_request(os: &str, arch: &str) -> &'static str {
     // RDKit's Windows wheels are x64. The ARM UI uses a separate x64 worker
@@ -60,12 +60,12 @@ fn uv_candidates(path: Option<&OsStr>, home: Option<&Path>) -> Vec<PathBuf> {
 }
 
 fn find_uv() -> Result<PathBuf, String> {
-    if let Some(value) = std::env::var_os("MORUNO_UV") {
+    if let Some(value) = crate::compatibility::environment("UV") {
         let path = PathBuf::from(value);
         return path
             .is_file()
             .then_some(path)
-            .ok_or_else(|| format!("MORUNO_UV does not point to a uv executable. {INSTALL_UV}"));
+            .ok_or_else(|| format!("RESHIKI_UV does not point to a uv executable. {INSTALL_UV}"));
     }
     let directories = directories_next::BaseDirs::new();
     uv_candidates(
@@ -94,16 +94,16 @@ fn environment_path(project: &Path, cache: &Path) -> Result<PathBuf, String> {
 
 pub(crate) async fn prepare(project: &Path) -> Result<PathBuf, String> {
     let uv = find_uv()?;
-    let cache = if let Some(path) = std::env::var_os("MORUNO_RUNTIME_DIR") {
+    let cache = if let Some(path) = crate::compatibility::environment("RUNTIME_DIR") {
         PathBuf::from(path)
     } else {
-        directories_next::ProjectDirs::from("dev", "moruno", "Moruno")
+        directories_next::ProjectDirs::from("dev", "reshiki", "ReShiki")
             .ok_or("Could not find the local chemistry cache directory")?
             .cache_dir()
             .join("chemistry")
     };
     if !cache.is_absolute() {
-        return Err("MORUNO_RUNTIME_DIR must be an absolute path".into());
+        return Err("RESHIKI_RUNTIME_DIR must be an absolute path".into());
     }
     let environment = environment_path(project, &cache)?;
     std::fs::create_dir_all(&cache)
@@ -175,14 +175,14 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let (executable, project) = if cfg!(target_os = "macos") {
             (
-                directory.path().join("Moruno.app/Contents/MacOS/moruno"),
+                directory.path().join("ReShiki.app/Contents/MacOS/reshiki"),
                 directory
                     .path()
-                    .join("Moruno.app/Contents/Resources/chemistry"),
+                    .join("ReShiki.app/Contents/Resources/chemistry"),
             )
         } else {
             (
-                directory.path().join("moruno"),
+                directory.path().join("reshiki"),
                 directory.path().join("chemistry"),
             )
         };

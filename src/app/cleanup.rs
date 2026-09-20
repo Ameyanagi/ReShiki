@@ -1,6 +1,6 @@
 use super::{App, Job, Message, Request};
 use iced::Task;
-use moruno::cleanup::{Options, Scope};
+use reshiki::cleanup::{Options, Scope};
 
 #[derive(Debug, Clone)]
 pub struct CleanupJob {

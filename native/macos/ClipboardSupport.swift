@@ -23,7 +23,7 @@ enum ClipboardError: Error, CustomStringConvertible {
 let limit = 64 * 1024 * 1024
 let pictureTypes = ["public.png", "public.tiff", "public.jpeg", "org.webmproject.webp", "public.webp"]
 let readable = [
-    "dev.moruno.drawing", "com.revvity.chemdraw.cdx-clipboard",
+    "dev.reshiki.drawing", "dev.moruno.drawing", "com.revvity.chemdraw.cdx-clipboard",
     "com.perkinelmer.chemdraw.cdx-clipboard", "com.cambridgesoft.cdx",
     "com.revvity.cdx", "com.perkinelmer.cdx", "com.revvity.cdxml",
     "com.perkinelmer.cdxml", "com.cambridgesoft.cdxml",
@@ -43,7 +43,7 @@ func read(_ board: NSPasteboard, imageOnly: Bool = false) throws -> Response {
         result.append(Representation(type: name, data: data))
         // One best editable representation suffices. Do not fetch a large image
         // or unrelated text when native structure data is available.
-        if name == "dev.moruno.drawing" || name.contains("cdx") || name == "com.mdli.molfile" || name == "org.opensmiles.smiles" || name == "public.utf8-plain-text" || pictureTypes.contains(name) { break }
+        if name == "dev.reshiki.drawing" || name == "dev.moruno.drawing" || name.contains("cdx") || name == "com.mdli.molfile" || name == "org.opensmiles.smiles" || name == "public.utf8-plain-text" || pictureTypes.contains(name) { break }
     }
     return Response(representations: result)
 }

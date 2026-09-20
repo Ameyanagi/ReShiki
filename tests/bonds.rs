@@ -1,4 +1,4 @@
-use moruno::{
+use reshiki::{
     bonds::{BondPreset, DoublePosition},
     document::{Annotation, Document, Point},
     editing::{self, Transform},
@@ -95,7 +95,7 @@ fn bond_color_reaches_shared_vector_and_raster_exports() {
     d.bonds[0].color = [32, 80, 145];
     let svg = scene::svg(&d);
     assert!(svg.contains("rgb(32,80,145)"));
-    let png = moruno::export::drawing(&d, "png").unwrap();
+    let png = reshiki::export::drawing(&d, "png").unwrap();
     let decoder = png::Decoder::new(std::io::Cursor::new(png));
     let mut reader = decoder.read_info().unwrap();
     let mut pixels = vec![0; reader.output_buffer_size()];
@@ -106,7 +106,7 @@ fn bond_color_reaches_shared_vector_and_raster_exports() {
             .any(|p| p[2] > 110 && p[0] < 60)
     );
     assert!(
-        moruno::export::drawing(&d, "pdf")
+        reshiki::export::drawing(&d, "pdf")
             .unwrap()
             .starts_with(b"%PDF")
     );
@@ -201,11 +201,11 @@ async fn bond_gallery_survives_checks_cleanup_and_cdxml_with_appearance_intact()
         assert_eq!(a.color, b.color);
         assert_eq!(a.double_position, b.double_position);
     }
-    if let Ok(dir) = std::env::var("MORUNO_BOND_QA_DIR") {
+    if let Ok(dir) = std::env::var("RESHIKI_BOND_QA_DIR") {
         let path = std::path::Path::new(&dir);
         std::fs::create_dir_all(path).unwrap();
         std::fs::write(
-            path.join("bond-gallery.moruno"),
+            path.join("bond-gallery.reshiki"),
             serde_json::to_string_pretty(&gallery).unwrap(),
         )
         .unwrap();
