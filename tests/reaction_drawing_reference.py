@@ -24,7 +24,7 @@ else:
     from reaction_import_reference import query_cases
 
 
-def expected(text):
+def expected(text, format="rxn"):
     participants, labels = [], []
 
     def draw(mol):
@@ -80,7 +80,7 @@ def expected(text):
             )
         return to_document(mol)
 
-    doc = reactions.import_reaction(text, "rxn", draw, check_supported)
+    doc = reactions.import_reaction(text, format, draw, check_supported)
     return dict(document=doc, participants=participants, labels=labels)
 
 

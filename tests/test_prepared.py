@@ -3,6 +3,7 @@
 import copy
 import json
 import unittest
+from itertools import product
 from pathlib import Path
 from unittest.mock import patch
 
@@ -17,37 +18,154 @@ from tests.reaction_drawing_reference import expected as reaction_drawing
 
 
 class PreparedMoleculeTests(unittest.TestCase):
-    def test_rxn_import_bridge_only_labels_and_analyzes_prepared_graphs(self):
+    def test_reaction_layout_preserves_prepared_chemistry(self):
         for text in (
-            "CCO.O>O>CC=O.O",
-            "F[C@](Cl)(Br)I>>F[C@@](Cl)(Br)I",
-            "c1ccccc1>C[C@@H](N)C(=O)O>c1ccccc1O",
-            "F/C=C/F>>F/C=C\\F",
+            "[H][C@](F)(Cl)Br>O>F/C=C/F",
+            "C1CC1.N>O.CC>CCO",
+            "[13CH3:0][NH3+]>N->[Cu]>c1ccccc1",
+            "*C>>CO",
         ):
             with self.subTest(text=text):
+                native = rdChemReactions.ReactionFromSmarts(text, useSmiles=True)
+                inputs, positions = [], []
+                next_id = 1
+                for mol in [*native.GetReactants(), *native.GetAgents(), *native.GetProducts()]:
+                    Chem.SanitizeMol(mol)
+                    n = mol.GetNumAtoms()
+                    before = snapshot(mol, "symmetric")
+                    inputs.append(
+                        dict(
+                            molecule=dict(
+                                rdkit_version=worker.rdBase.rdkitVersion,
+                                ids=list(range(next_id, next_id + n)),
+                                positions=[dict(x=0, y=0, z=0)] * n,
+                                state=before,
+                            ),
+                            file=dict(
+                                is_3d=False, attachment_points=[None] * n, dummy_labels=[None] * n
+                            ),
+                        )
+                    )
+                    next_id += n
+                    rdDepictor.Compute2DCoords(mol)
+                    self.assertEqual(snapshot(mol, "symmetric"), before)
+                    positions.append(
+                        [
+                            dict(x=p.x, y=p.y, z=p.z)
+                            for p in (mol.GetConformer().GetAtomPosition(i) for i in range(n))
+                        ]
+                    )
+                inputs = json.loads(json.dumps(inputs))
+                request = dict(
+                    protocol=1, operation="layout_reaction", format="rsmi", prepared_parts=inputs
+                )
+                with (
+                    patch.object(
+                        rdChemReactions,
+                        "ReactionFromSmarts",
+                        side_effect=AssertionError("Native reaction read"),
+                    ),
+                    patch.object(
+                        Chem, "MolFromSmiles", side_effect=AssertionError("Native SMILES read")
+                    ),
+                    patch.object(
+                        Chem, "SanitizeMol", side_effect=AssertionError("Native sanitize")
+                    ),
+                    patch.object(
+                        Chem, "AssignStereochemistry", side_effect=AssertionError("Native stereo")
+                    ),
+                    patch.object(
+                        worker, "to_document", side_effect=AssertionError("Native drawing")
+                    ),
+                ):
+                    self.assertEqual(
+                        worker.handle(request),
+                        dict(rdkit_version=worker.rdBase.rdkitVersion, positions=positions),
+                    )
+                    self.assertEqual(
+                        worker.handle({**request, "prepared_parts": inputs[:1]})["positions"],
+                        positions[:1],
+                    )
+                    for override in (
+                        dict(prepared_parts=[]),
+                        dict(prepared_parts=[inputs[0]] * 2),
+                        dict(format="smiles"),
+                        dict(prepared_molecule=inputs[0]["molecule"]),
+                        dict(prepared_import=inputs[0]["file"]),
+                        dict(document={}),
+                        dict(prepared_reaction=True),
+                        dict(protocol=2),
+                    ):
+                        with self.assertRaises(ValueError):
+                            worker.handle({**request, **override})
+
+                    n = len(inputs[0]["molecule"]["ids"])
+                    for fields in (
+                        None,
+                        [],
+                        {},
+                        [None] * n,
+                        [[[]]] * n,
+                        [[[[], [256]]]] * n,
+                        [[[[], [-1]]]] * n,
+                        [[[[], [True]]]] * n,
+                        [[["name", []]]] * n,
+                        [[[[], [0] * (1024 * 1024)]]] * n,
+                    ):
+                        with self.assertRaises(ValueError):
+                            worker.handle(
+                                {
+                                    **request,
+                                    "prepared_parts": [{**inputs[0], "atom_properties": fields}],
+                                }
+                            )
+
+    def test_reaction_import_bridge_only_labels_and_analyzes_prepared_graphs(self):
+        for format, text in product(
+            ("rxn", "rsmi"),
+            (
+                "CCO.O>O>CC=O.O",
+                "F[C@](Cl)(Br)I>>F[C@@](Cl)(Br)I",
+                "c1ccccc1>C[C@@H](N)C(=O)O>c1ccccc1O",
+                "F/C=C/F>>F/C=C\\F",
+            ),
+        ):
+            with self.subTest(text=text, format=format):
                 reaction = rdChemReactions.ReactionFromSmarts(text, useSmiles=True)
-                block = rdChemReactions.ReactionToV3KRxnBlock(reaction, separateAgents=True)
-                drawing = json.loads(json.dumps(reaction_drawing(block)))
+                block = (
+                    rdChemReactions.ReactionToV3KRxnBlock(reaction, separateAgents=True)
+                    if format == "rxn"
+                    else text
+                )
+                drawing = json.loads(json.dumps(reaction_drawing(block, format)))
                 expected = worker.handle(
-                    dict(protocol=1, operation="import", format="rxn", text=block)
+                    dict(protocol=1, operation="import", format=format, text=block)
                 )
                 analysis_graph = json.loads(json.dumps(prepare(drawing["document"])))
                 label_request = dict(
                     protocol=1,
                     operation="label_reaction",
-                    format="rxn",
+                    format=format,
                     prepared_parts=drawing["participants"],
                 )
                 analysis_request = dict(
                     protocol=1,
                     operation="import",
-                    format="rxn",
+                    format=format,
                     text="Must not be reparsed",
                     prepared_reaction=True,
                     prepared_molecule=analysis_graph,
                     document=drawing["document"],
                 )
                 with (
+                    patch.object(
+                        rdChemReactions,
+                        "ReactionFromSmarts",
+                        side_effect=AssertionError("Native reaction read"),
+                    ),
+                    patch.object(
+                        Chem, "MolFromSmiles", side_effect=AssertionError("Native SMILES read")
+                    ),
                     patch.object(
                         rdChemReactions,
                         "ReactionFromRxnBlock",
@@ -90,7 +208,7 @@ class PreparedMoleculeTests(unittest.TestCase):
                         dict(prepared_parts=[drawing["participants"][0]] * 2),
                         dict(prepared_parts=drawing["participants"] * 10001),
                         dict(operation="analyze"),
-                        dict(format="rsmi"),
+                        dict(format="mol"),
                         dict(prepared_reaction=True),
                         dict(prepared_molecule=analysis_graph),
                         dict(protocol=2),

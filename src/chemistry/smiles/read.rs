@@ -16,6 +16,12 @@ pub struct Imported {
     pub prepared: Prepared,
     pub conformers: Vec<Conformer>,
     pub name: Option<String>,
+    /// Reaction CX attachment markers affect wedge selection before drawing.
+    #[serde(skip)]
+    pub(crate) reaction_attachments: Vec<bool>,
+    /// Preserve native string types until the temporary layout pass reads them.
+    #[serde(skip)]
+    pub(crate) reaction_properties: Vec<Vec<(Vec<u8>, Vec<u8>)>>,
 }
 
 fn at<T>(items: &[T], id: usize) -> Result<&T> {
@@ -369,7 +375,32 @@ pub(crate) fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Resul
             );
         }
     }
+    let reaction_properties = annotations
+        .properties
+        .iter()
+        .map(|props| {
+            let mut entries = props
+                .iter()
+                .map(|(name, value)| (name.clone(), value.clone()))
+                .collect::<Vec<_>>();
+            entries.sort();
+            entries
+        })
+        .collect();
     Ok(Imported {
+        reaction_properties,
+        reaction_attachments: annotations
+            .properties
+            .iter()
+            .zip(&clean.graph.atoms)
+            .map(|(props, atom)| {
+                props.contains_key(b"_fromAttachPoint".as_slice())
+                    || atom.atomic_number == 0
+                        && props
+                            .get(b"atomLabel".as_slice())
+                            .is_some_and(|s| matches!(s.as_slice(), b"_AP1" | b"_AP2"))
+            })
+            .collect(),
         prepared: Prepared {
             state: State {
                 graph: clean.graph,
@@ -485,5 +516,7 @@ pub fn read(text: &str) -> Result<Imported> {
         prepared,
         conformers,
         name: (!name.is_empty()).then(|| name.to_owned()),
+        reaction_attachments: Vec::new(),
+        reaction_properties: Vec::new(),
     })
 }

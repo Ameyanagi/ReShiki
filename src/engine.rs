@@ -333,9 +333,9 @@ impl PythonEngine {
         }
         if self.local_documents
             && request.operation == "import"
-            && request.format.as_deref() == Some("rxn")
+            && let Some(format @ ("rxn" | "rsmi")) = request.format.as_deref()
             && let Some(response) = self
-                .import_rxn(request.text.clone().unwrap_or_default())
+                .import_reaction(request.text.clone().unwrap_or_default(), format)
                 .await?
         {
             return Ok(response);

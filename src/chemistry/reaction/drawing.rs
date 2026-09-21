@@ -80,12 +80,13 @@ impl Drawing {
 }
 
 #[derive(Default)]
-struct Builder {
+struct Builder<'a> {
     parts: Vec<Part>,
     separators: Vec<(u64, Position)>,
     next_id: u64,
+    attachments: Option<&'a [Vec<bool>]>,
 }
-impl Builder {
+impl Builder<'_> {
     fn id(&mut self) -> Result<u64, Error> {
         let id = self.next_id;
         self.next_id = id.checked_add(1).ok_or(Error::Limit)?;
@@ -104,10 +105,19 @@ impl Builder {
             molecule.ids = (0..molecule.state.graph.atoms.len())
                 .map(|_| self.id())
                 .collect::<Result<_, _>>()?;
-            let drawing = document::for_import(
+            let attachments = if let Some(attachments) = self.attachments {
+                attachments
+                    .get(self.parts.len())
+                    .ok_or_else(|| invalid("Missing reaction attachment markers"))?
+                    .clone()
+            } else {
+                vec![false; molecule.ids.len()]
+            };
+            let drawing = document::for_import_with_attachments(
                 &molecule,
                 source.annotations.is_3d,
                 &source.annotations.dummy_labels,
+                attachments,
             )?;
             let mut positions: Vec<_> = molecule
                 .positions
@@ -178,6 +188,18 @@ fn height(parts: &[Part]) -> f64 {
 
 impl Imported {
     pub fn drawing(&self) -> Result<Drawing, Error> {
+        self.drawing_with_attachments(None)
+    }
+
+    pub(super) fn drawing_with_attachments(
+        &self,
+        attachments: Option<&[Vec<bool>]>,
+    ) -> Result<Drawing, Error> {
+        if attachments.is_some_and(|items| {
+            items.len() != self.reactants.len() + self.agents.len() + self.products.len()
+        }) {
+            return Err(invalid("Reaction attachment participant count changed"));
+        }
         if self.reactants.is_empty() || self.products.is_empty() {
             return Err(invalid(
                 "A reaction needs at least one reactant and one product",
@@ -201,6 +223,7 @@ impl Imported {
         }
         let mut builder = Builder {
             next_id: 1,
+            attachments,
             ..Default::default()
         };
         let mut reaction = Reaction::new(0);

@@ -8,7 +8,7 @@ import math
 import struct
 
 from rdkit import Chem, rdBase
-from rdkit.Chem import rdCIPLabeler
+from rdkit.Chem import rdCIPLabeler, rdDepictor
 
 ORDERS = {
     0: Chem.BondType.HYDROGEN,
@@ -219,15 +219,16 @@ def restore(data, document=None, *, file=None):
     return _ring_annotations(mol, [p["ring_members"] for p in properties["atoms"]])
 
 
-def label_reaction(parts):
-    """Label detached participants; their parsing and layout have already finished."""
-    if not isinstance(parts, list) or not 2 <= len(parts) <= 10000:
+def _reaction_parts(parts, minimum, *, layout=False):
+    if not isinstance(parts, list) or not minimum <= len(parts) <= 10000:
         raise ValueError("Invalid prepared reaction participants")
     total, ids = 0, set()
     for part in parts:
         if (
             not isinstance(part, dict)
-            or set(part) != {"molecule", "file"}
+            or set(part)
+            - ({"molecule", "file", "atom_properties"} if layout else {"molecule", "file"})
+            or not {"molecule", "file"} <= set(part)
             or not isinstance(part["molecule"], dict)
             or not isinstance(part["file"], dict)
         ):
@@ -237,6 +238,55 @@ def label_reaction(parts):
         if not atom_ids or total > 10000 or ids.intersection(atom_ids):
             raise ValueError("Invalid prepared reaction atom count or identities")
         ids.update(atom_ids)
+    return parts
+
+
+def layout_reaction(parts):
+    """Only supply coordinates for participants without an input conformer."""
+    positions = []
+    for part in _reaction_parts(parts, 1, layout=True):
+        mol = restore(part["molecule"], file=part["file"])
+        _layout_properties(mol, part.get("atom_properties", [[] for _ in mol.GetAtoms()]))
+        rdDepictor.Compute2DCoords(mol)
+        conf = mol.GetConformer()
+        positions.append(
+            [
+                dict(x=p.x, y=p.y, z=p.z)
+                for p in (conf.GetAtomPosition(i) for i in range(mol.GetNumAtoms()))
+            ]
+        )
+    return dict(rdkit_version=rdBase.rdkitVersion, positions=positions)
+
+
+def _layout_properties(mol, properties):
+    """CX values retain string types; native numeric conversions happen lazily."""
+    if not isinstance(properties, list) or len(properties) != mol.GetNumAtoms():
+        raise ValueError("Invalid layout atom property dimensions")
+    size = 0
+    for atom, entries in zip(mol.GetAtoms(), properties, strict=True):
+        if not isinstance(entries, list):
+            raise ValueError("Invalid layout atom properties")
+        for entry in entries:
+            if (
+                not isinstance(entry, list)
+                or len(entry) != 2
+                or any(not isinstance(field, list) for field in entry)
+            ):
+                raise ValueError("Invalid layout atom property")
+            size += 1 + sum(len(field) for field in entry)
+            if size > 1024 * 1024 or any(
+                type(value) is not int or not 0 <= value <= 255
+                for field in entry
+                for value in field
+            ):
+                raise ValueError("Invalid or excessive layout property bytes")
+            name, value = (bytes(field) for field in entry)
+            atom.SetProp(name, value)
+
+
+def label_reaction(parts):
+    """Label detached participants; their parsing and layout have already finished."""
+    parts = _reaction_parts(parts, 2)
     return dict(
         rdkit_version=rdBase.rdkitVersion,
         labels=[label_drawing(restore(p["molecule"], file=p["file"])) for p in parts],

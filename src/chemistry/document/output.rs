@@ -142,11 +142,25 @@ pub fn for_import(
     is_3d: bool,
     dummy_labels: &[Option<String>],
 ) -> Result<Drawing, Error> {
+    for_import_with_attachments(
+        molecule,
+        is_3d,
+        dummy_labels,
+        vec![false; molecule.ids.len()],
+    )
+}
+
+pub(crate) fn for_import_with_attachments(
+    molecule: &Molecule,
+    is_3d: bool,
+    dummy_labels: &[Option<String>],
+    attachments: Vec<bool>,
+) -> Result<Drawing, Error> {
     validate_molecule(molecule)?;
     if dummy_labels.len() != molecule.state.graph.atoms.len() {
         return Err(invalid("Imported label dimensions changed"));
     }
-    let work = wedge(molecule, is_3d, vec![false; molecule.ids.len()])?;
+    let work = wedge(molecule, is_3d, attachments)?;
     reconstruct(work, molecule, None, &HashMap::new(), Some(dummy_labels))
 }
 

@@ -969,7 +969,7 @@ def handle(request):
         raise ValueError("prepared_reaction must be a boolean")
     if prepared_reaction and (
         request.get("operation") != "import"
-        or request.get("format") != "rxn"
+        or request.get("format") not in ("rxn", "rsmi")
         or not isinstance(request.get("document"), dict)
         or not isinstance(request.get("prepared_molecule"), dict)
         or any(
@@ -977,18 +977,23 @@ def handle(request):
             for key in ("prepared_parts", "prepared_import", "prepared_drawing")
         )
     ):
-        raise ValueError("Prepared reaction analysis requires an RXN drawing and molecule")
-    if request.get("prepared_parts") is not None and request.get("operation") != "label_reaction":
-        raise ValueError("Prepared participants require reaction labeling")
-    if request.get("operation") == "label_reaction" and (
-        request.get("format") != "rxn"
+        raise ValueError("Prepared reaction analysis requires a reaction drawing and molecule")
+    if request.get("prepared_parts") is not None and request.get("operation") not in (
+        "label_reaction",
+        "layout_reaction",
+    ):
+        raise ValueError("Prepared participants require reaction labeling or layout")
+    if request.get("operation") in ("label_reaction", "layout_reaction") and (
+        request.get("format") not in ("rxn", "rsmi")
+        or request.get("operation") == "layout_reaction"
+        and request.get("format") != "rsmi"
         or prepared_reaction
         or any(
             request.get(key) is not None
             for key in ("prepared_molecule", "prepared_import", "prepared_drawing", "document")
         )
     ):
-        raise ValueError("Reaction labeling requires detached RXN participants")
+        raise ValueError("Reaction labeling or layout requires detached participants")
     prepared_import = request.get("prepared_import")
     if prepared_import is not None and (
         not isinstance(prepared_import, dict)
@@ -1040,6 +1045,8 @@ def handle(request):
     response = {"engine_version": rdBase.rdkitVersion, "warnings": []}
     if operation == "label_reaction":
         return prepared.label_reaction(request.get("prepared_parts"))
+    if operation == "layout_reaction":
+        return prepared.layout_reaction(request.get("prepared_parts"))
     if prepared_reaction:
         doc = request["document"]
         reactions.validate(doc)

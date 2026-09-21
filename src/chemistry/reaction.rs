@@ -11,6 +11,7 @@ use std::{
 };
 mod drawing;
 pub use drawing::Drawing;
+mod layout;
 mod smiles;
 pub use smiles::{ReadError as SmilesError, SmilesReaction, read as read_smiles};
 

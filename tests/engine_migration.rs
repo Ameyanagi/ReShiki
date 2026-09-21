@@ -23,6 +23,38 @@ async fn rust_rxn_import_preserves_complete_reference_responses() -> TestResult 
 }
 
 #[tokio::test]
+async fn rust_reaction_smiles_import_preserves_complete_reference_responses() -> TestResult {
+    import_responses("rsmi", "tests/reaction_smiles_engine_reference.py").await
+}
+
+#[tokio::test]
+async fn reaction_cx_cached_properties_preserve_aromatic_stereo_drawings() -> TestResult {
+    let local = LocalEngine::default();
+    let reference = PythonEngine::default();
+    for graph in ["c1ccccc1[C@H]1CCCCC1", "c1ccccc1[C@H]2C[C@@H](N)CCC2"] {
+        for atom in 0..14 {
+            for key in ["_ringStereoAtoms", "_ringStereochemCand", "_CIPRank"] {
+                for value in ["0", "1", "bad"] {
+                    let text = format!("{graph}>>O |atomProp:{atom}.{key}.{value}|");
+                    let request = Request::import("rsmi", &text);
+                    match (
+                        local.execute(request.clone()).await,
+                        reference.execute(request).await,
+                    ) {
+                        (Ok(actual), Ok(expected)) => {
+                            assert_response_matches(actual, expected).with_context(|| text)?
+                        }
+                        (Err(_), Err(_)) => (),
+                        (actual, expected) => anyhow::bail!("{text}: {actual:?} != {expected:?}"),
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
 async fn overlapping_reaction_imports_keep_labels_and_analysis_with_their_drawing() -> TestResult {
     let local = LocalEngine::default();
     let reference = PythonEngine::default();
@@ -33,6 +65,12 @@ async fn overlapping_reaction_imports_keep_labels_and_analysis_with_their_drawin
         "c1ccccc1>C[C@@H](N)C(=O)O>c1ccccc1O",
         "F/C=C/F>>F/C=C\\F",
     ] {
+        for text in [text, "invalid", "C>>O |(bad)|"] {
+            let request = Request::import("rsmi", text);
+            let expected = reference.execute(request.clone()).await;
+            let engine = local.clone();
+            tasks.spawn(async move { (engine.execute(request).await, expected) });
+        }
         let doc = reference
             .execute(Request::import("rsmi", text))
             .await

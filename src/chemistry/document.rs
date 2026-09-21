@@ -15,7 +15,7 @@ mod aromatic;
 pub use aromatic::{Aromatic, Identity, aromatic_display};
 mod output;
 pub use output::{BondLabel, Drawing, Labels, for_drawing, for_import};
-pub(crate) use output::{kekule, validate_molecule};
+pub(crate) use output::{for_import_with_attachments, kekule, validate_molecule};
 
 #[cfg(test)]
 mod tests;
