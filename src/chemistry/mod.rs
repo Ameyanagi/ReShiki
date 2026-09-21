@@ -12,6 +12,7 @@ pub mod descriptors;
 pub mod document;
 pub mod electronic;
 pub mod graph;
+pub mod hydrogens;
 pub mod kekulize;
 pub mod molfile;
 pub mod normalize;

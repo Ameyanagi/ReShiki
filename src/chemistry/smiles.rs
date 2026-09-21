@@ -3,10 +3,12 @@
 //! Copyright (C) 2001-2022 Randal Henne, Greg Landrum, Rational Discovery LLC
 //! and other RDKit contributors. BSD-3-Clause; see licenses/rdkit/LICENSE.
 //!
-//! This is the graph-reading stage, before hydrogen removal, sanitization and
-//! stereo perception. CX extensions and names belong to the import wrapper.
+//! `parse` reads the raw graph; `prepare` also removes eligible hydrogens,
+//! sanitizes and perceives stereo. CX extensions and names are not yet handled.
 mod atom;
 mod chirality;
+mod prepare;
+pub use prepare::{Prepared, prepare};
 
 use super::{
     graph::{Atom, Bond, Graph},
@@ -24,6 +26,12 @@ pub enum Error {
     Unsupported(&'static str),
     #[error("SMILES exceeds parser resource limits")]
     Limit,
+    #[error(transparent)]
+    Hydrogens(#[from] super::hydrogens::Error),
+    #[error(transparent)]
+    Sanitization(#[from] super::sanitize::Error),
+    #[error("SMILES stereochemistry: {0}")]
+    Stereo(String),
 }
 type Result<T> = std::result::Result<T, Error>;
 
@@ -35,6 +43,10 @@ pub struct Parsed {
     /// Textual bond order, including ring closures, for CX bond references.
     pub bond_indices: Vec<usize>,
     pub dummy_labels: Vec<Option<String>>,
+    // Import can remove a query bond with its explicit hydrogen. Preserve the
+    // marker until that stage; surviving queries cannot become editable bonds.
+    #[serde(skip)]
+    query_bonds: Vec<bool>,
 }
 
 #[derive(Clone, Copy)]
@@ -42,6 +54,7 @@ struct BondSpec {
     order: Option<u8>,
     direction: Direction,
     reverse: bool,
+    query: bool,
 }
 impl Default for BondSpec {
     fn default() -> Self {
@@ -49,6 +62,7 @@ impl Default for BondSpec {
             order: None,
             direction: Direction::None,
             reverse: false,
+            query: false,
         }
     }
 }
@@ -74,6 +88,14 @@ struct Reader<'a> {
 /// Query bonds are rejected; stereo classes are retained for later cleanup.
 /// Do not use this result as a sanitized molecule or skip later import stages.
 pub fn parse(text: &str) -> Result<Parsed> {
+    let parsed = parse_inner(text)?;
+    if parsed.query_bonds.iter().any(|&query| query) {
+        return Err(Error::Unsupported("query bond"));
+    }
+    Ok(parsed)
+}
+
+fn parse_inner(text: &str) -> Result<Parsed> {
     if text.len() > 1024 * 1024 {
         return Err(Error::Limit);
     }
@@ -98,6 +120,7 @@ pub fn parse(text: &str) -> Result<Parsed> {
             directions: Vec::new(),
             bond_indices: Vec::new(),
             dummy_labels: Vec::new(),
+            query_bonds: Vec::new(),
         },
         adjacent: Vec::new(),
         closures: Vec::new(),
@@ -186,7 +209,10 @@ impl Reader<'_> {
                         return Ok(spec);
                     }
                 }
-                Some(b'~') => return Err(Error::Unsupported("query bond")),
+                Some(b'~') => {
+                    spec.order = Some(0);
+                    spec.query = true;
+                }
                 _ => return Ok(spec),
             }
             self.pos += 1;
@@ -287,6 +313,7 @@ impl Reader<'_> {
         self.parsed.metadata.bonds.push(BondMetadata::default());
         self.parsed.directions.push(spec.direction);
         self.parsed.bond_indices.push(index);
+        self.parsed.query_bonds.push(spec.query);
         self.adjacent.get_mut(a).ok_or(Error::Limit)?.push((b, id));
         self.adjacent.get_mut(b).ok_or(Error::Limit)?.push((a, id));
         Ok(id)
@@ -371,6 +398,13 @@ impl Reader<'_> {
                     (second, first)
                 };
                 let mut spec = chosen.spec;
+                // Native ring grammar creates a plain partial bond from the
+                // token's type. An unspecified query token loses its predicate
+                // here, then receives the endpoints' default bond order.
+                if spec.query {
+                    spec.query = false;
+                    spec.order = None;
+                }
                 // A direction copied from the opposite end changes orientation.
                 if spec.direction == Direction::None {
                     spec.direction = if spec.reverse {

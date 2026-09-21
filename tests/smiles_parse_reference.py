@@ -139,8 +139,8 @@ def cases():
         yield f"brackets/{atom}", f"F{atom}(Cl)(Br)I"
     for label, first, last in product(
         ("0", "1", "9", "%10", "%99", "%(0)", "%(001)", "%(12345)", "%01", "%(123456)", "%(1"),
-        ("", "-", "=", ":", "/", "\\", "->", "<-"),
-        ("", "-", "=", ":", "/", "\\", "->", "<-"),
+        ("", "-", "=", ":", "/", "\\", "->", "<-", "~"),
+        ("", "-", "=", ":", "/", "\\", "->", "<-", "~"),
     ):
         text = f"C{first}{label}CC{last}{label}"
         yield f"ring/{text}", text
@@ -189,6 +189,9 @@ def cases():
         "[C@H](F)(Cl)Br",
         "N.[C@H](F)(Cl)Br",
         "c1ccccc1",
+        "c~1ccccc1",
+        "c1ccccc~1",
+        "c~1ccccc-1",
         "F/C=C/F",
         "F/C=C\\F",
         "C/C(Cl)=C(Br)/F",
