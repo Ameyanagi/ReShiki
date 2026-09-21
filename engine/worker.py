@@ -967,10 +967,15 @@ def handle(request):
     prepared_import = request.get("prepared_import")
     if prepared_import is not None and (
         not isinstance(prepared_import, dict)
-        or request.get("operation") != "import"
-        or request.get("format") != "mol"
         or request.get("prepared_molecule") is None
-        or request.get("prepared_drawing") is None
+        or not (
+            request.get("operation") == "import"
+            and request.get("format", "smiles") in ("mol", "smiles")
+            and request.get("prepared_drawing") is not None
+            or request.get("operation") == "layout_import"
+            and request.get("format") == "smiles"
+            and request.get("prepared_drawing") is None
+        )
     ):
         raise ValueError("Prepared import requires a molecular file and drawing")
     local_properties = request.get("local_properties", False)
@@ -1008,6 +1013,20 @@ def handle(request):
     analyzer = partial(analyze, local_properties=local_properties)
     operation = request["operation"]
     response = {"engine_version": rdBase.rdkitVersion, "warnings": []}
+    if operation == "layout_import":
+        if prepared_import is None:
+            raise ValueError("Import layout requires a prepared molecule")
+        mol = prepared.restore(request["prepared_molecule"], file=prepared_import)
+        check_supported(mol)
+        rdDepictor.Compute2DCoords(mol)
+        conf = mol.GetConformer()
+        return dict(
+            rdkit_version=rdBase.rdkitVersion,
+            positions=[
+                dict(x=p.x, y=p.y, z=p.z)
+                for p in (conf.GetAtomPosition(i) for i in range(mol.GetNumAtoms()))
+            ],
+        )
     if operation == "import" and request.get("format") in ("rxn", "rsmi"):
         doc = reactions.import_reaction(
             request.get("text", ""), request["format"], to_document, check_supported

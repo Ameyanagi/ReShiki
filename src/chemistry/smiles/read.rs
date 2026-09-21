@@ -268,15 +268,23 @@ impl Annotations {
                 if let Some(value) = value {
                     meta.chiral_permutation = Some(value);
                 } else {
-                    *error = Some("invalid chiral permutation");
+                    put(&mut self.context.permutation_errors, id, true)?;
                 }
             }
-            if let Some(value) = int_property(props, b"_CanonicalRankingNumber", error) {
+            // Default import and drawing ranking never enable non-stereo
+            // ranks. Malformed values therefore remain unused native metadata.
+            if let Some(value) = int_property(props, b"_CanonicalRankingNumber", &mut None) {
                 meta.non_stereo_rank = value;
             }
-            if let Some(value) = int_property(props, b"_UnknownStereo", error) {
+            let mut unknown_error = None;
+            if let Some(value) = int_property(props, b"_UnknownStereo", &mut unknown_error) {
                 put(&mut self.context.unknown, id, value != 0)?;
             }
+            put(
+                &mut self.context.unknown_errors,
+                id,
+                unknown_error.is_some(),
+            )?;
             if let Some(value) = props.get(b"dummyLabel".as_slice()) {
                 match String::from_utf8(value.clone()) {
                     Ok(value) => put(&mut parsed.dummy_labels, id, Some(value))?,

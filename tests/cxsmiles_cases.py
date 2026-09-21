@@ -7,6 +7,17 @@ from rdkit.Chem import rdDepictor
 
 
 def cases():
+    # Exercise optional numeric properties where native stereo does and does
+    # not read them, including short-circuited unknown-stereo endpoints.
+    for graph in ("F/C=C/F", "FC(Cl)=C(Br)I", "C1=CCCCC1", "F[Pt@SP1](Cl)(Br)I"):
+        for index, key, value in product(
+            range(6),
+            ("_UnknownStereo", "_chiralPermutation", "_CanonicalRankingNumber"),
+            ("bad", "2.5", "4294967295"),
+        ):
+            yield f"{graph} |atomProp:{index}.{key}.{value}|"
+    for first, second in product(("0", "1", "bad"), repeat=2):
+        yield f"F/C=C/F |atomProp:1._UnknownStereo.{first}:2._UnknownStereo.{second}|"
     graphs = (
         "[H]C",
         "[H]~C",

@@ -128,7 +128,9 @@ def restore(data, document=None, *, file=None):
         a.SetProp("reshiki_id", str(data["ids"][i]))
         meta = metadata["atoms"][i]
         if meta["map_present"]:
-            a.SetAtomMapNum(meta["map_number"])
+            # SetAtomMapNum(0) removes the property. An explicit :0 affects
+            # canonical SMILES and must remain distinct from an absent map.
+            a.SetIntProp("molAtomMapNumber", meta["map_number"])
         a.SetChiralTag(Chem.ChiralType.values[meta["chiral_tag"]])
         a.SetHybridization(Chem.HybridizationType.names[state["hybridizations"][i]])
         if meta["ring_stereo"] != (properties["atoms"][i]["ring_members"] is not None):
@@ -173,6 +175,10 @@ def restore(data, document=None, *, file=None):
         bond.SetIsAromatic(item["aromatic"])
         bond.SetIsConjugated(state["conjugated"][i])
         bond.SetBondDir(DIRECTIONS[state["directions"][i]])
+    # Adding an aromatic-order bond can mark its endpoints aromatic even when
+    # sanitization left their flags clear. Restore the supplied flags last.
+    for atom, item in zip(rw.GetAtoms(), atoms, strict=True):
+        atom.SetIsAromatic(item["aromatic"])
     # Stereo controls may reference bonds that occur later in the input.
     for i, meta in enumerate(metadata["bonds"]):
         b = rw.GetBondWithIdx(i)

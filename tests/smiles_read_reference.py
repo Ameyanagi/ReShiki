@@ -39,6 +39,26 @@ def cases():
                     yield f"source-cx/{path.name}/{index}", line
 
 
+def prepared_snapshot(mol):
+    # Inspecting every optional property eagerly would reject otherwise valid
+    # native reads: the algorithms convert these strings only when used. After
+    # a successful native read, exclude unusable optional values from the typed
+    # state projection. The full engine oracle separately checks drawing output.
+    observed = Chem.Mol(mol)
+    for atom in observed.GetAtoms():
+        for name, getter in (
+            ("_chiralPermutation", atom.GetUnsignedProp),
+            ("_CanonicalRankingNumber", atom.GetIntProp),
+            ("_UnknownStereo", atom.GetIntProp),
+        ):
+            if atom.HasProp(name):
+                try:
+                    getter(name)
+                except (ValueError, RuntimeError, OverflowError):
+                    atom.ClearProp(name)
+    return snapshot(observed, "symmetric")
+
+
 def main():
     RDLogger.DisableLog("rdApp.*")
     print(json.dumps(dict(rdkit_version=rdBase.rdkitVersion)))
@@ -66,7 +86,7 @@ def main():
                 conformers.append(dict(positions=points, is_3d=conf.Is3D()))
             expected = dict(
                 prepared=dict(
-                    state=snapshot(mol, "symmetric"),
+                    state=prepared_snapshot(mol),
                     dummy_labels=[
                         a.GetProp("dummyLabel") if a.HasProp("dummyLabel") else None
                         for a in mol.GetAtoms()

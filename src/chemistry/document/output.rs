@@ -102,7 +102,7 @@ fn stereo_name(code: u8) -> Option<String> {
 /// Generate Kekulé and wedge bonds, then reconstruct drawing-owned styles and
 /// stable IDs. This path updates an existing drawing without moving its atoms.
 pub fn for_drawing(molecule: &Molecule, base: &Document) -> Result<Drawing, Error> {
-    validate(molecule)?;
+    validate_molecule(molecule)?;
     base.validate().map_err(Error::Drawing)?;
     let state = &molecule.state;
     let (n, e) = (state.graph.atoms.len(), state.graph.bonds.len());
@@ -126,7 +126,7 @@ pub fn for_import(
     is_3d: bool,
     dummy_labels: &[Option<String>],
 ) -> Result<Drawing, Error> {
-    validate(molecule)?;
+    validate_molecule(molecule)?;
     if dummy_labels.len() != molecule.state.graph.atoms.len() {
         return Err(invalid("Imported label dimensions changed"));
     }
@@ -134,7 +134,7 @@ pub fn for_import(
     reconstruct(work, molecule, None, &HashMap::new(), Some(dummy_labels))
 }
 
-fn validate(molecule: &Molecule) -> Result<(), Error> {
+pub(crate) fn validate_molecule(molecule: &Molecule) -> Result<(), Error> {
     let state = &molecule.state;
     state.graph.validate().map_err(Error::Drawing)?;
     state

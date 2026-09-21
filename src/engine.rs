@@ -233,6 +233,11 @@ struct Worker {
     output: BufReader<ChildStdout>,
     next_id: u64,
 }
+type PreparedMolecule = (
+    crate::chemistry::document::Molecule,
+    crate::chemistry::document::Drawing,
+    Option<crate::chemistry::molfile::FileAnnotations>,
+);
 #[derive(Clone, Default)]
 pub struct PythonEngine {
     worker: Arc<Mutex<Option<Worker>>>,
@@ -290,6 +295,9 @@ impl PythonEngine {
         })
     }
     pub async fn request(&self, request: Request) -> Result<Response, String> {
+        if request.protocol != 1 {
+            return Err("Unsupported protocol version".into());
+        }
         if let Some(doc) = &request.document {
             doc.validate()?;
         }
@@ -318,6 +326,12 @@ impl PythonEngine {
             })
             .await
             .map_err(|e| format!("Molecular import failed: {e}"))??
+        } else if self.local_documents
+            && request.operation == "import"
+            && request.format.as_deref() == Some("smiles")
+        {
+            self.prepare_smiles(request.text.clone().unwrap_or_default())
+                .await?
         } else if self.local_documents
             && (request.operation == "analyze"
                 || request.operation == "export"
@@ -399,13 +413,211 @@ impl PythonEngine {
         } else {
             None
         };
+        let mut message = serde_json::to_value(request).map_err(|e| e.to_string())?;
+        let envelope = message
+            .as_object_mut()
+            .ok_or("Invalid chemistry request envelope")?;
+        if let Some((molecule, drawing, file)) = &prepared_molecule {
+            envelope.insert(
+                "prepared_molecule".into(),
+                serde_json::to_value(molecule).map_err(|e| e.to_string())?,
+            );
+            envelope.insert(
+                "prepared_drawing".into(),
+                serde_json::to_value(drawing.molecule()).map_err(|e| e.to_string())?,
+            );
+            if let Some(file) = file {
+                envelope.insert(
+                    "prepared_import".into(),
+                    serde_json::to_value(file).map_err(|e| e.to_string())?,
+                );
+            }
+        }
+        if local_mol_output {
+            envelope.insert("local_mol_output".into(), true.into());
+        }
+        if local_drawing_output {
+            envelope.insert("local_drawing_output".into(), true.into());
+        }
+        if let Some(draft) = &prepared_aromatic {
+            envelope.insert(
+                "prepared_aromatic".into(),
+                serde_json::to_value(draft).map_err(|e| e.to_string())?,
+            );
+        }
+        if self.local_properties {
+            envelope.insert("local_properties".into(), true.into());
+        }
+        if self.local_pictures {
+            envelope.insert("local_pictures".into(), true.into());
+            if let Some(exports) = picture_exports {
+                envelope.insert(
+                    "picture_exports".into(),
+                    serde_json::to_value(exports).map_err(|e| e.to_string())?,
+                );
+            }
+        }
+        let mut result = self.exchange(message).await?;
+        if self.local_properties
+            || self.local_pictures
+            || prepared_molecule.is_some()
+            || prepared_aromatic.is_some()
+        {
+            let (properties, pictures) = (self.local_properties, self.local_pictures);
+            result = tokio::task::spawn_blocking(move || {
+                if let Some(draft) = prepared_aromatic {
+                    let object = result.as_object_mut().ok_or("Invalid chemistry response")?;
+                    let identity = object
+                        .remove("aromatic_identity")
+                        .ok_or("Missing aromatic identity check")?;
+                    let document = draft
+                        .finish(
+                            serde_json::from_value(identity)
+                                .map_err(|e| format!("Invalid aromatic identity check: {e}"))?,
+                        )
+                        .map_err(|e| e.to_string())?;
+                    object.insert(
+                        "document".into(),
+                        serde_json::to_value(document).map_err(|e| e.to_string())?,
+                    );
+                }
+                if let Some((molecule, drawing, _)) = prepared_molecule {
+                    let object = result.as_object_mut().ok_or("Invalid chemistry response")?;
+                    if local_mol_output {
+                        let output = crate::chemistry::molfile::write(
+                            &molecule,
+                            crate::chemistry::molfile::Options::default(),
+                        )
+                        .map_err(|e| e.to_string())?;
+                        object.insert("output".into(), output.into());
+                    }
+                    let labels = object
+                        .remove("drawing_labels")
+                        .ok_or("Missing full stereochemical labels")?;
+                    let document = drawing
+                        .finish(
+                            serde_json::from_value(labels)
+                                .map_err(|e| format!("Invalid drawing labels: {e}"))?,
+                        )
+                        .map_err(|e| e.to_string())?;
+                    object.insert(
+                        "document".into(),
+                        serde_json::to_value(document).map_err(|e| e.to_string())?,
+                    );
+                }
+                if properties {
+                    crate::chemistry::complete_analysis(&mut result)?;
+                }
+                if let Some(request) = drawing_export {
+                    let object = result.as_object_mut().ok_or("Invalid chemistry response")?;
+                    let document: Document = serde_json::from_value(
+                        object
+                            .get("document")
+                            .ok_or("Missing drawing for export")?
+                            .clone(),
+                    )
+                    .map_err(|e| format!("Invalid exported drawing: {e}"))?;
+                    let xml = crate::exchange::drawing::write(
+                        &document,
+                        crate::exchange::drawing::Options::from(&request),
+                    )
+                    .map_err(|e| e.to_string())?;
+                    let output = if request.format.as_deref() == Some("cdx") {
+                        use base64::{Engine, engine::general_purpose::STANDARD};
+                        STANDARD.encode(crate::exchange::to_cdx(&xml)?)
+                    } else {
+                        xml
+                    };
+                    object.insert("output".into(), output.into());
+                }
+                if pictures {
+                    crate::pictures::exchange::complete_imports(result)
+                } else {
+                    Ok(result)
+                }
+            })
+            .await
+            .map_err(|e| format!("Local chemistry completion failed: {e}"))??;
+        }
+        let response: Response = serde_json::from_value(result).map_err(|e| e.to_string())?;
+        if let Some(doc) = &response.document {
+            doc.validate()?;
+        }
+        Ok(response)
+    }
+
+    async fn prepare_smiles(&self, text: String) -> Result<Option<PreparedMolecule>, String> {
+        use crate::chemistry::{
+            RDKIT_VERSION, document, molfile, rings::RingError, sanitize, smiles,
+        };
+        if text.trim().is_empty() {
+            return Err("Enter a structure first".into());
+        }
+        let imported = tokio::task::spawn_blocking(move || smiles::read(&text))
+            .await
+            .map_err(|e| format!("SMILES import failed: {e}"))?;
+        let imported = match imported {
+            Ok(imported) => imported,
+            Err(smiles::Error::Sanitization(sanitize::Error {
+                cause: sanitize::Cause::Rings(RingError::UnresolvedOrdering),
+                ..
+            })) => return Ok(None),
+            Err(error) => return Err(error.to_string()),
+        };
+        let n = imported.prepared.state.graph.atoms.len();
+        let mut molecule = document::Molecule {
+            rdkit_version: RDKIT_VERSION,
+            ids: (1..=u64::try_from(n).map_err(|_| "Molecule exceeds atom limit")?).collect(),
+            // Imported CX coordinates may be nonfinite. They have already been
+            // used for chemical perception; never send them to drawing APIs.
+            positions: vec![crate::chemistry::stereo::Point3::default(); n],
+            state: imported.prepared.state,
+        };
+        let file = molfile::FileAnnotations {
+            is_3d: false,
+            attachment_points: vec![None; n],
+            dummy_labels: imported.prepared.dummy_labels,
+        };
+        document::validate_molecule(&molecule).map_err(|e| e.to_string())?;
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Layout {
+            rdkit_version: String,
+            positions: Vec<crate::chemistry::stereo::Point3>,
+        }
+        let layout: Layout = serde_json::from_value(
+            self.exchange(serde_json::json!({
+                "protocol": 1,
+                "operation": "layout_import",
+                "format": "smiles",
+                "prepared_molecule": molecule,
+                "prepared_import": file,
+            }))
+            .await?,
+        )
+        .map_err(|e| format!("Invalid import layout: {e}"))?;
+        if layout.rdkit_version != RDKIT_VERSION || layout.positions.len() != n {
+            return Err("Import layout version or dimensions changed".into());
+        }
+        molecule.positions = layout.positions;
+        tokio::task::spawn_blocking(move || {
+            let drawing = document::for_import(&molecule, false, &file.dummy_labels)
+                .map_err(|e| e.to_string())?;
+            Ok(Some((molecule, drawing, Some(file))))
+        })
+        .await
+        .map_err(|e| format!("Imported drawing preparation failed: {e}"))?
+    }
+
+    /// Serialize requests to one worker. Detached local preparation and drawing
+    /// completion run outside the lock; separate bridge calls cannot mix IDs.
+    async fn exchange(&self, mut message: serde_json::Value) -> Result<serde_json::Value, String> {
         let mut slot = self.worker.lock().await;
         let starting = slot.is_none();
         if starting {
             *slot = Some(Self::spawn().await?);
         }
-        // A newly installed RDKit environment may need additional time for the
-        // operating system to load and validate its native libraries once.
+        // Initial native-library loading can take longer after installation.
         let timeout_seconds = if starting { 120 } else { 30 };
         let result = tokio::time::timeout(Duration::from_secs(timeout_seconds), async {
             let worker = slot.as_mut().ok_or("Chemistry worker is unavailable")?;
@@ -414,51 +626,10 @@ impl PythonEngine {
                 .next_id
                 .checked_add(1)
                 .ok_or("Chemistry request counter exhausted; retry to restart the worker")?;
-            let mut message = serde_json::to_value(request).map_err(|e| e.to_string())?;
-            let envelope = message
+            message
                 .as_object_mut()
-                .ok_or("Invalid chemistry request envelope")?;
-            envelope.insert("id".into(), id.into());
-            if let Some((molecule, drawing, file)) = &prepared_molecule {
-                envelope.insert(
-                    "prepared_molecule".into(),
-                    serde_json::to_value(molecule).map_err(|e| e.to_string())?,
-                );
-                envelope.insert(
-                    "prepared_drawing".into(),
-                    serde_json::to_value(drawing.molecule()).map_err(|e| e.to_string())?,
-                );
-                if let Some(file) = file {
-                    envelope.insert(
-                        "prepared_import".into(),
-                        serde_json::to_value(file).map_err(|e| e.to_string())?,
-                    );
-                }
-            }
-            if local_mol_output {
-                envelope.insert("local_mol_output".into(), true.into());
-            }
-            if local_drawing_output {
-                envelope.insert("local_drawing_output".into(), true.into());
-            }
-            if let Some(draft) = &prepared_aromatic {
-                envelope.insert(
-                    "prepared_aromatic".into(),
-                    serde_json::to_value(draft).map_err(|e| e.to_string())?,
-                );
-            }
-            if self.local_properties {
-                envelope.insert("local_properties".into(), true.into());
-            }
-            if self.local_pictures {
-                envelope.insert("local_pictures".into(), true.into());
-                if let Some(exports) = picture_exports {
-                    envelope.insert(
-                        "picture_exports".into(),
-                        serde_json::to_value(exports).map_err(|e| e.to_string())?,
-                    );
-                }
-            }
+                .ok_or("Invalid chemistry request envelope")?
+                .insert("id".into(), id.into());
             let mut bytes = serde_json::to_vec(&message).map_err(|e| e.to_string())?;
             bytes.push(b'\n');
             worker
@@ -489,96 +660,11 @@ impl PythonEngine {
                     .unwrap_or("Chemistry error")
                     .to_string());
             }
-            let mut result = value
+            let result = value
                 .get("result")
                 .ok_or("Missing chemistry result")?
                 .clone();
-            if self.local_properties
-                || self.local_pictures
-                || prepared_molecule.is_some()
-                || prepared_aromatic.is_some()
-            {
-                let (properties, pictures) = (self.local_properties, self.local_pictures);
-                result = tokio::task::spawn_blocking(move || {
-                    if let Some(draft) = prepared_aromatic {
-                        let object = result.as_object_mut().ok_or("Invalid chemistry response")?;
-                        let identity = object
-                            .remove("aromatic_identity")
-                            .ok_or("Missing aromatic identity check")?;
-                        let document = draft
-                            .finish(
-                                serde_json::from_value(identity)
-                                    .map_err(|e| format!("Invalid aromatic identity check: {e}"))?,
-                            )
-                            .map_err(|e| e.to_string())?;
-                        object.insert(
-                            "document".into(),
-                            serde_json::to_value(document).map_err(|e| e.to_string())?,
-                        );
-                    }
-                    if let Some((molecule, drawing, _)) = prepared_molecule {
-                        let object = result.as_object_mut().ok_or("Invalid chemistry response")?;
-                        if local_mol_output {
-                            let output = crate::chemistry::molfile::write(
-                                &molecule,
-                                crate::chemistry::molfile::Options::default(),
-                            )
-                            .map_err(|e| e.to_string())?;
-                            object.insert("output".into(), output.into());
-                        }
-                        let labels = object
-                            .remove("drawing_labels")
-                            .ok_or("Missing full stereochemical labels")?;
-                        let document = drawing
-                            .finish(
-                                serde_json::from_value(labels)
-                                    .map_err(|e| format!("Invalid drawing labels: {e}"))?,
-                            )
-                            .map_err(|e| e.to_string())?;
-                        object.insert(
-                            "document".into(),
-                            serde_json::to_value(document).map_err(|e| e.to_string())?,
-                        );
-                    }
-                    if properties {
-                        crate::chemistry::complete_analysis(&mut result)?;
-                    }
-                    if let Some(request) = drawing_export {
-                        let object = result.as_object_mut().ok_or("Invalid chemistry response")?;
-                        let document: Document = serde_json::from_value(
-                            object
-                                .get("document")
-                                .ok_or("Missing drawing for export")?
-                                .clone(),
-                        )
-                        .map_err(|e| format!("Invalid exported drawing: {e}"))?;
-                        let xml = crate::exchange::drawing::write(
-                            &document,
-                            crate::exchange::drawing::Options::from(&request),
-                        )
-                        .map_err(|e| e.to_string())?;
-                        let output = if request.format.as_deref() == Some("cdx") {
-                            use base64::{Engine, engine::general_purpose::STANDARD};
-                            STANDARD.encode(crate::exchange::to_cdx(&xml)?)
-                        } else {
-                            xml
-                        };
-                        object.insert("output".into(), output.into());
-                    }
-                    if pictures {
-                        crate::pictures::exchange::complete_imports(result)
-                    } else {
-                        Ok(result)
-                    }
-                })
-                .await
-                .map_err(|e| format!("Local chemistry completion failed: {e}"))??;
-            }
-            let response: Response = serde_json::from_value(result).map_err(|e| e.to_string())?;
-            if let Some(doc) = &response.document {
-                doc.validate()?;
-            }
-            Ok(response)
+            Ok(result)
         })
         .await
         .unwrap_or_else(|_| {
@@ -586,7 +672,7 @@ impl PythonEngine {
                 "Chemistry operation timed out after {timeout_seconds} seconds"
             ))
         });
-        // Reset also on chemistry errors: the next request always has a clean stream.
+        // A transport or native chemistry error starts the next call fresh.
         if result.is_err() {
             *slot = None;
         }

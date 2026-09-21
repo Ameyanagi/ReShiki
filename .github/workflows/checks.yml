@@ -59,11 +59,18 @@ jobs:
             python: cpython-3.12-windows-x86_64-none
           - os: windows-11-arm
             python: cpython-3.12-windows-x86_64-none
+          - os: ubuntu-22.04
+            python: "3.12"
+          - os: ubuntu-24.04-arm
+            python: "3.12"
     runs-on: ${{ matrix.os }}
     env:
       UV_PYTHON: ${{ matrix.python }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Linux libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libfontconfig1-dev libudev-dev
       - run: rustup toolchain install 1.95.0 --profile minimal --component rustfmt --component clippy
       - run: rustup default 1.95.0
       - uses: Swatinem/rust-cache@63fed3e2fecf6f7b51dc6f043341b79ef82a9ae7 # v2.9.2

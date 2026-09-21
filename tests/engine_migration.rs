@@ -9,6 +9,59 @@ type TestResult = anyhow::Result<()>;
 
 #[tokio::test]
 async fn rust_mol_import_preserves_complete_reference_responses() -> TestResult {
+    import_responses("mol", "tests/molfile_engine_reference.py").await
+}
+
+#[tokio::test]
+async fn rust_smiles_import_preserves_complete_reference_responses() -> TestResult {
+    import_responses("smiles", "tests/smiles_engine_reference.py").await
+}
+
+#[tokio::test]
+async fn overlapping_imports_keep_their_own_layout_and_recover_after_errors() -> TestResult {
+    let local = LocalEngine::default();
+    let reference = PythonEngine::default();
+    let mut tasks = tokio::task::JoinSet::new();
+    for text in [
+        "CCO",
+        "c1ccccc1",
+        "N[C@@H](C)C(=O)O",
+        "C/C=C/C",
+        "C(=O)O",
+        "C1CC",
+        "[CH5]",
+        "F[C@H](Cl)[C@@H](Br)I |o1:1,3|",
+        "[13CH3:90][NH3+]",
+        "CC |(nan,inf,-inf)|",
+    ] {
+        let request = Request::import_smiles(text);
+        let expected = reference.execute(request.clone()).await;
+        let engine = local.clone();
+        tasks.spawn(async move { (engine.execute(request).await, expected) });
+    }
+    while let Some(result) = tasks.join_next().await {
+        match result? {
+            (Ok(actual), Ok(expected)) => assert_response_matches(actual, expected)?,
+            (Err(_), Err(_)) => (),
+            (actual, expected) => {
+                anyhow::bail!("Import result changed: {actual:?} != {expected:?}")
+            }
+        }
+    }
+    let request = Request::import_smiles("F[C@](Cl)(Br)I");
+    assert_response_matches(
+        local
+            .execute(request.clone())
+            .await
+            .map_err(anyhow::Error::msg)?,
+        reference
+            .execute(request)
+            .await
+            .map_err(anyhow::Error::msg)?,
+    )
+}
+
+async fn import_responses(format: &str, script: &str) -> TestResult {
     use std::{
         io::{BufRead, BufReader},
         path::Path,
@@ -18,7 +71,7 @@ async fn rust_mol_import_preserves_complete_reference_responses() -> TestResult 
     struct Case {
         name: String,
         text: String,
-        expected: Option<Response>,
+        expected: Option<serde_json::Value>,
         failure: Option<String>,
     }
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -28,7 +81,7 @@ async fn rust_mol_import_preserves_complete_reference_responses() -> TestResult 
         ".venv/bin/python"
     });
     let mut child = Command::new(python)
-        .arg(root.join("tests/molfile_engine_reference.py"))
+        .arg(root.join(script))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
@@ -45,8 +98,11 @@ async fn rust_mol_import_preserves_complete_reference_responses() -> TestResult 
         let case: Case = serde_json::from_str(&line?)?;
         let expected = case
             .expected
+            // The original Rust bridge also rejects native values outside the
+            // editable document's types, such as negative atom-map numbers.
+            .and_then(|value| serde_json::from_value::<Response>(value).ok())
             .filter(|r| r.document.as_ref().is_none_or(|d| d.validate().is_ok()));
-        let actual = local.execute(Request::import("mol", &case.text)).await;
+        let actual = local.execute(Request::import(format, &case.text)).await;
         let failure = match (actual, expected) {
             (Ok(actual), Some(expected)) => {
                 accepted += 1;
@@ -62,18 +118,18 @@ async fn rust_mol_import_preserves_complete_reference_responses() -> TestResult 
             (Ok(_), None) => Some(format!("Accepted reference rejection: {:?}", case.failure)),
         };
         if let Some(error) = failure {
-            failures.push(format!("{}: {error}", case.name));
+            failures.push(format!("{}: {error}; input {:?}", case.name, case.text));
         }
     }
     assert!(child.wait()?.success(), "Import reference failed");
     eprintln!(
-        "MOL engine responses: {accepted} accepted, {rejected} rejected, {} mismatches",
+        "{format} engine responses: {accepted} accepted, {rejected} rejected, {} mismatches",
         failures.len()
     );
     if !failures.is_empty() {
         std::fs::create_dir_all(root.join("artifacts"))?;
         std::fs::write(
-            root.join("artifacts/molfile-engine-failures.txt"),
+            root.join(format!("artifacts/{format}-engine-failures.txt")),
             failures.join("\n"),
         )?;
     }
@@ -111,7 +167,7 @@ fn assert_response_matches(actual: Response, expected: Response) -> TestResult {
                 .and_then(|v| v.as_f64())
                 .context("Missing reference mass")?;
             // RDKit wheels may fuse floating-point operations on some targets.
-            assert!(
+            anyhow::ensure!(
                 (av - ev).abs() <= ev.abs().max(1.) * 1e-12,
                 "{field}: {av} != {ev}"
             );

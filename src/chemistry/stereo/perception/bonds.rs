@@ -76,8 +76,7 @@ impl Context {
                 continue;
             }
             unassigned += 1;
-            let mut unknown = at(&self.state.properties.atoms, bond.a)?.unknown
-                || at(&self.state.properties.atoms, bond.b)?.unknown;
+            let mut unknown = self.unknown_atom(bond.a)? || self.unknown_atom(bond.b)?;
             let left = self.directed_neighbors(bond.a, i, &mut unknown, work)?;
             let right = self.directed_neighbors(bond.b, i, &mut unknown, work)?;
             if left.is_empty() || right.is_empty() {

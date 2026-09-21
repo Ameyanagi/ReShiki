@@ -28,6 +28,8 @@ pub(super) struct Context {
     pub needs_bond_stereo: bool,
     pub unsupported_bonds: Vec<bool>,
     pub property_errors: Vec<Option<&'static str>>,
+    pub unknown_errors: Vec<bool>,
+    pub permutation_errors: Vec<bool>,
 }
 impl Context {
     pub fn new(parsed: &Parsed) -> Self {
@@ -38,6 +40,8 @@ impl Context {
             needs_bond_stereo: false,
             unsupported_bonds: vec![false; parsed.graph.bonds.len()],
             property_errors: vec![None; parsed.graph.atoms.len()],
+            unknown_errors: vec![false; parsed.graph.atoms.len()],
+            permutation_errors: vec![false; parsed.graph.atoms.len()],
         }
     }
 }
@@ -50,9 +54,20 @@ pub(super) fn finish(parsed: Parsed, mut context: Context) -> Result<(Prepared, 
         unknown_atoms: context.unknown,
         annotations: context.annotations,
     })?;
-    for &atom in &removed.kept_atoms {
+    for (index, &atom) in removed.kept_atoms.iter().enumerate() {
         if let Some(error) = context.property_errors.get(atom).ok_or(Error::Limit)? {
             return Err(Error::Unsupported(error));
+        }
+        if *context.permutation_errors.get(atom).ok_or(Error::Limit)?
+            && removed
+                .metadata
+                .atoms
+                .get(index)
+                .ok_or(Error::Limit)?
+                .chiral_tag
+                >= 4
+        {
+            return Err(Error::Unsupported("invalid chiral permutation"));
         }
     }
     for &bond in &removed.kept_bonds {
@@ -108,8 +123,14 @@ pub(super) fn finish(parsed: Parsed, mut context: Context) -> Result<(Prepared, 
         sanitized.directions = geometry.directions;
     }
     let mut properties = perception::Properties::unspecified(&sanitized.graph);
-    for (atom, unknown) in properties.atoms.iter_mut().zip(removed.unknown_atoms) {
+    for ((atom, unknown), &old) in properties
+        .atoms
+        .iter_mut()
+        .zip(removed.unknown_atoms)
+        .zip(&removed.kept_atoms)
+    {
         atom.unknown = unknown;
+        atom.invalid_unknown = *context.unknown_errors.get(old).ok_or(Error::Limit)?;
     }
     let state = perception::perceive(
         &perception::State {

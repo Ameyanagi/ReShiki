@@ -27,6 +27,10 @@ pub struct AtomProperties {
     pub ring_candidate: Option<bool>,
     pub ring_members: Option<Vec<i32>>,
     pub unknown: bool,
+    /// CX properties are untyped text. An invalid value matters only when
+    /// stereo assignment actually reads it; it is not drawing metadata.
+    #[serde(skip)]
+    pub(crate) invalid_unknown: bool,
 }
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -300,6 +304,13 @@ struct Context {
     member_storage: usize,
 }
 impl Context {
+    fn unknown_atom(&self, atom: usize) -> Result<bool, String> {
+        let property = at(&self.state.properties.atoms, atom)?;
+        if property.invalid_unknown {
+            return Err("Invalid unknown-stereo atom property".into());
+        }
+        Ok(property.unknown)
+    }
     fn new(state: State, work: &mut Work) -> Result<Self, String> {
         let mut neighbors = vec![Vec::new(); state.graph.atoms.len()];
         let mut pairs = HashMap::new();

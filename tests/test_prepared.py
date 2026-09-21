@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from rdkit import Chem, RDConfig
-from rdkit.Chem import rdCIPLabeler
+from rdkit.Chem import rdCIPLabeler, rdDepictor
 
 from engine import prepared, worker
 from tests.document_preparation_reference import drawing, prepare
@@ -16,6 +16,116 @@ from tests.perception_reference import snapshot
 
 
 class PreparedMoleculeTests(unittest.TestCase):
+    def test_smiles_import_only_uses_native_layout_identifiers_and_full_cip(self):
+        for text in (
+            "CCO",
+            "c1ccccc1",
+            "F[C@](Cl)(Br)I",
+            "[H][C@](F)(Cl)Br",
+            "C[C@H]1CC[C@@H](C)CC1",
+            "C/C=C/C",
+            "F:O=C/F",
+            "[2H]:C",
+            "N->[Cu+2]",
+            "[13CH3:90][NH3+]",
+            "[13CH3:0][NH3+]",
+            "C* |atomProp:1.dummyLabel.R1|",
+            "CC |(nan,inf,-inf;1,0,)| named",
+            "FC(Cl)(Br)I |(0,0,;1,0,;0,1,;-1,-1,;1,1,),wU:1.0|",
+            "FC(Cl)(Br)I |(0,0,1;1,0,;0,1,;-1,-1,;1,1,)|",
+        ):
+            with self.subTest(text=text):
+                original = Chem.MolFromSmiles(text)
+                state = snapshot(original, "symmetric")
+                expected = worker.handle(
+                    dict(protocol=1, operation="import", format="smiles", text=text)
+                )
+                rdDepictor.Compute2DCoords(original)
+                self.assertEqual(snapshot(original, "symmetric"), state)
+
+                def payload(mol):
+                    conf = mol.GetConformer()
+                    return json.loads(
+                        json.dumps(
+                            dict(
+                                rdkit_version=worker.rdBase.rdkitVersion,
+                                ids=list(range(1, mol.GetNumAtoms() + 1)),
+                                positions=[
+                                    dict(x=p.x, y=p.y, z=p.z)
+                                    for p in (
+                                        conf.GetAtomPosition(i) for i in range(mol.GetNumAtoms())
+                                    )
+                                ],
+                                state=snapshot(mol, "symmetric"),
+                            )
+                        )
+                    )
+
+                reference = payload(original)
+                work = Chem.Mol(original)
+                Chem.Kekulize(work, clearAromaticFlags=True)
+                Chem.WedgeMolBonds(work, work.GetConformer())
+                drawing = payload(work)
+                expected["document"] = None
+                expected["drawing_labels"] = prepared.label_drawing(work)
+                request = dict(
+                    protocol=1,
+                    operation="layout_import",
+                    format="smiles",
+                    text="Must not be reparsed",
+                    prepared_molecule={
+                        **reference,
+                        "positions": [dict(x=0, y=0, z=0)] * original.GetNumAtoms(),
+                    },
+                    prepared_import=dict(
+                        is_3d=False,
+                        attachment_points=[None] * original.GetNumAtoms(),
+                        dummy_labels=[
+                            a.GetProp("dummyLabel") if a.HasProp("dummyLabel") else None
+                            for a in original.GetAtoms()
+                        ],
+                    ),
+                )
+                with (
+                    patch.object(Chem, "MolFromSmiles", side_effect=AssertionError("Native read")),
+                    patch.object(Chem, "RemoveHs", side_effect=AssertionError("Native H removal")),
+                    patch.object(
+                        Chem, "SanitizeMol", side_effect=AssertionError("Native sanitize")
+                    ),
+                    patch.object(
+                        Chem, "AssignStereochemistry", side_effect=AssertionError("Native stereo")
+                    ),
+                    patch.object(Chem, "Kekulize", side_effect=AssertionError("Native Kekulé")),
+                    patch.object(
+                        Chem, "WedgeMolBonds", side_effect=AssertionError("Native wedges")
+                    ),
+                    patch.object(
+                        worker, "from_document", side_effect=AssertionError("Native prep")
+                    ),
+                    patch.object(worker, "to_document", side_effect=AssertionError("Native draw")),
+                ):
+                    layout = worker.handle(request)
+                    self.assertEqual(layout["rdkit_version"], worker.rdBase.rdkitVersion)
+                    self.assertEqual(layout["positions"], reference["positions"])
+                    request["prepared_molecule"]["positions"] = layout["positions"]
+                    for override in (
+                        dict(prepared_import=None),
+                        dict(prepared_molecule=None),
+                        dict(prepared_drawing=drawing),
+                        dict(format="mol"),
+                        dict(operation="analyze"),
+                        dict(protocol=2),
+                    ):
+                        with self.assertRaises(ValueError):
+                            worker.handle({**request, **override})
+                    request.update(operation="import", prepared_drawing=drawing)
+                    with patch.object(
+                        rdDepictor, "Compute2DCoords", side_effect=AssertionError("Repeated layout")
+                    ):
+                        self.assertEqual(worker.handle(request), expected)
+                        request.pop("format")
+                        self.assertEqual(worker.handle(request), expected)
+
     def test_prepared_mol_import_skips_native_reader_and_drawing_passes(self):
         for text in ("", "c1ccccc1", "F[C@](Cl)(Br)I", "C[C@H]1CC[C@@H](C)CC1"):
             original = Chem.MolFromMolBlock(
