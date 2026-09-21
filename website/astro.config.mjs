@@ -82,6 +82,7 @@ export default defineConfig({
             { label: "Release and signing", slug: "developer/releasing" },
             { label: "ReShiki 0.3.0", slug: "developer/changes-0.3" },
             { label: "ReShiki 0.4.0", slug: "developer/changes-0.4" },
+            { label: "ReShiki 0.5.0", slug: "developer/changes-0.5" },
             { label: "Runtime safety", slug: "developer/runtime-safety" },
             { label: "Feature status", slug: "developer/feature-status" },
             {
