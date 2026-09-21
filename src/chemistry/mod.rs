@@ -8,6 +8,7 @@
 pub mod aromaticity;
 mod atomic_data;
 pub mod descriptors;
+pub mod document;
 pub mod electronic;
 pub mod graph;
 pub mod kekulize;

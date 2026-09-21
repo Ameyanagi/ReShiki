@@ -19,6 +19,7 @@ if TYPE_CHECKING or __package__:
         aromatic,
         cleanup,
         drawing_styles,
+        prepared,
         reactions,
     )
     from .arrows_exchange import read_arrow, write_arrow
@@ -36,6 +37,7 @@ else:
     import aromatic
     import cleanup
     import drawing_styles
+    import prepared
     import reactions
     from arrows_exchange import read_arrow, write_arrow
     from bonds_exchange import chemistry_xml, read_bonds, write_bond, write_crossings
@@ -1065,7 +1067,14 @@ def handle(request):
                 )
             )
             return response
-        mol = from_document(doc)
+        prepared_molecule = request.get("prepared_molecule")
+        if prepared_molecule is not None:
+            if operation != "analyze" and request.get("format") not in ("mol", "smiles", "inchi"):
+                raise ValueError("Prepared molecules are not supported for this operation")
+            mol = prepared.restore(prepared_molecule, doc)
+            check_supported(mol)
+        else:
+            mol = from_document(doc)
         result_doc = to_document(mol, doc)
         response.update(document=result_doc, analysis=analyzer(mol))
         if operation == "export":

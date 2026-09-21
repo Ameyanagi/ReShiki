@@ -165,6 +165,7 @@ impl Default for LocalEngine<PythonEngine> {
             chemistry: PythonEngine {
                 local_properties: true,
                 local_pictures: true,
+                local_documents: true,
                 ..PythonEngine::default()
             },
         }
@@ -238,6 +239,7 @@ pub struct PythonEngine {
     // Default false keeps an independent reference backend for differential tests.
     local_properties: bool,
     local_pictures: bool,
+    local_documents: bool,
 }
 impl PythonEngine {
     async fn spawn() -> Result<Worker, String> {
@@ -291,6 +293,31 @@ impl PythonEngine {
         if let Some(doc) = &request.document {
             doc.validate()?;
         }
+        let prepared_molecule = if self.local_documents
+            && (request.operation == "analyze"
+                || request.operation == "export"
+                    && matches!(request.format.as_deref(), Some("smiles" | "mol" | "inchi")))
+            && let Some(document) = request.document.clone()
+        {
+            tokio::task::spawn_blocking(move || {
+                use crate::chemistry::{document, rings::RingError, sanitize};
+                match document::prepare(&document) {
+                    Ok(molecule) => Ok(Some(molecule)),
+                    // Preserve the existing native fallback only for the known
+                    // platform-dependent ring tie; never hide a chemistry error.
+                    Err(document::Error::Sanitization(sanitize::Error {
+                        cause: sanitize::Cause::Rings(RingError::UnresolvedOrdering),
+                        ..
+                    })) => Ok(None),
+                    Err(error) => Err(error),
+                }
+            })
+            .await
+            .map_err(|e| format!("Molecule preparation failed: {e}"))?
+            .map_err(|e| e.to_string())?
+        } else {
+            None
+        };
         let picture_exports = if self.local_pictures
             && request.operation == "export"
             && matches!(request.format.as_deref(), Some("cdxml" | "cdx"))
@@ -326,6 +353,12 @@ impl PythonEngine {
                 .as_object_mut()
                 .ok_or("Invalid chemistry request envelope")?;
             envelope.insert("id".into(), id.into());
+            if let Some(molecule) = prepared_molecule {
+                envelope.insert(
+                    "prepared_molecule".into(),
+                    serde_json::to_value(molecule).map_err(|e| e.to_string())?,
+                );
+            }
             if self.local_properties {
                 envelope.insert("local_properties".into(), true.into());
             }

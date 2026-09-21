@@ -145,6 +145,110 @@ async fn rust_properties_match_reference_across_editor_operations() -> TestResul
 }
 
 #[tokio::test]
+async fn rust_prepared_drawings_preserve_full_analysis_and_molecular_exports() -> TestResult {
+    let local = LocalEngine::default();
+    let reference = PythonEngine::default();
+    let templates: serde_json::Value =
+        serde_json::from_str(include_str!("../assets/templates.json"))?;
+    let mut texts: Vec<_> = templates
+        .as_array()
+        .context("Missing templates")?
+        .iter()
+        .filter_map(|t| t["smiles"].as_str())
+        .collect();
+    texts.extend([
+        "[2H]O[3H]",
+        "[13CH3][NH3+]",
+        "[CH3]",
+        "[CH2]",
+        "[O]",
+        "[Na+].[Cl-]",
+        "F/C=C/F",
+        "F/C=C\\F",
+        "F/C=C/C=C/Cl",
+        "F[C@](Cl)(Br)I",
+        "C[C@H]1CCC[C@@H](C)C1",
+        "C[S@](=O)CC",
+        "C1CCC2(CC1)CCCC2",
+        "C12C3C4C1C5C2C3C45",
+        "[NH3]->[Cu+2]<-[NH3]",
+        "[CH3:1][OH:9]",
+    ]);
+    for text in texts {
+        let mut doc = reference
+            .execute(Request::import_smiles(text))
+            .await
+            .map_err(anyhow::Error::msg)?
+            .document
+            .context("Missing reference drawing")?;
+        // Reordering changes toolkit indices; stable IDs and explicit winding
+        // must survive, while stale display labels must have no chemical effect.
+        if text == "[CH3:1][OH:9]" {
+            doc.atoms.last_mut().context("Missing mapped atom")?.map_num = i32::MAX as u32;
+        }
+        doc.atoms.reverse();
+        doc.bonds.reverse();
+        for a in &mut doc.atoms {
+            a.position.x = -a.position.x;
+            a.label_h = 99;
+        }
+        for b in &mut doc.bonds {
+            b.color = [75, 125, 160];
+        }
+        for format in [None, Some("smiles"), Some("mol")] {
+            let mut request = Request::molecule(
+                if format.is_some() {
+                    "export"
+                } else {
+                    "analyze"
+                },
+                doc.clone(),
+            );
+            request.format = format.map(String::from);
+            let expected = reference.execute(request.clone()).await;
+            let actual = local.execute(request).await;
+            match (actual, expected) {
+                (Ok(a), Ok(e)) => {
+                    assert_response_matches(a, e).with_context(|| format!("{text}/{format:?}"))?
+                }
+                (Err(_), Err(_)) => anyhow::bail!("Unexpected rejection of {text}/{format:?}"),
+                (a, e) => anyhow::bail!("Response mismatch for {text}/{format:?}: {a:?} vs {e:?}"),
+            }
+        }
+    }
+    // A chemistry failure must leave the input unchanged and the next request usable.
+    let mut invalid = reshiki::document::Document::default();
+    let center = invalid.add_atom("C", Default::default());
+    for i in 0..5 {
+        let other = invalid.add_atom("F", reshiki::document::Point::new(i as f32 * 28., 28.));
+        invalid.add_bond(center, other, 1, "plain");
+    }
+    let before = invalid.clone();
+    assert!(
+        local
+            .execute(Request::molecule("analyze", invalid.clone()))
+            .await
+            .is_err()
+    );
+    assert_eq!(before, invalid);
+    let valid = reference
+        .execute(Request::import_smiles("CO"))
+        .await
+        .map_err(anyhow::Error::msg)?
+        .document
+        .context("Missing valid drawing")?;
+    let req = Request::molecule("analyze", valid);
+    assert_response_matches(
+        local
+            .execute(req.clone())
+            .await
+            .map_err(anyhow::Error::msg)?,
+        reference.execute(req).await.map_err(anyhow::Error::msg)?,
+    )?;
+    Ok(())
+}
+
+#[tokio::test]
 async fn ambiguous_ring_pruning_keeps_the_complete_reference_analysis() -> TestResult {
     use reshiki::{chemistry::graph::Graph, document::Document};
     let graph: Graph = serde_json::from_str(include_str!("fixtures/ring-order-dependent.json"))?;

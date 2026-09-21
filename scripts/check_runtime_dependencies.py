@@ -46,6 +46,7 @@ def main():
                 "tests.test_engine",
                 "tests.test_local_properties",
                 "tests.test_local_pictures",
+                "tests.test_prepared",
             ],
             cwd=ROOT,
             env=env,

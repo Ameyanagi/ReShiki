@@ -9,7 +9,7 @@ flowchart LR
     Doc --> Scene[Vector scene]
     Scene --> Canvas[Iced geometry]
     Scene --> SVG[SVG export]
-    App --> Local[LocalEngine / Rust conversion and properties]
+    App --> Local[LocalEngine / Rust molecule preparation and properties]
     Local --> Contract[ChemistryEngine / protocol v1]
     Contract <--> Worker[Python process]
     Worker --> RDKit[RDKit]
@@ -27,7 +27,7 @@ flowchart LR
 | `src/app/workspace.rs`                         | Command bar, context options, compact palette, inspector and drawers           |
 | `src/app/icons.rs`                             | Original vector tool and command icons                                         |
 | `src/engine.rs`                                | Chemistry interface, worker lifecycle, timeout and response validation         |
-| `src/chemistry/`                               | Bounded graph, properties, canonical ranking and sanitizer building blocks     |
+| `src/chemistry/`                               | Molecule preparation, bounded graph, properties and stereo calculations        |
 | `src/pictures/exchange/`                       | Bounded raster decoding, orientation, transparency and reflection              |
 | `src/editing.rs`                               | Clipboard remapping, transforms, component arrangement and ring placement      |
 | `src/recovery.rs`                              | Atomic session snapshots and recovery candidates                               |
@@ -71,9 +71,9 @@ The file-open panel is intentionally unfiltered, so opening a supported file doe
 
 Application code forbids `unsafe`; required Win32 calls stay in the native helper. Sanitization and ring failures use `thiserror`, preserving the failed stage and underlying ring error. Tests, examples, build scripts and the Windows helper use `anyhow` for propagation and context. Existing string-error APIs are converted explicitly at those boundaries. Prefer iterator transformations when they clarify data flow; use bounded loops for stateful graph traversal.
 
-The app uses `LocalEngine`, which implements `ChemistryEngine`. CDX conversion, raster normalization, valence checks, hydrogen counts and scalar molecular properties run in Rust on blocking tasks. RDKit still sanitizes molecules and supplies their atom/bond graphs. Rust derives hydrogen counts from those graphs; cached drawing labels are never used for properties.
+The app uses `LocalEngine`, which implements `ChemistryEngine`. CDX conversion, raster normalization, valence checks, hydrogen counts and scalar molecular properties run in Rust on blocking tasks. Analyze and SMILES/MOL/InChI export also prepare molecules in Rust: stable-ID mapping, sanitization, wedge/coordinate stereo and legacy stereo assignment. Cached drawing labels never determine chemical identity.
 
-The bridge requests a sanitized graph with `local_properties: true`, completes the analysis in Rust, and returns the unchanged public response type. Missing graph data, invalid valences or a mismatched RDKit version return errors. `PythonEngine::default()` retains the original calculations as an independent reference. A future backend can replace Python behind the same interface; this is not a runtime plugin ABI.
+The bridge sends prepared molecules for those operations and requests property graphs with `local_properties: true`. Rust completes analysis without changing the public response type. Missing graph data, invalid valences or a mismatched RDKit version return errors. `PythonEngine::default()` retains the original calculations as an independent reference. A future backend can replace Python behind the same interface; this is not a runtime plugin ABI.
 
 `tests/cdx_codec.rs` compares binary output and decoded XML with the Python reference, including native fixtures and every supported property. Its text corpus covers every defined character in the supported legacy codepages. `tests/engine_migration.rs` compares complete responses, stereo identities, isotopes, charges, radicals, figure objects, and rejected queries against RDKit. Malformed binary data must fail before reaching the chemistry backend. The ordinary integration tests use `LocalEngine`, so they exercise the app's migrated path.
 
@@ -81,7 +81,9 @@ The bridge requests a sanitized graph with `local_properties: true`, completes t
 
 `tests/valence.rs` compares over 278,000 cases with RDKit's strict/intermediate property caches and radical pass: allowed/rejected valences, charges, implicit-H policy, aromatic and partial bonds, dative direction and metal atoms. Graphs reject invalid endpoints, duplicate bonds and excessive size. Intermediate caches tolerate temporary valence excess during normalization; final validation remains strict.
 
-The Rust sanitization pipeline combines functional-group and metal normalization, radical assignment, canonical atom ranking, Kekulé bond assignment, aromaticity, conjugation, hybridization, stereo cleanup and hydrogen restoration. `tests/sanitize.rs` compares 32,987 complete results with RDKit, including valence caches, bond directions, stereo groups, canonical retries and rejected inputs. Intermediate caches follow the reference stage order. A failure returns its stage without changing the input. Production sanitization stays in RDKit while stereo perception and document integration are migrated.
+The Rust sanitization pipeline combines functional-group and metal normalization, radical assignment, canonical atom ranking, Kekulé bond assignment, aromaticity, conjugation, hybridization, stereo cleanup and hydrogen restoration. `tests/sanitize.rs` compares 32,987 complete results with RDKit, including valence caches, bond directions, stereo groups, canonical retries and rejected inputs. Intermediate caches follow the reference stage order. A failure returns its stage without changing the input. It now runs when preparing drawings for Analyze and molecular exports. Other operations still use the reference sanitizer.
+
+`tests/document_preparation.rs` compares complete drawing-to-molecule states against direct RDKit APIs, including stable IDs above the JavaScript integer limit, reordered bonds, mirrored coordinates, stale labels and rejected chemistry. `tests/test_prepared.py` verifies native-state transport and proves that migrated requests skip Python sanitization and stereo perception. RDKit still initializes native valence/ring caches for its remaining operations; the adapter checks them against Rust. Only unresolved dense-ring ordering uses the existing fallback; other preparation errors stop the request. Document validation indexes endpoints and neighbors, with a 20,000-atom regression.
 
 Kekulé assignment uses bounded, iterative backtracking and preserves bond directions according to the reference rules. `tests/kekulize.rs` compares over 51,000 cases, including rejected graphs, dummy atoms and wedged bonds. It also checks the optional-attempt snapshot used by canonical retries: aromatic flags/orders are restored after a chemical failure, while some direction and hydrogen changes remain. Failed assignment leaves the caller's graph unchanged.
 
@@ -115,7 +117,7 @@ Element, isotope, allowed-valence and outer-electron data come from RDKit `Relea
 
 Regenerate descriptor rules with `uv run --locked python scripts/regenerate_descriptor_data.py --rdkit-source ~/dev/rdkit`, then `npx --no-install oxfmt src/chemistry/descriptor_data.json`. The generator verifies source checksums and compiles the fixed queries into checked-in data. The application reads that data without invoking Python or parsing SMARTS.
 
-The target is a shipped app with no Python, RDKit or uv requirement. Remaining work includes document/exchange conversion, sanitizer integration, portable dense-ring pruning, drawing-label assignment, parsers, full CIP labeling, stereo integration, canonical identifiers and 2D layout. Each replacement needs differential tests before switching. Python/RDKit can remain development-only references after the runtime is removed; current builds still require them.
+The target is a shipped app with no Python, RDKit or uv requirement. Remaining work includes other document/exchange operations, portable dense-ring pruning, native-cache removal, drawing-label assignment, parsers, full CIP labeling, canonical identifiers and 2D layout. Each replacement needs differential tests before switching. Python/RDKit can remain development-only references after the runtime is removed; current builds still require them.
 
 Portable packages include the worker project and `uv.lock` in `Contents/Resources/chemistry` on macOS or a sibling `chemistry` directory on Windows/Linux. The Rust bridge discovers it relative to the executable and asynchronously runs `uv sync --locked --no-dev --python 3.12` into a separate per-user cache. uv is an installation prerequisite. Python dependencies are reused offline after initial setup, and setup does not modify the signed bundle. Development checkouts use their local `.venv`. The chemistry protocol remains version 1 independently of the native document version.
 
