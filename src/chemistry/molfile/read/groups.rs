@@ -202,9 +202,6 @@ impl Groups {
                             Err(crate::chemistry::smarts::Error::Limit) => {
                                 return Err(ReadError::Limit);
                             }
-                            Err(crate::chemistry::smarts::Error::Pending(reason)) => {
-                                return Err(ReadError::Pending(reason));
-                            }
                         }
                     }
                 }

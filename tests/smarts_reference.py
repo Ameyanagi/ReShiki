@@ -4,11 +4,18 @@ import json
 import random
 from itertools import product
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from rdkit import Chem, RDConfig, RDLogger, rdBase
 
+if TYPE_CHECKING or __package__:
+    from .cxsmarts_reference import cases as cx_cases
+else:
+    from cxsmarts_reference import cases as cx_cases
+
 
 def cases():
+    yield from cx_cases()
     atoms = [
         "C",
         "N",

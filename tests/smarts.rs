@@ -39,7 +39,7 @@ fn smarts_validation_matches_native_parser() -> anyhow::Result<()> {
     let version: serde_json::Value =
         serde_json::from_str(&lines.next().context("Missing version")??)?;
     assert_eq!(version["rdkit_version"], RDKIT_VERSION);
-    let (mut accepted, mut rejected, mut pending) = (0, 0, 0);
+    let (mut accepted, mut rejected) = (0, 0);
     let mut failures = Vec::new();
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
@@ -52,10 +52,6 @@ fn smarts_validation_matches_native_parser() -> anyhow::Result<()> {
                 rejected += 1;
                 None
             }
-            Err(Error::Pending("CXSMARTS extensions")) => {
-                pending += 1;
-                continue;
-            }
             Err(error) => anyhow::bail!("Unexpected parser error for {:?}: {error}", case.text),
         };
         if actual != case.expected {
@@ -67,7 +63,7 @@ fn smarts_validation_matches_native_parser() -> anyhow::Result<()> {
     }
     assert!(child.wait()?.success());
     eprintln!(
-        "SMARTS: {accepted} accepted, {rejected} rejected, {pending} pending CX, {} mismatches",
+        "SMARTS: {accepted} accepted, {rejected} rejected, {} mismatches",
         failures.len()
     );
     if !failures.is_empty() {
@@ -120,5 +116,27 @@ fn parser_bounds_and_long_branches_are_safe() -> anyhow::Result<()> {
             let _ = smarts::validate(&text);
         }
     }
+    for section in [
+        "$酸;🧪$",
+        "atomProp:0.name.酸",
+        "SgD:0:name:data::::",
+        "wU:0.0",
+        "(1,2,3)",
+    ] {
+        let text = format!("CC |{section}|");
+        for (end, _) in text.char_indices() {
+            let prefix = text.get(..end).context("Invalid test boundary")?;
+            let _ = smarts::validate(prefix);
+        }
+    }
+    let large = format!(
+        "{} |u:{}|",
+        "C".repeat(30_000),
+        (0..30_000)
+            .map(|i| i.to_string())
+            .collect::<Vec<_>>()
+            .join(",")
+    );
+    assert_eq!(smarts::validate(&large)?, 30_000);
     Ok(())
 }

@@ -21,9 +21,6 @@ pub enum ReadError {
     Invalid { line: usize, message: String },
     #[error("MOL input contains unsupported chemistry: {0}")]
     Unsupported(&'static str),
-    /// An explicit migration boundary, never a claim that the file is invalid.
-    #[error("MOL input still requires the reference reader: {0}")]
-    Pending(&'static str),
     #[error("MOL input exceeds the size or work limit")]
     Limit,
     #[error(transparent)]
@@ -366,8 +363,8 @@ fn radical(code: i32) -> Result<u8> {
 }
 
 /// Read one strict MOL block, retaining explicit H atoms and native atom order.
-/// This staged reader is not enabled in the application until pending file
-/// extensions have independent reference coverage.
+/// Engine integration is separate: file metadata and drawing reconstruction
+/// also need complete response comparisons before replacing application reads.
 pub fn read(text: &str) -> Result<Molecule> {
     if text.len() > 16 * 1024 * 1024 {
         return Err(ReadError::Limit);

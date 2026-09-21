@@ -4,8 +4,9 @@
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
 //!
 //! This validates syntax and graph construction, not chemical satisfiability.
-//! Query matching is separate. CX extensions remain explicitly staged.
+//! Query matching is separate.
 use std::collections::{HashMap, HashSet};
+mod cx;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -13,8 +14,6 @@ pub enum Error {
     Syntax(usize),
     #[error("SMARTS exceeds parser resource limits")]
     Limit,
-    #[error("SMARTS validation is pending for {0}")]
-    Pending(&'static str),
 }
 type Result<T> = std::result::Result<T, Error>;
 
@@ -54,13 +53,15 @@ pub fn validate(text: &str) -> Result<usize> {
         bytes: bytes.get(start..end).ok_or(Error::Limit)?,
         pos: 0,
         atoms: 0,
+        bond_index: 0,
+        topology: Topology::default(),
     };
     let count = parser.molecule(0)?;
     if !matches!(parser.peek(), None | Some(b'\n')) {
         return Err(parser.invalid());
     }
     if suffix.starts_with('|') {
-        return Err(Error::Pending("CXSMARTS extensions"));
+        cx::validate(suffix, &parser.topology)?;
     }
     Ok(count)
 }
@@ -91,6 +92,19 @@ struct Parser<'a> {
     bytes: &'a [u8],
     pos: usize,
     atoms: usize,
+    bond_index: usize,
+    topology: Topology,
+}
+
+#[derive(Default)]
+struct Topology {
+    atoms: usize,
+    bonds: Vec<ParseBond>,
+}
+struct ParseBond {
+    a: usize,
+    b: usize,
+    index: usize,
 }
 impl Parser<'_> {
     fn peek(&self) -> Option<u8> {
@@ -422,6 +436,8 @@ impl Parser<'_> {
         let mut branches = Vec::new();
         let mut rings = HashMap::new();
         let mut bonds = HashSet::new();
+        let mut ordinary = Vec::new();
+        let mut closures = Vec::new();
         while let Some(byte) = self.peek() {
             if byte == b'\n' {
                 break;
@@ -436,16 +452,19 @@ impl Parser<'_> {
             }
             let mut connected = true;
             let mut require_atom = false;
+            let mut specified = false;
             if self.eat(b'(') {
                 branches.push(current);
                 require_atom = true;
                 if self.bond_start() {
+                    specified = true;
                     self.bond()?;
                 }
             } else if self.eat(b'.') {
                 connected = false;
                 require_atom = true;
             } else if self.bond_start() {
+                specified = true;
                 self.bond()?;
             }
             if !require_atom && self.peek().is_some_and(|b| b.is_ascii_digit() || b == b'%') {
@@ -455,8 +474,22 @@ impl Parser<'_> {
                     if current == other || !bonds.insert(edge) {
                         return Err(self.invalid());
                     }
+                    if depth == 0 {
+                        closures.push((
+                            ring,
+                            ParseBond {
+                                a: other,
+                                b: current,
+                                index: self.bond_index,
+                            },
+                        ));
+                    }
+                    self.bond_index += 1;
                 } else {
                     rings.insert(ring, current);
+                    if specified {
+                        self.bond_index += 1;
+                    }
                 }
                 continue;
             }
@@ -464,6 +497,14 @@ impl Parser<'_> {
             chirality_valid &= atom.valid();
             if connected {
                 bonds.insert((current.min(count), current.max(count)));
+                if depth == 0 {
+                    ordinary.push(ParseBond {
+                        a: current,
+                        b: count,
+                        index: self.bond_index,
+                    });
+                }
+                self.bond_index += 1;
             }
             current = count;
             count += 1;
@@ -474,6 +515,16 @@ impl Parser<'_> {
         }
         if !branches.is_empty() || !rings.is_empty() || (depth == 0 && !chirality_valid) {
             return Err(self.invalid());
+        }
+        if depth == 0 {
+            // Native closure bonds are appended by bookmark order; equal
+            // bookmarks retain the order in which their pairs were parsed.
+            closures.sort_by_key(|(ring, _)| *ring);
+            ordinary.extend(closures.into_iter().map(|(_, bond)| bond));
+            self.topology = Topology {
+                atoms: count,
+                bonds: ordinary,
+            };
         }
         Ok(count)
     }

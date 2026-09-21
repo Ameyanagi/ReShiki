@@ -6,7 +6,6 @@ use reshiki::chemistry::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
-    collections::BTreeMap,
     io::{BufRead, BufReader},
     path::Path,
     process::{Command, Stdio},
@@ -73,7 +72,6 @@ fn molecular_file_import_matches_native_reader() -> anyhow::Result<()> {
     assert_eq!(version["rdkit_version"], RDKIT_VERSION);
     let (mut accepted, mut rejected, mut mismatches) = (0, 0, 0);
     let (mut groups_accepted, mut groups_rejected) = (0, 0);
-    let mut pending = BTreeMap::<String, usize>::new();
     let mut failures = Vec::new();
     let mut all_failures = Vec::new();
     for line in lines {
@@ -89,10 +87,6 @@ fn molecular_file_import_matches_native_reader() -> anyhow::Result<()> {
                     expected,
                     "molecule",
                 )
-            }
-            (Err(ReadError::Pending(reason)), _) => {
-                *pending.entry((*reason).to_owned()).or_default() += 1;
-                None
             }
             (Err(_), None) => {
                 rejected += 1;
@@ -130,15 +124,9 @@ fn molecular_file_import_matches_native_reader() -> anyhow::Result<()> {
             all_failures.join("\n"),
         )?;
     }
-    eprintln!(
-        "MOL import: {accepted} accepted, {rejected} rejected, {mismatches} mismatches, pending {pending:?}"
-    );
+    eprintln!("MOL import: {accepted} accepted, {rejected} rejected, {mismatches} mismatches");
     eprintln!("Substance groups: {groups_accepted} accepted, {groups_rejected} rejected");
     assert!(failures.is_empty(), "{}", failures.join("\n"));
-    assert!(
-        pending.keys().all(|reason| reason == "CXSMARTS extensions"),
-        "Unexpected pending import operation: {pending:?}"
-    );
     assert!(
         accepted > 1000 && rejected > 100,
         "Insufficient MOL import coverage"
