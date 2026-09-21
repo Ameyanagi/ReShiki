@@ -8,6 +8,8 @@ use super::{
     stereo::{perception::RingKind, wedging},
 };
 use std::{collections::HashSet, fmt::Write};
+mod read;
+pub use read::{ReadError, read};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
