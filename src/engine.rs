@@ -189,12 +189,19 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
         if request.protocol != 1 {
             return Err("Unsupported protocol version".into());
         }
-        if request.operation == "export" && request.format.as_deref() == Some("rxn") {
+        if request.operation == "export"
+            && let Some(format @ ("rxn" | "rsmi")) = request.format.as_deref()
+        {
+            let reaction_smiles = format == "rsmi";
             use crate::chemistry::{document, reaction, rings::RingError, sanitize};
             let document = request.document.clone().ok_or("Missing reaction drawing")?;
             let selected = request.selected_ids.clone();
             let output = tokio::task::spawn_blocking(move || {
-                reaction::write_rxn(&document, selected.as_deref())
+                if reaction_smiles {
+                    reaction::write_smiles(&document, selected.as_deref())
+                } else {
+                    reaction::write_rxn(&document, selected.as_deref())
+                }
             })
             .await
             .map_err(|e| format!("Reaction export failed: {e}"))?;
@@ -214,6 +221,9 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
                         cause: sanitize::Cause::Rings(RingError::UnresolvedOrdering),
                         ..
                     },
+                ))) => (),
+                Err(reaction::Error::Smiles(crate::chemistry::smiles::write::Error::Rings(
+                    RingError::UnresolvedOrdering,
                 ))) => (),
                 Err(error) => return Err(error.to_string()),
             }
@@ -263,6 +273,25 @@ struct Worker {
     output: BufReader<ChildStdout>,
     next_id: u64,
 }
+// Called only from blocking preparation tasks. `None` retains the known ring
+// fallback or the empty-file response; exotic bond analyses keep no identifier.
+fn molecular_smiles(
+    state: &crate::chemistry::stereo::perception::State,
+) -> Result<Option<String>, String> {
+    use crate::chemistry::{rings::RingError, smiles::write};
+    if state.graph.atoms.is_empty() {
+        return Ok(None);
+    }
+    if state.graph.bonds.iter().any(|b| matches!(b.order, 0 | 7)) {
+        return Ok(Some(String::new()));
+    }
+    match write::write(state, write::Options::default()) {
+        Ok(output) => Ok(Some(output.text)),
+        Err(write::Error::Rings(RingError::UnresolvedOrdering)) => Ok(None),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
 type PreparedMolecule = (
     crate::chemistry::document::Molecule,
     crate::chemistry::document::Drawing,
@@ -407,19 +436,9 @@ impl PythonEngine {
             .filter(|(molecule, _, _)| !molecule.state.graph.atoms.is_empty())
         {
             let state = molecule.state.clone();
-            tokio::task::spawn_blocking(move || {
-                use crate::chemistry::{rings::RingError, smiles::write};
-                if state.graph.bonds.iter().any(|b| matches!(b.order, 0 | 7)) {
-                    return Ok(Some(String::new()));
-                }
-                match write::write(&state, write::Options::default()) {
-                    Ok(output) => Ok(Some(output.text)),
-                    Err(write::Error::Rings(RingError::UnresolvedOrdering)) => Ok(None),
-                    Err(error) => Err(error.to_string()),
-                }
-            })
-            .await
-            .map_err(|e| format!("SMILES serialization failed: {e}"))??
+            tokio::task::spawn_blocking(move || molecular_smiles(&state))
+                .await
+                .map_err(|e| format!("SMILES serialization failed: {e}"))??
         } else {
             None
         };

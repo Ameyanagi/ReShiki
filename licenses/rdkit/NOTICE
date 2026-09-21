@@ -38,7 +38,7 @@ Copyright (C) 2020 Greg Landrum and T5 Informatics GmbH.
 Code/GraphMol/FileParsers/MolFileWriter.cpp (V2000/V3000 molecular output)
 Copyright (C) 2003-2023 Greg Landrum and other RDKit contributors.
 
-Code/GraphMol/ChemReactions/ReactionWriter.cpp (V3000 reaction output)
+Code/GraphMol/ChemReactions/ReactionWriter.cpp (reaction SMILES grouping and ordering; V3000 reaction output)
 Copyright (C) 2010-2024 Novartis Institutes for BioMedical Research Inc.
 and other RDKit contributors.
 

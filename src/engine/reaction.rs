@@ -56,7 +56,10 @@ impl PythonEngine {
         let drawing = tokio::task::spawn_blocking(move || {
             let doc = draft.finish(labeled.labels).map_err(|e| e.to_string())?;
             match document::prepare(&doc) {
-                Ok(molecule) => Ok(Some((doc, molecule))),
+                Ok(molecule) => {
+                    let smiles = super::molecular_smiles(&molecule.state)?;
+                    Ok(Some((doc, molecule, smiles)))
+                }
                 Err(document::Error::Sanitization(sanitize::Error {
                     cause: sanitize::Cause::Rings(RingError::UnresolvedOrdering),
                     ..
@@ -66,7 +69,7 @@ impl PythonEngine {
         })
         .await
         .map_err(|e| format!("Reaction drawing preparation failed: {e}"))??;
-        let Some((doc, molecule)) = drawing else {
+        let Some((doc, molecule, smiles)) = drawing else {
             return Ok(None);
         };
         let mut result = self
@@ -78,6 +81,7 @@ impl PythonEngine {
                 "document": doc,
                 "prepared_molecule": molecule,
                 "local_properties": self.local_properties,
+                "local_smiles": smiles.is_some(),
             }))
             .await?;
         let properties = self.local_properties;
@@ -89,6 +93,13 @@ impl PythonEngine {
                 serde_json::from_value(result).map_err(|e| e.to_string())?;
             if response.engine_version != RDKIT_VERSION {
                 return Err("Reaction analysis version changed".into());
+            }
+            if let Some(smiles) = smiles {
+                response
+                    .analysis
+                    .as_mut()
+                    .ok_or("Missing reaction analysis")?
+                    .smiles = smiles;
             }
             response.document = Some(doc);
             Ok(Some(response))

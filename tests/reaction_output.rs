@@ -22,6 +22,15 @@ struct Case {
 
 #[test]
 fn reaction_files_match_native_writer_and_rejections() -> anyhow::Result<()> {
+    output_matches_reference("rxn")
+}
+
+#[test]
+fn reaction_smiles_match_native_writer_and_rejections() -> anyhow::Result<()> {
+    output_matches_reference("rsmi")
+}
+
+fn output_matches_reference(format: &str) -> anyhow::Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let python = root.join(if cfg!(windows) {
         ".venv/Scripts/python.exe"
@@ -30,6 +39,7 @@ fn reaction_files_match_native_writer_and_rejections() -> anyhow::Result<()> {
     });
     let mut child = Command::new(python)
         .arg(root.join("tests/reaction_output_reference.py"))
+        .args((format == "rsmi").then_some("--smiles"))
         .env("PYTHONUTF8", "1")
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
@@ -45,7 +55,11 @@ fn reaction_files_match_native_writer_and_rejections() -> anyhow::Result<()> {
         let actual = serde_json::from_value::<Document>(case.document.clone())
             .map_err(anyhow::Error::from)
             .and_then(|doc| {
-                reaction::write_rxn(&doc, case.selected.as_deref()).map_err(Into::into)
+                if format == "rsmi" {
+                    reaction::write_smiles(&doc, case.selected.as_deref()).map_err(Into::into)
+                } else {
+                    reaction::write_rxn(&doc, case.selected.as_deref()).map_err(Into::into)
+                }
             });
         let failure = match (&actual, &case.expected) {
             (Ok(actual), Some(expected)) if actual == expected => {
@@ -59,7 +73,7 @@ fn reaction_files_match_native_writer_and_rejections() -> anyhow::Result<()> {
             (Err(error), Some(_)) => Some(format!("Unexpected rejection: {error}")),
             (Ok(_), None) => Some(format!("Accepted native rejection: {:?}", case.failure)),
             (Ok(actual), Some(expected)) => Some(format!(
-                "RXN differs at line {:?}",
+                "{format} differs at line {:?}",
                 actual
                     .lines()
                     .zip(expected.lines())
@@ -73,15 +87,21 @@ fn reaction_files_match_native_writer_and_rejections() -> anyhow::Result<()> {
             }
             if mismatches == 1 {
                 std::fs::create_dir_all(root.join("artifacts"))?;
-                std::fs::write(root.join("artifacts/reaction-first-mismatch.json"), line)?;
+                std::fs::write(
+                    root.join(format!("artifacts/reaction-{format}-mismatch.json")),
+                    line,
+                )?;
                 if let Ok(actual) = actual {
-                    std::fs::write(root.join("artifacts/reaction-actual.rxn"), actual)?;
+                    std::fs::write(
+                        root.join(format!("artifacts/reaction-actual.{format}")),
+                        actual,
+                    )?;
                 }
             }
         }
     }
     anyhow::ensure!(child.wait()?.success(), "Reaction oracle failed");
-    eprintln!("RXN output: {accepted} accepted, {rejected} rejected, {mismatches} mismatches");
+    eprintln!("{format} output: {accepted} accepted, {rejected} rejected, {mismatches} mismatches");
     anyhow::ensure!(mismatches == 0, "{}", failures.join("\n"));
     anyhow::ensure!(
         accepted > 5000 && rejected > 100,
@@ -92,6 +112,13 @@ fn reaction_files_match_native_writer_and_rejections() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn reaction_export_runs_without_a_python_backend() -> anyhow::Result<()> {
+    for format in ["rxn", "rsmi"] {
+        offline_export(format).await?;
+    }
+    Ok(())
+}
+
+async fn offline_export(format: &str) -> anyhow::Result<()> {
     use reshiki::{
         document::{Arrow, Point},
         engine::{ChemistryEngine, LocalEngine, Request, Response},
@@ -100,7 +127,7 @@ async fn reaction_export_runs_without_a_python_backend() -> anyhow::Result<()> {
     struct Unavailable;
     impl ChemistryEngine for Unavailable {
         async fn execute(&self, _: Request) -> Result<Response, String> {
-            Err("The backend must not be called for native RXN export".into())
+            Err("The backend must not be called for native reaction export".into())
         }
     }
     let mut doc = Document::default();
@@ -124,14 +151,18 @@ async fn reaction_export_runs_without_a_python_backend() -> anyhow::Result<()> {
     });
     doc.reactions.push(roles);
     let mut request = Request::molecule("export", doc.clone());
-    request.format = Some("rxn".into());
+    request.format = Some(format.into());
     let response = LocalEngine::with_backend(Unavailable)
         .execute(request)
         .await
         .map_err(anyhow::Error::msg)?;
     anyhow::ensure!(response.document.is_none() && response.analysis.is_none());
     anyhow::ensure!(response.engine_version == RDKIT_VERSION);
-    let expected = reaction::write_rxn(&doc, None)?;
+    let expected = if format == "rsmi" {
+        reaction::write_smiles(&doc, None)?
+    } else {
+        reaction::write_rxn(&doc, None)?
+    };
     anyhow::ensure!(response.output.as_deref() == Some(expected.as_str()));
     anyhow::ensure!(response.warnings.len() == 1);
     let mut invalid = doc;
@@ -145,7 +176,7 @@ async fn reaction_export_runs_without_a_python_backend() -> anyhow::Result<()> {
         .context("Missing participant")?
         .coefficient = 2;
     let mut request = Request::molecule("export", invalid);
-    request.format = Some("rxn".into());
+    request.format = Some(format.into());
     let error = LocalEngine::with_backend(Unavailable)
         .execute(request)
         .await
@@ -172,17 +203,19 @@ async fn complete_reaction_export_responses_match_the_original_engine() -> anyho
             .map_err(anyhow::Error::msg)?
             .document
             .context("Missing reaction")?;
-        let mut request = Request::molecule("export", doc);
-        request.format = Some("rxn".into());
-        let expected = reference
-            .execute(request.clone())
-            .await
-            .map_err(anyhow::Error::msg)?;
-        let actual = local.execute(request).await.map_err(anyhow::Error::msg)?;
-        anyhow::ensure!(
-            serde_json::to_value(actual)? == serde_json::to_value(expected)?,
-            "{text}"
-        );
+        for format in ["rxn", "rsmi"] {
+            let mut request = Request::molecule("export", doc.clone());
+            request.format = Some(format.into());
+            let expected = reference
+                .execute(request.clone())
+                .await
+                .map_err(anyhow::Error::msg)?;
+            let actual = local.execute(request).await.map_err(anyhow::Error::msg)?;
+            anyhow::ensure!(
+                serde_json::to_value(actual)? == serde_json::to_value(expected)?,
+                "{text}"
+            );
+        }
     }
     Ok(())
 }
@@ -246,7 +279,9 @@ async fn only_unresolved_ring_ordering_uses_the_reference_backend() -> anyhow::R
     struct Reference;
     impl ChemistryEngine for Reference {
         async fn execute(&self, request: Request) -> Result<Response, String> {
-            if request.operation != "export" || request.format.as_deref() != Some("rxn") {
+            if request.operation != "export"
+                || !matches!(request.format.as_deref(), Some("rxn" | "rsmi"))
+            {
                 return Err("Reaction request changed before fallback".into());
             }
             Ok(Response {
@@ -258,14 +293,16 @@ async fn only_unresolved_ring_ordering_uses_the_reference_backend() -> anyhow::R
             })
         }
     }
-    let mut request = Request::molecule("export", doc.clone());
-    request.format = Some("rxn".into());
-    let result = LocalEngine::with_backend(Reference)
-        .execute(request)
-        .await
-        .map_err(anyhow::Error::msg)?;
-    anyhow::ensure!(
-        result.output.as_deref() == Some("reference") && result.document.as_ref() == Some(&doc)
-    );
+    for format in ["rxn", "rsmi"] {
+        let mut request = Request::molecule("export", doc.clone());
+        request.format = Some(format.into());
+        let result = LocalEngine::with_backend(Reference)
+            .execute(request)
+            .await
+            .map_err(anyhow::Error::msg)?;
+        anyhow::ensure!(
+            result.output.as_deref() == Some("reference") && result.document.as_ref() == Some(&doc)
+        );
+    }
     Ok(())
 }

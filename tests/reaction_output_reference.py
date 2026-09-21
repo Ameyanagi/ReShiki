@@ -1,8 +1,9 @@
-"""Native RXN output using the original reaction rules and independent molecule builder."""
+"""Native RXN/reaction SMILES output using the original reaction rules and independent molecule builder."""
 
 import copy
 import json
 import sys
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -35,7 +36,7 @@ def scheme(part):
     return doc
 
 
-def emit(name, doc, selected=None):
+def write_case(name, doc, selected=None, format="rxn"):
     doc = copy.deepcopy(doc)
     # Requests promote stored f32 positions to JSON floats before Python reads
     # them. Preserve that boundary, including the sign of zero under Y reversal.
@@ -43,9 +44,11 @@ def emit(name, doc, selected=None):
         atom["position"] = {axis: f32(atom["position"][axis]) for axis in ("x", "y")}
     expected, failure = None, None
     try:
-        expected = reactions.export(doc, selected, "rxn", molecule)
+        expected = reactions.export(doc, selected, format, molecule)
     except (ValueError, RuntimeError, KeyError, OverflowError) as error:
         failure = str(error)
+    if name.startswith("mixture/") and failure is not None:
+        raise RuntimeError(f"Invalid mixture fixture: {failure}")
     print(
         json.dumps(
             dict(name=name, document=doc, selected=selected, expected=expected, failure=failure)
@@ -53,7 +56,8 @@ def emit(name, doc, selected=None):
     )
 
 
-def main():
+def main(format="rxn"):
+    emit = partial(write_case, format=format)
     RDLogger.DisableLog("rdApp.*")
     print(json.dumps(dict(rdkit_version=rdBase.rdkitVersion)))
     cases(lambda name, part: emit(name, scheme(part)))
@@ -102,6 +106,24 @@ def main():
                     bond["a"], bond["b"] = bond["b"], bond["a"]
                     bond["stereo_atoms"].reverse()
             emit(f"ordering/{smiles}/{permute}", doc)
+    for text in ("CO.[Na+].[Cl-].CC.N", "F/C=C/F.F/C=C\\F.O", "C[C@H](F)Cl.C[C@@H](F)Cl.N"):
+        mol = Chem.MolFromSmiles(text)
+        base = scheme(drawing(mol))
+        components = [[base["atoms"][a]["id"] for a in part] for part in Chem.GetMolFrags(mol)]
+        for grouped in (False, True):
+            groups = [components[0] + components[1], *components[2:]] if grouped else components
+            for reverse in (False, True):
+                for coefficient in (1, 3):
+                    doc = copy.deepcopy(base)
+                    source = doc["reactions"][0]
+                    source["reactants"] = [
+                        dict(atoms=members, coefficient=coefficient) for members in groups[:-1]
+                    ]
+                    source["agents"] = [dict(atoms=groups[-1], coefficient=coefficient)]
+                    if reverse:
+                        doc["atoms"].reverse()
+                        source["reactants"].reverse()
+                    emit(f"mixture/{text}/{grouped}/{reverse}/{coefficient}", doc)
     base = scheme(drawing(Chem.MolFromSmiles("CCO")))
     arrow = base["reactions"][0]["arrow"]
     for selected in (None, [], [arrow], [arrow, arrow], [1], [arrow, 1]):
@@ -182,4 +204,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main("rsmi" if "--smiles" in sys.argv else "rxn")

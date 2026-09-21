@@ -1,5 +1,5 @@
-//! MDL reaction interchange with explicit participant roles.
-//! CTAB arrangement follows RDKit ReactionWriter.cpp (2026.03.6).
+//! RXN and reaction SMILES interchange with explicit participant roles.
+//! Component arrangement follows RDKit ReactionWriter.cpp (2026.03.6).
 //! Copyright (C) 2010-2024 Novartis Institutes for BioMedical Research Inc.
 //! and other RDKit contributors.
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
@@ -36,6 +36,8 @@ pub enum Error {
     Preparation(#[from] document::Error),
     #[error(transparent)]
     Molecular(#[from] molfile::Error),
+    #[error(transparent)]
+    Smiles(#[from] super::smiles::write::Error),
     #[error("Reaction exceeds the 10,000 atom or 16 MB output limit")]
     Limit,
     #[error("Could not format reaction output: {0}")]
@@ -48,9 +50,17 @@ fn invalid(message: impl Into<String>) -> Error {
 
 pub const EXPORT_WARNING: &str = "Reaction files preserve participants, atom maps and stereo. Save .reshiki to retain captions, arrow appearance and drawing layout.";
 
-/// Export one explicitly defined reaction without modifying its drawing.
-/// Positions and captions never determine reaction membership.
-pub fn write_rxn(doc: &Document, selected: Option<&[u64]>) -> Result<String, Error> {
+struct OutputRow {
+    label: &'static str,
+    parts: Vec<(String, usize)>,
+    count: usize,
+}
+
+fn prepare_output(
+    doc: &Document,
+    selected: Option<&[u64]>,
+    render: impl Fn(&document::Molecule) -> Result<String, Error>,
+) -> Result<Vec<OutputRow>, Error> {
     doc.validate().map_err(invalid)?;
     let selected: HashSet<_> = selected.unwrap_or_default().iter().copied().collect();
     let mut reactions = doc
@@ -146,18 +156,30 @@ pub fn write_rxn(doc: &Document, selected: Option<&[u64]>) -> Result<String, Err
                     ));
                 }
             }
-            let ctab = molfile::reaction_ctab(&molecule)?;
+            let text = render(&molecule)?;
             count = count.checked_add(coefficient).ok_or(Error::Limit)?;
-            parts.push((ctab, coefficient));
+            parts.push((text, coefficient));
         }
-        rows.push((label, parts, count));
+        rows.push(OutputRow {
+            label,
+            parts,
+            count,
+        });
     }
+    Ok(rows)
+}
+
+/// Export an RXN file with explicit participant roles and coefficients.
+pub fn write_rxn(doc: &Document, selected: Option<&[u64]>) -> Result<String, Error> {
+    let rows = prepare_output(doc, selected, |molecule| {
+        Ok(molfile::reaction_ctab(molecule)?)
+    })?;
     let mut output = String::from("$RXN V3000\n\n      RDKit\n\nM  V30 COUNTS");
-    for (_, _, count) in &rows {
-        write!(output, " {count}")?;
+    for row in &rows {
+        write!(output, " {}", row.count)?;
     }
     output.push('\n');
-    for (label, parts, _) in rows {
+    for OutputRow { label, parts, .. } in rows {
         writeln!(output, "M  V30 BEGIN {label}")?;
         for (ctab, coefficient) in parts {
             let length = output
@@ -174,5 +196,50 @@ pub fn write_rxn(doc: &Document, selected: Option<&[u64]>) -> Result<String, Err
         writeln!(output, "M  V30 END {label}")?;
     }
     output.push_str("M  END\n");
+    Ok(output)
+}
+
+/// Canonical reaction SMILES, preserving grouped components and repeated roles.
+/// Drawing positions and captions do not determine reaction membership.
+pub fn write_smiles(doc: &Document, selected: Option<&[u64]>) -> Result<String, Error> {
+    use super::smiles::write;
+    let rows = prepare_output(doc, selected, |molecule| {
+        let text = write::write(&molecule.state, write::Options::default())?.text;
+        // Default molecular output has no custom symbols: a dot identifies a
+        // disconnected participant, which reaction SMILES groups in parentheses.
+        Ok(if text.contains('.') {
+            format!("({text})")
+        } else {
+            text
+        })
+    })?;
+    let mut output = String::new();
+    // RXN records products before agents; reaction SMILES puts agents between.
+    for (position, id) in [0, 2, 1].into_iter().enumerate() {
+        if position > 0 {
+            output.push('>');
+        }
+        let row = rows.get(id).ok_or(Error::Limit)?;
+        let mut parts = row
+            .parts
+            .iter()
+            .flat_map(|(text, count)| std::iter::repeat_n(text.as_str(), *count))
+            .collect::<Vec<_>>();
+        parts.sort_unstable();
+        for (i, part) in parts.into_iter().enumerate() {
+            let length = output
+                .len()
+                .checked_add(part.len())
+                .and_then(|s| s.checked_add(3))
+                .ok_or(Error::Limit)?;
+            if length > 16 * 1024 * 1024 {
+                return Err(Error::Limit);
+            }
+            if i > 0 {
+                output.push('.');
+            }
+            output.push_str(part);
+        }
+    }
     Ok(output)
 }

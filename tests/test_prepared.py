@@ -200,6 +200,17 @@ class PreparedMoleculeTests(unittest.TestCase):
                     )
                     expected["document"] = None
                     self.assertEqual(worker.handle(analysis_request), expected)
+                    local_expected = copy.deepcopy(expected)
+                    local_expected["analysis"]["smiles"] = ""
+                    with patch.object(
+                        Chem,
+                        "MolToSmiles",
+                        side_effect=AssertionError("Native reaction SMILES analysis"),
+                    ):
+                        self.assertEqual(
+                            worker.handle({**analysis_request, "local_smiles": True}),
+                            local_expected,
+                        )
                     for override in (
                         dict(prepared_parts=None),
                         dict(prepared_parts=[]),
