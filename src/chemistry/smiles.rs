@@ -9,6 +9,7 @@ mod atom;
 mod chirality;
 mod prepare;
 pub mod symbols;
+pub mod traversal;
 pub use prepare::{Prepared, prepare};
 mod read;
 pub(crate) use read::reaction_part;

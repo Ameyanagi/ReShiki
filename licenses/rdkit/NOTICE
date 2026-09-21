@@ -81,10 +81,10 @@ Copyright (C) 2001-2016 Randal Henne, Greg Landrum and Rational Discovery LLC.
 Code/GraphMol/SmilesParse/SmilesParse.cpp and SmilesParseOps.cpp (SMILES/SMARTS preprocessing, ring closure and chiral validation)
 Copyright (C) 2001-2022 Greg Landrum and other RDKit contributors.
 
-Code/GraphMol/SmilesParse/SmilesWrite.cpp (atom and bond output symbols)
+Code/GraphMol/SmilesParse/SmilesWrite.cpp (atom/bond symbols and ring-label output)
 Copyright (C) 2002-2025 Greg Landrum and other RDKit contributors.
 
-Code/GraphMol/Canon.cpp (SMILES neighbor-order adjustment)
+Code/GraphMol/Canon.cpp (ranked SMILES traversal, ring closures and neighbor-order adjustment)
 Copyright (C) 2001-2021 Greg Landrum and other RDKit contributors.
 
 Code/GraphMol/NontetrahedralStereo.cpp (coordination permutation tables)
