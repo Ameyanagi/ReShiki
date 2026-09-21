@@ -10,11 +10,14 @@ use crate::chemistry::{
 };
 use serde::{Deserialize, Serialize};
 mod atrop;
+pub(crate) use atrop::detect_atropisomers_with_bounds;
 pub use atrop::{AtropError, detect_atropisomers};
 mod bonds;
 mod spatial;
+pub(crate) use spatial::from_3d_with_bounds;
 pub use spatial::{SpatialAnnotations, SpatialError, SpatialOptions, SpatialStereo, from_3d};
 pub mod wedging;
+pub(crate) use bonds::double_bond_directions_with_bounds;
 pub use bonds::{BondGeometry, detect_bond_stereo, double_bond_directions};
 
 #[cfg(test)]
@@ -26,6 +29,22 @@ pub struct Point3 {
     pub x: f64,
     pub y: f64,
     pub z: f64,
+}
+#[derive(Clone, Copy)]
+pub(crate) enum CoordinateBounds {
+    Drawing,
+    /// CX input can contain nonfinite values. Preserve native chemical
+    /// perception before layout replaces those coordinates; never render them.
+    NativeImport,
+}
+impl CoordinateBounds {
+    fn allows(self, point: Point3, maximum: f64) -> bool {
+        matches!(self, Self::NativeImport)
+            || point.valid()
+                && [point.x, point.y, point.z]
+                    .iter()
+                    .all(|v| v.abs() <= maximum)
+    }
 }
 impl Point3 {
     fn sub(self, other: Self) -> Self {
@@ -85,12 +104,32 @@ pub fn from_directions(
     positions: Option<&[Point3]>,
     replace_existing: bool,
 ) -> Result<DrawnStereo, String> {
+    from_directions_with_bounds(
+        graph,
+        metadata,
+        directions,
+        positions,
+        replace_existing,
+        CoordinateBounds::Drawing,
+    )
+}
+
+pub(crate) fn from_directions_with_bounds(
+    graph: &Graph,
+    metadata: &Metadata,
+    directions: &[Direction],
+    positions: Option<&[Point3]>,
+    replace_existing: bool,
+    bounds: CoordinateBounds,
+) -> Result<DrawnStereo, String> {
     let cache = graph.provisional_valences()?;
     metadata.validate(graph)?;
     if directions.len() != graph.bonds.len() {
         return Err("Invalid stereo direction count".into());
     }
-    if positions.is_some_and(|p| p.len() != graph.atoms.len() || p.iter().any(|&p| !p.valid())) {
+    if positions.is_some_and(|p| {
+        p.len() != graph.atoms.len() || p.iter().any(|&p| !bounds.allows(p, 1e100))
+    }) {
         return Err("Invalid or excessive stereo coordinates".into());
     }
     let mut result = DrawnStereo {

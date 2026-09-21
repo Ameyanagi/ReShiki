@@ -8,6 +8,7 @@
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
 pub mod aromaticity;
 mod atomic_data;
+pub mod cx;
 pub mod descriptors;
 pub mod document;
 pub mod electronic;

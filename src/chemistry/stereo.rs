@@ -19,6 +19,10 @@ pub use drawing::{
     SpatialOptions, SpatialStereo, bond_stereo_from_directions, detect_atropisomers,
     detect_bond_stereo, double_bond_directions, from_3d, from_directions,
 };
+pub(crate) use drawing::{
+    CoordinateBounds, detect_atropisomers_with_bounds, double_bond_directions_with_bounds,
+    from_3d_with_bounds, from_directions_with_bounds,
+};
 pub use priority::atom_priorities;
 use std::collections::{HashMap, HashSet};
 

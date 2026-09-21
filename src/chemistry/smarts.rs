@@ -5,8 +5,8 @@
 //!
 //! This validates syntax and graph construction, not chemical satisfiability.
 //! Query matching is separate.
+use super::cx::{self, ParseBond, Topology};
 use std::collections::{HashMap, HashSet};
-mod cx;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -16,6 +16,15 @@ pub enum Error {
     Limit,
 }
 type Result<T> = std::result::Result<T, Error>;
+
+impl From<cx::Error> for Error {
+    fn from(error: cx::Error) -> Self {
+        match error {
+            cx::Error::Syntax(offset) => Self::Syntax(offset),
+            cx::Error::Limit => Self::Limit,
+        }
+    }
+}
 
 /// Return the number of top-level query atoms. The empty string has zero atoms.
 /// Invalid queries return `Syntax`; resource bounds never become valid queries.
@@ -31,9 +40,7 @@ pub fn validate(text: &str) -> Result<usize> {
     let (body, suffix) = match split.filter(|&i| i != 0) {
         Some(i) => (
             text.get(..i).ok_or(Error::Limit)?,
-            text.get(i..)
-                .ok_or(Error::Limit)?
-                .trim_matches(|c: char| c.is_ascii_whitespace()),
+            cx::trim(text.get(i..).ok_or(Error::Limit)?),
         ),
         None => (text, ""),
     };
@@ -61,7 +68,7 @@ pub fn validate(text: &str) -> Result<usize> {
         return Err(parser.invalid());
     }
     if suffix.starts_with('|') {
-        cx::validate(suffix, &parser.topology)?;
+        cx::read(suffix, &parser.topology)?;
     }
     Ok(count)
 }
@@ -96,16 +103,6 @@ struct Parser<'a> {
     topology: Topology,
 }
 
-#[derive(Default)]
-struct Topology {
-    atoms: usize,
-    bonds: Vec<ParseBond>,
-}
-struct ParseBond {
-    a: usize,
-    b: usize,
-    index: usize,
-}
 impl Parser<'_> {
     fn peek(&self) -> Option<u8> {
         self.bytes.get(self.pos).copied()

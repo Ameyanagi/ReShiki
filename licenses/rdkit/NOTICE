@@ -68,7 +68,7 @@ Copyright (C) 2001-2021 Greg Landrum and other RDKit contributors.
 Code/GraphMol/NontetrahedralStereo.cpp (coordination permutation tables)
 Copyright (C) 2022 Greg Landrum and other RDKit contributors.
 
-Code/GraphMol/SmilesParse/CXSmilesOps.cpp (CXSMARTS extension validation)
+Code/GraphMol/SmilesParse/CXSmilesOps.cpp (shared CX syntax, coordinate values and molecular annotations)
 Copyright (C) 2016-2021 Greg Landrum and other RDKit contributors.
 
 Code/GraphMol/MolPickler.cpp and Code/RDGeneral/StreamOps.h (ring-stereo integer-vector transport in the temporary native bridge)

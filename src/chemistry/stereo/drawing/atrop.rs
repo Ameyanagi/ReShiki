@@ -248,11 +248,28 @@ pub fn detect_atropisomers(
     directions: &[Direction],
     conformer: Option<&Conformer>,
 ) -> Result<Metadata> {
+    detect_atropisomers_with_bounds(
+        graph,
+        metadata,
+        directions,
+        conformer,
+        super::CoordinateBounds::Drawing,
+    )
+}
+
+pub(crate) fn detect_atropisomers_with_bounds(
+    graph: &Graph,
+    metadata: &Metadata,
+    directions: &[Direction],
+    conformer: Option<&Conformer>,
+    bounds: super::CoordinateBounds,
+) -> Result<Metadata> {
     graph.validate().map_err(AtropError::Graph)?;
     metadata.validate(graph).map_err(AtropError::Metadata)?;
     if directions.len() != graph.bonds.len()
         || conformer.is_some_and(|c| {
-            c.positions.len() != graph.atoms.len() || c.positions.iter().any(|&p| !p.valid())
+            c.positions.len() != graph.atoms.len()
+                || c.positions.iter().any(|&p| !bounds.allows(p, 1e100))
         })
     {
         return Err(AtropError::Invalid("Invalid directions or coordinates"));

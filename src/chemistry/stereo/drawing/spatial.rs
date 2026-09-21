@@ -1,7 +1,7 @@
 //! 3D atom perception adapted from RDKit Chirality.cpp (2026.03.6).
 //! Copyright (C) 2004-2024 Greg Landrum and other RDKit contributors.
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
-use super::{Point3, wedging::Conformer};
+use super::{CoordinateBounds, Point3, wedging::Conformer};
 use crate::chemistry::{graph::Graph, kekulize::Direction, ranking::Metadata};
 use serde::{Deserialize, Serialize};
 
@@ -205,6 +205,26 @@ pub fn from_3d(
     annotations: &SpatialAnnotations,
     options: SpatialOptions,
 ) -> Result<SpatialStereo> {
+    from_3d_with_bounds(
+        graph,
+        metadata,
+        directions,
+        conformer,
+        annotations,
+        options,
+        CoordinateBounds::Drawing,
+    )
+}
+
+pub(crate) fn from_3d_with_bounds(
+    graph: &Graph,
+    metadata: &Metadata,
+    directions: &[Direction],
+    conformer: Option<&Conformer>,
+    annotations: &SpatialAnnotations,
+    options: SpatialOptions,
+    bounds: CoordinateBounds,
+) -> Result<SpatialStereo> {
     let valences = graph.provisional_valences().map_err(SpatialError::Graph)?;
     metadata.validate(graph).map_err(SpatialError::Metadata)?;
     if directions.len() != graph.bonds.len() || annotations.non_explicit.len() != graph.atoms.len()
@@ -212,7 +232,8 @@ pub fn from_3d(
         return Err(SpatialError::Invalid("Annotation dimensions changed"));
     }
     if conformer.is_some_and(|c| {
-        c.positions.len() != graph.atoms.len() || c.positions.iter().any(|p| !p.valid())
+        c.positions.len() != graph.atoms.len()
+            || c.positions.iter().any(|&p| !bounds.allows(p, 1e100))
     }) {
         return Err(SpatialError::Invalid(
             "Invalid or excessive conformer coordinates",

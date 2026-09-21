@@ -54,6 +54,7 @@ fn validate(
     metadata: &Metadata,
     directions: &[Direction],
     positions: Option<&[Point3]>,
+    bounds: super::CoordinateBounds,
 ) -> Result<(), String> {
     graph.validate()?;
     metadata.validate(graph)?;
@@ -62,11 +63,9 @@ fn validate(
     }
     // Dihedral norms multiply four squared bond lengths. This range keeps all
     // intermediate products finite without rescaling native tolerance tests.
-    if positions.is_some_and(|p| {
-        p.len() != graph.atoms.len()
-            || p.iter()
-                .any(|p| !p.valid() || [p.x, p.y, p.z].iter().any(|v| v.abs() > 1e37))
-    }) {
+    if positions
+        .is_some_and(|p| p.len() != graph.atoms.len() || p.iter().any(|&p| !bounds.allows(p, 1e37)))
+    {
         return Err("Invalid or excessive double-bond coordinates".into());
     }
     Ok(())
@@ -81,7 +80,13 @@ pub fn detect_bond_stereo(
     positions: Option<&[Point3]>,
     rings: &[Vec<usize>],
 ) -> Result<BondGeometry, String> {
-    validate(graph, metadata, directions, positions)?;
+    validate(
+        graph,
+        metadata,
+        directions,
+        positions,
+        super::CoordinateBounds::Drawing,
+    )?;
     if positions.is_none() {
         return Ok(BondGeometry {
             metadata: metadata.clone(),
@@ -101,6 +106,24 @@ pub fn double_bond_directions(
     positions: Option<&[Point3]>,
     rings: &[Vec<usize>],
 ) -> Result<BondGeometry, String> {
+    double_bond_directions_with_bounds(
+        graph,
+        metadata,
+        directions,
+        positions,
+        rings,
+        super::CoordinateBounds::Drawing,
+    )
+}
+
+pub(crate) fn double_bond_directions_with_bounds(
+    graph: &Graph,
+    metadata: &Metadata,
+    directions: &[Direction],
+    positions: Option<&[Point3]>,
+    rings: &[Vec<usize>],
+    bounds: super::CoordinateBounds,
+) -> Result<BondGeometry, String> {
     with_work(
         graph,
         metadata,
@@ -108,6 +131,7 @@ pub fn double_bond_directions(
         positions,
         rings,
         &mut Work::default(),
+        bounds,
     )
 }
 
@@ -128,8 +152,9 @@ fn with_work(
     positions: Option<&[Point3]>,
     rings: &[Vec<usize>],
     work: &mut Work,
+    bounds: super::CoordinateBounds,
 ) -> Result<BondGeometry, String> {
-    validate(graph, metadata, directions, positions)?;
+    validate(graph, metadata, directions, positions, bounds)?;
     let mut ctx = Context {
         graph,
         positions,

@@ -3,36 +3,52 @@
 pub(super) fn valid(text: &str) -> bool {
     // UCRT accepts rounded nonzero subnormals. The Unix reference reports
     // decimal underflow and inexact hexadecimal subnormals as range errors.
-    valid_for(text, cfg!(windows))
+    parse(text).is_some()
 }
 
+/// Read the native coordinate spelling without FFI or process locale changes.
+pub fn parse(text: &str) -> Option<f64> {
+    if text.len() > 1024 * 1024 {
+        return None;
+    }
+    parse_for(text, cfg!(windows))
+}
+
+#[cfg(test)]
 fn valid_for(text: &str, rounded_subnormals: bool) -> bool {
+    parse_for(text, rounded_subnormals).is_some()
+}
+
+fn parse_for(text: &str, rounded_subnormals: bool) -> Option<f64> {
     let unsigned = text.strip_prefix(['+', '-']).unwrap_or(text);
     if unsigned.starts_with("0x") || unsigned.starts_with("0X") {
         return hexadecimal(
             unsigned.as_bytes().get(2..).unwrap_or_default(),
             rounded_subnormals,
-        );
+        )
+        .map(|value| if text.starts_with('-') { -value } else { value });
     }
     let Ok(value) = text.parse::<f64>() else {
-        return false;
+        return None;
     };
     if value.is_nan() || value.is_infinite() {
-        return unsigned.eq_ignore_ascii_case("nan")
+        return (unsigned.eq_ignore_ascii_case("nan")
             || unsigned.eq_ignore_ascii_case("inf")
-            || unsigned.eq_ignore_ascii_case("infinity");
+            || unsigned.eq_ignore_ascii_case("infinity"))
+        .then_some(value);
     }
     if value.is_subnormal() {
-        return rounded_subnormals;
+        return rounded_subnormals.then_some(value);
     }
-    value != 0.0
+    (value != 0.0
         || !unsigned
             .bytes()
             .take_while(|b| !matches!(b, b'e' | b'E'))
-            .any(|b| matches!(b, b'1'..=b'9'))
+            .any(|b| matches!(b, b'1'..=b'9')))
+    .then_some(value)
 }
 
-fn hexadecimal(text: &[u8], rounded_subnormals: bool) -> bool {
+fn hexadecimal(text: &[u8], rounded_subnormals: bool) -> Option<f64> {
     let (mut pos, mut digits, mut fraction) = (0usize, 0i64, 0i64);
     let (mut point, mut first, mut last) = (false, None, None);
     let (mut head, mut head_digits) = (0u64, 0u32);
@@ -61,7 +77,7 @@ fn hexadecimal(text: &[u8], rounded_subnormals: bool) -> bool {
         pos += 1;
     }
     if digits == 0 {
-        return false;
+        return None;
     }
     let mut exponent = 0i64;
     if matches!(text.get(pos), Some(b'p' | b'P')) {
@@ -78,17 +94,17 @@ fn hexadecimal(text: &[u8], rounded_subnormals: bool) -> bool {
             pos += 1;
         }
         if pos == start {
-            return false;
+            return None;
         }
         if negative {
             exponent = -exponent;
         }
     }
     if pos != text.len() {
-        return false;
+        return None;
     }
     let (Some((first_index, first_digit)), Some((last_index, last_digit))) = (first, last) else {
-        return true;
+        return Some(0.0);
     };
     let high = exponent - 4 * fraction
         + 4 * (digits - first_index - 1)
@@ -97,6 +113,9 @@ fn hexadecimal(text: &[u8], rounded_subnormals: bool) -> bool {
         + 4 * (digits - last_index - 1)
         + i64::from(last_digit.trailing_zeros());
     let prefix = |bits: u32| {
+        if bits == 0 {
+            return 0;
+        }
         let size = 64 - head.leading_zeros();
         if size > bits {
             head >> (size - bits)
@@ -105,20 +124,43 @@ fn hexadecimal(text: &[u8], rounded_subnormals: bool) -> bool {
         }
     };
     if high > 1023 {
-        return false;
+        return None;
     }
     if high == 1023 && prefix(54) == (1u64 << 54) - 1 {
-        return false;
+        return None;
     }
     if high < -1022 {
-        if rounded_subnormals {
+        let accepted = if rounded_subnormals {
             // At half the smallest subnormal, ties-to-even produces zero.
-            return high > -1075 || high == -1075 && low < high;
+            high > -1075 || high == -1075 && low < high
+        } else {
+            // A tie just below the normal boundary rounds to the minimum normal.
+            (high == -1023 && prefix(53) == (1u64 << 53) - 1) || low >= -1074
+        };
+        if !accepted {
+            return None;
         }
-        // A tie just below the normal boundary rounds to the minimum normal.
-        return (high == -1023 && prefix(53) == (1u64 << 53) - 1) || low >= -1074;
     }
-    true
+    let precision = u32::try_from((high + 1075).clamp(0, 53)).ok()?;
+    let mut significand = prefix(precision);
+    let halfway = prefix(precision + 1) & 1 != 0;
+    let sticky = low < high - i64::from(precision);
+    if halfway && (sticky || significand & 1 != 0) {
+        significand += 1;
+    }
+    let bits = if high < -1022 {
+        significand
+    } else {
+        // A rounded carry advances the exponent; the overflow cases above
+        // have already been rejected using the full guard/sticky information.
+        let carry = significand == 1u64 << 53;
+        if carry {
+            significand >>= 1;
+        }
+        let exponent = u64::try_from(high + i64::from(carry) + 1023).ok()?;
+        (exponent << 52) | (significand & ((1u64 << 52) - 1))
+    };
+    Some(f64::from_bits(bits))
 }
 
 #[cfg(test)]

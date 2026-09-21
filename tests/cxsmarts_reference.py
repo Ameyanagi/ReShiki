@@ -5,6 +5,9 @@ from itertools import product
 
 
 def cases():
+    for whitespace in ("\t", "\n", "\v", "\f", "\r", " "):
+        yield f"C {whitespace}|u:0|{whitespace}名前{whitespace}"
+        yield f"C {whitespace}|^1:0|{whitespace}名前{whitespace}"
     graphs = (
         "C",
         "CC",

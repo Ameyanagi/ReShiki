@@ -90,7 +90,8 @@ fn rejected_coordinates_metadata_and_exhausted_work_are_atomic() -> TestResult {
             &mut Work {
                 remaining: 0,
                 stored: 0
-            }
+            },
+            super::super::CoordinateBounds::Drawing,
         )
         .is_err()
     );
@@ -104,7 +105,8 @@ fn rejected_coordinates_metadata_and_exhausted_work_are_atomic() -> TestResult {
             &mut Work {
                 remaining: 1000,
                 stored: 2_000_000
-            }
+            },
+            super::super::CoordinateBounds::Drawing,
         )
         .is_err()
     );

@@ -3,12 +3,14 @@
 //! Copyright (C) 2001-2022 Randal Henne, Greg Landrum, Rational Discovery LLC
 //! and other RDKit contributors. BSD-3-Clause; see licenses/rdkit/LICENSE.
 //!
-//! `parse` reads the raw graph; `prepare` also removes eligible hydrogens,
-//! sanitizes and perceives stereo. CX extensions and names are not yet handled.
+//! `parse` reads the raw graph; `prepare` removes eligible hydrogens,
+//! sanitizes and perceives stereo. `read` also handles CX extensions and names.
 mod atom;
 mod chirality;
 mod prepare;
 pub use prepare::{Prepared, prepare};
+mod read;
+pub use read::{Imported, read};
 
 use super::{
     graph::{Atom, Bond, Graph},
@@ -32,6 +34,12 @@ pub enum Error {
     Sanitization(#[from] super::sanitize::Error),
     #[error("SMILES stereochemistry: {0}")]
     Stereo(String),
+    #[error(transparent)]
+    Cx(#[from] super::cx::Error),
+    #[error(transparent)]
+    Spatial(#[from] super::stereo::SpatialError),
+    #[error(transparent)]
+    Atropisomer(#[from] super::stereo::AtropError),
 }
 type Result<T> = std::result::Result<T, Error>;
 
