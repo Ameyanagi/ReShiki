@@ -195,10 +195,17 @@ impl Groups {
                         && group.data.first().is_some_and(|v| !v.is_empty())
                         && !group.atoms.is_empty()
                     {
-                        // A valid query is rejected by the editable contract;
-                        // invalid SMARTS is ignored by the native reader. Keep
-                        // this explicit until the Rust SMARTS grammar is ready.
-                        return Err(ReadError::Pending("substance-group SMARTS validation"));
+                        let data = group.data.first().ok_or(ReadError::Limit)?;
+                        match crate::chemistry::smarts::validate(data) {
+                            Ok(0) | Err(crate::chemistry::smarts::Error::Syntax(_)) => (),
+                            Ok(_) => return Err(ReadError::Unsupported("substance-group query")),
+                            Err(crate::chemistry::smarts::Error::Limit) => {
+                                return Err(ReadError::Limit);
+                            }
+                            Err(crate::chemistry::smarts::Error::Pending(reason)) => {
+                                return Err(ReadError::Pending(reason));
+                            }
+                        }
                     }
                 }
             }

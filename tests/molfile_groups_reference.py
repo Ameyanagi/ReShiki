@@ -3,9 +3,15 @@
 import os
 from itertools import product
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from rdkit import Chem
 from rdkit.Chem import rdDepictor
+
+if TYPE_CHECKING or __package__:
+    from .smarts_reference import cases as query_cases
+else:
+    from smarts_reference import cases as query_cases
 
 KINDS = (
     "SRU",
@@ -188,6 +194,16 @@ def cases():
         ["1 BAD 0 ATOMS=(1 1)"],
     ):
         yield f"v3 ordering/{records}", v3(records)
+    for i, data in enumerate(dict.fromkeys(query_cases())):
+        # DAT records have a 200-byte payload; newlines are physical record
+        # delimiters, not query syntax. The standalone corpus covers those.
+        if len(data.encode()) > 180 or any(c in data for c in "\n\r\0"):
+            continue
+        encoded = data.replace('"', '""')
+        yield (
+            f"SMARTS grammar/{i}",
+            v3([f'1 DAT 0 ATOMS=(1 1) QUERYTYPE=SMARTSQ QUERYOP="=" FIELDDATA="{encoded}"']),
+        )
     for defaults in (
         "FIELDNAME=ZCH FIELDDATA=1",
         "ATOMS=(1 1) FIELDNAME=HYD FIELDDATA=2",

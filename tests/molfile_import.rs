@@ -136,9 +136,7 @@ fn molecular_file_import_matches_native_reader() -> anyhow::Result<()> {
     eprintln!("Substance groups: {groups_accepted} accepted, {groups_rejected} rejected");
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     assert!(
-        pending
-            .keys()
-            .all(|reason| reason == "substance-group SMARTS validation"),
+        pending.keys().all(|reason| reason == "CXSMARTS extensions"),
         "Unexpected pending import operation: {pending:?}"
     );
     assert!(

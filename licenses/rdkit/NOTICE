@@ -50,6 +50,12 @@ Copyright (C) 2018-2020 Greg Landrum and T5 Informatics GmbH.
 Code/GraphMol/RWMol.cpp (hydrogen adjustment when replacing coordinate bonds)
 Copyright (C) 2003-2024 Greg Landrum and other RDKit contributors.
 
+Code/GraphMol/SmilesParse/smarts.ll and smarts.yy (SMARTS grammar)
+Copyright (C) 2003-2025 Greg Landrum, Rational Discovery LLC and other RDKit contributors.
+
+Code/GraphMol/SmilesParse/SmilesParse.cpp and SmilesParseOps.cpp (SMARTS preprocessing, ring closure and chiral validation)
+Copyright (C) 2001-2022 Greg Landrum and other RDKit contributors.
+
 Code/Geometry/point.h and point.cpp (stereo vector and dihedral arithmetic)
 Copyright (C) 2003-2025 Greg Landrum and other RDKit contributors.
 
