@@ -32,6 +32,15 @@ def cases():
         "0x0.fffffffffffff8p-1022",
     )
     rng = random.Random(147284)
+    # Equal numeric values can take different native hexadecimal paths at the
+    # denormal/normal carry. Probe varied leading nibbles and mantissa lengths.
+    for bits in (53, 54, 55, 56, 57, 60, 80):
+        halfway = 1 << (bits - 53)
+        for delta in range(-4, 5):
+            value = (1 << bits) - halfway + delta
+            for sign in ("", "-"):
+                yield f"{sign}0x{value:x}p{-1022 - bits}"
+                yield f"{sign}0x{value:x}00p{-1030 - bits}"
     for _ in range(4000):
         value = struct.unpack("!d", rng.getrandbits(64).to_bytes(8, "big"))[0]
         if math.isfinite(value):

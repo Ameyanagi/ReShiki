@@ -149,7 +149,19 @@ fn hexadecimal(text: &[u8], rounded_subnormals: bool) -> Option<f64> {
         significand += 1;
     }
     let bits = if high < -1022 {
-        significand
+        if rounded_subnormals && significand == 1u64 << 52 {
+            // The Windows native reader has an exponent-carry quirk when a
+            // hexadecimal subnormal rounds to the minimum normal. Its result
+            // depends on how many leading hexadecimal bits it buffered. Keep
+            // that import behavior without calling the platform C runtime.
+            let first_bits = 8 - first_digit.leading_zeros();
+            let buffered_digits =
+                (last_index - first_index + 1).min(if first_bits == 1 { 15 } else { 14 });
+            let buffered_bits = i64::from(first_bits) + 4 * (buffered_digits - 1);
+            u64::try_from(buffered_bits - 53).ok()? << 52
+        } else {
+            significand
+        }
     } else {
         // A rounded carry advances the exponent; the overflow cases above
         // have already been rejected using the full guard/sticky information.
@@ -165,7 +177,23 @@ fn hexadecimal(text: &[u8], rounded_subnormals: bool) -> Option<f64> {
 
 #[cfg(test)]
 mod tests {
-    use super::valid_for;
+    use super::{parse_for, valid_for};
+
+    #[test]
+    fn windows_hexadecimal_boundary_matches_observed_native_bits() {
+        for (text, bits) in [
+            ("0x0.fffffffffffff8p-1022", 13_510_798_882_111_488),
+            ("0x1.fffffffffffff7p-1023", 18_014_398_509_481_984),
+            ("0x1.fffffffffffff8p-1023", 18_014_398_509_481_984),
+            ("0x1.ffffffffffffffffp-1023", 18_014_398_509_481_984),
+        ] {
+            assert_eq!(parse_for(text, true).map(f64::to_bits), Some(bits));
+            assert_eq!(
+                parse_for(text, false).map(f64::to_bits),
+                Some(f64::MIN_POSITIVE.to_bits())
+            );
+        }
+    }
 
     #[test]
     fn native_underflow_rules_distinguish_windows_and_unix() {
