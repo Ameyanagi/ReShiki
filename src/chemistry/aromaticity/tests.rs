@@ -1,5 +1,5 @@
 use super::*;
-use crate::chemistry::graph::Atom;
+use crate::chemistry::graph::{Atom, Bond};
 
 fn ring(size: usize) -> Graph {
     Graph {

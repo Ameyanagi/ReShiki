@@ -11,6 +11,9 @@ Copyright (C) 2001-2023 Greg Landrum and other RDKit contributors.
 Code/GraphMol/Aromaticity.cpp (default aromaticity model)
 Copyright (C) 2003-2022 Greg Landrum and other RDKit contributors.
 
+Code/GraphMol/ConjugHybrid.cpp (conjugation and hybridization)
+Copyright (C) 2001-2024 Greg Landrum and other RDKit contributors.
+
 Code/GraphMol/Kekulize.cpp (bond assignment and iterative backtracking)
 Copyright (C) 2001-2021 Greg Landrum and other RDKit contributors.
 
@@ -35,7 +38,7 @@ Copyright (C) 2024 Greg Landrum and other RDKit contributors.
 Code/GraphMol/FindRings.cpp
 Copyright (C) 2003-2021 Greg Landrum and other RDKit contributors.
 
-Code/GraphMol/molopstest.cpp (ring regression examples)
+Code/GraphMol/molopstest.cpp (ring, conjugation and hybridization regression examples)
 Copyright (C) 2002-2025 Greg Landrum and other RDKit contributors.
 
 Code/GraphMol/Descriptors/Crippen.cpp (atom types and logP/MR contributions)

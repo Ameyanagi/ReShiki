@@ -5,7 +5,7 @@
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
 use super::{
     ELEMENTS, Element,
-    graph::{Bond, Graph, Valence},
+    graph::{Graph, Valence, pi_electron_count},
 };
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -36,17 +36,6 @@ fn element(number: i32) -> Result<&'static Element, String> {
         .ok()
         .and_then(|i| ELEMENTS.get(i))
         .ok_or_else(|| "Invalid effective aromatic atomic number".into())
-}
-fn twice_contribution(bond: &Bond, atom: usize) -> i32 {
-    match bond.order {
-        0 => 0,
-        1..=3 => i32::from(bond.order) * 2,
-        4 | 7 => 3,
-        5 if bond.b == atom => 2,
-        5 => 0,
-        6 => 8,
-        _ => 0, // The graph validator rejects unknown orders before traversal.
-    }
 }
 struct Work(usize);
 impl Work {
@@ -112,31 +101,13 @@ impl<'a> Topology<'a> {
     }
     fn electrons(&self, id: usize) -> Result<i32, String> {
         let atom = at(&self.graph.atoms, id)?;
-        let table = element(i32::from(atom.atomic_number))?;
-        let default = *table.valences.first().ok_or("Missing default valence")?;
-        if default <= 1 {
-            return Ok(-1);
-        }
         let valence = at(&self.valences, id)?;
         let adjacent = at(&self.neighbors, id)?;
-        let mut degree = adjacent.len() as i32
-            + i32::from(atom.explicit_hydrogens)
-            + valence.implicit_hydrogens as i32;
+        let mut zero_bonds = 0;
         for &(_, bond) in adjacent {
-            if twice_contribution(at(&self.graph.bonds, bond)?, id) == 0 {
-                degree -= 1;
-            }
+            zero_bonds += usize::from(at(&self.graph.bonds, bond)?.twice_contribution(id) == 0);
         }
-        if degree > 3 {
-            return Ok(-1);
-        }
-        let lone_pairs = (table.outer_electrons - default - i32::from(atom.charge)).max(0);
-        let result = default - degree + lone_pairs - i32::from(atom.radical_electrons);
-        if result > 1 && valence.explicit_valence as i32 - adjacent.len() as i32 > 1 {
-            Ok(1)
-        } else {
-            Ok(result)
-        }
+        pi_electron_count(atom, valence, adjacent.len(), zero_bonds)
     }
     fn donor(&self, id: usize) -> Result<Donor, String> {
         let atom = at(&self.graph.atoms, id)?;
@@ -144,7 +115,7 @@ impl<'a> Topology<'a> {
         let mut cyclic_multiple = false;
         let mut degree = at(&self.neighbors, id)?.len() as i32 + i32::from(atom.explicit_hydrogens);
         for &(other, bond) in at(&self.neighbors, id)? {
-            let contribution = twice_contribution(at(&self.graph.bonds, bond)?, id);
+            let contribution = at(&self.graph.bonds, bond)?.twice_contribution(id);
             if contribution == 0 {
                 degree -= 1;
             }

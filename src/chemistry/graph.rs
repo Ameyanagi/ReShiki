@@ -46,6 +46,52 @@ pub struct Valence {
     pub implicit_hydrogens: u32,
 }
 
+impl Bond {
+    /// Half-bond units; call only after graph validation rejects unknown orders.
+    pub(crate) fn twice_contribution(&self, atom: usize) -> i32 {
+        match self.order {
+            0 => 0,
+            1..=3 => i32::from(self.order) * 2,
+            4 | 7 => 3,
+            5 if self.b == atom => 2,
+            5 => 0,
+            6 => 8,
+            _ => 0,
+        }
+    }
+}
+
+/// Available pi electrons, shared by aromaticity and conjugation. Adapted from
+/// RDKit Aromaticity.cpp countAtomElec, Copyright (C) 2003-2022 Greg Landrum.
+/// Inputs are degrees and cached valences from a validated, bounded graph.
+pub(crate) fn pi_electron_count(
+    atom: &Atom,
+    valence: &Valence,
+    degree: usize,
+    zero_bonds: usize,
+) -> Result<i32, String> {
+    let table = element(atom.atomic_number)?;
+    let default = *table.valences.first().ok_or("Missing default valence")?;
+    if default <= 1 {
+        return Ok(-1);
+    }
+    let bonded = degree
+        .checked_sub(zero_bonds)
+        .ok_or("Invalid bond degree")?;
+    let total_degree =
+        bonded as i32 + i32::from(atom.explicit_hydrogens) + valence.implicit_hydrogens as i32;
+    if total_degree > 3 {
+        return Ok(-1);
+    }
+    let lone_pairs = (table.outer_electrons - default - i32::from(atom.charge)).max(0);
+    let result = default - total_degree + lone_pairs - i32::from(atom.radical_electrons);
+    if result > 1 && valence.explicit_valence as i32 - degree as i32 > 1 {
+        Ok(1)
+    } else {
+        Ok(result)
+    }
+}
+
 struct Environment {
     // Half-bond units retain partial/aromatic valence exactly without rounding.
     twice_valence: i32,
