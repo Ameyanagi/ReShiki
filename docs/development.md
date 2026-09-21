@@ -4,7 +4,7 @@ ReShiki uses Rust for the desktop application, Python/RDKit for chemistry, and A
 
 ## Set up
 
-Install Rust 1.95 with rustfmt and Clippy, uv, and Node.js 24 LTS.
+Install Rust 1.95 with rustfmt and Clippy, uv 0.12.3 or later, and Node.js 24 LTS.
 
 ```sh
 uv sync --locked --python 3.12
@@ -38,10 +38,11 @@ To format files, use `npm run format`, `uv run --locked ruff format engine scrip
 ```sh
 cargo test --locked
 uv run --locked python -m unittest discover -s tests -p 'test_*.py'
+uv run --locked python scripts/check_runtime_dependencies.py
 cargo run --locked -- --engine-check
 ```
 
-Native macOS tests skip on other systems. CI runs Rust checks/tests on macOS, Python checks/tests on all five release targets, and web checks on Linux. Release packaging separately verifies first-use uv setup and offline reuse on all five native targets.
+Native macOS tests skip on other systems. CI runs Rust checks/tests on macOS, Python checks/tests on all five release targets, and web checks on Linux. The runtime check creates a fresh production environment, verifies that Pillow is absent, and tests chemistry and picture transport. Release packaging separately verifies first-use uv setup and offline reuse on all five native targets.
 
 ## Documentation
 

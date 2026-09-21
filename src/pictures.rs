@@ -1,5 +1,6 @@
 //! Self-contained raster pictures. Decode untrusted inputs once with bounded
 //! dimensions, retain portable PNG data, and share image storage across Undo.
+pub mod exchange;
 use crate::{
     document::{Document, Point},
     graphics::{Graphic, GraphicKind},
@@ -60,6 +61,13 @@ impl<'de> Deserialize<'de> for Picture {
     }
 }
 fn decode(bytes: &[u8]) -> Result<(DynamicImage, ImageFormat), String> {
+    decode_limited(bytes, None, MAX_PIXELS)
+}
+fn decode_limited(
+    bytes: &[u8],
+    expected: Option<ImageFormat>,
+    remaining_pixels: u64,
+) -> Result<(DynamicImage, ImageFormat), String> {
     if bytes.len() > MAX_BYTES {
         return Err("Picture exceeds 16 MB".into());
     }
@@ -69,7 +77,11 @@ fn decode(bytes: &[u8]) -> Result<(DynamicImage, ImageFormat), String> {
     let format = reader
         .format()
         .ok_or("Choose a PNG, JPEG, TIFF or WebP picture")?;
-    if !matches!(
+    if let Some(expected) = expected {
+        if format != expected {
+            return Err("Embedded picture bytes do not match their declared format".into());
+        }
+    } else if !matches!(
         format,
         ImageFormat::Png | ImageFormat::Jpeg | ImageFormat::Tiff | ImageFormat::WebP
     ) {
@@ -84,6 +96,9 @@ fn decode(bytes: &[u8]) -> Result<(DynamicImage, ImageFormat), String> {
     let (width, height) = decoder.dimensions();
     if width == 0 || height == 0 || u64::from(width) * u64::from(height) > MAX_PIXELS {
         return Err("Pictures can contain at most 16 million pixels".into());
+    }
+    if u64::from(width) * u64::from(height) > remaining_pixels {
+        return Err("A drawing can contain at most 64 million picture pixels".into());
     }
     let orientation = decoder.orientation().map_err(|e| e.to_string())?;
     let mut image = DynamicImage::from_decoder(decoder).map_err(|e| e.to_string())?;

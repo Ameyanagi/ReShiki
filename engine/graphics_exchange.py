@@ -20,7 +20,7 @@ def palette(root):
     )
 
 
-def read_graphics(root, scale, first_id, object_map: dict | None = None):
+def read_graphics(root, scale, first_id, object_map: dict | None = None, *, local_pictures=False):
     objects = {} if object_map is None else object_map
     colors = palette(root)
     chemistry_z = [
@@ -269,7 +269,7 @@ def read_graphics(root, scale, first_id, object_map: dict | None = None):
                         collect(el)
                         continue
                 elif el.tag == "embeddedobject":
-                    value = read_picture(el, scale, picture_budget)
+                    value = read_picture(el, scale, picture_budget, defer=local_pictures)
                     z = int(el.get("Z", "0"))
                     value["layer"] = z - middle if z < middle else z - middle + 1
                 else:
@@ -287,7 +287,9 @@ def read_graphics(root, scale, first_id, object_map: dict | None = None):
     return result
 
 
-def write_graphics(page, graphics, paths, scale, position, color_id, next_id, parts=None):
+def write_graphics(
+    page, graphics, paths, scale, position, color_id, next_id, parts=None, picture_exports=None
+):
     """Emit editable Bézier curves; a two-curve group retains separate fill/stroke."""
     ordered = sorted(graphics, key=lambda g: g.get("layer", -1))
     middle = sum(g.get("layer", -1) < 0 for g in ordered) + 1
@@ -318,7 +320,12 @@ def write_graphics(page, graphics, paths, scale, position, color_id, next_id, pa
     for index, g in enumerate(ordered):
         z = index + 1 if g.get("layer", -1) < 0 else index + 2
         if g.get("kind") == "picture":
-            objects[g["id"]] = write_picture(page, g, position, next_id, z)
+            prepared = None
+            if picture_exports is not None:
+                prepared = picture_exports.get(str(g["id"]))
+                if not isinstance(prepared, str):
+                    raise ValueError("Missing prepared picture export")
+            objects[g["id"]] = write_picture(page, g, position, next_id, z, prepared)
             next_id += 1
             continue
         styled_parts = (parts or {}).get(str(g["id"]))

@@ -11,8 +11,6 @@ import math
 import warnings
 import xml.etree.ElementTree as ET
 
-from PIL import Image, ImageOps
-
 MAX_BYTES = 16 * 1024 * 1024
 MAX_PIXELS = 16_000_000
 MAX_SIDE = 8192
@@ -20,6 +18,9 @@ FORMATS = ("PNG", "TIFF", "JPEG", "GIF", "BMP")
 
 
 def decode(data, expected=None, budget=None):
+    # Reference-only dependency. The application normalizes images in Rust.
+    from PIL import Image, ImageOps
+
     if not data or len(data) > MAX_BYTES:
         raise ValueError("Embedded pictures must contain at most 16 MB")
     try:
@@ -62,7 +63,7 @@ def png_bytes(pixels):
     return data
 
 
-def read_picture(el, scale, budget=None):
+def read_picture(el, scale, budget=None, *, defer=False):
     name = next((name for name in FORMATS if el.get(name)), None)
     if name is None:
         raise ValueError(
@@ -75,12 +76,11 @@ def read_picture(el, scale, budget=None):
         data = bytes.fromhex(value)
     except ValueError as e:
         raise ValueError("Invalid embedded picture hexadecimal data") from e
-    pixels = decode(data, name, budget)
+    if not data or len(data) > MAX_BYTES:
+        raise ValueError("Embedded pictures must contain at most 16 MB")
     opacity = float(el.get("alpha", "1"))
     if not math.isfinite(opacity) or not 0 <= opacity <= 1:
         raise ValueError("Invalid embedded picture opacity")
-    if opacity != 1:
-        pixels.putalpha(pixels.getchannel("A").point([round(v * opacity) for v in range(256)]))
     box = [float(v) * scale for v in el.get("BoundingBox", "").split()]
     angle = float(el.get("RotationAngle", "0")) / 65536
     if len(box) != 4 or not all(math.isfinite(v) for v in box + [angle]):
@@ -92,25 +92,34 @@ def read_picture(el, scale, budget=None):
     c, s = math.cos(math.radians(angle)), math.sin(math.radians(angle))
     x, y = dict(x=c * width, y=s * width), dict(x=-s * height, y=c * height)
     origin = dict(x=(left + right - x["x"] - y["x"]) / 2, y=(top + bottom - x["y"] - y["y"]) / 2)
-    data = png_bytes(pixels)
-    if budget is not None:
-        budget["bytes"] += len(data)
-        if budget["bytes"] > 64 * 1024 * 1024:
-            raise ValueError("A drawing can contain at most 64 MB of encoded pictures")
-    return dict(
+    result = dict(
         kind="picture",
         origin=origin,
         axis_x=x,
         axis_y=y,
-        picture=base64.b64encode(data).decode("ascii"),
     )
+    if defer:
+        result["picture_source"] = dict(
+            data=base64.b64encode(data).decode("ascii"), format=name, opacity=opacity
+        )
+    else:
+        pixels = decode(data, name, budget)
+        if opacity != 1:
+            pixels.putalpha(pixels.getchannel("A").point([round(v * opacity) for v in range(256)]))
+        data = png_bytes(pixels)
+        if budget is not None:
+            budget["bytes"] += len(data)
+            if budget["bytes"] > 64 * 1024 * 1024:
+                raise ValueError("A drawing can contain at most 64 MB of encoded pictures")
+        result["picture"] = base64.b64encode(data).decode("ascii")
+    return result
 
 
-def write_picture(parent, graphic, position, identifier, z):
-    value = graphic.get("picture")
+def write_picture(parent, graphic, position, identifier, z, prepared_png=None):
+    value = graphic.get("picture") if prepared_png is None else prepared_png
     if not isinstance(value, str) or len(value) > ((MAX_BYTES + 2) // 3) * 4:
         raise ValueError("Invalid embedded picture data")
-    pixels = decode(base64.b64decode(value, validate=True), "PNG")
+    data = base64.b64decode(value, validate=True)
     origin, x, y = [graphic[key] for key in ("origin", "axis_x", "axis_y")]
     coords = [p[key] for p in (origin, x, y) for key in ("x", "y")]
     if not all(math.isfinite(v) for v in coords):
@@ -122,10 +131,16 @@ def write_picture(parent, graphic, position, identifier, z):
         or abs(x["x"] * y["x"] + x["y"] * y["y"]) > width * height * 0.0001
     ):
         raise ValueError("Picture exchange requires a rectangular frame")
-    if x["x"] * y["y"] - x["y"] * y["x"] < 0:
-        # The format has no reflection flag. Reverse rows without resampling,
-        # and retain the independently editable rectangle and rotation.
-        pixels = pixels.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
+    if prepared_png is None:
+        from PIL import Image
+
+        pixels = decode(data, "PNG")
+        if x["x"] * y["y"] - x["y"] * y["x"] < 0:
+            # Reference path: the format has no reflection flag.
+            pixels = pixels.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
+        data = png_bytes(pixels)
+    elif not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise ValueError("Prepared picture must be PNG")
     center = {k: origin[k] + (x[k] + y[k]) / 2 for k in ("x", "y")}
     a = dict(x=center["x"] - width / 2, y=center["y"] - height / 2)
     b = dict(x=center["x"] + width / 2, y=center["y"] + height / 2)
@@ -137,5 +152,5 @@ def write_picture(parent, graphic, position, identifier, z):
         Z=str(z),
         BoundingBox=position(a) + " " + position(b),
         RotationAngle=str(angle),
-        PNG=png_bytes(pixels).hex(),
+        PNG=data.hex(),
     )

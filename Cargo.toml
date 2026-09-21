@@ -31,7 +31,14 @@ tempfile = "3"
 directories-next = "2"
 resvg = "0.45"
 png = "0.17"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "tiff", "webp"] }
+image = { version = "0.25", default-features = false, features = [
+  "png",
+  "jpeg",
+  "tiff",
+  "webp",
+  "gif",
+  "bmp",
+] }
 pdf-writer = "0.12.1"
 ttf-parser = "0.25"
 svg2pdf = { version = "0.13", default-features = false, features = ["text", "image"] }
@@ -39,6 +46,7 @@ reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
 semver = "1"
 open = "5"
 roxmltree = "0.20"
+tiff = "0.11.3"
 
 [profile.dev]
 debug = 1
