@@ -76,6 +76,7 @@ fn invalid_metadata_and_work_exhaustion_are_atomic_errors() -> Result<(), String
     invalid.groups.push(StereoGroup {
         kind: 0,
         atoms: vec![usize::MAX],
+        ..StereoGroup::default()
     });
     assert!(rank(&graph, &rings, &invalid, Options::default()).is_err());
     assert_eq!(

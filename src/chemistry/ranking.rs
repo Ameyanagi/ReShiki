@@ -19,6 +19,8 @@ pub struct AtomMetadata {
     pub map_number: i32,
     /// RDKit atom winding codes: 0 unspecified, 1 CW, 2 CCW, 3..8 other geometries.
     pub chiral_tag: u8,
+    #[serde(default)]
+    pub chiral_permutation: Option<u32>,
     pub ring_stereo: bool,
     pub non_stereo_rank: i32,
 }
@@ -29,12 +31,18 @@ pub struct BondMetadata {
     pub stereo: u8,
     pub stereo_atoms: Vec<usize>,
 }
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct StereoGroup {
     /// 0 absolute, 1 OR, 2 AND.
     pub kind: u8,
     pub atoms: Vec<usize>,
+    #[serde(default)]
+    pub bonds: Vec<usize>,
+    #[serde(default)]
+    pub read_id: u32,
+    #[serde(default)]
+    pub write_id: u32,
 }
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -50,6 +58,43 @@ impl Metadata {
             bonds: vec![BondMetadata::default(); graph.bonds.len()],
             groups: Vec::new(),
         }
+    }
+
+    pub(crate) fn validate(&self, graph: &Graph) -> Result<(), String> {
+        let n = graph.atoms.len();
+        if self.atoms.len() != n
+            || self.bonds.len() != graph.bonds.len()
+            || self.groups.len() > 2_000_000
+            || self.atoms.iter().any(|a| a.chiral_tag > 8)
+            || self.bonds.iter().any(|b| {
+                b.stereo > 7 || b.stereo_atoms.len() > 2 || b.stereo_atoms.iter().any(|&a| a >= n)
+            })
+        {
+            return Err("Invalid stereo metadata".into());
+        }
+        // RDKit's molecule setter merges absolute groups before these passes.
+        // Require that normalized representation at the graph boundary.
+        if self.groups.iter().filter(|g| g.kind == 0).take(2).count() > 1 {
+            return Err("Multiple unmerged absolute stereo groups".into());
+        }
+        let mut storage = 0usize;
+        for group in &self.groups {
+            storage = storage
+                .checked_add(1)
+                .and_then(|s| s.checked_add(group.atoms.len()))
+                .and_then(|s| s.checked_add(group.bonds.len()))
+                .ok_or("Stereo group storage exceeded")?;
+            if group.kind > 2
+                || storage > 2_000_000
+                || group.atoms.iter().any(|&a| a >= n)
+                || group.bonds.iter().any(|&b| b >= graph.bonds.len())
+                || group.atoms.iter().collect::<HashSet<_>>().len() != group.atoms.len()
+                || group.bonds.iter().collect::<HashSet<_>>().len() != group.bonds.len()
+            {
+                return Err("Invalid stereo group".into());
+            }
+        }
+        Ok(())
     }
 }
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -145,16 +190,7 @@ impl<'a> Ranker<'a> {
     ) -> Result<Self, String> {
         let valences = graph.provisional_valences()?;
         let n = graph.atoms.len();
-        if metadata.atoms.len() != n
-            || metadata.bonds.len() != graph.bonds.len()
-            || metadata.atoms.iter().any(|a| a.chiral_tag > 8)
-            || metadata
-                .bonds
-                .iter()
-                .any(|b| b.stereo > 7 || b.stereo_atoms.len() > 2)
-        {
-            return Err("Invalid ranking metadata".into());
-        }
+        metadata.validate(graph)?;
         let mut neighbors = vec![Vec::new(); n];
         let mut pairs = HashMap::new();
         for (id, bond) in graph.bonds.iter().enumerate() {
@@ -188,18 +224,8 @@ impl<'a> Ranker<'a> {
             }
         }
         let mut groups = vec![None; n];
-        let mut group_storage = 0usize;
         for (id, group) in metadata.groups.iter().enumerate() {
-            group_storage = group_storage
-                .checked_add(group.atoms.len() + 1)
-                .ok_or("Stereo group storage exceeded")?;
-            if group.kind > 2 || group_storage > 2_000_000 {
-                return Err("Invalid stereo group".into());
-            }
             for &atom in &group.atoms {
-                if atom >= n {
-                    return Err("Missing stereo group atom".into());
-                }
                 if options.include_chirality && options.include_stereo_groups && !options.fragment {
                     put(&mut groups, atom, Some(id))?;
                 }
@@ -220,11 +246,6 @@ impl<'a> Ranker<'a> {
         }
         let mut bonds = vec![Vec::new(); n];
         for (bond, meta) in graph.bonds.iter().zip(&metadata.bonds) {
-            for &atom in &meta.stereo_atoms {
-                if atom >= n {
-                    return Err("Missing stereo reference atom".into());
-                }
-            }
             let mut controls = [None; 4];
             if options.include_chirality && matches!(meta.stereo, 4 | 5) {
                 if meta.stereo_atoms.len() != 2 {

@@ -14,6 +14,7 @@ pub mod kekulize;
 pub mod normalize;
 pub mod ranking;
 pub mod rings;
+pub mod stereo;
 
 pub use atomic_data::RDKIT_VERSION;
 use atomic_data::{ELECTRON_MASS, ELEMENTS, ISOTOPES};

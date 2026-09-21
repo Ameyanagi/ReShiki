@@ -5,7 +5,7 @@ https://github.com/rdkit/rdkit/tree/Release_2026_03_6
 Code/GraphMol/atomic_data.cpp, Code/GraphMol/Atom.cpp and Code/GraphMol/Bond.cpp
 Copyright (C) 2001-2024 Greg Landrum and other RDKit contributors.
 
-Code/GraphMol/MolOps.cpp (functional-group/metal cleanup, radicals and hydrogen adjustment)
+Code/GraphMol/MolOps.cpp (functional-group/metal/atropisomer cleanup, radicals and hydrogen adjustment)
 Copyright (C) 2001-2023 Greg Landrum and other RDKit contributors.
 
 Code/GraphMol/Aromaticity.cpp (default aromaticity model)
@@ -23,8 +23,14 @@ Copyright (C) 2014 Greg Landrum, adapted from pseudocode from Roger Sayle.
 Code/RDGeneral/hanoiSort.h (partition merge sort)
 Copyright (C) 2014-2025 Greg Landrum and other RDKit contributors.
 
-Code/GraphMol/Atropisomers.cpp (controlling-neighbor ordering)
+Code/GraphMol/Atropisomers.cpp (controlling-neighbor ordering and stereo-group repair)
 Copyright (C) 2004-2021 Tad hurst/CDD and other RDKit contributors.
+
+Code/GraphMol/Chirality.cpp (chiral-tag, permutation and stereo-group cleanup)
+Copyright (C) 2004-2024 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/StereoGroup.h and StereoGroup.cpp (group metadata and membership validation)
+Copyright (C) 2018-2021 Greg Landrum and other RDKit contributors.
 
 Code/GraphMol/PeriodicTable.h (relative electronegativity)
 Copyright (C) 2001-2011 Rational Discovery LLC.

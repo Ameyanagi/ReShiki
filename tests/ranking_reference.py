@@ -21,6 +21,9 @@ def metadata(mol):
             dict(
                 map_number=a.GetAtomMapNum(),
                 chiral_tag=int(a.GetChiralTag()),
+                chiral_permutation=a.GetUnsignedProp("_chiralPermutation")
+                if a.HasProp("_chiralPermutation")
+                else None,
                 ring_stereo=bool(a.HasProp("_ringStereoAtoms")),
                 non_stereo_rank=a.GetIntProp("_CanonicalRankingNumber")
                 if a.HasProp("_CanonicalRankingNumber")
@@ -33,7 +36,13 @@ def metadata(mol):
             for b in mol.GetBonds()
         ],
         groups=[
-            dict(kind=int(g.GetGroupType()), atoms=[a.GetIdx() for a in g.GetAtoms()])
+            dict(
+                kind=int(g.GetGroupType()),
+                atoms=[a.GetIdx() for a in g.GetAtoms()],
+                bonds=[b.GetIdx() for b in g.GetBonds()],
+                read_id=g.GetReadId(),
+                write_id=g.GetWriteId(),
+            )
             for g in mol.GetStereoGroups()
         ],
     )
