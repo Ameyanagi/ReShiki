@@ -62,6 +62,7 @@ export default defineConfig({
           label: "User guide",
           items: [
             { label: "Install ReShiki", slug: "guide/install" },
+            { label: "Windows", slug: "guide/windows" },
             { label: "Draw your first molecule", slug: "guide/first-molecule" },
             { label: "Build with templates", slug: "guide/templates" },
             { label: "Select and edit", slug: "guide/editing" },

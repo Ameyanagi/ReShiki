@@ -36,10 +36,18 @@ Molecular and reaction data formats do not retain the full figure layout. Keep t
 
 Select the objects, then **⌘/Ctrl+C** and **⌘/Ctrl+V**. **Cut** and **Duplicate** are also available above the canvas.
 
-On macOS, Copy offers supported editable drawing data and an image to the receiving app. **Shift+⌘+C** copies an image explicitly; **Shift+⌘+V** pastes a picture. Editable exchange depends on the receiving app and the objects used.
+On Windows and macOS, Copy offers supported editable drawing data and an image to the receiving app. **Ctrl+Shift+C** / **Shift+⌘+C** copies an image explicitly; **Ctrl+Shift+V** / **Shift+⌘+V** pastes a picture. Editable exchange depends on the receiving app and the objects used.
+
+In Windows desktop Office, normal Copy embeds a ReShiki drawing. Double-click it,
+edit in ReShiki and use **Ctrl+S** to update the open Office document. Then save
+the Office document. **Copy Image** pastes a static figure. See the
+[Windows workflow](/guide/windows/). For editing across Windows and Mac, retain
+the `.reshiki` original: Mac Office does not support this Windows OLE workflow.
 
 ## Print
 
 On macOS, use **⌘P** or **Export → Print…**. The native print dialog also offers Save as PDF. Use **Print selection** for selected objects.
 
-Windows and Linux do not yet have the same native clipboard and print integration. Export files for those workflows.
+On Windows, use **Ctrl+P** or **Export → Print…**. Preview the page layout in ReShiki, then choose a printer, pages and copies in the Windows dialog. Choose **Microsoft Print to PDF** for a PDF file. See the [Windows guide](/guide/windows/).
+
+On Linux, export PDF to print with your usual PDF application.

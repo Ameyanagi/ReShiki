@@ -21,7 +21,7 @@ Files are limited to 16 MB, 16 million pixels, and 8192 pixels per side. A drawi
 
 ## Verification
 
-Regression tests cover supported decoding formats, malformed inputs and size limits, transformations and transparency, export layering, native persistence, Undo, asynchronous cancellation/stale results, replacement, numeric dimensions and assistant image context. Native clipboard tests use a private pasteboard to verify format precedence and explicit picture paste without touching the user's clipboard.
+Regression tests cover supported decoding formats, malformed inputs and size limits, transformations and transparency, export layering, native persistence, Undo, asynchronous cancellation/stale results, replacement, numeric dimensions and assistant image context. macOS clipboard tests use a private pasteboard. Windows integration tests use the real desktop clipboard to verify editable/image precedence and round-trips; they replace its contents with test data.
 
 Desktop checks used an isolated document with a transparent PNG and editable ethanol: file import, physical dimensions, rotation/resize handles, front/back ordering, native save/reopen and clipboard workflows. Local QA artifacts are under `artifacts/pictures-qa/` and are not included in Git.
 

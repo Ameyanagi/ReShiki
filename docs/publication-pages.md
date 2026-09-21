@@ -85,7 +85,7 @@ physical print job was submitted.
 
 ## Remaining work
 
-Native printing is currently macOS-only. Physical printer output has not been
+Native printing is available on Windows and macOS. On Windows use Ctrl+P; Page setup previews the drawing, and the system print dialog selects the printer, pages and copies. Choose Microsoft Print to PDF for a local PDF. See the [Windows guide](windows.md). Physical printer output has not been
 verified; Save to PDF and cancellation have. Printer-specific printable-area
 guides on the canvas, calibrated screen actual-size view, automatic pagination,
 headers/footers and independent sizes for different sheets are not implemented.

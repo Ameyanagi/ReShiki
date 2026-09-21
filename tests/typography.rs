@@ -101,7 +101,6 @@ fn styled_labels_survive_native_save_and_vector_and_raster_exports() {
     assert_eq!(roundtrip, doc);
     let svg = reshiki::scene::svg(&doc);
     for value in [
-        "font-family=\"Helvetica\"",
         "font-weight=\"bold\"",
         "font-style=\"italic\"",
         "text-decoration=\"underline\"",
@@ -109,6 +108,12 @@ fn styled_labels_survive_native_save_and_vector_and_raster_exports() {
         "α &lt; H2O",
     ] {
         assert!(svg.contains(value), "{value}");
+    }
+    // The document preserves Helvetica, while rendering uses installed faces.
+    // Helvetica is normally absent on Windows; validate every resolved glyph.
+    for glyph in "α < H2O".chars() {
+        let (family, _) = reshiki::style::glyph_metrics(glyph, &doc.annotations[0].format.style);
+        assert!(svg.contains(&format!("font-family=\"{family}\"")));
     }
     let bytes = reshiki::export::drawing(&doc, "png").unwrap();
     let mut reader = png::Decoder::new(std::io::Cursor::new(bytes))

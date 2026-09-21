@@ -1,12 +1,17 @@
-//! Snapshot-based printing. Native UI runs in a separate process; document data
-//! remains owned by the editor and temporary PDFs live only for the print job.
+//! Snapshot-based printing. Native UI runs away from the editor event loop;
+//! document data remains owned by the editor.
 use crate::{
     document::{Document, Point},
     pages::Layout,
     style::DEFAULT as STYLE,
 };
-use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, io::Write, path::PathBuf, process::Stdio, sync::Arc};
+use serde::Deserialize;
+#[cfg(not(windows))]
+use serde::Serialize;
+use std::{collections::HashSet, sync::Arc};
+#[cfg(not(windows))]
+use std::{io::Write, path::PathBuf, process::Stdio};
+#[cfg(not(windows))]
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     process::Command,
@@ -21,11 +26,14 @@ pub enum Scope {
 pub struct Prepared {
     pub pdf: Arc<Vec<u8>>,
     pub title: String,
+    #[cfg(windows)]
+    pub native: Arc<Vec<u8>>,
 }
 #[derive(Debug, Clone, Copy, Deserialize)]
 pub struct Outcome {
     pub completed: bool,
 }
+#[cfg(not(windows))]
 #[derive(Serialize)]
 struct Request<'a> {
     path: &'a std::path::Path,
@@ -33,7 +41,7 @@ struct Request<'a> {
 }
 
 pub fn available() -> bool {
-    cfg!(target_os = "macos")
+    cfg!(any(target_os = "macos", windows))
 }
 
 /// A non-mutating snapshot; an unpaged drawing uses a centered A4 sheet.
@@ -106,6 +114,8 @@ pub fn prepare(doc: Document, title: String) -> Result<Prepared, String> {
         return Err("The print snapshot exceeds 128 MB. Print a smaller selection.".into());
     }
     Ok(Prepared {
+        #[cfg(windows)]
+        native: Arc::new(crate::native_windows::print_snapshot(&doc)?),
         pdf: Arc::new(pdf),
         title: title
             .chars()
@@ -114,6 +124,7 @@ pub fn prepare(doc: Document, title: String) -> Result<Prepared, String> {
             .collect(),
     })
 }
+#[cfg(not(windows))]
 fn helper() -> Result<PathBuf, String> {
     std::env::current_exe()
         .ok()
@@ -131,6 +142,7 @@ fn helper() -> Result<PathBuf, String> {
         })
         .ok_or_else(|| "Native printing is unavailable in this build.".into())
 }
+#[cfg(not(windows))]
 async fn drain_errors(mut input: impl tokio::io::AsyncRead + Unpin) -> Result<Vec<u8>, String> {
     let mut result = Vec::new();
     let mut buffer = [0u8; 4096];
@@ -146,9 +158,19 @@ async fn drain_errors(mut input: impl tokio::io::AsyncRead + Unpin) -> Result<Ve
     }
     Ok(result)
 }
+#[cfg(windows)]
+pub async fn show_dialog(job: Prepared) -> Result<Outcome, String> {
+    let completed =
+        tokio::task::spawn_blocking(move || reshiki_windows::print(&job.native, &job.title))
+            .await
+            .map_err(|e| e.to_string())??;
+    Ok(Outcome { completed })
+}
+
+#[cfg(not(windows))]
 pub async fn show_dialog(job: Prepared) -> Result<Outcome, String> {
     if !available() {
-        return Err("Native printing is currently available on macOS. Export a page PDF to print on this system.".into());
+        return Err("Native printing is available on Windows and macOS. Export a page PDF to print on this system.".into());
     }
     let helper = helper()?;
     let mut file = tempfile::Builder::new()
@@ -163,7 +185,8 @@ pub async fn show_dialog(job: Prepared) -> Result<Outcome, String> {
         title: &job.title,
     })
     .map_err(|e| e.to_string())?;
-    let mut child = Command::new(helper)
+    let mut command = Command::new(helper);
+    let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

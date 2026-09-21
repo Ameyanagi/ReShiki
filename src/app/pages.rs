@@ -387,7 +387,7 @@ impl App {
                 );
             if reshiki::printing::available() {
                 body = body.push(
-                    command("Print… · ⌘P")
+                    command(super::platform_shortcut("Print… · ⌘P", "Print… · Ctrl+P"))
                         .on_press_maybe(self.printing.active.is_none().then_some(
                             Message::Printing(super::printing::Action::Start(
                                 reshiki::printing::Scope::Document,
@@ -542,7 +542,7 @@ impl App {
                 );
             if reshiki::printing::available() {
                 body = body.push(
-                    command("Print… · ⌘P")
+                    command(super::platform_shortcut("Print… · ⌘P", "Print… · Ctrl+P"))
                         .on_press_maybe(self.printing.active.is_none().then_some(
                             Message::Printing(super::printing::Action::Start(
                                 reshiki::printing::Scope::Document,

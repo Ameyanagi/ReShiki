@@ -727,14 +727,29 @@ impl App {
                 tooltip::Position::Bottom
             ),
             divider(),
-            icon_button(Icon::New, "New · ⌘N", Some(Message::New), false),
-            icon_button(Icon::Open, "Open · ⌘O", Some(Message::Open), false),
-            icon_button(Icon::Save, "Save · ⌘S", Some(Message::Save), false),
+            icon_button(
+                Icon::New,
+                super::platform_shortcut("New · ⌘N", "New · Ctrl+N"),
+                Some(Message::New),
+                false
+            ),
+            icon_button(
+                Icon::Open,
+                super::platform_shortcut("Open · ⌘O", "Open · Ctrl+O"),
+                Some(Message::Open),
+                false
+            ),
+            icon_button(
+                Icon::Save,
+                super::platform_shortcut("Save · ⌘S", "Save · Ctrl+S"),
+                Some(Message::Save),
+                false
+            ),
             command("Save as", Message::SaveAs),
             divider(),
             icon_button(
                 Icon::Undo,
-                "Undo · ⌘Z",
+                super::platform_shortcut("Undo · ⌘Z", "Undo · Ctrl+Z"),
                 self.text_history_available(false)
                     .unwrap_or_else(|| self.history.can_undo())
                     .then_some(Message::Undo),
@@ -742,7 +757,7 @@ impl App {
             ),
             icon_button(
                 Icon::Redo,
-                "Redo · ⇧⌘Z",
+                super::platform_shortcut("Redo · ⇧⌘Z", "Redo · Ctrl+Shift+Z"),
                 self.text_history_available(true)
                     .unwrap_or_else(|| self.history.can_redo())
                     .then_some(Message::Redo),
@@ -753,6 +768,8 @@ impl App {
                 text(title).size(12),
                 text(if self.dirty() {
                     "Edited"
+                } else if self.office_document() {
+                    "Office drawing · Ctrl+S updates Office"
                 } else {
                     if self.path.is_some() {
                         "All changes saved"
@@ -2265,12 +2282,15 @@ impl App {
                     .width(Length::Fill),
             );
         }
-        if cfg!(target_os = "macos") {
+        if reshiki::clipboard::available() {
             body = body
                 .push(
-                    command("Copy image · ⇧⌘C", Message::CopyImage)
-                        .on_press_maybe((!self.clipboard_busy).then_some(Message::CopyImage))
-                        .width(Length::Fill),
+                    command(
+                        super::platform_shortcut("Copy image · ⇧⌘C", "Copy image · Ctrl+Shift+C"),
+                        Message::CopyImage,
+                    )
+                    .on_press_maybe((!self.clipboard_busy).then_some(Message::CopyImage))
+                    .width(Length::Fill),
                 )
                 .push(
                     text(if self.selected.is_empty() {
@@ -2298,7 +2318,7 @@ impl App {
         if reshiki::printing::available() {
             body = body.push(
                 command(
-                    "Print… · ⌘P",
+                    super::platform_shortcut("Print… · ⌘P", "Print… · Ctrl+P"),
                     Message::Printing(super::printing::Action::Start(
                         reshiki::printing::Scope::Document,
                     )),
@@ -2389,7 +2409,7 @@ impl App {
                     ),
                     text("PNG · JPEG · TIFF · WebP").size(11).color(muted()),
                     command("Paste picture", Message::PastePicture).on_press_maybe(
-                        (cfg!(target_os = "macos") && !self.clipboard_busy)
+                        (reshiki::clipboard::available() && !self.clipboard_busy)
                             .then_some(Message::PastePicture)
                     )
                 ]
@@ -2417,7 +2437,7 @@ impl App {
 
     fn shortcut_drawer(&self) -> Element<'_, Message> {
         container(row![
-            column![text("Draw without leaving the canvas").size(13),text("V Select   L Lasso   B / 1 Bond   2 Double   3 Triple   4 Quadruple").size(12),text("Hover / select bond: S Single · D Double (repeat shifts lines) · T Triple").size(12),text("Selected aromatic ring: A Circle / alternating bonds").size(12),text("X Chain   Shift+X Snaking chain   Alt Free bond drawing").size(12),text("R Ring   A Arrow   T Text   E Erase   Shift+R Aromatic ring").size(12),text("⌘G Group   ⇧⌘G Ungroup   ⇧⌘A Invert selection").size(12),text("Hover atom: C / N / O / S / P / F / H   ⌘I Import   ⌘E Export   ⌘P Print   ⌘D Duplicate   Esc Select").size(12)].spacing(5),
+            column![text("Draw without leaving the canvas").size(13),text("V Select   L Lasso   B / 1 Bond   2 Double   3 Triple   4 Quadruple").size(12),text("Hover / select bond: S Single · D Double (repeat shifts lines) · T Triple").size(12),text("Selected aromatic ring: A Circle / alternating bonds").size(12),text("X Chain   Shift+X Snaking chain   Alt Free bond drawing").size(12),text("R Ring   A Arrow   T Text   E Erase   Shift+R Aromatic ring").size(12),text(super::platform_shortcut("⌘G Group   ⇧⌘G Ungroup   ⇧⌘A Invert selection", "Ctrl+G Group   Ctrl+Shift+G Ungroup   Ctrl+Shift+A Invert selection")).size(12),text(super::platform_shortcut("Hover atom: C / N / O / S / P / F / H   ⌘I Import   ⌘E Export   ⌘P Print   ⌘D Duplicate   Esc Select", "Hover atom: C / N / O / S / P / F / H   Ctrl+I Import   Ctrl+E Export   Ctrl+P Print   Ctrl+D Duplicate   Esc Select")).size(12)].spacing(5),
             Space::new().width(Length::Fill),icon_button(Icon::Close,"Close shortcuts",Some(Message::ToggleHelp),false)
         ].align_y(Alignment::Center)).padding([12,18]).style(panel).into()
     }
@@ -2654,10 +2674,17 @@ fn sheet(_: &Theme) -> container::Style {
             width: 1.,
             radius: 1.0.into(),
         },
-        shadow: iced::Shadow {
-            color: Color::from_rgba8(35, 45, 57, 0.08),
-            offset: iced::Vector::new(0., 2.),
-            blur_radius: 8.,
+        // Tiny Skia's shadow pass does not clip to the damaged region. During
+        // partial redraws it darkens unchanged canvas pixels and is expensive
+        // for this large surface; the sheet border already separates it.
+        shadow: if cfg!(windows) {
+            iced::Shadow::default()
+        } else {
+            iced::Shadow {
+                color: Color::from_rgba8(35, 45, 57, 0.08),
+                offset: iced::Vector::new(0., 2.),
+                blur_radius: 8.,
+            }
         },
         ..Default::default()
     }

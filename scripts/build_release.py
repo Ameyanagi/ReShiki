@@ -53,6 +53,17 @@ def host_target():
     raise ValueError("rustc did not report its host target")
 
 
+def target_directory():
+    """Respect Cargo configuration, including a target directory on another drive."""
+    result = run(
+        ["cargo", "metadata", "--no-deps", "--format-version", "1", "--locked"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    return Path(json.loads(result.stdout)["target_directory"])
+
+
 def chemistry_architecture(system, architecture):
     # Windows 11 ARM runs the available RDKit x64 wheel in a separate process.
     return "x64" if system == "windows" else architecture
@@ -337,7 +348,7 @@ def main():
         shutil.rmtree(folder)
     folder.mkdir(parents=True)
     run(["cargo", "build", "--release", "--locked", "--target", target], cwd=ROOT)
-    build = ROOT / "target" / target / "release"
+    build = target_directory() / target / "release"
     binary_name = "reshiki.exe" if system == "windows" else "reshiki"
     verify_binary(build / binary_name, system, arch)
     worker = runtime_project()

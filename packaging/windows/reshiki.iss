@@ -47,6 +47,15 @@ Name: "{userprograms}\ReShiki"; Filename: "{app}\reshiki.exe"
 Name: "{userdesktop}\ReShiki"; Filename: "{app}\reshiki.exe"; Tasks: desktopicon
 
 [Registry]
+; Editable Office objects are independent of the optional .reshiki file association.
+Root: HKCU; Subkey: "Software\Classes\CLSID\{{3BAC2B7E-73A2-4F3A-9CE7-5E9B438C59B4}"; ValueType: string; ValueData: "ReShiki drawing"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\CLSID\{{3BAC2B7E-73A2-4F3A-9CE7-5E9B438C59B4}\LocalServer32"; ValueType: string; ValueData: """{app}\reshiki.exe"" --ole-server"
+Root: HKCU; Subkey: "Software\Classes\CLSID\{{3BAC2B7E-73A2-4F3A-9CE7-5E9B438C59B4}\InprocHandler32"; ValueType: string; ValueData: "ole32.dll"
+Root: HKCU; Subkey: "Software\Classes\CLSID\{{3BAC2B7E-73A2-4F3A-9CE7-5E9B438C59B4}\ProgID"; ValueType: string; ValueData: "ReShiki.EmbeddedDrawing.1"
+Root: HKCU; Subkey: "Software\Classes\CLSID\{{3BAC2B7E-73A2-4F3A-9CE7-5E9B438C59B4}\Verb\0"; ValueType: string; ValueData: "Edit,0,2"
+Root: HKCU; Subkey: "Software\Classes\CLSID\{{3BAC2B7E-73A2-4F3A-9CE7-5E9B438C59B4}\Verb\1"; ValueType: string; ValueData: "Open,0,2"
+Root: HKCU; Subkey: "Software\Classes\ReShiki.EmbeddedDrawing.1"; ValueType: string; ValueData: "ReShiki drawing"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\ReShiki.EmbeddedDrawing.1\CLSID"; ValueType: string; ValueData: "{{3BAC2B7E-73A2-4F3A-9CE7-5E9B438C59B4}"
 Root: HKCU; Subkey: "Software\Classes\.reshiki\OpenWithProgids"; ValueType: string; ValueName: "ReShiki.Drawing"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
 Root: HKCU; Subkey: "Software\Classes\ReShiki.Drawing"; ValueType: string; ValueData: "ReShiki drawing"; Flags: uninsdeletekey; Tasks: fileassoc
 Root: HKCU; Subkey: "Software\Classes\ReShiki.Drawing\shell\open\command"; ValueType: string; ValueData: """{app}\reshiki.exe"" --open ""%1"""; Tasks: fileassoc

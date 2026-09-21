@@ -82,9 +82,15 @@ impl App {
         let action = if stale_cut {
             "Copied previous selection; Cut cancelled because the drawing changed"
         } else if cut {
-            "Selection cut · editable drawing and images copied"
+            if cfg!(windows) {
+                "Selection cut · editable drawing copied"
+            } else {
+                "Selection cut · editable drawing and images copied"
+            }
         } else if outcome.image_only {
             "Image copied"
+        } else if cfg!(windows) {
+            "Editable drawing copied · use Copy Image for a picture"
         } else if outcome.external_editable {
             "Editable drawing and images copied"
         } else {

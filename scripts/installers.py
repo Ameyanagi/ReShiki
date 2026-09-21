@@ -5,6 +5,7 @@ import json
 import os
 import platform
 import shutil
+import sys
 import tempfile
 from pathlib import Path
 
@@ -57,6 +58,11 @@ def windows_installer(folder, output_dir):
 
 def verify_windows_installer(installer, source):
     """Install, upgrade in place, run chemistry, and uninstall on a disposable CI runner."""
+    if sys.platform != "win32":
+        raise ValueError("Windows installer verification requires Windows")
+    import winreg
+
+    ole_key = r"Software\Classes\CLSID\{3BAC2B7E-73A2-4F3A-9CE7-5E9B438C59B4}\LocalServer32"
     with tempfile.TemporaryDirectory(prefix="ReShiki installer check ") as temporary:
         root = Path(temporary)
         destination = root / "Installed ReShiki"
@@ -84,6 +90,10 @@ def verify_windows_installer(installer, source):
         try:
             for _ in range(2):
                 run([installer, *flags], timeout=180)
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, ole_key) as key:
+                    command, _ = winreg.QueryValueEx(key, "")
+                if command != f'"{destination / "reshiki.exe"}" --ole-server':
+                    raise ValueError("Installed Office editor registration is incorrect")
                 # Every shipped byte, including the worker/lockfile, must survive setup and upgrade.
                 for original in source.rglob("*"):
                     if original.is_file():

@@ -17,6 +17,21 @@ mod app;
 mod canvas;
 
 fn main() -> iced::Result {
+    #[cfg(windows)]
+    {
+        if std::env::args().any(|arg| arg == "--ole-server") {
+            let result = reshiki_windows::run_office_server(|bytes| {
+                let document: reshiki::document::Document =
+                    serde_json::from_slice(bytes).map_err(|error| error.to_string())?;
+                reshiki::export::office_preview(&document)
+            });
+            if let Err(error) = result {
+                eprintln!("Office integration failed: {error}");
+            }
+            return Ok(());
+        }
+        reshiki_windows::enable_office_embedding();
+    }
     if std::env::args().any(|arg| arg == "--engine-check") {
         let runtime = match tokio::runtime::Runtime::new() {
             Ok(runtime) => runtime,
