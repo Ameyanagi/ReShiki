@@ -1,9 +1,18 @@
 //! Validate the lexical_cast<double> coordinate spellings used by CX readers.
 //! Hexadecimal input needs separate range checks; no FFI or locale state.
 pub(super) fn valid(text: &str) -> bool {
+    // UCRT accepts rounded nonzero subnormals. The Unix reference reports
+    // decimal underflow and inexact hexadecimal subnormals as range errors.
+    valid_for(text, cfg!(windows))
+}
+
+fn valid_for(text: &str, rounded_subnormals: bool) -> bool {
     let unsigned = text.strip_prefix(['+', '-']).unwrap_or(text);
     if unsigned.starts_with("0x") || unsigned.starts_with("0X") {
-        return hexadecimal(unsigned.as_bytes().get(2..).unwrap_or_default());
+        return hexadecimal(
+            unsigned.as_bytes().get(2..).unwrap_or_default(),
+            rounded_subnormals,
+        );
     }
     let Ok(value) = text.parse::<f64>() else {
         return false;
@@ -14,7 +23,7 @@ pub(super) fn valid(text: &str) -> bool {
             || unsigned.eq_ignore_ascii_case("infinity");
     }
     if value.is_subnormal() {
-        return false;
+        return rounded_subnormals;
     }
     value != 0.0
         || !unsigned
@@ -23,7 +32,7 @@ pub(super) fn valid(text: &str) -> bool {
             .any(|b| matches!(b, b'1'..=b'9'))
 }
 
-fn hexadecimal(text: &[u8]) -> bool {
+fn hexadecimal(text: &[u8], rounded_subnormals: bool) -> bool {
     let (mut pos, mut digits, mut fraction) = (0usize, 0i64, 0i64);
     let (mut point, mut first, mut last) = (false, None, None);
     let (mut head, mut head_digits) = (0u64, 0u32);
@@ -102,8 +111,53 @@ fn hexadecimal(text: &[u8]) -> bool {
         return false;
     }
     if high < -1022 {
+        if rounded_subnormals {
+            // At half the smallest subnormal, ties-to-even produces zero.
+            return high > -1075 || high == -1075 && low < high;
+        }
         // A tie just below the normal boundary rounds to the minimum normal.
         return (high == -1023 && prefix(53) == (1u64 << 53) - 1) || low >= -1074;
     }
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::valid_for;
+
+    #[test]
+    fn native_underflow_rules_distinguish_windows_and_unix() {
+        for input in [
+            "1e-308",
+            "5e-324",
+            "0x1.1p-1075",
+            "0x1.8p-1074",
+            "0x1.123456789abcdefp-1023",
+        ] {
+            assert!(valid_for(input, true), "Windows: {input}");
+            assert!(!valid_for(input, false), "Unix: {input}");
+        }
+        for input in [
+            "0x1p-1075",
+            "0x1p-1076",
+            "1e-9999",
+            "1e309",
+            "0x1p1024",
+            "0x1.fffffffffffff8p1023",
+            "bad",
+        ] {
+            assert!(!valid_for(input, true), "Windows: {input}");
+            assert!(!valid_for(input, false), "Unix: {input}");
+        }
+        for input in [
+            "0x1p-1074",
+            "0x0.fffffffffffff8p-1022",
+            "0x1p-1022",
+            "0x1.fffffffffffffp1023",
+            "0e-9999",
+        ] {
+            assert!(valid_for(input, true), "Windows: {input}");
+            assert!(valid_for(input, false), "Unix: {input}");
+        }
+    }
 }
