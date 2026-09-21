@@ -1,6 +1,6 @@
 use super::*;
 use crate::chemistry::graph::{Atom, Bond};
-type TestResult = Result<(), Box<dyn std::error::Error>>;
+type TestResult = anyhow::Result<()>;
 
 fn molecule() -> (Graph, Vec<Point3>, Vec<Direction>) {
     let graph = Graph {
@@ -34,12 +34,14 @@ fn reflecting_wedge_geometry_reverses_winding_and_promotes_h() -> TestResult {
     let (graph, positions, dirs) = molecule();
     let meta = Metadata::unspecified(&graph);
     let before = serde_json::to_value((&graph, &meta))?;
-    let result = from_directions(&graph, &meta, &dirs, Some(&positions), true)?;
+    let result = from_directions(&graph, &meta, &dirs, Some(&positions), true)
+        .map_err(anyhow::Error::msg)?;
     let reflected = positions
         .iter()
         .map(|p| Point3 { x: -p.x, ..*p })
         .collect::<Vec<_>>();
-    let mirrored = from_directions(&graph, &meta, &dirs, Some(&reflected), true)?;
+    let mirrored = from_directions(&graph, &meta, &dirs, Some(&reflected), true)
+        .map_err(anyhow::Error::msg)?;
     assert!(matches!(result.metadata.atoms[0].chiral_tag, 1 | 2));
     assert_eq!(
         result.metadata.atoms[0].chiral_tag + mirrored.metadata.atoms[0].chiral_tag,
@@ -99,7 +101,8 @@ fn many_promotions_and_high_degree_atoms_stay_linear() -> TestResult {
         &dirs,
         Some(&positions),
         true,
-    )?;
+    )
+    .map_err(anyhow::Error::msg)?;
     assert_eq!(
         result
             .graph
@@ -129,14 +132,16 @@ fn many_promotions_and_high_degree_atoms_stay_linear() -> TestResult {
         &vec![Direction::Wedge; star.bonds.len()],
         Some(&positions),
         true,
-    )?;
+    )
+    .map_err(anyhow::Error::msg)?;
     assert_eq!(result.metadata.atoms[0].chiral_tag, 0);
     for bond in star.bonds.iter_mut().skip(1) {
         bond.order = 2;
     }
     let mut directions = vec![Direction::None; star.bonds.len()];
     directions[0] = Direction::Up;
-    let result = bond_stereo_from_directions(&star, &Metadata::unspecified(&star), &directions)?;
+    let result = bond_stereo_from_directions(&star, &Metadata::unspecified(&star), &directions)
+        .map_err(anyhow::Error::msg)?;
     assert!(result.bonds.iter().all(|b| b.stereo == 0));
     Ok(())
 }

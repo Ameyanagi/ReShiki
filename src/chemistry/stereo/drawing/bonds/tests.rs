@@ -3,7 +3,7 @@ use crate::chemistry::{
     graph::{Atom, Bond},
     stereo::bond_stereo_from_directions,
 };
-type TestResult = Result<(), Box<dyn std::error::Error>>;
+type TestResult = anyhow::Result<()>;
 
 fn chain(n: usize) -> (Graph, Vec<Point3>) {
     let graph = Graph {
@@ -42,8 +42,10 @@ fn long_conjugated_chain_propagates_without_recursion() -> TestResult {
         &vec![Direction::None; graph.bonds.len()],
         Some(&positions),
         &[],
-    )?;
-    let meta = bond_stereo_from_directions(&graph, &result.metadata, &result.directions)?;
+    )
+    .map_err(anyhow::Error::msg)?;
+    let meta = bond_stereo_from_directions(&graph, &result.metadata, &result.directions)
+        .map_err(anyhow::Error::msg)?;
     for (bond, meta) in graph.bonds.iter().zip(meta.bonds) {
         if bond.order == 2 {
             assert_eq!(meta.stereo, 5);
@@ -117,12 +119,16 @@ fn no_conformer_detection_differs_from_direction_assignment() -> TestResult {
     meta.bonds[1].stereo = 3;
     meta.bonds[1].stereo_atoms = vec![0, 3];
     let dirs = vec![Direction::None; graph.bonds.len()];
-    let untouched = detect_bond_stereo(&graph, &meta, &dirs, None, &[])?;
+    let untouched =
+        detect_bond_stereo(&graph, &meta, &dirs, None, &[]).map_err(anyhow::Error::msg)?;
     assert_eq!(untouched.directions, dirs);
-    let directed = double_bond_directions(&graph, &meta, &dirs, None, &[])?;
+    let directed =
+        double_bond_directions(&graph, &meta, &dirs, None, &[]).map_err(anyhow::Error::msg)?;
     assert_ne!(directed.directions, dirs);
     assert_eq!(
-        bond_stereo_from_directions(&graph, &directed.metadata, &directed.directions)?.bonds[1]
+        bond_stereo_from_directions(&graph, &directed.metadata, &directed.directions)
+            .map_err(anyhow::Error::msg)?
+            .bonds[1]
             .stereo,
         5
     );

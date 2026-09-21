@@ -1,10 +1,11 @@
 //! Exact binary and semantic XML comparison against the pre-migration Python codec.
+use anyhow::Context;
 use base64::{Engine, engine::general_purpose::STANDARD};
 use reshiki::exchange::{from_cdx, to_cdx};
 use serde::Deserialize;
-use std::{collections::BTreeMap, error::Error, path::Path, process::Command};
+use std::{collections::BTreeMap, path::Path, process::Command};
 
-type TestResult = Result<(), Box<dyn Error>>;
+type TestResult = anyhow::Result<()>;
 
 #[derive(Deserialize)]
 struct Case {
@@ -81,9 +82,16 @@ fn matches_python_reference_for_native_files_all_properties_and_charsets() -> Te
     for case in cases {
         let bytes = STANDARD.decode(&case.binary)?;
         if let Some(xml) = case.xml {
-            assert_eq!(to_cdx(&xml)?, bytes, "{}", case.name);
+            assert_eq!(
+                to_cdx(&xml).map_err(anyhow::Error::msg)?,
+                bytes,
+                "{}",
+                case.name
+            );
         }
-        let decoded = from_cdx(&bytes).map_err(|e| format!("{}: {e}", case.name))?;
+        let decoded = from_cdx(&bytes)
+            .map_err(anyhow::Error::msg)
+            .with_context(|| case.name.clone())?;
         same_xml(&decoded, &case.decoded, &case.name)?;
     }
     Ok(())
@@ -93,7 +101,7 @@ fn matches_python_reference_for_native_files_all_properties_and_charsets() -> Te
 fn corrupt_inputs_and_limits_return_errors_without_partial_output() -> TestResult {
     let data = to_cdx(
         "<CDXML><page id=\"1\"><fragment id=\"2\"><n id=\"3\" p=\"0 0\" Element=\"8\"/></fragment></page></CDXML>",
-    )?;
+    ).map_err(anyhow::Error::msg)?;
     for end in 0..data.len() - 2 {
         assert!(from_cdx(&data[..end]).is_err(), "truncated at {end}");
     }

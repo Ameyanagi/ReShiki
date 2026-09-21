@@ -1,7 +1,7 @@
+use anyhow::Context;
 use reshiki::chemistry::{RDKIT_VERSION, graph::Graph, ranking::Metadata, stereo};
 use serde::Deserialize;
 use std::{
-    error::Error,
     io::{BufRead, BufReader},
     path::Path,
     process::{Command, Stdio},
@@ -16,7 +16,7 @@ struct Case {
 }
 
 #[test]
-fn legacy_atom_priorities_match_independent_rdkit() -> Result<(), Box<dyn Error>> {
+fn legacy_atom_priorities_match_independent_rdkit() -> anyhow::Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let python = root.join(if cfg!(windows) {
         ".venv/Scripts/python.exe"
@@ -29,9 +29,9 @@ fn legacy_atom_priorities_match_independent_rdkit() -> Result<(), Box<dyn Error>
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()?;
-    let mut lines = BufReader::new(child.stdout.take().ok_or("Missing oracle output")?).lines();
+    let mut lines = BufReader::new(child.stdout.take().context("Missing oracle output")?).lines();
     let version: serde_json::Value =
-        serde_json::from_str(&lines.next().ok_or("Missing oracle version")??)?;
+        serde_json::from_str(&lines.next().context("Missing oracle version")??)?;
     assert_eq!(version["rdkit_version"], RDKIT_VERSION);
     let (mut count, mut mapped, mut isotopic, mut rejected, mut tied) = (0, 0, 0, 0, 0);
     let mut failures = Vec::new();

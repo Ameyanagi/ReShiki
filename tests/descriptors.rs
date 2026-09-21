@@ -1,5 +1,6 @@
 //! Compare independently computed totals and atom contributions before routing
 //! any production descriptor away from RDKit.
+use anyhow::Context;
 use reshiki::chemistry::{
     RDKIT_VERSION,
     descriptors::{self, Descriptors},
@@ -7,7 +8,6 @@ use reshiki::chemistry::{
 };
 use serde::Deserialize;
 use std::{
-    error::Error,
     io::{BufRead, BufReader},
     path::Path,
     process::{Command, Stdio},
@@ -19,7 +19,7 @@ struct Case {
     rings: Vec<Vec<usize>>,
     expected: Descriptors,
 }
-type TestResult = Result<(), Box<dyn Error>>;
+type TestResult = anyhow::Result<()>;
 
 fn close(a: f64, b: f64) -> bool {
     (a - b).abs() <= a.abs().max(b.abs()).max(1.) * 1e-12
@@ -90,9 +90,9 @@ fn descriptors_and_atom_contributions_match_rdkit() -> TestResult {
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()?;
-    let mut lines = BufReader::new(child.stdout.take().ok_or("Missing oracle output")?).lines();
+    let mut lines = BufReader::new(child.stdout.take().context("Missing oracle output")?).lines();
     let header: serde_json::Value =
-        serde_json::from_str(&lines.next().ok_or("Missing oracle version")??)?;
+        serde_json::from_str(&lines.next().context("Missing oracle version")??)?;
     assert_eq!(header["rdkit_version"], RDKIT_VERSION);
     let mut count = 0;
     let mut errors = Vec::new();

@@ -1,6 +1,6 @@
 use super::*;
 use crate::chemistry::graph::{Atom, Bond};
-type TestResult = Result<(), Box<dyn std::error::Error>>;
+type TestResult = anyhow::Result<()>;
 
 fn carbon_graph(n: usize, edges: impl Iterator<Item = (usize, usize, u8)>) -> Graph {
     Graph {
@@ -29,19 +29,25 @@ fn long_polyenes_and_high_degree_centers_have_bounded_traversal() -> TestResult 
         n,
         (1..n).map(|i| (i - 1, i, if i % 2 == 1 { 2 } else { 1 })),
     );
-    let flags = conjugation(&graph)?;
+    let flags = conjugation(&graph).map_err(anyhow::Error::msg)?;
     assert!(flags.iter().all(|&flag| flag));
     assert!(
-        hybridization(&graph, &vec![0; n], &flags)?
+        hybridization(&graph, &vec![0; n], &flags)
+            .map_err(anyhow::Error::msg)?
             .iter()
             .all(|&h| h == Hybridization::Sp2)
     );
     let star = carbon_graph(n, (1..n).map(|i| (0, i, 1)));
     // A naive all-pairs bond scan at the center would be quadratic. The
     // candidate/degree gate excludes this center before comparing its bonds.
-    assert!(conjugation(&star)?.iter().all(|&flag| !flag));
+    assert!(
+        conjugation(&star)
+            .map_err(anyhow::Error::msg)?
+            .iter()
+            .all(|&flag| !flag)
+    );
     assert_eq!(
-        hybridization(&star, &vec![0; n], &vec![false; n - 1])?[0],
+        hybridization(&star, &vec![0; n], &vec![false; n - 1]).map_err(anyhow::Error::msg)?[0],
         Hybridization::Unspecified
     );
     Ok(())

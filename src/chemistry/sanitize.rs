@@ -35,19 +35,25 @@ pub enum Stage {
     Hydrogens,
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
+#[error("{stage:?}: {cause}")]
 pub struct Error {
     pub stage: Stage,
-    pub message: String,
+    #[source]
+    pub cause: Cause,
 }
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}: {}", self.stage, self.message)
-    }
+#[derive(Debug, thiserror::Error)]
+pub enum Cause {
+    #[error("{0}")]
+    Invalid(String),
+    #[error("{0}")]
+    Rings(#[from] rings::RingError),
 }
-impl std::error::Error for Error {}
 fn at_stage<T>(stage: Stage, result: Result<T, String>) -> Result<T, Error> {
-    result.map_err(|message| Error { stage, message })
+    result.map_err(|message| Error {
+        stage,
+        cause: Cause::Invalid(message),
+    })
 }
 
 #[derive(Debug, Serialize)]
@@ -78,7 +84,7 @@ pub fn sanitize(
     if directions.len() != graph.bonds.len() {
         return Err(Error {
             stage: Input,
-            message: "Invalid sanitization bond directions".into(),
+            cause: Cause::Invalid("Invalid sanitization bond directions".into()),
         });
     }
     let graph = at_stage(Cleanup, normalize::functional_groups(graph))?;
@@ -87,7 +93,7 @@ pub fn sanitize(
     let rings = rings::perceive(&graph, rings::Options::default())
         .map_err(|error| Error {
             stage: Rings,
-            message: error.to_string(),
+            cause: Cause::Rings(error),
         })?
         .atoms;
     let mut attempt = at_stage(

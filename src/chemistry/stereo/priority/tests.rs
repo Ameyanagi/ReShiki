@@ -1,6 +1,6 @@
 use super::*;
 use crate::chemistry::graph::{Atom, Bond};
-type TestResult = Result<(), Box<dyn std::error::Error>>;
+type TestResult = anyhow::Result<()>;
 
 fn carbons(n: usize) -> Graph {
     Graph {
@@ -19,18 +19,37 @@ fn carbons(n: usize) -> Graph {
 #[test]
 fn empty_graph_and_explicit_zero_maps_are_distinct() -> TestResult {
     let empty = carbons(0);
-    assert!(atom_priorities(&empty, &Metadata::unspecified(&empty))?.is_empty());
+    assert!(
+        atom_priorities(&empty, &Metadata::unspecified(&empty))
+            .map_err(anyhow::Error::msg)?
+            .is_empty()
+    );
     let graph = carbons(2);
     let mut meta = Metadata::unspecified(&graph);
-    assert_eq!(atom_priorities(&graph, &meta)?, [0, 0]);
+    assert_eq!(
+        atom_priorities(&graph, &meta).map_err(anyhow::Error::msg)?,
+        [0, 0]
+    );
     meta.atoms[0].map_present = true;
-    assert_eq!(atom_priorities(&graph, &meta)?, [1, 0]);
+    assert_eq!(
+        atom_priorities(&graph, &meta).map_err(anyhow::Error::msg)?,
+        [1, 0]
+    );
     meta.atoms[0].map_number = 1023;
-    assert_eq!(atom_priorities(&graph, &meta)?, [0, 0]);
+    assert_eq!(
+        atom_priorities(&graph, &meta).map_err(anyhow::Error::msg)?,
+        [0, 0]
+    );
     meta.atoms[0].map_number = -1;
-    assert_eq!(atom_priorities(&graph, &meta)?, [0, 0]);
+    assert_eq!(
+        atom_priorities(&graph, &meta).map_err(anyhow::Error::msg)?,
+        [0, 0]
+    );
     meta.atoms[0].map_number = i32::MAX;
-    assert_eq!(atom_priorities(&graph, &meta)?, [0, 0]);
+    assert_eq!(
+        atom_priorities(&graph, &meta).map_err(anyhow::Error::msg)?,
+        [0, 0]
+    );
     Ok(())
 }
 
@@ -45,7 +64,8 @@ fn high_degree_uses_bounded_dynamic_storage() -> TestResult {
             aromatic: false,
         })
         .collect();
-    let ranks = atom_priorities(&graph, &Metadata::unspecified(&graph))?;
+    let ranks =
+        atom_priorities(&graph, &Metadata::unspecified(&graph)).map_err(anyhow::Error::msg)?;
     assert_eq!(ranks[0], 1);
     assert!(ranks.iter().skip(1).all(|&v| v == 0));
     Ok(())
@@ -98,7 +118,8 @@ fn supplied_hydrogen_cache_controls_tied_substituents() -> TestResult {
         },
     ];
     assert_eq!(
-        atom_priorities_cached(&graph, &Metadata::unspecified(&graph), Some(&cache))?,
+        atom_priorities_cached(&graph, &Metadata::unspecified(&graph), Some(&cache))
+            .map_err(anyhow::Error::msg)?,
         [0, 1]
     );
     Ok(())
@@ -108,7 +129,7 @@ fn supplied_hydrogen_cache_controls_tied_substituents() -> TestResult {
 fn seeded_refinement_checks_rank_lengths_and_integer_range() -> TestResult {
     let graph = carbons(100_000);
     let meta = Metadata::unspecified(&graph);
-    let cache = graph.provisional_valences()?;
+    let cache = graph.provisional_valences().map_err(anyhow::Error::msg)?;
     let labels = vec![None; graph.atoms.len()];
     let ranks: Vec<_> = (0..graph.atoms.len() as u32).collect();
     assert!(

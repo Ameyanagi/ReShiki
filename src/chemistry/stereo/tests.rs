@@ -1,6 +1,7 @@
 use super::*;
 use crate::chemistry::graph::{Atom, Bond};
-type TestResult = Result<(), Box<dyn std::error::Error>>;
+use anyhow::Context;
+type TestResult = anyhow::Result<()>;
 
 fn ring(n: usize) -> Graph {
     Graph {
@@ -35,7 +36,8 @@ fn large_macrocycle_cleanup_does_not_recurse() -> TestResult {
         &metadata,
         &vec![Hybridization::Sp2; graph.atoms.len()],
         &[(0..graph.atoms.len()).collect()],
-    )?;
+    )
+    .map_err(anyhow::Error::msg)?;
     assert!(result.bonds.iter().all(|b| b.stereo == 6));
     Ok(())
 }
@@ -130,7 +132,7 @@ fn expanding_incident_bonds_cannot_exceed_group_storage() -> TestResult {
     let before = serde_json::to_value(&metadata)?;
     let error = atropisomers(&graph, &metadata, &hybs, &[])
         .err()
-        .ok_or("Expected storage error")?;
+        .context("Expected storage error")?;
     assert!(error.contains("group storage exceeded"), "{error}");
     assert_eq!(serde_json::to_value(&metadata)?, before);
     Ok(())

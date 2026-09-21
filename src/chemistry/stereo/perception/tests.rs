@@ -3,7 +3,7 @@ use crate::chemistry::{
     graph::{Atom, Bond},
     ranking::StereoGroup,
 };
-type TestResult = Result<(), Box<dyn std::error::Error>>;
+type TestResult = anyhow::Result<()>;
 
 fn state(graph: Graph) -> Result<State, String> {
     Ok(State {
@@ -47,23 +47,29 @@ fn star() -> Result<State, String> {
 
 #[test]
 fn winding_and_atom_order_preserve_opposite_labels() -> TestResult {
-    let mut input = star()?;
+    let mut input = star().map_err(anyhow::Error::msg)?;
     input.metadata.atoms[0].chiral_tag = 1;
     let before = serde_json::to_value(&input)?;
-    let cw = perceive(&input, options())?;
+    let cw = perceive(&input, options()).map_err(anyhow::Error::msg)?;
     assert_eq!(cw.properties.atoms[0].cip_code.as_deref(), Some("R"));
     assert_eq!(cw.properties.atoms[0].possible, Some(true));
     assert_eq!(serde_json::to_value(&input)?, before);
     input.metadata.atoms[0].chiral_tag = 2;
     assert_eq!(
-        perceive(&input, options())?.properties.atoms[0]
+        perceive(&input, options())
+            .map_err(anyhow::Error::msg)?
+            .properties
+            .atoms[0]
             .cip_code
             .as_deref(),
         Some("S")
     );
     input.graph.bonds.swap(0, 1);
     assert_eq!(
-        perceive(&input, options())?.properties.atoms[0]
+        perceive(&input, options())
+            .map_err(anyhow::Error::msg)?
+            .properties
+            .atoms[0]
             .cip_code
             .as_deref(),
         Some("R")
@@ -73,15 +79,15 @@ fn winding_and_atom_order_preserve_opposite_labels() -> TestResult {
 
 #[test]
 fn cleanup_removes_invalid_center_and_repairs_hydrogen_cache() -> TestResult {
-    let mut input = star()?;
+    let mut input = star().map_err(anyhow::Error::msg)?;
     input.graph.atoms.pop();
     input.graph.bonds.pop();
     input.graph.atoms[1].atomic_number = 17;
     input.graph.atoms[0].explicit_hydrogens = 1;
-    input = state(input.graph)?;
+    input = state(input.graph).map_err(anyhow::Error::msg)?;
     input.metadata.atoms[0].chiral_tag = 2;
     input.directions[0] = Direction::Wedge;
-    let output = perceive(&input, options())?;
+    let output = perceive(&input, options()).map_err(anyhow::Error::msg)?;
     assert_eq!(output.metadata.atoms[0].chiral_tag, 0);
     assert_eq!(output.graph.atoms[0].explicit_hydrogens, 0);
     assert!(!output.graph.atoms[0].no_implicit);
@@ -96,11 +102,12 @@ fn empty_and_cached_done_do_not_require_stereo_ranks() -> TestResult {
     let empty = state(Graph {
         atoms: Vec::new(),
         bonds: Vec::new(),
-    })?;
-    let output = perceive(&empty, options())?;
+    })
+    .map_err(anyhow::Error::msg)?;
+    let output = perceive(&empty, options()).map_err(anyhow::Error::msg)?;
     assert_eq!(output.properties.done, Some(true));
     assert_eq!(output.rings.kind, RingKind::Symmetric);
-    let mut input = star()?;
+    let mut input = star().map_err(anyhow::Error::msg)?;
     input.properties.done = Some(false);
     input.properties.needs_detection = Some(true);
     input.properties.atoms[0].cip_code = Some("preserved".into());
@@ -110,14 +117,15 @@ fn empty_and_cached_done_do_not_require_stereo_ranks() -> TestResult {
             force: false,
             ..options()
         },
-    )?;
+    )
+    .map_err(anyhow::Error::msg)?;
     assert_eq!(serde_json::to_value(output)?, serde_json::to_value(input)?);
     Ok(())
 }
 
 #[test]
 fn invalid_metadata_and_work_exhaustion_leave_inputs_unchanged() -> TestResult {
-    let input = star()?;
+    let input = star().map_err(anyhow::Error::msg)?;
     let before = serde_json::to_value(&input)?;
     assert!(with_work(&input, options(), &mut Work(0)).is_err());
     assert!(with_work(&input, options(), &mut Work(10)).is_err());
@@ -164,7 +172,8 @@ fn deep_chain_is_iterative_and_group_expansion_is_bounded() -> TestResult {
                 aromatic: false,
             })
             .collect(),
-    })?;
+    })
+    .map_err(anyhow::Error::msg)?;
     let output = perceive(
         &input,
         Options {
@@ -172,7 +181,8 @@ fn deep_chain_is_iterative_and_group_expansion_is_bounded() -> TestResult {
             flag_possible: false,
             force: true,
         },
-    )?;
+    )
+    .map_err(anyhow::Error::msg)?;
     assert!(output.rings.atoms.is_empty());
     assert_eq!(output.properties.done, Some(true));
     let mut graph = input.graph;
@@ -185,7 +195,7 @@ fn deep_chain_is_iterative_and_group_expansion_is_bounded() -> TestResult {
             aromatic: false,
         })
         .collect();
-    let mut input = state(graph)?;
+    let mut input = state(graph).map_err(anyhow::Error::msg)?;
     for bond in &mut input.metadata.bonds {
         bond.stereo = 6;
     }

@@ -1,3 +1,4 @@
+use anyhow::Context;
 use reshiki::chemistry::{
     RDKIT_VERSION,
     stereo::perception::{self, Options, State},
@@ -5,7 +6,6 @@ use reshiki::chemistry::{
 use serde::Deserialize;
 use serde_json::Value;
 use std::{
-    error::Error,
     io::{BufRead, BufReader},
     path::Path,
     process::{Command, Stdio},
@@ -45,7 +45,7 @@ fn difference(actual: &Value, expected: &Value, location: &str) -> Option<String
 }
 
 #[test]
-fn legacy_stereo_perception_matches_independent_rdkit() -> Result<(), Box<dyn Error>> {
+fn legacy_stereo_perception_matches_independent_rdkit() -> anyhow::Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let python = root.join(if cfg!(windows) {
         ".venv/Scripts/python.exe"
@@ -58,8 +58,8 @@ fn legacy_stereo_perception_matches_independent_rdkit() -> Result<(), Box<dyn Er
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()?;
-    let mut lines = BufReader::new(child.stdout.take().ok_or("Missing oracle output")?).lines();
-    let version: Value = serde_json::from_str(&lines.next().ok_or("Missing oracle version")??)?;
+    let mut lines = BufReader::new(child.stdout.take().context("Missing oracle output")?).lines();
+    let version: Value = serde_json::from_str(&lines.next().context("Missing oracle version")??)?;
     assert_eq!(version["rdkit_version"], RDKIT_VERSION);
     let (mut count, mut labelled, mut ring_stereo, mut bond_stereo, mut rejected) = (0, 0, 0, 0, 0);
     let mut failures = Vec::new();

@@ -12,12 +12,14 @@ use super::graph::Graph;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 type Ring = Vec<usize>;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum RingError {
     /// The legacy greedy pruning depends on unspecified C++ sort tie ordering,
     /// or proving its independence exceeded the bounded verification budget.
     /// Keep the backend's ring result until this case has a portable replacement.
+    #[error("Ring pruning has unresolved equal-size ordering")]
     UnresolvedOrdering,
+    #[error("{0}")]
     Failed(String),
 }
 impl From<String> for RingError {
@@ -25,17 +27,6 @@ impl From<String> for RingError {
         Self::Failed(message)
     }
 }
-impl std::fmt::Display for RingError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::UnresolvedOrdering => {
-                f.write_str("Ring pruning has unresolved equal-size ordering")
-            }
-            Self::Failed(message) => f.write_str(message),
-        }
-    }
-}
-impl std::error::Error for RingError {}
 
 #[derive(Clone, Copy, Default)]
 pub struct Options {

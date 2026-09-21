@@ -1,3 +1,4 @@
+use anyhow::Context;
 use reshiki::chemistry::{
     RDKIT_VERSION,
     graph::{Graph, Valence},
@@ -7,7 +8,6 @@ use reshiki::chemistry::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
-    error::Error,
     io::{BufRead, BufReader},
     path::Path,
     process::{Command, Stdio},
@@ -31,7 +31,7 @@ struct Case {
 }
 
 #[test]
-fn drawn_stereo_matches_independent_rdkit() -> Result<(), Box<dyn Error>> {
+fn drawn_stereo_matches_independent_rdkit() -> anyhow::Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let python = root.join(if cfg!(windows) {
         ".venv/Scripts/python.exe"
@@ -44,9 +44,9 @@ fn drawn_stereo_matches_independent_rdkit() -> Result<(), Box<dyn Error>> {
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()?;
-    let mut lines = BufReader::new(child.stdout.take().ok_or("Missing oracle output")?).lines();
+    let mut lines = BufReader::new(child.stdout.take().context("Missing oracle output")?).lines();
     let version: serde_json::Value =
-        serde_json::from_str(&lines.next().ok_or("Missing oracle version")??)?;
+        serde_json::from_str(&lines.next().context("Missing oracle version")??)?;
     assert_eq!(version["rdkit_version"], RDKIT_VERSION);
     let (mut count, mut rejected, mut changed, mut promoted, mut cleared, mut bond_cases) =
         (0, 0, 0, 0, 0, 0);

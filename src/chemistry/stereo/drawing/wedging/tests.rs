@@ -1,6 +1,6 @@
 use super::*;
 use crate::chemistry::graph::{Atom, Bond};
-type TestResult = Result<(), Box<dyn std::error::Error>>;
+type TestResult = anyhow::Result<()>;
 fn input() -> Result<(WedgeState, WedgeProperties, Conformer), String> {
     let graph = Graph {
         atoms: [6, 9, 17, 35, 53]
@@ -43,9 +43,9 @@ fn input() -> Result<(WedgeState, WedgeProperties, Conformer), String> {
 }
 #[test]
 fn molecule_orients_the_wedge_but_single_bond_preserves_endpoints() -> TestResult {
-    let (state, props, conf) = input()?;
+    let (state, props, conf) = input().map_err(anyhow::Error::msg)?;
     let before = serde_json::to_value(&state)?;
-    let whole = wedge_molecule(&state, &props, Some(&conf), false)?;
+    let whole = wedge_molecule(&state, &props, Some(&conf), false).map_err(anyhow::Error::msg)?;
     assert_eq!(
         whole.directions,
         [
@@ -56,7 +56,7 @@ fn molecule_orients_the_wedge_but_single_bond_preserves_endpoints() -> TestResul
         ]
     );
     assert_eq!(whole.graph.bonds[0].a, 0);
-    let single = wedge_bond(&state, &props, &conf, 0, 0)?;
+    let single = wedge_bond(&state, &props, &conf, 0, 0).map_err(anyhow::Error::msg)?;
     assert_eq!(single.directions[0], Direction::Hash);
     assert_eq!(single.graph.bonds[0].a, 1);
     let perceived = super::super::from_directions(
@@ -65,20 +65,21 @@ fn molecule_orients_the_wedge_but_single_bond_preserves_endpoints() -> TestResul
         &whole.directions,
         Some(&conf.positions),
         true,
-    )?;
+    )
+    .map_err(anyhow::Error::msg)?;
     assert_eq!(perceived.metadata.atoms[0].chiral_tag, 1);
     assert_eq!(serde_json::to_value(&state)?, before);
     Ok(())
 }
 #[test]
 fn attachment_points_and_second_wedges_follow_preferences() -> TestResult {
-    let (state, mut props, conf) = input()?;
+    let (state, mut props, conf) = input().map_err(anyhow::Error::msg)?;
     props.attachment_points[1] = true;
-    let result = wedge_molecule(&state, &props, Some(&conf), false)?;
+    let result = wedge_molecule(&state, &props, Some(&conf), false).map_err(anyhow::Error::msg)?;
     assert_eq!(result.directions[0], Direction::None);
     assert!(wedged(result.directions[1]));
     props.attachment_points[1] = false;
-    let result = wedge_molecule(&state, &props, Some(&conf), true)?;
+    let result = wedge_molecule(&state, &props, Some(&conf), true).map_err(anyhow::Error::msg)?;
     assert_eq!(result.directions.iter().filter(|&&v| wedged(v)).count(), 2);
     assert_eq!(result.directions[3], Direction::Wedge);
     assert_eq!(result.graph.bonds[3].a, 0);
@@ -86,9 +87,9 @@ fn attachment_points_and_second_wedges_follow_preferences() -> TestResult {
 }
 #[test]
 fn overlapping_geometry_preserves_direction_and_errors_are_atomic() -> TestResult {
-    let (state, props, mut conf) = input()?;
+    let (state, props, mut conf) = input().map_err(anyhow::Error::msg)?;
     conf.positions[1] = conf.positions[0];
-    let out = wedge_molecule(&state, &props, Some(&conf), false)?;
+    let out = wedge_molecule(&state, &props, Some(&conf), false).map_err(anyhow::Error::msg)?;
     assert_eq!(out.directions, state.directions);
     let before = serde_json::to_value((&state, &props))?;
     assert!(wedge_molecule(&state, &props, None, false).is_err());
@@ -102,7 +103,7 @@ fn overlapping_geometry_preserves_direction_and_errors_are_atomic() -> TestResul
 }
 #[test]
 fn invalid_caches_and_annotations_return_errors() -> TestResult {
-    let (state, props, conf) = input()?;
+    let (state, props, conf) = input().map_err(anyhow::Error::msg)?;
     let mut bad = state.clone();
     bad.directions.pop();
     assert!(wedge_molecule(&bad, &props, Some(&conf), false).is_err());
@@ -142,7 +143,7 @@ fn large_neighbor_ordering_uses_bounded_dynamic_storage() -> TestResult {
             .collect(),
     };
     let props = WedgeProperties {
-        valences: graph.provisional_valences()?,
+        valences: graph.provisional_valences().map_err(anyhow::Error::msg)?,
         attachment_points: vec![false; n],
     };
     let mut meta = Metadata::unspecified(&graph);
@@ -169,7 +170,7 @@ fn large_neighbor_ordering_uses_bounded_dynamic_storage() -> TestResult {
         positions: points,
         is_3d: false,
     };
-    let result = wedge_molecule(&state, &props, Some(&conf), false)?;
+    let result = wedge_molecule(&state, &props, Some(&conf), false).map_err(anyhow::Error::msg)?;
     assert_eq!(result.directions.iter().filter(|&&v| wedged(v)).count(), 1);
     assert!(with_work(&state, &props, Some(&conf), false, &mut Work(1000)).is_err());
     Ok(())

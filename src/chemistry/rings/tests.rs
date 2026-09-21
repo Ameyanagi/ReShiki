@@ -1,6 +1,6 @@
 use super::*;
 use crate::chemistry::graph::{Atom, Bond};
-type TestResult = Result<(), Box<dyn std::error::Error>>;
+type TestResult = anyhow::Result<()>;
 
 fn graph(n: usize, edges: &[(usize, usize)]) -> Graph {
     Graph {
@@ -88,7 +88,7 @@ fn long_chains_and_macrocycles_do_not_use_recursive_traversal() -> TestResult {
     let edges = (1..n).map(|i| (i - 1, i)).collect::<Vec<_>>();
     let mut graph = graph(n, &edges);
     assert!(perceive(&graph, Options::default())?.atoms.is_empty());
-    assert!(fast(&graph)?.atoms.is_empty());
+    assert!(fast(&graph).map_err(anyhow::Error::msg)?.atoms.is_empty());
     graph.bonds.push(Bond {
         a: n - 1,
         b: 0,
@@ -99,7 +99,7 @@ fn long_chains_and_macrocycles_do_not_use_recursive_traversal() -> TestResult {
     assert_eq!(rings.atoms.len(), 1);
     assert_eq!(rings.atoms[0].len(), n);
     assert_cycles(&graph, &rings);
-    let rings = fast(&graph)?;
+    let rings = fast(&graph).map_err(anyhow::Error::msg)?;
     assert_eq!(rings.atoms.len(), 1);
     assert_eq!(rings.atoms[0].len(), n);
     assert_cycles(&graph, &rings);
@@ -109,7 +109,7 @@ fn long_chains_and_macrocycles_do_not_use_recursive_traversal() -> TestResult {
 #[test]
 fn fast_ring_work_and_storage_are_bounded() -> TestResult {
     let graph = graph(3, &[(0, 1), (1, 2), (2, 0)]);
-    let top = Topology::new(&graph)?;
+    let top = Topology::new(&graph).map_err(anyhow::Error::msg)?;
     assert!(search::fast(&top, &mut Budget { work: 0, stored: 3 }).is_err());
     assert!(
         search::fast(
@@ -128,7 +128,8 @@ fn fast_ring_work_and_storage_are_bounded() -> TestResult {
                 work: 100,
                 stored: 3
             }
-        )?
+        )
+        .map_err(anyhow::Error::msg)?
         .len(),
         1
     );
@@ -163,7 +164,7 @@ fn ordering_ambiguity_is_explicit_and_budgeted() -> TestResult {
         &[true],
         &mut budget
     ));
-    let top = Topology::new(&graph)?;
+    let top = Topology::new(&graph).map_err(anyhow::Error::msg)?;
     assert!(search::smallest(&top, 0, &vec![true; graph.bonds.len()], &[], &mut budget).is_err());
     Ok(())
 }

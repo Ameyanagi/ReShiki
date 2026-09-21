@@ -1,9 +1,9 @@
+use anyhow::Context;
 use reshiki::chemistry::{
     RDKIT_VERSION, graph::Graph, kekulize::Direction, normalize, ranking::Metadata, rings,
 };
 use serde::Deserialize;
 use std::{
-    error::Error,
     io::{BufRead, BufReader},
     path::Path,
     process::{Command, Stdio},
@@ -22,7 +22,7 @@ struct Case {
 }
 
 #[test]
-fn metal_cleanup_and_fast_cycles_match_rdkit() -> Result<(), Box<dyn Error>> {
+fn metal_cleanup_and_fast_cycles_match_rdkit() -> anyhow::Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let python = root.join(if cfg!(windows) {
         ".venv/Scripts/python.exe"
@@ -35,9 +35,9 @@ fn metal_cleanup_and_fast_cycles_match_rdkit() -> Result<(), Box<dyn Error>> {
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()?;
-    let mut lines = BufReader::new(child.stdout.take().ok_or("Missing oracle stdout")?).lines();
+    let mut lines = BufReader::new(child.stdout.take().context("Missing oracle stdout")?).lines();
     let version: serde_json::Value =
-        serde_json::from_str(&lines.next().ok_or("Missing oracle version")??)?;
+        serde_json::from_str(&lines.next().context("Missing oracle version")??)?;
     assert_eq!(version["rdkit_version"], RDKIT_VERSION);
     let (mut count, mut changed, mut rejected) = (0, 0, 0);
     let mut failures = Vec::new();
@@ -45,7 +45,7 @@ fn metal_cleanup_and_fast_cycles_match_rdkit() -> Result<(), Box<dyn Error>> {
         let case: Case = serde_json::from_str(&line?)?;
         count += 1;
         let before = serde_json::to_value(&case.graph)?;
-        let fast = rings::fast(&case.graph)?;
+        let fast = rings::fast(&case.graph).map_err(anyhow::Error::msg)?;
         if (fast.atoms, fast.bonds) != (case.fast_atoms, case.fast_bonds) && failures.len() < 20 {
             failures.push(format!("{}: fast traversal mismatch", case.name));
         }

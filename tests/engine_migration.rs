@@ -1,13 +1,11 @@
 //! Differential chemistry/figure tests guard the boundary between local Rust
 //! conversion and the retained RDKit backend. Neither oracle uses the new codec.
+use anyhow::Context;
 use base64::{Engine, engine::general_purpose::STANDARD};
 use reshiki::engine::{ChemistryEngine, LocalEngine, PythonEngine, Request, Response};
-use std::{
-    error::Error,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
-type TestResult = Result<(), Box<dyn Error>>;
+type TestResult = anyhow::Result<()>;
 
 fn assert_response_matches(actual: Response, expected: Response) -> TestResult {
     let mut actual = serde_json::to_value(actual)?;
@@ -20,11 +18,11 @@ fn assert_response_matches(actual: Response, expected: Response) -> TestResult {
             let av = a
                 .remove(field)
                 .and_then(|v| v.as_f64())
-                .ok_or("Missing mass")?;
+                .context("Missing mass")?;
             let ev = e
                 .remove(field)
                 .and_then(|v| v.as_f64())
-                .ok_or("Missing reference mass")?;
+                .context("Missing reference mass")?;
             // RDKit wheels may fuse floating-point operations on some targets.
             assert!(
                 (av - ev).abs() <= ev.abs().max(1.) * 1e-12,
@@ -56,15 +54,22 @@ async fn rust_properties_match_reference_across_editor_operations() -> TestResul
     ] {
         let request = Request::import_smiles(smiles);
         assert_response_matches(
-            local.execute(request.clone()).await?,
-            reference.execute(request).await?,
+            local
+                .execute(request.clone())
+                .await
+                .map_err(anyhow::Error::msg)?,
+            reference
+                .execute(request)
+                .await
+                .map_err(anyhow::Error::msg)?,
         )?;
     }
     let document = reference
         .execute(Request::import_smiles("COc1ccccc1"))
-        .await?
+        .await
+        .map_err(anyhow::Error::msg)?
         .document
-        .ok_or("Missing reference document")?;
+        .context("Missing reference document")?;
     for operation in ["analyze", "clean", "aromatic", "abbreviate"] {
         let mut request = Request::molecule(operation, document.clone());
         request.selected_ids = Some(document.atoms.iter().map(|a| a.id).collect());
@@ -72,29 +77,48 @@ async fn rust_properties_match_reference_across_editor_operations() -> TestResul
             request.text = Some("OMe".into());
         }
         assert_response_matches(
-            local.execute(request.clone()).await?,
-            reference.execute(request).await?,
+            local
+                .execute(request.clone())
+                .await
+                .map_err(anyhow::Error::msg)?,
+            reference
+                .execute(request)
+                .await
+                .map_err(anyhow::Error::msg)?,
         )?;
     }
     for format in ["smiles", "inchi", "mol", "cdxml", "cdx"] {
         let mut request = Request::molecule("export", document.clone());
         request.format = Some(format.into());
         assert_response_matches(
-            local.execute(request.clone()).await?,
-            reference.execute(request).await?,
+            local
+                .execute(request.clone())
+                .await
+                .map_err(anyhow::Error::msg)?,
+            reference
+                .execute(request)
+                .await
+                .map_err(anyhow::Error::msg)?,
         )?;
     }
     let request = Request::import("rsmi", "[CH3:1][OH:2]>>[CH2:1]=[O:2]");
     assert_response_matches(
-        local.execute(request.clone()).await?,
-        reference.execute(request).await?,
+        local
+            .execute(request.clone())
+            .await
+            .map_err(anyhow::Error::msg)?,
+        reference
+            .execute(request)
+            .await
+            .map_err(anyhow::Error::msg)?,
     )?;
     // Cached labels must not affect properties following a topology edit.
     let mut document = reference
         .execute(Request::import_smiles("CC"))
-        .await?
+        .await
+        .map_err(anyhow::Error::msg)?
         .document
-        .ok_or("Missing reference document")?;
+        .context("Missing reference document")?;
     for atom in &mut document.atoms {
         atom.label_h = 99;
     }
@@ -102,12 +126,21 @@ async fn rust_properties_match_reference_across_editor_operations() -> TestResul
         bond.order = 2;
     }
     let request = Request::molecule("analyze", document);
-    let actual = local.execute(request.clone()).await?;
+    let actual = local
+        .execute(request.clone())
+        .await
+        .map_err(anyhow::Error::msg)?;
     assert_eq!(
         actual.analysis.as_ref().map(|a| a.formula.as_str()),
         Some("C2H4")
     );
-    assert_response_matches(actual, reference.execute(request).await?)?;
+    assert_response_matches(
+        actual,
+        reference
+            .execute(request)
+            .await
+            .map_err(anyhow::Error::msg)?,
+    )?;
     Ok(())
 }
 
@@ -132,8 +165,14 @@ async fn ambiguous_ring_pruning_keeps_the_complete_reference_analysis() -> TestR
     }
     let request = Request::molecule("analyze", document);
     assert_response_matches(
-        LocalEngine::default().execute(request.clone()).await?,
-        PythonEngine::default().execute(request).await?,
+        LocalEngine::default()
+            .execute(request.clone())
+            .await
+            .map_err(anyhow::Error::msg)?,
+        PythonEngine::default()
+            .execute(request)
+            .await
+            .map_err(anyhow::Error::msg)?,
     )?;
     Ok(())
 }
@@ -148,8 +187,11 @@ async fn native_drawings_match_the_original_python_importer() -> TestResult {
         include_bytes!("fixtures/picture-group-native.cdx").as_slice(),
     ] {
         let request = Request::import("cdx", &STANDARD.encode(data));
-        let expected = reference.execute(request.clone()).await?;
-        let actual = local.execute(request).await?;
+        let expected = reference
+            .execute(request.clone())
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let actual = local.execute(request).await.map_err(anyhow::Error::msg)?;
         assert_response_matches(actual, expected)?;
     }
     Ok(())
@@ -171,23 +213,35 @@ async fn exports_and_reimports_preserve_rdkit_chemistry_and_document_metadata() 
         "c1ccc2occc2c1",
         "C1CC2CCC1C2",
     ] {
-        let initial = reference.execute(Request::import_smiles(smiles)).await?;
-        let analysis = initial.analysis.ok_or("Missing reference analysis")?;
-        let mut document = initial.document.ok_or("Missing reference drawing")?;
+        let initial = reference
+            .execute(Request::import_smiles(smiles))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let analysis = initial.analysis.context("Missing reference analysis")?;
+        let mut document = initial.document.context("Missing reference drawing")?;
         for bond in &mut document.bonds {
             bond.color = [180, 50, 55];
         }
         let mut request = Request::molecule("export", document);
         request.format = Some("cdx".into());
-        let expected = reference.execute(request.clone()).await?;
-        let actual = local.execute(request).await?;
+        let expected = reference
+            .execute(request.clone())
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let actual = local.execute(request).await.map_err(anyhow::Error::msg)?;
         assert_response_matches(actual.clone(), expected)?;
-        let data = actual.output.ok_or("Missing binary export")?;
+        let data = actual.output.context("Missing binary export")?;
         let request = Request::import("cdx", &data);
-        let back = local.execute(request.clone()).await?;
-        let oracle = reference.execute(request).await?;
+        let back = local
+            .execute(request.clone())
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let oracle = reference
+            .execute(request)
+            .await
+            .map_err(anyhow::Error::msg)?;
         assert_response_matches(back.clone(), oracle)?;
-        let identity = back.analysis.ok_or("Missing round-trip analysis")?;
+        let identity = back.analysis.context("Missing round-trip analysis")?;
         assert_eq!(analysis.smiles, identity.smiles, "{smiles}");
         assert_eq!(analysis.inchikey, identity.inchikey, "{smiles}");
         assert_eq!(analysis.formula, identity.formula, "{smiles}");
@@ -220,18 +274,25 @@ async fn backend_receives_cdxml_and_unchanged_chemistry_requests() -> TestResult
     let backend = RecordingBackend::default();
     let local = LocalEngine::with_backend(backend.clone());
     let input = "<CDXML><page id=\"1\"/></CDXML>";
-    let bytes = reshiki::exchange::to_cdx(input)?;
+    let bytes = reshiki::exchange::to_cdx(input).map_err(anyhow::Error::msg)?;
     local
         .execute(Request::import("cdx", &STANDARD.encode(&bytes)))
-        .await?;
+        .await
+        .map_err(anyhow::Error::msg)?;
     let mut export = Request::molecule("export", Default::default());
     export.format = Some("cdx".into());
-    let out = local.execute(export).await?;
+    let out = local.execute(export).await.map_err(anyhow::Error::msg)?;
     assert_eq!(out.output, Some(STANDARD.encode(bytes)));
     assert_eq!(out.warnings, vec!["kept"]);
     let request = Request::import_smiles("N[C@@H](C)C(=O)O");
-    local.execute(request.clone()).await?;
-    let requests = backend.requests.lock().map_err(|_| "Poisoned test lock")?;
+    local
+        .execute(request.clone())
+        .await
+        .map_err(anyhow::Error::msg)?;
+    let requests = backend
+        .requests
+        .lock()
+        .map_err(|_| anyhow::anyhow!("Poisoned test lock"))?;
     assert_eq!(
         requests
             .first()
@@ -264,15 +325,18 @@ async fn malformed_binary_never_reaches_backend_and_next_request_succeeds() -> T
         backend
             .requests
             .lock()
-            .map_err(|_| "Poisoned test lock")?
+            .map_err(|_| anyhow::anyhow!("Poisoned test lock"))?
             .is_empty()
     );
-    local.execute(Request::import_smiles("CCO")).await?;
+    local
+        .execute(Request::import_smiles("CCO"))
+        .await
+        .map_err(anyhow::Error::msg)?;
     assert_eq!(
         backend
             .requests
             .lock()
-            .map_err(|_| "Poisoned test lock")?
+            .map_err(|_| anyhow::anyhow!("Poisoned test lock"))?
             .len(),
         1
     );
@@ -301,13 +365,17 @@ async fn supported_figure_exports_are_byte_identical_to_python() -> TestResult {
         ))?;
         let doc = reference
             .execute(Request::import("cdxml", &xml))
-            .await?
+            .await
+            .map_err(anyhow::Error::msg)?
             .document
-            .ok_or("Missing drawing")?;
+            .context("Missing drawing")?;
         let mut request = Request::molecule("export", doc);
         request.format = Some("cdx".into());
-        let expected = reference.execute(request.clone()).await?;
-        let actual = local.execute(request).await?;
+        let expected = reference
+            .execute(request.clone())
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let actual = local.execute(request).await.map_err(anyhow::Error::msg)?;
         assert_response_matches(actual, expected)?;
     }
     Ok(())
@@ -325,7 +393,7 @@ async fn query_predicates_still_fail_chemistry_validation() -> TestResult {
         let xml = format!(
             "<CDXML><page id=\"1\"><fragment id=\"2\"><n id=\"3\" p=\"0 0\" Element=\"6\" {name}=\"{value}\"/></fragment></page></CDXML>"
         );
-        let bytes = reshiki::exchange::to_cdx(&xml)?;
+        let bytes = reshiki::exchange::to_cdx(&xml).map_err(anyhow::Error::msg)?;
         let request = Request::import("cdx", &STANDARD.encode(bytes));
         let expected = reference.execute(request.clone()).await;
         let actual = local.execute(request).await;

@@ -1,4 +1,5 @@
 use super::{Owner, Result};
+use anyhow::Context;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::Deserialize;
 use std::ptr::null_mut;
@@ -47,7 +48,7 @@ struct Stroke {
 }
 fn parse(data: &[u8]) -> Result<Snapshot> {
     if data.len() > 128 * 1024 * 1024 {
-        return Err("Print snapshot exceeds 128 MB".into());
+        return Err(anyhow::anyhow!("Print snapshot exceeds 128 MB"));
     }
     let s: Snapshot = serde_json::from_slice(data)?;
     if s.version != 1
@@ -59,16 +60,16 @@ fn parse(data: &[u8]) -> Result<Snapshot> {
         || !s.pages.iter().flatten().all(|v| v.is_finite())
         || s.primitives.len() > 1_000_000
     {
-        return Err("Invalid print snapshot".into());
+        return Err(anyhow::anyhow!("Invalid print snapshot"));
     }
     for item in &s.primitives {
         if !item.transform.iter().all(|v| v.is_finite()) {
-            return Err("Invalid print transform".into());
+            return Err(anyhow::anyhow!("Invalid print transform"));
         }
         match item.kind.as_str() {
             "path" => {
                 if item.commands.is_empty() || item.commands[0].first() != Some(&0.) {
-                    return Err("Invalid print path".into());
+                    return Err(anyhow::anyhow!("Invalid print path"));
                 }
                 for command in &item.commands {
                     if !command.iter().all(|v| v.is_finite())
@@ -81,7 +82,7 @@ fn parse(data: &[u8]) -> Result<Snapshot> {
                                 | [4.]
                         )
                     {
-                        return Err("Invalid print path command".into());
+                        return Err(anyhow::anyhow!("Invalid print path command"));
                     }
                 }
                 if let Some(stroke) = &item.stroke
@@ -94,7 +95,7 @@ fn parse(data: &[u8]) -> Result<Snapshot> {
                             d.len() > 256 || d.iter().any(|v| !v.is_finite() || *v <= 0.)
                         }))
                 {
-                    return Err("Invalid print stroke".into());
+                    return Err(anyhow::anyhow!("Invalid print stroke"));
                 }
             }
             "image" => {
@@ -102,12 +103,13 @@ fn parse(data: &[u8]) -> Result<Snapshot> {
                     .iter()
                     .all(|v| v.is_some_and(|v| v.is_finite() && v > 0.))
                 {
-                    return Err("Invalid print image dimensions".into());
+                    return Err(anyhow::anyhow!("Invalid print image dimensions"));
                 }
-                let bytes = STANDARD.decode(item.data.as_deref().ok_or("Missing print image")?)?;
+                let bytes =
+                    STANDARD.decode(item.data.as_deref().context("Missing print image")?)?;
                 super::clipboard::bitmap(&bytes)?;
             }
-            _ => return Err("Unknown print primitive".into()),
+            _ => return Err(anyhow::anyhow!("Unknown print primitive")),
         }
     }
     Ok(s)
@@ -116,7 +118,10 @@ fn check(status: gp::Status) -> Result<()> {
     if status == gp::Ok {
         Ok(())
     } else {
-        Err(format!("Windows drawing failed (GDI+ {})", status.0).into())
+        Err(anyhow::anyhow!(
+            "Windows drawing failed (GDI+ {})",
+            status.0
+        ))
     }
 }
 struct GdiPlus(usize);
@@ -232,7 +237,7 @@ fn path(item: &Item) -> Result<Path> {
                     check(gp::GdipClosePathFigure(path.0))?;
                     last = first;
                 }
-                _ => return Err("Invalid print path command".into()),
+                _ => return Err(anyhow::anyhow!("Invalid print path command")),
             }
         }
     }
@@ -241,7 +246,7 @@ fn path(item: &Item) -> Result<Path> {
 const ARGB32: i32 = 0x26200a;
 fn draw(graphics: &Graphics, s: &Snapshot, page: usize) -> Result<()> {
     let _sheet = Saved::new(graphics)?;
-    let offset = s.pages.get(page).ok_or("Invalid print page")?;
+    let offset = s.pages.get(page).context("Invalid print page")?;
     // SAFETY: graphics is owned and valid; validated finite geometry is passed
     // by value. All temporary GDI+ objects outlive drawing and are RAII-owned.
     unsafe {
@@ -284,7 +289,8 @@ fn draw(graphics: &Graphics, s: &Snapshot, page: usize) -> Result<()> {
                 gp::MatrixOrderPrepend,
             ))?;
             if item.kind == "image" {
-                let bytes = STANDARD.decode(item.data.as_deref().ok_or("Missing print image")?)?;
+                let bytes =
+                    STANDARD.decode(item.data.as_deref().context("Missing print image")?)?;
                 let image = super::clipboard::bitmap(&bytes)?;
                 let (width, height) = image.dimensions();
                 let mut bgra = image.into_raw();
@@ -306,8 +312,8 @@ fn draw(graphics: &Graphics, s: &Snapshot, page: usize) -> Result<()> {
                     bitmap.0.cast(),
                     0.,
                     0.,
-                    item.width.ok_or("Missing image width")?,
-                    item.height.ok_or("Missing image height")?,
+                    item.width.context("Missing image width")?,
+                    item.height.context("Missing image height")?,
                 ))?;
             } else {
                 let path = path(item)?;
@@ -365,14 +371,14 @@ fn draw(graphics: &Graphics, s: &Snapshot, page: usize) -> Result<()> {
 pub(super) fn render(data: &[u8], dpi: f32) -> Result<Vec<u8>> {
     let s = parse(data)?;
     if !dpi.is_finite() || !(36. ..=600.).contains(&dpi) {
-        return Err("Invalid render resolution".into());
+        return Err(anyhow::anyhow!("Invalid render resolution"));
     }
     let (width, height) = (
         (s.width_pt * dpi / 72.).ceil() as u32,
         (s.height_pt * dpi / 72.).ceil() as u32,
     );
     if u64::from(width) * u64::from(height) > 80_000_000 {
-        return Err("Print preview is too large".into());
+        return Err(anyhow::anyhow!("Print preview is too large"));
     }
     let _runtime = GdiPlus::new()?;
     let mut pixels = vec![255u8; width as usize * height as usize * 4];
@@ -439,7 +445,9 @@ pub(super) fn metafile(data: &[u8]) -> Result<Vec<u8>> {
             .all(|dpi| dpi.is_finite() && *dpi > 0.)
         {
             ReleaseDC(None, reference);
-            return Err("Invalid Office preview reference resolution".into());
+            return Err(anyhow::anyhow!(
+                "Invalid Office preview reference resolution"
+            ));
         }
         let status = gp::GdipRecordMetafile(
             reference,
@@ -471,13 +479,13 @@ pub(super) fn metafile(data: &[u8]) -> Result<Vec<u8>> {
         let size = GetEnhMetaFileBits(handle, None);
         if size == 0 || size > 64 * 1024 * 1024 {
             let _ = DeleteEnhMetaFile(handle);
-            return Err("Office metafile is empty or exceeds 64 MB".into());
+            return Err(anyhow::anyhow!("Office metafile is empty or exceeds 64 MB"));
         }
         let mut bytes = vec![0; size as usize];
         let copied = GetEnhMetaFileBits(handle, Some(&mut bytes));
         let _ = DeleteEnhMetaFile(handle);
         if copied != size {
-            return Err("Incomplete Office metafile".into());
+            return Err(anyhow::anyhow!("Incomplete Office metafile"));
         }
         Ok(bytes)
     }
@@ -506,7 +514,7 @@ fn set_paper(memory: HGLOBAL, s: &Snapshot) -> Result<()> {
     // or writing, preserve the driver's trailing private configuration bytes.
     unsafe {
         if GlobalSize(memory) < std::mem::size_of::<DEVMODEW>() {
-            return Err("Invalid printer settings".into());
+            return Err(anyhow::anyhow!("Invalid printer settings"));
         }
         let pointer = GlobalLock(memory).cast::<DEVMODEW>();
         if pointer.is_null() {
@@ -596,17 +604,19 @@ fn spool(
     // and each graphics object live until their synchronous calls complete.
     unsafe {
         if StartDocW(dc, &info) <= 0 {
-            return Err("The print job was cancelled or could not start".into());
+            return Err(anyhow::anyhow!(
+                "The print job was cancelled or could not start"
+            ));
         }
         let mut job = Job(dc, true);
         let dpi_x = GetDeviceCaps(dc, LOGPIXELSX);
         let dpi_y = GetDeviceCaps(dc, LOGPIXELSY);
         if dpi_x <= 0 || dpi_y <= 0 {
-            return Err("Invalid printer resolution".into());
+            return Err(anyhow::anyhow!("Invalid printer resolution"));
         }
         for page in pages {
             if StartPage(dc) <= 0 {
-                return Err("Could not start the print page".into());
+                return Err(anyhow::anyhow!("Could not start the print page"));
             }
             {
                 let mut graphics = Graphics::default();
@@ -621,11 +631,13 @@ fn spool(
                 draw(&graphics, s, *page)?;
             }
             if EndPage(dc) <= 0 {
-                return Err("Could not finish the print page".into());
+                return Err(anyhow::anyhow!("Could not finish the print page"));
             }
         }
         if EndDoc(dc) <= 0 {
-            return Err("The print job was cancelled or could not finish".into());
+            return Err(anyhow::anyhow!(
+                "The print job was cancelled or could not finish"
+            ));
         }
         job.1 = false;
     }
@@ -677,7 +689,9 @@ pub(super) fn show(data: &[u8], title: &str) -> Result<bool> {
         return Ok(false);
     }
     if dialog.0.hDC.is_invalid() {
-        return Err("The printer did not return a drawing surface".into());
+        return Err(anyhow::anyhow!(
+            "The printer did not return a drawing surface"
+        ));
     }
     let pages: Vec<_> = if dialog.0.Flags.contains(PD_PAGENUMS) {
         let mut pages = Vec::new();
@@ -686,7 +700,7 @@ pub(super) fn show(data: &[u8], title: &str) -> Result<bool> {
                 || range.nToPage < range.nFromPage
                 || range.nToPage > snapshot.pages.len() as u32
             {
-                return Err("Invalid print page range".into());
+                return Err(anyhow::anyhow!("Invalid print page range"));
             }
             pages.extend((range.nFromPage - 1..range.nToPage).map(|v| v as usize));
         }
@@ -695,7 +709,7 @@ pub(super) fn show(data: &[u8], title: &str) -> Result<bool> {
         (0..snapshot.pages.len()).collect()
     };
     if pages.is_empty() {
-        return Err("No pages selected to print".into());
+        return Err(anyhow::anyhow!("No pages selected to print"));
     }
     spool(
         dialog.0.hDC,

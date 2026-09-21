@@ -2,6 +2,17 @@
 //! this crate; clipboard data is bounded and validated before replacing it.
 #![cfg(windows)]
 #![deny(unsafe_op_in_unsafe_fn)]
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::unreachable,
+        clippy::todo,
+        clippy::unimplemented
+    )
+)]
 
 mod clipboard;
 mod ole;
@@ -47,7 +58,7 @@ use windows::{
     Win32::{Foundation::*, UI::WindowsAndMessaging::*},
     core::w,
 };
-type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
+type Result<T> = anyhow::Result<T>;
 
 struct Owner(HWND);
 impl Owner {

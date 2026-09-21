@@ -69,6 +69,8 @@ The file-open panel is intentionally unfiltered, so opening a supported file doe
 
 ## Pure Rust migration
 
+Application code forbids `unsafe`; required Win32 calls stay in the native helper. Sanitization and ring failures use `thiserror`, preserving the failed stage and underlying ring error. Tests, examples, build scripts and the Windows helper use `anyhow` for propagation and context. Existing string-error APIs are converted explicitly at those boundaries. Prefer iterator transformations when they clarify data flow; use bounded loops for stateful graph traversal.
+
 The app uses `LocalEngine`, which implements `ChemistryEngine`. CDX conversion, raster normalization, valence checks, hydrogen counts and scalar molecular properties run in Rust on blocking tasks. RDKit still sanitizes molecules and supplies their atom/bond graphs. Rust derives hydrogen counts from those graphs; cached drawing labels are never used for properties.
 
 The bridge requests a sanitized graph with `local_properties: true`, completes the analysis in Rust, and returns the unchanged public response type. Missing graph data, invalid valences or a mismatched RDKit version return errors. `PythonEngine::default()` retains the original calculations as an independent reference. A future backend can replace Python behind the same interface; this is not a runtime plugin ABI.

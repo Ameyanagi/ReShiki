@@ -1,16 +1,16 @@
 //! Compare all elements and edge cases directly with the pinned RDKit source.
+use anyhow::Context;
 use reshiki::chemistry::{
     RDKIT_VERSION,
     graph::{Atom, Graph, Valence},
 };
 use serde::Deserialize;
 use std::{
-    error::Error,
     io::{BufRead, BufReader},
     path::Path,
     process::{Command, Stdio},
 };
-type TestResult = Result<(), Box<dyn Error>>;
+type TestResult = anyhow::Result<()>;
 
 #[derive(Deserialize)]
 struct Case {
@@ -34,8 +34,9 @@ fn valence_hydrogens_and_radicals_match_rdkit() -> TestResult {
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()?;
-    let mut lines = BufReader::new(child.stdout.take().ok_or("Missing oracle output")?).lines();
-    let header: serde_json::Value = serde_json::from_str(&lines.next().ok_or("Missing version")??)?;
+    let mut lines = BufReader::new(child.stdout.take().context("Missing oracle output")?).lines();
+    let header: serde_json::Value =
+        serde_json::from_str(&lines.next().context("Missing version")??)?;
     assert_eq!(header["rdkit_version"], RDKIT_VERSION);
     let (mut count, mut rejected, mut radical_cases, mut provisional_cases) = (0, 0, 0, 0);
     let mut failures = Vec::new();
@@ -121,7 +122,7 @@ fn rejects_malformed_graphs_without_partial_results() -> TestResult {
     }
     let graph: Graph = serde_json::from_value(serde_json::json!({"atoms":[carbon],"bonds":[]}))?;
     assert_eq!(
-        graph.valences()?,
+        graph.valences().map_err(anyhow::Error::msg)?,
         vec![Valence {
             explicit_valence: 0,
             implicit_hydrogens: 4
@@ -134,12 +135,14 @@ fn rejects_malformed_graphs_without_partial_results() -> TestResult {
     assert!(too_large.assign_radicals().is_err());
     let valid = serde_json::json!({"atoms":[carbon,carbon],"bonds":[bond(0,1,1)]});
     for section in ["atoms", "bonds"] {
-        let fields = valid[section][0].as_object().ok_or("Missing test fields")?;
+        let fields = valid[section][0]
+            .as_object()
+            .context("Missing test fields")?;
         for key in fields.keys() {
             let mut missing = valid.clone();
             missing[section][0]
                 .as_object_mut()
-                .ok_or("Missing test fields")?
+                .context("Missing test fields")?
                 .remove(key);
             assert!(
                 serde_json::from_value::<Graph>(missing).is_err(),

@@ -1,4 +1,5 @@
 use super::{Owner, Result};
+use anyhow::Context;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, io::Cursor, time::Duration};
@@ -63,7 +64,9 @@ impl Open {
             }
             std::thread::sleep(Duration::from_millis(25));
         }
-        Err("The clipboard is busy in another application. Try again.".into())
+        Err(anyhow::anyhow!(
+            "The clipboard is busy in another application. Try again."
+        ))
     }
 }
 impl Drop for Open {
@@ -77,7 +80,7 @@ pub(super) struct Memory(pub(super) HGLOBAL);
 impl Memory {
     pub(super) fn new(bytes: &[u8]) -> Result<Self> {
         if bytes.is_empty() || bytes.len() > LIMIT {
-            return Err("Invalid clipboard data size".into());
+            return Err(anyhow::anyhow!("Invalid clipboard data size"));
         }
         // SAFETY: allocation size and source length match; RAII frees on any error.
         unsafe {
@@ -107,7 +110,7 @@ fn read(id: u32) -> Result<Vec<u8>> {
         let memory = HGLOBAL(GetClipboardData(id)?.0);
         let size = GlobalSize(memory);
         if size == 0 || size > LIMIT {
-            return Err("Clipboard data exceeds 64 MB".into());
+            return Err(anyhow::anyhow!("Clipboard data exceeds 64 MB"));
         }
         let pointer = GlobalLock(memory);
         if pointer.is_null() {
@@ -120,11 +123,11 @@ fn read(id: u32) -> Result<Vec<u8>> {
 }
 fn decode(data: &str) -> Result<Vec<u8>> {
     if data.len() > LIMIT.div_ceil(3) * 4 {
-        return Err("Clipboard data exceeds 64 MB".into());
+        return Err(anyhow::anyhow!("Clipboard data exceeds 64 MB"));
     }
     let bytes = STANDARD.decode(data)?;
     if bytes.is_empty() || bytes.len() > LIMIT {
-        return Err("Invalid clipboard data size".into());
+        return Err(anyhow::anyhow!("Invalid clipboard data size"));
     }
     Ok(bytes)
 }
@@ -137,7 +140,7 @@ pub(super) fn bitmap(data: &[u8]) -> Result<image::RgbaImage> {
     reader.limits(limits);
     let image = reader.decode()?.into_rgba8();
     if u64::from(image.width()) * u64::from(image.height()) > 80_000_000 {
-        return Err("Clipboard picture is too large".into());
+        return Err(anyhow::anyhow!("Clipboard picture is too large"));
     }
     Ok(image)
 }
@@ -147,7 +150,9 @@ pub(super) fn to_dib(data: &[u8]) -> Result<Vec<u8>> {
     let stride = (w as usize * 3 + 3) & !3;
     let size = 40 + stride * h as usize;
     if size > LIMIT {
-        return Err("Clipboard bitmap exceeds 64 MB; use file export for this drawing".into());
+        return Err(anyhow::anyhow!(
+            "Clipboard bitmap exceeds 64 MB; use file export for this drawing"
+        ));
     }
     let mut result = vec![0; size];
     for (offset, value) in [(0, 40u32), (4, w), (8, h), (20, (size - 40) as u32)] {
@@ -177,27 +182,31 @@ pub(super) fn to_dib(data: &[u8]) -> Result<Vec<u8>> {
 }
 fn from_dib(data: &[u8]) -> Result<Vec<u8>> {
     if data.len() < 40 {
-        return Err("Truncated clipboard bitmap".into());
+        return Err(anyhow::anyhow!("Truncated clipboard bitmap"));
     }
-    let word = |at| u32::from_le_bytes(data[at..at + 4].try_into().unwrap());
-    let header = word(0) as usize;
+    let word = |at: usize| -> Result<u32> {
+        let end = at.checked_add(4).context("Invalid bitmap header offset")?;
+        let bytes = data.get(at..end).context("Truncated clipboard bitmap")?;
+        Ok(u32::from_le_bytes(bytes.try_into()?))
+    };
+    let header = word(0)? as usize;
     let bits = u16::from_le_bytes([data[14], data[15]]);
-    let compression = word(16);
+    let compression = word(16)?;
     if header < 40
         || header > data.len()
         || ![0, 3, 6].contains(&compression)
         || ![1, 4, 8, 16, 24, 32].contains(&bits)
     {
-        return Err("Unsupported clipboard bitmap".into());
+        return Err(anyhow::anyhow!("Unsupported clipboard bitmap"));
     }
-    let colors = word(32) as usize;
+    let colors = word(32)? as usize;
     let colors = if colors == 0 && bits <= 8 {
         1usize << bits
     } else {
         colors
     };
     if colors > 256 {
-        return Err("Unsupported clipboard palette".into());
+        return Err(anyhow::anyhow!("Unsupported clipboard palette"));
     }
     let offset = header
         + colors * 4
@@ -211,7 +220,7 @@ fn from_dib(data: &[u8]) -> Result<Vec<u8>> {
             0
         };
     if offset > data.len() {
-        return Err("Truncated clipboard bitmap pixels".into());
+        return Err(anyhow::anyhow!("Truncated clipboard bitmap pixels"));
     }
     let mut bmp = Vec::with_capacity(data.len() + 14);
     bmp.extend_from_slice(b"BM");
@@ -224,7 +233,7 @@ fn from_dib(data: &[u8]) -> Result<Vec<u8>> {
     let mut encoder = png::Encoder::new(&mut bytes, image.width(), image.height());
     encoder.set_color(png::ColorType::Rgba);
     encoder.set_depth(png::BitDepth::Eight);
-    let (x, y) = (word(24) as i32, word(28) as i32);
+    let (x, y) = (word(24)? as i32, word(28)? as i32);
     if x > 0 && y > 0 {
         encoder.set_pixel_dims(Some(png::PixelDimensions {
             xppu: x as u32,
@@ -237,12 +246,12 @@ fn from_dib(data: &[u8]) -> Result<Vec<u8>> {
 }
 fn write(representations: Vec<Representation>, embedded: bool) -> Result<()> {
     if representations.is_empty() || representations.len() > 32 {
-        return Err("No clipboard representations".into());
+        return Err(anyhow::anyhow!("No clipboard representations"));
     }
     let mut formats = BTreeMap::new();
     for rep in representations {
         if rep.kind.is_empty() || rep.kind.len() > 128 || rep.kind.contains('\0') {
-            return Err("Invalid clipboard format".into());
+            return Err(anyhow::anyhow!("Invalid clipboard format"));
         }
         let bytes = decode(&rep.data)?;
         if rep.kind == "public.png" {
@@ -263,7 +272,9 @@ fn write(representations: Vec<Representation>, embedded: bool) -> Result<()> {
         formats.entry(id).or_insert(bytes);
     }
     if formats.values().map(Vec::len).sum::<usize>() > LIMIT {
-        return Err("Combined clipboard representations exceed 64 MB".into());
+        return Err(anyhow::anyhow!(
+            "Combined clipboard representations exceed 64 MB"
+        ));
     }
     if embedded && super::ole::enabled() {
         return super::ole::copy(formats);
@@ -352,7 +363,7 @@ fn read_packet(picture_only: bool) -> Result<Packet> {
     if !picture_only && unsafe { IsClipboardFormatAvailable(UNICODE) }.is_ok() {
         let bytes = read(UNICODE)?;
         if bytes.len() % 2 != 0 {
-            return Err("Invalid clipboard Unicode text".into());
+            return Err(anyhow::anyhow!("Invalid clipboard Unicode text"));
         }
         let utf16: Vec<_> = bytes
             .chunks_exact(2)
@@ -370,7 +381,7 @@ fn read_packet(picture_only: bool) -> Result<Packet> {
 }
 pub(super) fn invoke(bytes: &[u8]) -> Result<Vec<u8>> {
     if bytes.len() > LIMIT * 2 {
-        return Err("Clipboard request is too large".into());
+        return Err(anyhow::anyhow!("Clipboard request is too large"));
     }
     let request: Request = serde_json::from_slice(bytes)?;
     let result = match request.operation.as_str() {
@@ -385,7 +396,7 @@ pub(super) fn invoke(bytes: &[u8]) -> Result<Vec<u8>> {
         }
         "read" => read_packet(false)?,
         "read_picture" => read_packet(true)?,
-        _ => return Err("Unknown clipboard operation".into()),
+        _ => return Err(anyhow::anyhow!("Unknown clipboard operation")),
     };
     Ok(serde_json::to_vec(&result)?)
 }
@@ -469,5 +480,8 @@ mod tests {
             11811
         );
         assert!(from_dib(&[0; 40]).is_err());
+        for length in 0..40 {
+            assert!(from_dib(&vec![0; length]).is_err());
+        }
     }
 }

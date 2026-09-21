@@ -1,3 +1,4 @@
+use anyhow::Context;
 use reshiki::chemistry::{
     RDKIT_VERSION,
     graph::Graph,
@@ -5,12 +6,11 @@ use reshiki::chemistry::{
 };
 use serde::Deserialize;
 use std::{
-    error::Error,
     io::{BufRead, BufReader},
     path::Path,
     process::{Command, Stdio},
 };
-type TestResult = Result<(), Box<dyn Error>>;
+type TestResult = anyhow::Result<()>;
 
 #[derive(Deserialize)]
 struct Expected {
@@ -41,8 +41,9 @@ fn ring_sets_match_rdkit_examples_permutations_and_nci() -> TestResult {
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
         .spawn()?;
-    let mut lines = BufReader::new(child.stdout.take().ok_or("Missing oracle output")?).lines();
-    let header: serde_json::Value = serde_json::from_str(&lines.next().ok_or("Missing version")??)?;
+    let mut lines = BufReader::new(child.stdout.take().context("Missing oracle output")?).lines();
+    let header: serde_json::Value =
+        serde_json::from_str(&lines.next().context("Missing version")??)?;
     assert_eq!(header["rdkit_version"], RDKIT_VERSION);
     let mut count = 0;
     let mut failures = Vec::new();
