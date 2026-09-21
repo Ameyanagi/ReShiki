@@ -294,6 +294,31 @@ impl PythonEngine {
             doc.validate()?;
         }
         let prepared_molecule = if self.local_documents
+            && request.operation == "import"
+            && request.format.as_deref() == Some("mol")
+        {
+            let text = request.text.clone().unwrap_or_default();
+            tokio::task::spawn_blocking(move || {
+                use crate::chemistry::{molfile, rings::RingError, sanitize};
+                match molfile::read(&text) {
+                    Ok(imported) => {
+                        let drawing = imported.drawing().map_err(|e| e.to_string())?;
+                        Ok(Some((
+                            imported.molecule,
+                            drawing,
+                            Some(imported.annotations),
+                        )))
+                    }
+                    Err(molfile::ReadError::Sanitization(sanitize::Error {
+                        cause: sanitize::Cause::Rings(RingError::UnresolvedOrdering),
+                        ..
+                    })) => Ok(None),
+                    Err(error) => Err(error.to_string()),
+                }
+            })
+            .await
+            .map_err(|e| format!("Molecular import failed: {e}"))??
+        } else if self.local_documents
             && (request.operation == "analyze"
                 || request.operation == "export"
                     && matches!(
@@ -307,7 +332,7 @@ impl PythonEngine {
                 match document::prepare(&document) {
                     Ok(molecule) => {
                         let drawing = document::for_drawing(&molecule, &document)?;
-                        Ok(Some((molecule, drawing)))
+                        Ok(Some((molecule, drawing, None)))
                     }
                     // Preserve the existing native fallback only for the known
                     // platform-dependent ring tie; never hide a chemistry error.
@@ -394,7 +419,7 @@ impl PythonEngine {
                 .as_object_mut()
                 .ok_or("Invalid chemistry request envelope")?;
             envelope.insert("id".into(), id.into());
-            if let Some((molecule, drawing)) = &prepared_molecule {
+            if let Some((molecule, drawing, file)) = &prepared_molecule {
                 envelope.insert(
                     "prepared_molecule".into(),
                     serde_json::to_value(molecule).map_err(|e| e.to_string())?,
@@ -403,6 +428,12 @@ impl PythonEngine {
                     "prepared_drawing".into(),
                     serde_json::to_value(drawing.molecule()).map_err(|e| e.to_string())?,
                 );
+                if let Some(file) = file {
+                    envelope.insert(
+                        "prepared_import".into(),
+                        serde_json::to_value(file).map_err(|e| e.to_string())?,
+                    );
+                }
             }
             if local_mol_output {
                 envelope.insert("local_mol_output".into(), true.into());
@@ -485,7 +516,7 @@ impl PythonEngine {
                             serde_json::to_value(document).map_err(|e| e.to_string())?,
                         );
                     }
-                    if let Some((molecule, drawing)) = prepared_molecule {
+                    if let Some((molecule, drawing, _)) = prepared_molecule {
                         let object = result.as_object_mut().ok_or("Invalid chemistry response")?;
                         if local_mol_output {
                             let output = crate::chemistry::molfile::write(

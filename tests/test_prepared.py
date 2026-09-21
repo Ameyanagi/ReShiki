@@ -11,10 +11,168 @@ from rdkit.Chem import rdCIPLabeler
 
 from engine import prepared, worker
 from tests.document_preparation_reference import drawing, prepare
+from tests.molfile_import_reference import annotation_cases, native_molecules, read
 from tests.perception_reference import snapshot
 
 
 class PreparedMoleculeTests(unittest.TestCase):
+    def test_prepared_mol_import_skips_native_reader_and_drawing_passes(self):
+        for text in ("", "c1ccccc1", "F[C@](Cl)(Br)I", "C[C@H]1CC[C@@H](C)CC1"):
+            original = Chem.MolFromMolBlock(
+                Chem.MolToMolBlock(Chem.MolFromSmiles(text)), removeHs=False
+            )
+            block = Chem.MolToMolBlock(original)
+            expected = worker.handle(dict(protocol=1, operation="import", format="mol", text=block))
+            work = Chem.Mol(original)
+            Chem.Kekulize(work, clearAromaticFlags=True)
+            Chem.WedgeMolBonds(work, work.GetConformer())
+
+            def payload(mol):
+                conf = mol.GetConformer()
+                return json.loads(
+                    json.dumps(
+                        dict(
+                            rdkit_version=worker.rdBase.rdkitVersion,
+                            ids=list(range(1, mol.GetNumAtoms() + 1)),
+                            positions=[
+                                dict(x=p.x, y=p.y, z=p.z)
+                                for p in (conf.GetAtomPosition(i) for i in range(mol.GetNumAtoms()))
+                            ],
+                            state=snapshot(mol, "symmetric"),
+                        )
+                    )
+                )
+
+            request = dict(
+                protocol=1,
+                operation="import",
+                format="mol",
+                text="Must not be reparsed",
+                prepared_molecule=payload(original),
+                prepared_drawing=payload(work),
+                prepared_import=dict(
+                    is_3d=original.GetConformer().Is3D(),
+                    attachment_points=[None] * original.GetNumAtoms(),
+                    dummy_labels=[None] * original.GetNumAtoms(),
+                ),
+            )
+            expected["document"] = None
+            expected["drawing_labels"] = prepared.label_drawing(work)
+            with (
+                patch.object(Chem, "MolFromMolBlock", side_effect=AssertionError("Native reader")),
+                patch.object(
+                    Chem, "AssignStereochemistry", side_effect=AssertionError("Native stereo")
+                ),
+                patch.object(Chem, "SanitizeMol", side_effect=AssertionError("Native sanitizer")),
+                patch.object(Chem, "Kekulize", side_effect=AssertionError("Native Kekulé")),
+                patch.object(Chem, "WedgeMolBonds", side_effect=AssertionError("Native wedges")),
+                patch.object(
+                    worker, "from_document", side_effect=AssertionError("Native preparation")
+                ),
+                patch.object(worker, "to_document", side_effect=AssertionError("Native drawing")),
+            ):
+                self.assertEqual(worker.handle(request), expected)
+                for key in ("prepared_molecule", "prepared_drawing"):
+                    with self.assertRaisesRegex(ValueError, "requires a molecular"):
+                        worker.handle({**request, key: None})
+                for value in (False, True, 1, "true"):
+                    with self.assertRaisesRegex(ValueError, "requires a molecular"):
+                        worker.handle({**request, "prepared_import": value})
+
+    def test_import_transport_preserves_file_and_ring_stereo_annotations(self):
+        counts = dict(cases=0, spatial=0, rings=0, attachments=0, labels=0)
+
+        def verify(name, text):
+            with self.subTest(name=name):
+                original = read(text)
+                conf = original.GetConformer()
+                data = dict(
+                    rdkit_version=worker.rdBase.rdkitVersion,
+                    ids=list(range(1, original.GetNumAtoms() + 1)),
+                    positions=[
+                        dict(x=p.x, y=p.y, z=p.z)
+                        for p in (conf.GetAtomPosition(i) for i in range(original.GetNumAtoms()))
+                    ],
+                    state=snapshot(original, "symmetric"),
+                )
+                file = dict(
+                    is_3d=conf.Is3D(),
+                    attachment_points=[
+                        a.GetIntProp("molAttchpt") if a.HasProp("molAttchpt") else None
+                        for a in original.GetAtoms()
+                    ],
+                    dummy_labels=[
+                        a.GetProp("dummyLabel") if a.HasProp("dummyLabel") else None
+                        for a in original.GetAtoms()
+                    ],
+                )
+                counts["cases"] += 1
+                counts["spatial"] += int(file["is_3d"])
+                counts["rings"] += sum(a.HasProp("_ringStereoAtoms") for a in original.GetAtoms())
+                counts["attachments"] += sum(a.HasProp("molAttchpt") for a in original.GetAtoms())
+                counts["labels"] += sum(a.HasProp("dummyLabel") for a in original.GetAtoms())
+                with (
+                    patch.object(
+                        Chem, "MolFromMolBlock", side_effect=AssertionError("Native reader")
+                    ),
+                    patch.object(
+                        Chem, "AssignStereochemistry", side_effect=AssertionError("Native stereo")
+                    ),
+                    patch.object(
+                        Chem, "SanitizeMol", side_effect=AssertionError("Native sanitizer")
+                    ),
+                ):
+                    restored = prepared.restore(json.loads(json.dumps(data)), file=file)
+                self.assertEqual(
+                    json.loads(json.dumps(snapshot(restored, "symmetric"))),
+                    json.loads(json.dumps(data["state"])),
+                )
+                self.assertEqual(restored.GetConformer().Is3D(), conf.Is3D())
+                self.assertEqual(
+                    list(restored.GetConformer().GetPositions().flat),
+                    list(conf.GetPositions().flat),
+                )
+                self.assertEqual(
+                    [a.GetSymbol() for a in restored.GetAtoms()],
+                    [a.GetSymbol() for a in original.GetAtoms()],
+                )
+                self.assertEqual(Chem.MolToSmiles(restored), Chem.MolToSmiles(original))
+                for a, b in zip(restored.GetAtoms(), original.GetAtoms(), strict=True):
+                    self.assertEqual(a.HasProp("molAttchpt"), b.HasProp("molAttchpt"))
+                    if b.HasProp("molAttchpt"):
+                        self.assertEqual(a.GetIntProp("molAttchpt"), b.GetIntProp("molAttchpt"))
+
+        annotation_cases(verify)
+        for name, molecule in native_molecules():
+            # Queries have an independent rejection test; they cannot be transported.
+            if any(a.GetAtomicNum() == 0 for a in molecule.GetAtoms()):
+                continue
+            for v3000 in (False, True):
+                verify(name, Chem.MolToMolBlock(molecule, forceV3000=v3000))
+        from tests.molfile_import_reference import v3_block
+
+        for label in ("R", "R1", "R#", "Pol", "Mod"):
+            verify(label, v3_block([f"1 {label} 0 0 0 0"]))
+        self.assertGreater(counts["cases"], 500)
+        self.assertGreater(counts["rings"], 20)
+        self.assertGreater(counts["spatial"], 20)
+        self.assertGreater(counts["attachments"], 100)
+        self.assertEqual(counts["labels"], 5)
+
+    def test_ring_annotation_transport_rejects_invalid_members(self):
+        mol = Chem.MolFromSmiles("CC")
+        for members in (
+            [],
+            [None],
+            [None, None, None],
+            [[0], None],
+            [[3], None],
+            [[-(2**31)], None],
+            [[True], None],
+        ):
+            with self.subTest(members=members), self.assertRaisesRegex(ValueError, "ring-stereo"):
+                prepared._ring_annotations(mol, members)
+
     def test_prepared_editable_export_skips_all_native_drawing_writers(self):
         for text in ("c1ccccc1", "C[C@H](N)C(=O)O", "[13CH3:90][NH3+]", "N->[Cu+2]"):
             doc = worker.handle(dict(protocol=1, operation="import", format="smiles", text=text))[

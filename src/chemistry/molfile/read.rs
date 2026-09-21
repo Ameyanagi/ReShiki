@@ -10,6 +10,7 @@ use crate::chemistry::{
     sanitize,
     stereo::{self, Point3, perception},
 };
+use serde::Serialize;
 use std::str::Lines;
 mod groups;
 mod v2000;
@@ -33,6 +34,33 @@ pub enum ReadError {
     Chemistry(String),
 }
 type Result<T> = std::result::Result<T, ReadError>;
+
+/// Chemical state plus file annotations needed by the drawing and native bridge.
+#[derive(Clone, Debug, Serialize)]
+pub struct Imported {
+    pub molecule: Molecule,
+    pub annotations: FileAnnotations,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct FileAnnotations {
+    pub is_3d: bool,
+    pub attachment_points: Vec<Option<i32>>,
+    pub dummy_labels: Vec<Option<String>>,
+}
+
+impl Imported {
+    pub fn drawing(
+        &self,
+    ) -> std::result::Result<crate::chemistry::document::Drawing, crate::chemistry::document::Error>
+    {
+        crate::chemistry::document::for_import(
+            &self.molecule,
+            self.annotations.is_3d,
+            &self.annotations.dummy_labels,
+        )
+    }
+}
 
 struct Reader<'a> {
     lines: Lines<'a>,
@@ -152,7 +180,13 @@ impl<'a> Reader<'a> {
 struct FileAtom {
     valence: i32,
     hyd_override: bool,
-    attachment: bool,
+    attachment: Option<i32>,
+    dummy_label: Option<String>,
+}
+
+fn dummy_label(symbol: &str) -> Option<String> {
+    (matches!(symbol, "R" | "R#" | "Pol" | "Mod") || ("R0"..="R99").contains(&symbol))
+        .then(|| symbol.to_owned())
 }
 #[derive(Default)]
 struct FileBond {
@@ -211,7 +245,7 @@ impl Parsed {
         self.directions.push(dir);
         self.bonds.push(props);
     }
-    fn finish(mut self) -> Result<Molecule> {
+    fn finish(mut self) -> Result<Imported> {
         self.graph.validate().map_err(ReadError::Chemistry)?;
         let cache = self
             .graph
@@ -237,8 +271,8 @@ impl Parsed {
         if self.bonds.iter().any(|b| b.unspecified || b.query) {
             return Err(ReadError::Unsupported("query or unspecified bond order"));
         }
-        let is_3d = self.positions.iter().any(|p| p.z.abs() > 1e-3)
-            || self.marked_3d && !self.chirality && !self.graph.atoms.is_empty();
+        let is_3d =
+            self.positions.iter().any(|p| p.z.abs() > 1e-3) || self.marked_3d && !self.chirality;
         let conformer = stereo::wedging::Conformer {
             positions: self.positions,
             is_3d,
@@ -326,11 +360,18 @@ impl Parsed {
                 "radical count or stereochemistry class",
             ));
         }
-        Ok(Molecule {
-            rdkit_version: RDKIT_VERSION,
-            ids: (1..=state.graph.atoms.len() as u64).collect(),
-            positions: conformer.positions,
-            state,
+        Ok(Imported {
+            molecule: Molecule {
+                rdkit_version: RDKIT_VERSION,
+                ids: (1..=state.graph.atoms.len() as u64).collect(),
+                positions: conformer.positions,
+                state,
+            },
+            annotations: FileAnnotations {
+                is_3d,
+                attachment_points: self.atoms.iter().map(|a| a.attachment).collect(),
+                dummy_labels: self.atoms.into_iter().map(|a| a.dummy_label).collect(),
+            },
         })
     }
 }
@@ -363,9 +404,9 @@ fn radical(code: i32) -> Result<u8> {
 }
 
 /// Read one strict MOL block, retaining explicit H atoms and native atom order.
-/// Engine integration is separate: file metadata and drawing reconstruction
-/// also need complete response comparisons before replacing application reads.
-pub fn read(text: &str) -> Result<Molecule> {
+/// File annotations remain separate from the chemical graph and are retained
+/// for drawing reconstruction and the remaining native identifier operations.
+pub fn read(text: &str) -> Result<Imported> {
     if text.len() > 16 * 1024 * 1024 {
         return Err(ReadError::Limit);
     }

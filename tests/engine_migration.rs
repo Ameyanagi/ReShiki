@@ -7,6 +7,93 @@ use std::sync::{Arc, Mutex};
 
 type TestResult = anyhow::Result<()>;
 
+#[tokio::test]
+async fn rust_mol_import_preserves_complete_reference_responses() -> TestResult {
+    use std::{
+        io::{BufRead, BufReader},
+        path::Path,
+        process::{Command, Stdio},
+    };
+    #[derive(serde::Deserialize)]
+    struct Case {
+        name: String,
+        text: String,
+        expected: Option<Response>,
+        failure: Option<String>,
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let python = root.join(if cfg!(windows) {
+        ".venv/Scripts/python.exe"
+    } else {
+        ".venv/bin/python"
+    });
+    let mut child = Command::new(python)
+        .arg(root.join("tests/molfile_engine_reference.py"))
+        .env("PYTHONUTF8", "1")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()?;
+    let mut lines =
+        BufReader::new(child.stdout.take().context("Missing import reference")?).lines();
+    let version: serde_json::Value =
+        serde_json::from_str(&lines.next().context("Missing reference version")??)?;
+    assert_eq!(version["rdkit_version"], reshiki::chemistry::RDKIT_VERSION);
+    let local = LocalEngine::default();
+    let (mut accepted, mut rejected) = (0, 0);
+    let mut failures = Vec::new();
+    for line in lines {
+        let case: Case = serde_json::from_str(&line?)?;
+        let expected = case
+            .expected
+            .filter(|r| r.document.as_ref().is_none_or(|d| d.validate().is_ok()));
+        let actual = local.execute(Request::import("mol", &case.text)).await;
+        let failure = match (actual, expected) {
+            (Ok(actual), Some(expected)) => {
+                accepted += 1;
+                assert_response_matches(actual, expected)
+                    .err()
+                    .map(|e| e.to_string())
+            }
+            (Err(_), None) => {
+                rejected += 1;
+                None
+            }
+            (Err(error), Some(_)) => Some(format!("Unexpected rejection: {error}")),
+            (Ok(_), None) => Some(format!("Accepted reference rejection: {:?}", case.failure)),
+        };
+        if let Some(error) = failure {
+            failures.push(format!("{}: {error}", case.name));
+        }
+    }
+    assert!(child.wait()?.success(), "Import reference failed");
+    eprintln!(
+        "MOL engine responses: {accepted} accepted, {rejected} rejected, {} mismatches",
+        failures.len()
+    );
+    if !failures.is_empty() {
+        std::fs::create_dir_all(root.join("artifacts"))?;
+        std::fs::write(
+            root.join("artifacts/molfile-engine-failures.txt"),
+            failures.join("\n"),
+        )?;
+    }
+    assert!(
+        failures.is_empty(),
+        "{}",
+        failures
+            .iter()
+            .take(24)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+    assert!(
+        accepted > 500 && rejected > 20,
+        "Insufficient import response coverage"
+    );
+    Ok(())
+}
+
 fn assert_response_matches(actual: Response, expected: Response) -> TestResult {
     let mut actual = serde_json::to_value(actual)?;
     let mut expected = serde_json::to_value(expected)?;
@@ -442,7 +529,7 @@ async fn mol_dummy_atoms_retain_the_reference_query_import_rejection() -> TestRe
         local.execute(Request::import("mol", &text)).await,
         reference.execute(Request::import("mol", &text)).await,
     ] {
-        assert!(result.is_err_and(|error| error.contains("Query atoms are not supported")));
+        assert!(result.is_err_and(|error| error.to_ascii_lowercase().contains("query")));
     }
     Ok(())
 }

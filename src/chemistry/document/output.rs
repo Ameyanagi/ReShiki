@@ -6,7 +6,7 @@ use crate::{
         ELEMENTS, RDKIT_VERSION, kekulize, ranking,
         stereo::{perception::RingKind, wedging},
     },
-    document::{AtomStereo, Document, Point},
+    document::{Atom, AtomStereo, Bond, Document, Point},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -102,18 +102,50 @@ fn stereo_name(code: u8) -> Option<String> {
 /// Generate Kekulé and wedge bonds, then reconstruct drawing-owned styles and
 /// stable IDs. This path updates an existing drawing without moving its atoms.
 pub fn for_drawing(molecule: &Molecule, base: &Document) -> Result<Drawing, Error> {
-    molecule.state.graph.validate().map_err(Error::Drawing)?;
+    validate(molecule)?;
     base.validate().map_err(Error::Drawing)?;
     let state = &molecule.state;
     let (n, e) = (state.graph.atoms.len(), state.graph.bonds.len());
     let previous: HashMap<_, _> = base.atoms.iter().map(|a| (a.id, a)).collect();
+    if previous.len() != n
+        || base.bonds.len() != e
+        || molecule.ids.iter().any(|id| !previous.contains_key(id))
+    {
+        return Err(invalid("Drawing molecule dimensions or identities changed"));
+    }
+    let work = wedge(molecule, false, vec![false; n])?;
+    reconstruct(work, molecule, Some(base), &previous, None)
+}
+
+/// Construct a new drawing from an imported molecular state. File coordinates
+/// determine the generated wedges; no previous drawing styles override those
+/// directions or endpoints. Unexpanded file attachment markers are not the
+/// generated attachment atoms that receive different wedge priorities.
+pub fn for_import(
+    molecule: &Molecule,
+    is_3d: bool,
+    dummy_labels: &[Option<String>],
+) -> Result<Drawing, Error> {
+    validate(molecule)?;
+    if dummy_labels.len() != molecule.state.graph.atoms.len() {
+        return Err(invalid("Imported label dimensions changed"));
+    }
+    let work = wedge(molecule, is_3d, vec![false; molecule.ids.len()])?;
+    reconstruct(work, molecule, None, &HashMap::new(), Some(dummy_labels))
+}
+
+fn validate(molecule: &Molecule) -> Result<(), Error> {
+    let state = &molecule.state;
+    state.graph.validate().map_err(Error::Drawing)?;
+    state
+        .metadata
+        .validate(&state.graph)
+        .map_err(Error::Drawing)?;
+    let (n, e) = (state.graph.atoms.len(), state.graph.bonds.len());
     if molecule.rdkit_version != RDKIT_VERSION
         || molecule.ids.len() != n
         || molecule.positions.len() != n
-        || previous.len() != n
-        || base.bonds.len() != e
         || molecule.ids.iter().collect::<HashSet<_>>().len() != n
-        || molecule.ids.iter().any(|id| !previous.contains_key(id))
         || state.hybridizations.len() != n
         || state.conjugated.len() != e
         || state.properties.atoms.len() != n
@@ -131,6 +163,15 @@ pub fn for_drawing(molecule: &Molecule, base: &Document) -> Result<Drawing, Erro
             "Unsupported drawing stereochemistry or radical count",
         ));
     }
+    Ok(())
+}
+
+fn wedge(
+    molecule: &Molecule,
+    is_3d: bool,
+    attachment_points: Vec<bool>,
+) -> Result<Molecule, Error> {
+    let state = &molecule.state;
     let kekule = kekule(molecule)?;
     let wedged = wedging::wedge_molecule(
         &wedging::WedgeState {
@@ -141,11 +182,11 @@ pub fn for_drawing(molecule: &Molecule, base: &Document) -> Result<Drawing, Erro
         },
         &wedging::WedgeProperties {
             valences: kekule.cache.clone(),
-            attachment_points: vec![false; n],
+            attachment_points,
         },
         Some(&wedging::Conformer {
             positions: molecule.positions.clone(),
-            is_3d: false,
+            is_3d,
         }),
         false,
     )
@@ -156,7 +197,7 @@ pub fn for_drawing(molecule: &Molecule, base: &Document) -> Result<Drawing, Erro
     work.state.directions = wedged.directions;
     work.state.rings = wedged.rings;
     work.state.valences = kekule.cache;
-    reconstruct(work, molecule, base, &previous)
+    Ok(work)
 }
 
 /// Shared canonical bond assignment for drawing reconstruction and MOL output.
@@ -201,8 +242,9 @@ pub(crate) fn kekule(molecule: &Molecule) -> Result<kekulize::Attempt, Error> {
 fn reconstruct(
     mut work: Molecule,
     molecule: &Molecule,
-    base: &Document,
+    base: Option<&Document>,
     previous: &HashMap<u64, &crate::document::Atom>,
+    dummy_labels: Option<&[Option<String>]>,
 ) -> Result<Drawing, Error> {
     let state = &molecule.state;
     let (n, e) = (state.graph.atoms.len(), state.graph.bonds.len());
@@ -224,8 +266,8 @@ fn reconstruct(
         }
     }
     let circular: HashSet<_> = base
-        .bonds
-        .iter()
+        .into_iter()
+        .flat_map(|d| &d.bonds)
         .filter(|b| b.order == 4)
         .flat_map(|b| [b.a, b.b])
         .collect();
@@ -237,29 +279,44 @@ fn reconstruct(
         .enumerate()
         .map(|(i, a)| {
             let id = *at(&work.ids, i)?;
-            let mut atom = (*previous
-                .get(&id)
-                .ok_or_else(|| invalid("Missing original atom"))?)
-            .clone();
             let metadata = at(&work.state.metadata.atoms, i)?;
             let p = at(&work.positions, i)?;
-            atom.element = at(ELEMENTS, usize::from(a.atomic_number))?.symbol.into();
-            atom.position = Point {
-                x: (p.x * 28.) as f32,
-                y: (-p.y * 28.) as f32,
+            let old = previous.get(&id).copied();
+            let element = if a.atomic_number == 0 {
+                dummy_labels
+                    .and_then(|labels| labels.get(i))
+                    .and_then(Option::as_deref)
+            } else {
+                None
+            }
+            .unwrap_or(at(ELEMENTS, usize::from(a.atomic_number))?.symbol);
+            let mut atom = Atom {
+                id,
+                element: element.into(),
+                position: Point {
+                    x: (p.x * 28.) as f32,
+                    y: (-p.y * 28.) as f32,
+                },
+                charge: i32::from(a.charge),
+                isotope: u32::from(a.isotope),
+                radical_electrons: a.radical_electrons,
+                explicit_h: u32::from(a.explicit_hydrogens),
+                no_implicit: a.no_implicit,
+                aromatic: a.aromatic,
+                map_num: u32::try_from(metadata.map_number)
+                    .map_err(|_| invalid("Negative atom map"))?,
+                stereo: None,
+                label_h: 0,
+                cip_label: None,
+                display: old.map(|a| a.display.clone()).unwrap_or_default(),
+                marks: old.map(|a| a.marks.clone()).unwrap_or_default(),
+                text_style: old.and_then(|a| a.text_style.clone()),
             };
-            atom.charge = i32::from(a.charge);
-            atom.isotope = u32::from(a.isotope);
-            atom.radical_electrons = a.radical_electrons;
             atom.explicit_h = u32::from(if circular.contains(&id) {
                 at(&state.graph.atoms, i)?.explicit_hydrogens
             } else {
                 a.explicit_hydrogens
             });
-            atom.no_implicit = a.no_implicit;
-            atom.aromatic = a.aromatic;
-            atom.map_num =
-                u32::try_from(metadata.map_number).map_err(|_| invalid("Negative atom map"))?;
             atom.stereo = match metadata.chiral_tag {
                 0 => None,
                 tag => Some(AtomStereo {
@@ -274,19 +331,55 @@ fn reconstruct(
             Ok(atom)
         })
         .collect::<Result<Vec<_>, Error>>()?;
+    let ordered = if let Some(base) = base {
+        base.bonds
+            .iter()
+            .map(|old| {
+                let index = *bonds_by_pair
+                    .get(&pair(old.a, old.b))
+                    .ok_or_else(|| invalid("Drawing bond endpoints changed"))?;
+                Ok((index, Some(old)))
+            })
+            .collect::<Result<Vec<_>, Error>>()?
+    } else {
+        (0..e).map(|i| (i, None)).collect()
+    };
     let mut bond_indices = Vec::with_capacity(e);
-    let bonds = base
-        .bonds
-        .iter()
-        .map(|old| {
-            let i = *bonds_by_pair
-                .get(&pair(old.a, old.b))
-                .ok_or_else(|| invalid("Drawing bond endpoints changed"))?;
+    let bonds = ordered
+        .into_iter()
+        .map(|(i, old)| {
             bond_indices.push(i);
             let b = at(&work.state.graph.bonds, i)?;
             let meta = at(&work.state.metadata.bonds, i)?;
-            let mut bond = old.clone();
-            bond.order = if old.order == 4 && at(&state.graph.bonds, i)?.aromatic {
+            let mut bond = Bond {
+                a: *at(&work.ids, b.a)?,
+                b: *at(&work.ids, b.b)?,
+                order: b.order,
+                display: if meta.stereo == 1 {
+                    "wavy"
+                } else {
+                    match at(&work.state.directions, i)? {
+                        crate::chemistry::kekulize::Direction::Wedge => "wedge",
+                        crate::chemistry::kekulize::Direction::Hash => "hash",
+                        crate::chemistry::kekulize::Direction::Unknown => "wavy",
+                        _ => "plain",
+                    }
+                }
+                .into(),
+                stereo: None,
+                stereo_atoms: Vec::new(),
+                cip_label: None,
+                double_position: Default::default(),
+                secondary_display: None,
+                color: [0; 3],
+                indicator: Default::default(),
+                z_order: 0,
+            };
+            if let Some(old) = old {
+                bond = old.clone();
+            }
+            bond.order = if old.is_some_and(|b| b.order == 4) && at(&state.graph.bonds, i)?.aromatic
+            {
                 4
             } else {
                 b.order
@@ -304,7 +397,7 @@ fn reconstruct(
                 .iter()
                 .map(|&i| at(&work.ids, i).copied())
                 .collect::<Result<Vec<_>, _>>()?;
-            if old.a != *at(&work.ids, b.a)? {
+            if bond.a != *at(&work.ids, b.a)? {
                 bond.stereo_atoms.reverse();
             }
             bond.cip_label = None;
@@ -315,7 +408,7 @@ fn reconstruct(
         version: 15,
         atoms,
         bonds,
-        ..base.clone()
+        ..base.cloned().unwrap_or_default()
     };
     document.validate().map_err(Error::Drawing)?;
     Ok(Drawing {

@@ -46,7 +46,8 @@ pub(super) fn read(r: &mut Reader<'_>, p: &mut Parsed, n: usize, e: usize) -> Re
             FileAtom {
                 valence,
                 hyd_override: false,
-                attachment: false,
+                attachment: None,
+                dummy_label: dummy_label(symbol),
             },
         );
     }
@@ -135,10 +136,10 @@ fn properties(r: &mut Reader<'_>, p: &mut Parsed) -> Result<()> {
                                 .atoms
                                 .get_mut(index)
                                 .ok_or_else(|| r.invalid("Missing attachment atom"))?;
-                            if props.attachment {
+                            if props.attachment.is_some() {
                                 return Err(r.invalid("Duplicate attachment point"));
                             }
-                            props.attachment = true;
+                            props.attachment = Some(if value == 3 { -1 } else { value });
                         }
                         continue;
                     }

@@ -123,7 +123,10 @@ pub(super) fn read(r: &mut Reader<'_>, p: &mut Parsed) -> Result<()> {
                 z: r.coordinate(r.token(&tokens, 4)?, false)?,
             };
             let map = r.integer(r.token(&tokens, 5)?)?.max(0);
-            let mut props = FileAtom::default();
+            let mut props = FileAtom {
+                dummy_label: dummy_label(r.token(&tokens, 1)?),
+                ..FileAtom::default()
+            };
             for &token in tokens.iter().skip(6) {
                 let (key, value) = r.assignment(token)?;
                 match key.as_str() {
@@ -169,11 +172,11 @@ pub(super) fn read(r: &mut Reader<'_>, p: &mut Parsed) -> Result<()> {
                         }
                     }
                     "ATTCHPT" if value != "0" => {
-                        r.integer(value)?;
-                        if props.attachment {
+                        let attachment = r.integer(value)?;
+                        if props.attachment.is_some() {
                             return Err(r.invalid("Duplicate attachment point"));
                         }
-                        props.attachment = true;
+                        props.attachment = Some(attachment);
                     }
                     "ATTCHORD" if value.starts_with('(') => {
                         template_order(r, value)?;

@@ -22,26 +22,39 @@ else:
     from valence_reference import ORDERS
 
 
+def read(text):
+    mol = Chem.MolFromMolBlock(text, removeHs=False, strictParsing=True)
+    if mol is None:
+        raise ValueError("Native MOL reader rejected input")
+    if (
+        mol.GetStereoGroups()
+        or any(
+            a.HasQuery() or a.GetNumRadicalElectrons() > 2 or int(a.GetChiralTag()) > 2
+            for a in mol.GetAtoms()
+        )
+        or any(
+            b.HasQuery() or b.GetBondType() not in ORDERS.values() or int(b.GetStereo()) > 5
+            for b in mol.GetBonds()
+        )
+    ):
+        raise ValueError("Outside the existing editable chemistry contract")
+    return mol
+
+
 def emit(name, text):
     try:
-        mol = Chem.MolFromMolBlock(text, removeHs=False, strictParsing=True)
-        if mol is None:
-            raise ValueError("Native MOL reader rejected input")
-        if (
-            mol.GetStereoGroups()
-            or any(
-                a.HasQuery() or a.GetNumRadicalElectrons() > 2 or int(a.GetChiralTag()) > 2
-                for a in mol.GetAtoms()
-            )
-            or any(
-                b.HasQuery() or b.GetBondType() not in ORDERS.values() or int(b.GetStereo()) > 5
-                for b in mol.GetBonds()
-            )
-        ):
-            raise ValueError("Outside the existing editable chemistry contract")
+        mol = read(text)
         conf = mol.GetConformer()
         expected = dict(
             state=snapshot(mol, "symmetric"),
+            is_3d=conf.Is3D(),
+            attachment_points=[
+                a.GetIntProp("molAttchpt") if a.HasProp("molAttchpt") else None
+                for a in mol.GetAtoms()
+            ],
+            dummy_labels=[
+                a.GetProp("dummyLabel") if a.HasProp("dummyLabel") else None for a in mol.GetAtoms()
+            ],
             positions=[
                 dict(x=p.x, y=p.y, z=p.z)
                 for p in (conf.GetAtomPosition(i) for i in range(mol.GetNumAtoms()))
@@ -159,7 +172,7 @@ def v3_block(atoms, bonds=(), extras=()):
     )
 
 
-def syntax_cases():
+def syntax_cases(emit):
     for count, repeats in ((0, 1), (1, 0), (1, 1), (1, 2), (2, 1)):
         extra = ("M  V30 BEGIN OBJ3D", "M  V30 1 0 0", "M  V30 END OBJ3D") * repeats
         text = v3_block(["1 C 0 0 0 0"], extras=extra).replace(
@@ -310,11 +323,49 @@ def syntax_cases():
         emit(f"pending/substance group/{version}", Chem.MolToMolBlock(mol, forceV3000=version))
 
 
-def main():
-    RDLogger.DisableLog("rdApp.*")
-    print(json.dumps(dict(rdkit_version=rdBase.rdkitVersion)))
+def annotation_cases(emit):
+    for smiles in (
+        "F[C@](Cl)(Br)I",
+        "C[C@@H](N)C(=O)O",
+        "N[C@H](CC1=CC=CC=C1)C(O)=O",
+        "C[C@H]1CC[C@H](C)CC1",
+        "C[C@H]1CC[C@@H](C)CC1",
+        "C[C@H]1CC[C@H](C)[C@H](C)C1",
+        "F/C=C/Cl",
+        "c1cc[nH]c1",
+        "",
+    ):
+        original = Chem.MolFromSmiles(smiles)
+        rdDepictor.Compute2DCoords(original)
+        for spatial, dimension, v3000 in product((False, True), (False, True), (False, True)):
+            mol = Chem.Mol(original)
+            conf = mol.GetConformer()
+            conf.Set3D(dimension)
+            if spatial:
+                for i in range(mol.GetNumAtoms()):
+                    p = conf.GetAtomPosition(i)
+                    conf.SetAtomPosition(i, (p.x, p.y, (i % 3 - 1) * 0.4))
+            emit(
+                f"file geometry/{smiles}/{spatial}/{dimension}/{v3000}",
+                Chem.MolToMolBlock(mol, forceV3000=v3000),
+            )
+        for atom in original.GetAtoms():
+            for value, v3000 in product((1, 2, -1), (False, True)):
+                mol = Chem.Mol(original)
+                mol.GetAtomWithIdx(atom.GetIdx()).SetIntProp("molAttchpt", value)
+                emit(
+                    f"attachment point/{smiles}/{atom.GetIdx()}/{value}/{v3000}",
+                    Chem.MolToMolBlock(mol, forceV3000=v3000),
+                )
+    # Native V3000 retains any signed value, including alternate spellings of zero.
+    for value in ("0", "00", "+0", "-0", "1", "-1", "2", "3", "2147483647", "-2147483648"):
+        emit(f"attachment value/{value}", v3_block([f"1 C 0 0 0 0 ATTCHPT={value}"]))
+
+
+def cases(emit):
     rng = random.Random(98153)
-    syntax_cases()
+    syntax_cases(emit)
+    annotation_cases(emit)
     for name, text in group_cases():
         emit(f"substance groups/{name}", text)
     for name, text, _ in axial_cases():
@@ -402,4 +453,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    RDLogger.DisableLog("rdApp.*")
+    print(json.dumps(dict(rdkit_version=rdBase.rdkitVersion)))
+    cases(emit)

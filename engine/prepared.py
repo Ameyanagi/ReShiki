@@ -5,6 +5,7 @@ still initializes its own valence and ring caches; check those against Rust.
 """
 
 import math
+import struct
 
 from rdkit import Chem, rdBase
 from rdkit.Chem import rdCIPLabeler
@@ -30,7 +31,49 @@ DIRECTIONS = {
 }
 
 
-def restore(data, document):
+def _ring_annotations(mol, members):
+    """Transport integer-vector properties missing from Python's atomic setters.
+
+    This is RDKit's pinned binary format, not Python pickle. Only locally built
+    molecules and bounded, validated integer lists enter the serializer.
+    Layout: RDKit 2026.03.6 MolPickler.cpp and RDGeneral/StreamOps.h (BSD-3-Clause).
+    """
+    n = mol.GetNumAtoms()
+    if len(members) != n or sum(len(v) for v in members if v is not None) > 10_000_000:
+        raise ValueError("Invalid prepared ring-stereo dimensions")
+    if all(v is None for v in members):
+        return mol
+    block = bytearray()
+    name = b"_ringStereoAtoms"
+    for values in members:
+        if values is None:
+            block.extend(b"\0\0\0")  # uint16 property count, uint8 explicit flags.
+            continue
+        if any(type(v) is not int or not 1 <= abs(v) <= n for v in values):
+            raise ValueError("Invalid prepared ring-stereo atom")
+        block.extend(struct.pack("<HI", 1, len(name)))
+        block.extend(name)
+        block.extend(struct.pack("<BQ", 7, len(values)))  # signed vector tag, uint64 count.
+        for value in values:
+            block.extend(struct.pack("<i", value))
+        block.append(0)
+    raw = mol.ToBinary(
+        Chem.PropertyPickleOptions.AllProps | Chem.PropertyPickleOptions.CoordsAsDouble
+    )
+    if (
+        len(raw) < 21
+        or struct.unpack_from("<IIiii", raw) != (0xDEADBEEF, 0, 16, 3, 0)
+        or raw[-1] != 22
+    ):
+        raise ValueError("Prepared molecule binary version mismatch")
+    # A further BEGINATOMPROPS block extends existing properties. Keep the
+    # native graph, conformers, caches and all previously transported fields.
+    return Chem.Mol(
+        raw[:-1] + bytes([58]) + struct.pack("<i", len(block)) + block + bytes([19, 22])
+    )
+
+
+def restore(data, document=None, *, file=None):
     if data["rdkit_version"] != rdBase.rdkitVersion:
         raise ValueError("Prepared molecule reference version mismatch")
     state = data["state"]
@@ -40,7 +83,7 @@ def restore(data, document):
     if (
         n > 100_000
         or m > 300_000
-        or data["ids"] != [a["id"] for a in document["atoms"]]
+        or (document is not None and data["ids"] != [a["id"] for a in document["atoms"]])
         or len(set(data["ids"])) != n
         or any(
             len(items) != n
@@ -60,13 +103,19 @@ def restore(data, document):
                 properties["bond_codes"],
                 state["directions"],
                 state["conjugated"],
-                document["bonds"],
             )
         )
+        or (document is not None and len(document["bonds"]) != m)
         or metadata["groups"]
         or state["rings"]["kind"] != "symmetric"
     ):
         raise ValueError("Invalid prepared molecule dimensions or metadata")
+    if file is not None and (
+        type(file["is_3d"]) is not bool
+        or len(file["attachment_points"]) != n
+        or len(file["dummy_labels"]) != n
+    ):
+        raise ValueError("Invalid prepared file annotations")
     rw = Chem.RWMol()
     for i, item in enumerate(atoms):
         a = Chem.Atom(item["atomic_number"])
@@ -82,10 +131,17 @@ def restore(data, document):
             a.SetAtomMapNum(meta["map_number"])
         a.SetChiralTag(Chem.ChiralType.values[meta["chiral_tag"]])
         a.SetHybridization(Chem.HybridizationType.names[state["hybridizations"][i]])
-        # Drawing preparation has no enhanced groups or ring-stereo annotations.
-        # Reject unexpected fields instead of silently discarding stereo state.
-        if meta["ring_stereo"] or properties["atoms"][i]["ring_members"] is not None:
-            raise ValueError("Unsupported prepared ring-stereo annotation")
+        if meta["ring_stereo"] != (properties["atoms"][i]["ring_members"] is not None):
+            raise ValueError("Inconsistent prepared ring-stereo annotation")
+        if file is not None:
+            if (attachment := file["attachment_points"][i]) is not None:
+                if type(attachment) is not int or not -(2**31) <= attachment < 2**31:
+                    raise ValueError("Invalid prepared attachment point")
+                a.SetIntProp("molAttchpt", attachment)
+            if (label := file["dummy_labels"][i]) is not None:
+                if not isinstance(label, str) or len(label.encode("utf-8")) > 16 * 1024 * 1024:
+                    raise ValueError("Invalid prepared dummy label")
+                a.SetProp("dummyLabel", label)
         if meta.get("chiral_permutation") is not None:
             a.SetUnsignedProp("_chiralPermutation", meta["chiral_permutation"])
         p = properties["atoms"][i]
@@ -130,7 +186,7 @@ def restore(data, document):
             b.SetProp("_CIPCode", code)
     mol = rw.GetMol()
     conformer = Chem.Conformer(n)
-    conformer.Set3D(False)
+    conformer.Set3D(file["is_3d"] if file is not None else False)
     for i, p in enumerate(data["positions"]):
         xyz = (p["x"], p["y"], p["z"])
         if not all(math.isfinite(v) for v in xyz):
@@ -154,7 +210,7 @@ def restore(data, document):
     for key, name in (("done", "_StereochemDone"), ("needs_detection", "_needsDetectBondStereo")):
         if properties[key] is not None:
             mol.SetIntProp(name, int(properties[key]), computed=key == "done")
-    return mol
+    return _ring_annotations(mol, [p["ring_members"] for p in properties["atoms"]])
 
 
 def label_drawing(mol):

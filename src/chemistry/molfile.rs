@@ -9,7 +9,7 @@ use super::{
 };
 use std::{collections::HashSet, fmt::Write};
 mod read;
-pub use read::{ReadError, read};
+pub use read::{FileAnnotations, Imported, ReadError, read};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

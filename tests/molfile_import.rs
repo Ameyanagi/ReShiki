@@ -83,7 +83,9 @@ fn molecular_file_import_matches_native_reader() -> anyhow::Result<()> {
                 accepted += 1;
                 groups_accepted += usize::from(group_case);
                 difference(
-                    &serde_json::json!({"state":actual.state,"positions":actual.positions}),
+                    &serde_json::json!({"state":actual.molecule.state,"positions":actual.molecule.positions,
+                        "is_3d":actual.annotations.is_3d,"attachment_points":actual.annotations.attachment_points,
+                        "dummy_labels":actual.annotations.dummy_labels}),
                     expected,
                     "molecule",
                 )

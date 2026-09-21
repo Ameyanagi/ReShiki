@@ -59,6 +59,9 @@ Copyright (C) 2001-2022 Greg Landrum and other RDKit contributors.
 Code/GraphMol/SmilesParse/CXSmilesOps.cpp (CXSMARTS extension validation)
 Copyright (C) 2016-2021 Greg Landrum and other RDKit contributors.
 
+Code/GraphMol/MolPickler.cpp and Code/RDGeneral/StreamOps.h (ring-stereo integer-vector transport in the temporary native bridge)
+Copyright (C) 2001-2021 Greg Landrum and Rational Discovery LLC.
+
 Code/Geometry/point.h and point.cpp (stereo vector and dihedral arithmetic)
 Copyright (C) 2003-2025 Greg Landrum and other RDKit contributors.
 
@@ -98,6 +101,6 @@ Copyright (C) 2007-2023 Greg Landrum.
 Code/GraphMol/QueryOps.h and QueryOps.cpp (query predicates, metal classification and bridgehead detection)
 Copyright (C) 2003-2021 Greg Landrum and other RDKit contributors.
 
-Adaptations are in src/chemistry/, scripts/regenerate_atomic_data.py,
+Adaptations are in src/chemistry/, engine/prepared.py, scripts/regenerate_atomic_data.py,
 scripts/regenerate_descriptor_data.py and the *_reference.py fixtures in tests/.
 These portions are distributed under the accompanying BSD-3-Clause LICENSE.

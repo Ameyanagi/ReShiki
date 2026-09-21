@@ -964,6 +964,15 @@ def export_cdxml(
 def handle(request):
     if request.get("protocol") != 1:
         raise ValueError("Unsupported protocol version")
+    prepared_import = request.get("prepared_import")
+    if prepared_import is not None and (
+        not isinstance(prepared_import, dict)
+        or request.get("operation") != "import"
+        or request.get("format") != "mol"
+        or request.get("prepared_molecule") is None
+        or request.get("prepared_drawing") is None
+    ):
+        raise ValueError("Prepared import requires a molecular file and drawing")
     local_properties = request.get("local_properties", False)
     if not isinstance(local_properties, bool):
         raise ValueError("local_properties must be a boolean")
@@ -1046,6 +1055,17 @@ def handle(request):
         response.update(document=to_document(checked, result), analysis=analyzer(checked))
         return response
     if operation == "import":
+        if prepared_import is not None:
+            mol = prepared.restore(request["prepared_molecule"], file=prepared_import)
+            drawing = prepared.restore(request["prepared_drawing"], file=prepared_import)
+            check_supported(mol)
+            check_supported(drawing)
+            response.update(
+                document=None,
+                drawing_labels=prepared.label_drawing(drawing),
+                analysis=analyzer(mol) if mol.GetNumAtoms() else None,
+            )
+            return response
         fmt, text = request.get("format", "smiles"), request.get("text", "")
         if not text.strip():
             raise ValueError("Enter a structure first")
