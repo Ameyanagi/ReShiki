@@ -5,7 +5,7 @@ https://github.com/rdkit/rdkit/tree/Release_2026_03_6
 Code/GraphMol/atomic_data.cpp, Code/GraphMol/Atom.cpp and Code/GraphMol/Bond.cpp
 Copyright (C) 2001-2024 Greg Landrum and other RDKit contributors.
 
-Code/GraphMol/MolOps.cpp (functional-group cleanup, radicals and hydrogen adjustment)
+Code/GraphMol/MolOps.cpp (functional-group/metal cleanup, radicals and hydrogen adjustment)
 Copyright (C) 2001-2023 Greg Landrum and other RDKit contributors.
 
 Code/GraphMol/Aromaticity.cpp (default aromaticity model)
@@ -26,7 +26,7 @@ Copyright (C) 2004-2021 Tad hurst/CDD and other RDKit contributors.
 Code/GraphMol/PeriodicTable.h (relative electronegativity)
 Copyright (C) 2001-2011 Rational Discovery LLC.
 
-Code/GraphMol/catch_graphmol.cpp (aromaticity and Kekulé regression examples)
+Code/GraphMol/catch_graphmol.cpp (aromaticity, Kekulé and metal-cleanup regression examples)
 Copyright (C) 2018-2026 Greg Landrum and other RDKit contributors.
 
 Code/GraphMol/MolProps.cpp
@@ -47,9 +47,9 @@ Copyright (C) 2011-2013 Greg Landrum.
 Code/GraphMol/Descriptors/MolSurf.cpp (polar surface area contributions)
 Copyright (C) 2007-2023 Greg Landrum.
 
-Code/GraphMol/QueryOps.h (query predicates)
+Code/GraphMol/QueryOps.h and QueryOps.cpp (query predicates and metal classification)
 Copyright (C) 2003-2021 Greg Landrum and other RDKit contributors.
 
 Adaptations are in src/chemistry/, scripts/regenerate_atomic_data.py,
-scripts/regenerate_descriptor_data.py and tests/ring_perception_reference.py.
+scripts/regenerate_descriptor_data.py and the *_reference.py fixtures in tests/.
 These portions are distributed under the accompanying BSD-3-Clause LICENSE.

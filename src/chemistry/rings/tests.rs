@@ -88,6 +88,7 @@ fn long_chains_and_macrocycles_do_not_use_recursive_traversal() -> TestResult {
     let edges = (1..n).map(|i| (i - 1, i)).collect::<Vec<_>>();
     let mut graph = graph(n, &edges);
     assert!(perceive(&graph, Options::default())?.atoms.is_empty());
+    assert!(fast(&graph)?.atoms.is_empty());
     graph.bonds.push(Bond {
         a: n - 1,
         b: 0,
@@ -98,6 +99,39 @@ fn long_chains_and_macrocycles_do_not_use_recursive_traversal() -> TestResult {
     assert_eq!(rings.atoms.len(), 1);
     assert_eq!(rings.atoms[0].len(), n);
     assert_cycles(&graph, &rings);
+    let rings = fast(&graph)?;
+    assert_eq!(rings.atoms.len(), 1);
+    assert_eq!(rings.atoms[0].len(), n);
+    assert_cycles(&graph, &rings);
+    Ok(())
+}
+
+#[test]
+fn fast_ring_work_and_storage_are_bounded() -> TestResult {
+    let graph = graph(3, &[(0, 1), (1, 2), (2, 0)]);
+    let top = Topology::new(&graph)?;
+    assert!(search::fast(&top, &mut Budget { work: 0, stored: 3 }).is_err());
+    assert!(
+        search::fast(
+            &top,
+            &mut Budget {
+                work: 100,
+                stored: 2
+            }
+        )
+        .is_err()
+    );
+    assert_eq!(
+        search::fast(
+            &top,
+            &mut Budget {
+                work: 100,
+                stored: 3
+            }
+        )?
+        .len(),
+        1
+    );
     Ok(())
 }
 
@@ -151,6 +185,7 @@ fn malformed_graphs_fail_without_mutation() -> TestResult {
             perceive(&bad, Options::default()),
             Err(RingError::Failed(_))
         ));
+        assert!(fast(&bad).is_err());
         assert_eq!(serde_json::to_value(&bad)?, before);
     }
     Ok(())

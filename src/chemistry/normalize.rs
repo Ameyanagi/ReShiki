@@ -4,6 +4,8 @@
 //! Copyright (C) 2001-2023 Greg Landrum and other RDKit contributors.
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
 use super::graph::Graph;
+mod metals;
+pub use metals::organometallics;
 
 fn at<T>(items: &[T], index: usize) -> Result<&T, String> {
     items

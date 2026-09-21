@@ -577,6 +577,24 @@ impl State {
     }
 }
 
+/// Depth-first cycle basis used when canonical ranking needs ring membership
+/// before full ring perception. Includes every bond type, including dative and
+/// hydrogen bonds. These cycles are not necessarily smallest or symmetric.
+pub fn fast(graph: &Graph) -> Result<Rings, String> {
+    let top = Topology::new(graph)?;
+    let atoms = search::fast(&top, &mut Budget::default())?;
+    let bonds = atoms
+        .iter()
+        .map(|ring| top.bonds(ring))
+        .collect::<Result<_, _>>()?;
+    Ok(Rings {
+        basis_count: atoms.len(),
+        atoms,
+        bonds,
+        approximate: true,
+    })
+}
+
 pub fn perceive(graph: &Graph, options: Options) -> Result<Rings, RingError> {
     let top = Topology::new(graph)?;
     let active = graph
