@@ -131,6 +131,10 @@ fn molecular_file_import_matches_native_reader() -> anyhow::Result<()> {
     );
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     assert!(
+        pending.keys().all(|reason| reason == "substance groups"),
+        "Unexpected pending import operation: {pending:?}"
+    );
+    assert!(
         accepted > 1000 && rejected > 100,
         "Insufficient MOL import coverage"
     );

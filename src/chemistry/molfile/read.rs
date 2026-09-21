@@ -4,7 +4,6 @@
 use crate::chemistry::{
     ELEMENTS, RDKIT_VERSION,
     document::Molecule,
-    electronic,
     graph::{Atom, Bond, Graph},
     kekulize::Direction,
     ranking::{AtomMetadata, BondMetadata, Metadata},
@@ -30,6 +29,8 @@ pub enum ReadError {
     Sanitization(#[from] sanitize::Error),
     #[error(transparent)]
     Spatial(#[from] stereo::SpatialError),
+    #[error(transparent)]
+    Atropisomer(#[from] stereo::AtropError),
     #[error("MOL chemistry: {0}")]
     Chemistry(String),
 }
@@ -225,15 +226,16 @@ impl Parsed {
         }
         let is_3d = self.positions.iter().any(|p| p.z.abs() > 1e-3)
             || self.marked_3d && !self.chirality && !self.graph.atoms.is_empty();
+        let conformer = stereo::wedging::Conformer {
+            positions: self.positions,
+            is_3d,
+        };
         if is_3d {
             self.metadata = stereo::from_3d(
                 &self.graph,
                 &self.metadata,
                 &self.directions,
-                Some(&stereo::wedging::Conformer {
-                    positions: self.positions.clone(),
-                    is_3d: true,
-                }),
+                Some(&conformer),
                 &stereo::SpatialAnnotations {
                     non_explicit: vec![None; self.graph.atoms.len()],
                     done: None,
@@ -246,14 +248,19 @@ impl Parsed {
                 &self.graph,
                 &self.metadata,
                 &self.directions,
-                Some(&self.positions),
+                Some(&conformer.positions),
                 true,
             )
             .map_err(ReadError::Chemistry)?;
             self.graph = drawn.graph;
             self.metadata = drawn.metadata;
         }
-        self.check_atropisomer_boundary()?;
+        self.metadata = stereo::detect_atropisomers(
+            &self.graph,
+            &self.metadata,
+            &self.directions,
+            Some(&conformer),
+        )?;
         for ((bond, metadata), direction) in self
             .graph
             .bonds
@@ -271,7 +278,7 @@ impl Parsed {
             &cleaned.graph,
             &cleaned.metadata,
             &cleaned.directions,
-            Some(&self.positions),
+            Some(&conformer.positions),
             &cleaned.rings,
         )
         .map_err(ReadError::Chemistry)?;
@@ -309,51 +316,9 @@ impl Parsed {
         Ok(Molecule {
             rdkit_version: RDKIT_VERSION,
             ids: (1..=state.graph.atoms.len() as u64).collect(),
-            positions: self.positions,
+            positions: conformer.positions,
             state,
         })
-    }
-
-    fn check_atropisomer_boundary(&self) -> Result<()> {
-        let mut wedged = vec![None; self.graph.atoms.len()];
-        for (i, (bond, dir)) in self.graph.bonds.iter().zip(&self.directions).enumerate() {
-            if matches!(dir, Direction::Wedge | Direction::Hash) && matches!(bond.order, 1 | 4) {
-                *wedged
-                    .get_mut(bond.a)
-                    .ok_or_else(|| ReadError::Chemistry("Missing wedge atom".into()))? = Some(i);
-            }
-        }
-        if wedged.iter().all(Option::is_none) {
-            return Ok(());
-        }
-        let cache = self
-            .graph
-            .provisional_valences()
-            .map_err(ReadError::Chemistry)?;
-        let conjugated = electronic::conjugation_cached(&self.graph, Some(&cache))
-            .map_err(ReadError::Chemistry)?;
-        let tags = self
-            .metadata
-            .atoms
-            .iter()
-            .map(|a| a.chiral_tag)
-            .collect::<Vec<_>>();
-        let hybrids =
-            electronic::hybridization_cached(&self.graph, &tags, &conjugated, Some(&cache))
-                .map_err(ReadError::Chemistry)?;
-        for (i, bond) in self.graph.bonds.iter().enumerate() {
-            if bond.order == 1
-                && [bond.a, bond.b]
-                    .iter()
-                    .any(|&a| wedged.get(a).is_some_and(|w| w.is_some_and(|w| w != i)))
-                && [bond.a, bond.b]
-                    .iter()
-                    .all(|&a| hybrids.get(a) == Some(&electronic::Hybridization::Sp2))
-            {
-                return Err(ReadError::Pending("atropisomer perception"));
-            }
-        }
-        Ok(())
     }
 }
 
@@ -376,7 +341,7 @@ fn radical(code: i32) -> Result<u8> {
 
 /// Read one strict MOL block, retaining explicit H atoms and native atom order.
 /// This staged reader is not enabled in the application until pending file
-/// extensions and atropisomer perception have independent reference coverage.
+/// extensions have independent reference coverage.
 pub fn read(text: &str) -> Result<Molecule> {
     if text.len() > 16 * 1024 * 1024 {
         return Err(ReadError::Limit);

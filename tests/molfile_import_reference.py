@@ -11,9 +11,11 @@ from rdkit import Chem, RDConfig, RDLogger, rdBase
 from rdkit.Chem import rdDepictor
 
 if TYPE_CHECKING or __package__:
+    from .atropisomer_reference import cases as axial_cases
     from .perception_reference import snapshot
     from .valence_reference import ORDERS
 else:
+    from atropisomer_reference import cases as axial_cases
     from perception_reference import snapshot
     from valence_reference import ORDERS
 
@@ -276,12 +278,12 @@ def syntax_cases():
     for text in ("C[C@H](O)C(=O)O", "C[C@H](O)[C@H](O)C |&1:1,3|"):
         mol = Chem.MolFromSmiles(text)
         rdDepictor.Compute2DCoords(mol)
-        emit("pending/enhanced stereo", Chem.MolToMolBlock(mol, forceV3000=True))
+        emit("enhanced stereo", Chem.MolToMolBlock(mol, forceV3000=True))
         conf = mol.GetConformer()
         conf.Set3D(True)
         p = conf.GetAtomPosition(0)
         conf.SetAtomPosition(0, (p.x, p.y, 0.5))
-        emit("pending/3D", Chem.MolToMolBlock(mol, forceV3000=True))
+        emit("3D", Chem.MolToMolBlock(mol, forceV3000=True))
     for direction in (Chem.BondDir.BEGINWEDGE, Chem.BondDir.BEGINDASH):
         mol = Chem.MolFromSmiles("Fc1cccc(F)c1-c1c(Cl)cccc1Cl")
         rdDepictor.Compute2DCoords(mol)
@@ -296,7 +298,7 @@ def syntax_cases():
             if b.GetIdx() != axis.GetIdx() and b.GetBeginAtomIdx() == axis.GetBeginAtomIdx()
         )
         side.SetBondDir(direction)
-        emit(f"pending/atropisomer/{direction}", Chem.MolToMolBlock(mol, forceV3000=True))
+        emit(f"atropisomer/{direction}", Chem.MolToMolBlock(mol, forceV3000=True))
     for version in (False, True):
         mol = Chem.MolFromSmiles("CCO")
         rdDepictor.Compute2DCoords(mol)
@@ -311,6 +313,8 @@ def main():
     print(json.dumps(dict(rdkit_version=rdBase.rdkitVersion)))
     rng = random.Random(98153)
     syntax_cases()
+    for name, text, _ in axial_cases():
+        emit(f"atropisomer/{name}", text)
     for name, original in native_molecules():
         for sample in range(3):
             order = list(range(original.GetNumAtoms()))

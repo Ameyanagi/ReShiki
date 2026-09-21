@@ -9,6 +9,8 @@ use crate::chemistry::{
     ranking::Metadata,
 };
 use serde::{Deserialize, Serialize};
+mod atrop;
+pub use atrop::{AtropError, detect_atropisomers};
 mod bonds;
 mod spatial;
 pub use spatial::{SpatialAnnotations, SpatialError, SpatialOptions, SpatialStereo, from_3d};
