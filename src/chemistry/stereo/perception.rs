@@ -112,6 +112,23 @@ fn opposite(d: Direction) -> Result<Direction, String> {
 pub fn perceive(input: &State, options: Options) -> Result<State, String> {
     with_work(input, options, None, &mut Work(50_000_000))
 }
+
+/// FindStereo's center predicate differs from legacy perception for low-degree
+/// phosphorus/arsenic. SMILES winding uses this predicate after perception.
+pub(crate) fn potential_tetrahedral_centers(input: &State) -> Result<Vec<bool>, String> {
+    input.graph.cached_valences(Some(&input.valences))?;
+    input.metadata.validate(&input.graph)?;
+    if input.hybridizations.len() != input.graph.atoms.len()
+        || input.conjugated.len() != input.graph.bonds.len()
+    {
+        return Err("Invalid potential-center annotations".into());
+    }
+    let mut work = Work(50_000_000);
+    let mut ctx = Context::new(input.clone(), &mut work)?;
+    (0..input.graph.atoms.len())
+        .map(|atom| ctx.potential_tetrahedral(atom, &mut work))
+        .collect()
+}
 /// Exact atomic-number file queries remain queries during the first stereo pass.
 /// Their coordinated H atoms do not contribute duplicate priority entries.
 pub(crate) fn perceive_file_queries(

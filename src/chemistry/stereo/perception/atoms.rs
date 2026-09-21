@@ -1,5 +1,58 @@
 use super::*;
 impl Context {
+    // FindStereo.cpp::isAtomPotentialTetrahedralCenter (2026.03.6).
+    pub(super) fn potential_tetrahedral(
+        &mut self,
+        i: usize,
+        work: &mut Work,
+    ) -> Result<bool, String> {
+        let atom = at(&self.state.graph.atoms, i)?.clone();
+        let mut degree = 0;
+        for &b in at(&self.neighbors, i)? {
+            work.spend(1)?;
+            let bond = at(&self.state.graph.bonds, b)?;
+            if bond.order != 5 || bond.a != i {
+                degree += 1;
+            }
+        }
+        let hs = self.hydrogens(i)?;
+        if degree + hs > 4 || degree <= 1 {
+            return Ok(false);
+        }
+        if degree == 4 || matches!(atom.atomic_number, 15 | 33) {
+            return Ok(true);
+        }
+        if degree < 3 {
+            return Ok(false);
+        }
+        if hs == 1 {
+            for &b in at(&self.neighbors, i)? {
+                work.spend(1)?;
+                let a = at(&self.state.graph.atoms, self.other(b, i)?)?;
+                if a.atomic_number == 1 && a.isotope == 0 {
+                    return Ok(false);
+                }
+            }
+            return Ok(true);
+        }
+        match atom.atomic_number {
+            16 | 34 => Ok(at(&self.state.valences, i)?.explicit_valence == 4
+                || at(&self.state.valences, i)?.explicit_valence == 3 && atom.charge == 1),
+            7 => {
+                if *at(&self.state.hybridizations, i)? != Hybridization::Sp3 {
+                    return Ok(false);
+                }
+                for &b in at(&self.neighbors, i)? {
+                    work.spend(1)?;
+                    if *at(&self.state.conjugated, b)? {
+                        return Ok(false);
+                    }
+                }
+                Ok(self.in_three_ring(i, work)? || self.bridgehead(i, work)?)
+            }
+            _ => Ok(false),
+        }
+    }
     pub(super) fn legal_center(&mut self, i: usize, work: &mut Work) -> Result<bool, String> {
         let atom = at(&self.state.graph.atoms, i)?.clone();
         let mut degree = 0;

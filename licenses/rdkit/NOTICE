@@ -32,7 +32,7 @@ Copyright (C) 2023 Greg Landrum and other RDKit contributors.
 Code/GraphMol/Chirality.cpp (chiral-tag, permutation and stereo-group cleanup; wedge, 3D atom and coordination geometry, double-bond geometry, direction propagation, legacy CIP priorities and stereo perception)
 Copyright (C) 2004-2024 Greg Landrum and other RDKit contributors.
 
-Code/GraphMol/FindStereo.cpp (potential double-bond stereochemistry for MOL export)
+Code/GraphMol/FindStereo.cpp (potential atom and double-bond stereochemistry for output)
 Copyright (C) 2020 Greg Landrum and T5 Informatics GmbH.
 
 Code/GraphMol/FileParsers/MolFileWriter.cpp (V2000/V3000 molecular output)
@@ -84,7 +84,7 @@ Copyright (C) 2001-2022 Greg Landrum and other RDKit contributors.
 Code/GraphMol/SmilesParse/SmilesWrite.cpp (atom/bond symbols and ring-label output)
 Copyright (C) 2002-2025 Greg Landrum and other RDKit contributors.
 
-Code/GraphMol/Canon.cpp (ranked SMILES traversal, ring closures and neighbor-order adjustment)
+Code/GraphMol/Canon.cpp (ranked SMILES traversal, ring closures, atom winding and bond directions)
 Copyright (C) 2001-2021 Greg Landrum and other RDKit contributors.
 
 Code/GraphMol/NontetrahedralStereo.cpp (coordination permutation tables)

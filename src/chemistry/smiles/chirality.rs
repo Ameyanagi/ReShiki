@@ -57,6 +57,60 @@ pub(super) fn permutation(
     Ok(value)
 }
 
+/// Convert storage coordination winding to the writer's traversal order.
+pub(super) fn output_permutation(
+    tag: u8,
+    mut value: u32,
+    bonds: &[usize],
+    adjacent: &[usize],
+    first: bool,
+) -> Result<u32> {
+    let maximum = match tag {
+        6 => 4,
+        7 => 5,
+        8 => 6,
+        _ => return Err(Error::Limit),
+    };
+    if value == 0 || bonds.len() > maximum {
+        return Ok(0);
+    }
+    let mut current = adjacent.iter().copied().map(Some).collect::<Vec<_>>();
+    current.resize(maximum, None);
+    let mut target = bonds.iter().copied().map(Some).collect::<Vec<_>>();
+    let insertion = if first { 0 } else { 1.min(target.len()) };
+    target.splice(
+        insertion..insertion,
+        std::iter::repeat_n(None, maximum - bonds.len()),
+    );
+    for (i, desired) in target.iter().enumerate() {
+        if current.get(i) == Some(desired) {
+            continue;
+        }
+        let j = current
+            .iter()
+            .enumerate()
+            .skip(i)
+            .find(|(_, v)| *v == desired)
+            .map(|(j, _)| j)
+            .ok_or(Error::Limit)?;
+        let column = (0..i).map(|x| maximum - x - 1).sum::<usize>() + j - i - 1;
+        value = u32::from(
+            match tag {
+                6 => SP.get(value as usize).and_then(|row| row.get(column)),
+                7 => TB.get(value as usize).and_then(|row| row.get(column)),
+                8 => OH.get(value as usize).and_then(|row| row.get(column)),
+                _ => None,
+            }
+            .copied()
+            .unwrap_or(0),
+        );
+        let old = *current.get(i).ok_or(Error::Limit)?;
+        *current.get_mut(i).ok_or(Error::Limit)? = *desired;
+        *current.get_mut(j).ok_or(Error::Limit)? = old;
+    }
+    Ok(value)
+}
+
 const SP: [[u8; 6]; 4] = [
     [0, 0, 0, 0, 0, 0],
     [3, 1, 2, 2, 1, 3],
