@@ -1,6 +1,10 @@
 # Release builds and macOS signing
 
-The Release builds workflow produces native portable packages for Apple Silicon macOS, Windows x64/ARM64 and Linux x64/ARM64. Intel macOS is not supported. Users install uv. Packages include the chemistry source and a dependency lockfile; uv installs Python and chemistry libraries into a local user environment on first use. Build outputs contain dependency notices, source/version metadata and SHA-256 checksums.
+The Release builds workflow produces a signed macOS disk image, Windows x64/ARM64 setup programs, and portable packages for all five platforms. Linux supports x64 and ARM64; macOS supports Apple Silicon only. Users install uv. Packages include the chemistry source and lockfile; uv installs Python and chemistry libraries locally on first use.
+
+Windows setup uses Inno Setup 6.7.3, downloaded with a pinned SHA-256 checksum. It installs per user, adds a Start menu shortcut, and offers a desktop shortcut and `.reshiki` file association. Setup and uninstall preserve user data. CI installs twice to check upgrades, runs the installed chemistry worker, and checks uninstallation.
+
+The macOS disk image contains the signed app and an Applications shortcut. Both the app and disk image are notarized and stapled. CI mounts the image, copies the app out, and verifies its signature and Gatekeeper status. The release has eight downloads plus `SHA256SUMS`.
 
 ## Test a build
 
@@ -66,7 +70,7 @@ Setup references: [Apple notarization](https://developer.apple.com/documentation
 
 ```sh
 uv sync --locked --python 3.12
-uv run --locked python scripts/build_release.py
+uv run --locked python scripts/build_release.py --installer
 ```
 
 Windows ARM uses a native ARM64 application and an x64 Python/RDKit worker through Windows 11's built-in emulation, because RDKit does not publish Windows ARM wheels. Linux ARM uses native aarch64 chemistry packages. The lock resolver checks the supported chemistry environments. Packaging checks the CPU architecture of both the application and its installed worker, and every build runs the Python regression suite before packaging.
@@ -74,3 +78,9 @@ Windows ARM uses a native ARM64 application and an x64 Python/RDKit worker throu
 Build runners are macOS 14, Windows Server 2022 x64, Windows 11 ARM, Ubuntu 22.04 x64, and Ubuntu 24.04 ARM. Pass `--target` to `scripts/build_release.py` to select the explicit Rust target; package names derive from that target, including when packaging Python uses a different architecture.
 
 Build on the target operating system. Python and RDKit are installed by the user’s uv at runtime. Archives are written to `dist/releases/`. On macOS, `scripts/build_macos_app.py` still builds the development app, and `--portable --release` builds an optimized app with the worker source and lockfile included.
+
+Install Inno Setup 6.7.3 for local Windows installer builds, or set `RESHIKI_ISCC` to its `ISCC.exe`. Installer verification installs and uninstalls the app, so run it in a disposable Windows account or CI runner. Omit `--installer` to build only a portable archive.
+
+## In-app version checks
+
+ReShiki queries this repository’s latest stable GitHub release asynchronously. Successful checks are cached for 24 hours; failures for one hour. Manual checks bypass the cache. Semantic version comparisons prevent downgrade prompts, and prereleases are excluded. The download button opens the release page; it does not replace a running app. No signing credentials or drawing data are used by this check.

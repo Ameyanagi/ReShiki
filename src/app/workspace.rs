@@ -718,7 +718,14 @@ impl App {
             .map(|p| p.to_string_lossy().into_owned())
             .unwrap_or_else(|| "Untitled".into());
         let bar = row![
-            text("ReShiki").size(21).color(Color::from_rgb8(22, 91, 81)),
+            hover_hint(
+                button(text("ReShiki").size(21).color(Color::from_rgb8(22, 91, 81)))
+                    .padding(0)
+                    .style(button::text)
+                    .on_press(Message::Updates(super::updates::Action::Show(true))),
+                "About ReShiki · Check for updates",
+                tooltip::Position::Bottom
+            ),
             divider(),
             icon_button(Icon::New, "New · ⌘N", Some(Message::New), false),
             icon_button(Icon::Open, "Open · ⌘O", Some(Message::Open), false),
@@ -2465,6 +2472,14 @@ impl App {
         .width(Length::Fill);
         let status = row![
             left,
+            command(
+                if self.updates.available() {
+                    "Update available"
+                } else {
+                    concat!("v", env!("CARGO_PKG_VERSION"))
+                },
+                Message::Updates(super::updates::Action::Show(true))
+            ),
             text(&self.autosave_status).size(10).color(muted()),
             text(self.selection_summary()).size(11).color(muted()),
             divider(),

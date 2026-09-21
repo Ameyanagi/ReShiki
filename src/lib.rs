@@ -46,3 +46,4 @@ pub mod style;
 pub mod template_library;
 pub mod templates;
 pub mod typography;
+pub mod updates;

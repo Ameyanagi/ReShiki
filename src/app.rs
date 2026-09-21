@@ -28,6 +28,7 @@ mod reactions;
 mod shortcuts;
 mod template_library;
 mod typography;
+mod updates;
 mod workspace;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -45,6 +46,7 @@ pub enum InspectorTab {
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    Updates(updates::Action),
     Reaction(reactions::Action),
     DrawingStyle(document_styles::Action),
     InlineText(inline_text::Action),
@@ -219,6 +221,7 @@ struct CleanupPreview {
 }
 
 pub struct App {
+    updates: updates::State,
     styles: document_styles::State,
     palette: Option<palettes::Family>,
     assistant: assistant::State,
@@ -310,6 +313,7 @@ impl App {
             .map(|r| r.candidates())
             .unwrap_or_default();
         let mut app = Self {
+            updates: updates::State::new(),
             styles: Default::default(),
             reactions: Default::default(),
             palette: None,
@@ -419,7 +423,8 @@ impl App {
         } else {
             app.run(Request::import_smiles(&app.smiles), Job::Startup)
         };
-        (app, task)
+        let update_check = app.update_action(updates::Action::Check(false));
+        (app, Task::batch([task, update_check]))
     }
     pub fn title(&self) -> String {
         format!(
@@ -447,6 +452,7 @@ impl App {
     }
     pub fn subscription(&self) -> Subscription<Message> {
         Subscription::batch([
+            self.updates.subscription(),
             if self.assistant.needs_poll() {
                 iced::time::every(std::time::Duration::from_millis(200))
                     .map(|_| Message::Assistant(assistant::Action::Poll))
@@ -729,6 +735,13 @@ impl App {
             .unwrap_or(&self.doc)
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        if let Message::Updates(action) = message {
+            return self.update_action(action);
+        }
+        if self.updates.open && matches!(message, Message::Escape) {
+            self.updates.open = false;
+            return Task::none();
+        }
         if let Message::Join(action) = message {
             return self.join_action(action);
         }
@@ -860,6 +873,7 @@ impl App {
             Message::Printing(action) => return self.print_action(action),
             Message::Pictures(action) => return self.picture_action(action),
             Message::Assistant(_)
+            | Message::Updates(_)
             | Message::Palette(_)
             | Message::InlineText(_)
             | Message::Join(_)
@@ -2636,7 +2650,7 @@ impl App {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        file_shortcuts::wrap(self.with_palette(self.workspace()))
+        file_shortcuts::wrap(self.with_updates(self.with_palette(self.workspace())))
     }
 }
 

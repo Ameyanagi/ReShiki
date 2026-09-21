@@ -56,6 +56,7 @@ export default defineConfig({
         },
       ],
       customCss: ["./src/styles/custom.css"],
+      components: { Header: "./src/components/DocsHeader.astro" },
       sidebar: [
         {
           label: "User guide",
@@ -79,6 +80,7 @@ export default defineConfig({
             { label: "Architecture", slug: "developer/architecture" },
             { label: "Release and signing", slug: "developer/releasing" },
             { label: "ReShiki 0.3.0", slug: "developer/changes-0.3" },
+            { label: "ReShiki 0.4.0", slug: "developer/changes-0.4" },
             { label: "Runtime safety", slug: "developer/runtime-safety" },
             { label: "Feature status", slug: "developer/feature-status" },
             {

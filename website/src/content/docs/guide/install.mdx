@@ -35,15 +35,15 @@ import { Code, Tabs, TabItem } from "@astrojs/starlight/components";
 
 [Choose a download on GitHub Releases](https://github.com/Ameyanagi/ReShiki/releases).
 
-| Your computer     | Package              | Open after extracting |
-| ----------------- | -------------------- | --------------------- |
-| Apple Silicon Mac | `macos-arm64.zip`    | `ReShiki.app`         |
-| Windows x64       | `windows-x64.zip`    | `reshiki.exe`         |
-| Windows ARM       | `windows-arm64.zip`  | `reshiki.exe`         |
-| Linux x64         | `linux-x64.tar.gz`   | `reshiki`             |
-| Linux ARM         | `linux-arm64.tar.gz` | `reshiki`             |
+| Your computer     | Download ends in          | Install                                         |
+| ----------------- | ------------------------- | ----------------------------------------------- |
+| Apple Silicon Mac | `macos-arm64.dmg`         | Open, then drag **ReShiki** to **Applications** |
+| Windows x64       | `windows-x64-setup.exe`   | Run setup, then open **ReShiki** from Start     |
+| Windows ARM       | `windows-arm64-setup.exe` | Run setup, then open **ReShiki** from Start     |
+| Linux x64         | `linux-x64.tar.gz`        | Extract, then run `reshiki`                     |
+| Linux ARM         | `linux-arm64.tar.gz`      | Extract, then run `reshiki`                     |
 
-Keep the extracted contents together. On Mac, you can move **ReShiki.app** to Applications.
+Windows setup installs for your account. Mac downloads are signed and notarized; Windows downloads are unsigned. Portable ZIP downloads are also available. Keep a portable download’s extracted contents together.
 
 Upgrading from Moruno? Open your existing `.moruno` drawings normally. Templates, assistant preferences, and recovery drafts are copied on first launch; the originals stay in place. New drawings use `.reshiki`.
 
@@ -59,3 +59,9 @@ Mac requires Apple Silicon and macOS 14+. Windows x64 requires Windows 10/11; Wi
 First use needs internet access to install the chemistry tools. Later drawing and chemistry checks work offline. The optional assistant needs a Codex connection.
 
 [Draw your first molecule →](/guide/first-molecule/)
+
+## Updates
+
+Click **ReShiki** at the top left → **Check for updates**. ReShiki also checks once a day in the background; turn off **Check automatically** here if you prefer.
+
+When an update is available, choose **Download update**, close ReShiki, and install the new version. Your drawings and settings stay in place. Updates are never installed while you draw.

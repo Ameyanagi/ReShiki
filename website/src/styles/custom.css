@@ -1,20 +1,48 @@
 :root {
-  --sl-color-accent-low: #123b35;
-  --sl-color-accent: #389280;
-  --sl-color-accent-high: #b8e9df;
+  --sl-color-accent-low: #38291b;
+  --sl-color-accent: #d4935f;
+  --sl-color-accent-high: #f4d6ba;
   --sl-font:
     -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif;
-  --sl-content-width: 52rem;
-  --reshiki-surface: #17211f;
-  --reshiki-shadow: 0 18px 60px #0003;
+  --sl-content-width: 48rem;
+  --reshiki-surface: #202623;
+  --reshiki-button: #315143;
 }
 
 :root[data-theme="light"] {
-  --sl-color-accent-low: #e1f2ed;
-  --sl-color-accent: #287866;
-  --sl-color-accent-high: #184f44;
-  --reshiki-surface: #f2f6f3;
-  --reshiki-shadow: 0 18px 60px #163e2f12;
+  --sl-color-accent-low: #fff1e4;
+  --sl-color-accent: #97521e;
+  --sl-color-accent-high: #713811;
+  --sl-color-bg: #f7f7f2;
+  --sl-color-bg-nav: #f7f7f2;
+  --sl-color-bg-sidebar: #f7f7f2;
+  --sl-color-hairline-light: #dfe1d9;
+  --sl-color-hairline: #dfe1d9;
+  --reshiki-surface: #fff;
+}
+
+.sl-markdown-content table {
+  font-size: 0.88rem;
+}
+.sl-markdown-content :is(p, li) {
+  line-height: 1.75;
+}
+.sl-markdown-content h2 {
+  font-weight: 600;
+}
+.sl-markdown-content h3 {
+  font-weight: 600;
+}
+.content-panel h1 {
+  letter-spacing: -0.045em;
+  font-weight: 600;
+}
+.sidebar-content a[aria-current="page"] {
+  border-radius: 0.3rem;
+}
+:is(a, button):focus-visible {
+  outline: 2px solid var(--sl-color-text-accent);
+  outline-offset: 4px;
 }
 
 .sl-markdown-content img {
@@ -29,23 +57,27 @@
 /* Keep the landing page separate from the manual's reading layout. */
 [data-has-hero] .hero {
   display: block;
-  padding: clamp(2rem, 6vw, 5.5rem) 0 0;
+  padding: clamp(2rem, 5vw, 4.5rem) 0 0;
+}
+
+[data-has-hero] .sl-container {
+  max-width: 72rem;
 }
 
 [data-has-hero] .hero .stack {
-  align-items: center;
-  text-align: center;
+  align-items: flex-start;
+  text-align: left;
   gap: 1.75rem;
 }
 
 [data-has-hero] .hero .copy {
-  align-items: center;
+  align-items: flex-start;
   gap: 1.4rem;
 }
 
 [data-has-hero] .hero h1 {
-  font-size: clamp(2.65rem, 6.2vw, 4.75rem);
-  font-weight: 620;
+  font-size: clamp(2.5rem, 5vw, 4.25rem);
+  font-weight: 560;
   letter-spacing: -0.055em;
   line-height: 1.06;
 }
@@ -57,13 +89,19 @@
 }
 
 [data-has-hero] .hero .actions {
-  justify-content: center;
+  justify-content: flex-start;
   gap: 0.8rem;
+}
+
+[data-has-hero] .hero .sl-link-button.primary {
+  background: var(--reshiki-button);
+  border-color: var(--reshiki-button);
+  color: #fff;
 }
 
 [data-has-hero] .hero .sl-link-button {
   padding: 0.9rem 1.2rem;
-  border-radius: 0.6rem;
+  border-radius: 0.35rem;
   font-size: 0.95rem;
   font-weight: 550;
 }
@@ -87,7 +125,7 @@
 
 .home-platforms {
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   flex-wrap: wrap;
   gap: 0.55rem;
   margin: 0 0 2.5rem;
@@ -112,7 +150,7 @@
 
 .home-support {
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   flex-wrap: wrap;
   gap: 0.75rem;
   margin: -1.25rem 0 2.5rem;
@@ -145,7 +183,6 @@
   border: 1px solid var(--sl-color-hairline);
   border-radius: 1rem;
   background: var(--reshiki-surface);
-  box-shadow: var(--reshiki-shadow);
 }
 
 .home-workspace img {
@@ -308,4 +345,51 @@
   font-size: 0.875rem;
   line-height: 1.6;
   max-width: 70ch;
+}
+
+.home-tour {
+  margin-top: 3rem;
+}
+.home-tour-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+.home-tour figure {
+  margin: 0;
+  min-width: 0;
+}
+.home-tour a {
+  display: block;
+  overflow: hidden;
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 0.5rem;
+  background: var(--reshiki-surface);
+}
+.home-tour a:hover {
+  border-color: var(--sl-color-text-accent);
+}
+.home-tour img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.home-tour figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.85rem 0.15rem;
+}
+.home-tour strong {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.home-tour figcaption span {
+  color: var(--sl-color-gray-2);
+  font-size: 0.85rem;
+}
+@media (max-width: 40rem) {
+  .home-tour-grid {
+    grid-template-columns: 1fr;
+  }
 }

@@ -165,31 +165,68 @@ def sign_and_notarize(app):
             run(["codesign", "--verify", "--deep", "--strict", app])
             submission = directory / "submission.zip"
             run(["ditto", "-c", "-k", "--keepParent", app, submission])
-            auth = ["--keychain-profile", "reshiki-release", "--keychain", str(keychain)]
-            response = subprocess.run(
-                [
-                    "xcrun",
-                    "notarytool",
-                    "submit",
-                    str(submission),
-                    *auth,
-                    "--wait",
-                    "--timeout",
-                    "45m",
-                    "--output-format",
-                    "json",
-                ],
-                capture_output=True,
-                text=True,
-            )
-            try:
-                result = json.loads(response.stdout)
-            except json.JSONDecodeError as error:
-                raise RuntimeError("Notarization did not return a valid response") from error
-            if response.returncode or result.get("status") != "Accepted":
-                if result.get("id"):
-                    run(["xcrun", "notarytool", "log", result["id"], *auth])
-                raise RuntimeError("Apple did not accept this notarization submission")
-            print(f"Apple accepted notarization: {result['id']}")
+            notarize(submission, keychain)
             run(["xcrun", "stapler", "staple", app])
             verify_app(app)
+
+
+def notarize(submission, keychain):
+    auth = ["--keychain-profile", "reshiki-release", "--keychain", str(keychain)]
+    response = subprocess.run(
+        [
+            "xcrun",
+            "notarytool",
+            "submit",
+            str(submission),
+            *auth,
+            "--wait",
+            "--timeout",
+            "45m",
+            "--output-format",
+            "json",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    try:
+        result = json.loads(response.stdout)
+    except json.JSONDecodeError as error:
+        raise RuntimeError("Notarization did not return a valid response") from error
+    if response.returncode or result.get("status") != "Accepted":
+        if result.get("id"):
+            run(["xcrun", "notarytool", "log", result["id"], *auth])
+        raise RuntimeError("Apple did not accept this notarization submission")
+    print(f"Apple accepted notarization: {result['id']}")
+
+
+def sign_disk_image(image):
+    with tempfile.TemporaryDirectory(prefix="reshiki-dmg-signing-") as temporary:
+        with signing_keychain(Path(temporary)) as keychain:
+            run(
+                [
+                    "codesign",
+                    "--force",
+                    "--sign",
+                    os.environ["MACOS_SIGNING_IDENTITY"],
+                    "--keychain",
+                    keychain,
+                    "--timestamp",
+                    image,
+                ]
+            )
+            notarize(image, keychain)
+            run(["xcrun", "stapler", "staple", image])
+            run(["codesign", "--verify", "--strict", image])
+            run(["xcrun", "stapler", "validate", image])
+            run(
+                [
+                    "spctl",
+                    "--assess",
+                    "--type",
+                    "open",
+                    "--context",
+                    "context:primary-signature",
+                    "--verbose=2",
+                    image,
+                ]
+            )

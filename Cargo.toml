@@ -1,6 +1,6 @@
 [package]
 name = "reshiki"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 description = "A molecular drawing workspace"
 
@@ -35,6 +35,9 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg",
 pdf-writer = "0.12.1"
 ttf-parser = "0.25"
 svg2pdf = { version = "0.13", default-features = false, features = ["text", "image"] }
+reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
+semver = "1"
+open = "5"
 
 [profile.dev]
 debug = 1

@@ -6,6 +6,7 @@ import tempfile
 from pathlib import Path
 
 from build_release import ROOT, archive, run, verify_archive, version
+from installers import mac_disk_image
 from sign_macos import sign_and_notarize
 
 
@@ -51,6 +52,7 @@ def main():
         Path(str(output) + ".sha256").write_text(
             f"{digest}  {output.name}\n", encoding="ascii", newline="\n"
         )
+        mac_disk_image(folder, ROOT / "dist/releases", signed=True)
 
 
 if __name__ == "__main__":

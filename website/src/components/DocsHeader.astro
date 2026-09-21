@@ -1,0 +1,31 @@
+---
+import Search from "@astrojs/starlight/components/Search.astro";
+import ThemeSelect from "@astrojs/starlight/components/ThemeSelect.astro";
+import SocialIcons from "@astrojs/starlight/components/SocialIcons.astro";
+const current = Astro.url.pathname;
+---
+
+<div class="docs-header">
+  <a class="wordmark" href="/" aria-label="ReShiki home">ReShiki<span> / guide</span></a>
+  <nav aria-label="Main navigation">
+    <a href="/guide/first-molecule/" aria-current={current.startsWith("/guide/") && !current.includes("assistant") ? "true" : undefined}>User guide</a>
+    <a href="/guide/assistant/" aria-current={current.includes("/assistant/") ? "true" : undefined}>Assistant</a>
+    <a class="wide" href="/developer/development/" aria-current={current.startsWith("/developer/") ? "true" : undefined}>Developer</a>
+    <a class="wide" href="/guide/install/">Download</a>
+  </nav>
+  <div class="tools"><Search /><div class="social"><SocialIcons /></div><ThemeSelect /></div>
+</div>
+
+<style>
+  .docs-header { display: flex; align-items: center; gap: 2rem; height: 100%; }
+  .wordmark { font-size: 1.45rem; font-weight: 750; letter-spacing: -.055em; color: var(--sl-color-white); text-decoration: none; white-space: nowrap; }
+  .wordmark span { font-size: .8rem; font-weight: 450; letter-spacing: 0; color: var(--sl-color-gray-2); margin-left: .45rem; }
+  nav, .tools, .social { display: flex; align-items: center; gap: 1.2rem; }
+  nav a { color: var(--sl-color-text); text-decoration: none; font-size: .85rem; font-weight: 600; white-space: nowrap; }
+  nav a:hover, nav a[aria-current] { color: var(--sl-color-text-accent); }
+  .tools { margin-left: auto; gap: 1rem; }
+  .social { gap: .75rem; padding-left: .5rem; }
+  @media (max-width: 74rem) { nav .wide, .wordmark span { display: none; } }
+  @media (max-width: 50rem) { .docs-header { gap: .8rem; } .tools { gap: .3rem; } .social { display: none; } nav { gap: .8rem; } }
+  @media (max-width: 36rem) { nav { display: none; } .wordmark { font-size: 1.3rem; } }
+</style>

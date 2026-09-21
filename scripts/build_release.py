@@ -309,6 +309,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tag")
     parser.add_argument("--sign", action="store_true")
+    parser.add_argument(
+        "--installer",
+        action="store_true",
+        help="Also build and verify a Windows setup or macOS disk image",
+    )
     parser.add_argument("--target", choices=sorted(RELEASE_TARGETS))
     parser.add_argument("--check-tag-only", action="store_true")
     args = parser.parse_args()
@@ -384,6 +389,10 @@ def main():
         f"{digest}  {output.name}\n", encoding="ascii", newline="\n"
     )
     print(output)
+    if args.installer:
+        from installers import build_installer
+
+        print(build_installer(folder, ROOT / "dist/releases", args.sign))
 
 
 if __name__ == "__main__":

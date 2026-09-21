@@ -74,12 +74,23 @@ jobs:
       - run: rustup toolchain install 1.95.0 --profile minimal --target ${{ matrix.target }}
       - run: rustup default 1.95.0
       - run: uv sync --locked
+      - name: Install pinned Windows installer compiler
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $compilerInstaller = Join-Path $env:RUNNER_TEMP 'innosetup.exe'
+          Invoke-WebRequest 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe' -OutFile $compilerInstaller
+          if ((Get-FileHash $compilerInstaller -Algorithm SHA256).Hash.ToLowerInvariant() -ne '9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732') { throw 'Inno Setup checksum mismatch' }
+          $compilerDir = Join-Path $env:RUNNER_TEMP 'InnoSetup'
+          $installerProcess = Start-Process $compilerInstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=`"$compilerDir`"") -Wait -PassThru
+          if ($installerProcess.ExitCode -ne 0) { throw 'Inno Setup installation failed' }
+          "RESHIKI_ISCC=$compilerDir\ISCC.exe" >> $env:GITHUB_ENV
       - name: Test chemistry and packaging on this platform
         run: uv run --locked python -m unittest discover -s tests -p 'test_*.py'
       - name: Build and test extracted portable archive
         env:
           MACOSX_DEPLOYMENT_TARGET: "14.0"
-        run: uv run --locked python scripts/build_release.py --target ${{ matrix.target }}
+        run: uv run --locked python scripts/build_release.py --target ${{ matrix.target }} --installer
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: unsigned-${{ matrix.artifact }}
@@ -158,7 +169,7 @@ jobs:
         run: |
           cat *.sha256 | tr -d '\r' > SHA256SUMS
           sha256sum --check SHA256SUMS
-          test "$(wc -l < SHA256SUMS)" -eq 5
+          test "$(wc -l < SHA256SUMS)" -eq 8
           args=()
           if [[ "$RELEASE_TAG" == *-* ]]; then args+=(--prerelease); fi
-          gh release create "$RELEASE_TAG" --verify-tag --generate-notes "${args[@]}" *.zip *.tar.gz SHA256SUMS
+          gh release create "$RELEASE_TAG" --verify-tag --generate-notes "${args[@]}" *.zip *.tar.gz *.dmg *-setup.exe SHA256SUMS
