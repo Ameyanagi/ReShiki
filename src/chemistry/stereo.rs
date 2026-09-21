@@ -5,6 +5,7 @@
 //!
 //! Cleanup repairs annotations; the drawing pass reads wedged-bond geometry.
 //! Absolute configurations remain separate. Results never edit the caller's data.
+pub mod cip;
 mod drawing;
 pub use drawing::wedging;
 pub mod perception;

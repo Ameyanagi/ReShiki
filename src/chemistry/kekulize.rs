@@ -452,6 +452,36 @@ pub(crate) fn assign_cached(
     })
 }
 
+/// Native CIP bond-order inspection catches chemical assignment failures and
+/// inspects the partially changed copy. Keep that snapshot separate from the
+/// rollback semantics of `if_possible_cached`; never apply it to a drawing.
+pub(crate) fn partial_cached(
+    graph: &Graph,
+    rings: &[Vec<usize>],
+    directions: &[Direction],
+    options: Options<'_>,
+    cache: &[Valence],
+) -> Result<Attempt, String> {
+    let mut cache = graph.cached_valences(Some(cache))?;
+    let mut result = Assignment::snapshot(graph, directions)?;
+    let success = match assign_in_place(
+        &mut result,
+        rings,
+        options,
+        &mut Work(50_000_000),
+        &mut cache,
+    ) {
+        Ok(()) => true,
+        Err(Failure::Chemical(_)) => false,
+        Err(Failure::Invalid(message)) => return Err(message),
+    };
+    Ok(Attempt {
+        assignment: result,
+        success,
+        cache,
+    })
+}
+
 fn assign_in_place(
     result: &mut Assignment,
     rings: &[Vec<usize>],
