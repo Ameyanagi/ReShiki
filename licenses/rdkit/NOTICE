@@ -5,7 +5,7 @@ https://github.com/rdkit/rdkit/tree/Release_2026_03_6
 Code/GraphMol/atomic_data.cpp, Code/GraphMol/Atom.cpp and Code/GraphMol/Bond.cpp
 Copyright (C) 2001-2024 Greg Landrum and other RDKit contributors.
 
-Code/GraphMol/MolOps.cpp (sanitization order, functional-group/metal/atropisomer cleanup, radicals and hydrogen adjustment)
+Code/GraphMol/MolOps.cpp (sanitization order, functional-group/metal/atropisomer cleanup, radicals, hydrogen adjustment and component splitting)
 Copyright (C) 2001-2023 Greg Landrum and other RDKit contributors.
 
 Code/GraphMol/Aromaticity.cpp (default aromaticity model)
@@ -81,7 +81,7 @@ Copyright (C) 2001-2016 Randal Henne, Greg Landrum and Rational Discovery LLC.
 Code/GraphMol/SmilesParse/SmilesParse.cpp and SmilesParseOps.cpp (SMILES/SMARTS preprocessing, ring closure and chiral validation)
 Copyright (C) 2001-2022 Greg Landrum and other RDKit contributors.
 
-Code/GraphMol/SmilesParse/SmilesWrite.cpp (atom/bond symbols and ring-label output)
+Code/GraphMol/SmilesParse/SmilesWrite.cpp (atom/bond symbols, ring labels and molecular SMILES assembly)
 Copyright (C) 2002-2025 Greg Landrum and other RDKit contributors.
 
 Code/GraphMol/Canon.cpp (ranked SMILES traversal, ring closures, atom winding and bond directions)

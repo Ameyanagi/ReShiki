@@ -543,6 +543,37 @@ class PreparedMoleculeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "requires a prepared"):
             worker.handle({**empty, "format": "smiles"})
 
+    def test_prepared_smiles_skips_native_serialization(self):
+        for text in (
+            "c1ccccc1",
+            "C[C@H](N)C(=O)O",
+            "C[C@H]1CC[C@@H](C)CC1.O",
+            "[13CH3:90][NH3+]",
+            "N->[Cu+2]",
+        ):
+            doc = worker.handle(dict(protocol=1, operation="import", format="smiles", text=text))[
+                "document"
+            ]
+            payload = json.loads(json.dumps(prepare(doc)))
+            for operation in ("analyze", "export"):
+                request = dict(protocol=1, operation=operation, document=doc, format="smiles")
+                expected = worker.handle(request)
+                expected["analysis"]["smiles"] = ""
+                if operation == "export":
+                    expected["output"] = None
+                request.update(prepared_molecule=payload, local_smiles=True)
+                with patch.object(
+                    Chem, "MolToSmiles", side_effect=AssertionError("Native SMILES writer")
+                ):
+                    self.assertEqual(worker.handle(request), expected)
+                    for value in ("true", 1, None):
+                        with self.assertRaisesRegex(ValueError, "must be a boolean"):
+                            worker.handle({**request, "local_smiles": value})
+                    with self.assertRaisesRegex(ValueError, "requires a prepared"):
+                        worker.handle({**request, "prepared_molecule": None})
+                    with self.assertRaisesRegex(ValueError, "requires a prepared"):
+                        worker.handle({**request, "operation": "aromatic"})
+
     def test_prepared_mol_export_skips_native_writer(self):
         for text in ("c1ccccc1", "C[C@H](N)C(=O)O", "[13CH3:90][NH3+]", "N->[Cu+2]"):
             doc = worker.handle(dict(protocol=1, operation="import", format="smiles", text=text))[

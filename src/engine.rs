@@ -402,6 +402,29 @@ impl PythonEngine {
         } else {
             None
         };
+        let local_smiles = if let Some((molecule, _, _)) = prepared_molecule
+            .as_ref()
+            .filter(|(molecule, _, _)| !molecule.state.graph.atoms.is_empty())
+        {
+            let state = molecule.state.clone();
+            tokio::task::spawn_blocking(move || {
+                use crate::chemistry::{rings::RingError, smiles::write};
+                if state.graph.bonds.iter().any(|b| matches!(b.order, 0 | 7)) {
+                    return Ok(Some(String::new()));
+                }
+                match write::write(&state, write::Options::default()) {
+                    Ok(output) => Ok(Some(output.text)),
+                    Err(write::Error::Rings(RingError::UnresolvedOrdering)) => Ok(None),
+                    Err(error) => Err(error.to_string()),
+                }
+            })
+            .await
+            .map_err(|e| format!("SMILES serialization failed: {e}"))??
+        } else {
+            None
+        };
+        let smiles_export =
+            request.operation == "export" && request.format.as_deref() == Some("smiles");
         let local_mol_output = prepared_molecule.is_some()
             && request.operation == "export"
             && request.format.as_deref() == Some("mol");
@@ -472,6 +495,9 @@ impl PythonEngine {
                 );
             }
         }
+        if local_smiles.is_some() {
+            envelope.insert("local_smiles".into(), true.into());
+        }
         if local_mol_output {
             envelope.insert("local_mol_output".into(), true.into());
         }
@@ -519,6 +545,17 @@ impl PythonEngine {
                         "document".into(),
                         serde_json::to_value(document).map_err(|e| e.to_string())?,
                     );
+                }
+                if let Some(smiles) = local_smiles {
+                    let object = result.as_object_mut().ok_or("Invalid chemistry response")?;
+                    object
+                        .get_mut("analysis")
+                        .and_then(serde_json::Value::as_object_mut)
+                        .ok_or("Missing molecular analysis")?
+                        .insert("smiles".into(), smiles.clone().into());
+                    if smiles_export {
+                        object.insert("output".into(), smiles.into());
+                    }
                 }
                 if let Some((molecule, drawing, _)) = prepared_molecule {
                     let object = result.as_object_mut().ok_or("Invalid chemistry response")?;

@@ -994,3 +994,81 @@ async fn query_predicates_still_fail_chemistry_validation() -> TestResult {
     }
     Ok(())
 }
+
+#[tokio::test]
+async fn rust_smiles_export_preserves_analysis_and_complete_drawing() -> TestResult {
+    let local = LocalEngine::default();
+    let reference = PythonEngine::default();
+    for text in [
+        "CC(=O)Oc1ccccc1C(=O)O",
+        "O.[Na+].[Cl-]",
+        "F[C@](Cl)(Br)I",
+        "F/C=C/F",
+        "F/C=C\\F",
+        "C[C@H]1CC[C@@H](C)CC1.O",
+        "C[C@H](F)Cl.C[C@@H](F)Cl",
+        "[13CH3:0][NH3+]",
+        "N->[Cu]<-N",
+        "[Pt@SP1](Cl)(F)(Br)I",
+        "[P@TB5](F)(Cl)(Br)(I)N",
+        "[Co@OH23](F)(Cl)(Br)(I)(N)O",
+    ] {
+        let imported = match reference.execute(Request::import_smiles(text)).await {
+            Ok(response) => response,
+            Err(_) => {
+                let actual = local.execute(Request::import_smiles(text)).await;
+                assert!(
+                    actual.is_err(),
+                    "Unsupported native drawing was accepted: {text}"
+                );
+                continue;
+            }
+        };
+        let document = imported.document.context("Missing drawing")?;
+        let before = document.clone();
+        for (operation, format) in [("analyze", None), ("export", Some("smiles"))] {
+            let mut request = Request::molecule(operation, document.clone());
+            request.format = format.map(str::to_owned);
+            let actual = local
+                .execute(request.clone())
+                .await
+                .map_err(anyhow::Error::msg)?;
+            let expected = reference
+                .execute(request)
+                .await
+                .map_err(anyhow::Error::msg)?;
+            assert_response_matches(actual, expected)
+                .with_context(|| format!("{text}/{operation}"))?;
+        }
+        assert_eq!(document, before);
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn overlapping_smiles_exports_keep_each_analysis_with_its_snapshot() -> TestResult {
+    let reference = PythonEngine::default();
+    let local = LocalEngine::default();
+    let mut tasks = tokio::task::JoinSet::new();
+    for text in ["CCO", "F/C=C\\F", "F[C@](Cl)(Br)I", "c1ccccc1.O.[Na+]"] {
+        let document = reference
+            .execute(Request::import_smiles(text))
+            .await
+            .map_err(anyhow::Error::msg)?
+            .document
+            .context("Missing drawing")?;
+        let mut request = Request::molecule("export", document);
+        request.format = Some("smiles".into());
+        let expected = reference
+            .execute(request.clone())
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let engine = local.clone();
+        tasks.spawn(async move { (engine.execute(request).await, expected) });
+    }
+    while let Some(result) = tasks.join_next().await {
+        let (actual, expected) = result?;
+        assert_response_matches(actual.map_err(anyhow::Error::msg)?, expected)?;
+    }
+    Ok(())
+}

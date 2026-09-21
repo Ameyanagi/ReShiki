@@ -343,7 +343,7 @@ def to_document(mol, base=None, rewedge=False):
     }
 
 
-def analyze(mol, *, local_properties=False):
+def analyze(mol, *, local_properties=False, local_smiles=False):
     identifiers = not any(
         b.GetBondType() in (Chem.BondType.HYDROGEN, Chem.BondType.ONEANDAHALF)
         for b in mol.GetBonds()
@@ -352,7 +352,7 @@ def analyze(mol, *, local_properties=False):
         b.GetBondType() in (Chem.BondType.DATIVE, Chem.BondType.QUADRUPLE) for b in mol.GetBonds()
     )
     result = {
-        "smiles": Chem.MolToSmiles(mol) if identifiers else "",
+        "smiles": Chem.MolToSmiles(mol) if identifiers and not local_smiles else "",
         "inchi": Chem.MolToInchi(mol) if inchi_ok else "",
         "inchikey": Chem.MolToInchiKey(mol) if inchi_ok else "",
     }
@@ -1014,6 +1014,14 @@ def handle(request):
     local_pictures = request.get("local_pictures", False)
     if not isinstance(local_pictures, bool):
         raise ValueError("local_pictures must be a boolean")
+    local_smiles = request.get("local_smiles", False)
+    if not isinstance(local_smiles, bool):
+        raise ValueError("local_smiles must be a boolean")
+    if local_smiles and (
+        request.get("operation") not in ("import", "analyze", "export")
+        or request.get("prepared_molecule") is None
+    ):
+        raise ValueError("Local SMILES requires a prepared molecular operation")
     local_mol_output = request.get("local_mol_output", False)
     if not isinstance(local_mol_output, bool):
         raise ValueError("local_mol_output must be a boolean")
@@ -1040,7 +1048,7 @@ def handle(request):
     picture_exports = request.get("picture_exports", {}) if local_pictures else None
     if local_pictures and not isinstance(picture_exports, dict):
         raise ValueError("Prepared picture exports must be an object")
-    analyzer = partial(analyze, local_properties=local_properties)
+    analyzer = partial(analyze, local_properties=local_properties, local_smiles=local_smiles)
     operation = request["operation"]
     response = {"engine_version": rdBase.rdkitVersion, "warnings": []}
     if operation == "label_reaction":
@@ -1231,7 +1239,7 @@ def handle(request):
             if fmt == "mol":
                 response["output"] = None if local_mol_output else Chem.MolToMolBlock(mol)
             elif fmt == "smiles":
-                response["output"] = Chem.MolToSmiles(mol)
+                response["output"] = None if local_smiles else Chem.MolToSmiles(mol)
             elif fmt == "inchi":
                 response["output"] = Chem.MolToInchi(mol)
             elif fmt in ("cdxml", "cdx"):
