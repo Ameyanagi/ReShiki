@@ -970,6 +970,15 @@ def handle(request):
     local_pictures = request.get("local_pictures", False)
     if not isinstance(local_pictures, bool):
         raise ValueError("local_pictures must be a boolean")
+    local_mol_output = request.get("local_mol_output", False)
+    if not isinstance(local_mol_output, bool):
+        raise ValueError("local_mol_output must be a boolean")
+    if local_mol_output and (
+        request.get("operation") != "export"
+        or request.get("format") != "mol"
+        or request.get("prepared_molecule") is None
+    ):
+        raise ValueError("Local MOL output requires a prepared molecular export")
     picture_exports = request.get("picture_exports", {}) if local_pictures else None
     if local_pictures and not isinstance(picture_exports, dict):
         raise ValueError("Prepared picture exports must be an object")
@@ -1119,7 +1128,7 @@ def handle(request):
                     "This export cannot preserve the hydrogen, partial, dative or quadruple bonds in this drawing; use native or CDXML"
                 )
             if fmt == "mol":
-                response["output"] = Chem.MolToMolBlock(mol)
+                response["output"] = None if local_mol_output else Chem.MolToMolBlock(mol)
             elif fmt == "smiles":
                 response["output"] = Chem.MolToSmiles(mol)
             elif fmt == "inchi":

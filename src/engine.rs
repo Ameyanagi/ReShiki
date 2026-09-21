@@ -321,6 +321,9 @@ impl PythonEngine {
         } else {
             None
         };
+        let local_mol_output = prepared_molecule.is_some()
+            && request.operation == "export"
+            && request.format.as_deref() == Some("mol");
         let prepared_aromatic = if self.local_documents
             && request.operation == "aromatic"
             && let Some(document) = request.document.clone()
@@ -387,6 +390,9 @@ impl PythonEngine {
                     "prepared_drawing".into(),
                     serde_json::to_value(drawing.molecule()).map_err(|e| e.to_string())?,
                 );
+            }
+            if local_mol_output {
+                envelope.insert("local_mol_output".into(), true.into());
             }
             if let Some(draft) = &prepared_aromatic {
                 envelope.insert(
@@ -463,8 +469,16 @@ impl PythonEngine {
                             serde_json::to_value(document).map_err(|e| e.to_string())?,
                         );
                     }
-                    if let Some((_, drawing)) = prepared_molecule {
+                    if let Some((molecule, drawing)) = prepared_molecule {
                         let object = result.as_object_mut().ok_or("Invalid chemistry response")?;
+                        if local_mol_output {
+                            let output = crate::chemistry::molfile::write(
+                                &molecule,
+                                crate::chemistry::molfile::Options::default(),
+                            )
+                            .map_err(|e| e.to_string())?;
+                            object.insert("output".into(), output.into());
+                        }
                         let labels = object
                             .remove("drawing_labels")
                             .ok_or("Missing full stereochemical labels")?;

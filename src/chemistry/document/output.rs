@@ -131,40 +131,7 @@ pub fn for_drawing(molecule: &Molecule, base: &Document) -> Result<Drawing, Erro
             "Unsupported drawing stereochemistry or radical count",
         ));
     }
-    let cache = state
-        .graph
-        .refresh_implicit(&state.valences)
-        .map_err(Error::BondAssignment)?;
-    let ranks = if state.graph.atoms.iter().any(|a| a.aromatic)
-        || state.graph.bonds.iter().any(|b| b.aromatic)
-    {
-        Some(
-            ranking::rank_cached(
-                &state.graph,
-                &state.rings.atoms,
-                &state.metadata,
-                ranking::Options {
-                    fragment: true,
-                    ..Default::default()
-                },
-                &cache,
-            )
-            .map_err(Error::BondAssignment)?,
-        )
-    } else {
-        None
-    };
-    let kekule = kekulize::assign_cached(
-        &state.graph,
-        &state.rings.atoms,
-        &state.directions,
-        kekulize::Options {
-            ranks: ranks.as_deref(),
-            ..Default::default()
-        },
-        &state.valences,
-    )
-    .map_err(Error::BondAssignment)?;
+    let kekule = kekule(molecule)?;
     let wedged = wedging::wedge_molecule(
         &wedging::WedgeState {
             graph: kekule.assignment.graph,
@@ -189,6 +156,56 @@ pub fn for_drawing(molecule: &Molecule, base: &Document) -> Result<Drawing, Erro
     work.state.directions = wedged.directions;
     work.state.rings = wedged.rings;
     work.state.valences = kekule.cache;
+    reconstruct(work, molecule, base, &previous)
+}
+
+/// Shared canonical bond assignment for drawing reconstruction and MOL output.
+pub(crate) fn kekule(molecule: &Molecule) -> Result<kekulize::Attempt, Error> {
+    let state = &molecule.state;
+    let cache = state
+        .graph
+        .refresh_implicit(&state.valences)
+        .map_err(Error::BondAssignment)?;
+    let ranks = if state.graph.atoms.iter().any(|a| a.aromatic)
+        || state.graph.bonds.iter().any(|b| b.aromatic)
+    {
+        Some(
+            ranking::rank_cached(
+                &state.graph,
+                &state.rings.atoms,
+                &state.metadata,
+                ranking::Options {
+                    fragment: true,
+                    ..Default::default()
+                },
+                &cache,
+            )
+            .map_err(Error::BondAssignment)?,
+        )
+    } else {
+        None
+    };
+    kekulize::assign_cached(
+        &state.graph,
+        &state.rings.atoms,
+        &state.directions,
+        kekulize::Options {
+            ranks: ranks.as_deref(),
+            ..Default::default()
+        },
+        &state.valences,
+    )
+    .map_err(Error::BondAssignment)
+}
+
+fn reconstruct(
+    mut work: Molecule,
+    molecule: &Molecule,
+    base: &Document,
+    previous: &HashMap<u64, &crate::document::Atom>,
+) -> Result<Drawing, Error> {
+    let state = &molecule.state;
+    let (n, e) = (state.graph.atoms.len(), state.graph.bonds.len());
     for properties in &mut work.state.properties.atoms {
         properties.cip_code = None;
     }

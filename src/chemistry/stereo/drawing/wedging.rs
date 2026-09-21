@@ -2,6 +2,8 @@
 //! Copyright (C) 2023 Greg Landrum and other RDKit contributors.
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
 mod atrop;
+mod molfile;
+pub(crate) use molfile::file_bonds;
 #[cfg(test)]
 mod tests;
 use super::{Point3, at};

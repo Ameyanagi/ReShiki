@@ -14,6 +14,7 @@ use std::collections::{HashMap, HashSet};
 mod aromatic;
 pub use aromatic::{Aromatic, Identity, aromatic_display};
 mod output;
+pub(crate) use output::kekule;
 pub use output::{BondLabel, Drawing, Labels, for_drawing};
 
 #[cfg(test)]

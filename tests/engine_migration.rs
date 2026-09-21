@@ -345,6 +345,87 @@ async fn ambiguous_ring_pruning_keeps_the_complete_reference_analysis() -> TestR
 }
 
 #[tokio::test]
+async fn rust_mol_files_roundtrip_stereo_isotopes_charges_and_maps() -> TestResult {
+    let local = LocalEngine::default();
+    let reference = PythonEngine::default();
+    for text in [
+        "CCO",
+        "[13CH3:90][NH3+]",
+        "[2H]O[3H]",
+        "[Na+].[Cl-]",
+        "[CH3]",
+        "N[C@H](C)C(=O)O",
+        "N[C@@H](C)C(=O)O",
+        "F/C=C/Cl",
+        "F/C=C\\Cl",
+        "F[C@](Cl)(Br)I",
+        "c1ccc2[nH]ccc2c1",
+        "N->[Cu+2]",
+    ] {
+        let original = reference
+            .execute(Request::import_smiles(text))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let analysis = original.analysis.context("Missing starting identity")?;
+        let mut request =
+            Request::molecule("export", original.document.context("Missing drawing")?);
+        request.format = Some("mol".into());
+        let expected = reference
+            .execute(request.clone())
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let actual = local.execute(request).await.map_err(anyhow::Error::msg)?;
+        assert_response_matches(actual.clone(), expected)?;
+        let output = actual.output.context("Missing MOL output")?;
+        assert_eq!(output.contains("V3000"), text.contains("->"));
+        let back = reference
+            .execute(Request::import("mol", &output))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let identity = back.analysis.context("Missing reimported identity")?;
+        assert_eq!(identity.smiles, analysis.smiles, "{text}");
+        assert_eq!(identity.inchikey, analysis.inchikey, "{text}");
+        assert_eq!(identity.formula, analysis.formula, "{text}");
+        assert_eq!(identity.exact_mass, analysis.exact_mass, "{text}");
+        assert_eq!(
+            identity.unpaired_electrons, analysis.unpaired_electrons,
+            "{text}"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn mol_dummy_atoms_retain_the_reference_query_import_rejection() -> TestResult {
+    let local = LocalEngine::default();
+    let reference = PythonEngine::default();
+    let document = reference
+        .execute(Request::import_smiles("*CC"))
+        .await
+        .map_err(anyhow::Error::msg)?
+        .document
+        .context("Missing dummy drawing")?;
+    let mut request = Request::molecule("export", document);
+    request.format = Some("mol".into());
+    let expected = reference
+        .execute(request.clone())
+        .await
+        .map_err(anyhow::Error::msg)?;
+    let actual = local.execute(request).await.map_err(anyhow::Error::msg)?;
+    assert_response_matches(actual.clone(), expected)?;
+    let text = actual.output.context("Missing dummy MOL output")?;
+    // The reference writes a generic R atom, which its reader treats as a
+    // query. The drawing model currently rejects such queries on import.
+    for result in [
+        local.execute(Request::import("mol", &text)).await,
+        reference.execute(Request::import("mol", &text)).await,
+    ] {
+        assert!(result.is_err_and(|error| error.contains("Query atoms are not supported")));
+    }
+    Ok(())
+}
+
+#[tokio::test]
 async fn native_drawings_match_the_original_python_importer() -> TestResult {
     let local = LocalEngine::default();
     let reference = PythonEngine::default();

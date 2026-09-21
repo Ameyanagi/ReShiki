@@ -15,6 +15,26 @@ from tests.perception_reference import snapshot
 
 
 class PreparedMoleculeTests(unittest.TestCase):
+    def test_prepared_mol_export_skips_native_writer(self):
+        for text in ("c1ccccc1", "C[C@H](N)C(=O)O", "[13CH3:90][NH3+]", "N->[Cu+2]"):
+            doc = worker.handle(dict(protocol=1, operation="import", format="smiles", text=text))[
+                "document"
+            ]
+            request = dict(protocol=1, operation="export", document=doc, format="mol")
+            expected = worker.handle(request)
+            expected["output"] = None
+            request["prepared_molecule"] = json.loads(json.dumps(prepare(doc)))
+            request["local_mol_output"] = True
+            with patch.object(
+                Chem, "MolToMolBlock", side_effect=AssertionError("Native MOL writer")
+            ):
+                self.assertEqual(worker.handle(request), expected)
+                for value in ("true", 1, None):
+                    with self.assertRaisesRegex(ValueError, "must be a boolean"):
+                        worker.handle({**request, "local_mol_output": value})
+                with self.assertRaisesRegex(ValueError, "requires a prepared"):
+                    worker.handle({**request, "prepared_molecule": None})
+
     def test_aromatic_transport_only_checks_identifiers_and_analyzes(self):
         for text in ("c1ccccc1", "c1cc[nH]c1", "c1ccc2ccccc2c1.CCO", "C[C@H](O)c1ccccc1"):
             doc = worker.handle(dict(protocol=1, operation="import", format="smiles", text=text))[

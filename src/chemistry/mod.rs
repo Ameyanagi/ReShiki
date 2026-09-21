@@ -13,6 +13,7 @@ pub mod document;
 pub mod electronic;
 pub mod graph;
 pub mod kekulize;
+pub mod molfile;
 pub mod normalize;
 pub mod ranking;
 pub mod rings;
