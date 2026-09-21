@@ -1,4 +1,4 @@
-ReShiki includes atomic data and adapted molecular property, valence, ring and descriptor calculations
+ReShiki includes atomic data and adapted sanitization, molecular property, valence, ring and descriptor calculations
 from RDKit 2026.03.6, commit 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985:
 https://github.com/rdkit/rdkit/tree/Release_2026_03_6
 
@@ -11,10 +11,13 @@ Copyright (C) 2001-2023 Greg Landrum and other RDKit contributors.
 Code/GraphMol/Aromaticity.cpp (default aromaticity model)
 Copyright (C) 2003-2022 Greg Landrum and other RDKit contributors.
 
+Code/GraphMol/Kekulize.cpp (bond assignment and iterative backtracking)
+Copyright (C) 2001-2021 Greg Landrum and other RDKit contributors.
+
 Code/GraphMol/PeriodicTable.h (relative electronegativity)
 Copyright (C) 2001-2011 Rational Discovery LLC.
 
-Code/GraphMol/catch_graphmol.cpp (aromaticity regression examples)
+Code/GraphMol/catch_graphmol.cpp (aromaticity and Kekulé regression examples)
 Copyright (C) 2018-2026 Greg Landrum and other RDKit contributors.
 
 Code/GraphMol/MolProps.cpp

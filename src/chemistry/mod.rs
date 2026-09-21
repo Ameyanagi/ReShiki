@@ -9,6 +9,7 @@ pub mod aromaticity;
 mod atomic_data;
 pub mod descriptors;
 pub mod graph;
+pub mod kekulize;
 pub mod normalize;
 pub mod rings;
 
