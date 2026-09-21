@@ -43,6 +43,15 @@ fn at<T>(items: &[T], index: usize) -> Result<&T, Error> {
 /// conventions. V3000 is automatic for dative bonds, large graphs/coordinates.
 /// Queries, enhanced stereo groups and non-tetrahedral tags are not drawing data.
 pub fn write(molecule: &Molecule, options: Options) -> Result<String, Error> {
+    write_part(molecule, options, false)
+}
+
+/// Reaction CTABs retain aromatic bond types instead of assigning Kekulé bonds.
+pub(crate) fn reaction_ctab(molecule: &Molecule) -> Result<String, Error> {
+    write_part(molecule, Options { force_v3000: true }, true)
+}
+
+fn write_part(molecule: &Molecule, options: Options, reaction: bool) -> Result<String, Error> {
     let source = &molecule.state;
     source.graph.validate().map_err(invalid)?;
     source.metadata.validate(&source.graph).map_err(invalid)?;
@@ -57,6 +66,8 @@ pub fn write(molecule: &Molecule, options: Options) -> Result<String, Error> {
                 .any(|v| !v.is_finite() || v.abs() > 1e100)
         })
         || source.properties.atoms.len() != n
+        || source.valences.len() != n
+        || source.directions.len() != e
         || source.properties.bond_codes.len() != e
         || source.hybridizations.len() != n
         || source.conjugated.len() != e
@@ -75,14 +86,23 @@ pub fn write(molecule: &Molecule, options: Options) -> Result<String, Error> {
     {
         return Err(Error::UnsupportedBond);
     }
-    let kekule = document::kekule(molecule)?;
-    let graph = &kekule.assignment.graph;
-    let valences = &kekule.cache;
+    let kekule = (!reaction)
+        .then(|| document::kekule(molecule))
+        .transpose()?;
+    let (graph, valences, directions) = if let Some(kekule) = &kekule {
+        (
+            &kekule.assignment.graph,
+            &kekule.cache,
+            &kekule.assignment.directions,
+        )
+    } else {
+        (&source.graph, &source.valences, &source.directions)
+    };
     let mut bonds = wedging::file_bonds(
         &wedging::WedgeState {
             graph: graph.clone(),
             metadata: source.metadata.clone(),
-            directions: kekule.assignment.directions,
+            directions: directions.clone(),
             rings: source.rings.clone(),
         },
         &wedging::WedgeProperties {
@@ -102,7 +122,7 @@ pub fn write(molecule: &Molecule, options: Options) -> Result<String, Error> {
     )
     .map_err(Error::Stereo)?;
     for (bond, original) in bonds.iter_mut().zip(&source.graph.bonds) {
-        if original.aromatic && bond.code == 3 {
+        if !reaction && original.aromatic && bond.code == 3 {
             bond.code = 0;
         }
     }
@@ -123,9 +143,16 @@ pub fn write(molecule: &Molecule, options: Options) -> Result<String, Error> {
                 .iter()
                 .any(|&v| v >= 100000. || v <= -10000.)
         });
-    let mut output = String::from("\n     RDKit          2D\n\n");
+    let mut output = if reaction {
+        String::new()
+    } else {
+        String::from("\n     RDKit          2D\n\n")
+    };
     if v3000 {
-        output.push_str("  0  0  0  0  0  0  0  0  0  0999 V3000\nM  V30 BEGIN CTAB\n");
+        if !reaction {
+            output.push_str("  0  0  0  0  0  0  0  0  0  0999 V3000\n");
+        }
+        output.push_str("M  V30 BEGIN CTAB\n");
         writeln!(output, "M  V30 COUNTS {n} {e} 0 0 0\nM  V30 BEGIN ATOM")?;
     } else {
         writeln!(output, "{n:3}{e:3}  0  0  0  0  0  0  0  0999 V2000")?;
@@ -206,7 +233,9 @@ pub fn write(molecule: &Molecule, options: Options) -> Result<String, Error> {
     } else {
         properties(&mut output, graph, valences, &degrees)?;
     }
-    output.push_str("M  END\n");
+    if !reaction {
+        output.push_str("M  END\n");
+    }
     Ok(output)
 }
 

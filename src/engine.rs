@@ -188,6 +188,35 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
         if request.protocol != 1 {
             return Err("Unsupported protocol version".into());
         }
+        if request.operation == "export" && request.format.as_deref() == Some("rxn") {
+            use crate::chemistry::{document, reaction, rings::RingError, sanitize};
+            let document = request.document.clone().ok_or("Missing reaction drawing")?;
+            let selected = request.selected_ids.clone();
+            let output = tokio::task::spawn_blocking(move || {
+                reaction::write_rxn(&document, selected.as_deref())
+            })
+            .await
+            .map_err(|e| format!("Reaction export failed: {e}"))?;
+            match output {
+                Ok(output) => {
+                    return Ok(Response {
+                        document: None,
+                        analysis: None,
+                        output: Some(output),
+                        engine_version: crate::chemistry::RDKIT_VERSION.into(),
+                        warnings: vec![reaction::EXPORT_WARNING.into()],
+                    });
+                }
+                // Retain only the existing unresolved ring-order fallback.
+                Err(reaction::Error::Preparation(document::Error::Sanitization(
+                    sanitize::Error {
+                        cause: sanitize::Cause::Rings(RingError::UnresolvedOrdering),
+                        ..
+                    },
+                ))) => (),
+                Err(error) => return Err(error.to_string()),
+            }
+        }
         let binary = request.format.as_deref() == Some("cdx");
         let export_binary = binary && request.operation == "export";
         if binary && request.operation == "import" {

@@ -1,7 +1,7 @@
 //! Molecular preparation, drawing reconstruction and properties in safe Rust.
 //!
-//! Migrated operations use local sanitization and stereo perception. Parsers,
-//! full CIP labels and identifiers still use the backend. Never use cached
+//! Migrated operations use local sanitization and stereo perception. Remaining
+//! imports, full CIP labels and identifiers still use the backend. Never use cached
 //! drawing labels: they may predate the latest edit.
 //! Mass/formula semantics adapted from RDKit MolProps.cpp and Atom::getMass.
 //! Copyright (C) 2001-2024 Greg Landrum and other RDKit contributors.
@@ -18,6 +18,7 @@ pub mod kekulize;
 pub mod molfile;
 pub mod normalize;
 pub mod ranking;
+pub mod reaction;
 pub mod rings;
 pub mod sanitize;
 pub mod smarts;
