@@ -360,20 +360,33 @@ def analyze(mol, *, local_properties=False):
         "inchikey": Chem.MolToInchiKey(mol) if inchi_ok else "",
     }
     if local_properties:
-        # Facts come from the sanitized molecule, never cached drawing labels.
-        # Keep the original descriptor path as an independent migration oracle.
+        # Supply the sanitized graph, not toolkit-computed H counts. Rust owns
+        # the final valence/H calculation. Keep the original path as the oracle.
         result["property_input"] = {
             "rdkit_version": rdBase.rdkitVersion,
-            "atoms": [
-                {
-                    "atomic_number": a.GetAtomicNum(),
-                    "isotope": a.GetIsotope(),
-                    "charge": a.GetFormalCharge(),
-                    "hydrogens": a.GetTotalNumHs(),
-                    "radical_electrons": a.GetNumRadicalElectrons(),
-                }
-                for a in mol.GetAtoms()
-            ],
+            "graph": {
+                "atoms": [
+                    {
+                        "atomic_number": a.GetAtomicNum(),
+                        "isotope": a.GetIsotope(),
+                        "charge": a.GetFormalCharge(),
+                        "explicit_hydrogens": a.GetNumExplicitHs(),
+                        "no_implicit": a.GetNoImplicit(),
+                        "aromatic": a.GetIsAromatic(),
+                        "radical_electrons": a.GetNumRadicalElectrons(),
+                    }
+                    for a in mol.GetAtoms()
+                ],
+                "bonds": [
+                    {
+                        "a": b.GetBeginAtomIdx(),
+                        "b": b.GetEndAtomIdx(),
+                        "order": {v: k for k, v in ORDERS.items()}[b.GetBondType()],
+                        "aromatic": b.GetIsAromatic(),
+                    }
+                    for b in mol.GetBonds()
+                ],
+            },
         }
     else:
         result.update(
@@ -495,7 +508,7 @@ def cdxml_text_reader(root):
     return read
 
 
-def import_cdxml(text):
+def import_cdxml(text, *, local_pictures=False):
     root = ET.fromstring(text)
     # These predicates and reaction changes have no equivalent in the drawing
     # model yet. A topology parser may ignore them, so reject them before it runs.
@@ -649,7 +662,9 @@ def import_cdxml(text):
     read_marks(root, mol, base, scale, object_map)
     read_labels(root, mol, base, scale, read_text, object_map)
     aromatic.remove_owned_circles(root, mol, base, scale)
-    base["graphics"] = read_graphics(root, scale, next_id, object_map)
+    base["graphics"] = read_graphics(
+        root, scale, next_id, object_map, local_pictures=local_pictures
+    )
     # A chemical fragment may also contain nonchemical curves.
     for fragment, atoms in list(object_map.items()):
         if fragment.tag == "fragment":
@@ -669,7 +684,12 @@ def import_cdxml(text):
 
 
 def export_cdxml(
-    doc, text_layout=None, graphic_paths=None, graphic_parts=None, atom_indicators=None
+    doc,
+    text_layout=None,
+    graphic_paths=None,
+    graphic_parts=None,
+    atom_indicators=None,
+    picture_exports=None,
 ):
     # Coordinates and styles belong to the editor. Chemistry is checked first.
     mol = from_document(doc)
@@ -920,6 +940,7 @@ def export_cdxml(
         color_id,
         next_id,
         graphic_parts,
+        picture_exports,
     )
     # Leave one common layer for the molecule, arrows and text. The graphic
     # layers above and below it retain the editor's front/back order.
@@ -941,6 +962,12 @@ def handle(request):
     local_properties = request.get("local_properties", False)
     if not isinstance(local_properties, bool):
         raise ValueError("local_properties must be a boolean")
+    local_pictures = request.get("local_pictures", False)
+    if not isinstance(local_pictures, bool):
+        raise ValueError("local_pictures must be a boolean")
+    picture_exports = request.get("picture_exports", {}) if local_pictures else None
+    if local_pictures and not isinstance(picture_exports, dict):
+        raise ValueError("Prepared picture exports must be an object")
     analyzer = partial(analyze, local_properties=local_properties)
     operation = request["operation"]
     response = {"engine_version": rdBase.rdkitVersion, "warnings": []}
@@ -989,9 +1016,11 @@ def handle(request):
         elif fmt == "cdx":
             if len(text) > (CDX_LIMIT + 2) // 3 * 4:
                 raise ValueError("Drawing exceeds the 16 MB structure limit")
-            mol, base = import_cdxml(from_cdx(base64.b64decode(text, validate=True)))
+            mol, base = import_cdxml(
+                from_cdx(base64.b64decode(text, validate=True)), local_pictures=local_pictures
+            )
         elif fmt == "cdxml":
-            mol, base = import_cdxml(text)
+            mol, base = import_cdxml(text, local_pictures=local_pictures)
         else:
             raise ValueError("Unsupported import format")
         if mol is None:
@@ -1012,6 +1041,7 @@ def handle(request):
                     request.get("graphic_paths"),
                     request.get("graphic_parts"),
                     request.get("atom_indicators"),
+                    picture_exports,
                 )
                 if request.get("format") == "cdx":
                     output = base64.b64encode(to_cdx(output)).decode("ascii")
@@ -1063,6 +1093,7 @@ def handle(request):
                     request.get("graphic_paths"),
                     request.get("graphic_parts"),
                     request.get("atom_indicators"),
+                    picture_exports,
                 )
                 response["output"] = (
                     base64.b64encode(to_cdx(output)).decode("ascii") if fmt == "cdx" else output

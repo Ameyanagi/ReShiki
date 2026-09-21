@@ -3,13 +3,21 @@ name = "reshiki-engine"
 version = "0.1.0"
 description = "Local chemistry worker for ReShiki"
 requires-python = ">=3.11,<3.14"
-dependencies = ["rdkit>=2025.9,<2027", "pillow>=12.3,<13"]
+dependencies = ["rdkit>=2025.9,<2027"]
 
 [dependency-groups]
-dev = ["ruff>=0.16.8", "ty>=0.0.82"]
+dev = ["ruff>=0.16.8", "ty>=0.0.82", "pillow>=12.3,<13"]
 
 [tool.uv]
 package = false
+required-version = ">=0.12.3"
+# RDKit's optional bitmap drawing helpers use Pillow; ReShiki uses Rust instead.
+# Scope this to the tested release. Pillow remains in dev for the image oracle.
+exclude-dependencies = [
+  { package = { name = "rdkit", version = "2026.3.6" }, dependencies = [
+    "pillow",
+  ] },
+]
 required-environments = [
   "sys_platform == 'darwin' and platform_machine == 'arm64'",
   # Windows ARM runs the same x64 chemistry worker through Windows 11 emulation.

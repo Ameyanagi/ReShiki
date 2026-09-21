@@ -3246,6 +3246,7 @@ dependencies = [
  "serde_json",
  "svg2pdf",
  "tempfile",
+ "tiff",
  "tokio",
  "ttf-parser",
 ]

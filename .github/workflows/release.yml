@@ -87,6 +87,8 @@ jobs:
           "RESHIKI_ISCC=$compilerDir\ISCC.exe" >> $env:GITHUB_ENV
       - name: Test chemistry and packaging on this platform
         run: uv run --locked python -m unittest discover -s tests -p 'test_*.py'
+      - name: Verify production dependencies
+        run: uv run --locked python scripts/check_runtime_dependencies.py
       - name: Build and test extracted portable archive
         env:
           MACOSX_DEPLOYMENT_TARGET: "14.0"

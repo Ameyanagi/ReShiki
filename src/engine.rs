@@ -164,6 +164,7 @@ impl Default for LocalEngine<PythonEngine> {
         Self {
             chemistry: PythonEngine {
                 local_properties: true,
+                local_pictures: true,
                 ..PythonEngine::default()
             },
         }
@@ -236,6 +237,7 @@ pub struct PythonEngine {
     worker: Arc<Mutex<Option<Worker>>>,
     // Default false keeps an independent reference backend for differential tests.
     local_properties: bool,
+    local_pictures: bool,
 }
 impl PythonEngine {
     async fn spawn() -> Result<Worker, String> {
@@ -289,6 +291,21 @@ impl PythonEngine {
         if let Some(doc) = &request.document {
             doc.validate()?;
         }
+        let picture_exports = if self.local_pictures
+            && request.operation == "export"
+            && matches!(request.format.as_deref(), Some("cdxml" | "cdx"))
+            && let Some(document) = request.document.clone()
+        {
+            Some(
+                tokio::task::spawn_blocking(move || {
+                    crate::pictures::exchange::prepare_exports(&document)
+                })
+                .await
+                .map_err(|e| format!("Picture preparation failed: {e}"))??,
+            )
+        } else {
+            None
+        };
         let mut slot = self.worker.lock().await;
         let starting = slot.is_none();
         if starting {
@@ -311,6 +328,15 @@ impl PythonEngine {
             envelope.insert("id".into(), id.into());
             if self.local_properties {
                 envelope.insert("local_properties".into(), true.into());
+            }
+            if self.local_pictures {
+                envelope.insert("local_pictures".into(), true.into());
+                if let Some(exports) = picture_exports {
+                    envelope.insert(
+                        "picture_exports".into(),
+                        serde_json::to_value(exports).map_err(|e| e.to_string())?,
+                    );
+                }
             }
             let mut bytes = serde_json::to_vec(&message).map_err(|e| e.to_string())?;
             bytes.push(b'\n');
@@ -346,8 +372,20 @@ impl PythonEngine {
                 .get("result")
                 .ok_or("Missing chemistry result")?
                 .clone();
-            if self.local_properties {
-                crate::chemistry::complete_analysis(&mut result)?;
+            if self.local_properties || self.local_pictures {
+                let (properties, pictures) = (self.local_properties, self.local_pictures);
+                result = tokio::task::spawn_blocking(move || {
+                    if properties {
+                        crate::chemistry::complete_analysis(&mut result)?;
+                    }
+                    if pictures {
+                        crate::pictures::exchange::complete_imports(result)
+                    } else {
+                        Ok(result)
+                    }
+                })
+                .await
+                .map_err(|e| format!("Local chemistry completion failed: {e}"))??;
             }
             let response: Response = serde_json::from_value(result).map_err(|e| e.to_string())?;
             if let Some(doc) = &response.document {

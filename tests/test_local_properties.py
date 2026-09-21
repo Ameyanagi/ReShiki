@@ -1,4 +1,4 @@
-"""The migrated worker supplies checked atom facts without calculating descriptors."""
+"""The migrated worker supplies a sanitized graph without derived H or descriptors."""
 
 import copy
 import unittest
@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from rdkit import Chem, rdBase
 
-from engine.worker import handle
+from engine.worker import analyze, handle
 
 
 def imported(smiles):
@@ -39,7 +39,8 @@ class LocalPropertyTests(unittest.TestCase):
                     self.assertNotIn(key, analysis)
                 facts = analysis["property_input"]
                 self.assertEqual(facts["rdkit_version"], rdBase.rdkitVersion)
-                self.assertEqual(len(facts["atoms"]), len(result["document"]["atoms"]))
+                self.assertEqual(len(facts["graph"]["atoms"]), len(result["document"]["atoms"]))
+                self.assertTrue(all("hydrogens" not in a for a in facts["graph"]["atoms"]))
                 self.assertIn("logp", analysis)
 
     def test_hydrogens_come_from_current_graph_not_cached_labels(self):
@@ -48,8 +49,9 @@ class LocalPropertyTests(unittest.TestCase):
             atom["label_h"] = 99
         doc["bonds"][0]["order"] = 2
         result = handle(dict(protocol=1, operation="analyze", document=doc, local_properties=True))
-        atoms = result["analysis"]["property_input"]["atoms"]
-        self.assertEqual([a["hydrogens"] for a in atoms], [2, 2])
+        graph = result["analysis"]["property_input"]["graph"]
+        self.assertEqual([a["explicit_hydrogens"] for a in graph["atoms"]], [0, 0])
+        self.assertEqual(graph["bonds"], [dict(a=0, b=1, order=2, aromatic=False)])
         self.assertEqual([a["label_h"] for a in doc["atoms"]], [99, 99])
 
     def test_graph_hydrogens_and_isotopes_are_not_counted_as_attached_hydrogens(self):
@@ -63,9 +65,19 @@ class LocalPropertyTests(unittest.TestCase):
                 local_properties=True,
             )
         )
-        atoms = result["analysis"]["property_input"]["atoms"]
-        self.assertEqual(sum(a["hydrogens"] for a in atoms), 0)
+        atoms = result["analysis"]["property_input"]["graph"]["atoms"]
+        self.assertEqual(sum(a["explicit_hydrogens"] for a in atoms), 0)
         self.assertEqual(sorted(a["isotope"] for a in atoms), [0, 2, 3])
+
+    def test_local_analysis_never_reads_rdkit_hydrogen_totals(self):
+        mol = Chem.MolFromSmiles("[13CH3][NH2+]Cc1cc[nH]c1")
+        with (
+            patch.object(Chem.Atom, "GetTotalNumHs", side_effect=AssertionError),
+            patch.object(Chem.Atom, "GetNumImplicitHs", side_effect=AssertionError),
+        ):
+            result = analyze(mol, local_properties=True)
+        self.assertTrue(result["property_input"]["graph"]["bonds"])
+        self.assertNotIn("formula", result)
 
     def test_reference_mode_and_invalid_capabilities(self):
         request = dict(protocol=1, operation="import", format="smiles", text="CCO")
