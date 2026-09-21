@@ -1,11 +1,12 @@
-//! Properties calculated in Rust from sanitized atom facts supplied by the backend.
+//! Properties and valence calculated in Rust from the backend's sanitized graph.
 //!
-//! Hydrogen/valence assignment remains the backend's responsibility. Never feed
-//! cached drawing labels into this API: they may predate the latest graph edit.
+//! Aromaticity, resonance cleanup and other sanitization still belong to the
+//! backend. Never use cached drawing labels: they may predate the latest edit.
 //! Mass/formula semantics adapted from RDKit MolProps.cpp and Atom::getMass.
 //! Copyright (C) 2001-2024 Greg Landrum and other RDKit contributors.
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
 mod atomic_data;
+pub mod graph;
 
 pub use atomic_data::RDKIT_VERSION;
 use atomic_data::{ELECTRON_MASS, ELEMENTS, ISOTOPES};
@@ -35,6 +36,8 @@ struct Element {
     symbol: &'static str,
     average: f64,
     exact: f64,
+    outer_electrons: i32,
+    valences: &'static [i32],
 }
 
 /// RDKit's default formula merges isotopes; masses retain their isotope values.
@@ -127,7 +130,7 @@ pub(crate) fn complete_analysis(result: &mut serde_json::Value) -> Result<(), St
     #[serde(deny_unknown_fields)]
     struct Input {
         rdkit_version: String,
-        atoms: Vec<AtomFacts>,
+        graph: graph::Graph,
     }
     let input: Input = serde_json::from_value(
         analysis
@@ -142,7 +145,7 @@ pub(crate) fn complete_analysis(result: &mut serde_json::Value) -> Result<(), St
             input.rdkit_version
         ));
     }
-    let derived = serde_json::to_value(properties(&input.atoms)?)
+    let derived = serde_json::to_value(properties(&input.graph.atom_facts()?)?)
         .map_err(|error| format!("Invalid molecular properties: {error}"))?;
     let fields = derived.as_object().ok_or("Invalid molecular properties")?;
     let analysis = analysis
@@ -160,10 +163,11 @@ mod tests {
 
     #[test]
     fn worker_completion_is_atomic_and_requires_matching_data() -> Result<(), String> {
-        let input = json!({"rdkit_version": RDKIT_VERSION, "atoms": [{
+        let input = json!({"rdkit_version": RDKIT_VERSION, "graph": {"atoms": [{
             "atomic_number": 6, "isotope": 0, "charge": 0,
-            "hydrogens": 4, "radical_electrons": 0,
-        }]});
+            "explicit_hydrogens": 0, "radical_electrons": 0,
+            "no_implicit": false, "aromatic": false,
+        }], "bonds": []}});
         let mut response = json!({"analysis": {"smiles": "C", "property_input": input}});
         complete_analysis(&mut response)?;
         assert_eq!(response["analysis"]["formula"], "CH4");
@@ -172,12 +176,19 @@ mod tests {
         assert!(response["analysis"].get("property_input").is_none());
         for bad_input in [
             json!(null),
-            json!({"rdkit_version": "different", "atoms": []}),
-            json!({"rdkit_version": RDKIT_VERSION, "atoms": [{"atomic_number": 6}]}),
-            json!({"rdkit_version": RDKIT_VERSION, "atoms": [{
+            json!({"rdkit_version": "different", "graph": {"atoms": [], "bonds": []}}),
+            json!({"rdkit_version": RDKIT_VERSION, "graph": {"atoms": [{"atomic_number": 6}]}}),
+            json!({"rdkit_version": RDKIT_VERSION, "graph": {"atoms": [{
                 "atomic_number": 119, "isotope": 0, "charge": 0,
-                "hydrogens": 0, "radical_electrons": 0,
-            }]}),
+                "explicit_hydrogens": 0, "radical_electrons": 0,
+                "no_implicit": false, "aromatic": false,
+            }], "bonds": []}}),
+            // Reject stale transport payloads and impossible graph valences.
+            json!({"rdkit_version": RDKIT_VERSION, "atoms": []}),
+            json!({"rdkit_version": RDKIT_VERSION, "graph": {"atoms": [{
+                "atomic_number": 6, "explicit_hydrogens": 5, "isotope": 0, "charge": 0,
+                "radical_electrons": 0, "no_implicit": false, "aromatic": false,
+            }], "bonds": []}}),
         ] {
             let mut bad = json!({"analysis": {"smiles": "C", "property_input": bad_input}});
             let original = bad.clone();

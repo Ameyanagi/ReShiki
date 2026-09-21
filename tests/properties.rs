@@ -1,5 +1,5 @@
 //! Every supported element/isotope and representative graphs against RDKit.
-use reshiki::chemistry::{AtomFacts, Properties, RDKIT_VERSION, properties};
+use reshiki::chemistry::{AtomFacts, Properties, RDKIT_VERSION, graph::Graph, properties};
 use serde::Deserialize;
 use std::{error::Error, path::Path, process::Command};
 
@@ -14,6 +14,7 @@ struct Reference {
 struct Case {
     name: String,
     atoms: Vec<AtomFacts>,
+    graph: Graph,
     expected: Properties,
 }
 
@@ -41,24 +42,28 @@ fn agrees_with_rdkit_for_every_isotope_templates_and_hydrogen_representations() 
     );
     assert!(reference.cases.len() > 3500);
     for case in reference.cases {
-        let actual = properties(&case.atoms)?;
-        assert_eq!(actual.formula, case.expected.formula, "{}", case.name);
-        assert_eq!(
-            actual.unpaired_electrons, case.expected.unpaired_electrons,
-            "{}",
-            case.name
-        );
-        // Native wheels may fuse multiply-adds (e.g. the final H contribution).
-        // Permit only floating-point noise, never formula/isotope/count changes.
-        for (value, expected) in [
-            (actual.mass, case.expected.mass),
-            (actual.exact_mass, case.expected.exact_mass),
+        for actual in [
+            properties(&case.atoms)?,
+            properties(&case.graph.atom_facts()?)?,
         ] {
-            assert!(
-                (value - expected).abs() <= expected.abs().max(1.) * 1e-12,
-                "{}: {value:?} != {expected:?}",
+            assert_eq!(actual.formula, case.expected.formula, "{}", case.name);
+            assert_eq!(
+                actual.unpaired_electrons, case.expected.unpaired_electrons,
+                "{}",
                 case.name
             );
+            // Native wheels may fuse multiply-adds (e.g. the final H contribution).
+            // Permit only floating-point noise, never formula/isotope/count changes.
+            for (value, expected) in [
+                (actual.mass, case.expected.mass),
+                (actual.exact_mass, case.expected.exact_mass),
+            ] {
+                assert!(
+                    (value - expected).abs() <= expected.abs().max(1.) * 1e-12,
+                    "{}: {value:?} != {expected:?}",
+                    case.name
+                );
+            }
         }
     }
     Ok(())

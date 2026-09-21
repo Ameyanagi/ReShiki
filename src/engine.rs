@@ -372,15 +372,20 @@ impl PythonEngine {
                 .get("result")
                 .ok_or("Missing chemistry result")?
                 .clone();
-            if self.local_properties {
-                crate::chemistry::complete_analysis(&mut result)?;
-            }
-            if self.local_pictures {
+            if self.local_properties || self.local_pictures {
+                let (properties, pictures) = (self.local_properties, self.local_pictures);
                 result = tokio::task::spawn_blocking(move || {
-                    crate::pictures::exchange::complete_imports(result)
+                    if properties {
+                        crate::chemistry::complete_analysis(&mut result)?;
+                    }
+                    if pictures {
+                        crate::pictures::exchange::complete_imports(result)
+                    } else {
+                        Ok(result)
+                    }
                 })
                 .await
-                .map_err(|e| format!("Picture import failed: {e}"))??;
+                .map_err(|e| format!("Local chemistry completion failed: {e}"))??;
             }
             let response: Response = serde_json::from_value(result).map_err(|e| e.to_string())?;
             if let Some(doc) = &response.document {

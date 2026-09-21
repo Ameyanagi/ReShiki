@@ -360,20 +360,33 @@ def analyze(mol, *, local_properties=False):
         "inchikey": Chem.MolToInchiKey(mol) if inchi_ok else "",
     }
     if local_properties:
-        # Facts come from the sanitized molecule, never cached drawing labels.
-        # Keep the original descriptor path as an independent migration oracle.
+        # Supply the sanitized graph, not toolkit-computed H counts. Rust owns
+        # the final valence/H calculation. Keep the original path as the oracle.
         result["property_input"] = {
             "rdkit_version": rdBase.rdkitVersion,
-            "atoms": [
-                {
-                    "atomic_number": a.GetAtomicNum(),
-                    "isotope": a.GetIsotope(),
-                    "charge": a.GetFormalCharge(),
-                    "hydrogens": a.GetTotalNumHs(),
-                    "radical_electrons": a.GetNumRadicalElectrons(),
-                }
-                for a in mol.GetAtoms()
-            ],
+            "graph": {
+                "atoms": [
+                    {
+                        "atomic_number": a.GetAtomicNum(),
+                        "isotope": a.GetIsotope(),
+                        "charge": a.GetFormalCharge(),
+                        "explicit_hydrogens": a.GetNumExplicitHs(),
+                        "no_implicit": a.GetNoImplicit(),
+                        "aromatic": a.GetIsAromatic(),
+                        "radical_electrons": a.GetNumRadicalElectrons(),
+                    }
+                    for a in mol.GetAtoms()
+                ],
+                "bonds": [
+                    {
+                        "a": b.GetBeginAtomIdx(),
+                        "b": b.GetEndAtomIdx(),
+                        "order": {v: k for k, v in ORDERS.items()}[b.GetBondType()],
+                        "aromatic": b.GetIsAromatic(),
+                    }
+                    for b in mol.GetBonds()
+                ],
+            },
         }
     else:
         result.update(

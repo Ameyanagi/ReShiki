@@ -27,7 +27,7 @@ flowchart LR
 | `src/app/workspace.rs`                         | Command bar, context options, compact palette, inspector and drawers           |
 | `src/app/icons.rs`                             | Original vector tool and command icons                                         |
 | `src/engine.rs`                                | Chemistry interface, worker lifecycle, timeout and response validation         |
-| `src/chemistry/`                               | Formula, average/exact mass and radical count from validated atom facts        |
+| `src/chemistry/`                               | Bounded chemical graph, valence, hydrogen assignment and molecular properties  |
 | `src/pictures/exchange/`                       | Bounded raster decoding, orientation, transparency and reflection              |
 | `src/editing.rs`                               | Clipboard remapping, transforms, component arrangement and ring placement      |
 | `src/recovery.rs`                              | Atomic session snapshots and recovery candidates                               |
@@ -68,13 +68,15 @@ The file-open panel is intentionally unfiltered, so opening a supported file doe
 
 ## Pure Rust migration
 
-The app uses `LocalEngine`, which implements `ChemistryEngine`. CDX encoding and decoding run in Rust on a blocking task. Formula, average mass, exact mass and radical count also run in Rust. RDKit still validates the graph and supplies atom facts, including hydrogen counts. Cached drawing labels are never used for these calculations.
+The app uses `LocalEngine`, which implements `ChemistryEngine`. CDX conversion, raster normalization, valence checks, hydrogen counts and formula/mass calculations run in Rust on blocking tasks. RDKit still sanitizes molecules and supplies their atom/bond graphs. Rust derives hydrogen counts from those graphs; cached drawing labels are never used for properties.
 
-The bridge requests atom facts with `local_properties: true`, completes the analysis in Rust, and returns the unchanged public response type. Missing facts or a mismatched RDKit data version return errors. `PythonEngine::default()` retains the original calculations as an independent reference. A future backend can replace Python behind the same interface; this is not a runtime plugin ABI.
+The bridge requests a sanitized graph with `local_properties: true`, completes the analysis in Rust, and returns the unchanged public response type. Missing graph data, invalid valences or a mismatched RDKit version return errors. `PythonEngine::default()` retains the original calculations as an independent reference. A future backend can replace Python behind the same interface; this is not a runtime plugin ABI.
 
 `tests/cdx_codec.rs` compares binary output and decoded XML with the Python reference, including native fixtures and every supported property. Its text corpus covers every defined character in the supported legacy codepages. `tests/engine_migration.rs` compares complete responses, stereo identities, isotopes, charges, radicals, figure objects, and rejected queries against RDKit. Malformed binary data must fail before reaching the chemistry backend. The ordinary integration tests use `LocalEngine`, so they exercise the app's migrated path.
 
 `tests/properties.rs` checks all 119 element entries, 3,111 known isotopes, unknown isotope fallbacks, templates, ions, radicals and explicit/implicit hydrogens against RDKit. Formulas and counts must match exactly; masses allow relative error of at most `1e-12` for platform-dependent floating-point operations. JSON parsing preserves full float precision. Worker tests also verify that migrated descriptors are no longer calculated in Python.
+
+`tests/valence.rs` compares over 165,000 cases with RDKit's property-cache and radical passes: allowed/rejected valences, charges, implicit-H policy, aromatic and partial bonds, dative direction and metal atoms. Graphs reject invalid endpoints, duplicate bonds and excessive size. The Rust radical pass is ready for the future sanitizer; production still takes radical assignments from RDKit. Valence checks alone do not replace resonance normalization, kekulization or aromaticity perception.
 
 Embedded PNG, TIFF, JPEG, GIF and BMP normalization runs in Rust. The worker returns deferred picture payloads; the bridge validates and decodes them before exposing a document. Export supplies prepared PNG data, including lossless row reversal for reflected pictures. Image work runs off the UI thread with the existing size and document budgets. Lossless pixels must match the Pillow reference exactly; JPEG color channels may differ by at most 2/255 between decoders. Alpha must match exactly.
 
@@ -82,9 +84,9 @@ Pillow is a development-only image reference. A [version-scoped uv exclusion](ht
 
 Regenerate codec constants and codepage tables with `uv run --locked python scripts/regenerate_cdx_rust_schema.py`, followed by `cargo fmt --all`. The generator uses the checked Python schema and standard-library codecs; released applications read only compiled Rust constants and tables.
 
-Atomic data comes from RDKit `Release_2026_03_6`. Regenerate it with `uv run --locked python scripts/regenerate_atomic_data.py --rdkit-source ~/dev/rdkit`, then `cargo fmt --all`. The generator verifies the source checksum and compares every entry with installed RDKit. Its BSD license and attribution are in `licenses/rdkit/` and are included in release packages.
+Element, isotope, allowed-valence and outer-electron data come from RDKit `Release_2026_03_6`. Regenerate them with `uv run --locked python scripts/regenerate_atomic_data.py --rdkit-source ~/dev/rdkit`, then `cargo fmt --all`. The generator verifies the source checksum and compares every entry with installed RDKit. Its BSD license and attribution are in `licenses/rdkit/` and are included in release packages.
 
-The target is a shipped app with no Python, RDKit or uv requirement. Remaining work includes document/exchange conversion, graph validation and hydrogen assignment, other descriptors, parsers, aromaticity, stereochemistry, canonical identifiers and 2D layout. Each replacement needs differential tests before switching. Python/RDKit can remain development-only references after the runtime is removed; current builds still require them.
+The target is a shipped app with no Python, RDKit or uv requirement. Remaining work includes document/exchange conversion, complete graph sanitization, drawing-label assignment, other descriptors, parsers, aromaticity, stereochemistry, canonical identifiers and 2D layout. Each replacement needs differential tests before switching. Python/RDKit can remain development-only references after the runtime is removed; current builds still require them.
 
 Portable packages include the worker project and `uv.lock` in `Contents/Resources/chemistry` on macOS or a sibling `chemistry` directory on Windows/Linux. The Rust bridge discovers it relative to the executable and asynchronously runs `uv sync --locked --no-dev --python 3.12` into a separate per-user cache. uv is an installation prerequisite. Python dependencies are reused offline after initial setup, and setup does not modify the signed bundle. Development checkouts use their local `.venv`. The chemistry protocol remains version 1 independently of the native document version.
 

@@ -2,14 +2,21 @@
 
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from rdkit import Chem, rdBase
 from rdkit.Chem import rdMolDescriptors
+
+if TYPE_CHECKING or __package__:
+    from .valence_reference import graph
+else:
+    from valence_reference import graph
 
 
 def case(name, mol):
     return {
         "name": name,
+        "graph": graph(mol),
         "atoms": [
             {
                 "atomic_number": a.GetAtomicNum(),

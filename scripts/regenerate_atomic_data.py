@@ -1,4 +1,4 @@
-"""Extract Rust mass tables from the pinned RDKit source, checking the local oracle."""
+"""Extract Rust element/isotope tables from pinned RDKit, checking the local oracle."""
 
 import argparse
 import hashlib
@@ -45,7 +45,10 @@ def main():
             table.GetMostCommonIsotopeMass(number),
         ):
             raise ValueError(f"Element {number} differs from the installed RDKit")
-        elements[number] = (symbol, average, exact)
+        outer, valences = int(fields[7]), tuple(map(int, fields[10:]))
+        if outer != table.GetNOuterElecs(number) or valences != tuple(table.GetValenceList(number)):
+            raise ValueError(f"Element {number} valence data differs from installed RDKit")
+        elements[number] = (symbol, average, exact, outer, valences)
     if sorted(elements) != list(range(119)):
         raise ValueError("Incomplete periodic table")
     isotopes = {}
@@ -79,9 +82,10 @@ def main():
         "pub(super) const ELECTRON_MASS: f64 = 0.00054857991;",
         "pub(super) const ELEMENTS: &[Element] = &[",
     ]
-    for symbol, average, exact in elements.values():
+    for symbol, average, exact, outer, valences in elements.values():
         lines.append(
-            f"    Element {{ symbol: {json.dumps(symbol)}, average: {average!r}, exact: {exact!r} }},"
+            f"    Element {{ symbol: {json.dumps(symbol)}, average: {average!r}, exact: {exact!r}, "
+            f"outer_electrons: {outer}, valences: &{list(valences)!r} }},"
         )
     lines.extend(
         [
