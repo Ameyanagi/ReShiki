@@ -11,6 +11,8 @@ use std::{
 };
 mod drawing;
 pub use drawing::Drawing;
+mod smiles;
+pub use smiles::{ReadError as SmilesError, SmilesReaction, read as read_smiles};
 
 /// Parsed participants in file order; drawing placement is a separate operation.
 #[derive(Clone, Debug, serde::Serialize)]

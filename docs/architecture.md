@@ -123,6 +123,8 @@ RXN export runs in Rust through `src/chemistry/reaction.rs`. It preserves explic
 
 RXN import uses the Rust reader and canvas builder, preserving participant roles, stereo, label spacing, reagent rows and separators. Placement keeps full precision until the final canvas coordinates. The bridge supplies full CIP labels and identifiers; Rust prepares the combined analysis graph after labeling. Complete-response and concurrent-import tests compare the original importer. Incomplete labels or invalid coordinates cannot publish a partial drawing.
 
+The reaction SMILES parser is being migrated separately. Its tested Rust preparation preserves explicit hydrogens, grouped reactants and disconnected agents without running ordinary SMILES stereo assignment. Extended CX annotations and runtime integration remain on the reference path.
+
 The bridge supplies 2D coordinates, identifiers and full CIP labels. Rust reconstructs the editable drawing after layout. CX coordinates used for perception can be nonfinite; they never enter drawing APIs. Complete-response tests include templates, isotope/stereo cases, names, malformed input and optional source fixtures. Concurrent imports keep separate layout results. Transport tests forbid native parsing, H removal, sanitization, Kekulé/wedge generation and drawing conversion. Explicit zero atom maps and independent atom/bond aromatic flags survive transport.
 
 Hydrogen removal preserves isotope H, protected group members, winding and double-bond controls. Invalid properties on removed hydrogens are discarded before validation. Query bonds removed with hydrogen are allowed; surviving queries are rejected. Malformed metadata and excessive work return typed errors without changing input.

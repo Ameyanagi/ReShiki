@@ -46,6 +46,10 @@ Code/GraphMol/ChemReactions/MDLParser.cpp (V2000/V3000 reaction input)
 Copyright (C) 2007-2026 Novartis Institutes for BioMedical Research Inc.
 and other RDKit contributors.
 
+Code/GraphMol/ChemReactions/DaylightParser.cpp (reaction SMILES framing and participant grouping)
+Copyright (C) 2007-2021 Novartis Institutes for BioMedical Research Inc.
+and other RDKit contributors.
+
 Code/GraphMol/QueryAtom.h (reaction atom wrapper predicates)
 Copyright (C) 2001-2022 Greg Landrum and other RDKit contributors.
 
