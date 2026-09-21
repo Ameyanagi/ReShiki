@@ -186,6 +186,11 @@ impl Atom {
 }
 
 impl Graph {
+    /// Validate topology and field ranges without imposing chemical valences.
+    pub fn validate(&self) -> Result<(), String> {
+        self.environments().map(|_| ())
+    }
+
     fn environments(&self) -> Result<Vec<Environment>, String> {
         if self.atoms.len() > 100_000 || self.bonds.len() > 300_000 {
             return Err("Chemical graph exceeds 100,000 atoms or 300,000 bonds".into());

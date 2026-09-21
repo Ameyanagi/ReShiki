@@ -35,10 +35,11 @@ class LocalPropertyTests(unittest.TestCase):
             ):
                 result = handle(dict(protocol=1, local_properties=True, **copy.deepcopy(request)))
                 analysis = result["analysis"]
-                for key in ("formula", "mass", "exact_mass", "unpaired_electrons"):
+                for key in ("formula", "mass", "exact_mass", "unpaired_electrons", "rings"):
                     self.assertNotIn(key, analysis)
                 facts = analysis["property_input"]
                 self.assertEqual(facts["rdkit_version"], rdBase.rdkitVersion)
+                self.assertIsInstance(facts["reference_rings"], int)
                 self.assertEqual(len(facts["graph"]["atoms"]), len(result["document"]["atoms"]))
                 self.assertTrue(all("hydrogens" not in a for a in facts["graph"]["atoms"]))
                 self.assertIn("logp", analysis)

@@ -47,6 +47,9 @@ async fn rust_properties_match_reference_across_editor_operations() -> TestResul
         "[Fe+3].[Cl-].[Cl-].[Cl-]",
         "[CH3]",
         "*CC",
+        "C12C3C4C1C5C2C3C45", // Cubane: six symmetric rings, five basis rings.
+        "C1CCC2(CC1)CCCC2",   // Spiro junction.
+        "c1ccc2occc2c1",      // Fused aromatic rings.
     ] {
         let request = Request::import_smiles(smiles);
         assert_response_matches(
@@ -102,6 +105,33 @@ async fn rust_properties_match_reference_across_editor_operations() -> TestResul
         Some("C2H4")
     );
     assert_response_matches(actual, reference.execute(request).await?)?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn ambiguous_ring_pruning_keeps_the_complete_reference_analysis() -> TestResult {
+    use reshiki::{chemistry::graph::Graph, document::Document};
+    let graph: Graph = serde_json::from_str(include_str!("fixtures/ring-order-dependent.json"))?;
+    let mut document = Document::default();
+    let ids = (0..graph.atoms.len())
+        .map(|i| {
+            document.add_atom(
+                "*",
+                reshiki::document::Point {
+                    x: i as f32 * 42.,
+                    y: 0.,
+                },
+            )
+        })
+        .collect::<Vec<_>>();
+    for bond in &graph.bonds {
+        document.add_bond(ids[bond.a], ids[bond.b], 1, "plain");
+    }
+    let request = Request::molecule("analyze", document);
+    assert_response_matches(
+        LocalEngine::default().execute(request.clone()).await?,
+        PythonEngine::default().execute(request).await?,
+    )?;
     Ok(())
 }
 

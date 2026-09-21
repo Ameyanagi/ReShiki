@@ -27,7 +27,7 @@ flowchart LR
 | `src/app/workspace.rs`                         | Command bar, context options, compact palette, inspector and drawers           |
 | `src/app/icons.rs`                             | Original vector tool and command icons                                         |
 | `src/engine.rs`                                | Chemistry interface, worker lifecycle, timeout and response validation         |
-| `src/chemistry/`                               | Bounded chemical graph, valence, hydrogen assignment and molecular properties  |
+| `src/chemistry/`                               | Bounded graph, valence, hydrogen assignment, ring perception and properties    |
 | `src/pictures/exchange/`                       | Bounded raster decoding, orientation, transparency and reflection              |
 | `src/editing.rs`                               | Clipboard remapping, transforms, component arrangement and ring placement      |
 | `src/recovery.rs`                              | Atomic session snapshots and recovery candidates                               |
@@ -77,6 +77,8 @@ The bridge requests a sanitized graph with `local_properties: true`, completes t
 `tests/properties.rs` checks all 119 element entries, 3,111 known isotopes, unknown isotope fallbacks, templates, ions, radicals and explicit/implicit hydrogens against RDKit. Formulas and counts must match exactly; masses allow relative error of at most `1e-12` for platform-dependent floating-point operations. JSON parsing preserves full float precision. Worker tests also verify that migrated descriptors are no longer calculated in Python.
 
 `tests/valence.rs` compares over 165,000 cases with RDKit's property-cache and radical passes: allowed/rejected valences, charges, implicit-H policy, aromatic and partial bonds, dative direction and metal atoms. Graphs reject invalid endpoints, duplicate bonds and excessive size. The Rust radical pass is ready for the future sanitizer; production still takes radical assignments from RDKit. Valence checks alone do not replace resonance normalization, kekulization or aromaticity perception.
+
+Rust also computes symmetric SSSR rings with iterative, bounded searches. `tests/ring_perception.rs` compares RDKit regressions, templates, the bundled NCI 5,000-molecule sample, atom permutations and dense synthetic graphs. All molecular cases match. Some dense graphs expose platform-dependent equal-size sorting in RDKit's pruning algorithm. Rust certifies the possible pruning choices and uses the reference count when it cannot prove agreement; that fallback still requires RDKit. This changes no document coordinates or bonds.
 
 Embedded PNG, TIFF, JPEG, GIF and BMP normalization runs in Rust. The worker returns deferred picture payloads; the bridge validates and decodes them before exposing a document. Export supplies prepared PNG data, including lossless row reversal for reflected pictures. Image work runs off the UI thread with the existing size and document budgets. Lossless pixels must match the Pillow reference exactly; JPEG color channels may differ by at most 2/255 between decoders. Alpha must match exactly.
 

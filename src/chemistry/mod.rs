@@ -7,6 +7,7 @@
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
 mod atomic_data;
 pub mod graph;
+pub mod rings;
 
 pub use atomic_data::RDKIT_VERSION;
 use atomic_data::{ELECTRON_MASS, ELEMENTS, ISOTOPES};
@@ -131,6 +132,8 @@ pub(crate) fn complete_analysis(result: &mut serde_json::Value) -> Result<(), St
     struct Input {
         rdkit_version: String,
         graph: graph::Graph,
+        // Temporary fallback for platform-dependent legacy ring pruning.
+        reference_rings: u32,
     }
     let input: Input = serde_json::from_value(
         analysis
@@ -145,8 +148,19 @@ pub(crate) fn complete_analysis(result: &mut serde_json::Value) -> Result<(), St
             input.rdkit_version
         ));
     }
-    let derived = serde_json::to_value(properties(&input.graph.atom_facts()?)?)
+    let ring_count = match rings::perceive(&input.graph, rings::Options::default()) {
+        Ok(rings) => {
+            u32::try_from(rings.atoms.len()).map_err(|_| "Ring count exceeds supported range")?
+        }
+        Err(rings::RingError::UnresolvedOrdering) => input.reference_rings,
+        Err(error) => return Err(error.to_string()),
+    };
+    let mut derived = serde_json::to_value(properties(&input.graph.atom_facts()?)?)
         .map_err(|error| format!("Invalid molecular properties: {error}"))?;
+    derived
+        .as_object_mut()
+        .ok_or("Invalid molecular properties")?
+        .insert("rings".into(), ring_count.into());
     let fields = derived.as_object().ok_or("Invalid molecular properties")?;
     let analysis = analysis
         .as_object_mut()
@@ -163,7 +177,7 @@ mod tests {
 
     #[test]
     fn worker_completion_is_atomic_and_requires_matching_data() -> Result<(), String> {
-        let input = json!({"rdkit_version": RDKIT_VERSION, "graph": {"atoms": [{
+        let input = json!({"rdkit_version": RDKIT_VERSION, "reference_rings": 99, "graph": {"atoms": [{
             "atomic_number": 6, "isotope": 0, "charge": 0,
             "explicit_hydrogens": 0, "radical_electrons": 0,
             "no_implicit": false, "aromatic": false,
@@ -172,9 +186,11 @@ mod tests {
         complete_analysis(&mut response)?;
         assert_eq!(response["analysis"]["formula"], "CH4");
         assert_eq!(response["analysis"]["mass"], 16.043);
+        // Ordinary graphs use the Rust result, not the reference fallback.
+        assert_eq!(response["analysis"]["rings"], 0);
         assert_eq!(response["analysis"]["smiles"], "C");
         assert!(response["analysis"].get("property_input").is_none());
-        for bad_input in [
+        for mut bad_input in [
             json!(null),
             json!({"rdkit_version": "different", "graph": {"atoms": [], "bonds": []}}),
             json!({"rdkit_version": RDKIT_VERSION, "graph": {"atoms": [{"atomic_number": 6}]}}),
@@ -190,6 +206,9 @@ mod tests {
                 "radical_electrons": 0, "no_implicit": false, "aromatic": false,
             }], "bonds": []}}),
         ] {
+            if let Some(input) = bad_input.as_object_mut() {
+                input.insert("reference_rings".into(), 0.into());
+            }
             let mut bad = json!({"analysis": {"smiles": "C", "property_input": bad_input}});
             let original = bad.clone();
             assert!(complete_analysis(&mut bad).is_err());
@@ -199,6 +218,36 @@ mod tests {
         for mut no_analysis in [json!({}), json!({"analysis": null})] {
             complete_analysis(&mut no_analysis)?;
         }
+        Ok(())
+    }
+
+    #[test]
+    fn unresolved_ring_ordering_retains_reference_and_missing_fallback_is_rejected()
+    -> Result<(), String> {
+        let graph: serde_json::Value = serde_json::from_str(include_str!(
+            "../../tests/fixtures/ring-order-dependent.json"
+        ))
+        .map_err(|e| e.to_string())?;
+        let input = json!({"rdkit_version": RDKIT_VERSION, "reference_rings": 32, "graph": graph});
+        let mut response = json!({"analysis": {"property_input": input}});
+        complete_analysis(&mut response)?;
+        assert_eq!(response["analysis"]["rings"], 32);
+        assert!(response["analysis"].get("property_input").is_none());
+        for bad in [json!(null), json!(-1), json!(1.5), json!(4294967296u64)] {
+            let mut input = input.clone();
+            input["reference_rings"] = bad;
+            let mut response = json!({"analysis": {"property_input": input}});
+            let before = response.clone();
+            assert!(complete_analysis(&mut response).is_err());
+            assert_eq!(response, before);
+        }
+        let mut input = input;
+        input
+            .as_object_mut()
+            .ok_or("Missing fixture")?
+            .remove("reference_rings");
+        let mut response = json!({"analysis": {"property_input": input}});
+        assert!(complete_analysis(&mut response).is_err());
         Ok(())
     }
 }
