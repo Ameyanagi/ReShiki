@@ -74,7 +74,7 @@ impl Atom {
             || (effective > 34 && matches!(self.atomic_number, 33 | 34))
     }
 
-    fn valence(&self, env: &Environment) -> Result<Valence, String> {
+    fn valence(&self, env: &Environment, strict: bool) -> Result<Valence, String> {
         let original = element(self.atomic_number)?;
         let effective_number = self.effective_number(original);
         let effective = element(effective_number)?;
@@ -107,13 +107,14 @@ impl Atom {
         if self.atomic_number == 1 && self.charge == -1 {
             maximum = 2;
         }
-        if maximum >= 0 && original_max >= 0 && explicit + offset > maximum {
+        if strict && maximum >= 0 && original_max >= 0 && explicit + offset > maximum {
             return Err(format!(
                 "Explicit valence {explicit} is too large for {}",
                 original.symbol
             ));
         }
-        let implicit = self.implicit_valence(env.aromatic, explicit, original, effective_number)?;
+        let implicit =
+            self.implicit_valence(env.aromatic, explicit, original, effective_number, strict)?;
         Ok(Valence {
             explicit_valence: explicit as u32,
             implicit_hydrogens: implicit as u32,
@@ -126,6 +127,7 @@ impl Atom {
         explicit: i32,
         original: &Element,
         effective_number: u8,
+        strict: bool,
     ) -> Result<i32, String> {
         if self.no_implicit || self.atomic_number == 0 {
             return Ok(0);
@@ -134,7 +136,8 @@ impl Atom {
             return match self.charge {
                 -1 | 1 => Ok(0),
                 0 => Ok(1),
-                _ => Err("Unreasonable formal charge on hydrogen".into()),
+                _ if strict => Err("Unreasonable formal charge on hydrogen".into()),
+                _ => Ok(0),
             };
         }
         if effective_number == 0 {
@@ -166,7 +169,11 @@ impl Atom {
             {
                 return Ok(0);
             }
-            return Err("Aromatic atom has no matching allowed valence".into());
+            return if strict {
+                Err("Aromatic atom has no matching allowed valence".into())
+            } else {
+                Ok(0)
+            };
         }
         if let Some(&allowed) = valences
             .iter()
@@ -175,7 +182,10 @@ impl Atom {
         {
             return Ok(allowed - explicit_radical);
         }
-        if valences.last() != Some(&-1) && original.valences.last().is_some_and(|&v| v > 0) {
+        if strict
+            && valences.last() != Some(&-1)
+            && original.valences.last().is_some_and(|&v| v > 0)
+        {
             return Err(format!(
                 "Valence including radicals is too large for {}",
                 original.symbol
@@ -235,13 +245,24 @@ impl Graph {
     /// Strict RDKit property-cache semantics. This does not perceive aromaticity
     /// or normalize functional groups: callers must supply that chemistry first.
     pub fn valences(&self) -> Result<Vec<Valence>, String> {
+        self.calculate_valences(true)
+    }
+
+    /// Intermediate cache used during sanitization. Topology and field limits
+    /// still apply, but excessive valences are retained for normalization.
+    /// This must never replace the final strict valence check.
+    pub fn provisional_valences(&self) -> Result<Vec<Valence>, String> {
+        self.calculate_valences(false)
+    }
+
+    fn calculate_valences(&self, strict: bool) -> Result<Vec<Valence>, String> {
         let environments = self.environments()?;
         self.atoms
             .iter()
             .zip(environments)
             .enumerate()
             .map(|(i, (atom, env))| {
-                atom.valence(&env)
+                atom.valence(&env, strict)
                     .map_err(|e| format!("Atom {}: {e}", i + 1))
             })
             .collect()

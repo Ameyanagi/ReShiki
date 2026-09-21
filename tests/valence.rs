@@ -37,7 +37,7 @@ fn valence_hydrogens_and_radicals_match_rdkit() -> TestResult {
     let mut lines = BufReader::new(child.stdout.take().ok_or("Missing oracle output")?).lines();
     let header: serde_json::Value = serde_json::from_str(&lines.next().ok_or("Missing version")??)?;
     assert_eq!(header["rdkit_version"], RDKIT_VERSION);
-    let (mut count, mut rejected, mut radical_cases) = (0, 0, 0);
+    let (mut count, mut rejected, mut radical_cases, mut provisional_cases) = (0, 0, 0, 0);
     let mut failures = Vec::new();
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
@@ -46,6 +46,11 @@ fn valence_hydrogens_and_radicals_match_rdkit() -> TestResult {
             radical_cases += 1;
             case.graph
                 .assign_radicals()
+                .and_then(|v| serde_json::to_value(v).map_err(|e| e.to_string()))
+        } else if case.operation == "provisional" {
+            provisional_cases += 1;
+            case.graph
+                .provisional_valences()
                 .and_then(|v| serde_json::to_value(v).map_err(|e| e.to_string()))
         } else {
             case.graph
@@ -78,6 +83,10 @@ fn valence_hydrogens_and_radicals_match_rdkit() -> TestResult {
         radical_cases > 40_000,
         "Missing radical cases: {radical_cases}"
     );
+    assert!(
+        provisional_cases > 100_000,
+        "Missing intermediate cache cases: {provisional_cases}"
+    );
     eprintln!(
         "Verified {count} RDKit cases, including {rejected} valence rejections and {radical_cases} radical assignments"
     );
@@ -105,7 +114,10 @@ fn rejects_malformed_graphs_without_partial_results() -> TestResult {
     ] {
         let graph: Graph = serde_json::from_value(value)?;
         assert!(graph.valences().is_err());
+        assert!(graph.provisional_valences().is_err());
         assert!(graph.assign_radicals().is_err());
+        assert!(reshiki::chemistry::normalize::functional_groups(&graph).is_err());
+        assert!(reshiki::chemistry::aromaticity::perceive(&graph, &[]).is_err());
     }
     let graph: Graph = serde_json::from_value(serde_json::json!({"atoms":[carbon],"bonds":[]}))?;
     assert_eq!(
@@ -118,6 +130,7 @@ fn rejects_malformed_graphs_without_partial_results() -> TestResult {
     let mut too_large = graph.clone();
     too_large.atoms.resize(100_001, graph.atoms[0].clone());
     assert!(too_large.valences().is_err());
+    assert!(too_large.provisional_valences().is_err());
     assert!(too_large.assign_radicals().is_err());
     let valid = serde_json::json!({"atoms":[carbon,carbon],"bonds":[bond(0,1,1)]});
     for section in ["atoms", "bonds"] {
