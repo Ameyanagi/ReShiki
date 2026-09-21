@@ -1,4 +1,4 @@
-//! V3000 reaction export, preserving explicit roles and repeated participants.
+//! MDL reaction interchange with explicit participant roles.
 //! CTAB arrangement follows RDKit ReactionWriter.cpp (2026.03.6).
 //! Copyright (C) 2010-2024 Novartis Institutes for BioMedical Research Inc.
 //! and other RDKit contributors.
@@ -9,6 +9,19 @@ use std::{
     collections::{BTreeSet, HashMap, HashSet},
     fmt::Write,
 };
+
+/// Parsed participants in file order; drawing placement is a separate operation.
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct Imported {
+    pub reactants: Vec<molfile::Imported>,
+    pub products: Vec<molfile::Imported>,
+    pub agents: Vec<molfile::Imported>,
+}
+
+/// Read an RXN file without flattening query atoms or losing explicit hydrogens.
+pub fn read_rxn(text: &str) -> Result<Imported, molfile::ReadError> {
+    molfile::read_reaction(text)
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {

@@ -2,6 +2,7 @@
 
 import json
 import random
+import re
 from itertools import product
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -16,6 +17,22 @@ else:
 
 def cases():
     yield from cx_cases()
+    for atom, extension in product(
+        ("[#0]", "[#6]", "[#8]", "[H]", "[Xe]", "[!#6]", "[!!#6]"),
+        (
+            "",
+            "|$Q$|",
+            "|$R$|",
+            "|$C$|",
+            "|$X$|",
+            "|$star_e$|",
+            "|^1:0|",
+            "|rb:0:2|",
+            "|s:0:1|",
+            "|u:0|",
+        ),
+    ):
+        yield atom + (" " + extension if extension else "")
     atoms = [
         "C",
         "N",
@@ -247,9 +264,17 @@ def main():
         try:
             mol = Chem.MolFromSmarts(text)
             expected = mol.GetNumAtoms() if mol is not None else None
+            query = (
+                re.fullmatch(
+                    r"AtomAtomicNum (\d+) = val", mol.GetAtomWithIdx(0).DescribeQuery().strip()
+                )
+                if expected == 1
+                else None
+            )
+            atomic_number = int(query.group(1)) if query else None
         except (RuntimeError, ValueError, OverflowError):
-            expected = None
-        print(json.dumps({"text": text, "expected": expected}))
+            expected, atomic_number = None, None
+        print(json.dumps({"text": text, "expected": expected, "atomic_number": atomic_number}))
 
 
 if __name__ == "__main__":

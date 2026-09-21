@@ -39,13 +39,14 @@ pub(crate) fn atom_priorities_cached(
     metadata: &Metadata,
     cached: Option<&[Valence]>,
 ) -> Result<Vec<u32>, String> {
-    priorities(graph, metadata, cached, &mut Work(50_000_000))
+    priorities(graph, metadata, cached, None, &mut Work(50_000_000))
 }
 
 pub(super) fn priorities(
     graph: &Graph,
     metadata: &Metadata,
     cached: Option<&[Valence]>,
+    queries: Option<&[bool]>,
     work: &mut Work,
 ) -> Result<Vec<u32>, String> {
     let cache = graph.cached_valences(cached)?;
@@ -82,7 +83,7 @@ pub(super) fn priorities(
         let invariant = ((i32::from(atom.atomic_number) << 10 | mass) << 10) | map_part;
         entries.push(vec![invariant]);
     }
-    refine(graph, &cache, entries, false, work)
+    refine(graph, &cache, entries, false, queries, work)
 }
 
 pub(super) fn rerank(
@@ -91,6 +92,7 @@ pub(super) fn rerank(
     cache: &[Valence],
     ranks: &[u32],
     labels: &[Option<String>],
+    queries: Option<&[bool]>,
     work: &mut Work,
 ) -> Result<Vec<u32>, String> {
     let n = graph.atoms.len();
@@ -141,7 +143,7 @@ pub(super) fn rerank(
                 .map_err(|_| "Stereo refinement exceeds signed reference range".to_string())
         })
         .collect::<Result<Vec<_>, _>>()?;
-    refine(graph, cache, entries, true, work)
+    refine(graph, cache, entries, true, queries, work)
 }
 
 fn refine(
@@ -149,9 +151,13 @@ fn refine(
     cache: &[Valence],
     mut entries: Vec<Vec<i32>>,
     seeded: bool,
+    queries: Option<&[bool]>,
     work: &mut Work,
 ) -> Result<Vec<u32>, String> {
     let n = graph.atoms.len();
+    if queries.is_some_and(|q| q.len() != n) {
+        return Err("Invalid file query atom count".into());
+    }
     let mut order: Vec<_> = (0..n).collect();
     sort(&entries, &mut order, work)?;
     let mut ranks = vec![0; n];
@@ -202,7 +208,14 @@ fn refine(
         .atoms
         .iter()
         .zip(cache)
-        .map(|(a, v)| usize::from(a.explicit_hydrogens) + v.implicit_hydrogens as usize)
+        .enumerate()
+        .map(|(i, (a, v))| {
+            if queries.and_then(|q| q.get(i)).copied().unwrap_or(false) {
+                0
+            } else {
+                usize::from(a.explicit_hydrogens) + v.implicit_hydrogens as usize
+            }
+        })
         .collect();
     for &count in &hydrogens {
         storage += count;

@@ -14,6 +14,7 @@ use std::{
 struct Case {
     text: String,
     expected: Option<usize>,
+    atomic_number: Option<u32>,
 }
 
 #[test]
@@ -58,6 +59,14 @@ fn smarts_validation_matches_native_parser() -> anyhow::Result<()> {
             failures.push(format!(
                 "{:?}: {actual:?} != {:?}",
                 case.text, case.expected
+            ));
+        }
+        if let Ok(number) = smarts::atomic_number_query(&case.text)
+            && number != case.atomic_number
+        {
+            failures.push(format!(
+                "{:?}: atomic-number query {number:?} != {:?}",
+                case.text, case.atomic_number
             ));
         }
     }

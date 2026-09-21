@@ -48,6 +48,7 @@ pub(super) fn read(r: &mut Reader<'_>, p: &mut Parsed, n: usize, e: usize) -> Re
                 hyd_override: false,
                 attachment: None,
                 dummy_label: dummy_label(symbol),
+                query: FileQuery::None,
             },
         );
     }

@@ -29,11 +29,24 @@ impl From<cx::Error> for Error {
 /// Return the number of top-level query atoms. The empty string has zero atoms.
 /// Invalid queries return `Syntax`; resource bounds never become valid queries.
 pub fn validate(text: &str) -> Result<usize> {
+    parse(text).map(|(count, _)| count)
+}
+
+/// Identify an exact, positive atomic-number predicate on one query atom.
+/// This does not simplify other predicates or perform substructure matching.
+pub fn atomic_number_query(text: &str) -> Result<Option<u32>> {
+    parse(text).map(|(count, query)| match (count, query) {
+        (1, Query::Number(n, false)) => Some(n),
+        _ => None,
+    })
+}
+
+fn parse(text: &str) -> Result<(usize, Query)> {
     if text.len() > 1024 * 1024 {
         return Err(Error::Limit);
     }
     if text.is_empty() {
-        return Ok(0);
+        return Ok((0, Query::Other));
     }
     // Native name/CX splitting precedes scanner whitespace trimming.
     let split = text.bytes().position(|b| b == b' ' || b == b'\t');
@@ -62,30 +75,94 @@ pub fn validate(text: &str) -> Result<usize> {
         atoms: 0,
         bond_index: 0,
         topology: Topology::default(),
+        single_query: Query::Other,
     };
     let count = parser.molecule(0)?;
     if !matches!(parser.peek(), None | Some(b'\n')) {
         return Err(parser.invalid());
     }
     if suffix.starts_with('|') {
-        cx::read(suffix, &parser.topology)?;
+        let annotations = cx::read(suffix, &parser.topology)?;
+        let mut label = None;
+        for event in annotations.events {
+            match event {
+                cx::Event::QueryAtom(_) => parser.single_query = Query::Other,
+                cx::Event::AtomProperty {
+                    atom: 0,
+                    name,
+                    value,
+                } if name == b"atomLabel" => label = Some(value),
+                cx::Event::ProcessLabels
+                    if label.as_deref().is_some_and(|s| {
+                        matches!(
+                            s,
+                            b"star_e"
+                                | b"Q_e"
+                                | b"QH_p"
+                                | b"AH_p"
+                                | b"X_p"
+                                | b"XH_p"
+                                | b"M_p"
+                                | b"MH_p"
+                        )
+                    }) =>
+                {
+                    parser.single_query = Query::Other
+                }
+                _ => (),
+            }
+        }
     }
-    Ok(count)
+    Ok((count, parser.single_query))
+}
+
+#[derive(Clone, Copy, Default)]
+enum Query {
+    Null(bool),
+    Number(u32, bool),
+    #[default]
+    Other,
+}
+impl Query {
+    fn negate(self) -> Self {
+        match self {
+            Self::Null(negated) => Self::Null(!negated),
+            Self::Number(n, negated) => Self::Number(n, !negated),
+            Self::Other => Self::Other,
+        }
+    }
+    // Preserve native null-query algebra; two non-null predicates always form
+    // a composite, even if their mathematical meaning could be simplified.
+    fn combine(self, other: Self, is_or: bool) -> Self {
+        match (self, other) {
+            (Self::Null(a), Self::Null(b)) => Self::Null(if is_or { a && b } else { a || b }),
+            (Self::Null(negated), q) | (q, Self::Null(negated)) => {
+                if negated == is_or {
+                    q
+                } else {
+                    Self::Null(negated)
+                }
+            }
+            _ => Self::Other,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Default)]
 struct Chirality {
     limit: Option<u32>,
     permutation: Option<u32>,
+    query: Query,
 }
 impl Chirality {
-    fn and(mut self, other: Self, copy_permutation: bool) -> Self {
+    fn and(mut self, other: Self, copy_permutation: bool, is_or: bool) -> Self {
         if self.limit.is_none() {
             self.limit = other.limit;
             if copy_permutation && other.permutation.is_some() {
                 self.permutation = other.permutation;
             }
         }
+        self.query = self.query.combine(other.query, is_or);
         self
     }
     fn valid(self) -> bool {
@@ -101,6 +178,7 @@ struct Parser<'a> {
     atoms: usize,
     bond_index: usize,
     topology: Topology,
+    single_query: Query,
 }
 
 impl Parser<'_> {
@@ -220,7 +298,17 @@ impl Parser<'_> {
             .map(|(_, limit)| (end + 2, limit))
     }
     fn point(&mut self, depth: usize) -> Result<Chirality> {
-        while self.eat(b'!') {}
+        let mut negated = false;
+        while self.eat(b'!') {
+            negated = !negated;
+        }
+        let mut result = self.point_value(depth)?;
+        if negated {
+            result.query = result.query.negate();
+        }
+        Ok(result)
+    }
+    fn point_value(&mut self, depth: usize) -> Result<Chirality> {
         if self.starts(b"$(") {
             self.pos += 2;
             self.molecule(depth + 1)?;
@@ -244,6 +332,7 @@ impl Parser<'_> {
             return Ok(Chirality {
                 limit: Some(limit),
                 permutation: Some(n),
+                query: Query::Null(false),
             });
         }
         if self.eat(b'@') {
@@ -254,11 +343,35 @@ impl Parser<'_> {
             return Ok(Chirality {
                 limit: Some(u32::MAX),
                 permutation: None,
+                query: Query::Null(false),
             });
         }
         // Lexers choose the longest symbol before single-letter primitives.
+        let start = self.pos;
         if self.element() || self.simple(true) {
-            return Ok(Chirality::default());
+            let symbol = self.bytes.get(start..self.pos).ok_or(Error::Limit)?;
+            let query = if symbol == b"*" {
+                Query::Null(false)
+            } else if matches!(
+                symbol,
+                b"B" | b"C" | b"N" | b"O" | b"F" | b"P" | b"S" | b"Cl" | b"Br" | b"I" | b"A" | b"a"
+            ) || symbol.first().is_some_and(u8::is_ascii_lowercase)
+            {
+                Query::Other
+            } else if symbol == b"Uut" {
+                Query::Number(113, false)
+            } else if symbol == b"Uup" {
+                Query::Number(115, false)
+            } else {
+                super::ELEMENTS
+                    .iter()
+                    .position(|e| e.symbol.as_bytes() == symbol)
+                    .map_or(Query::Other, |n| Query::Number(n as u32, false))
+            };
+            return Ok(Chirality {
+                query,
+                ..Chirality::default()
+            });
         }
         let byte = self.peek().ok_or_else(|| self.invalid())?;
         match byte {
@@ -267,7 +380,11 @@ impl Parser<'_> {
             }
             b'#' => {
                 self.pos += 1;
-                self.number()?;
+                let n = self.number()?;
+                return Ok(Chirality {
+                    query: Query::Number(n, false),
+                    ..Chirality::default()
+                });
             }
             b'H' | b'D' | b'd' | b'X' | b'v' | b'R' | b'r' | b'k' | b'x' | b'h' | b'z' | b'Z' => {
                 self.pos += 1;
@@ -303,14 +420,14 @@ impl Parser<'_> {
                 break;
             }
             self.eat(b'&');
-            result = result.and(self.point(depth)?, true);
+            result = result.and(self.point(depth)?, true, false);
         }
         Ok(result)
     }
     fn disjunction(&mut self, depth: usize) -> Result<Chirality> {
         let mut result = self.conjunction(depth)?;
         while self.eat(b',') {
-            result = result.and(self.conjunction(depth)?, false);
+            result = result.and(self.conjunction(depth)?, false, true);
         }
         Ok(result)
     }
@@ -335,17 +452,29 @@ impl Parser<'_> {
                 return Ok(Chirality::default());
             }
             self.pos = start;
+            let hydrogen = self.bytes.get(start) == Some(&b'H')
+                && matches!(self.bytes.get(start + 1), Some(b']' | b':'));
             let mut result = self.disjunction(depth)?;
             while self.eat(b';') {
-                result = result.and(self.disjunction(depth)?, false);
+                result = result.and(self.disjunction(depth)?, false, false);
             }
             if self.eat(b':') {
                 self.number()?;
             }
             self.require(b']')?;
+            if hydrogen {
+                result.query = Query::Number(1, false);
+            }
             Ok(result)
         } else if self.simple(false) {
-            Ok(Chirality::default())
+            Ok(Chirality {
+                query: if self.bytes.get(self.pos.saturating_sub(1)) == Some(&b'*') {
+                    Query::Null(false)
+                } else {
+                    Query::Other
+                },
+                ..Chirality::default()
+            })
         } else {
             Err(self.invalid())
         }
@@ -514,6 +643,11 @@ impl Parser<'_> {
             return Err(self.invalid());
         }
         if depth == 0 {
+            self.single_query = if count == 1 {
+                first.query
+            } else {
+                Query::Other
+            };
             // Native closure bonds are appended by bookmark order; equal
             // bookmarks retain the order in which their pairs were parsed.
             closures.sort_by_key(|(ring, _)| *ring);

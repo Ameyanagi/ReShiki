@@ -13,8 +13,10 @@ use crate::chemistry::{
 use serde::Serialize;
 use std::str::Lines;
 mod groups;
+mod reaction;
 mod v2000;
 mod v3000;
+pub(crate) use reaction::read as read_reaction;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ReadError {
@@ -177,11 +179,19 @@ impl<'a> Reader<'a> {
 }
 
 #[derive(Default)]
+enum FileQuery {
+    #[default]
+    None,
+    Number(u32),
+    Other,
+}
+#[derive(Default)]
 struct FileAtom {
     valence: i32,
     hyd_override: bool,
     attachment: Option<i32>,
     dummy_label: Option<String>,
+    query: FileQuery,
 }
 
 fn dummy_label(symbol: &str) -> Option<String> {
@@ -203,6 +213,11 @@ struct Parsed {
     groups: groups::Groups,
     chirality: bool,
     marked_3d: bool,
+}
+#[derive(Clone, Copy)]
+enum Context {
+    Molecule,
+    Reaction { agent: bool, v3000: bool },
 }
 impl Parsed {
     fn new(marked_3d: bool) -> Self {
@@ -245,7 +260,18 @@ impl Parsed {
         self.directions.push(dir);
         self.bonds.push(props);
     }
-    fn finish(mut self) -> Result<Imported> {
+    fn finish(self) -> Result<Imported> {
+        self.finish_in(Context::Molecule)
+    }
+
+    fn finish_in(mut self, context: Context) -> Result<Imported> {
+        let sanitize_file = !matches!(
+            context,
+            Context::Reaction {
+                agent: true,
+                v3000: false
+            }
+        );
         self.graph.validate().map_err(ReadError::Chemistry)?;
         let cache = self
             .graph
@@ -268,6 +294,15 @@ impl Parsed {
         }
         let groups = std::mem::take(&mut self.groups);
         groups.apply(&mut self)?;
+        for (atom, props) in self.graph.atoms.iter().zip(&self.atoms) {
+            match props.query {
+                FileQuery::None => (),
+                FileQuery::Number(n)
+                    if matches!(context, Context::Reaction { .. })
+                        && n == u32::from(atom.atomic_number) => {}
+                _ => return Err(ReadError::Unsupported("substance-group query")),
+            }
+        }
         if self.bonds.iter().any(|b| b.unspecified || b.query) {
             return Err(ReadError::Unsupported("query or unspecified bond order"));
         }
@@ -320,37 +355,81 @@ impl Parsed {
                 *direction = Direction::None;
             }
         }
+        // V2000 reaction agents perceive bond directions before the application's
+        // sanitization pass, without the file reader's legacy stereo assignment.
+        if !sanitize_file {
+            let rings = crate::chemistry::rings::perceive(&self.graph, Default::default())
+                .map_err(|error| sanitize::Error {
+                    stage: sanitize::Stage::Rings,
+                    cause: sanitize::Cause::Rings(error),
+                })?;
+            let geometry = stereo::detect_bond_stereo(
+                &self.graph,
+                &self.metadata,
+                &self.directions,
+                Some(&conformer.positions),
+                &rings.atoms,
+            )
+            .map_err(ReadError::Chemistry)?;
+            self.metadata = geometry.metadata;
+            self.directions = geometry.directions;
+        }
         let cleaned = sanitize::sanitize(&self.graph, &self.metadata, &self.directions)?;
-        let geometry = stereo::detect_bond_stereo(
-            &cleaned.graph,
-            &cleaned.metadata,
-            &cleaned.directions,
-            Some(&conformer.positions),
-            &cleaned.rings,
-        )
-        .map_err(ReadError::Chemistry)?;
-        let properties = perception::Properties::unspecified(&cleaned.graph);
-        let state = perception::perceive(
-            &perception::State {
-                graph: cleaned.graph,
-                metadata: geometry.metadata,
-                directions: geometry.directions,
-                valences: cleaned.valences,
-                conjugated: cleaned.conjugated,
-                hybridizations: cleaned.hybridizations,
-                rings: perception::RingCache {
-                    kind: perception::RingKind::Symmetric,
-                    atoms: cleaned.rings,
+        let geometry = if sanitize_file {
+            stereo::detect_bond_stereo(
+                &cleaned.graph,
+                &cleaned.metadata,
+                &cleaned.directions,
+                Some(&conformer.positions),
+                &cleaned.rings,
+            )
+            .map_err(ReadError::Chemistry)?
+        } else {
+            stereo::BondGeometry {
+                metadata: cleaned.metadata.clone(),
+                directions: cleaned.directions.clone(),
+            }
+        };
+        let mut properties = perception::Properties::unspecified(&cleaned.graph);
+        if !sanitize_file
+            && geometry
+                .metadata
+                .bonds
+                .iter()
+                .any(|b| !b.stereo_atoms.is_empty())
+        {
+            properties.needs_detection = Some(true);
+        }
+        let mut state = perception::State {
+            graph: cleaned.graph,
+            metadata: geometry.metadata,
+            directions: geometry.directions,
+            valences: cleaned.valences,
+            conjugated: cleaned.conjugated,
+            hybridizations: cleaned.hybridizations,
+            rings: perception::RingCache {
+                kind: perception::RingKind::Symmetric,
+                atoms: cleaned.rings,
+            },
+            properties,
+        };
+        if sanitize_file {
+            let queries: Vec<_> = self
+                .atoms
+                .iter()
+                .map(|a| !matches!(a.query, FileQuery::None))
+                .collect();
+            state = perception::perceive_file_queries(
+                &state,
+                perception::Options {
+                    clean: true,
+                    force: true,
+                    flag_possible: true,
                 },
-                properties,
-            },
-            perception::Options {
-                clean: true,
-                force: true,
-                flag_possible: true,
-            },
-        )
-        .map_err(ReadError::Chemistry)?;
+                &queries,
+            )
+            .map_err(ReadError::Chemistry)?;
+        }
         if state.graph.atoms.iter().any(|a| a.radical_electrons > 2)
             || state.metadata.atoms.iter().any(|a| a.chiral_tag > 2)
             || state.metadata.bonds.iter().any(|b| b.stereo > 5)
@@ -359,6 +438,16 @@ impl Parsed {
             return Err(ReadError::Unsupported(
                 "radical count or stereochemistry class",
             ));
+        }
+        // Reaction parsing wraps ordinary reactant/product atoms as queries.
+        // Existing explicit number queries replace that generated wrapper.
+        if matches!(context, Context::Reaction { agent: false, .. })
+            && state.graph.atoms.iter().zip(&self.atoms).any(|(a, props)| {
+                matches!(props.query, FileQuery::None)
+                    && (a.isotope != 0 || a.charge != 0 || a.radical_electrons != 0)
+            })
+        {
+            return Err(ReadError::Unsupported("query reaction atom"));
         }
         Ok(Imported {
             molecule: Molecule {
@@ -420,6 +509,10 @@ pub fn read(text: &str) -> Result<Imported> {
         lines: text.lines(),
         line: 0,
     };
+    read_molecule(&mut reader)?.finish()
+}
+
+fn read_molecule(reader: &mut Reader<'_>) -> Result<Parsed> {
     reader.next()?;
     let info = reader.next()?;
     let marked = info
@@ -436,9 +529,9 @@ pub fn read(text: &str) -> Result<Imported> {
     };
     let mut parsed = Parsed::new(marked);
     match version {
-        "V2000" => v2000::read(&mut reader, &mut parsed, n, e)?,
-        "V3000" if n == 0 && e == 0 => v3000::read(&mut reader, &mut parsed)?,
+        "V2000" => v2000::read(reader, &mut parsed, n, e)?,
+        "V3000" if n == 0 && e == 0 => v3000::read(reader, &mut parsed, true)?,
         _ => return Err(reader.invalid("Invalid version or V3000 header counts")),
     }
-    parsed.finish()
+    Ok(parsed)
 }

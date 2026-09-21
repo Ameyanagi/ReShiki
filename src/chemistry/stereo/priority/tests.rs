@@ -81,8 +81,8 @@ fn invalid_input_and_resource_limits_leave_inputs_unchanged() -> TestResult {
         bad.atoms[0].map_number = value;
         assert!(atom_priorities(&graph, &bad).is_err());
     }
-    assert!(priorities(&graph, &meta, None, &mut Work(0)).is_err());
-    assert!(priorities(&graph, &meta, None, &mut Work(50)).is_err());
+    assert!(priorities(&graph, &meta, None, None, &mut Work(0)).is_err());
+    assert!(priorities(&graph, &meta, None, None, &mut Work(50)).is_err());
     assert!(atom_priorities_cached(&graph, &meta, Some(&[])).is_err());
     let mut bad = meta.clone();
     bad.atoms.pop();
@@ -139,10 +139,22 @@ fn seeded_refinement_checks_rank_lengths_and_integer_range() -> TestResult {
             &cache,
             &ranks,
             &labels,
+            None,
             &mut Work(50_000_000)
         )
         .is_err_and(|e| e.contains("overflow") || e.contains("signed reference range"))
     );
-    assert!(rerank(&graph, &meta, &cache, &[], &labels, &mut Work(50_000_000)).is_err());
+    assert!(
+        rerank(
+            &graph,
+            &meta,
+            &cache,
+            &[],
+            &labels,
+            None,
+            &mut Work(50_000_000)
+        )
+        .is_err()
+    );
     Ok(())
 }

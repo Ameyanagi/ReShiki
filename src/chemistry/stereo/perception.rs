@@ -110,9 +110,23 @@ fn opposite(d: Direction) -> Result<Direction, String> {
 /// Legacy R/S and E/Z rules are approximate; full CIP labeling is separate.
 /// Supplied caches must belong to this graph. Errors leave the input unchanged.
 pub fn perceive(input: &State, options: Options) -> Result<State, String> {
-    with_work(input, options, &mut Work(50_000_000))
+    with_work(input, options, None, &mut Work(50_000_000))
 }
-fn with_work(input: &State, options: Options, work: &mut Work) -> Result<State, String> {
+/// Exact atomic-number file queries remain queries during the first stereo pass.
+/// Their coordinated H atoms do not contribute duplicate priority entries.
+pub(crate) fn perceive_file_queries(
+    input: &State,
+    options: Options,
+    queries: &[bool],
+) -> Result<State, String> {
+    with_work(input, options, Some(queries), &mut Work(50_000_000))
+}
+fn with_work(
+    input: &State,
+    options: Options,
+    queries: Option<&[bool]>,
+    work: &mut Work,
+) -> Result<State, String> {
     input.graph.cached_valences(Some(&input.valences))?;
     input.metadata.validate(&input.graph)?;
     let (n, e) = (input.graph.atoms.len(), input.graph.bonds.len());
@@ -121,6 +135,7 @@ fn with_work(input: &State, options: Options, work: &mut Work) -> Result<State, 
         || input.hybridizations.len() != n
         || input.properties.atoms.len() != n
         || input.properties.bond_codes.len() != e
+        || queries.is_some_and(|q| q.len() != n)
     {
         return Err("Invalid stereo perception annotation count".into());
     }
@@ -154,6 +169,7 @@ fn with_work(input: &State, options: Options, work: &mut Work) -> Result<State, 
         return Err("Invalid stereo bond label".into());
     }
     let mut ctx = Context::new(input.clone(), work)?;
+    ctx.queries = queries.map(<[bool]>::to_vec);
     if !options.force && ctx.state.properties.done.is_some() {
         return Ok(ctx.state);
     }
@@ -279,6 +295,7 @@ fn with_work(input: &State, options: Options, work: &mut Work) -> Result<State, 
                 &ctx.state.valences,
                 &ctx.ranks,
                 &labels,
+                ctx.queries.as_deref(),
                 work,
             )?;
             ctx.write_ranks()?;
@@ -293,6 +310,7 @@ fn with_work(input: &State, options: Options, work: &mut Work) -> Result<State, 
 
 struct Context {
     state: State,
+    queries: Option<Vec<bool>>,
     neighbors: Vec<Vec<usize>>,
     pairs: HashMap<(usize, usize), usize>,
     ranks: Vec<u32>,
@@ -325,6 +343,7 @@ impl Context {
         }
         let mut result = Self {
             state,
+            queries: None,
             neighbors,
             pairs,
             ranks: Vec::new(),
@@ -363,6 +382,7 @@ impl Context {
                 &self.state.graph,
                 &self.state.metadata,
                 Some(&self.state.valences),
+                self.queries.as_deref(),
                 work,
             )?;
             self.write_ranks()?;

@@ -9,6 +9,7 @@ use super::{
 };
 use std::{collections::HashSet, fmt::Write};
 mod read;
+pub(crate) use read::read_reaction;
 pub use read::{FileAnnotations, Imported, ReadError, read};
 
 #[derive(Debug, thiserror::Error)]

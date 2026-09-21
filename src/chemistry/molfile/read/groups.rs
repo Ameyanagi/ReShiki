@@ -198,7 +198,26 @@ impl Groups {
                         let data = group.data.first().ok_or(ReadError::Limit)?;
                         match crate::chemistry::smarts::validate(data) {
                             Ok(0) | Err(crate::chemistry::smarts::Error::Syntax(_)) => (),
-                            Ok(_) => return Err(ReadError::Unsupported("substance-group query")),
+                            Ok(count) => {
+                                let number = if count == 1 {
+                                    crate::chemistry::smarts::atomic_number_query(data).map_err(
+                                        |error| match error {
+                                            crate::chemistry::smarts::Error::Limit => {
+                                                ReadError::Limit
+                                            }
+                                            crate::chemistry::smarts::Error::Syntax(_) => {
+                                                ReadError::Unsupported("substance-group query")
+                                            }
+                                        },
+                                    )?
+                                } else {
+                                    None
+                                };
+                                for &index in &group.atoms {
+                                    p.atoms.get_mut(index).ok_or(ReadError::Limit)?.query =
+                                        number.map_or(FileQuery::Other, FileQuery::Number);
+                                }
+                            }
                             Err(crate::chemistry::smarts::Error::Limit) => {
                                 return Err(ReadError::Limit);
                             }

@@ -29,7 +29,7 @@ impl Reader<'_> {
             }
         }
     }
-    fn expect(&mut self, prefix: &str) -> Result<()> {
+    pub(super) fn expect(&mut self, prefix: &str) -> Result<()> {
         if self.v3()?.to_ascii_uppercase().starts_with(prefix) {
             Ok(())
         } else {
@@ -85,7 +85,7 @@ impl Reader<'_> {
     }
 }
 
-pub(super) fn read(r: &mut Reader<'_>, p: &mut Parsed) -> Result<()> {
+pub(super) fn read(r: &mut Reader<'_>, p: &mut Parsed, expect_end: bool) -> Result<()> {
     r.expect("BEGIN CTAB")?;
     let line = r.v3()?;
     let tokens = r.tokens(&line)?;
@@ -311,7 +311,7 @@ pub(super) fn read(r: &mut Reader<'_>, p: &mut Parsed) -> Result<()> {
     if objects != 0 && !objects_found {
         return Err(r.invalid("Missing 3D constraint block"));
     }
-    if !r.next()?.starts_with("M  END") {
+    if expect_end && !r.next()?.starts_with("M  END") {
         return Err(r.invalid("Missing M END"));
     }
     Ok(())

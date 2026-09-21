@@ -127,8 +127,9 @@ fn empty_and_cached_done_do_not_require_stereo_ranks() -> TestResult {
 fn invalid_metadata_and_work_exhaustion_leave_inputs_unchanged() -> TestResult {
     let input = star().map_err(anyhow::Error::msg)?;
     let before = serde_json::to_value(&input)?;
-    assert!(with_work(&input, options(), &mut Work(0)).is_err());
-    assert!(with_work(&input, options(), &mut Work(10)).is_err());
+    assert!(with_work(&input, options(), None, &mut Work(0)).is_err());
+    assert!(with_work(&input, options(), None, &mut Work(10)).is_err());
+    assert!(perceive_file_queries(&input, options(), &[]).is_err());
     let mut bad = input.clone();
     bad.properties.atoms.pop();
     assert!(perceive(&bad, options()).is_err());
