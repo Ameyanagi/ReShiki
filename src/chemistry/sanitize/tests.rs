@@ -110,31 +110,17 @@ fn long_chain_pipeline_is_iterative() -> TestResult {
 }
 
 #[test]
-fn ring_failure_preserves_its_type_through_stage_and_application_context() -> TestResult {
+fn dense_ring_preparation_preserves_the_input_graph() -> TestResult {
     let graph: Graph = serde_json::from_str(include_str!(
         "../../../tests/fixtures/ring-order-dependent.json"
     ))?;
-    let error = match sanitize(
+    let original = serde_json::to_value(&graph)?;
+    let state = sanitize(
         &graph,
         &Metadata::unspecified(&graph),
         &vec![Direction::None; graph.bonds.len()],
-    ) {
-        Ok(_) => anyhow::bail!("Expected the reference-dependent ring ordering to fail"),
-        Err(error) => error,
-    };
-    assert_eq!(error.stage, Stage::Rings);
-    assert!(matches!(
-        error.cause,
-        Cause::Rings(rings::RingError::UnresolvedOrdering)
-    ));
-    let report = anyhow::Error::new(error).context("Preparing the molecular graph");
-    assert!(matches!(
-        report.root_cause().downcast_ref::<rings::RingError>(),
-        Some(rings::RingError::UnresolvedOrdering)
-    ));
-    assert_eq!(report.to_string(), "Preparing the molecular graph");
-    assert!(
-        format!("{report:#}").contains("Rings: Ring pruning has unresolved equal-size ordering")
-    );
+    )?;
+    assert!(!state.rings.is_empty());
+    assert_eq!(serde_json::to_value(&graph)?, original);
     Ok(())
 }

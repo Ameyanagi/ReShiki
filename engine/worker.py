@@ -363,7 +363,6 @@ def analyze(mol, *, local_properties=False, local_smiles=False):
             "rdkit_version": rdBase.rdkitVersion,
             # Retain only as a fallback while Rust certifies equal-sized ring
             # pruning. Some dense graphs depend on the C++ sort implementation.
-            "reference_rings": list(mol.GetRingInfo().AtomRings()),
             "graph": {
                 "atoms": [
                     {

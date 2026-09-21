@@ -150,20 +150,13 @@ fn dense_degree_four_graph_uses_iterative_reference_fallback() -> TestResult {
 }
 
 #[test]
-fn ordering_ambiguity_is_explicit_and_budgeted() -> TestResult {
+fn dense_ordering_is_local_and_search_is_budgeted() -> TestResult {
     let graph: Graph = serde_json::from_str(include_str!(
         "../../../tests/fixtures/ring-order-dependent.json"
     ))?;
-    assert!(matches!(
-        perceive(&graph, Options::default()),
-        Err(RingError::UnresolvedOrdering)
-    ));
+    let rings = perceive(&graph, Options::default())?;
+    assert_cycles(&graph, &rings);
     let mut budget = Budget { work: 0, stored: 0 };
-    assert!(!ordering::independent(
-        &[HashSet::from([0, 1, 2])],
-        &[true],
-        &mut budget
-    ));
     let top = Topology::new(&graph).map_err(anyhow::Error::msg)?;
     assert!(search::smallest(&top, 0, &vec![true; graph.bonds.len()], &[], &mut budget).is_err());
     Ok(())

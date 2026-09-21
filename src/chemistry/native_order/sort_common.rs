@@ -1,6 +1,6 @@
 //! Checked storage operations shared by the reference sorting policies.
-use super::{Edge, Error, at, at_mut};
-pub(super) type Entry = (i32, Edge);
+use super::{Error, at, at_mut};
+pub(super) type Entry = (i32, usize);
 
 pub(super) fn key(values: &[Entry], i: usize) -> Result<i32, Error> {
     Ok(at(values, i)?.0)

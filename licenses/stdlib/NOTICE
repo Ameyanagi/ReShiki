@@ -1,4 +1,4 @@
-ReShiki's checked Rust traversal sort policies adapt these standard-library
+ReShiki's checked Rust comparison-sort policies adapt these standard-library
 algorithms to preserve the pinned chemistry reference's equal-key ordering:
 
 LLVM libc++ __algorithm/sort.h and heap primitives, read from the Apple
@@ -11,5 +11,5 @@ Copyright (c) Microsoft Corporation.
 https://github.com/microsoft/STL/tree/vs-2022-17.13/stl/inc
 Apache-2.0 WITH LLVM-exception; see msvc-LICENSE.
 
-Adaptations are in src/chemistry/smiles/traversal/apple_sort.rs and
+Adaptations are in src/chemistry/native_order/apple_sort.rs and
 windows_sort.rs. They use integer keys, fallible indexing and explicit stacks.

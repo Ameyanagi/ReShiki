@@ -193,7 +193,7 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
             && let Some(format @ ("rxn" | "rsmi")) = request.format.as_deref()
         {
             let reaction_smiles = format == "rsmi";
-            use crate::chemistry::{document, reaction, rings::RingError, sanitize};
+            use crate::chemistry::reaction;
             let document = request.document.clone().ok_or("Missing reaction drawing")?;
             let selected = request.selected_ids.clone();
             let output = tokio::task::spawn_blocking(move || {
@@ -215,16 +215,6 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
                         warnings: vec![reaction::EXPORT_WARNING.into()],
                     });
                 }
-                // Retain only the existing unresolved ring-order fallback.
-                Err(reaction::Error::Preparation(document::Error::Sanitization(
-                    sanitize::Error {
-                        cause: sanitize::Cause::Rings(RingError::UnresolvedOrdering),
-                        ..
-                    },
-                ))) => (),
-                Err(reaction::Error::Smiles(crate::chemistry::smiles::write::Error::Rings(
-                    RingError::UnresolvedOrdering,
-                ))) => (),
                 Err(error) => return Err(error.to_string()),
             }
         }
@@ -273,23 +263,21 @@ struct Worker {
     output: BufReader<ChildStdout>,
     next_id: u64,
 }
-// Called only from blocking preparation tasks. `None` retains the known ring
-// fallback or the empty-file response; exotic bond analyses keep no identifier.
+// Called only from blocking preparation tasks. Empty files have no analysis;
+// exotic bond analyses keep no identifier.
 fn molecular_smiles(
     state: &crate::chemistry::stereo::perception::State,
 ) -> Result<Option<String>, String> {
-    use crate::chemistry::{rings::RingError, smiles::write};
+    use crate::chemistry::smiles::write;
     if state.graph.atoms.is_empty() {
         return Ok(None);
     }
     if state.graph.bonds.iter().any(|b| matches!(b.order, 0 | 7)) {
         return Ok(Some(String::new()));
     }
-    match write::write(state, write::Options::default()) {
-        Ok(output) => Ok(Some(output.text)),
-        Err(write::Error::Rings(RingError::UnresolvedOrdering)) => Ok(None),
-        Err(error) => Err(error.to_string()),
-    }
+    write::write(state, write::Options::default())
+        .map(|output| Some(output.text))
+        .map_err(|e| e.to_string())
 }
 
 type PreparedMolecule = (
@@ -363,11 +351,10 @@ impl PythonEngine {
         if self.local_documents
             && request.operation == "import"
             && let Some(format @ ("rxn" | "rsmi")) = request.format.as_deref()
-            && let Some(response) = self
-                .import_reaction(request.text.clone().unwrap_or_default(), format)
-                .await?
         {
-            return Ok(response);
+            return self
+                .import_reaction(request.text.clone().unwrap_or_default(), format)
+                .await;
         }
         let prepared_molecule = if self.local_documents
             && request.operation == "import"
@@ -375,7 +362,7 @@ impl PythonEngine {
         {
             let text = request.text.clone().unwrap_or_default();
             tokio::task::spawn_blocking(move || {
-                use crate::chemistry::{molfile, rings::RingError, sanitize};
+                use crate::chemistry::molfile;
                 match molfile::read(&text) {
                     Ok(imported) => {
                         let drawing = imported.drawing().map_err(|e| e.to_string())?;
@@ -385,10 +372,6 @@ impl PythonEngine {
                             Some(imported.annotations),
                         )))
                     }
-                    Err(molfile::ReadError::Sanitization(sanitize::Error {
-                        cause: sanitize::Cause::Rings(RingError::UnresolvedOrdering),
-                        ..
-                    })) => Ok(None),
                     Err(error) => Err(error.to_string()),
                 }
             })
@@ -398,8 +381,10 @@ impl PythonEngine {
             && request.operation == "import"
             && request.format.as_deref() == Some("smiles")
         {
-            self.prepare_smiles(request.text.clone().unwrap_or_default())
-                .await?
+            Some(
+                self.prepare_smiles(request.text.clone().unwrap_or_default())
+                    .await?,
+            )
         } else if self.local_documents
             && (request.operation == "analyze"
                 || request.operation == "export"
@@ -410,18 +395,12 @@ impl PythonEngine {
             && let Some(document) = request.document.clone().filter(|d| !d.atoms.is_empty())
         {
             tokio::task::spawn_blocking(move || {
-                use crate::chemistry::{document, rings::RingError, sanitize};
+                use crate::chemistry::document;
                 match document::prepare(&document) {
                     Ok(molecule) => {
                         let drawing = document::for_drawing(&molecule, &document)?;
                         Ok(Some((molecule, drawing, None)))
                     }
-                    // Preserve the existing native fallback only for the known
-                    // platform-dependent ring tie; never hide a chemistry error.
-                    Err(document::Error::Sanitization(sanitize::Error {
-                        cause: sanitize::Cause::Rings(RingError::UnresolvedOrdering),
-                        ..
-                    })) => Ok(None),
                     Err(error) => Err(error),
                 }
             })
@@ -462,22 +441,10 @@ impl PythonEngine {
         {
             let selected = request.selected_ids.clone().unwrap_or_default();
             tokio::task::spawn_blocking(move || {
-                use crate::chemistry::{document, rings::RingError, sanitize};
-                match document::aromatic_display(&document, &selected)
+                use crate::chemistry::document;
+                document::aromatic_display(&document, &selected)
                     .and_then(document::Aromatic::finish)
-                {
-                    Ok(draft) => Ok(Some(draft)),
-                    Err(document::Error::Sanitization(sanitize::Error {
-                        cause: sanitize::Cause::Rings(RingError::UnresolvedOrdering),
-                        ..
-                    })) => Ok(None),
-                    Err(document::Error::Smiles(
-                        crate::chemistry::smiles::write::Error::Rings(
-                            RingError::UnresolvedOrdering,
-                        ),
-                    )) => Ok(None),
-                    Err(error) => Err(error),
-                }
+                    .map(Some)
             })
             .await
             .map_err(|e| format!("Aromatic display preparation failed: {e}"))?
@@ -657,24 +624,15 @@ impl PythonEngine {
         Ok(response)
     }
 
-    async fn prepare_smiles(&self, text: String) -> Result<Option<PreparedMolecule>, String> {
-        use crate::chemistry::{
-            RDKIT_VERSION, document, molfile, rings::RingError, sanitize, smiles,
-        };
+    async fn prepare_smiles(&self, text: String) -> Result<PreparedMolecule, String> {
+        use crate::chemistry::{RDKIT_VERSION, document, molfile, smiles};
         if text.trim().is_empty() {
             return Err("Enter a structure first".into());
         }
         let imported = tokio::task::spawn_blocking(move || smiles::read(&text))
             .await
             .map_err(|e| format!("SMILES import failed: {e}"))?;
-        let imported = match imported {
-            Ok(imported) => imported,
-            Err(smiles::Error::Sanitization(sanitize::Error {
-                cause: sanitize::Cause::Rings(RingError::UnresolvedOrdering),
-                ..
-            })) => return Ok(None),
-            Err(error) => return Err(error.to_string()),
-        };
+        let imported = imported.map_err(|e| e.to_string())?;
         let n = imported.prepared.state.graph.atoms.len();
         let mut molecule = document::Molecule {
             rdkit_version: RDKIT_VERSION,
@@ -714,7 +672,7 @@ impl PythonEngine {
         tokio::task::spawn_blocking(move || {
             let drawing = document::for_import(&molecule, false, &file.dummy_labels)
                 .map_err(|e| e.to_string())?;
-            Ok(Some((molecule, drawing, Some(file))))
+            Ok((molecule, drawing, Some(file)))
         })
         .await
         .map_err(|e| format!("Imported drawing preparation failed: {e}"))?

@@ -2,8 +2,8 @@
 //!
 //! Median-of-three introsort, a 16-element insertion cutoff, and a heap fallback
 //! reproduce its comparison policy. An explicit range stack bounds call depth.
-use super::{Edge, Error, at, at_mut};
-type Entry = (i32, Edge);
+use super::{Error, at, at_mut};
+type Entry = (i32, usize);
 
 fn key(values: &[Entry], i: usize) -> Result<i32, Error> {
     Ok(at(values, i)?.0)

@@ -221,11 +221,11 @@ async fn complete_reaction_export_responses_match_the_original_engine() -> anyho
 }
 
 #[tokio::test]
-async fn only_unresolved_ring_ordering_uses_the_reference_backend() -> anyhow::Result<()> {
+async fn dense_ring_reaction_export_never_calls_the_backend() -> anyhow::Result<()> {
     use reshiki::{
-        chemistry::{document, graph::Graph, rings::RingError, sanitize},
+        chemistry::graph::Graph,
         document::{Arrow, Point},
-        engine::{ChemistryEngine, LocalEngine, Request, Response},
+        engine::{ChemistryEngine, LocalEngine, PythonEngine, Request, Response},
         reactions::{Participant, Reaction},
     };
     let graph: Graph = serde_json::from_str(include_str!("fixtures/ring-order-dependent.json"))?;
@@ -263,45 +263,30 @@ async fn only_unresolved_ring_ordering_uses_the_reference_backend() -> anyhow::R
         coefficient: 1,
     });
     doc.reactions.push(roles);
-    let error = reaction::write_rxn(&doc, None)
-        .err()
-        .context("Expected unresolved ordering")?;
-    anyhow::ensure!(
-        matches!(
-            error,
-            reaction::Error::Preparation(document::Error::Sanitization(sanitize::Error {
-                cause: sanitize::Cause::Rings(RingError::UnresolvedOrdering),
-                ..
-            }))
-        ),
-        "{error}"
-    );
-    struct Reference;
-    impl ChemistryEngine for Reference {
-        async fn execute(&self, request: Request) -> Result<Response, String> {
-            if request.operation != "export"
-                || !matches!(request.format.as_deref(), Some("rxn" | "rsmi"))
-            {
-                return Err("Reaction request changed before fallback".into());
-            }
-            Ok(Response {
-                document: request.document,
-                analysis: None,
-                output: Some("reference".into()),
-                engine_version: RDKIT_VERSION.into(),
-                warnings: vec![],
-            })
+    struct Unavailable;
+    impl ChemistryEngine for Unavailable {
+        async fn execute(&self, _: Request) -> Result<Response, String> {
+            Err("Dense-ring export called the backend".into())
         }
     }
+    let reference = PythonEngine::default();
     for format in ["rxn", "rsmi"] {
         let mut request = Request::molecule("export", doc.clone());
         request.format = Some(format.into());
-        let result = LocalEngine::with_backend(Reference)
+        let expected = reference
+            .execute(request.clone())
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let result = LocalEngine::with_backend(Unavailable)
             .execute(request)
             .await
             .map_err(anyhow::Error::msg)?;
         anyhow::ensure!(
-            result.output.as_deref() == Some("reference") && result.document.as_ref() == Some(&doc)
+            result.output.as_ref().is_some_and(|s| !s.is_empty()) && result.document.is_none()
+        );
+        assert_eq!(
+            serde_json::to_value(result)?,
+            serde_json::to_value(expected)?
         );
     }
     Ok(())

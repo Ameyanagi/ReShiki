@@ -617,7 +617,7 @@ async fn rust_prepared_drawings_preserve_full_analysis_and_molecular_exports() -
 }
 
 #[tokio::test]
-async fn ambiguous_ring_pruning_keeps_the_complete_reference_analysis() -> TestResult {
+async fn dense_ring_pruning_matches_complete_reference_responses() -> TestResult {
     use reshiki::{chemistry::graph::Graph, document::Document};
     let graph: Graph = serde_json::from_str(include_str!("fixtures/ring-order-dependent.json"))?;
     let mut document = Document::default();
@@ -639,6 +639,7 @@ async fn ambiguous_ring_pruning_keeps_the_complete_reference_analysis() -> TestR
     let reference = PythonEngine::default();
     for (operation, format) in [
         ("analyze", None),
+        ("export", Some("smiles")),
         ("export", Some("mol")),
         ("export", Some("cdxml")),
         ("export", Some("cdx")),
@@ -656,8 +657,6 @@ async fn ambiguous_ring_pruning_keeps_the_complete_reference_analysis() -> TestR
                 .map_err(anyhow::Error::msg)?,
         )?;
     }
-    // RXN import retains the same narrow fallback when participant parsing
-    // encounters a ring order that cannot yet be certified across platforms.
     // Use a supported element with unrestricted valence: native RXN export
     // writes dummy atoms as R labels, which the original analysis cannot read.
     for atom in &mut document.atoms {
@@ -690,23 +689,7 @@ async fn ambiguous_ring_pruning_keeps_the_complete_reference_analysis() -> TestR
         .map_err(anyhow::Error::msg)?
         .output
         .context("Missing dense-ring reaction")?;
-    let error = reshiki::chemistry::reaction::read_rxn(&block)
-        .err()
-        .context("Expected unresolved reaction ring ordering")?;
-    assert!(
-        matches!(
-            error,
-            reshiki::chemistry::molfile::ReadError::Sanitization(
-                reshiki::chemistry::sanitize::Error {
-                    cause: reshiki::chemistry::sanitize::Cause::Rings(
-                        reshiki::chemistry::rings::RingError::UnresolvedOrdering
-                    ),
-                    ..
-                }
-            )
-        ),
-        "{error}"
-    );
+    reshiki::chemistry::reaction::read_rxn(&block)?.drawing()?;
     let request = Request::import("rxn", &block);
     assert_response_matches(
         local

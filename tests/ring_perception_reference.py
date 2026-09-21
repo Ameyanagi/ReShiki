@@ -21,8 +21,8 @@ def emit(name, mol, dative=False, hydrogen=False):
         basis = list(Chem.GetSSSR(Chem.Mol(mol), dative, hydrogen))
         sym_mol = Chem.Mol(mol)
         sym = list(Chem.GetSymmSSSR(sym_mol, dative, hydrogen))
-        rings = sorted(sorted(r) for r in sym)
-        bonds = sorted(sorted(r) for r in sym_mol.GetRingInfo().BondRings())
+        rings = [list(r) for r in sym]
+        bonds = [list(r) for r in sym_mol.GetRingInfo().BondRings()]
         expected = dict(basis_count=len(basis), atoms=rings, bonds=bonds)
     except (ValueError, RuntimeError):
         expected = None
@@ -86,7 +86,7 @@ def main():
             Chem.RenumberAtoms(mol, list(reversed(range(mol.GetNumAtoms())))),
         )
     # Topological graphs isolate ring behavior from unrelated valence rejection.
-    for case in range(600):
+    for case in range(6000):
         n = rng.randrange(3, 23)
         mol = Chem.RWMol()
         for _ in range(n):
@@ -96,6 +96,26 @@ def main():
         for a, b in edges[: rng.randrange(n - 1, min(len(edges), n * 2) + 1)]:
             mol.AddBond(a, b, Chem.BondType.SINGLE)
         emit(f"topology {case}", mol)
+    source = json.loads((Path(__file__).parent / "fixtures/ring-order-dependent.json").read_text())
+    mol = Chem.RWMol()
+    for atom in source["atoms"]:
+        mol.AddAtom(Chem.Atom(atom["atomic_number"]))
+    for bond in source["bonds"]:
+        mol.AddBond(bond["a"], bond["b"], Chem.BondType.SINGLE)
+    emit("former reference fallback", mol)
+    # Multiple dense components also exercise extra-ring accumulation order.
+    for case in range(100):
+        mol = Chem.RWMol()
+        n = rng.randrange(24, 55)
+        for _ in range(n):
+            mol.AddAtom(Chem.Atom(0))
+        edges = list(itertools.combinations(range(n), 2))
+        rng.shuffle(edges)
+        for a, b in edges[: n * 2]:
+            mol.AddBond(a, b, Chem.BondType.SINGLE)
+        emit(f"large topology {case}", mol)
+        if case % 10 == 0:
+            emit(f"combined topology {case}", Chem.CombineMols(mol, mol))
     for text in ("C1CC1", "C1CCC2(CC1)CCCC2", "C12C3C4C1C5C2C3C45", "C1CC1.C1CC1"):
         for kind in (Chem.BondType.DATIVE, Chem.BondType.HYDROGEN):
             mol = Chem.MolFromSmiles(text, sanitize=False)

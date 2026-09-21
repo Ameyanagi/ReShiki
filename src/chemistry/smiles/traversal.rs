@@ -8,20 +8,6 @@ use super::symbols::{self, AtomProperties, Options, Writer};
 use crate::chemistry::{graph::Graph, kekulize::Direction};
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
-#[cfg(target_os = "macos")]
-mod apple_sort;
-#[cfg(target_os = "linux")]
-mod linux_sort;
-#[cfg(any(target_os = "macos", target_os = "windows"))]
-mod sort_common;
-#[cfg(all(
-    test,
-    any(target_os = "linux", target_os = "macos", target_os = "windows")
-))]
-mod sort_tests;
-#[cfg(target_os = "windows")]
-mod windows_sort;
-
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("Invalid SMILES traversal: {0}")]
@@ -214,27 +200,14 @@ impl<'a> Topology<'a> {
             }
             choices.push((key, edge));
         }
-        #[cfg(target_os = "linux")]
         if self.ranks.len() > 5000 {
-            // Native rank offsets can collide beyond MAX_NATOMS. The Linux
-            // reference uses an unstable median-of-three introsort for ties.
-            linux_sort::sort(&mut choices)?;
-        } else {
-            choices.sort_by_key(|(rank, _)| *rank);
+            let keys = choices.iter().map(|(key, _)| *key).collect::<Vec<_>>();
+            return crate::chemistry::native_order::indices(&keys)
+                .map_err(|e| Error::Invalid(e.to_string()))?
+                .into_iter()
+                .map(|i| at(&choices, i).map(|(_, edge)| *edge))
+                .collect();
         }
-        #[cfg(target_os = "macos")]
-        if self.ranks.len() > 5000 {
-            apple_sort::sort(&mut choices)?;
-        } else {
-            choices.sort_by_key(|(rank, _)| *rank);
-        }
-        #[cfg(target_os = "windows")]
-        if self.ranks.len() > 5000 {
-            windows_sort::sort(&mut choices)?;
-        } else {
-            choices.sort_by_key(|(rank, _)| *rank);
-        }
-        #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
         choices.sort_by_key(|(rank, _)| *rank);
         Ok(choices.into_iter().map(|(_, edge)| edge).collect())
     }

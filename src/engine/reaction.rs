@@ -1,32 +1,24 @@
 //! Reaction parsing, chemical preparation and canvas assembly stay in Rust.
 //! The temporary bridge supplies missing layouts, full CIP labels and identifiers.
 use super::{PythonEngine, Response};
-use crate::chemistry::{RDKIT_VERSION, document, molfile, reaction, rings::RingError, sanitize};
+use crate::chemistry::{RDKIT_VERSION, document, reaction};
 use serde::Deserialize;
 
 impl PythonEngine {
-    /// `None` retains the existing fallback for unresolved dense-ring ordering.
     pub(super) async fn import_reaction(
         &self,
         text: String,
         format: &str,
-    ) -> Result<Option<Response>, String> {
+    ) -> Result<Response, String> {
         let draft = if format == "rsmi" {
             self.prepare_reaction_smiles(text).await?
         } else {
             tokio::task::spawn_blocking(move || match reaction::read_rxn(&text) {
-                Ok(imported) => imported.drawing().map(Some).map_err(|e| e.to_string()),
-                Err(molfile::ReadError::Sanitization(sanitize::Error {
-                    cause: sanitize::Cause::Rings(RingError::UnresolvedOrdering),
-                    ..
-                })) => Ok(None),
+                Ok(imported) => imported.drawing().map_err(|e| e.to_string()),
                 Err(error) => Err(error.to_string()),
             })
             .await
             .map_err(|e| format!("Reaction import failed: {e}"))??
-        };
-        let Some(draft) = draft else {
-            return Ok(None);
         };
         #[derive(Deserialize)]
         #[serde(deny_unknown_fields)]
@@ -55,23 +47,13 @@ impl PythonEngine {
         // combined analysis graph only after those labels finish the drawing.
         let drawing = tokio::task::spawn_blocking(move || {
             let doc = draft.finish(labeled.labels).map_err(|e| e.to_string())?;
-            match document::prepare(&doc) {
-                Ok(molecule) => {
-                    let smiles = super::molecular_smiles(&molecule.state)?;
-                    Ok(Some((doc, molecule, smiles)))
-                }
-                Err(document::Error::Sanitization(sanitize::Error {
-                    cause: sanitize::Cause::Rings(RingError::UnresolvedOrdering),
-                    ..
-                })) => Ok(None),
-                Err(error) => Err(error.to_string()),
-            }
+            let molecule = document::prepare(&doc).map_err(|e| e.to_string())?;
+            let smiles = super::molecular_smiles(&molecule.state)?;
+            Ok::<_, String>((doc, molecule, smiles))
         })
         .await
         .map_err(|e| format!("Reaction drawing preparation failed: {e}"))??;
-        let Some((doc, molecule, smiles)) = drawing else {
-            return Ok(None);
-        };
+        let (doc, molecule, smiles) = drawing;
         let mut result = self
             .exchange(serde_json::json!({
                 "protocol": 1,
@@ -102,29 +84,19 @@ impl PythonEngine {
                     .smiles = smiles;
             }
             response.document = Some(doc);
-            Ok(Some(response))
+            Ok(response)
         })
         .await
         .map_err(|e| format!("Reaction completion failed: {e}"))?
     }
 
-    async fn prepare_reaction_smiles(
-        &self,
-        text: String,
-    ) -> Result<Option<reaction::Drawing>, String> {
+    async fn prepare_reaction_smiles(&self, text: String) -> Result<reaction::Drawing, String> {
         let layout = tokio::task::spawn_blocking(move || match reaction::read_smiles(&text) {
-            Ok(source) => source.layout().map(Some).map_err(|e| e.to_string()),
-            Err(reaction::SmilesError::Sanitization(sanitize::Error {
-                cause: sanitize::Cause::Rings(RingError::UnresolvedOrdering),
-                ..
-            })) => Ok(None),
+            Ok(source) => source.layout().map_err(|e| e.to_string()),
             Err(error) => Err(error.to_string()),
         })
         .await
         .map_err(|e| format!("Reaction SMILES import failed: {e}"))??;
-        let Some(layout) = layout else {
-            return Ok(None);
-        };
         let parts: Vec<_> = layout.requests().collect();
         let positions = if parts.is_empty() {
             Vec::new()
@@ -150,13 +122,8 @@ impl PythonEngine {
             }
             reply.positions
         };
-        tokio::task::spawn_blocking(move || {
-            layout
-                .finish(positions)
-                .map(Some)
-                .map_err(|e| e.to_string())
-        })
-        .await
-        .map_err(|e| format!("Reaction drawing failed: {e}"))?
+        tokio::task::spawn_blocking(move || layout.finish(positions).map_err(|e| e.to_string()))
+            .await
+            .map_err(|e| format!("Reaction drawing failed: {e}"))?
     }
 }
