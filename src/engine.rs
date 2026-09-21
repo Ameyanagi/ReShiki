@@ -302,7 +302,10 @@ impl PythonEngine {
             tokio::task::spawn_blocking(move || {
                 use crate::chemistry::{document, rings::RingError, sanitize};
                 match document::prepare(&document) {
-                    Ok(molecule) => Ok(Some(molecule)),
+                    Ok(molecule) => {
+                        let drawing = document::for_drawing(&molecule, &document)?;
+                        Ok(Some((molecule, drawing)))
+                    }
                     // Preserve the existing native fallback only for the known
                     // platform-dependent ring tie; never hide a chemistry error.
                     Err(document::Error::Sanitization(sanitize::Error {
@@ -353,10 +356,14 @@ impl PythonEngine {
                 .as_object_mut()
                 .ok_or("Invalid chemistry request envelope")?;
             envelope.insert("id".into(), id.into());
-            if let Some(molecule) = prepared_molecule {
+            if let Some((molecule, drawing)) = &prepared_molecule {
                 envelope.insert(
                     "prepared_molecule".into(),
                     serde_json::to_value(molecule).map_err(|e| e.to_string())?,
+                );
+                envelope.insert(
+                    "prepared_drawing".into(),
+                    serde_json::to_value(drawing.molecule()).map_err(|e| e.to_string())?,
                 );
             }
             if self.local_properties {
@@ -405,9 +412,25 @@ impl PythonEngine {
                 .get("result")
                 .ok_or("Missing chemistry result")?
                 .clone();
-            if self.local_properties || self.local_pictures {
+            if self.local_properties || self.local_pictures || prepared_molecule.is_some() {
                 let (properties, pictures) = (self.local_properties, self.local_pictures);
                 result = tokio::task::spawn_blocking(move || {
+                    if let Some((_, drawing)) = prepared_molecule {
+                        let object = result.as_object_mut().ok_or("Invalid chemistry response")?;
+                        let labels = object
+                            .remove("drawing_labels")
+                            .ok_or("Missing full stereochemical labels")?;
+                        let document = drawing
+                            .finish(
+                                serde_json::from_value(labels)
+                                    .map_err(|e| format!("Invalid drawing labels: {e}"))?,
+                            )
+                            .map_err(|e| e.to_string())?;
+                        object.insert(
+                            "document".into(),
+                            serde_json::to_value(document).map_err(|e| e.to_string())?,
+                        );
+                    }
                     if properties {
                         crate::chemistry::complete_analysis(&mut result)?;
                     }

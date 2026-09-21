@@ -473,6 +473,19 @@ async fn supported_figure_exports_are_byte_identical_to_python() -> TestResult {
             .map_err(anyhow::Error::msg)?
             .document
             .context("Missing drawing")?;
+        if !doc.atoms.is_empty() {
+            let analyze = Request::molecule("analyze", doc.clone());
+            assert_response_matches(
+                local
+                    .execute(analyze.clone())
+                    .await
+                    .map_err(anyhow::Error::msg)?,
+                reference
+                    .execute(analyze)
+                    .await
+                    .map_err(anyhow::Error::msg)?,
+            )?;
+        }
         let mut request = Request::molecule("export", doc);
         request.format = Some("cdx".into());
         let expected = reference

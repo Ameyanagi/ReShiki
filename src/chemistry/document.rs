@@ -11,6 +11,8 @@ use super::{
 use crate::document::Document;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
+mod output;
+pub use output::{BondLabel, Drawing, Labels, for_drawing};
 
 #[cfg(test)]
 mod tests;
@@ -23,10 +25,14 @@ pub enum Error {
     Sanitization(#[from] sanitize::Error),
     #[error("Drawing stereochemistry: {0}")]
     Stereo(String),
+    #[error("Kekulé drawing bonds: {0}")]
+    BondAssignment(String),
+    #[error("Drawing wedge assignment: {0}")]
+    WedgeAssignment(String),
 }
 
 /// Detached chemical state, with stable drawing IDs and Y-up coordinates.
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Molecule {
     pub rdkit_version: &'static str,
     pub ids: Vec<u64>,

@@ -21,7 +21,7 @@ STEREO = {"z": 2, "e": 3, "cis": 4, "trans": 5}
 DISPLAY = {"wedge": 1, "hash": 2, "hollow_wedge": 1, "bold": 1, "hashed": 2, "wavy": 6}
 
 
-def prepare(doc):
+def molecule(doc):
     rw = Chem.RWMol()
     ids = {}
     for item in doc["atoms"]:
@@ -96,12 +96,18 @@ def prepare(doc):
         or any(int(b.GetStereo()) > 5 for b in mol.GetBonds())
     ):
         raise ValueError("Unsupported molecular state")
+    return mol
+
+
+def prepare(doc):
+    mol = molecule(doc)
+    positions = mol.GetConformer()
     return dict(
         rdkit_version=rdBase.rdkitVersion,
         ids=[a["id"] for a in doc["atoms"]],
         positions=[
             dict(x=p.x, y=p.y, z=p.z)
-            for p in (positions.GetAtomPosition(i) for i in range(len(ids)))
+            for p in (positions.GetAtomPosition(i) for i in range(mol.GetNumAtoms()))
         ],
         state=snapshot(mol, "symmetric"),
     )
@@ -164,9 +170,7 @@ def drawing(original):
     return dict(version=15, atoms=atoms, bonds=bonds)
 
 
-def main():
-    RDLogger.DisableLog("rdApp.*")
-    print(json.dumps(dict(rdkit_version=rdBase.rdkitVersion)))
+def cases(emit):
     rng = random.Random(946027)
     emit("empty", dict(version=15, atoms=[], bonds=[]))
     for donor in ("H", "C"):
@@ -281,6 +285,12 @@ def main():
                 else ("plain", "wavy")
             )
         emit(f"modified drawing/{i}", doc)
+
+
+def main():
+    RDLogger.DisableLog("rdApp.*")
+    print(json.dumps(dict(rdkit_version=rdBase.rdkitVersion)))
+    cases(emit)
 
 
 if __name__ == "__main__":

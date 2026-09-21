@@ -7,6 +7,7 @@ still initializes its own valence and ring caches; check those against Rust.
 import math
 
 from rdkit import Chem, rdBase
+from rdkit.Chem import rdCIPLabeler
 
 ORDERS = {
     0: Chem.BondType.HYDROGEN,
@@ -154,3 +155,23 @@ def restore(data, document):
         if properties[key] is not None:
             mol.SetIntProp(name, int(properties[key]), computed=key == "done")
     return mol
+
+
+def label_drawing(mol):
+    """Full CIP labels, including the bond-stereo controls the native pass changes."""
+    for item in list(mol.GetAtoms()) + list(mol.GetBonds()):
+        if item.HasProp("_CIPCode"):
+            item.ClearProp("_CIPCode")
+    rdCIPLabeler.AssignCIPLabels(mol, maxRecursiveIterations=1_250_000)
+    return dict(
+        rdkit_version=rdBase.rdkitVersion,
+        atoms=[a.GetProp("_CIPCode") if a.HasProp("_CIPCode") else None for a in mol.GetAtoms()],
+        bonds=[
+            dict(
+                code=b.GetProp("_CIPCode") if b.HasProp("_CIPCode") else None,
+                stereo=int(b.GetStereo()),
+                stereo_atoms=list(b.GetStereoAtoms()),
+            )
+            for b in mol.GetBonds()
+        ],
+    )

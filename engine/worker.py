@@ -1075,7 +1075,18 @@ def handle(request):
             check_supported(mol)
         else:
             mol = from_document(doc)
-        result_doc = to_document(mol, doc)
+        prepared_drawing = request.get("prepared_drawing")
+        if prepared_drawing is not None:
+            if prepared_molecule is None:
+                raise ValueError("A prepared drawing requires its prepared molecule")
+            drawing = prepared.restore(prepared_drawing, doc)
+            check_supported(drawing)
+            response["drawing_labels"] = prepared.label_drawing(drawing)
+            drawing_bonds = prepared_drawing["state"]["graph"]["bonds"]
+            result_doc = None
+        else:
+            result_doc = to_document(mol, doc)
+            drawing_bonds = result_doc["bonds"]
         response.update(document=result_doc, analysis=analyzer(mol))
         if operation == "export":
             fmt = request["format"]
@@ -1083,7 +1094,7 @@ def handle(request):
                 response["warnings"].append(
                     "This drawing or molecule format does not retain reaction roles. Use RXN/reaction SMILES for reaction data, or .reshiki for the complete scheme."
                 )
-            exotic = {b["order"] for b in result_doc["bonds"]} & {0, 5, 6, 7}
+            exotic = {b["order"] for b in drawing_bonds} & {0, 5, 6, 7}
             if (
                 (fmt == "mol" and exotic & {0, 6, 7})
                 or (fmt == "smiles" and exotic & {0, 7})

@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from rdkit import Chem, RDConfig
+from rdkit.Chem import rdCIPLabeler
 
 from engine import prepared, worker
 from tests.document_preparation_reference import drawing, prepare
@@ -125,6 +126,79 @@ class PreparedMoleculeTests(unittest.TestCase):
         self.assertNotIn("_StereochemDone", mol.GetPropNames(True, False))
         mol.ClearComputedProps()
         self.assertFalse(mol.HasProp("_StereochemDone"))
+
+    def test_prepared_drawing_skips_native_drawing_conversion(self):
+        for text in (
+            "N[C@H](C)C(=O)O",
+            "F/C=C/F",
+            "F/C=C\\F",
+            "c1ccc2[nH]ccc2c1",
+            "[13CH3:1][OH:9]",
+        ):
+            doc = worker.handle(dict(protocol=1, operation="import", format="smiles", text=text))[
+                "document"
+            ]
+            chemical = json.loads(json.dumps(prepare(doc)))
+            work = worker.from_document(doc)
+            Chem.Kekulize(work, clearAromaticFlags=True)
+            Chem.WedgeMolBonds(work, work.GetConformer())
+            for item in list(work.GetAtoms()) + list(work.GetBonds()):
+                if item.HasProp("_CIPCode"):
+                    item.ClearProp("_CIPCode")
+            drawing = {**chemical, "state": json.loads(json.dumps(snapshot(work, "symmetric")))}
+            rdCIPLabeler.AssignCIPLabels(work, maxRecursiveIterations=1_250_000)
+            expected_labels = dict(
+                rdkit_version=chemical["rdkit_version"],
+                atoms=[
+                    a.GetProp("_CIPCode") if a.HasProp("_CIPCode") else None
+                    for a in work.GetAtoms()
+                ],
+                bonds=[
+                    dict(
+                        code=b.GetProp("_CIPCode") if b.HasProp("_CIPCode") else None,
+                        stereo=int(b.GetStereo()),
+                        stereo_atoms=list(b.GetStereoAtoms()),
+                    )
+                    for b in work.GetBonds()
+                ],
+            )
+            for operation, format in (
+                ("analyze", None),
+                ("export", "smiles"),
+                ("export", "mol"),
+                ("export", "inchi"),
+            ):
+                with self.subTest(text=text, operation=operation, format=format):
+                    request = dict(protocol=1, operation=operation, format=format, document=doc)
+                    expected = worker.handle(request)
+                    expected["document"] = (
+                        None  # Rust assembles the drawing after receiving CIP metadata.
+                    )
+                    expected["drawing_labels"] = expected_labels
+                    request.update(prepared_molecule=chemical, prepared_drawing=drawing)
+                    with (
+                        patch.object(
+                            worker,
+                            "from_document",
+                            side_effect=AssertionError("Native preparation called"),
+                        ),
+                        patch.object(
+                            worker,
+                            "to_document",
+                            side_effect=AssertionError("Native drawing conversion called"),
+                        ),
+                        patch.object(
+                            Chem,
+                            "Kekulize",
+                            side_effect=AssertionError("Native drawing Kekulize called"),
+                        ),
+                        patch.object(
+                            Chem,
+                            "WedgeMolBonds",
+                            side_effect=AssertionError("Native wedging called"),
+                        ),
+                    ):
+                        self.assertEqual(worker.handle(request), expected)
 
 
 if __name__ == "__main__":
