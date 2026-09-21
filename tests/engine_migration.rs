@@ -9,6 +9,102 @@ use std::{
 
 type TestResult = Result<(), Box<dyn Error>>;
 
+fn assert_response_matches(actual: Response, expected: Response) -> TestResult {
+    let mut actual = serde_json::to_value(actual)?;
+    let mut expected = serde_json::to_value(expected)?;
+    if let (Some(a), Some(e)) = (
+        actual["analysis"].as_object_mut(),
+        expected["analysis"].as_object_mut(),
+    ) {
+        for field in ["mass", "exact_mass"] {
+            let av = a
+                .remove(field)
+                .and_then(|v| v.as_f64())
+                .ok_or("Missing mass")?;
+            let ev = e
+                .remove(field)
+                .and_then(|v| v.as_f64())
+                .ok_or("Missing reference mass")?;
+            // RDKit wheels may fuse floating-point operations on some targets.
+            assert!(
+                (av - ev).abs() <= ev.abs().max(1.) * 1e-12,
+                "{field}: {av} != {ev}"
+            );
+        }
+    }
+    assert_eq!(actual, expected);
+    Ok(())
+}
+
+#[tokio::test]
+async fn rust_properties_match_reference_across_editor_operations() -> TestResult {
+    let local = LocalEngine::default();
+    let reference = PythonEngine::default();
+    for smiles in [
+        "CN",
+        "[2H]O[3H]",
+        "[NH4+]",
+        "[Fe+3].[Cl-].[Cl-].[Cl-]",
+        "[CH3]",
+        "*CC",
+    ] {
+        let request = Request::import_smiles(smiles);
+        assert_response_matches(
+            local.execute(request.clone()).await?,
+            reference.execute(request).await?,
+        )?;
+    }
+    let document = reference
+        .execute(Request::import_smiles("COc1ccccc1"))
+        .await?
+        .document
+        .ok_or("Missing reference document")?;
+    for operation in ["analyze", "clean", "aromatic", "abbreviate"] {
+        let mut request = Request::molecule(operation, document.clone());
+        request.selected_ids = Some(document.atoms.iter().map(|a| a.id).collect());
+        if operation == "abbreviate" {
+            request.text = Some("OMe".into());
+        }
+        assert_response_matches(
+            local.execute(request.clone()).await?,
+            reference.execute(request).await?,
+        )?;
+    }
+    for format in ["smiles", "inchi", "mol", "cdxml", "cdx"] {
+        let mut request = Request::molecule("export", document.clone());
+        request.format = Some(format.into());
+        assert_response_matches(
+            local.execute(request.clone()).await?,
+            reference.execute(request).await?,
+        )?;
+    }
+    let request = Request::import("rsmi", "[CH3:1][OH:2]>>[CH2:1]=[O:2]");
+    assert_response_matches(
+        local.execute(request.clone()).await?,
+        reference.execute(request).await?,
+    )?;
+    // Cached labels must not affect properties following a topology edit.
+    let mut document = reference
+        .execute(Request::import_smiles("CC"))
+        .await?
+        .document
+        .ok_or("Missing reference document")?;
+    for atom in &mut document.atoms {
+        atom.label_h = 99;
+    }
+    for bond in &mut document.bonds {
+        bond.order = 2;
+    }
+    let request = Request::molecule("analyze", document);
+    let actual = local.execute(request.clone()).await?;
+    assert_eq!(
+        actual.analysis.as_ref().map(|a| a.formula.as_str()),
+        Some("C2H4")
+    );
+    assert_response_matches(actual, reference.execute(request).await?)?;
+    Ok(())
+}
+
 #[tokio::test]
 async fn native_drawings_match_the_original_python_importer() -> TestResult {
     let local = LocalEngine::default();
@@ -21,10 +117,7 @@ async fn native_drawings_match_the_original_python_importer() -> TestResult {
         let request = Request::import("cdx", &STANDARD.encode(data));
         let expected = reference.execute(request.clone()).await?;
         let actual = local.execute(request).await?;
-        assert_eq!(
-            serde_json::to_value(actual)?,
-            serde_json::to_value(expected)?
-        );
+        assert_response_matches(actual, expected)?;
     }
     Ok(())
 }
@@ -55,20 +148,12 @@ async fn exports_and_reimports_preserve_rdkit_chemistry_and_document_metadata() 
         request.format = Some("cdx".into());
         let expected = reference.execute(request.clone()).await?;
         let actual = local.execute(request).await?;
-        assert_eq!(
-            serde_json::to_value(&actual)?,
-            serde_json::to_value(&expected)?,
-            "{smiles}"
-        );
+        assert_response_matches(actual.clone(), expected)?;
         let data = actual.output.ok_or("Missing binary export")?;
         let request = Request::import("cdx", &data);
         let back = local.execute(request.clone()).await?;
         let oracle = reference.execute(request).await?;
-        assert_eq!(
-            serde_json::to_value(&back)?,
-            serde_json::to_value(oracle)?,
-            "{smiles}"
-        );
+        assert_response_matches(back.clone(), oracle)?;
         let identity = back.analysis.ok_or("Missing round-trip analysis")?;
         assert_eq!(analysis.smiles, identity.smiles, "{smiles}");
         assert_eq!(analysis.inchikey, identity.inchikey, "{smiles}");
@@ -190,11 +275,7 @@ async fn supported_figure_exports_are_byte_identical_to_python() -> TestResult {
         request.format = Some("cdx".into());
         let expected = reference.execute(request.clone()).await?;
         let actual = local.execute(request).await?;
-        assert_eq!(
-            serde_json::to_value(actual)?,
-            serde_json::to_value(expected)?,
-            "{name}"
-        );
+        assert_response_matches(actual, expected)?;
     }
     Ok(())
 }

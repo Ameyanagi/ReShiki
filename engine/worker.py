@@ -5,6 +5,7 @@ import json
 import math
 import sys
 import xml.etree.ElementTree as ET
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypedDict
 
@@ -340,7 +341,7 @@ def to_document(mol, base=None, rewedge=False):
     }
 
 
-def analyze(mol):
+def analyze(mol, *, local_properties=False):
     identifiers = not any(
         b.GetBondType() in (Chem.BondType.HYDROGEN, Chem.BondType.ONEANDAHALF)
         for b in mol.GetBonds()
@@ -348,20 +349,40 @@ def analyze(mol):
     inchi_ok = identifiers and not any(
         b.GetBondType() in (Chem.BondType.DATIVE, Chem.BondType.QUADRUPLE) for b in mol.GetBonds()
     )
-    return {
+    result = {
         "smiles": Chem.MolToSmiles(mol) if identifiers else "",
-        "formula": rdMolDescriptors.CalcMolFormula(mol),
-        "mass": rdMolDescriptors._CalcMolWt(mol),
-        "exact_mass": rdMolDescriptors.CalcExactMolWt(mol),
         "logp": rdMolDescriptors.CalcCrippenDescriptors(mol)[0],
         "tpsa": rdMolDescriptors.CalcTPSA(mol),
         "donors": rdMolDescriptors.CalcNumHBD(mol),
         "acceptors": rdMolDescriptors.CalcNumHBA(mol),
         "rings": rdMolDescriptors.CalcNumRings(mol),
-        "unpaired_electrons": sum(a.GetNumRadicalElectrons() for a in mol.GetAtoms()),
         "inchi": Chem.MolToInchi(mol) if inchi_ok else "",
         "inchikey": Chem.MolToInchiKey(mol) if inchi_ok else "",
     }
+    if local_properties:
+        # Facts come from the sanitized molecule, never cached drawing labels.
+        # Keep the original descriptor path as an independent migration oracle.
+        result["property_input"] = {
+            "rdkit_version": rdBase.rdkitVersion,
+            "atoms": [
+                {
+                    "atomic_number": a.GetAtomicNum(),
+                    "isotope": a.GetIsotope(),
+                    "charge": a.GetFormalCharge(),
+                    "hydrogens": a.GetTotalNumHs(),
+                    "radical_electrons": a.GetNumRadicalElectrons(),
+                }
+                for a in mol.GetAtoms()
+            ],
+        }
+    else:
+        result.update(
+            formula=rdMolDescriptors.CalcMolFormula(mol),
+            mass=rdMolDescriptors._CalcMolWt(mol),
+            exact_mass=rdMolDescriptors.CalcExactMolWt(mol),
+            unpaired_electrons=sum(a.GetNumRadicalElectrons() for a in mol.GetAtoms()),
+        )
+    return result
 
 
 class TextStyle(TypedDict):
@@ -917,13 +938,17 @@ def export_cdxml(
 def handle(request):
     if request.get("protocol") != 1:
         raise ValueError("Unsupported protocol version")
+    local_properties = request.get("local_properties", False)
+    if not isinstance(local_properties, bool):
+        raise ValueError("local_properties must be a boolean")
+    analyzer = partial(analyze, local_properties=local_properties)
     operation = request["operation"]
     response = {"engine_version": rdBase.rdkitVersion, "warnings": []}
     if operation == "import" and request.get("format") in ("rxn", "rsmi"):
         doc = reactions.import_reaction(
             request.get("text", ""), request["format"], to_document, check_supported
         )
-        response.update(document=doc, analysis=analyze(from_document(doc)))
+        response.update(document=doc, analysis=analyzer(from_document(doc)))
         return response
     if operation == "export" and request.get("format") in ("rxn", "rsmi"):
         response["output"] = reactions.export(
@@ -937,7 +962,7 @@ def handle(request):
         result, mol = aromatic.toggle(
             request["document"], request.get("selected_ids"), from_document, to_document
         )
-        response.update(document=result, analysis=analyze(mol))
+        response.update(document=result, analysis=analyzer(mol))
         return response
     if operation == "abbreviate":
         doc = request["document"]
@@ -948,7 +973,7 @@ def handle(request):
         else:
             result = abbreviations.find(doc, mol, selection, request.get("text"))
         checked = from_document(result)
-        response.update(document=to_document(checked, result), analysis=analyze(checked))
+        response.update(document=to_document(checked, result), analysis=analyzer(checked))
         return response
     if operation == "import":
         fmt, text = request.get("format", "smiles"), request.get("text", "")
@@ -975,7 +1000,7 @@ def handle(request):
         if fmt in ("smiles", "inchi") or not mol.GetNumConformers():
             rdDepictor.Compute2DCoords(mol)
         response.update(
-            document=to_document(mol, base), analysis=analyze(mol) if mol.GetNumAtoms() else None
+            document=to_document(mol, base), analysis=analyzer(mol) if mol.GetNumAtoms() else None
         )
     elif operation in ("analyze", "clean", "export"):
         doc = request["document"]
@@ -1001,7 +1026,7 @@ def handle(request):
                     request.get("selected_ids"),
                     from_document,
                     to_document,
-                    analyze,
+                    analyzer,
                     SCALE,
                     drawing_styles.checked(doc.get("drawing_style"))["bond_length_world"],
                 )
@@ -1009,7 +1034,7 @@ def handle(request):
             return response
         mol = from_document(doc)
         result_doc = to_document(mol, doc)
-        response.update(document=result_doc, analysis=analyze(mol))
+        response.update(document=result_doc, analysis=analyzer(mol))
         if operation == "export":
             fmt = request["format"]
             if doc.get("reactions"):

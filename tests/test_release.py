@@ -18,6 +18,7 @@ from build_release import (
     archive,
     check_tag,
     main,
+    notices,
     release_platform,
     verify_binary,
     verify_interpreter,
@@ -27,6 +28,21 @@ from sign_macos import is_macho, private_run
 
 
 class ReleaseTests(unittest.TestCase):
+    def test_release_includes_adapted_source_licenses(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "Licenses"
+            with patch("build_release.run") as run:
+                run.side_effect = lambda *args, **kwargs: kwargs["stdout"].write('{"packages": []}')
+                notices(destination)
+            self.assertIn(
+                "BSD 3-Clause License",
+                (destination / "sources/rdkit/LICENSE").read_text(),
+            )
+            self.assertIn(
+                "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
+                (destination / "sources/rdkit/NOTICE").read_text(),
+            )
+
     @staticmethod
     def pe_image(machine):
         header = bytearray(64)

@@ -144,7 +144,7 @@ pub struct Response {
     pub warnings: Vec<String>,
 }
 
-/// The editor's contract. A future Rust engine implements this same interface.
+/// Shared contract for local Rust operations and the remaining chemistry backend.
 pub trait ChemistryEngine: Send + Sync {
     fn execute(
         &self,
@@ -162,7 +162,10 @@ pub struct LocalEngine<B = PythonEngine> {
 impl Default for LocalEngine<PythonEngine> {
     fn default() -> Self {
         Self {
-            chemistry: PythonEngine::default(),
+            chemistry: PythonEngine {
+                local_properties: true,
+                ..PythonEngine::default()
+            },
         }
     }
 }
@@ -231,6 +234,8 @@ struct Worker {
 #[derive(Clone, Default)]
 pub struct PythonEngine {
     worker: Arc<Mutex<Option<Worker>>>,
+    // Default false keeps an independent reference backend for differential tests.
+    local_properties: bool,
 }
 impl PythonEngine {
     async fn spawn() -> Result<Worker, String> {
@@ -300,10 +305,13 @@ impl PythonEngine {
                 .checked_add(1)
                 .ok_or("Chemistry request counter exhausted; retry to restart the worker")?;
             let mut message = serde_json::to_value(request).map_err(|e| e.to_string())?;
-            message
+            let envelope = message
                 .as_object_mut()
-                .ok_or("Invalid chemistry request envelope")?
-                .insert("id".into(), id.into());
+                .ok_or("Invalid chemistry request envelope")?;
+            envelope.insert("id".into(), id.into());
+            if self.local_properties {
+                envelope.insert("local_properties".into(), true.into());
+            }
             let mut bytes = serde_json::to_vec(&message).map_err(|e| e.to_string())?;
             bytes.push(b'\n');
             worker
@@ -334,13 +342,14 @@ impl PythonEngine {
                     .unwrap_or("Chemistry error")
                     .to_string());
             }
-            let response: Response = serde_json::from_value(
-                value
-                    .get("result")
-                    .ok_or("Missing chemistry result")?
-                    .clone(),
-            )
-            .map_err(|e| e.to_string())?;
+            let mut result = value
+                .get("result")
+                .ok_or("Missing chemistry result")?
+                .clone();
+            if self.local_properties {
+                crate::chemistry::complete_analysis(&mut result)?;
+            }
+            let response: Response = serde_json::from_value(result).map_err(|e| e.to_string())?;
             if let Some(doc) = &response.document {
                 doc.validate()?;
             }

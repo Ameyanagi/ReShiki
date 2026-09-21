@@ -126,6 +126,7 @@ def runtime_project():
 
 def notices(destination):
     destination.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(ROOT / "licenses", destination / "sources", dirs_exist_ok=True)
     with (destination / "rust-dependencies.json").open("w") as stream:
         run(["cargo", "metadata", "--format-version", "1", "--locked"], cwd=ROOT, stdout=stream)
     metadata = json.loads((destination / "rust-dependencies.json").read_text(encoding="utf-8"))

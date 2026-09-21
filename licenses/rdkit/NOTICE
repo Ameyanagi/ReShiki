@@ -1,0 +1,12 @@
+ReShiki includes atomic mass data and adapted molecular property calculations
+from RDKit 2026.03.6, commit 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985:
+https://github.com/rdkit/rdkit/tree/Release_2026_03_6
+
+Code/GraphMol/atomic_data.cpp and Code/GraphMol/Atom.cpp
+Copyright (C) 2001-2024 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/MolProps.cpp
+Copyright (C) 2024 Greg Landrum and other RDKit contributors.
+
+Adaptations are in src/chemistry/ and scripts/regenerate_atomic_data.py.
+These portions are distributed under the accompanying BSD-3-Clause LICENSE.

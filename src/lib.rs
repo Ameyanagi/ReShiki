@@ -19,6 +19,7 @@ pub mod assistant;
 pub mod atom_labels;
 pub mod bonds;
 pub mod chains;
+pub mod chemistry;
 pub mod cleanup;
 pub mod clipboard;
 pub mod compatibility;

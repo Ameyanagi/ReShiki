@@ -9,7 +9,7 @@ flowchart LR
     Doc --> Scene[Vector scene]
     Scene --> Canvas[Iced geometry]
     Scene --> SVG[SVG export]
-    App --> Local[LocalEngine / Rust file conversion]
+    App --> Local[LocalEngine / Rust conversion and properties]
     Local --> Contract[ChemistryEngine / protocol v1]
     Contract <--> Worker[Python process]
     Worker --> RDKit[RDKit]
@@ -27,6 +27,7 @@ flowchart LR
 | `src/app/workspace.rs`                         | Command bar, context options, compact palette, inspector and drawers           |
 | `src/app/icons.rs`                             | Original vector tool and command icons                                         |
 | `src/engine.rs`                                | Chemistry interface, worker lifecycle, timeout and response validation         |
+| `src/chemistry/`                               | Formula, average/exact mass and radical count from validated atom facts        |
 | `src/editing.rs`                               | Clipboard remapping, transforms, component arrangement and ring placement      |
 | `src/recovery.rs`                              | Atomic session snapshots and recovery candidates                               |
 | `src/clipboard.rs`, `src/app/clipboard.rs`     | Native multi-format Copy/Paste, asynchronous completion guards and safe Cut    |
@@ -66,13 +67,19 @@ The file-open panel is intentionally unfiltered, so opening a supported file doe
 
 ## Pure Rust migration
 
-The app uses `LocalEngine`, which implements `ChemistryEngine`. CDX encoding and decoding run in Rust on a blocking task; CDXML chemistry and document conversion still go to `PythonEngine`. Other chemistry requests pass through unchanged. A future backend can replace Python behind the same interface. The trait uses a statically dispatched async future; it is not a runtime plugin ABI.
+The app uses `LocalEngine`, which implements `ChemistryEngine`. CDX encoding and decoding run in Rust on a blocking task. Formula, average mass, exact mass and radical count also run in Rust. RDKit still validates the graph and supplies atom facts, including hydrogen counts. Cached drawing labels are never used for these calculations.
+
+The bridge requests atom facts with `local_properties: true`, completes the analysis in Rust, and returns the unchanged public response type. Missing facts or a mismatched RDKit data version return errors. `PythonEngine::default()` retains the original calculations as an independent reference. A future backend can replace Python behind the same interface; this is not a runtime plugin ABI.
 
 `tests/cdx_codec.rs` compares binary output and decoded XML with the Python reference, including native fixtures and every supported property. Its text corpus covers every defined character in the supported legacy codepages. `tests/engine_migration.rs` compares complete responses, stereo identities, isotopes, charges, radicals, figure objects, and rejected queries against RDKit. Malformed binary data must fail before reaching the chemistry backend. The ordinary integration tests use `LocalEngine`, so they exercise the app's migrated path.
 
+`tests/properties.rs` checks all 119 element entries, 3,111 known isotopes, unknown isotope fallbacks, templates, ions, radicals and explicit/implicit hydrogens against RDKit. Formulas and counts must match exactly; masses allow relative error of at most `1e-12` for platform-dependent floating-point operations. JSON parsing preserves full float precision. Worker tests also verify that migrated descriptors are no longer calculated in Python.
+
 Regenerate codec constants and codepage tables with `uv run --locked python scripts/regenerate_cdx_rust_schema.py`, followed by `cargo fmt --all`. The generator uses the checked Python schema and standard-library codecs; released applications read only compiled Rust constants and tables.
 
-First move graph checks, formula/mass and simple descriptors into Rust. Then add parsers, aromaticity, stereochemistry and canonical identifiers with a reference corpus. Move 2D coordinate generation separately from depiction. Keep Python as a selectable verification backend until stereo, charges, isotopes, salts and interchange pass differential tests. Retiring the Python runtime is a later packaging milestone, not an existing capability.
+Atomic data comes from RDKit `Release_2026_03_6`. Regenerate it with `uv run --locked python scripts/regenerate_atomic_data.py --rdkit-source ~/dev/rdkit`, then `cargo fmt --all`. The generator verifies the source checksum and compares every entry with installed RDKit. Its BSD license and attribution are in `licenses/rdkit/` and are included in release packages.
+
+The target is a shipped app with no Python, RDKit or uv requirement. Remaining work includes document/exchange conversion, graph validation and hydrogen assignment, other descriptors, parsers, aromaticity, stereochemistry, canonical identifiers and 2D layout. Each replacement needs differential tests before switching. Python/RDKit can remain development-only references after the runtime is removed; current builds still require them.
 
 Portable packages include the worker project and `uv.lock` in `Contents/Resources/chemistry` on macOS or a sibling `chemistry` directory on Windows/Linux. The Rust bridge discovers it relative to the executable and asynchronously runs `uv sync --locked --no-dev --python 3.12` into a separate per-user cache. uv is an installation prerequisite. Python dependencies are reused offline after initial setup, and setup does not modify the signed bundle. Development checkouts use their local `.venv`. The chemistry protocol remains version 1 independently of the native document version.
 
