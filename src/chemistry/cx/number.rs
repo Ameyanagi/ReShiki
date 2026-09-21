@@ -1,9 +1,14 @@
 //! Validate the lexical_cast<double> coordinate spellings used by CX readers.
 //! Hexadecimal input needs separate range checks; no FFI or locale state.
 pub(super) fn valid(text: &str) -> bool {
-    // UCRT accepts rounded nonzero subnormals. The Unix reference reports
-    // decimal underflow and inexact hexadecimal subnormals as range errors.
     parse(text).is_some()
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Reader {
+    Mac,
+    Windows,
+    Linux,
 }
 
 /// Read the native coordinate spelling without FFI or process locale changes.
@@ -11,20 +16,31 @@ pub fn parse(text: &str) -> Option<f64> {
     if text.len() > 1024 * 1024 {
         return None;
     }
-    parse_for(text, cfg!(windows))
+    let reader = if cfg!(windows) {
+        Reader::Windows
+    } else if cfg!(target_os = "linux") {
+        Reader::Linux
+    } else {
+        Reader::Mac
+    };
+    parse_for(text, reader)
 }
 
 #[cfg(test)]
-fn valid_for(text: &str, rounded_subnormals: bool) -> bool {
-    parse_for(text, rounded_subnormals).is_some()
+fn valid_for(text: &str, reader: Reader) -> bool {
+    parse_for(text, reader).is_some()
 }
 
-fn parse_for(text: &str, rounded_subnormals: bool) -> Option<f64> {
+fn parse_for(text: &str, reader: Reader) -> Option<f64> {
     let unsigned = text.strip_prefix(['+', '-']).unwrap_or(text);
     if unsigned.starts_with("0x") || unsigned.starts_with("0X") {
+        // The Linux reference's stream conversion rejects hexadecimal input.
+        if reader == Reader::Linux {
+            return None;
+        }
         return hexadecimal(
             unsigned.as_bytes().get(2..).unwrap_or_default(),
-            rounded_subnormals,
+            reader == Reader::Windows,
         )
         .map(|value| if text.starts_with('-') { -value } else { value });
     }
@@ -38,9 +54,11 @@ fn parse_for(text: &str, rounded_subnormals: bool) -> Option<f64> {
         .then_some(value);
     }
     if value.is_subnormal() {
-        return rounded_subnormals.then_some(value);
+        return (reader != Reader::Mac).then_some(value);
     }
-    (value != 0.0
+    // Linux accepts decimal underflow to zero; the other readers reject it.
+    (reader == Reader::Linux
+        || value != 0.0
         || !unsigned
             .bytes()
             .take_while(|b| !matches!(b, b'e' | b'E'))
@@ -177,7 +195,22 @@ fn hexadecimal(text: &[u8], rounded_subnormals: bool) -> Option<f64> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_for, valid_for};
+    use super::{Reader, parse_for, valid_for};
+
+    #[test]
+    fn linux_coordinate_syntax_and_underflow_match_native_reader() {
+        for (text, bits) in [
+            ("1e-9999", 0),
+            ("-1e-9999", 1u64 << 63),
+            ("1e-308", 2_024_022_533_073_106),
+            ("5e-324", 1),
+        ] {
+            assert_eq!(parse_for(text, Reader::Linux).map(f64::to_bits), Some(bits));
+        }
+        for text in ["0x0", "0x1p0", "-0x1p-1074", "1e309"] {
+            assert!(!valid_for(text, Reader::Linux), "{text}");
+        }
+    }
 
     #[test]
     fn windows_hexadecimal_boundary_matches_observed_native_bits() {
@@ -187,16 +220,19 @@ mod tests {
             ("0x1.fffffffffffff8p-1023", 18_014_398_509_481_984),
             ("0x1.ffffffffffffffffp-1023", 18_014_398_509_481_984),
         ] {
-            assert_eq!(parse_for(text, true).map(f64::to_bits), Some(bits));
             assert_eq!(
-                parse_for(text, false).map(f64::to_bits),
+                parse_for(text, Reader::Windows).map(f64::to_bits),
+                Some(bits)
+            );
+            assert_eq!(
+                parse_for(text, Reader::Mac).map(f64::to_bits),
                 Some(f64::MIN_POSITIVE.to_bits())
             );
         }
     }
 
     #[test]
-    fn native_underflow_rules_distinguish_windows_and_unix() {
+    fn native_underflow_rules_distinguish_windows_and_mac() {
         for input in [
             "1e-308",
             "5e-324",
@@ -204,8 +240,8 @@ mod tests {
             "0x1.8p-1074",
             "0x1.123456789abcdefp-1023",
         ] {
-            assert!(valid_for(input, true), "Windows: {input}");
-            assert!(!valid_for(input, false), "Unix: {input}");
+            assert!(valid_for(input, Reader::Windows), "Windows: {input}");
+            assert!(!valid_for(input, Reader::Mac), "macOS: {input}");
         }
         for input in [
             "0x1p-1075",
@@ -216,8 +252,8 @@ mod tests {
             "0x1.fffffffffffff8p1023",
             "bad",
         ] {
-            assert!(!valid_for(input, true), "Windows: {input}");
-            assert!(!valid_for(input, false), "Unix: {input}");
+            assert!(!valid_for(input, Reader::Windows), "Windows: {input}");
+            assert!(!valid_for(input, Reader::Mac), "macOS: {input}");
         }
         for input in [
             "0x1p-1074",
@@ -226,8 +262,8 @@ mod tests {
             "0x1.fffffffffffffp1023",
             "0e-9999",
         ] {
-            assert!(valid_for(input, true), "Windows: {input}");
-            assert!(valid_for(input, false), "Unix: {input}");
+            assert!(valid_for(input, Reader::Windows), "Windows: {input}");
+            assert!(valid_for(input, Reader::Mac), "macOS: {input}");
         }
     }
 }
