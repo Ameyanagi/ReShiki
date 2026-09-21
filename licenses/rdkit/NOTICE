@@ -53,8 +53,17 @@ Copyright (C) 2003-2024 Greg Landrum and other RDKit contributors.
 Code/GraphMol/SmilesParse/smarts.ll and smarts.yy (SMARTS grammar)
 Copyright (C) 2003-2025 Greg Landrum, Rational Discovery LLC and other RDKit contributors.
 
-Code/GraphMol/SmilesParse/SmilesParse.cpp and SmilesParseOps.cpp (SMARTS preprocessing, ring closure and chiral validation)
+Code/GraphMol/SmilesParse/smiles.ll and smiles.yy (SMILES grammar)
+Copyright (C) 2001-2016 Randal Henne, Greg Landrum and Rational Discovery LLC.
+
+Code/GraphMol/SmilesParse/SmilesParse.cpp and SmilesParseOps.cpp (SMILES/SMARTS preprocessing, ring closure and chiral validation)
 Copyright (C) 2001-2022 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/Canon.cpp (SMILES neighbor-order adjustment)
+Copyright (C) 2001-2021 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/NontetrahedralStereo.cpp (coordination permutation tables)
+Copyright (C) 2022 Greg Landrum and other RDKit contributors.
 
 Code/GraphMol/SmilesParse/CXSmilesOps.cpp (CXSMARTS extension validation)
 Copyright (C) 2016-2021 Greg Landrum and other RDKit contributors.

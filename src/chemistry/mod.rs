@@ -19,6 +19,7 @@ pub mod ranking;
 pub mod rings;
 pub mod sanitize;
 pub mod smarts;
+pub mod smiles;
 pub mod stereo;
 
 pub use atomic_data::RDKIT_VERSION;
