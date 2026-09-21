@@ -9,7 +9,7 @@ mod symmetry;
 #[cfg(test)]
 mod tests;
 
-use super::graph::Graph;
+use super::graph::{Graph, Valence};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
@@ -187,8 +187,9 @@ impl<'a> Ranker<'a> {
         metadata: &'a Metadata,
         options: Options,
         work: Work,
+        cache: Option<&[Valence]>,
     ) -> Result<Self, String> {
-        let valences = graph.provisional_valences()?;
+        let valences = graph.cached_valences(cache)?;
         let n = graph.atoms.len();
         metadata.validate(graph)?;
         let mut neighbors = vec![Vec::new(); n];
@@ -363,7 +364,35 @@ fn rank_with_work(
     options: Options,
     work: Work,
 ) -> Result<Vec<u32>, String> {
-    let mut ranker = Ranker::new(graph, rings, metadata, options, work)?;
+    rank_cached_with_work(graph, rings, metadata, options, work, None)
+}
+
+pub(crate) fn rank_cached(
+    graph: &Graph,
+    rings: &[Vec<usize>],
+    metadata: &Metadata,
+    options: Options,
+    cache: &[Valence],
+) -> Result<Vec<u32>, String> {
+    rank_cached_with_work(
+        graph,
+        rings,
+        metadata,
+        options,
+        Work(100_000_000),
+        Some(cache),
+    )
+}
+
+fn rank_cached_with_work(
+    graph: &Graph,
+    rings: &[Vec<usize>],
+    metadata: &Metadata,
+    options: Options,
+    work: Work,
+    cache: Option<&[Valence]>,
+) -> Result<Vec<u32>, String> {
+    let mut ranker = Ranker::new(graph, rings, metadata, options, work, cache)?;
     if graph.atoms.is_empty() {
         return Ok(Vec::new());
     }

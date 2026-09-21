@@ -51,6 +51,48 @@ pub struct Assignment {
     pub graph: Graph,
     pub directions: Vec<Direction>,
 }
+impl Assignment {
+    fn snapshot(graph: &Graph, directions: &[Direction]) -> Result<Self, String> {
+        graph.validate()?;
+        if directions.len() != graph.bonds.len() {
+            return Err("Kekulé bond direction count changed".into());
+        }
+        Ok(Self {
+            graph: graph.clone(),
+            directions: directions.to_vec(),
+        })
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub struct Attempt {
+    pub assignment: Assignment,
+    pub success: bool,
+    #[serde(skip)]
+    pub(crate) cache: Vec<Valence>,
+}
+
+enum Failure {
+    Invalid(String),
+    Chemical(String),
+}
+impl From<String> for Failure {
+    fn from(message: String) -> Self {
+        Self::Invalid(message)
+    }
+}
+impl From<&str> for Failure {
+    fn from(message: &str) -> Self {
+        Self::Invalid(message.into())
+    }
+}
+impl Failure {
+    fn message(self) -> String {
+        match self {
+            Self::Invalid(message) | Self::Chemical(message) => message,
+        }
+    }
+}
 fn at<T>(items: &[T], index: usize) -> Result<&T, String> {
     items
         .get(index)
@@ -322,7 +364,106 @@ fn assign_with_work(
     options: Options<'_>,
     work: &mut Work,
 ) -> Result<Assignment, String> {
-    let topology = Topology::new(graph, rings)?;
+    let mut cache = graph.provisional_valences()?;
+    let mut result = Assignment::snapshot(graph, directions)?;
+    assign_in_place(&mut result, rings, options, work, &mut cache).map_err(Failure::message)?;
+    Ok(result)
+}
+
+/// Snapshot after an optional assignment attempt. Chemical failure restores
+/// aromatic flags/orders as RDKit does, while retaining changed directions,
+/// nonaromatic dummy bonds and hydrogen fields for a later canonical retry.
+/// Invalid input and exhausted resource limits return errors. Never mutates
+/// the caller's graph; a failed snapshot must not be applied to a document.
+pub fn if_possible(
+    graph: &Graph,
+    rings: &[Vec<usize>],
+    directions: &[Direction],
+    options: Options<'_>,
+) -> Result<Attempt, String> {
+    if_possible_cached(graph, rings, directions, options, None)
+}
+
+pub(crate) fn if_possible_cached(
+    graph: &Graph,
+    rings: &[Vec<usize>],
+    directions: &[Direction],
+    options: Options<'_>,
+    cache: Option<&[Valence]>,
+) -> Result<Attempt, String> {
+    let aromatic = Topology::new(graph, rings)?.aromatic_atoms(graph)?;
+    let mut result = Assignment::snapshot(graph, directions)?;
+    let mut cache = graph.cached_valences(cache)?;
+    match assign_in_place(
+        &mut result,
+        rings,
+        options,
+        &mut Work(50_000_000),
+        &mut cache,
+    ) {
+        Ok(()) => Ok(Attempt {
+            assignment: result,
+            success: true,
+            cache,
+        }),
+        Err(Failure::Invalid(message)) => Err(message),
+        Err(Failure::Chemical(_)) => {
+            for (original, bond) in graph.bonds.iter().zip(&mut result.graph.bonds) {
+                if original.aromatic {
+                    bond.aromatic = true;
+                    bond.order = 4;
+                }
+            }
+            for (atom, was_aromatic) in result.graph.atoms.iter_mut().zip(aromatic) {
+                if was_aromatic {
+                    atom.aromatic = true;
+                }
+            }
+            Ok(Attempt {
+                assignment: result,
+                success: false,
+                cache,
+            })
+        }
+    }
+}
+
+pub(crate) fn assign_cached(
+    graph: &Graph,
+    rings: &[Vec<usize>],
+    directions: &[Direction],
+    options: Options<'_>,
+    cache: &[Valence],
+) -> Result<Attempt, String> {
+    let mut cache = graph.cached_valences(Some(cache))?;
+    let mut result = Assignment::snapshot(graph, directions)?;
+    assign_in_place(
+        &mut result,
+        rings,
+        options,
+        &mut Work(50_000_000),
+        &mut cache,
+    )
+    .map_err(Failure::message)?;
+    Ok(Attempt {
+        assignment: result,
+        success: true,
+        cache,
+    })
+}
+
+fn assign_in_place(
+    result: &mut Assignment,
+    rings: &[Vec<usize>],
+    options: Options<'_>,
+    work: &mut Work,
+    cache: &mut Vec<Valence>,
+) -> Result<(), Failure> {
+    let graph = &result.graph;
+    let directions = &result.directions;
+    let mut topology = Topology::new(graph, rings)?;
+    *cache = graph.refresh_implicit(cache)?;
+    topology.valences = cache.clone();
     if directions.len() != graph.bonds.len() {
         return Err("Kekulé bond direction count changed".into());
     }
@@ -336,13 +477,9 @@ fn assign_with_work(
     } else {
         (0..graph.atoms.len() as u32).collect()
     };
-    let mut result = Assignment {
-        graph: graph.clone(),
-        directions: directions.to_vec(),
-    };
     let aromatic = topology.aromatic_atoms(graph)?;
     if !aromatic.iter().any(|&a| a) && !graph.bonds.iter().any(|b| b.aromatic) {
-        return Ok(result);
+        return Ok(());
     }
     let mut wedged_atoms = vec![false; graph.atoms.len()];
     for (bond, &dir) in graph.bonds.iter().zip(directions) {
@@ -396,7 +533,7 @@ fn assign_with_work(
         }
         let candidates = candidates(&mut result.graph, &atoms, rings, &topology, work)?;
         search::fused(
-            &mut result,
+            result,
             &atoms,
             candidates,
             &topology,
@@ -410,12 +547,14 @@ fn assign_with_work(
             bond.aromatic = false;
         }
         let mut refreshed = Vec::new();
+        let mut nonring = None;
         for (id, atom) in result.graph.atoms.iter_mut().enumerate() {
             if !atom.aromatic {
                 continue;
             }
             if at(&topology.members, id)?.is_empty() {
-                return Err(format!("Non-ring atom {} marked aromatic", id + 1));
+                nonring = Some(id);
+                break;
             }
             atom.aromatic = false;
             if matches!(atom.atomic_number, 7 | 15)
@@ -431,16 +570,27 @@ fn assign_with_work(
         // Compare only cache entries it actually recalculates in this pass.
         if !refreshed.is_empty() {
             let after = result.graph.provisional_valences()?;
-            for id in refreshed {
-                let old = at(&topology.valences, id)?;
-                let new = at(&after, id)?;
-                if old.explicit_valence + old.implicit_hydrogens
-                    != new.explicit_valence + new.implicit_hydrogens
-                {
-                    return Err("Kekulé assignment changed atom valence".into());
-                }
+            for &id in &refreshed {
+                set(cache, id, *at(&after, id)?)?;
+            }
+        }
+        if let Some(id) = nonring {
+            return Err(Failure::Chemical(format!(
+                "Non-ring atom {} marked aromatic",
+                id + 1
+            )));
+        }
+        for id in refreshed {
+            let old = at(&topology.valences, id)?;
+            let new = at(cache, id)?;
+            if old.explicit_valence + old.implicit_hydrogens
+                != new.explicit_valence + new.implicit_hydrogens
+            {
+                return Err(Failure::Chemical(
+                    "Kekulé assignment changed atom valence".into(),
+                ));
             }
         }
     }
-    Ok(result)
+    Ok(())
 }

@@ -14,6 +14,7 @@ pub mod kekulize;
 pub mod normalize;
 pub mod ranking;
 pub mod rings;
+pub mod sanitize;
 pub mod stereo;
 
 pub use atomic_data::RDKIT_VERSION;

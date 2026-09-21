@@ -48,11 +48,20 @@ def emit(name, original, clear=True, canonical=False):
     source = graph(mol)
     rings = list(mol.GetRingInfo().AtomRings())
     dirs = directions(mol)
+    optional = Chem.Mol(mol)
     try:
         Chem.Kekulize(mol, clearAromaticFlags=clear, canonical=canonical)
         expected = dict(graph=graph(mol), directions=directions(mol))
     except (ValueError, RuntimeError):
         expected = None
+    try:
+        Chem.KekulizeIfPossible(optional, clearAromaticFlags=clear, canonical=canonical)
+        attempt = dict(
+            assignment=dict(graph=graph(optional), directions=directions(optional)),
+            success=expected is not None,
+        )
+    except (ValueError, RuntimeError):
+        attempt = None
     print(
         json.dumps(
             dict(
@@ -63,6 +72,7 @@ def emit(name, original, clear=True, canonical=False):
                 clear=clear,
                 ranks=ranks,
                 expected=expected,
+                attempt=attempt,
             )
         )
     )

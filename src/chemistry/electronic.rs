@@ -37,8 +37,8 @@ struct Topology<'a> {
 }
 
 impl<'a> Topology<'a> {
-    fn new(graph: &'a Graph) -> Result<Self, String> {
-        let valences = graph.provisional_valences()?;
+    fn new(graph: &'a Graph, cache: Option<&[Valence]>) -> Result<Self, String> {
+        let valences = graph.cached_valences(cache)?;
         let mut neighbors = vec![Vec::new(); graph.atoms.len()];
         for (id, bond) in graph.bonds.iter().enumerate() {
             for (a, b) in [(bond.a, bond.b), (bond.b, bond.a)] {
@@ -99,7 +99,7 @@ impl<'a> Topology<'a> {
 
 /// Available pi electrons for each atom, using the intermediate property cache.
 pub fn pi_electrons(graph: &Graph) -> Result<Vec<i32>, String> {
-    let top = Topology::new(graph)?;
+    let top = Topology::new(graph, None)?;
     (0..graph.atoms.len()).map(|id| top.electrons(id)).collect()
 }
 
@@ -107,7 +107,14 @@ pub fn pi_electrons(graph: &Graph) -> Result<Vec<i32>, String> {
 /// Every central candidate has at most three neighbors, so the nested bond
 /// comparisons remain linear in the size of the validated graph.
 pub fn conjugation(graph: &Graph) -> Result<Vec<bool>, String> {
-    let top = Topology::new(graph)?;
+    conjugation_cached(graph, None)
+}
+
+pub(crate) fn conjugation_cached(
+    graph: &Graph,
+    cache: Option<&[Valence]>,
+) -> Result<Vec<bool>, String> {
+    let top = Topology::new(graph, cache)?;
     let candidates = (0..graph.atoms.len())
         .map(|id| top.candidate(id))
         .collect::<Result<Vec<_>, _>>()?;
@@ -142,13 +149,22 @@ pub fn hybridization(
     chiral_tags: &[u8],
     conjugated: &[bool],
 ) -> Result<Vec<Hybridization>, String> {
+    hybridization_cached(graph, chiral_tags, conjugated, None)
+}
+
+pub(crate) fn hybridization_cached(
+    graph: &Graph,
+    chiral_tags: &[u8],
+    conjugated: &[bool],
+    cache: Option<&[Valence]>,
+) -> Result<Vec<Hybridization>, String> {
     if chiral_tags.len() != graph.atoms.len()
         || chiral_tags.iter().any(|&tag| tag > 8)
         || conjugated.len() != graph.bonds.len()
     {
         return Err("Invalid hybridization metadata".into());
     }
-    let top = Topology::new(graph)?;
+    let top = Topology::new(graph, cache)?;
     let mut result = Vec::with_capacity(graph.atoms.len());
     for (id, atom) in graph.atoms.iter().enumerate() {
         use Hybridization::*;

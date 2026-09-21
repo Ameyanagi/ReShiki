@@ -55,8 +55,12 @@ struct Topology<'a> {
     cyclic: Vec<bool>,
 }
 impl<'a> Topology<'a> {
-    fn new(graph: &'a Graph, rings: &[Vec<usize>]) -> Result<Self, String> {
-        let valences = graph.provisional_valences()?;
+    fn new(
+        graph: &'a Graph,
+        rings: &[Vec<usize>],
+        cache: Option<&[Valence]>,
+    ) -> Result<Self, String> {
+        let valences = graph.cached_valences(cache)?;
         let mut neighbors = vec![Vec::new(); graph.atoms.len()];
         let mut pairs = HashMap::new();
         for (id, bond) in graph.bonds.iter().enumerate() {
@@ -227,7 +231,24 @@ fn perceive_with_work(
     rings: &[Vec<usize>],
     work: &mut Work,
 ) -> Result<Aromaticity, String> {
-    let topology = Topology::new(graph, rings)?;
+    perceive_cached_with_work(graph, rings, None, work)
+}
+
+pub(crate) fn perceive_cached(
+    graph: &Graph,
+    rings: &[Vec<usize>],
+    cache: &[Valence],
+) -> Result<Aromaticity, String> {
+    perceive_cached_with_work(graph, rings, Some(cache), &mut Work(50_000_000))
+}
+
+fn perceive_cached_with_work(
+    graph: &Graph,
+    rings: &[Vec<usize>],
+    cache: Option<&[Valence]>,
+    work: &mut Work,
+) -> Result<Aromaticity, String> {
+    let topology = Topology::new(graph, rings, cache)?;
     let mut donors = vec![Donor::None; graph.atoms.len()];
     let mut seen = vec![false; graph.atoms.len()];
     let mut allowed = vec![false; graph.atoms.len()];

@@ -7,7 +7,7 @@
 //! assign absolute configurations. Results are separate from the caller's data.
 use super::{
     electronic::{self, Hybridization},
-    graph::Graph,
+    graph::{Graph, Valence},
     ranking::{Metadata, StereoGroup},
 };
 use std::collections::{HashMap, HashSet};
@@ -28,7 +28,16 @@ pub fn chirality(
     metadata: &Metadata,
     hybridizations: &[Hybridization],
 ) -> Result<Metadata, String> {
-    let valences = graph.provisional_valences()?;
+    chirality_cached(graph, metadata, hybridizations, None)
+}
+
+pub(crate) fn chirality_cached(
+    graph: &Graph,
+    metadata: &Metadata,
+    hybridizations: &[Hybridization],
+    cache: Option<&[Valence]>,
+) -> Result<Metadata, String> {
+    let valences = graph.cached_valences(cache)?;
     metadata.validate(graph)?;
     if hybridizations.len() != graph.atoms.len() {
         return Err("Invalid stereo-cleanup hybridizations".into());

@@ -1,7 +1,7 @@
 //! Iterative search and dummy-atom backtracking from RDKit Kekulize.cpp.
 //! Copyright (C) 2001-2021 Greg Landrum and other RDKit contributors.
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
-use super::{Assignment, Candidates, Direction, Topology, Work, at, set};
+use super::{Assignment, Candidates, Direction, Failure, Topology, Work, at, set};
 use std::collections::{HashMap, HashSet, VecDeque};
 
 pub(super) fn fused(
@@ -12,7 +12,7 @@ pub(super) fn fused(
     ranks: &[u32],
     max_backtracks: usize,
     work: &mut Work,
-) -> Result<(), String> {
+) -> Result<(), Failure> {
     let mut search = Search {
         result,
         topology,
@@ -25,7 +25,7 @@ pub(super) fn fused(
     }
     let mut switches = vec![false; candidates.questions.len()];
     if switches.is_empty() {
-        return Err("Could not assign Kekulé bonds".into());
+        return Err(Failure::Chemical("Could not assign Kekulé bonds".into()));
     }
     set(&mut switches, 0, true)?;
     let atom_set = atoms.iter().copied().collect::<HashSet<_>>();
@@ -62,7 +62,9 @@ pub(super) fn fused(
             }
         }
         if carry {
-            return Err("Could not assign Kekulé bonds after dummy permutations".into());
+            return Err(Failure::Chemical(
+                "Could not assign Kekulé bonds after dummy permutations".into(),
+            ));
         }
     }
 }

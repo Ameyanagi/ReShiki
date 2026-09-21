@@ -40,7 +40,7 @@ pub struct Graph {
     pub bonds: Vec<Bond>,
 }
 
-#[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Valence {
     pub explicit_valence: u32,
     pub implicit_hydrogens: u32,
@@ -299,6 +299,44 @@ impl Graph {
     /// This must never replace the final strict valence check.
     pub fn provisional_valences(&self) -> Result<Vec<Valence>, String> {
         self.calculate_valences(false)
+    }
+
+    /// A sanitizer cache can intentionally predate bond-order changes. Keep its
+    /// values until the reference stage refreshes them, with checked size/ranges.
+    pub(crate) fn cached_valences(
+        &self,
+        cache: Option<&[Valence]>,
+    ) -> Result<Vec<Valence>, String> {
+        let Some(cache) = cache else {
+            return self.provisional_valences();
+        };
+        self.validate()?;
+        let maximum = self.bonds.len() as u32 * 4 + u32::from(u8::MAX);
+        if cache.len() != self.atoms.len()
+            || cache
+                .iter()
+                .any(|v| v.explicit_valence > maximum || v.implicit_hydrogens > u32::from(u8::MAX))
+        {
+            return Err("Invalid sanitizer valence cache".into());
+        }
+        Ok(cache.to_vec())
+    }
+
+    /// RDKit calcImplicitValence(false), retaining an existing explicit cache.
+    pub(crate) fn refresh_implicit(&self, cache: &[Valence]) -> Result<Vec<Valence>, String> {
+        let mut result = self.cached_valences(Some(cache))?;
+        for ((atom, env), valence) in self.atoms.iter().zip(self.environments()?).zip(&mut result) {
+            let table = element(atom.atomic_number)?;
+            valence.implicit_hydrogens = u32::try_from(atom.implicit_valence(
+                env.aromatic,
+                valence.explicit_valence as i32,
+                table,
+                atom.effective_number(table),
+                false,
+            )?)
+            .map_err(|_| "Invalid cached implicit hydrogen count")?;
+        }
+        Ok(result)
     }
 
     fn calculate_valences(&self, strict: bool) -> Result<Vec<Valence>, String> {

@@ -5,7 +5,7 @@ https://github.com/rdkit/rdkit/tree/Release_2026_03_6
 Code/GraphMol/atomic_data.cpp, Code/GraphMol/Atom.cpp and Code/GraphMol/Bond.cpp
 Copyright (C) 2001-2024 Greg Landrum and other RDKit contributors.
 
-Code/GraphMol/MolOps.cpp (functional-group/metal/atropisomer cleanup, radicals and hydrogen adjustment)
+Code/GraphMol/MolOps.cpp (sanitization order, functional-group/metal/atropisomer cleanup, radicals and hydrogen adjustment)
 Copyright (C) 2001-2023 Greg Landrum and other RDKit contributors.
 
 Code/GraphMol/Aromaticity.cpp (default aromaticity model)
@@ -14,7 +14,7 @@ Copyright (C) 2003-2022 Greg Landrum and other RDKit contributors.
 Code/GraphMol/ConjugHybrid.cpp (conjugation and hybridization)
 Copyright (C) 2001-2024 Greg Landrum and other RDKit contributors.
 
-Code/GraphMol/Kekulize.cpp (bond assignment and iterative backtracking)
+Code/GraphMol/Kekulize.cpp (bond assignment, optional-attempt snapshots and iterative backtracking)
 Copyright (C) 2001-2021 Greg Landrum and other RDKit contributors.
 
 Code/GraphMol/new_canon.cpp and new_canon.h (canonical atom ranking)

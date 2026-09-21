@@ -20,6 +20,7 @@ struct Case {
     ranks: Option<Vec<u32>>,
     clear: bool,
     expected: Option<serde_json::Value>,
+    attempt: Option<serde_json::Value>,
 }
 
 #[test]
@@ -42,6 +43,7 @@ fn kekule_assignment_matches_independent_rdkit() -> Result<(), Box<dyn Error>> {
     assert_eq!(header["rdkit_version"], RDKIT_VERSION);
     let (mut count, mut rejected, mut canonical, mut changed) = (0, 0, 0, 0);
     let mut failures = Vec::new();
+    let mut retained_failure_changes = 0;
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
         let before = serde_json::to_value(&case.graph)?;
@@ -67,6 +69,32 @@ fn kekule_assignment_matches_independent_rdkit() -> Result<(), Box<dyn Error>> {
         if !matches && failures.len() < 20 {
             failures.push(format!("{}: {result:?} != {:?}", case.name, case.expected));
         }
+        let attempt = kekulize::if_possible(
+            &case.graph,
+            &case.rings,
+            &case.directions,
+            Options {
+                clear_aromaticity: case.clear,
+                ranks: case.ranks.as_deref(),
+                ..Options::default()
+            },
+        );
+        let matches = match (&attempt, &case.attempt) {
+            (Ok(a), Some(e)) => serde_json::to_value(a)? == *e,
+            (Err(_), None) => true,
+            _ => false,
+        };
+        if !matches && failures.len() < 20 {
+            failures.push(format!(
+                "{} optional: {attempt:?} != {:?}",
+                case.name, case.attempt
+            ));
+        }
+        retained_failure_changes += usize::from(case.attempt.as_ref().is_some_and(|a| {
+            a["success"] == false
+                && (a["assignment"]["graph"] != before
+                    || a["assignment"]["directions"] != serde_json::json!(case.directions))
+        }));
         assert_eq!(serde_json::to_value(&case.graph)?, before, "Mutated input");
     }
     assert!(
@@ -74,13 +102,17 @@ fn kekule_assignment_matches_independent_rdkit() -> Result<(), Box<dyn Error>> {
         "Oracle failed: {}",
         failures.join("\n")
     );
+    assert!(
+        retained_failure_changes > 10,
+        "Missing partial-failure coverage: {retained_failure_changes}"
+    );
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     assert!(
         count > 50_000 && rejected > 3_000 && canonical > 16_000 && changed > 15_000,
         "Missing coverage: {count}/{rejected}/{canonical}/{changed}"
     );
     eprintln!(
-        "Verified {count} Kekulé cases: {rejected} rejected, {canonical} ranked, {changed} transformed"
+        "Verified {count} Kekulé cases: {rejected} rejected, {canonical} ranked, {changed} transformed, {retained_failure_changes} retained failure changes"
     );
     Ok(())
 }
