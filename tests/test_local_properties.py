@@ -32,17 +32,35 @@ class LocalPropertyTests(unittest.TestCase):
                 patch("engine.worker.rdMolDescriptors.CalcMolFormula", side_effect=AssertionError),
                 patch("engine.worker.rdMolDescriptors._CalcMolWt", side_effect=AssertionError),
                 patch("engine.worker.rdMolDescriptors.CalcExactMolWt", side_effect=AssertionError),
+                patch(
+                    "engine.worker.rdMolDescriptors.CalcCrippenDescriptors",
+                    side_effect=AssertionError,
+                ),
+                patch("engine.worker.rdMolDescriptors.CalcTPSA", side_effect=AssertionError),
+                patch("engine.worker.rdMolDescriptors.CalcNumHBD", side_effect=AssertionError),
+                patch("engine.worker.rdMolDescriptors.CalcNumHBA", side_effect=AssertionError),
+                patch("engine.worker.rdMolDescriptors.CalcNumRings", side_effect=AssertionError),
             ):
                 result = handle(dict(protocol=1, local_properties=True, **copy.deepcopy(request)))
                 analysis = result["analysis"]
-                for key in ("formula", "mass", "exact_mass", "unpaired_electrons", "rings"):
+                for key in (
+                    "formula",
+                    "mass",
+                    "exact_mass",
+                    "unpaired_electrons",
+                    "rings",
+                    "logp",
+                    "tpsa",
+                    "donors",
+                    "acceptors",
+                ):
                     self.assertNotIn(key, analysis)
                 facts = analysis["property_input"]
                 self.assertEqual(facts["rdkit_version"], rdBase.rdkitVersion)
-                self.assertIsInstance(facts["reference_rings"], int)
+                self.assertIsInstance(facts["reference_rings"], list)
                 self.assertEqual(len(facts["graph"]["atoms"]), len(result["document"]["atoms"]))
                 self.assertTrue(all("hydrogens" not in a for a in facts["graph"]["atoms"]))
-                self.assertIn("logp", analysis)
+                self.assertIn("smiles", analysis)
 
     def test_hydrogens_come_from_current_graph_not_cached_labels(self):
         doc = imported("CC")["document"]

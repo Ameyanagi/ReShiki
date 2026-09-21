@@ -1,0 +1,3310 @@
+{
+  "rdkit_version": "2026.03.6",
+  "patterns": [
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 6 },
+            { "op": "hydrogens", "value": 4 }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 6 },
+            { "op": "hydrogens", "value": 3 }
+          ]
+        },
+        { "op": "atom_type", "value": 6 }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } }]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 6 },
+            { "op": "hydrogens", "value": 2 }
+          ]
+        },
+        { "op": "atom_type", "value": 6 },
+        { "op": "atom_type", "value": 6 }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 0, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 6 },
+            { "op": "hydrogens", "value": 1 }
+          ]
+        },
+        { "op": "atom_type", "value": 6 },
+        { "op": "atom_type", "value": 6 },
+        { "op": "atom_type", "value": 6 }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 0, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 0, "b": 3, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 6 },
+        { "op": "atom_type", "value": 6 },
+        { "op": "atom_type", "value": 6 },
+        { "op": "atom_type", "value": 6 },
+        { "op": "atom_type", "value": 6 }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 0, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 0, "b": 3, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 0, "b": 4, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 6 },
+            { "op": "hydrogens", "value": 3 }
+          ]
+        },
+        {
+          "op": "any",
+          "children": [
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    {
+                      "op": "any",
+                      "children": [
+                        {
+                          "op": "any",
+                          "children": [
+                            {
+                              "op": "any",
+                              "children": [
+                                {
+                                  "op": "any",
+                                  "children": [
+                                    { "op": "atom_type", "value": 7 },
+                                    { "op": "atom_type", "value": 8 }
+                                  ]
+                                },
+                                { "op": "atom_type", "value": 15 }
+                              ]
+                            },
+                            { "op": "atom_type", "value": 16 }
+                          ]
+                        },
+                        { "op": "atom_type", "value": 9 }
+                      ]
+                    },
+                    { "op": "atom_type", "value": 17 }
+                  ]
+                },
+                { "op": "atom_type", "value": 35 }
+              ]
+            },
+            { "op": "atom_type", "value": 53 }
+          ]
+        }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } }]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            {
+              "op": "all",
+              "children": [
+                { "op": "atom_type", "value": 6 },
+                { "op": "hydrogens", "value": 2 }
+              ]
+            },
+            { "op": "degree", "value": 4 }
+          ]
+        },
+        {
+          "op": "any",
+          "children": [
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    {
+                      "op": "any",
+                      "children": [
+                        {
+                          "op": "any",
+                          "children": [
+                            {
+                              "op": "any",
+                              "children": [
+                                {
+                                  "op": "any",
+                                  "children": [
+                                    { "op": "atom_type", "value": 7 },
+                                    { "op": "atom_type", "value": 8 }
+                                  ]
+                                },
+                                { "op": "atom_type", "value": 15 }
+                              ]
+                            },
+                            { "op": "atom_type", "value": 16 }
+                          ]
+                        },
+                        { "op": "atom_type", "value": 9 }
+                      ]
+                    },
+                    { "op": "atom_type", "value": 17 }
+                  ]
+                },
+                { "op": "atom_type", "value": 35 }
+              ]
+            },
+            { "op": "atom_type", "value": 53 }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aliphatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 0, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            {
+              "op": "all",
+              "children": [
+                { "op": "atom_type", "value": 6 },
+                { "op": "hydrogens", "value": 1 }
+              ]
+            },
+            { "op": "degree", "value": 4 }
+          ]
+        },
+        {
+          "op": "any",
+          "children": [
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    {
+                      "op": "any",
+                      "children": [
+                        {
+                          "op": "any",
+                          "children": [
+                            {
+                              "op": "any",
+                              "children": [
+                                {
+                                  "op": "any",
+                                  "children": [
+                                    { "op": "atom_type", "value": 7 },
+                                    { "op": "atom_type", "value": 8 }
+                                  ]
+                                },
+                                { "op": "atom_type", "value": 15 }
+                              ]
+                            },
+                            { "op": "atom_type", "value": 16 }
+                          ]
+                        },
+                        { "op": "atom_type", "value": 9 }
+                      ]
+                    },
+                    { "op": "atom_type", "value": 17 }
+                  ]
+                },
+                { "op": "atom_type", "value": 35 }
+              ]
+            },
+            { "op": "atom_type", "value": 53 }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aliphatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aliphatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 0, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 0, "b": 3, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            {
+              "op": "all",
+              "children": [
+                { "op": "atom_type", "value": 6 },
+                { "op": "hydrogens", "value": 0 }
+              ]
+            },
+            { "op": "degree", "value": 4 }
+          ]
+        },
+        {
+          "op": "any",
+          "children": [
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    {
+                      "op": "any",
+                      "children": [
+                        {
+                          "op": "any",
+                          "children": [
+                            {
+                              "op": "any",
+                              "children": [
+                                {
+                                  "op": "any",
+                                  "children": [
+                                    { "op": "atom_type", "value": 7 },
+                                    { "op": "atom_type", "value": 8 }
+                                  ]
+                                },
+                                { "op": "atom_type", "value": 15 }
+                              ]
+                            },
+                            { "op": "atom_type", "value": 16 }
+                          ]
+                        },
+                        { "op": "atom_type", "value": 9 }
+                      ]
+                    },
+                    { "op": "atom_type", "value": 17 }
+                  ]
+                },
+                { "op": "atom_type", "value": 35 }
+              ]
+            },
+            { "op": "atom_type", "value": 53 }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aliphatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aliphatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aliphatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 0, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 0, "b": 3, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 0, "b": 4, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 6 },
+        {
+          "op": "all",
+          "children": [
+            {
+              "op": "all",
+              "children": [
+                { "op": "not", "children": [{ "op": "atom_type", "value": 6 }] },
+                { "op": "aliphatic", "value": 1 }
+              ]
+            },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "bond_order", "value": 2 } }]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 6 },
+            { "op": "hydrogens", "value": 2 }
+          ]
+        },
+        { "op": "atom_type", "value": 6 }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "bond_order", "value": 2 } }]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 6 },
+            { "op": "hydrogens", "value": 1 }
+          ]
+        },
+        { "op": "atom_type", "value": 6 },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aliphatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "bond_order", "value": 2 } },
+        { "a": 0, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 6 },
+            { "op": "hydrogens", "value": 0 }
+          ]
+        },
+        { "op": "atom_type", "value": 6 },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aliphatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aliphatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "bond_order", "value": 2 } },
+        { "a": 0, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 0, "b": 3, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 6 },
+        { "op": "atom_type", "value": 6 },
+        { "op": "atom_type", "value": 6 }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "bond_order", "value": 2 } },
+        { "a": 0, "b": 2, "query": { "op": "bond_order", "value": 2 } }
+      ]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 6 },
+            { "op": "degree", "value": 2 }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aliphatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "bond_order", "value": 3 } }]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 6 },
+            { "op": "hydrogens", "value": 3 }
+          ]
+        },
+        { "op": "atom_type", "value": 1006 }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } }]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 6 },
+            { "op": "hydrogens", "value": 3 }
+          ]
+        },
+        { "op": "aromatic", "value": 1 }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } }]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            {
+              "op": "all",
+              "children": [
+                { "op": "atom_type", "value": 6 },
+                { "op": "hydrogens", "value": 2 }
+              ]
+            },
+            { "op": "degree", "value": 4 }
+          ]
+        },
+        { "op": "aromatic", "value": 1 }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } }]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            {
+              "op": "all",
+              "children": [
+                { "op": "atom_type", "value": 6 },
+                { "op": "hydrogens", "value": 1 }
+              ]
+            },
+            { "op": "degree", "value": 4 }
+          ]
+        },
+        { "op": "aromatic", "value": 1 }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } }]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            {
+              "op": "all",
+              "children": [
+                { "op": "atom_type", "value": 6 },
+                { "op": "hydrogens", "value": 0 }
+              ]
+            },
+            { "op": "degree", "value": 4 }
+          ]
+        },
+        { "op": "aromatic", "value": 1 }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } }]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 1006 },
+            { "op": "hydrogens", "value": 0 }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            {
+              "op": "all",
+              "children": [
+                {
+                  "op": "all",
+                  "children": [
+                    {
+                      "op": "all",
+                      "children": [
+                        {
+                          "op": "all",
+                          "children": [
+                            {
+                              "op": "all",
+                              "children": [
+                                {
+                                  "op": "all",
+                                  "children": [
+                                    {
+                                      "op": "all",
+                                      "children": [
+                                        {
+                                          "op": "all",
+                                          "children": [
+                                            { "op": "aliphatic", "value": 1 },
+                                            {
+                                              "op": "not",
+                                              "children": [{ "op": "atom_type", "value": 6 }]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "op": "not",
+                                          "children": [{ "op": "atom_type", "value": 7 }]
+                                        }
+                                      ]
+                                    },
+                                    { "op": "not", "children": [{ "op": "atom_type", "value": 8 }] }
+                                  ]
+                                },
+                                { "op": "not", "children": [{ "op": "atom_type", "value": 16 }] }
+                              ]
+                            },
+                            { "op": "not", "children": [{ "op": "atom_type", "value": 9 }] }
+                          ]
+                        },
+                        { "op": "not", "children": [{ "op": "atom_type", "value": 17 }] }
+                      ]
+                    },
+                    { "op": "not", "children": [{ "op": "atom_type", "value": 35 }] }
+                  ]
+                },
+                { "op": "not", "children": [{ "op": "atom_type", "value": 53 }] }
+              ]
+            },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "bond_order", "value": 1 } }]
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 1006 },
+        { "op": "number", "value": 9 }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } }]
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 1006 },
+        { "op": "number", "value": 17 }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } }]
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 1006 },
+        { "op": "number", "value": 35 }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } }]
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 1006 },
+        { "op": "number", "value": 53 }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } }]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 1006 },
+            { "op": "hydrogens", "value": 1 }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 1006 },
+        { "op": "aromatic", "value": 1 },
+        { "op": "aromatic", "value": 1 },
+        { "op": "aromatic", "value": 1 }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "bond_order", "value": 12 } },
+        { "a": 0, "b": 2, "query": { "op": "bond_order", "value": 12 } },
+        { "a": 0, "b": 3, "query": { "op": "bond_order", "value": 12 } }
+      ]
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 1006 },
+        { "op": "aromatic", "value": 1 },
+        { "op": "aromatic", "value": 1 },
+        { "op": "aromatic", "value": 1 }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "bond_order", "value": 12 } },
+        { "a": 0, "b": 2, "query": { "op": "bond_order", "value": 12 } },
+        { "a": 0, "b": 3, "query": { "op": "bond_order", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 1006 },
+        { "op": "aromatic", "value": 1 },
+        { "op": "aromatic", "value": 1 },
+        { "op": "atom_type", "value": 6 }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "bond_order", "value": 12 } },
+        { "a": 0, "b": 2, "query": { "op": "bond_order", "value": 12 } },
+        { "a": 0, "b": 3, "query": { "op": "bond_order", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 1006 },
+        { "op": "aromatic", "value": 1 },
+        { "op": "aromatic", "value": 1 },
+        { "op": "atom_type", "value": 7 }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "bond_order", "value": 12 } },
+        { "a": 0, "b": 2, "query": { "op": "bond_order", "value": 12 } },
+        { "a": 0, "b": 3, "query": { "op": "bond_order", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 1006 },
+        { "op": "aromatic", "value": 1 },
+        { "op": "aromatic", "value": 1 },
+        { "op": "atom_type", "value": 8 }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "bond_order", "value": 12 } },
+        { "a": 0, "b": 2, "query": { "op": "bond_order", "value": 12 } },
+        { "a": 0, "b": 3, "query": { "op": "bond_order", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 1006 },
+        { "op": "aromatic", "value": 1 },
+        { "op": "aromatic", "value": 1 },
+        { "op": "atom_type", "value": 16 }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "bond_order", "value": 12 } },
+        { "a": 0, "b": 2, "query": { "op": "bond_order", "value": 12 } },
+        { "a": 0, "b": 3, "query": { "op": "bond_order", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 1006 },
+        { "op": "aromatic", "value": 1 },
+        { "op": "aromatic", "value": 1 },
+        {
+          "op": "any",
+          "children": [
+            {
+              "op": "any",
+              "children": [
+                { "op": "atom_type", "value": 6 },
+                { "op": "atom_type", "value": 7 }
+              ]
+            },
+            { "op": "atom_type", "value": 8 }
+          ]
+        }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "bond_order", "value": 12 } },
+        { "a": 0, "b": 2, "query": { "op": "bond_order", "value": 12 } },
+        { "a": 0, "b": 3, "query": { "op": "bond_order", "value": 2 } }
+      ]
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 6 },
+        { "op": "atom_type", "value": 6 },
+        { "op": "aromatic", "value": 1 },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aliphatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "bond_order", "value": 2 } },
+        { "a": 0, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 0, "b": 3, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 6 },
+        { "op": "atom_type", "value": 6 },
+        { "op": "atom_type", "value": 1006 },
+        { "op": "aromatic", "value": 1 }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "bond_order", "value": 2 } },
+        { "a": 0, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 0, "b": 3, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 6 },
+            { "op": "hydrogens", "value": 1 }
+          ]
+        },
+        { "op": "atom_type", "value": 6 },
+        { "op": "aromatic", "value": 1 }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "bond_order", "value": 2 } },
+        { "a": 0, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 6 },
+        { "op": "atom_type", "value": 1006 }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "bond_order", "value": 2 } }]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 6 },
+            { "op": "degree", "value": 4 }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            {
+              "op": "all",
+              "children": [
+                {
+                  "op": "all",
+                  "children": [
+                    {
+                      "op": "all",
+                      "children": [
+                        {
+                          "op": "all",
+                          "children": [
+                            {
+                              "op": "all",
+                              "children": [
+                                {
+                                  "op": "all",
+                                  "children": [
+                                    {
+                                      "op": "all",
+                                      "children": [
+                                        {
+                                          "op": "all",
+                                          "children": [
+                                            {
+                                              "op": "all",
+                                              "children": [
+                                                { "op": "aliphatic", "value": 1 },
+                                                {
+                                                  "op": "not",
+                                                  "children": [{ "op": "atom_type", "value": 6 }]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "op": "not",
+                                              "children": [{ "op": "atom_type", "value": 7 }]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "op": "not",
+                                          "children": [{ "op": "atom_type", "value": 8 }]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "op": "not",
+                                      "children": [{ "op": "atom_type", "value": 15 }]
+                                    }
+                                  ]
+                                },
+                                { "op": "not", "children": [{ "op": "atom_type", "value": 16 }] }
+                              ]
+                            },
+                            { "op": "not", "children": [{ "op": "atom_type", "value": 9 }] }
+                          ]
+                        },
+                        { "op": "not", "children": [{ "op": "atom_type", "value": 17 }] }
+                      ]
+                    },
+                    { "op": "not", "children": [{ "op": "atom_type", "value": 35 }] }
+                  ]
+                },
+                { "op": "not", "children": [{ "op": "atom_type", "value": 53 }] }
+              ]
+            },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } }]
+    },
+    { "atoms": [{ "op": "number", "value": 6 }], "bonds": [] },
+    {
+      "atoms": [
+        { "op": "number", "value": 1 },
+        {
+          "op": "any",
+          "children": [
+            { "op": "number", "value": 6 },
+            { "op": "number", "value": 1 }
+          ]
+        }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } }]
+    },
+    {
+      "atoms": [
+        { "op": "number", "value": 1 },
+        { "op": "atom_type", "value": 8 },
+        {
+          "op": "any",
+          "children": [
+            {
+              "op": "all",
+              "children": [
+                { "op": "atom_type", "value": 6 },
+                { "op": "degree", "value": 4 }
+              ]
+            },
+            { "op": "atom_type", "value": 1006 }
+          ]
+        }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 1, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        { "op": "number", "value": 1 },
+        { "op": "atom_type", "value": 8 },
+        {
+          "op": "all",
+          "children": [
+            {
+              "op": "all",
+              "children": [
+                {
+                  "op": "all",
+                  "children": [
+                    { "op": "not", "children": [{ "op": "number", "value": 6 }] },
+                    { "op": "not", "children": [{ "op": "number", "value": 7 }] }
+                  ]
+                },
+                { "op": "not", "children": [{ "op": "number", "value": 8 }] }
+              ]
+            },
+            { "op": "not", "children": [{ "op": "number", "value": 16 }] }
+          ]
+        }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 1, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        { "op": "number", "value": 1 },
+        {
+          "op": "all",
+          "children": [
+            {
+              "op": "all",
+              "children": [
+                { "op": "not", "children": [{ "op": "number", "value": 6 }] },
+                { "op": "not", "children": [{ "op": "number", "value": 7 }] }
+              ]
+            },
+            { "op": "not", "children": [{ "op": "number", "value": 8 }] }
+          ]
+        }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } }]
+    },
+    {
+      "atoms": [
+        { "op": "number", "value": 1 },
+        { "op": "number", "value": 7 }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } }]
+    },
+    {
+      "atoms": [
+        { "op": "number", "value": 1 },
+        { "op": "atom_type", "value": 8 },
+        { "op": "number", "value": 7 }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 1, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        { "op": "number", "value": 1 },
+        { "op": "atom_type", "value": 8 },
+        { "op": "atom_type", "value": 6 },
+        {
+          "op": "any",
+          "children": [
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    { "op": "number", "value": 6 },
+                    { "op": "number", "value": 7 }
+                  ]
+                },
+                { "op": "atom_type", "value": 8 }
+              ]
+            },
+            { "op": "atom_type", "value": 16 }
+          ]
+        }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 1, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 2, "b": 3, "query": { "op": "bond_order", "value": 2 } }
+      ]
+    },
+    {
+      "atoms": [
+        { "op": "number", "value": 1 },
+        { "op": "atom_type", "value": 8 },
+        {
+          "op": "any",
+          "children": [
+            { "op": "atom_type", "value": 8 },
+            { "op": "atom_type", "value": 16 }
+          ]
+        }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 1, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    { "atoms": [{ "op": "number", "value": 1 }], "bonds": [] },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            {
+              "op": "all",
+              "children": [
+                { "op": "atom_type", "value": 7 },
+                { "op": "hydrogens", "value": 2 }
+              ]
+            },
+            { "op": "charge", "value": 0 }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aliphatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } }]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            {
+              "op": "all",
+              "children": [
+                { "op": "atom_type", "value": 7 },
+                { "op": "hydrogens", "value": 1 }
+              ]
+            },
+            { "op": "charge", "value": 0 }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aliphatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aliphatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 0, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            {
+              "op": "all",
+              "children": [
+                { "op": "atom_type", "value": 7 },
+                { "op": "hydrogens", "value": 2 }
+              ]
+            },
+            { "op": "charge", "value": 0 }
+          ]
+        },
+        { "op": "aromatic", "value": 1 }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } }]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            {
+              "op": "all",
+              "children": [
+                { "op": "atom_type", "value": 7 },
+                { "op": "hydrogens", "value": 1 }
+              ]
+            },
+            { "op": "charge", "value": 0 }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] },
+            {
+              "op": "any",
+              "children": [
+                { "op": "aliphatic", "value": 1 },
+                { "op": "aromatic", "value": 1 }
+              ]
+            }
+          ]
+        },
+        { "op": "aromatic", "value": 1 }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 0, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            {
+              "op": "all",
+              "children": [
+                { "op": "atom_type", "value": 7 },
+                { "op": "hydrogens", "value": 1 }
+              ]
+            },
+            { "op": "charge", "value": 0 }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] },
+            {
+              "op": "any",
+              "children": [
+                { "op": "aliphatic", "value": 1 },
+                { "op": "aromatic", "value": 1 }
+              ]
+            }
+          ]
+        }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "bond_order", "value": 2 } }]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 7 },
+            { "op": "charge", "value": 0 }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] },
+            {
+              "op": "any",
+              "children": [
+                { "op": "aliphatic", "value": 1 },
+                { "op": "aromatic", "value": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] },
+            {
+              "op": "any",
+              "children": [
+                { "op": "aliphatic", "value": 1 },
+                { "op": "aromatic", "value": 1 }
+              ]
+            }
+          ]
+        }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "bond_order", "value": 2 } },
+        { "a": 0, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 7 },
+            { "op": "charge", "value": 0 }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aliphatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aliphatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aliphatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 0, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 0, "b": 3, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 7 },
+            { "op": "charge", "value": 0 }
+          ]
+        },
+        { "op": "aromatic", "value": 1 },
+        {
+          "op": "all",
+          "children": [
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] },
+            {
+              "op": "any",
+              "children": [
+                { "op": "aliphatic", "value": 1 },
+                { "op": "aromatic", "value": 1 }
+              ]
+            }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aliphatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 0, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 0, "b": 3, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 7 },
+            { "op": "charge", "value": 0 }
+          ]
+        },
+        { "op": "aromatic", "value": 1 },
+        { "op": "aromatic", "value": 1 },
+        { "op": "aromatic", "value": 1 }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 0, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 0, "b": 3, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 7 },
+            { "op": "charge", "value": 0 }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aliphatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "bond_order", "value": 3 } }]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    {
+                      "op": "all",
+                      "children": [
+                        { "op": "atom_type", "value": 7 },
+                        { "op": "hydrogens", "value": 3 }
+                      ]
+                    },
+                    {
+                      "op": "all",
+                      "children": [
+                        { "op": "atom_type", "value": 7 },
+                        { "op": "hydrogens", "value": 2 }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "all",
+                  "children": [
+                    { "op": "atom_type", "value": 7 },
+                    { "op": "hydrogens", "value": 1 }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    { "op": "charge", "value": 1 },
+                    { "op": "charge", "value": 2 }
+                  ]
+                },
+                { "op": "charge", "value": 3 }
+              ]
+            }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 1007 },
+            { "op": "charge", "value": 0 }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 1007 },
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    { "op": "charge", "value": 1 },
+                    { "op": "charge", "value": 2 }
+                  ]
+                },
+                { "op": "charge", "value": 3 }
+              ]
+            }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            {
+              "op": "all",
+              "children": [
+                { "op": "atom_type", "value": 7 },
+                { "op": "hydrogens", "value": 0 }
+              ]
+            },
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    { "op": "charge", "value": 1 },
+                    { "op": "charge", "value": 2 }
+                  ]
+                },
+                { "op": "charge", "value": 3 }
+              ]
+            }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aliphatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aliphatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aliphatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aliphatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 0, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 0, "b": 3, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 0, "b": 4, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            {
+              "op": "all",
+              "children": [
+                { "op": "atom_type", "value": 7 },
+                { "op": "hydrogens", "value": 0 }
+              ]
+            },
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    { "op": "charge", "value": 1 },
+                    { "op": "charge", "value": 2 }
+                  ]
+                },
+                { "op": "charge", "value": 3 }
+              ]
+            }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aliphatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aliphatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] },
+            {
+              "op": "any",
+              "children": [
+                { "op": "aliphatic", "value": 1 },
+                { "op": "aromatic", "value": 1 }
+              ]
+            }
+          ]
+        }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "bond_order", "value": 2 } },
+        { "a": 0, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 0, "b": 3, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            {
+              "op": "all",
+              "children": [
+                { "op": "atom_type", "value": 7 },
+                { "op": "hydrogens", "value": 0 }
+              ]
+            },
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    { "op": "charge", "value": 1 },
+                    { "op": "charge", "value": 2 }
+                  ]
+                },
+                { "op": "charge", "value": 3 }
+              ]
+            }
+          ]
+        },
+        { "op": "number", "value": 6 },
+        { "op": "number", "value": 7 }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "bond_order", "value": 2 } },
+        { "a": 0, "b": 2, "query": { "op": "bond_order", "value": 2 } }
+      ]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 7 },
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    { "op": "charge", "value": 1 },
+                    { "op": "charge", "value": 2 }
+                  ]
+                },
+                { "op": "charge", "value": 3 }
+              ]
+            }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aliphatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "bond_order", "value": 3 } }]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 7 },
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    { "op": "charge", "value": -1 },
+                    { "op": "charge", "value": -2 }
+                  ]
+                },
+                { "op": "charge", "value": -3 }
+              ]
+            }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 7 },
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    { "op": "charge", "value": 1 },
+                    { "op": "charge", "value": 2 }
+                  ]
+                },
+                { "op": "charge", "value": 3 }
+              ]
+            }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 7 },
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    { "op": "charge", "value": -1 },
+                    { "op": "charge", "value": -2 }
+                  ]
+                },
+                { "op": "charge", "value": -3 }
+              ]
+            }
+          ]
+        },
+        { "op": "atom_type", "value": 7 }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "bond_order", "value": 2 } },
+        { "a": 0, "b": 2, "query": { "op": "bond_order", "value": 2 } }
+      ]
+    },
+    { "atoms": [{ "op": "number", "value": 7 }], "bonds": [] },
+    { "atoms": [{ "op": "atom_type", "value": 1008 }], "bonds": [] },
+    {
+      "atoms": [
+        {
+          "op": "any",
+          "children": [
+            {
+              "op": "all",
+              "children": [
+                { "op": "atom_type", "value": 8 },
+                { "op": "hydrogens", "value": 1 }
+              ]
+            },
+            {
+              "op": "all",
+              "children": [
+                { "op": "atom_type", "value": 8 },
+                { "op": "hydrogens", "value": 2 }
+              ]
+            }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 8 },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aliphatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aliphatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 0, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 8 },
+        { "op": "aromatic", "value": 1 },
+        {
+          "op": "all",
+          "children": [
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] },
+            {
+              "op": "any",
+              "children": [
+                { "op": "aliphatic", "value": 1 },
+                { "op": "aromatic", "value": 1 }
+              ]
+            }
+          ]
+        }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 0, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 8 },
+        {
+          "op": "any",
+          "children": [
+            { "op": "number", "value": 7 },
+            { "op": "number", "value": 8 }
+          ]
+        }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "bond_order", "value": 2 } }]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            {
+              "op": "all",
+              "children": [
+                { "op": "atom_type", "value": 8 },
+                { "op": "degree", "value": 1 }
+              ]
+            },
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    { "op": "charge", "value": -1 },
+                    { "op": "charge", "value": -2 }
+                  ]
+                },
+                { "op": "charge", "value": -3 }
+              ]
+            }
+          ]
+        },
+        { "op": "number", "value": 7 }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } }]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            {
+              "op": "all",
+              "children": [
+                { "op": "atom_type", "value": 8 },
+                { "op": "degree", "value": 1 }
+              ]
+            },
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    { "op": "charge", "value": -1 },
+                    { "op": "charge", "value": -2 }
+                  ]
+                },
+                { "op": "charge", "value": -2 }
+              ]
+            }
+          ]
+        },
+        { "op": "number", "value": 16 }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } }]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 8 },
+            { "op": "charge", "value": 0 }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "number", "value": 16 },
+            { "op": "charge", "value": 0 }
+          ]
+        }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "bond_order", "value": 2 } }]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 8 },
+            { "op": "charge", "value": -1 }
+          ]
+        },
+        { "op": "atom_type", "value": 6 },
+        { "op": "atom_type", "value": 8 }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 1, "b": 2, "query": { "op": "bond_order", "value": 2 } }
+      ]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            {
+              "op": "all",
+              "children": [
+                { "op": "atom_type", "value": 8 },
+                { "op": "degree", "value": 1 }
+              ]
+            },
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    { "op": "charge", "value": -1 },
+                    { "op": "charge", "value": -2 }
+                  ]
+                },
+                { "op": "charge", "value": -3 }
+              ]
+            }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            {
+              "op": "all",
+              "children": [
+                { "op": "not", "children": [{ "op": "number", "value": 1 }] },
+                { "op": "not", "children": [{ "op": "atom_type", "value": 7 }] }
+              ]
+            },
+            { "op": "not", "children": [{ "op": "atom_type", "value": 16 }] }
+          ]
+        }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "single_or_aromatic", "value": 1 } }]
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 8 },
+        { "op": "atom_type", "value": 1006 }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "bond_order", "value": 2 } }]
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 8 },
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 6 },
+            { "op": "hydrogens", "value": 1 }
+          ]
+        },
+        { "op": "atom_type", "value": 6 }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "bond_order", "value": 2 } },
+        { "a": 1, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 8 },
+        { "op": "atom_type", "value": 6 },
+        { "op": "atom_type", "value": 6 },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aliphatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "bond_order", "value": 2 } },
+        { "a": 1, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 1, "b": 3, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 8 },
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 6 },
+            { "op": "hydrogens", "value": 1 }
+          ]
+        },
+        {
+          "op": "any",
+          "children": [
+            { "op": "atom_type", "value": 7 },
+            { "op": "atom_type", "value": 8 }
+          ]
+        }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "bond_order", "value": 2 } },
+        { "a": 1, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 8 },
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 6 },
+            { "op": "hydrogens", "value": 2 }
+          ]
+        }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "bond_order", "value": 2 } }]
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 8 },
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 6 },
+            { "op": "degree", "value": 2 }
+          ]
+        },
+        { "op": "atom_type", "value": 8 }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "bond_order", "value": 2 } },
+        { "a": 1, "b": 2, "query": { "op": "bond_order", "value": 2 } }
+      ]
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 8 },
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 6 },
+            { "op": "hydrogens", "value": 1 }
+          ]
+        },
+        { "op": "atom_type", "value": 1006 }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "bond_order", "value": 2 } },
+        { "a": 1, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 8 },
+        { "op": "atom_type", "value": 6 },
+        {
+          "op": "any",
+          "children": [
+            { "op": "atom_type", "value": 6 },
+            { "op": "atom_type", "value": 1006 }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aromatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "bond_order", "value": 2 } },
+        { "a": 1, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 1, "b": 3, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 8 },
+        { "op": "atom_type", "value": 6 },
+        { "op": "atom_type", "value": 1006 },
+        {
+          "op": "all",
+          "children": [
+            { "op": "aliphatic", "value": 1 },
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] }
+          ]
+        }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "bond_order", "value": 2 } },
+        { "a": 1, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 1, "b": 3, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 8 },
+        { "op": "atom_type", "value": 6 },
+        {
+          "op": "all",
+          "children": [
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] },
+            { "op": "not", "children": [{ "op": "number", "value": 6 }] }
+          ]
+        },
+        {
+          "op": "all",
+          "children": [
+            { "op": "not", "children": [{ "op": "number", "value": 1 }] },
+            { "op": "not", "children": [{ "op": "number", "value": 6 }] }
+          ]
+        }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "bond_order", "value": 2 } },
+        { "a": 1, "b": 2, "query": { "op": "single_or_aromatic", "value": 1 } },
+        { "a": 1, "b": 3, "query": { "op": "single_or_aromatic", "value": 1 } }
+      ]
+    },
+    { "atoms": [{ "op": "number", "value": 8 }], "bonds": [] },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "number", "value": 9 },
+            { "op": "charge", "value": 0 }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "number", "value": 17 },
+            { "op": "charge", "value": 0 }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "number", "value": 35 },
+            { "op": "charge", "value": 0 }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "number", "value": 53 },
+            { "op": "charge", "value": 0 }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    {
+                      "op": "any",
+                      "children": [
+                        { "op": "number", "value": 9 },
+                        { "op": "number", "value": 17 }
+                      ]
+                    },
+                    { "op": "number", "value": 35 }
+                  ]
+                },
+                { "op": "number", "value": 53 }
+              ]
+            },
+            { "op": "charge", "value": -1 }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "number", "value": 53 },
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    { "op": "charge", "value": 1 },
+                    { "op": "charge", "value": 2 }
+                  ]
+                },
+                { "op": "charge", "value": 3 }
+              ]
+            }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "charge", "value": 1 },
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    {
+                      "op": "any",
+                      "children": [
+                        {
+                          "op": "any",
+                          "children": [
+                            { "op": "number", "value": 3 },
+                            { "op": "number", "value": 11 }
+                          ]
+                        },
+                        { "op": "number", "value": 19 }
+                      ]
+                    },
+                    { "op": "number", "value": 37 }
+                  ]
+                },
+                { "op": "number", "value": 55 }
+              ]
+            }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    { "atoms": [{ "op": "number", "value": 15 }], "bonds": [] },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 16 },
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    {
+                      "op": "any",
+                      "children": [
+                        {
+                          "op": "any",
+                          "children": [
+                            {
+                              "op": "any",
+                              "children": [
+                                {
+                                  "op": "any",
+                                  "children": [
+                                    {
+                                      "op": "any",
+                                      "children": [
+                                        {
+                                          "op": "any",
+                                          "children": [
+                                            { "op": "charge", "value": -1 },
+                                            { "op": "charge", "value": -2 }
+                                          ]
+                                        },
+                                        { "op": "charge", "value": -3 }
+                                      ]
+                                    },
+                                    { "op": "charge", "value": -4 }
+                                  ]
+                                },
+                                { "op": "charge", "value": 1 }
+                              ]
+                            },
+                            { "op": "charge", "value": 2 }
+                          ]
+                        },
+                        { "op": "charge", "value": 3 }
+                      ]
+                    },
+                    { "op": "charge", "value": 5 }
+                  ]
+                },
+                { "op": "charge", "value": 6 }
+              ]
+            }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 16 },
+            { "op": "charge", "value": 0 }
+          ]
+        },
+        {
+          "op": "any",
+          "children": [
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    { "op": "atom_type", "value": 7 },
+                    { "op": "atom_type", "value": 8 }
+                  ]
+                },
+                { "op": "atom_type", "value": 15 }
+              ]
+            },
+            { "op": "atom_type", "value": 16 }
+          ]
+        }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "bond_order", "value": 2 } }]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 16 },
+            { "op": "aliphatic", "value": 1 }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            { "op": "atom_type", "value": 1016 },
+            { "op": "aromatic", "value": 1 }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    {
+      "atoms": [
+        {
+          "op": "any",
+          "children": [
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    {
+                      "op": "any",
+                      "children": [
+                        { "op": "number", "value": 3 },
+                        { "op": "number", "value": 11 }
+                      ]
+                    },
+                    { "op": "number", "value": 19 }
+                  ]
+                },
+                { "op": "number", "value": 37 }
+              ]
+            },
+            { "op": "number", "value": 55 }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    {
+      "atoms": [
+        {
+          "op": "any",
+          "children": [
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    {
+                      "op": "any",
+                      "children": [
+                        { "op": "number", "value": 4 },
+                        { "op": "number", "value": 12 }
+                      ]
+                    },
+                    { "op": "number", "value": 20 }
+                  ]
+                },
+                { "op": "number", "value": 38 }
+              ]
+            },
+            { "op": "number", "value": 56 }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    {
+      "atoms": [
+        {
+          "op": "any",
+          "children": [
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    {
+                      "op": "any",
+                      "children": [
+                        { "op": "number", "value": 5 },
+                        { "op": "number", "value": 13 }
+                      ]
+                    },
+                    { "op": "number", "value": 31 }
+                  ]
+                },
+                { "op": "number", "value": 49 }
+              ]
+            },
+            { "op": "number", "value": 81 }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    {
+      "atoms": [
+        {
+          "op": "any",
+          "children": [
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    { "op": "number", "value": 14 },
+                    { "op": "number", "value": 32 }
+                  ]
+                },
+                { "op": "number", "value": 50 }
+              ]
+            },
+            { "op": "number", "value": 82 }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    {
+      "atoms": [
+        {
+          "op": "any",
+          "children": [
+            {
+              "op": "any",
+              "children": [
+                { "op": "number", "value": 33 },
+                { "op": "number", "value": 51 }
+              ]
+            },
+            { "op": "number", "value": 83 }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    {
+      "atoms": [
+        {
+          "op": "any",
+          "children": [
+            {
+              "op": "any",
+              "children": [
+                { "op": "number", "value": 34 },
+                { "op": "number", "value": 52 }
+              ]
+            },
+            { "op": "number", "value": 84 }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    {
+      "atoms": [
+        {
+          "op": "any",
+          "children": [
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    {
+                      "op": "any",
+                      "children": [
+                        {
+                          "op": "any",
+                          "children": [
+                            {
+                              "op": "any",
+                              "children": [
+                                {
+                                  "op": "any",
+                                  "children": [
+                                    {
+                                      "op": "any",
+                                      "children": [
+                                        {
+                                          "op": "any",
+                                          "children": [
+                                            { "op": "number", "value": 21 },
+                                            { "op": "number", "value": 22 }
+                                          ]
+                                        },
+                                        { "op": "number", "value": 23 }
+                                      ]
+                                    },
+                                    { "op": "number", "value": 24 }
+                                  ]
+                                },
+                                { "op": "number", "value": 25 }
+                              ]
+                            },
+                            { "op": "number", "value": 26 }
+                          ]
+                        },
+                        { "op": "number", "value": 27 }
+                      ]
+                    },
+                    { "op": "number", "value": 28 }
+                  ]
+                },
+                { "op": "number", "value": 29 }
+              ]
+            },
+            { "op": "number", "value": 30 }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    {
+      "atoms": [
+        {
+          "op": "any",
+          "children": [
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    {
+                      "op": "any",
+                      "children": [
+                        {
+                          "op": "any",
+                          "children": [
+                            {
+                              "op": "any",
+                              "children": [
+                                {
+                                  "op": "any",
+                                  "children": [
+                                    {
+                                      "op": "any",
+                                      "children": [
+                                        {
+                                          "op": "any",
+                                          "children": [
+                                            { "op": "number", "value": 39 },
+                                            { "op": "number", "value": 40 }
+                                          ]
+                                        },
+                                        { "op": "number", "value": 41 }
+                                      ]
+                                    },
+                                    { "op": "number", "value": 42 }
+                                  ]
+                                },
+                                { "op": "number", "value": 43 }
+                              ]
+                            },
+                            { "op": "number", "value": 44 }
+                          ]
+                        },
+                        { "op": "number", "value": 45 }
+                      ]
+                    },
+                    { "op": "number", "value": 46 }
+                  ]
+                },
+                { "op": "number", "value": 47 }
+              ]
+            },
+            { "op": "number", "value": 48 }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    {
+      "atoms": [
+        {
+          "op": "any",
+          "children": [
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    {
+                      "op": "any",
+                      "children": [
+                        {
+                          "op": "any",
+                          "children": [
+                            {
+                              "op": "any",
+                              "children": [
+                                {
+                                  "op": "any",
+                                  "children": [
+                                    {
+                                      "op": "any",
+                                      "children": [
+                                        { "op": "number", "value": 72 },
+                                        { "op": "number", "value": 73 }
+                                      ]
+                                    },
+                                    { "op": "number", "value": 74 }
+                                  ]
+                                },
+                                { "op": "number", "value": 75 }
+                              ]
+                            },
+                            { "op": "number", "value": 76 }
+                          ]
+                        },
+                        { "op": "number", "value": 77 }
+                      ]
+                    },
+                    { "op": "number", "value": 78 }
+                  ]
+                },
+                { "op": "number", "value": 79 }
+              ]
+            },
+            { "op": "number", "value": 80 }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    {
+      "atoms": [
+        {
+          "op": "any",
+          "children": [
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    {
+                      "op": "any",
+                      "children": [
+                        {
+                          "op": "all",
+                          "children": [
+                            {
+                              "op": "all",
+                              "children": [
+                                { "op": "atom_type", "value": 7 },
+                                { "op": "not", "children": [{ "op": "hydrogens", "value": 0 }] }
+                              ]
+                            },
+                            { "op": "valence", "value": 3 }
+                          ]
+                        },
+                        {
+                          "op": "all",
+                          "children": [
+                            {
+                              "op": "all",
+                              "children": [
+                                {
+                                  "op": "all",
+                                  "children": [
+                                    { "op": "atom_type", "value": 7 },
+                                    { "op": "not", "children": [{ "op": "hydrogens", "value": 0 }] }
+                                  ]
+                                },
+                                { "op": "charge", "value": 1 }
+                              ]
+                            },
+                            { "op": "valence", "value": 4 }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "op": "all",
+                      "children": [
+                        {
+                          "op": "all",
+                          "children": [
+                            { "op": "atom_type", "value": 8 },
+                            { "op": "hydrogens", "value": 1 }
+                          ]
+                        },
+                        { "op": "charge", "value": 0 }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "all",
+                  "children": [
+                    {
+                      "op": "all",
+                      "children": [
+                        { "op": "atom_type", "value": 16 },
+                        { "op": "hydrogens", "value": 1 }
+                      ]
+                    },
+                    { "op": "charge", "value": 0 }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "all",
+              "children": [
+                {
+                  "op": "all",
+                  "children": [
+                    { "op": "atom_type", "value": 1007 },
+                    { "op": "hydrogens", "value": 1 }
+                  ]
+                },
+                { "op": "charge", "value": 0 }
+              ]
+            }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    {
+      "atoms": [
+        { "op": "always" },
+        {
+          "op": "any",
+          "children": [
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    { "op": "atom_type", "value": 8 },
+                    { "op": "atom_type", "value": 7 }
+                  ]
+                },
+                { "op": "atom_type", "value": 15 }
+              ]
+            },
+            { "op": "atom_type", "value": 16 }
+          ]
+        }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "bond_order", "value": 2 } }]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            {
+              "op": "all",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    { "op": "atom_type", "value": 8 },
+                    { "op": "atom_type", "value": 16 }
+                  ]
+                },
+                { "op": "hydrogens", "value": 1 }
+              ]
+            },
+            { "op": "valence", "value": 2 }
+          ]
+        },
+        { "op": "not", "children": [{ "op": "recursive", "value": 111 }] }
+      ],
+      "bonds": [{ "a": 0, "b": 1, "query": { "op": "bond_order", "value": 1 } }]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            {
+              "op": "all",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    { "op": "atom_type", "value": 8 },
+                    { "op": "atom_type", "value": 16 }
+                  ]
+                },
+                { "op": "hydrogens", "value": 0 }
+              ]
+            },
+            { "op": "valence", "value": 2 }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            {
+              "op": "any",
+              "children": [
+                { "op": "atom_type", "value": 8 },
+                { "op": "atom_type", "value": 16 }
+              ]
+            },
+            { "op": "charge", "value": -1 }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    {
+      "atoms": [
+        { "op": "atom_type", "value": 7 },
+        { "op": "always" },
+        {
+          "op": "any",
+          "children": [
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    { "op": "atom_type", "value": 8 },
+                    { "op": "atom_type", "value": 7 }
+                  ]
+                },
+                { "op": "atom_type", "value": 15 }
+              ]
+            },
+            { "op": "atom_type", "value": 16 }
+          ]
+        }
+      ],
+      "bonds": [
+        { "a": 0, "b": 1, "query": { "op": "bond_order", "value": 1 } },
+        {
+          "a": 1,
+          "b": 2,
+          "query": {
+            "op": "all",
+            "children": [
+              { "op": "bond_order", "value": 2 },
+              { "op": "not", "children": [{ "op": "ring_bond", "value": 1 }] }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            {
+              "op": "all",
+              "children": [
+                { "op": "atom_type", "value": 7 },
+                { "op": "valence", "value": 3 }
+              ]
+            },
+            { "op": "not", "children": [{ "op": "recursive", "value": 115 }] }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    {
+      "atoms": [
+        {
+          "op": "all",
+          "children": [
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    {
+                      "op": "all",
+                      "children": [
+                        {
+                          "op": "all",
+                          "children": [
+                            { "op": "atom_type", "value": 1007 },
+                            { "op": "hydrogens", "value": 0 }
+                          ]
+                        },
+                        { "op": "degree", "value": 2 }
+                      ]
+                    },
+                    { "op": "atom_type", "value": 1008 }
+                  ]
+                },
+                { "op": "atom_type", "value": 1016 }
+              ]
+            },
+            { "op": "charge", "value": 0 }
+          ]
+        }
+      ],
+      "bonds": []
+    },
+    {
+      "atoms": [
+        {
+          "op": "any",
+          "children": [
+            {
+              "op": "any",
+              "children": [
+                {
+                  "op": "any",
+                  "children": [
+                    {
+                      "op": "any",
+                      "children": [
+                        { "op": "recursive", "value": 112 },
+                        { "op": "recursive", "value": 113 }
+                      ]
+                    },
+                    { "op": "recursive", "value": 114 }
+                  ]
+                },
+                { "op": "recursive", "value": 116 }
+              ]
+            },
+            { "op": "recursive", "value": 117 }
+          ]
+        }
+      ],
+      "bonds": []
+    }
+  ],
+  "crippen": [
+    { "label": "C1", "smarts": "[CH4]", "pattern": 0, "logp": 0.1441, "mr": 2.503 },
+    { "label": "C1", "smarts": "[CH3]C", "pattern": 1, "logp": 0.1441, "mr": 2.503 },
+    { "label": "C1", "smarts": "[CH2](C)C", "pattern": 2, "logp": 0.1441, "mr": 2.503 },
+    { "label": "C2", "smarts": "[CH](C)(C)C", "pattern": 3, "logp": 0.0, "mr": 2.433 },
+    { "label": "C2", "smarts": "[C](C)(C)(C)C", "pattern": 4, "logp": 0.0, "mr": 2.433 },
+    {
+      "label": "C3",
+      "smarts": "[CH3][N,O,P,S,F,Cl,Br,I]",
+      "pattern": 5,
+      "logp": -0.2035,
+      "mr": 2.753
+    },
+    {
+      "label": "C3",
+      "smarts": "[CH2X4]([N,O,P,S,F,Cl,Br,I])[A;!#1]",
+      "pattern": 6,
+      "logp": -0.2035,
+      "mr": 2.753
+    },
+    {
+      "label": "C4",
+      "smarts": "[CH1X4]([N,O,P,S,F,Cl,Br,I])([A;!#1])[A;!#1]",
+      "pattern": 7,
+      "logp": -0.2051,
+      "mr": 2.731
+    },
+    {
+      "label": "C4",
+      "smarts": "[CH0X4]([N,O,P,S,F,Cl,Br,I])([A;!#1])([A;!#1])[A;!#1]",
+      "pattern": 8,
+      "logp": -0.2051,
+      "mr": 2.731
+    },
+    { "label": "C5", "smarts": "[C]=[!C;A;!#1]", "pattern": 9, "logp": -0.2783, "mr": 5.007 },
+    { "label": "C6", "smarts": "[CH2]=C", "pattern": 10, "logp": 0.1551, "mr": 3.513 },
+    { "label": "C6", "smarts": "[CH1](=C)[A;!#1]", "pattern": 11, "logp": 0.1551, "mr": 3.513 },
+    {
+      "label": "C6",
+      "smarts": "[CH0](=C)([A;!#1])[A;!#1]",
+      "pattern": 12,
+      "logp": 0.1551,
+      "mr": 3.513
+    },
+    { "label": "C6", "smarts": "[C](=C)=C", "pattern": 13, "logp": 0.1551, "mr": 3.513 },
+    { "label": "C7", "smarts": "[CX2]#[A;!#1]", "pattern": 14, "logp": 0.0017, "mr": 3.888 },
+    { "label": "C8", "smarts": "[CH3]c", "pattern": 15, "logp": 0.08452, "mr": 2.464 },
+    { "label": "C9", "smarts": "[CH3]a", "pattern": 16, "logp": -0.1444, "mr": 2.412 },
+    { "label": "C10", "smarts": "[CH2X4]a", "pattern": 17, "logp": -0.0516, "mr": 2.488 },
+    { "label": "C11", "smarts": "[CHX4]a", "pattern": 18, "logp": 0.1193, "mr": 2.582 },
+    { "label": "C12", "smarts": "[CH0X4]a", "pattern": 19, "logp": -0.0967, "mr": 2.576 },
+    {
+      "label": "C13",
+      "smarts": "[cH0]-[A;!C;!N;!O;!S;!F;!Cl;!Br;!I;!#1]",
+      "pattern": 20,
+      "logp": -0.5443,
+      "mr": 4.041
+    },
+    { "label": "C14", "smarts": "[c][#9]", "pattern": 21, "logp": 0.0, "mr": 3.257 },
+    { "label": "C15", "smarts": "[c][#17]", "pattern": 22, "logp": 0.245, "mr": 3.564 },
+    { "label": "C16", "smarts": "[c][#35]", "pattern": 23, "logp": 0.198, "mr": 3.18 },
+    { "label": "C17", "smarts": "[c][#53]", "pattern": 24, "logp": 0.0, "mr": 3.104 },
+    { "label": "C18", "smarts": "[cH]", "pattern": 25, "logp": 0.1581, "mr": 3.35 },
+    { "label": "C19", "smarts": "[c](:a)(:a):a", "pattern": 26, "logp": 0.2955, "mr": 4.346 },
+    { "label": "C20", "smarts": "[c](:a)(:a)-a", "pattern": 27, "logp": 0.2713, "mr": 3.904 },
+    { "label": "C21", "smarts": "[c](:a)(:a)-C", "pattern": 28, "logp": 0.136, "mr": 3.509 },
+    { "label": "C22", "smarts": "[c](:a)(:a)-N", "pattern": 29, "logp": 0.4619, "mr": 4.067 },
+    { "label": "C23", "smarts": "[c](:a)(:a)-O", "pattern": 30, "logp": 0.5437, "mr": 3.853 },
+    { "label": "C24", "smarts": "[c](:a)(:a)-S", "pattern": 31, "logp": 0.1893, "mr": 2.673 },
+    {
+      "label": "C25",
+      "smarts": "[c](:a)(:a)=[C,N,O]",
+      "pattern": 32,
+      "logp": -0.8186,
+      "mr": 3.135
+    },
+    { "label": "C26", "smarts": "[C](=C)(a)[A;!#1]", "pattern": 33, "logp": 0.264, "mr": 4.305 },
+    { "label": "C26", "smarts": "[C](=C)(c)a", "pattern": 34, "logp": 0.264, "mr": 4.305 },
+    { "label": "C26", "smarts": "[CH1](=C)a", "pattern": 35, "logp": 0.264, "mr": 4.305 },
+    { "label": "C26", "smarts": "[C]=c", "pattern": 36, "logp": 0.264, "mr": 4.305 },
+    {
+      "label": "C27",
+      "smarts": "[CX4][A;!C;!N;!O;!P;!S;!F;!Cl;!Br;!I;!#1]",
+      "pattern": 37,
+      "logp": 0.2148,
+      "mr": 2.693
+    },
+    { "label": "CS", "smarts": "[#6]", "pattern": 38, "logp": 0.08129, "mr": 3.243 },
+    { "label": "H1", "smarts": "[#1][#6,#1]", "pattern": 39, "logp": 0.123, "mr": 1.057 },
+    { "label": "H2", "smarts": "[#1]O[CX4,c]", "pattern": 40, "logp": -0.2677, "mr": 1.395 },
+    {
+      "label": "H2",
+      "smarts": "[#1]O[!#6;!#7;!#8;!#16]",
+      "pattern": 41,
+      "logp": -0.2677,
+      "mr": 1.395
+    },
+    { "label": "H2", "smarts": "[#1][!#6;!#7;!#8]", "pattern": 42, "logp": -0.2677, "mr": 1.395 },
+    { "label": "H3", "smarts": "[#1][#7]", "pattern": 43, "logp": 0.2142, "mr": 0.9627 },
+    { "label": "H3", "smarts": "[#1]O[#7]", "pattern": 44, "logp": 0.2142, "mr": 0.9627 },
+    { "label": "H4", "smarts": "[#1]OC=[#6,#7,O,S]", "pattern": 45, "logp": 0.298, "mr": 1.805 },
+    { "label": "H4", "smarts": "[#1]O[O,S]", "pattern": 46, "logp": 0.298, "mr": 1.805 },
+    { "label": "HS", "smarts": "[#1]", "pattern": 47, "logp": 0.1125, "mr": 1.112 },
+    { "label": "N1", "smarts": "[NH2+0][A;!#1]", "pattern": 48, "logp": -1.019, "mr": 2.262 },
+    {
+      "label": "N2",
+      "smarts": "[NH+0]([A;!#1])[A;!#1]",
+      "pattern": 49,
+      "logp": -0.7096,
+      "mr": 2.173
+    },
+    { "label": "N3", "smarts": "[NH2+0]a", "pattern": 50, "logp": -1.027, "mr": 2.827 },
+    { "label": "N4", "smarts": "[NH1+0]([!#1;A,a])a", "pattern": 51, "logp": -0.5188, "mr": 3.0 },
+    { "label": "N5", "smarts": "[NH+0]=[!#1;A,a]", "pattern": 52, "logp": 0.08387, "mr": 1.757 },
+    {
+      "label": "N6",
+      "smarts": "[N+0](=[!#1;A,a])[!#1;A,a]",
+      "pattern": 53,
+      "logp": 0.1836,
+      "mr": 2.428
+    },
+    {
+      "label": "N7",
+      "smarts": "[N+0]([A;!#1])([A;!#1])[A;!#1]",
+      "pattern": 54,
+      "logp": -0.3187,
+      "mr": 1.839
+    },
+    {
+      "label": "N8",
+      "smarts": "[N+0](a)([!#1;A,a])[A;!#1]",
+      "pattern": 55,
+      "logp": -0.4458,
+      "mr": 2.819
+    },
+    { "label": "N8", "smarts": "[N+0](a)(a)a", "pattern": 56, "logp": -0.4458, "mr": 2.819 },
+    { "label": "N9", "smarts": "[N+0]#[A;!#1]", "pattern": 57, "logp": 0.01508, "mr": 1.725 },
+    { "label": "N10", "smarts": "[NH3,NH2,NH;+,+2,+3]", "pattern": 58, "logp": -1.95, "mr": 0.0 },
+    { "label": "N11", "smarts": "[n+0]", "pattern": 59, "logp": -0.3239, "mr": 2.202 },
+    { "label": "N12", "smarts": "[n;+,+2,+3]", "pattern": 60, "logp": -1.119, "mr": 0.0 },
+    {
+      "label": "N13",
+      "smarts": "[NH0;+,+2,+3]([A;!#1])([A;!#1])([A;!#1])[A;!#1]",
+      "pattern": 61,
+      "logp": -0.3396,
+      "mr": 0.2604
+    },
+    {
+      "label": "N13",
+      "smarts": "[NH0;+,+2,+3](=[A;!#1])([A;!#1])[!#1;A,a]",
+      "pattern": 62,
+      "logp": -0.3396,
+      "mr": 0.2604
+    },
+    {
+      "label": "N13",
+      "smarts": "[NH0;+,+2,+3](=[#6])=[#7]",
+      "pattern": 63,
+      "logp": -0.3396,
+      "mr": 0.2604
+    },
+    { "label": "N14", "smarts": "[N;+,+2,+3]#[A;!#1]", "pattern": 64, "logp": 0.2887, "mr": 3.359 },
+    { "label": "N14", "smarts": "[N;-,-2,-3]", "pattern": 65, "logp": 0.2887, "mr": 3.359 },
+    {
+      "label": "N14",
+      "smarts": "[N;+,+2,+3](=[N;-,-2,-3])=N",
+      "pattern": 66,
+      "logp": 0.2887,
+      "mr": 3.359
+    },
+    { "label": "NS", "smarts": "[#7]", "pattern": 67, "logp": -0.4806, "mr": 2.134 },
+    { "label": "O1", "smarts": "[o]", "pattern": 68, "logp": 0.1552, "mr": 1.08 },
+    { "label": "O2", "smarts": "[OH,OH2]", "pattern": 69, "logp": -0.2893, "mr": 0.8238 },
+    { "label": "O3", "smarts": "[O]([A;!#1])[A;!#1]", "pattern": 70, "logp": -0.0684, "mr": 1.085 },
+    { "label": "O4", "smarts": "[O](a)[!#1;A,a]", "pattern": 71, "logp": -0.4195, "mr": 1.182 },
+    { "label": "O5", "smarts": "[O]=[#7,#8]", "pattern": 72, "logp": 0.0335, "mr": 3.367 },
+    { "label": "O5", "smarts": "[OX1;-,-2,-3][#7]", "pattern": 73, "logp": 0.0335, "mr": 3.367 },
+    { "label": "O6", "smarts": "[OX1;-,-2,-2][#16]", "pattern": 74, "logp": -0.3339, "mr": 0.7774 },
+    { "label": "O6", "smarts": "[O;-0]=[#16;-0]", "pattern": 75, "logp": -0.3339, "mr": 0.7774 },
+    { "label": "O12", "smarts": "[O-]C(=O)", "pattern": 76, "logp": -1.326, "mr": 0.0 },
+    {
+      "label": "O7",
+      "smarts": "[OX1;-,-2,-3][!#1;!N;!S]",
+      "pattern": 77,
+      "logp": -1.189,
+      "mr": 0.0
+    },
+    { "label": "O8", "smarts": "[O]=c", "pattern": 78, "logp": 0.1788, "mr": 3.135 },
+    { "label": "O9", "smarts": "[O]=[CH]C", "pattern": 79, "logp": -0.1526, "mr": 0.0 },
+    { "label": "O9", "smarts": "[O]=C(C)([A;!#1])", "pattern": 80, "logp": -0.1526, "mr": 0.0 },
+    { "label": "O9", "smarts": "[O]=[CH][N,O]", "pattern": 81, "logp": -0.1526, "mr": 0.0 },
+    { "label": "O9", "smarts": "[O]=[CH2]", "pattern": 82, "logp": -0.1526, "mr": 0.0 },
+    { "label": "O9", "smarts": "[O]=[CX2]=O", "pattern": 83, "logp": -0.1526, "mr": 0.0 },
+    { "label": "O10", "smarts": "[O]=[CH]c", "pattern": 84, "logp": 0.1129, "mr": 0.2215 },
+    {
+      "label": "O10",
+      "smarts": "[O]=C([C,c])[a;!#1]",
+      "pattern": 85,
+      "logp": 0.1129,
+      "mr": 0.2215
+    },
+    { "label": "O10", "smarts": "[O]=C(c)[A;!#1]", "pattern": 86, "logp": 0.1129, "mr": 0.2215 },
+    {
+      "label": "O11",
+      "smarts": "[O]=C([!#1;!#6])[!#1;!#6]",
+      "pattern": 87,
+      "logp": 0.4833,
+      "mr": 0.389
+    },
+    { "label": "OS", "smarts": "[#8]", "pattern": 88, "logp": -0.1188, "mr": 0.6865 },
+    { "label": "F", "smarts": "[#9-0]", "pattern": 89, "logp": 0.4202, "mr": 1.108 },
+    { "label": "Cl", "smarts": "[#17-0]", "pattern": 90, "logp": 0.6895, "mr": 5.853 },
+    { "label": "Br", "smarts": "[#35-0]", "pattern": 91, "logp": 0.8456, "mr": 8.927 },
+    { "label": "I", "smarts": "[#53-0]", "pattern": 92, "logp": 0.8857, "mr": 14.02 },
+    { "label": "Hal", "smarts": "[#9,#17,#35,#53;-]", "pattern": 93, "logp": -2.996, "mr": 0.0 },
+    { "label": "Hal", "smarts": "[#53;+,+2,+3]", "pattern": 94, "logp": -2.996, "mr": 0.0 },
+    {
+      "label": "Hal",
+      "smarts": "[+;#3,#11,#19,#37,#55]",
+      "pattern": 95,
+      "logp": -2.996,
+      "mr": 0.0
+    },
+    { "label": "P", "smarts": "[#15]", "pattern": 96, "logp": 0.8612, "mr": 6.92 },
+    {
+      "label": "S2",
+      "smarts": "[S;-,-2,-3,-4,+1,+2,+3,+5,+6]",
+      "pattern": 97,
+      "logp": -0.0024,
+      "mr": 7.365
+    },
+    { "label": "S2", "smarts": "[S-0]=[N,O,P,S]", "pattern": 98, "logp": -0.0024, "mr": 7.365 },
+    { "label": "S1", "smarts": "[S;A]", "pattern": 99, "logp": 0.6482, "mr": 7.591 },
+    { "label": "S3", "smarts": "[s;a]", "pattern": 100, "logp": 0.6237, "mr": 6.691 },
+    {
+      "label": "Me1",
+      "smarts": "[#3,#11,#19,#37,#55]",
+      "pattern": 101,
+      "logp": -0.3808,
+      "mr": 5.754
+    },
+    {
+      "label": "Me1",
+      "smarts": "[#4,#12,#20,#38,#56]",
+      "pattern": 102,
+      "logp": -0.3808,
+      "mr": 5.754
+    },
+    {
+      "label": "Me1",
+      "smarts": "[#5,#13,#31,#49,#81]",
+      "pattern": 103,
+      "logp": -0.3808,
+      "mr": 5.754
+    },
+    { "label": "Me1", "smarts": "[#14,#32,#50,#82]", "pattern": 104, "logp": -0.3808, "mr": 5.754 },
+    { "label": "Me1", "smarts": "[#33,#51,#83]", "pattern": 105, "logp": -0.3808, "mr": 5.754 },
+    { "label": "Me1", "smarts": "[#34,#52,#84]", "pattern": 106, "logp": -0.3808, "mr": 5.754 },
+    {
+      "label": "Me2",
+      "smarts": "[#21,#22,#23,#24,#25,#26,#27,#28,#29,#30]",
+      "pattern": 107,
+      "logp": -0.0025,
+      "mr": 0.0
+    },
+    {
+      "label": "Me2",
+      "smarts": "[#39,#40,#41,#42,#43,#44,#45,#46,#47,#48]",
+      "pattern": 108,
+      "logp": -0.0025,
+      "mr": 0.0
+    },
+    {
+      "label": "Me2",
+      "smarts": "[#72,#73,#74,#75,#76,#77,#78,#79,#80]",
+      "pattern": 109,
+      "logp": -0.0025,
+      "mr": 0.0
+    }
+  ],
+  "donors": 110,
+  "acceptors": 118
+}

@@ -6,6 +6,7 @@
 //! Copyright (C) 2001-2024 Greg Landrum and other RDKit contributors.
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
 mod atomic_data;
+pub mod descriptors;
 pub mod graph;
 pub mod rings;
 
@@ -133,7 +134,7 @@ pub(crate) fn complete_analysis(result: &mut serde_json::Value) -> Result<(), St
         rdkit_version: String,
         graph: graph::Graph,
         // Temporary fallback for platform-dependent legacy ring pruning.
-        reference_rings: u32,
+        reference_rings: Vec<Vec<usize>>,
     }
     let input: Input = serde_json::from_value(
         analysis
@@ -148,19 +149,24 @@ pub(crate) fn complete_analysis(result: &mut serde_json::Value) -> Result<(), St
             input.rdkit_version
         ));
     }
-    let ring_count = match rings::perceive(&input.graph, rings::Options::default()) {
-        Ok(rings) => {
-            u32::try_from(rings.atoms.len()).map_err(|_| "Ring count exceeds supported range")?
-        }
+    let ring_atoms = match rings::perceive(&input.graph, rings::Options::default()) {
+        Ok(rings) => rings.atoms,
         Err(rings::RingError::UnresolvedOrdering) => input.reference_rings,
         Err(error) => return Err(error.to_string()),
     };
+    let descriptors = descriptors::calculate(&input.graph, &ring_atoms)?;
+    let ring_count =
+        u32::try_from(ring_atoms.len()).map_err(|_| "Ring count exceeds supported range")?;
     let mut derived = serde_json::to_value(properties(&input.graph.atom_facts()?)?)
         .map_err(|error| format!("Invalid molecular properties: {error}"))?;
-    derived
+    let fields = derived
         .as_object_mut()
-        .ok_or("Invalid molecular properties")?
-        .insert("rings".into(), ring_count.into());
+        .ok_or("Invalid molecular properties")?;
+    fields.insert("rings".into(), ring_count.into());
+    fields.insert("logp".into(), descriptors.logp.into());
+    fields.insert("tpsa".into(), descriptors.tpsa.into());
+    fields.insert("donors".into(), descriptors.donors.into());
+    fields.insert("acceptors".into(), descriptors.acceptors.into());
     let fields = derived.as_object().ok_or("Invalid molecular properties")?;
     let analysis = analysis
         .as_object_mut()
@@ -177,7 +183,7 @@ mod tests {
 
     #[test]
     fn worker_completion_is_atomic_and_requires_matching_data() -> Result<(), String> {
-        let input = json!({"rdkit_version": RDKIT_VERSION, "reference_rings": 99, "graph": {"atoms": [{
+        let input = json!({"rdkit_version": RDKIT_VERSION, "reference_rings": [[0, 1, 2]], "graph": {"atoms": [{
             "atomic_number": 6, "isotope": 0, "charge": 0,
             "explicit_hydrogens": 0, "radical_electrons": 0,
             "no_implicit": false, "aromatic": false,
@@ -207,7 +213,7 @@ mod tests {
             }], "bonds": []}}),
         ] {
             if let Some(input) = bad_input.as_object_mut() {
-                input.insert("reference_rings".into(), 0.into());
+                input.insert("reference_rings".into(), json!([]));
             }
             let mut bad = json!({"analysis": {"smiles": "C", "property_input": bad_input}});
             let original = bad.clone();
@@ -228,12 +234,19 @@ mod tests {
             "../../tests/fixtures/ring-order-dependent.json"
         ))
         .map_err(|e| e.to_string())?;
-        let input = json!({"rdkit_version": RDKIT_VERSION, "reference_rings": 32, "graph": graph});
+        let input = json!({"rdkit_version": RDKIT_VERSION, "reference_rings": [[0, 8, 16]], "graph": graph});
         let mut response = json!({"analysis": {"property_input": input}});
         complete_analysis(&mut response)?;
-        assert_eq!(response["analysis"]["rings"], 32);
+        assert_eq!(response["analysis"]["rings"], 1);
         assert!(response["analysis"].get("property_input").is_none());
-        for bad in [json!(null), json!(-1), json!(1.5), json!(4294967296u64)] {
+        for bad in [
+            json!(null),
+            json!(-1),
+            json!(1.5),
+            json!(4294967296u64),
+            json!([[0, 999, 16]]),
+            json!([[0, 0, 0]]),
+        ] {
             let mut input = input.clone();
             input["reference_rings"] = bad;
             let mut response = json!({"analysis": {"property_input": input}});

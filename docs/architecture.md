@@ -27,18 +27,19 @@ flowchart LR
 | `src/app/workspace.rs`                         | Command bar, context options, compact palette, inspector and drawers           |
 | `src/app/icons.rs`                             | Original vector tool and command icons                                         |
 | `src/engine.rs`                                | Chemistry interface, worker lifecycle, timeout and response validation         |
-| `src/chemistry/`                               | Bounded graph, valence, hydrogen assignment, ring perception and properties    |
+| `src/chemistry/`                               | Bounded graph, valence, hydrogen assignment, ring perception and descriptors   |
 | `src/pictures/exchange/`                       | Bounded raster decoding, orientation, transparency and reflection              |
 | `src/editing.rs`                               | Clipboard remapping, transforms, component arrangement and ring placement      |
 | `src/recovery.rs`                              | Atomic session snapshots and recovery candidates                               |
 | `src/clipboard.rs`, `src/app/clipboard.rs`     | Native multi-format Copy/Paste, asynchronous completion guards and safe Cut    |
 | `native/macos/Clipboard.swift`                 | Bounded single-item AppKit pasteboard bridge                                   |
+| `native/windows/`                              | Windows clipboard, printing and editable Office objects through a safe API     |
 | `src/exchange/`                                | Bounded Rust CDX/CDXML codec and exact legacy text encodings                   |
 | `engine/cdx_exchange.py`                       | Python reference codec retained for differential tests                         |
 | `src/export.rs`                                | Vector PDF and raster PNG from the shared SVG scene                            |
 | `src/storage.rs`                               | Write complete files beside the destination, then atomically replace           |
 | `src/style.rs` and `engine/drawing_style.json` | Shared JACS / ACS defaults, publication units and font advances                |
-| `engine/worker.py`                             | Molecular parsing, sanitization, descriptors, depiction and exchange formats   |
+| `engine/worker.py`                             | Molecular parsing, sanitization, identifiers, depiction and exchange formats   |
 
 Document coordinates use screen-style positive-down Y, with 28 world units per RDKit coordinate unit. The default single bond is 42 world units, representing 14.4 publication points in the JACS / ACS preset. The camera never changes stored coordinates or export size. Native documents use JSON format version 15 and accept supported versions 1–14 when reading. Version 15 adds explicit reaction roles tied to arrow and atom IDs. Version 14 adds validated per-document drawing settings; the physical coordinate scale remains fixed at 14.4/42 points per world unit. New presentation fields prompted version increments so older editors reject unsupported documents. History and camera are session state.
 
@@ -68,7 +69,7 @@ The file-open panel is intentionally unfiltered, so opening a supported file doe
 
 ## Pure Rust migration
 
-The app uses `LocalEngine`, which implements `ChemistryEngine`. CDX conversion, raster normalization, valence checks, hydrogen counts and formula/mass calculations run in Rust on blocking tasks. RDKit still sanitizes molecules and supplies their atom/bond graphs. Rust derives hydrogen counts from those graphs; cached drawing labels are never used for properties.
+The app uses `LocalEngine`, which implements `ChemistryEngine`. CDX conversion, raster normalization, valence checks, hydrogen counts and scalar molecular properties run in Rust on blocking tasks. RDKit still sanitizes molecules and supplies their atom/bond graphs. Rust derives hydrogen counts from those graphs; cached drawing labels are never used for properties.
 
 The bridge requests a sanitized graph with `local_properties: true`, completes the analysis in Rust, and returns the unchanged public response type. Missing graph data, invalid valences or a mismatched RDKit version return errors. `PythonEngine::default()` retains the original calculations as an independent reference. A future backend can replace Python behind the same interface; this is not a runtime plugin ABI.
 
@@ -78,7 +79,9 @@ The bridge requests a sanitized graph with `local_properties: true`, completes t
 
 `tests/valence.rs` compares over 165,000 cases with RDKit's property-cache and radical passes: allowed/rejected valences, charges, implicit-H policy, aromatic and partial bonds, dative direction and metal atoms. Graphs reject invalid endpoints, duplicate bonds and excessive size. The Rust radical pass is ready for the future sanitizer; production still takes radical assignments from RDKit. Valence checks alone do not replace resonance normalization, kekulization or aromaticity perception.
 
-Rust also computes symmetric SSSR rings with iterative, bounded searches. `tests/ring_perception.rs` compares RDKit regressions, templates, the bundled NCI 5,000-molecule sample, atom permutations and dense synthetic graphs. All molecular cases match. Some dense graphs expose platform-dependent equal-size sorting in RDKit's pruning algorithm. Rust certifies the possible pruning choices and uses the reference count when it cannot prove agreement; that fallback still requires RDKit. This changes no document coordinates or bonds.
+Rust also computes symmetric SSSR rings with iterative, bounded searches. `tests/ring_perception.rs` compares RDKit regressions, templates, the bundled NCI 5,000-molecule sample, atom permutations and dense synthetic graphs. All molecular cases match. Some dense graphs expose platform-dependent equal-size sorting in RDKit's pruning algorithm. Rust certifies the possible pruning choices and uses reference ring membership when it cannot prove agreement; that fallback still requires RDKit. This changes no document coordinates or bonds.
+
+Rust computes logP, polar surface area and hydrogen donor/acceptor counts using pinned descriptor rules and a bounded query matcher. `tests/descriptors.rs` compares totals, atom contributions and Crippen type assignments against RDKit, including explicit hydrogens, atom permutations, special bonds and the reference's 1,000-match limit. Floating-point results allow relative error of at most `1e-12`; counts and types match exactly. The suite also checks molar refractivity and sulfur/phosphorus surface contributions, although the UI does not expose them.
 
 Embedded PNG, TIFF, JPEG, GIF and BMP normalization runs in Rust. The worker returns deferred picture payloads; the bridge validates and decodes them before exposing a document. Export supplies prepared PNG data, including lossless row reversal for reflected pictures. Image work runs off the UI thread with the existing size and document budgets. Lossless pixels must match the Pillow reference exactly; JPEG color channels may differ by at most 2/255 between decoders. Alpha must match exactly.
 
@@ -88,7 +91,9 @@ Regenerate codec constants and codepage tables with `uv run --locked python scri
 
 Element, isotope, allowed-valence and outer-electron data come from RDKit `Release_2026_03_6`. Regenerate them with `uv run --locked python scripts/regenerate_atomic_data.py --rdkit-source ~/dev/rdkit`, then `cargo fmt --all`. The generator verifies the source checksum and compares every entry with installed RDKit. Its BSD license and attribution are in `licenses/rdkit/` and are included in release packages.
 
-The target is a shipped app with no Python, RDKit or uv requirement. Remaining work includes document/exchange conversion, complete graph sanitization, drawing-label assignment, other descriptors, parsers, aromaticity, stereochemistry, canonical identifiers and 2D layout. Each replacement needs differential tests before switching. Python/RDKit can remain development-only references after the runtime is removed; current builds still require them.
+Regenerate descriptor rules with `uv run --locked python scripts/regenerate_descriptor_data.py --rdkit-source ~/dev/rdkit`, then `npx --no-install oxfmt src/chemistry/descriptor_data.json`. The generator verifies source checksums and compiles the fixed queries into checked-in data. The application reads that data without invoking Python or parsing SMARTS.
+
+The target is a shipped app with no Python, RDKit or uv requirement. Remaining work includes document/exchange conversion, complete graph sanitization, drawing-label assignment, parsers, aromaticity, stereochemistry, canonical identifiers and 2D layout. Each replacement needs differential tests before switching. Python/RDKit can remain development-only references after the runtime is removed; current builds still require them.
 
 Portable packages include the worker project and `uv.lock` in `Contents/Resources/chemistry` on macOS or a sibling `chemistry` directory on Windows/Linux. The Rust bridge discovers it relative to the executable and asynchronously runs `uv sync --locked --no-dev --python 3.12` into a separate per-user cache. uv is an installation prerequisite. Python dependencies are reused offline after initial setup, and setup does not modify the signed bundle. Development checkouts use their local `.venv`. The chemistry protocol remains version 1 independently of the native document version.
 
@@ -98,7 +103,7 @@ On macOS, explicit Copy/Paste starts a bundled AppKit helper with JSON on stdin/
 
 The app accepts `format: "cdx"` with base64 input/output. `LocalEngine` converts it in Rust and sends CDXML to the worker for the existing chemistry checks. The binary codec bounds input, output, nesting, object count and property count. Unsupported object properties and query predicates return errors. The worker retains its original CDX path as the test oracle during migration.
 
-Clipboard tasks capture document epoch and revision. Cut removes the captured selection only after a successful write and only if the drawing remains unchanged. Paste validates and inserts in one Undo step, rejecting stale results. Rendering uses a snapshot and runs off the UI thread. The build script compiles the Swift helper beside the app executable; development builds use the helper compiled by Cargo's build script. Non-macOS builds retain text clipboard exchange.
+Clipboard tasks capture document epoch and revision. Cut removes the captured selection only after a successful write and only if the drawing remains unchanged. Paste validates and inserts in one Undo step, rejecting stale results. Rendering uses a snapshot and runs off the UI thread. The build script compiles the Swift helper beside the app executable; development builds use the helper compiled by Cargo's build script. Windows uses its native clipboard and editable Office object bridge; Linux retains text clipboard exchange.
 
 Chemical abbreviations store presentation metadata over the complete atom/bond graph. Cleanup requires selected atoms in the desktop. The worker splits connected components, redraws the requested atoms/molecules, pins unselected atoms and preserves each component’s placement. Cleanup results remain transient until Apply; a revision and document epoch reject stale previews, and Apply commits one history step. Template connection preview and insertion use the same pure geometry operation.
 

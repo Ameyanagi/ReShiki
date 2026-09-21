@@ -16,7 +16,7 @@ fn assert_response_matches(actual: Response, expected: Response) -> TestResult {
         actual["analysis"].as_object_mut(),
         expected["analysis"].as_object_mut(),
     ) {
-        for field in ["mass", "exact_mass"] {
+        for field in ["mass", "exact_mass", "logp", "tpsa"] {
             let av = a
                 .remove(field)
                 .and_then(|v| v.as_f64())
@@ -50,6 +50,9 @@ async fn rust_properties_match_reference_across_editor_operations() -> TestResul
         "C12C3C4C1C5C2C3C45", // Cubane: six symmetric rings, five basis rings.
         "C1CCC2(CC1)CCCC2",   // Spiro junction.
         "c1ccc2occc2c1",      // Fused aromatic rings.
+        "CC(=O)N",            // Exclude the amide nitrogen from acceptors.
+        "O1CC1",              // Three-membered-ring polar surface contribution.
+        "CS(=O)(=O)N",        // Sulfur and nitrogen descriptor rules.
     ] {
         let request = Request::import_smiles(smiles);
         assert_response_matches(

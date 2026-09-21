@@ -1,4 +1,4 @@
-ReShiki includes atomic data and adapted molecular property, valence and ring calculations
+ReShiki includes atomic data and adapted molecular property, valence, ring and descriptor calculations
 from RDKit 2026.03.6, commit 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985:
 https://github.com/rdkit/rdkit/tree/Release_2026_03_6
 
@@ -17,6 +17,18 @@ Copyright (C) 2003-2021 Greg Landrum and other RDKit contributors.
 Code/GraphMol/molopstest.cpp (ring regression examples)
 Copyright (C) 2002-2025 Greg Landrum and other RDKit contributors.
 
-Adaptations are in src/chemistry/, scripts/regenerate_atomic_data.py and
-tests/ring_perception_reference.py.
+Code/GraphMol/Descriptors/Crippen.cpp (atom types and logP/MR contributions)
+Copyright (C) 2004-2012 Greg Landrum and Rational Discovery LLC.
+
+Code/GraphMol/Descriptors/Lipinski.cpp (hydrogen donor/acceptor queries)
+Copyright (C) 2011-2013 Greg Landrum.
+
+Code/GraphMol/Descriptors/MolSurf.cpp (polar surface area contributions)
+Copyright (C) 2007-2023 Greg Landrum.
+
+Code/GraphMol/QueryOps.h (query predicates)
+Copyright (C) 2003-2021 Greg Landrum and other RDKit contributors.
+
+Adaptations are in src/chemistry/, scripts/regenerate_atomic_data.py,
+scripts/regenerate_descriptor_data.py and tests/ring_perception_reference.py.
 These portions are distributed under the accompanying BSD-3-Clause LICENSE.

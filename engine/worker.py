@@ -351,10 +351,6 @@ def analyze(mol, *, local_properties=False):
     )
     result = {
         "smiles": Chem.MolToSmiles(mol) if identifiers else "",
-        "logp": rdMolDescriptors.CalcCrippenDescriptors(mol)[0],
-        "tpsa": rdMolDescriptors.CalcTPSA(mol),
-        "donors": rdMolDescriptors.CalcNumHBD(mol),
-        "acceptors": rdMolDescriptors.CalcNumHBA(mol),
         "inchi": Chem.MolToInchi(mol) if inchi_ok else "",
         "inchikey": Chem.MolToInchiKey(mol) if inchi_ok else "",
     }
@@ -365,7 +361,7 @@ def analyze(mol, *, local_properties=False):
             "rdkit_version": rdBase.rdkitVersion,
             # Retain only as a fallback while Rust certifies equal-sized ring
             # pruning. Some dense graphs depend on the C++ sort implementation.
-            "reference_rings": rdMolDescriptors.CalcNumRings(mol),
+            "reference_rings": list(mol.GetRingInfo().AtomRings()),
             "graph": {
                 "atoms": [
                     {
@@ -392,6 +388,10 @@ def analyze(mol, *, local_properties=False):
         }
     else:
         result.update(
+            logp=rdMolDescriptors.CalcCrippenDescriptors(mol)[0],
+            tpsa=rdMolDescriptors.CalcTPSA(mol),
+            donors=rdMolDescriptors.CalcNumHBD(mol),
+            acceptors=rdMolDescriptors.CalcNumHBA(mol),
             rings=rdMolDescriptors.CalcNumRings(mol),
             formula=rdMolDescriptors.CalcMolFormula(mol),
             mass=rdMolDescriptors._CalcMolWt(mol),
