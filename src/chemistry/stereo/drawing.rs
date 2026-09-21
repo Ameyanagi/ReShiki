@@ -10,6 +10,8 @@ use crate::chemistry::{
 };
 use serde::{Deserialize, Serialize};
 mod bonds;
+mod spatial;
+pub use spatial::{SpatialAnnotations, SpatialError, SpatialOptions, SpatialStereo, from_3d};
 pub mod wedging;
 pub use bonds::{BondGeometry, detect_bond_stereo, double_bond_directions};
 

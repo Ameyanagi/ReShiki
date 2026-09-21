@@ -1,4 +1,5 @@
 use super::*;
+use crate::chemistry::ranking::StereoGroup;
 use std::collections::{HashMap, HashSet};
 
 impl Reader<'_> {
@@ -94,11 +95,10 @@ pub(super) fn read(r: &mut Reader<'_>, p: &mut Parsed) -> Result<()> {
         .map(|s| r.integer(s))
         .transpose()?
         .unwrap_or(0);
+    let groups = r.count(groups, 100_000)?;
+    let objects = r.count(objects, 100_000)?;
     if groups != 0 {
         return Err(ReadError::Pending("substance groups"));
-    }
-    if objects != 0 {
-        return Err(ReadError::Pending("3D constraint records"));
     }
     let mut indices = HashMap::new();
     if n != 0 {
@@ -170,7 +170,7 @@ pub(super) fn read(r: &mut Reader<'_>, p: &mut Parsed) -> Result<()> {
                         props.attachment = true;
                     }
                     "ATTCHORD" if value.starts_with('(') => {
-                        return Err(ReadError::Pending("template attachment order"));
+                        template_order(r, value)?;
                     }
                     "ATTCHORD" => {
                         r.integer(value)?;
@@ -250,18 +250,32 @@ pub(super) fn read(r: &mut Reader<'_>, p: &mut Parsed) -> Result<()> {
         r.expect("END BOND")?;
     }
     let mut line = r.v3()?.to_ascii_uppercase();
+    let mut objects_found = false;
     while line.starts_with("LINKNODE") {
         line = r.v3()?.to_ascii_uppercase();
     }
     while line.starts_with("BEGIN") {
         if line.starts_with("BEGIN COLLECTION") {
-            return Err(ReadError::Pending("enhanced stereo collections"));
+            collection(r, p)?;
+            line = r.v3()?.to_ascii_uppercase();
+            continue;
         }
         if line.starts_with("BEGIN SGROUP") {
             return Err(r.invalid("Unexpected substance group block"));
         }
         if line.starts_with("BEGIN OBJ3D") {
-            return Err(r.invalid("Unexpected 3D constraint block"));
+            if objects == 0 || objects_found {
+                return Err(r.invalid("Unexpected or repeated 3D constraint block"));
+            }
+            objects_found = true;
+            // As in the native reader, constraints do not alter atom positions.
+            // Validate their framing and count without interpreting the payload.
+            for _ in 0..objects {
+                r.v3()?;
+            }
+            r.expect("END OBJ3D")?;
+            line = r.v3()?.to_ascii_uppercase();
+            continue;
         }
         // Bound traversal by the input limit and require a real terminating record.
         while !line.starts_with("END") {
@@ -272,8 +286,126 @@ pub(super) fn read(r: &mut Reader<'_>, p: &mut Parsed) -> Result<()> {
     if !line.starts_with("END CTAB") {
         return Err(r.invalid("Missing END CTAB"));
     }
+    if objects != 0 && !objects_found {
+        return Err(r.invalid("Missing 3D constraint block"));
+    }
     if !r.next()?.starts_with("M  END") {
         return Err(r.invalid("Missing M END"));
     }
     Ok(())
+}
+
+fn template_order(r: &Reader<'_>, value: &str) -> Result<()> {
+    let list = value
+        .strip_prefix('(')
+        .and_then(|v| v.strip_suffix(')'))
+        .ok_or_else(|| r.invalid("Invalid template attachment list"))?;
+    let fields = list.split_whitespace().collect::<Vec<_>>();
+    let count = r.count(r.integer(r.token(&fields, 0)?)?, 100_000)?;
+    if count == 0 || count % 2 != 0 || fields.len() != count + 1 {
+        return Err(r.invalid("Invalid template attachment count"));
+    }
+    let mut indices = HashSet::new();
+    let mut labels = HashSet::new();
+    for entry in fields
+        .get(1..)
+        .ok_or_else(|| r.invalid("Missing template attachments"))?
+        .chunks_exact(2)
+    {
+        let index = r.integer(r.token(entry, 0)?)?;
+        let label = r.token(entry, 1)?;
+        if !indices.insert(index) || !labels.insert(label) {
+            return Err(r.invalid("Duplicate template attachment"));
+        }
+    }
+    Ok(())
+}
+
+// Group membership uses the one-based atom insertion order, not V3000
+// bookmarks. Unknown collection types are ignored by the reference reader.
+fn collection(r: &mut Reader<'_>, p: &mut Parsed) -> Result<()> {
+    let mut line = r.v3()?.to_ascii_uppercase();
+    let mut groups = Vec::new();
+    let mut absolute = false;
+    while !line.starts_with("END") {
+        if let Some(group) = collection_group(r, &line, p.graph.atoms.len())? {
+            if group.kind == 0 {
+                if absolute {
+                    return Err(r.invalid("Multiple absolute stereo groups"));
+                }
+                absolute = true;
+            }
+            groups.push(group);
+        }
+        line = r.v3()?;
+    }
+    if !groups.is_empty() {
+        p.metadata.groups = groups;
+    }
+    Ok(())
+}
+
+fn collection_group(r: &Reader<'_>, text: &str, atom_count: usize) -> Result<Option<StereoGroup>> {
+    let Some(content) = text.trim_end_matches(' ').strip_prefix("MDLV30/STE") else {
+        return Ok(None);
+    };
+    let Some((label, list)) = content.split_once("ATOMS=(") else {
+        return Ok(None);
+    };
+    if !label.ends_with(' ') {
+        return Ok(None);
+    }
+    let label = label.trim_end_matches(' ');
+    let Some(kind) = label.get(..3) else {
+        return Ok(None);
+    };
+    let Some(identity) = label
+        .get(3..)
+        .filter(|s| s.bytes().all(|c| c.is_ascii_digit()))
+    else {
+        return Ok(None);
+    };
+    let Some(list) = list.strip_suffix(')') else {
+        return Ok(None);
+    };
+    let Some((count, members)) = list.split_once(' ') else {
+        return Ok(None);
+    };
+    if count.is_empty() || !count.bytes().all(|c| c.is_ascii_digit()) {
+        return Ok(None);
+    }
+    let kind = match kind {
+        "ABS" => 0,
+        "REL" => 1,
+        "RAC" => 2,
+        _ => return Err(r.invalid("Unknown enhanced stereo group type")),
+    };
+    let read_id = if kind == 0 || identity.is_empty() {
+        0
+    } else {
+        identity
+            .parse::<u32>()
+            .map_err(|_| r.invalid("Invalid stereo group ID"))?
+    };
+    let count = r.count(r.integer(count)?, 100_000)?;
+    let mut atoms = Vec::new();
+    let mut seen = HashSet::new();
+    let mut members = members.split_whitespace();
+    for _ in 0..count {
+        let token = members
+            .next()
+            .ok_or_else(|| r.invalid("Missing stereo group members"))?;
+        let i = r.index(r.integer(token)?, atom_count)?;
+        if !seen.insert(i) {
+            return Err(r.invalid("Duplicate stereo group member"));
+        }
+        atoms.push(i);
+    }
+    Ok(Some(StereoGroup {
+        kind,
+        atoms,
+        bonds: Vec::new(),
+        read_id,
+        write_id: 0,
+    }))
 }

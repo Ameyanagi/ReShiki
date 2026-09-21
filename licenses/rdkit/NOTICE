@@ -29,7 +29,7 @@ Copyright (C) 2004-2021 Tad hurst/CDD and other RDKit contributors.
 Code/GraphMol/WedgeBonds.cpp (wedge selection, orientation and optional second wedges)
 Copyright (C) 2023 Greg Landrum and other RDKit contributors.
 
-Code/GraphMol/Chirality.cpp (chiral-tag, permutation and stereo-group cleanup; wedge geometry, double-bond geometry, direction propagation, legacy CIP priorities and stereo perception)
+Code/GraphMol/Chirality.cpp (chiral-tag, permutation and stereo-group cleanup; wedge, 3D atom and coordination geometry, double-bond geometry, direction propagation, legacy CIP priorities and stereo perception)
 Copyright (C) 2004-2024 Greg Landrum and other RDKit contributors.
 
 Code/GraphMol/FindStereo.cpp (potential double-bond stereochemistry for MOL export)

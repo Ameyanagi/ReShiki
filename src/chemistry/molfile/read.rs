@@ -28,6 +28,8 @@ pub enum ReadError {
     Limit,
     #[error(transparent)]
     Sanitization(#[from] sanitize::Error),
+    #[error(transparent)]
+    Spatial(#[from] stereo::SpatialError),
     #[error("MOL chemistry: {0}")]
     Chemistry(String),
 }
@@ -224,9 +226,22 @@ impl Parsed {
         let is_3d = self.positions.iter().any(|p| p.z.abs() > 1e-3)
             || self.marked_3d && !self.chirality && !self.graph.atoms.is_empty();
         if is_3d {
-            return Err(ReadError::Pending("3D atom and atropisomer perception"));
-        }
-        if self.chirality {
+            self.metadata = stereo::from_3d(
+                &self.graph,
+                &self.metadata,
+                &self.directions,
+                Some(&stereo::wedging::Conformer {
+                    positions: self.positions.clone(),
+                    is_3d: true,
+                }),
+                &stereo::SpatialAnnotations {
+                    non_explicit: vec![None; self.graph.atoms.len()],
+                    done: None,
+                },
+                stereo::SpatialOptions::default(),
+            )?
+            .metadata;
+        } else if self.chirality {
             let drawn = stereo::from_directions(
                 &self.graph,
                 &self.metadata,
@@ -335,7 +350,7 @@ impl Parsed {
                     .iter()
                     .all(|&a| hybrids.get(a) == Some(&electronic::Hybridization::Sp2))
             {
-                return Err(ReadError::Pending("2D atropisomer perception"));
+                return Err(ReadError::Pending("atropisomer perception"));
             }
         }
         Ok(())
@@ -361,7 +376,7 @@ fn radical(code: i32) -> Result<u8> {
 
 /// Read one strict MOL block, retaining explicit H atoms and native atom order.
 /// This staged reader is not enabled in the application until pending file
-/// extensions and 3D perception have independent native-reference coverage.
+/// extensions and atropisomer perception have independent reference coverage.
 pub fn read(text: &str) -> Result<Molecule> {
     if text.len() > 16 * 1024 * 1024 {
         return Err(ReadError::Limit);

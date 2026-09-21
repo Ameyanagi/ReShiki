@@ -156,6 +156,55 @@ def v3_block(atoms, bonds=(), extras=()):
 
 
 def syntax_cases():
+    for count, repeats in ((0, 1), (1, 0), (1, 1), (1, 2), (2, 1)):
+        extra = ("M  V30 BEGIN OBJ3D", "M  V30 1 0 0", "M  V30 END OBJ3D") * repeats
+        text = v3_block(["1 C 0 0 0 0"], extras=extra).replace(
+            "COUNTS 1 0 0 0 0", f"COUNTS 1 0 0 {count} 0"
+        )
+        emit(f"constraint records/{count}/{repeats}", text)
+    for value in (
+        "(4 1 Al 3 Br)",
+        "(2 1 Al)",
+        "(0)",
+        "(3 1 Al 3)",
+        "(4 1 Al 1 Br)",
+        "(4 1 Al 3 Al)",
+    ):
+        emit(f"template attachment/{value}", v3_block([f"1 C 0 0 0 0 ATTCHORD={value}"]))
+    for record in (
+        "MDLV30/HILITE ATOMS=(1 1)",
+        "MDLV30/STEABS ATOMS=(1 1)",
+        "MDLV30/STEREL1 ATOMS=(1 1)",
+        "MDLV30/STEREL4294967295 ATOMS=(1 1)",
+        "MDLV30/STERAC5 ATOMS=(2 1 2)",
+        "MDLV30/STEABS ATOMS=(0 )",
+        "MDLV30/STEREL ATOMS=(1 1)",
+        "MDLV30/STEABS ATOMS=(2 1 1)",
+        "MDLV30/STEABS ATOMS=(1 3)",
+        "MDLV30/STEBAD1 ATOMS=(1 1)",
+        "MDLV30/STEABS BONDS=(1 1)",
+    ):
+        emit(
+            f"collection/{record}",
+            v3_block(
+                ["10 C 0 0 0 0", "40 N 1.5 0 0 0"],
+                ["93 1 10 40"],
+                extras=("M  V30 BEGIN COLLECTION", "M  V30 " + record, "M  V30 END COLLECTION"),
+            ),
+        )
+    for first, second in (("ABS", "ABS"), ("REL1", "RAC3"), ("RAC1", "REL1")):
+        emit(
+            f"collections/{first}/{second}",
+            v3_block(
+                ["1 C 0 0 0 0"],
+                extras=(
+                    "M  V30 BEGIN COLLECTION",
+                    f"M  V30 MDLV30/STE{first} ATOMS=(1 1)",
+                    f"M  V30 MDLV30/STE{second} ATOMS=(1 1)",
+                    "M  V30 END COLLECTION",
+                ),
+            ),
+        )
     for symbol in ("R123", "R01", "R001", "R99", "R999", "R1000", "R9a", "R8a", "Rabc"):
         emit(f"v3 dummy label/{symbol}", v3_block([f"1 {symbol} 0 0 0 0"]))
     for symbol, chg, val, mass, rad in product(
@@ -273,6 +322,13 @@ def main():
                 emit(f"{name}/{sample}/{v3000}", text)
                 if sample == 0:
                     emit(f"{name}/CRLF/{v3000}", text.replace("\n", "\r\n"))
+                    spatial = Chem.Mol(mol)
+                    conf = spatial.GetConformer()
+                    conf.Set3D(True)
+                    for atom in spatial.GetAtoms():
+                        pos = conf.GetAtomPosition(atom.GetIdx())
+                        conf.SetAtomPosition(atom.GetIdx(), (pos.x, pos.y, rng.uniform(-0.7, 0.7)))
+                    emit(f"{name}/3D/{v3000}", Chem.MolToMolBlock(spatial, forceV3000=v3000))
     for symbol, charge, valence, isotope in product(
         (
             "C",

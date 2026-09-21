@@ -15,8 +15,9 @@ use super::{
     ranking::{Metadata, StereoGroup},
 };
 pub use drawing::{
-    BondGeometry, DrawnStereo, Point3, bond_stereo_from_directions, detect_bond_stereo,
-    double_bond_directions, from_directions,
+    BondGeometry, DrawnStereo, Point3, SpatialAnnotations, SpatialError, SpatialOptions,
+    SpatialStereo, bond_stereo_from_directions, detect_bond_stereo, double_bond_directions,
+    from_3d, from_directions,
 };
 pub use priority::atom_priorities;
 use std::collections::{HashMap, HashSet};
