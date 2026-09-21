@@ -162,7 +162,7 @@ Template placement offers explicit new-bond connection, shared-atom and fused-bo
 
 ## Next work
 
-1. Broader clipboard compatibility, editable external picture exchange, Office verification and cross-platform exchange.
+1. Broader clipboard compatibility, editable external picture exchange, additional Office versions and cross-platform exchange.
 2. Broader chemical nicknames and full rich-text caret layout.
 3. Complete stationery, calibrated actual-size view, advanced page composition and broader printing controls.
 4. Reaction roles, atom mapping, query/polymer data, naming and spectra.
@@ -185,4 +185,9 @@ Implemented a Codex proposal panel with local chemistry validation, editable rea
 - Canvas inspection supplies live document data and a rendered image; proposal preview supplies a validated scheme image. Existing scheme objects can be replaced by ID while unrelated content is retained.
 - Scheme layout supports stoichiometric coefficients, readable R groups, disconnected component spacing, participant rotation and aligned captions.
 
-Windows-specific workflows and coverage: [Windows guide](windows.md).
+Windows-specific workflows and coverage: [Windows guide](windows.md). Desktop
+Word, PowerPoint and Excel support editable ReShiki OLE drawings through normal
+Copy/Paste, double-click editing and Ctrl+S updates. Their previews use transparent
+vector bonds and outlined text; Excel adds its own object fill, which can be set
+to No fill. Mac Office does not support this Windows OLE editing workflow; keep
+the cross-platform `.reshiki` original.

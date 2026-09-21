@@ -52,6 +52,11 @@ pictures are not converted into editable chemistry by installing this update.
 To refresh an existing embedded ReShiki object's older bitmap preview,
 double-click it, press **Ctrl+S** in ReShiki, then save the Office document.
 
+Excel adds its own white fill and outline to newly pasted OLE objects. Select
+the object, press **Ctrl+1**, and choose **Colors and Lines → Fill → No fill**
+to show worksheet cells through the transparent preview. Its outline is also
+controlled by Excel. ReShiki's preview itself contains no background fill.
+
 ### Share with a Mac
 
 The `.reshiki` file format works on both platforms. For a document that needs
@@ -98,7 +103,15 @@ round-trips, standard bitmap resolution, malformed data, active-process
 detection and the actual Windows print renderer's physical dimensions and
 placement. The full shared test suite covers drawing, chemistry, templates,
 labels, reactions, graphics, pictures, page layouts, file formats, recovery and
-asynchronous assistant state. CI includes Windows x64 and ARM Rust checks.
+asynchronous assistant state. Windows x64/ARM and macOS Rust checks and Python
+tests passed for the vector-preview change in
+[this CI run](https://github.com/Ameyanagi/ReShiki/actions/runs/35558543181).
+
+Desktop Word, PowerPoint and Excel were checked with normal Copy/Paste,
+double-click editing in ReShiki, and Ctrl+S updates accepted by Office. Saved
+documents retain the native drawing and a transparent vector preview. Enlarged
+figures were inspected in all three applications; Excel's separate object fill
+was set to No fill for the transparency check.
 
 The Windows x64 package was extracted outside the checkout and checked for
 missing-uv guidance, first-use chemistry setup and offline reuse. Its installer
@@ -106,7 +119,7 @@ was checked for installation, in-place upgrade, chemistry and uninstallation
 without removing user data. The live assistant connected and produced a
 validated ethanol drawing through the user's installed Codex executable.
 
-Local desktop checks use Windows 11 x64. CI configuration is not evidence of a
-completed ARM run. Windows 10, physical printers, other display scales and
+Local desktop checks use Windows 11 x64. ARM CI does not establish graphical
+acceptance on ARM hardware. Windows 10, physical printers, other display scales and
 every external application's clipboard behavior require testing on those
 systems. See the [visual Windows guide](/guide/windows/) for screenshots.
