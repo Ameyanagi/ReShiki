@@ -9,6 +9,8 @@ use crate::chemistry::{
     ranking::Metadata,
 };
 use serde::{Deserialize, Serialize};
+mod bonds;
+pub use bonds::{BondGeometry, detect_bond_stereo, double_bond_directions};
 
 #[cfg(test)]
 mod tests;

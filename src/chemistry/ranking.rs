@@ -30,6 +30,9 @@ pub struct BondMetadata {
     /// 0 none, 1 unknown, 2 Z, 3 E, 4 cis, 5 trans, 6/7 atropisomer winding.
     pub stereo: u8,
     pub stereo_atoms: Vec<usize>,
+    /// Explicit unknown-stereo marker, independent of the displayed direction.
+    #[serde(default)]
+    pub unknown_stereo: bool,
 }
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]

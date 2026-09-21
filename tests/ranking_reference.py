@@ -32,7 +32,11 @@ def metadata(mol):
             for a in mol.GetAtoms()
         ],
         bonds=[
-            dict(stereo=int(b.GetStereo()), stereo_atoms=list(b.GetStereoAtoms()))
+            dict(
+                stereo=int(b.GetStereo()),
+                stereo_atoms=list(b.GetStereoAtoms()),
+                unknown_stereo=bool(b.HasProp("_UnknownStereo") and b.GetIntProp("_UnknownStereo")),
+            )
             for b in mol.GetBonds()
         ],
         groups=[

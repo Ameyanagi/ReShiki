@@ -11,7 +11,10 @@ use super::{
     graph::{Graph, Valence},
     ranking::{Metadata, StereoGroup},
 };
-pub use drawing::{DrawnStereo, Point3, bond_stereo_from_directions, from_directions};
+pub use drawing::{
+    BondGeometry, DrawnStereo, Point3, bond_stereo_from_directions, detect_bond_stereo,
+    double_bond_directions, from_directions,
+};
 use std::collections::{HashMap, HashSet};
 
 #[cfg(test)]
