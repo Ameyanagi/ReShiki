@@ -145,6 +145,69 @@ async fn rust_properties_match_reference_across_editor_operations() -> TestResul
 }
 
 #[tokio::test]
+async fn rust_ring_display_preserves_selected_scope_and_complete_response() -> TestResult {
+    let local = LocalEngine::default();
+    let reference = PythonEngine::default();
+    for text in [
+        "c1ccccc1.CCO",
+        "c1cc[nH]c1",
+        "c1ncc[nH]1",
+        "c1ccc2ccccc2c1",
+        "c1ccc2[nH]ccc2c1",
+        "[13cH:90]1ccccc1.[2H]O[3H]",
+        "C[C@H](O)c1ccccc1",
+        "c1ccccc1/C=C/Cl",
+    ] {
+        let mut original = reference
+            .execute(Request::import_smiles(text))
+            .await
+            .map_err(anyhow::Error::msg)?
+            .document
+            .context("Missing ring drawing")?;
+        for bond in &mut original.bonds {
+            bond.color = [25, 60, 190];
+        }
+        original.annotations.push(reshiki::document::Annotation {
+            id: 987654,
+            position: reshiki::document::Point::new(10., 100.),
+            text: "試料".into(),
+            format: Default::default(),
+        });
+        let chemical = reshiki::chemistry::document::prepare(&original)?;
+        let ring = chemical
+            .state
+            .rings
+            .atoms
+            .first()
+            .context("Missing aromatic ring")?
+            .iter()
+            .map(|&i| chemical.ids.get(i).copied().context("Missing ring atom"))
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        for selected in [original.atoms.iter().map(|a| a.id).collect(), ring] {
+            let mut document = original.clone();
+            for _ in 0..2 {
+                let mut request = Request::molecule("aromatic", document);
+                request.selected_ids = Some(selected.clone());
+                let expected = reference
+                    .execute(request.clone())
+                    .await
+                    .map_err(anyhow::Error::msg)?;
+                let actual = local.execute(request).await.map_err(anyhow::Error::msg)?;
+                document = actual.document.clone().context("Missing ring display")?;
+                assert_response_matches(actual, expected)?;
+            }
+        }
+        for selected in [vec![], vec![987654]] {
+            let mut request = Request::molecule("aromatic", original.clone());
+            request.selected_ids = Some(selected);
+            assert!(reference.execute(request.clone()).await.is_err());
+            assert!(local.execute(request).await.is_err());
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
 async fn rust_prepared_drawings_preserve_full_analysis_and_molecular_exports() -> TestResult {
     let local = LocalEngine::default();
     let reference = PythonEngine::default();

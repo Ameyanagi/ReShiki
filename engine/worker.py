@@ -991,6 +991,21 @@ def handle(request):
         )
         return response
     if operation == "aromatic":
+        if (data := request.get("prepared_aromatic")) is not None:
+            before = prepared.restore(data["before"], request["document"])
+            after = prepared.restore(data["after"], request["document"])
+            check_supported(before)
+            check_supported(after)
+            response.update(
+                document=None,
+                analysis=analyzer(after),
+                aromatic_identity=dict(
+                    rdkit_version=rdBase.rdkitVersion,
+                    before=Chem.MolToSmiles(before),
+                    after=Chem.MolToSmiles(after),
+                ),
+            )
+            return response
         result, mol = aromatic.toggle(
             request["document"], request.get("selected_ids"), from_document, to_document
         )

@@ -321,6 +321,28 @@ impl PythonEngine {
         } else {
             None
         };
+        let prepared_aromatic = if self.local_documents
+            && request.operation == "aromatic"
+            && let Some(document) = request.document.clone()
+        {
+            let selected = request.selected_ids.clone().unwrap_or_default();
+            tokio::task::spawn_blocking(move || {
+                use crate::chemistry::{document, rings::RingError, sanitize};
+                match document::aromatic_display(&document, &selected) {
+                    Ok(draft) => Ok(Some(draft)),
+                    Err(document::Error::Sanitization(sanitize::Error {
+                        cause: sanitize::Cause::Rings(RingError::UnresolvedOrdering),
+                        ..
+                    })) => Ok(None),
+                    Err(error) => Err(error),
+                }
+            })
+            .await
+            .map_err(|e| format!("Aromatic display preparation failed: {e}"))?
+            .map_err(|e| e.to_string())?
+        } else {
+            None
+        };
         let picture_exports = if self.local_pictures
             && request.operation == "export"
             && matches!(request.format.as_deref(), Some("cdxml" | "cdx"))
@@ -364,6 +386,12 @@ impl PythonEngine {
                 envelope.insert(
                     "prepared_drawing".into(),
                     serde_json::to_value(drawing.molecule()).map_err(|e| e.to_string())?,
+                );
+            }
+            if let Some(draft) = &prepared_aromatic {
+                envelope.insert(
+                    "prepared_aromatic".into(),
+                    serde_json::to_value(draft).map_err(|e| e.to_string())?,
                 );
             }
             if self.local_properties {
@@ -412,9 +440,29 @@ impl PythonEngine {
                 .get("result")
                 .ok_or("Missing chemistry result")?
                 .clone();
-            if self.local_properties || self.local_pictures || prepared_molecule.is_some() {
+            if self.local_properties
+                || self.local_pictures
+                || prepared_molecule.is_some()
+                || prepared_aromatic.is_some()
+            {
                 let (properties, pictures) = (self.local_properties, self.local_pictures);
                 result = tokio::task::spawn_blocking(move || {
+                    if let Some(draft) = prepared_aromatic {
+                        let object = result.as_object_mut().ok_or("Invalid chemistry response")?;
+                        let identity = object
+                            .remove("aromatic_identity")
+                            .ok_or("Missing aromatic identity check")?;
+                        let document = draft
+                            .finish(
+                                serde_json::from_value(identity)
+                                    .map_err(|e| format!("Invalid aromatic identity check: {e}"))?,
+                            )
+                            .map_err(|e| e.to_string())?;
+                        object.insert(
+                            "document".into(),
+                            serde_json::to_value(document).map_err(|e| e.to_string())?,
+                        );
+                    }
                     if let Some((_, drawing)) = prepared_molecule {
                         let object = result.as_object_mut().ok_or("Invalid chemistry response")?;
                         let labels = object

@@ -11,6 +11,8 @@ use super::{
 use crate::document::Document;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
+mod aromatic;
+pub use aromatic::{Aromatic, Identity, aromatic_display};
 mod output;
 pub use output::{BondLabel, Drawing, Labels, for_drawing};
 
@@ -29,6 +31,8 @@ pub enum Error {
     BondAssignment(String),
     #[error("Drawing wedge assignment: {0}")]
     WedgeAssignment(String),
+    #[error("Ring display would change the molecular identity")]
+    IdentityChanged,
 }
 
 /// Detached chemical state, with stable drawing IDs and Y-up coordinates.

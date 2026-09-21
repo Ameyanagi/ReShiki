@@ -15,6 +15,46 @@ from tests.perception_reference import snapshot
 
 
 class PreparedMoleculeTests(unittest.TestCase):
+    def test_aromatic_transport_only_checks_identifiers_and_analyzes(self):
+        for text in ("c1ccccc1", "c1cc[nH]c1", "c1ccc2ccccc2c1.CCO", "C[C@H](O)c1ccccc1"):
+            doc = worker.handle(dict(protocol=1, operation="import", format="smiles", text=text))[
+                "document"
+            ]
+            for _ in range(2):
+                request = dict(
+                    protocol=1,
+                    operation="aromatic",
+                    document=doc,
+                    selected_ids=[a["id"] for a in doc["atoms"]],
+                )
+                expected = worker.handle(request)
+                changed = expected["document"]
+                before, after = json.loads(json.dumps([prepare(doc), prepare(changed)]))
+                request["prepared_aromatic"] = dict(before=before, after=after)
+                expected["document"] = None
+                expected["aromatic_identity"] = dict(
+                    rdkit_version=before["rdkit_version"],
+                    before=Chem.MolToSmiles(worker.from_document(doc)),
+                    after=Chem.MolToSmiles(worker.from_document(changed)),
+                )
+                with (
+                    patch.object(worker, "from_document", side_effect=AssertionError("Reprepared")),
+                    patch.object(
+                        worker, "to_document", side_effect=AssertionError("Reconstructed")
+                    ),
+                    patch.object(
+                        worker.aromatic, "toggle", side_effect=AssertionError("Retoggled")
+                    ),
+                    patch.object(Chem, "Kekulize", side_effect=AssertionError("Kekulized")),
+                    patch.object(Chem, "SanitizeMol", side_effect=AssertionError("Sanitized")),
+                ):
+                    self.assertEqual(worker.handle(request), expected)
+                    invalid = copy.deepcopy(request)
+                    invalid["prepared_aromatic"]["after"]["rdkit_version"] = "wrong"
+                    with self.assertRaisesRegex(ValueError, "version mismatch"):
+                        worker.handle(invalid)
+                doc = changed
+
     def test_transport_preserves_complete_states(self):
         root = Path(__file__).resolve().parents[1]
         texts = [t["smiles"] for t in json.loads((root / "assets/templates.json").read_text())]

@@ -93,8 +93,8 @@ def restore(data, document):
             a.SetProp("_CIPCode", p["cip_code"])
         if p["cip_rank"] is not None:
             # Atomic setters expose values, but not computed-property flags,
-            # as in RDKit's JSON importer. This adapter is restricted to
-            # analysis/export; do not reuse its atoms for topology edits.
+            # as in RDKit's JSON importer. Use transported atoms only for
+            # analysis/export/identity checks, never for topology edits.
             a.SetUnsignedProp("_CIPRank", p["cip_rank"])
         for key, name in (
             ("possible", "_ChiralityPossible"),
