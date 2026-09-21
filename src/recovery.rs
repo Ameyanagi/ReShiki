@@ -108,7 +108,11 @@ fn process_alive(pid: u32) -> bool {
             .status()
             .is_ok_and(|s| s.success())
     }
-    #[cfg(not(unix))]
+    #[cfg(windows)]
+    {
+        reshiki_windows::process_alive(pid)
+    }
+    #[cfg(not(any(unix, windows)))]
     {
         false
     }
@@ -116,6 +120,39 @@ fn process_alive(pid: u32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(windows)]
+    #[test]
+    fn windows_does_not_recover_a_live_editors_draft() {
+        use std::{
+            os::windows::process::CommandExt,
+            process::{Command, Stdio},
+        };
+        let mut child = Command::new(
+            std::path::PathBuf::from(std::env::var_os("WINDIR").unwrap()).join("System32/ping.exe"),
+        )
+        .args(["-n", "30", "127.0.0.1"])
+        .creation_flags(0x08000000)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let store = Recovery::in_directory(dir.path()).unwrap();
+        let mut doc = Document::default();
+        doc.add_atom("O", Default::default());
+        store.save(&doc, None).unwrap();
+        std::fs::rename(
+            &store.session,
+            dir.path().join(format!("{}-other.json", child.id())),
+        )
+        .unwrap();
+        let while_running = store.candidates();
+        child.kill().unwrap();
+        child.wait().unwrap();
+        assert!(while_running.is_empty());
+        assert_eq!(store.candidates().len(), 1);
+    }
     #[test]
     fn draft_is_durable_and_corrupt_files_are_ignored() {
         let dir = tempfile::tempdir().unwrap();

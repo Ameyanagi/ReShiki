@@ -763,9 +763,12 @@ impl App {
             .align_y(Alignment::Center),
             composer,
             row![connection, Space::new().width(Length::Fill), submit].align_y(Alignment::Center),
-            text("Drawing context is shared when you send · ⌘ Enter to send")
-                .size(10)
-                .color(super::workspace::muted())
+            text(super::platform_shortcut(
+                "Drawing context is shared when you send · ⌘ Enter to send",
+                "Drawing context is shared when you send · Ctrl+Enter to send"
+            ))
+            .size(10)
+            .color(super::workspace::muted())
         ]
         .spacing(8);
         let base: Element<'_, Message> = container(

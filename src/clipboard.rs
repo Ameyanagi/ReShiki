@@ -7,7 +7,9 @@ use crate::{
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
+#[cfg(not(windows))]
 use std::{path::PathBuf, process::Stdio, time::Duration};
+#[cfg(not(windows))]
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     process::Command,
@@ -116,6 +118,11 @@ fn embedded_png(png: &[u8]) -> Result<Vec<u8>, String> {
     Ok(output)
 }
 
+pub fn available() -> bool {
+    cfg!(any(target_os = "macos", windows))
+}
+
+#[cfg(not(windows))]
 fn helper() -> Result<PathBuf, String> {
     let bundled = std::env::current_exe().ok().and_then(|exe| {
         let path = exe.parent()?.join("reshiki-clipboard");
@@ -130,6 +137,7 @@ fn helper() -> Result<PathBuf, String> {
         .ok_or_else(|| "Native clipboard helper is unavailable".into())
 }
 
+#[cfg(windows)]
 async fn invoke(operation: &str, representations: &[Representation]) -> Result<Packet, String> {
     let input = serde_json::to_vec(&CommandRequest {
         operation,
@@ -139,7 +147,24 @@ async fn invoke(operation: &str, representations: &[Representation]) -> Result<P
     if input.len() > JSON_LIMIT {
         return Err("Clipboard request is too large".into());
     }
-    let mut child = Command::new(helper()?)
+    let output = tokio::task::spawn_blocking(move || reshiki_windows::clipboard(&input))
+        .await
+        .map_err(|e| e.to_string())??;
+    serde_json::from_slice(&output).map_err(|e| e.to_string())
+}
+
+#[cfg(not(windows))]
+async fn invoke(operation: &str, representations: &[Representation]) -> Result<Packet, String> {
+    let input = serde_json::to_vec(&CommandRequest {
+        operation,
+        representations,
+    })
+    .map_err(|e| e.to_string())?;
+    if input.len() > JSON_LIMIT {
+        return Err("Clipboard request is too large".into());
+    }
+    let mut command = Command::new(helper()?);
+    let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -283,7 +308,12 @@ pub async fn copy(
     if image_count == 0 && image_only {
         return Err(outcome.notices.join(" · "));
     }
-    invoke("write", &representations).await?;
+    let operation = if cfg!(windows) && !image_only {
+        "write_embedded"
+    } else {
+        "write"
+    };
+    invoke(operation, &representations).await?;
     Ok(outcome)
 }
 
@@ -298,10 +328,19 @@ fn copy_images(
     ]
     .into_iter()
     .map(|(kind, format)| {
-        (
-            format,
-            export::drawing(doc, format).map(|bytes| Representation::new(kind, &bytes)),
-        )
+        #[cfg(windows)]
+        let image = match format {
+            "svg" => export::clipboard_svg(doc),
+            "png" => export::clipboard_png(doc),
+            _ => export::drawing(doc, format),
+        };
+        #[cfg(not(windows))]
+        let image = if format == "png" {
+            export::clipboard_png(doc)
+        } else {
+            export::drawing(doc, format)
+        };
+        (format, image.map(|bytes| Representation::new(kind, &bytes)))
     })
     .collect();
     if image_only && let Some((_, Ok(png))) = images.iter().find(|(format, _)| *format == "png") {
@@ -474,6 +513,21 @@ mod tests {
             serde_json::from_str(include_str!("../tests/fixtures/ui-drawn-ethanol.reshiki"))
                 .unwrap();
         let images = copy_images(&doc, true);
+        #[cfg(windows)]
+        {
+            let svg = images
+                .iter()
+                .find(|(format, _)| *format == "svg")
+                .unwrap()
+                .1
+                .as_ref()
+                .unwrap()
+                .bytes()
+                .unwrap();
+            let text = std::str::from_utf8(&svg).unwrap();
+            assert!(!text.contains("<text"), "Office needs outlined labels");
+            assert!(text.contains("<path"));
+        }
         let native = images
             .iter()
             .find(|(format, _)| *format == "native picture")

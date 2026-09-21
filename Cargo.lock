@@ -3237,6 +3237,7 @@ dependencies = [
  "pdf-writer",
  "png 0.17.16",
  "reqwest",
+ "reshiki-windows",
  "resvg",
  "rfd",
  "roxmltree",
@@ -3247,6 +3248,20 @@ dependencies = [
  "tempfile",
  "tokio",
  "ttf-parser",
+]
+
+[[package]]
+name = "reshiki-windows"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "image",
+ "png 0.17.16",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "windows",
+ "windows-core",
 ]
 
 [[package]]

@@ -122,6 +122,8 @@ impl Server {
             .tempdir()
             .map_err(|e| e.to_string())?;
         let mut command = Command::new(executable()?);
+        #[cfg(windows)]
+        command.creation_flags(0x08000000);
         command.env(
             "PATH",
             std::env::join_paths(search_directories())

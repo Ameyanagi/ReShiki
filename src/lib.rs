@@ -33,6 +33,8 @@ pub mod export;
 pub mod graphics;
 pub mod grouping;
 pub mod joining;
+#[cfg(windows)]
+mod native_windows;
 pub mod pages;
 pub mod pictures;
 pub mod printing;

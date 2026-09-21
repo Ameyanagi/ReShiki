@@ -4,9 +4,19 @@ version = "0.4.0"
 edition = "2024"
 description = "A molecular drawing workspace"
 
+[workspace]
+members = ["native/windows"]
+default-members = ["."]
+
+[target.'cfg(windows)'.dependencies]
+reshiki-windows = { path = "native/windows" }
+iced = { version = "0.14", default-features = false, features = ["tiny-skia"] }
+
+[target.'cfg(not(windows))'.dependencies]
+iced = { version = "0.14", default-features = false, features = ["wgpu"] }
+
 [dependencies]
 iced = { version = "0.14", default-features = false, features = [
-  "wgpu",
   "canvas",
   "tokio",
   "advanced",

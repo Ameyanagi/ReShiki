@@ -280,6 +280,8 @@ pub struct App {
     status: String,
     error: bool,
     path: Option<PathBuf>,
+    #[cfg(windows)]
+    office_path: Option<PathBuf>,
     saved: Document,
     pending: Option<Pending>,
     file_epoch: u64,
@@ -377,6 +379,8 @@ impl App {
             status: "Starting chemistry…".into(),
             error: false,
             path: None,
+            #[cfg(windows)]
+            office_path: None,
             saved: Document::default(),
             pending: None,
             file_epoch: 0,
@@ -406,6 +410,10 @@ impl App {
                 .and_then(|_| args.next())
                 .map(PathBuf::from)
         };
+        #[cfg(windows)]
+        if !cfg!(test) && std::env::args_os().any(|arg| arg == "--office-edit") {
+            app.office_path = startup_path.clone();
+        }
         let task = if let Some(path) = startup_path {
             Task::perform(
                 async move {
@@ -494,34 +502,35 @@ impl App {
                 }
                 match key {
                     Key::Character(c) if mods.command() => match c.as_str() {
-                        "z" => Some(if mods.shift() {
+                        "y" | "Y" if cfg!(windows) => Some(Message::Redo),
+                        "z" | "Z" => Some(if mods.shift() {
                             Message::Redo
                         } else {
                             Message::Undo
                         }),
-                        "a" => Some(if mods.shift() {
+                        "a" | "A" => Some(if mods.shift() {
                             Message::InvertSelection
                         } else {
                             Message::SelectAll
                         }),
-                        "g" => Some(if mods.shift() {
+                        "g" | "G" => Some(if mods.shift() {
                             Message::Ungroup
                         } else {
                             Message::Group
                         }),
-                        "c" | "C" => Some(if mods.shift() && cfg!(target_os = "macos") {
+                        "c" | "C" => Some(if mods.shift() && reshiki::clipboard::available() {
                             Message::CopyImage
                         } else {
                             Message::Copy(false)
                         }),
-                        "x" => Some(Message::Copy(true)),
-                        "v" if mods.shift() && cfg!(target_os = "macos") => {
+                        "x" | "X" => Some(Message::Copy(true)),
+                        "v" | "V" if mods.shift() && reshiki::clipboard::available() => {
                             Some(Message::PastePicture)
                         }
-                        "v" => Some(Message::Paste),
-                        "d" => Some(Message::Duplicate),
-                        "i" => Some(Message::ToggleImport),
-                        "e" => Some(Message::Inspector(InspectorTab::Export)),
+                        "v" | "V" => Some(Message::Paste),
+                        "d" | "D" => Some(Message::Duplicate),
+                        "i" | "I" => Some(Message::ToggleImport),
+                        "e" | "E" => Some(Message::Inspector(InspectorTab::Export)),
                         _ => None,
                     },
                     Key::Character(c)
@@ -569,6 +578,16 @@ impl App {
     }
     fn dirty(&self) -> bool {
         self.inline_changed() || !same_drawing(&self.doc, &self.saved)
+    }
+    fn office_document(&self) -> bool {
+        #[cfg(windows)]
+        {
+            self.path.is_some() && self.path == self.office_path
+        }
+        #[cfg(not(windows))]
+        {
+            false
+        }
     }
     fn clear_recovery(&mut self) {
         if let Some(recovery) = &self.recovery {
@@ -1444,7 +1463,7 @@ impl App {
                 result,
             } => self.clipboard_read(epoch, revision, *result),
             Message::Copy(cut) => {
-                if cfg!(target_os = "macos") {
+                if reshiki::clipboard::available() {
                     return self.copy_native(cut, false);
                 }
                 if self.selected.is_empty() {
@@ -1470,7 +1489,7 @@ impl App {
             }
             Message::PastePicture => return self.paste_native(true),
             Message::Paste => {
-                if cfg!(target_os = "macos") {
+                if reshiki::clipboard::available() {
                     return self.paste_native(false);
                 }
                 return iced::clipboard::read().map(Message::Pasted);
@@ -2035,6 +2054,8 @@ impl App {
                 }
             }
             Message::Save | Message::SaveAs => {
+                #[cfg(windows)]
+                let office_save = self.office_document() && matches!(message, Message::Save);
                 let path = if matches!(message, Message::SaveAs) {
                     None
                 } else {
@@ -2064,7 +2085,21 @@ impl App {
                             };
                             file.path().to_path_buf()
                         };
-                        reshiki::storage::write_atomic(&path, &bytes)?;
+                        let save_path = path.clone();
+                        tokio::task::spawn_blocking(move || {
+                            #[cfg(windows)]
+                            if office_save {
+                                reshiki_windows::prepare_office_save(&save_path);
+                            }
+                            reshiki::storage::write_atomic(&save_path, &bytes)?;
+                            #[cfg(windows)]
+                            if office_save {
+                                reshiki_windows::wait_for_office_save(&save_path, &bytes)?;
+                            }
+                            Ok::<_, String>(())
+                        })
+                        .await
+                        .map_err(|error| error.to_string())??;
                         Ok(Some(path))
                     },
                     move |result| Message::Saved(epoch, Box::new(snapshot.clone()), result),
@@ -2078,7 +2113,12 @@ impl App {
                     }
                     self.saved = *snapshot;
                     self.path = Some(path);
-                    self.status = "Document saved".into();
+                    self.status = if self.office_document() {
+                        "Drawing updated in Office. Save the Office document to keep it."
+                    } else {
+                        "Document saved"
+                    }
+                    .into();
                     self.error = false;
                     if !self.dirty() {
                         self.clear_recovery();
@@ -2743,6 +2783,14 @@ async fn save_export(bytes: Vec<u8>, format: &'static str) -> Result<Option<Path
 }
 fn input_request(text: &str) -> Request {
     reshiki::clipboard::text_request(text)
+}
+
+fn platform_shortcut(macos: &'static str, other: &'static str) -> &'static str {
+    if cfg!(target_os = "macos") {
+        macos
+    } else {
+        other
+    }
 }
 
 #[cfg(test)]

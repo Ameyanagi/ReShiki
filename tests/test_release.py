@@ -66,6 +66,7 @@ class ReleaseTests(unittest.TestCase):
                 patch("build_release.platform.system", return_value="Windows"),
                 patch("build_release.platform.machine", return_value="AMD64"),
                 patch("build_release.runtime_project", return_value=worker),
+                patch("build_release.target_directory", return_value=root / "target"),
                 patch("build_release.notices"),
                 patch("build_release.verify_archive"),
                 patch("build_release.run") as run,
