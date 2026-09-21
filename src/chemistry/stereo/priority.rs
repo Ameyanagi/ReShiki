@@ -12,9 +12,9 @@ use std::{cmp::Ordering, ops::Range};
 #[cfg(test)]
 mod tests;
 
-struct Work(usize);
+pub(super) struct Work(pub(super) usize);
 impl Work {
-    fn spend(&mut self, amount: usize) -> Result<(), String> {
+    pub(super) fn spend(&mut self, amount: usize) -> Result<(), String> {
         self.0 = self
             .0
             .checked_sub(amount)
@@ -42,7 +42,7 @@ pub(crate) fn atom_priorities_cached(
     priorities(graph, metadata, cached, &mut Work(50_000_000))
 }
 
-fn priorities(
+pub(super) fn priorities(
     graph: &Graph,
     metadata: &Metadata,
     cached: Option<&[Valence]>,
@@ -82,13 +82,86 @@ fn priorities(
         let invariant = ((i32::from(atom.atomic_number) << 10 | mass) << 10) | map_part;
         entries.push(vec![invariant]);
     }
+    refine(graph, &cache, entries, false, work)
+}
+
+pub(super) fn rerank(
+    graph: &Graph,
+    metadata: &Metadata,
+    cache: &[Valence],
+    ranks: &[u32],
+    labels: &[Option<String>],
+    work: &mut Work,
+) -> Result<Vec<u32>, String> {
+    let n = graph.atoms.len();
+    if ranks.len() != n || labels.len() != n || ranks.iter().any(|&r| r as usize >= n) {
+        return Err("Invalid stereo refinement ranks".into());
+    }
+    let mut factor = 100u32;
+    while (factor as usize) < n {
+        factor = factor
+            .checked_mul(10)
+            .ok_or("Stereo refinement factor overflow")?;
+    }
+    let mut invariants = Vec::with_capacity(n);
+    for (&rank, label) in ranks.iter().zip(labels) {
+        work.spend(1)?;
+        let extra = match label.as_deref() {
+            Some("R") => 20,
+            Some("S") => 10,
+            _ => 0,
+        };
+        invariants.push(
+            rank.checked_mul(factor)
+                .and_then(|v| v.checked_add(extra))
+                .ok_or("Stereo refinement invariant overflow")?,
+        );
+    }
+    for (bond, meta) in graph.bonds.iter().zip(&metadata.bonds) {
+        work.spend(1)?;
+        if bond.order == 2 {
+            let extra = match meta.stereo {
+                3 => 1,
+                2 => 2,
+                _ => 0,
+            };
+            for atom in [bond.a, bond.b] {
+                let value = invariants.get_mut(atom).ok_or("Missing stereo invariant")?;
+                *value = value
+                    .checked_add(extra)
+                    .ok_or("Stereo refinement invariant overflow")?;
+            }
+        }
+    }
+    let entries = invariants
+        .into_iter()
+        .map(|value| {
+            i32::try_from(value)
+                .map(|v| vec![v])
+                .map_err(|_| "Stereo refinement exceeds signed reference range".to_string())
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    refine(graph, cache, entries, true, work)
+}
+
+fn refine(
+    graph: &Graph,
+    cache: &[Valence],
+    mut entries: Vec<Vec<i32>>,
+    seeded: bool,
+    work: &mut Work,
+) -> Result<Vec<u32>, String> {
+    let n = graph.atoms.len();
     let mut order: Vec<_> = (0..n).collect();
     sort(&entries, &mut order, work)?;
     let mut ranks = vec![0; n];
     let (mut classes, mut tied) = segments(&entries, &order, &mut ranks, work)?;
-    for ((entry, atom), &rank) in entries.iter_mut().zip(&graph.atoms).zip(&ranks) {
-        *entry = vec![i32::from(atom.atomic_number), rank as i32];
+    if !seeded {
+        for ((entry, atom), &rank) in entries.iter_mut().zip(&graph.atoms).zip(&ranks) {
+            *entry = vec![i32::from(atom.atomic_number), rank as i32];
+        }
     }
+    let rank_slot = if seeded { 1 } else { 2 };
     let mut degree = vec![0usize; n];
     for bond in &graph.bonds {
         for atom in [bond.a, bond.b] {
@@ -128,7 +201,7 @@ fn priorities(
     let hydrogens: Vec<_> = graph
         .atoms
         .iter()
-        .zip(&cache)
+        .zip(cache)
         .map(|(a, v)| usize::from(a.explicit_hydrogens) + v.implicit_hydrogens as usize)
         .collect();
     for &count in &hydrogens {
@@ -173,8 +246,8 @@ fn priorities(
             break;
         }
         for (entry, &rank) in entries.iter_mut().zip(&ranks) {
-            entry.resize(3, 0);
-            *entry.get_mut(2).ok_or("Missing CIP rank slot")? = rank as i32;
+            entry.resize(rank_slot + 1, 0);
+            *entry.get_mut(rank_slot).ok_or("Missing CIP rank slot")? = rank as i32;
         }
     }
     Ok(ranks)

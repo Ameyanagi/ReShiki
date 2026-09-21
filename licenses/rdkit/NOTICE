@@ -26,7 +26,7 @@ Copyright (C) 2014-2025 Greg Landrum and other RDKit contributors.
 Code/GraphMol/Atropisomers.cpp (controlling-neighbor ordering and stereo-group repair)
 Copyright (C) 2004-2021 Tad hurst/CDD and other RDKit contributors.
 
-Code/GraphMol/Chirality.cpp (chiral-tag, permutation and stereo-group cleanup; wedge geometry, double-bond geometry, direction propagation and legacy CIP priorities)
+Code/GraphMol/Chirality.cpp (chiral-tag, permutation and stereo-group cleanup; wedge geometry, double-bond geometry, direction propagation, legacy CIP priorities and stereo perception)
 Copyright (C) 2004-2024 Greg Landrum and other RDKit contributors.
 
 Code/Geometry/point.h and point.cpp (stereo vector and dihedral arithmetic)
@@ -50,6 +50,9 @@ Copyright (C) 2024 Greg Landrum and other RDKit contributors.
 Code/GraphMol/FindRings.cpp
 Copyright (C) 2003-2021 Greg Landrum and other RDKit contributors.
 
+Code/GraphMol/testChirality.cpp (dependent and ring stereo regression examples)
+Copyright (C) 2007-2025 Greg Landrum and other RDKit contributors.
+
 Code/GraphMol/molopstest.cpp (ring, conjugation and hybridization regression examples)
 Copyright (C) 2002-2025 Greg Landrum and other RDKit contributors.
 
@@ -62,7 +65,7 @@ Copyright (C) 2011-2013 Greg Landrum.
 Code/GraphMol/Descriptors/MolSurf.cpp (polar surface area contributions)
 Copyright (C) 2007-2023 Greg Landrum.
 
-Code/GraphMol/QueryOps.h and QueryOps.cpp (query predicates and metal classification)
+Code/GraphMol/QueryOps.h and QueryOps.cpp (query predicates, metal classification and bridgehead detection)
 Copyright (C) 2003-2021 Greg Landrum and other RDKit contributors.
 
 Adaptations are in src/chemistry/, scripts/regenerate_atomic_data.py,

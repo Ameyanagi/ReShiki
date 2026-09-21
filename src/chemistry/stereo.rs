@@ -6,6 +6,7 @@
 //! Cleanup repairs annotations; the drawing pass reads wedged-bond geometry.
 //! Absolute configurations remain separate. Results never edit the caller's data.
 mod drawing;
+pub mod perception;
 mod priority;
 use super::{
     electronic::{self, Hybridization},

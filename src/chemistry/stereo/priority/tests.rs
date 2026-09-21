@@ -103,3 +103,25 @@ fn supplied_hydrogen_cache_controls_tied_substituents() -> TestResult {
     );
     Ok(())
 }
+
+#[test]
+fn seeded_refinement_checks_rank_lengths_and_integer_range() -> TestResult {
+    let graph = carbons(100_000);
+    let meta = Metadata::unspecified(&graph);
+    let cache = graph.provisional_valences()?;
+    let labels = vec![None; graph.atoms.len()];
+    let ranks: Vec<_> = (0..graph.atoms.len() as u32).collect();
+    assert!(
+        rerank(
+            &graph,
+            &meta,
+            &cache,
+            &ranks,
+            &labels,
+            &mut Work(50_000_000)
+        )
+        .is_err_and(|e| e.contains("overflow") || e.contains("signed reference range"))
+    );
+    assert!(rerank(&graph, &meta, &cache, &[], &labels, &mut Work(50_000_000)).is_err());
+    Ok(())
+}
