@@ -352,6 +352,29 @@ impl Graph {
             .collect()
     }
 
+    /// Refresh only edited atoms, as native per-atom updatePropertyCache does.
+    /// Build environments once so many H promotions remain linear.
+    pub(crate) fn refresh_atoms(
+        &self,
+        cache: &[Valence],
+        atoms: &[usize],
+        strict: bool,
+    ) -> Result<Vec<Valence>, String> {
+        let mut result = self.cached_valences(Some(cache))?;
+        if atoms.len() > self.atoms.len() {
+            return Err("Too many atom cache updates".into());
+        }
+        let environments = self.environments()?;
+        for &id in atoms {
+            let atom = self.atoms.get(id).ok_or("Missing cache-update atom")?;
+            let env = environments
+                .get(id)
+                .ok_or("Missing cache-update environment")?;
+            *result.get_mut(id).ok_or("Missing atom cache")? = atom.valence(env, strict)?;
+        }
+        Ok(result)
+    }
+
     /// RDKit's radical-assignment pass, to be called after kekulization. Return
     /// complete results without mutating the input if any field is invalid.
     pub fn assign_radicals(&self) -> Result<Vec<u8>, String> {

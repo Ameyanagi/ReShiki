@@ -3,13 +3,15 @@
 //! Copyright (C) 2004-2021 Tad hurst/CDD and other RDKit contributors.
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
 //!
-//! These passes repair existing annotations. They do not perceive stereo or
-//! assign absolute configurations. Results are separate from the caller's data.
+//! Cleanup repairs annotations; the drawing pass reads wedged-bond geometry.
+//! Absolute configurations remain separate. Results never edit the caller's data.
+mod drawing;
 use super::{
     electronic::{self, Hybridization},
     graph::{Graph, Valence},
     ranking::{Metadata, StereoGroup},
 };
+pub use drawing::{DrawnStereo, Point3, bond_stereo_from_directions, from_directions};
 use std::collections::{HashMap, HashSet};
 
 #[cfg(test)]

@@ -26,8 +26,14 @@ Copyright (C) 2014-2025 Greg Landrum and other RDKit contributors.
 Code/GraphMol/Atropisomers.cpp (controlling-neighbor ordering and stereo-group repair)
 Copyright (C) 2004-2021 Tad hurst/CDD and other RDKit contributors.
 
-Code/GraphMol/Chirality.cpp (chiral-tag, permutation and stereo-group cleanup)
+Code/GraphMol/Chirality.cpp (chiral-tag, permutation and stereo-group cleanup; wedge geometry and directed-bond stereo)
 Copyright (C) 2004-2024 Greg Landrum and other RDKit contributors.
+
+Code/Geometry/point.h (stereo vector arithmetic)
+Copyright (C) 2003-2025 Greg Landrum and other RDKit contributors.
+
+Code/Numerics/Vector.h (normalization tolerance)
+Copyright (C) 2004-2025 Greg Landrum and other RDKit contributors.
 
 Code/GraphMol/StereoGroup.h and StereoGroup.cpp (group metadata and membership validation)
 Copyright (C) 2018-2021 Greg Landrum and other RDKit contributors.
