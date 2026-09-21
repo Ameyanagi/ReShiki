@@ -6,6 +6,7 @@
 //! Cleanup repairs annotations; the drawing pass reads wedged-bond geometry.
 //! Absolute configurations remain separate. Results never edit the caller's data.
 mod drawing;
+mod priority;
 use super::{
     electronic::{self, Hybridization},
     graph::{Graph, Valence},
@@ -15,6 +16,7 @@ pub use drawing::{
     BondGeometry, DrawnStereo, Point3, bond_stereo_from_directions, detect_bond_stereo,
     double_bond_directions, from_directions,
 };
+pub use priority::atom_priorities;
 use std::collections::{HashMap, HashSet};
 
 #[cfg(test)]

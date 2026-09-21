@@ -38,17 +38,18 @@ def main():
         number, symbol = int(fields[0]), fields[1]
         if number in elements:  # RDKit retains the first name, not historical aliases.
             continue
-        average, exact = float(fields[6]), float(fields[9])
-        if (symbol, average, exact) != (
+        average, exact, common = float(fields[6]), float(fields[9]), int(fields[8])
+        if (symbol, average, exact, common) != (
             table.GetElementSymbol(number),
             table.GetAtomicWeight(number),
             table.GetMostCommonIsotopeMass(number),
+            table.GetMostCommonIsotope(number),
         ):
             raise ValueError(f"Element {number} differs from the installed RDKit")
         outer, valences = int(fields[7]), tuple(map(int, fields[10:]))
         if outer != table.GetNOuterElecs(number) or valences != tuple(table.GetValenceList(number)):
             raise ValueError(f"Element {number} valence data differs from installed RDKit")
-        elements[number] = (symbol, average, exact, outer, valences)
+        elements[number] = (symbol, average, exact, common, outer, valences)
     if sorted(elements) != list(range(119)):
         raise ValueError("Incomplete periodic table")
     isotopes = {}
@@ -82,10 +83,10 @@ def main():
         "pub(super) const ELECTRON_MASS: f64 = 0.00054857991;",
         "pub(super) const ELEMENTS: &[Element] = &[",
     ]
-    for symbol, average, exact, outer, valences in elements.values():
+    for symbol, average, exact, common, outer, valences in elements.values():
         lines.append(
             f"    Element {{ symbol: {json.dumps(symbol)}, average: {average!r}, exact: {exact!r}, "
-            f"outer_electrons: {outer}, valences: &{list(valences)!r} }},"
+            f"common_isotope: {common}, outer_electrons: {outer}, valences: &{list(valences)!r} }},"
         )
     lines.extend(
         [

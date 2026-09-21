@@ -20,6 +20,7 @@ def metadata(mol):
         atoms=[
             dict(
                 map_number=a.GetAtomMapNum(),
+                map_present=bool(a.HasProp("molAtomMapNumber")),
                 chiral_tag=int(a.GetChiralTag()),
                 chiral_permutation=a.GetUnsignedProp("_chiralPermutation")
                 if a.HasProp("_chiralPermutation")

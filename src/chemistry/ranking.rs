@@ -17,6 +17,9 @@ use std::collections::{HashMap, HashSet};
 #[serde(deny_unknown_fields)]
 pub struct AtomMetadata {
     pub map_number: i32,
+    /// Distinguish an explicit zero map from absence. Nonzero maps imply presence.
+    #[serde(default)]
+    pub map_present: bool,
     /// RDKit atom winding codes: 0 unspecified, 1 CW, 2 CCW, 3..8 other geometries.
     pub chiral_tag: u8,
     #[serde(default)]

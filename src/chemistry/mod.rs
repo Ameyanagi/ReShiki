@@ -45,6 +45,7 @@ struct Element {
     symbol: &'static str,
     average: f64,
     exact: f64,
+    common_isotope: u16,
     outer_electrons: i32,
     valences: &'static [i32],
 }
