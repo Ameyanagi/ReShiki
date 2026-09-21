@@ -1,25 +1,21 @@
 //! Selected aromatic rings can change presentation without changing chemistry.
 use super::{Error, Molecule, at, for_drawing, invalid, prepare};
-use crate::{chemistry::RDKIT_VERSION, document::Document};
-use serde::{Deserialize, Serialize};
+use crate::{chemistry::smiles::write, document::Document};
 use std::collections::{HashMap, HashSet};
 
-/// Canonical identifiers still come from the reference backend. Keep both so a
-/// failed or incomplete identity check cannot expose the pending drawing.
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct Identity {
-    pub rdkit_version: String,
-    pub before: String,
-    pub after: String,
+/// A verified display edit. The document is ready for one history operation;
+/// the prepared molecule and SMILES feed the remaining analysis calculations.
+#[derive(Debug)]
+pub struct AromaticEdit {
+    pub document: Document,
+    pub molecule: Molecule,
+    pub smiles: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 pub struct Aromatic {
     before: Molecule,
     after: Molecule,
-    // Only chemical states cross the transport; the pending edit stays local.
-    #[serde(skip)]
     document: Document,
 }
 impl Aromatic {
@@ -29,14 +25,17 @@ impl Aromatic {
     pub fn after(&self) -> &Molecule {
         &self.after
     }
-    pub fn finish(self, identity: Identity) -> Result<Document, Error> {
-        if identity.rdkit_version != RDKIT_VERSION {
-            return Err(invalid("Aromatic identity reference version changed"));
-        }
-        if identity.before.is_empty() || identity.before != identity.after {
+    pub fn finish(self) -> Result<AromaticEdit, Error> {
+        let before = write::write(&self.before.state, write::Options::default())?.text;
+        let after = write::write(&self.after.state, write::Options::default())?.text;
+        if before.is_empty() || before != after {
             return Err(Error::IdentityChanged);
         }
-        Ok(self.document)
+        Ok(AromaticEdit {
+            document: self.document,
+            molecule: self.after,
+            smiles: after,
+        })
     }
 }
 
@@ -154,4 +153,60 @@ pub fn aromatic_display(base: &Document, selection: &[u64]) -> Result<Aromatic, 
         after,
         document,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{document::Point, editing};
+
+    #[test]
+    fn changed_chemical_identity_cannot_publish_a_display_edit() -> anyhow::Result<()> {
+        let mut original = Document::default();
+        editing::ring(&mut original, Point::default(), 6, false, 42.);
+        for (i, bond) in original.bonds.iter_mut().enumerate() {
+            bond.order = if i % 2 == 0 { 2 } else { 1 };
+        }
+        let selected = original.atoms.iter().map(|a| a.id).collect::<Vec<_>>();
+        for variant in 0..3 {
+            let mut draft = aromatic_display(&original, &selected)?;
+            match variant {
+                0 => {
+                    draft
+                        .after
+                        .state
+                        .graph
+                        .atoms
+                        .first_mut()
+                        .ok_or_else(|| anyhow::anyhow!("Missing atom"))?
+                        .isotope = 13
+                }
+                1 => {
+                    draft
+                        .after
+                        .state
+                        .metadata
+                        .atoms
+                        .first_mut()
+                        .ok_or_else(|| anyhow::anyhow!("Missing atom metadata"))?
+                        .map_number = 7
+                }
+                _ => {
+                    draft
+                        .after
+                        .state
+                        .graph
+                        .bonds
+                        .first_mut()
+                        .ok_or_else(|| anyhow::anyhow!("Missing bond"))?
+                        .b = usize::MAX
+                }
+            }
+            assert!(
+                draft.finish().is_err(),
+                "Changed identity variant {variant}"
+            );
+        }
+        Ok(())
+    }
 }

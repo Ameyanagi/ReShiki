@@ -605,7 +605,7 @@ class PreparedMoleculeTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "requires a prepared"):
                     worker.handle({**request, "prepared_molecule": None})
 
-    def test_aromatic_transport_only_checks_identifiers_and_analyzes(self):
+    def test_aromatic_transport_only_analyzes_the_verified_state(self):
         for text in ("c1ccccc1", "c1cc[nH]c1", "c1ccc2ccccc2c1.CCO", "C[C@H](O)c1ccccc1"):
             doc = worker.handle(dict(protocol=1, operation="import", format="smiles", text=text))[
                 "document"
@@ -619,15 +619,15 @@ class PreparedMoleculeTests(unittest.TestCase):
                 )
                 expected = worker.handle(request)
                 changed = expected["document"]
-                before, after = json.loads(json.dumps([prepare(doc), prepare(changed)]))
-                request["prepared_aromatic"] = dict(before=before, after=after)
+                after = json.loads(json.dumps(prepare(changed)))
+                request["prepared_aromatic"] = after
+                request["local_smiles"] = True
                 expected["document"] = None
-                expected["aromatic_identity"] = dict(
-                    rdkit_version=before["rdkit_version"],
-                    before=Chem.MolToSmiles(worker.from_document(doc)),
-                    after=Chem.MolToSmiles(worker.from_document(changed)),
-                )
+                expected["analysis"]["smiles"] = ""
                 with (
+                    patch.object(
+                        Chem, "MolToSmiles", side_effect=AssertionError("Native identity writer")
+                    ),
                     patch.object(worker, "from_document", side_effect=AssertionError("Reprepared")),
                     patch.object(
                         worker, "to_document", side_effect=AssertionError("Reconstructed")
@@ -640,7 +640,7 @@ class PreparedMoleculeTests(unittest.TestCase):
                 ):
                     self.assertEqual(worker.handle(request), expected)
                     invalid = copy.deepcopy(request)
-                    invalid["prepared_aromatic"]["after"]["rdkit_version"] = "wrong"
+                    invalid["prepared_aromatic"]["rdkit_version"] = "wrong"
                     with self.assertRaisesRegex(ValueError, "version mismatch"):
                         worker.handle(invalid)
                 doc = changed

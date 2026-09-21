@@ -466,6 +466,53 @@ async fn rust_ring_display_preserves_selected_scope_and_complete_response() -> T
 }
 
 #[tokio::test]
+async fn aromatic_edits_retain_blank_analysis_smiles_for_partial_and_hydrogen_bonds() -> TestResult
+{
+    let local = LocalEngine::default();
+    let reference = PythonEngine::default();
+    for order in [0, 7] {
+        let mut document = reference
+            .execute(Request::import_smiles("c1ccccc1"))
+            .await
+            .map_err(anyhow::Error::msg)?
+            .document
+            .context("Missing ring drawing")?;
+        let selected = document.atoms.iter().map(|a| a.id).collect::<Vec<_>>();
+        if order == 0 {
+            let o = document.add_atom("O", reshiki::document::Point::new(200., 0.));
+            let h = document.add_atom("H", reshiki::document::Point::new(228., 0.));
+            let acceptor = document.add_atom("O", reshiki::document::Point::new(256., 0.));
+            document.add_bond(o, h, 1, "plain");
+            document.add_bond(h, acceptor, 0, "dotted");
+        } else {
+            let a = document.add_atom("C", reshiki::document::Point::new(200., 0.));
+            let b = document.add_atom("C", reshiki::document::Point::new(228., 0.));
+            document.add_bond(a, b, order, "plain");
+        }
+        for _ in 0..2 {
+            let mut request = Request::molecule("aromatic", document);
+            request.selected_ids = Some(selected.clone());
+            let expected = reference
+                .execute(request.clone())
+                .await
+                .map_err(anyhow::Error::msg)?;
+            let actual = local.execute(request).await.map_err(anyhow::Error::msg)?;
+            assert!(
+                actual
+                    .analysis
+                    .as_ref()
+                    .context("Missing analysis")?
+                    .smiles
+                    .is_empty()
+            );
+            document = actual.document.clone().context("Missing ring display")?;
+            assert_response_matches(actual, expected)?;
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
 async fn rust_prepared_drawings_preserve_full_analysis_and_molecular_exports() -> TestResult {
     let local = LocalEngine::default();
     let reference = PythonEngine::default();

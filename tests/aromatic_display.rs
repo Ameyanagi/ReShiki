@@ -1,9 +1,6 @@
 use anyhow::Context;
 use reshiki::{
-    chemistry::{
-        RDKIT_VERSION,
-        document::{Identity, aromatic_display},
-    },
+    chemistry::{RDKIT_VERSION, document::aromatic_display},
     document::{Document, History, Point},
 };
 use serde::Deserialize;
@@ -13,6 +10,13 @@ use std::{
     path::Path,
     process::{Command, Stdio},
 };
+
+#[derive(Deserialize)]
+struct Identity {
+    rdkit_version: String,
+    before: String,
+    after: String,
+}
 
 #[derive(Deserialize)]
 struct Case {
@@ -60,8 +64,12 @@ fn selected_aromatic_displays_match_reference_without_changing_identity() -> any
                 {
                     Some("Changed chemical state differs".into())
                 } else {
-                    let actual = draft.finish(case.identity.context("Missing identifiers")?)?;
-                    if actual == *expected {
+                    let identity = case.identity.context("Missing identifiers")?;
+                    assert_eq!(identity.rdkit_version, RDKIT_VERSION);
+                    let actual = draft.finish()?;
+                    if actual.smiles != identity.before || actual.smiles != identity.after {
+                        Some("Canonical identity differs".into())
+                    } else if actual.document == *expected {
                         None
                     } else {
                         Some("Editable document differs".into())
@@ -104,28 +112,10 @@ fn identity_checks_are_required_and_display_is_one_undoable_edit() -> anyhow::Re
         bond.order = if i % 2 == 0 { 2 } else { 1 };
     }
     let selection: Vec<_> = original.atoms.iter().map(|a| a.id).collect();
-    for (version, before, after) in [
-        ("wrong", "c1ccccc1", "c1ccccc1"),
-        (RDKIT_VERSION, "", ""),
-        (RDKIT_VERSION, "c1ccccc1", "C1CCCCC1"),
-    ] {
-        let draft = aromatic_display(&original, &selection)?;
-        assert!(
-            draft
-                .finish(Identity {
-                    rdkit_version: version.into(),
-                    before: before.into(),
-                    after: after.into(),
-                })
-                .is_err()
-        );
-    }
     let draft = aromatic_display(&original, &selection)?;
-    let mut changed = draft.finish(Identity {
-        rdkit_version: RDKIT_VERSION.into(),
-        before: "c1ccccc1".into(),
-        after: "c1ccccc1".into(),
-    })?;
+    let edit = draft.finish()?;
+    assert_eq!(edit.smiles, "c1ccccc1");
+    let mut changed = edit.document;
     assert!(changed.bonds.iter().all(|b| b.order == 4));
     let mut history = History::default();
     assert!(history.commit(original.clone(), &changed));

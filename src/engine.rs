@@ -463,12 +463,19 @@ impl PythonEngine {
             let selected = request.selected_ids.clone().unwrap_or_default();
             tokio::task::spawn_blocking(move || {
                 use crate::chemistry::{document, rings::RingError, sanitize};
-                match document::aromatic_display(&document, &selected) {
+                match document::aromatic_display(&document, &selected)
+                    .and_then(document::Aromatic::finish)
+                {
                     Ok(draft) => Ok(Some(draft)),
                     Err(document::Error::Sanitization(sanitize::Error {
                         cause: sanitize::Cause::Rings(RingError::UnresolvedOrdering),
                         ..
                     })) => Ok(None),
+                    Err(document::Error::Smiles(
+                        crate::chemistry::smiles::write::Error::Rings(
+                            RingError::UnresolvedOrdering,
+                        ),
+                    )) => Ok(None),
                     Err(error) => Err(error),
                 }
             })
@@ -478,6 +485,23 @@ impl PythonEngine {
         } else {
             None
         };
+        let local_smiles = prepared_aromatic
+            .as_ref()
+            .map(|edit| {
+                if edit
+                    .molecule
+                    .state
+                    .graph
+                    .bonds
+                    .iter()
+                    .any(|b| matches!(b.order, 0 | 7))
+                {
+                    String::new()
+                } else {
+                    edit.smiles.clone()
+                }
+            })
+            .or(local_smiles);
         let picture_exports = if self.local_pictures
             && !local_drawing_output
             && request.operation == "export"
@@ -526,7 +550,7 @@ impl PythonEngine {
         if let Some(draft) = &prepared_aromatic {
             envelope.insert(
                 "prepared_aromatic".into(),
-                serde_json::to_value(draft).map_err(|e| e.to_string())?,
+                serde_json::to_value(&draft.molecule).map_err(|e| e.to_string())?,
             );
         }
         if self.local_properties {
@@ -551,15 +575,7 @@ impl PythonEngine {
             result = tokio::task::spawn_blocking(move || {
                 if let Some(draft) = prepared_aromatic {
                     let object = result.as_object_mut().ok_or("Invalid chemistry response")?;
-                    let identity = object
-                        .remove("aromatic_identity")
-                        .ok_or("Missing aromatic identity check")?;
-                    let document = draft
-                        .finish(
-                            serde_json::from_value(identity)
-                                .map_err(|e| format!("Invalid aromatic identity check: {e}"))?,
-                        )
-                        .map_err(|e| e.to_string())?;
+                    let document = draft.document;
                     object.insert(
                         "document".into(),
                         serde_json::to_value(document).map_err(|e| e.to_string())?,

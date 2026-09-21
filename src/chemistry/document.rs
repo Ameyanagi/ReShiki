@@ -12,7 +12,7 @@ use crate::document::Document;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 mod aromatic;
-pub use aromatic::{Aromatic, Identity, aromatic_display};
+pub use aromatic::{Aromatic, AromaticEdit, aromatic_display};
 mod output;
 pub use output::{BondLabel, Drawing, Labels, for_drawing, for_import};
 pub(crate) use output::{for_import_with_attachments, kekule, validate_molecule};
@@ -32,6 +32,8 @@ pub enum Error {
     BondAssignment(String),
     #[error("Drawing wedge assignment: {0}")]
     WedgeAssignment(String),
+    #[error(transparent)]
+    Smiles(#[from] super::smiles::write::Error),
     #[error("Ring display would change the molecular identity")]
     IdentityChanged,
 }

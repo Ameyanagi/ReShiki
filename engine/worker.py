@@ -1018,8 +1018,12 @@ def handle(request):
     if not isinstance(local_smiles, bool):
         raise ValueError("local_smiles must be a boolean")
     if local_smiles and (
-        request.get("operation") not in ("import", "analyze", "export")
-        or request.get("prepared_molecule") is None
+        not (
+            request.get("operation") in ("import", "analyze", "export")
+            and request.get("prepared_molecule") is not None
+            or request.get("operation") == "aromatic"
+            and request.get("prepared_aromatic") is not None
+        )
     ):
         raise ValueError("Local SMILES requires a prepared molecular operation")
     local_mol_output = request.get("local_mol_output", False)
@@ -1092,19 +1096,9 @@ def handle(request):
         return response
     if operation == "aromatic":
         if (data := request.get("prepared_aromatic")) is not None:
-            before = prepared.restore(data["before"], request["document"])
-            after = prepared.restore(data["after"], request["document"])
-            check_supported(before)
+            after = prepared.restore(data, request["document"])
             check_supported(after)
-            response.update(
-                document=None,
-                analysis=analyzer(after),
-                aromatic_identity=dict(
-                    rdkit_version=rdBase.rdkitVersion,
-                    before=Chem.MolToSmiles(before),
-                    after=Chem.MolToSmiles(after),
-                ),
-            )
+            response.update(document=None, analysis=analyzer(after))
             return response
         result, mol = aromatic.toggle(
             request["document"], request.get("selected_ids"), from_document, to_document
