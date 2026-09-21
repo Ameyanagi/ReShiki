@@ -87,7 +87,11 @@ fn malformed_topologies_and_expanding_annotations_are_bounded() {
     for (a, b, index) in [(0, 1, 0), (usize::MAX, 0, 0), (0, 0, usize::MAX)] {
         let graph = cx::Topology {
             atoms: 1,
-            bonds: vec![cx::ParseBond { a, b, index }],
+            bonds: vec![cx::ParseBond {
+                a,
+                b,
+                index: Some(index),
+            }],
         };
         assert!(cx::read("|C:0.0|", &graph).is_err());
     }
@@ -97,7 +101,7 @@ fn malformed_topologies_and_expanding_annotations_are_bounded() {
             .map(|b| cx::ParseBond {
                 a: 0,
                 b,
-                index: b - 1,
+                index: Some(b - 1),
             })
             .collect(),
     };

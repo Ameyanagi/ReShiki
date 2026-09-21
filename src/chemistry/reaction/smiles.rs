@@ -2,11 +2,7 @@
 //! Copyright (C) 2007-2021 Novartis Institutes for BioMedical Research Inc.
 //! and other RDKit contributors. BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
 use crate::chemistry::{
-    graph::Graph,
-    kekulize::Direction,
-    ranking::Metadata,
-    sanitize, smiles as molecule,
-    stereo::perception::{Properties, RingCache, RingKind, State},
+    cx, graph::Graph, kekulize::Direction, ranking::Metadata, sanitize, smiles as molecule,
 };
 use serde::Serialize;
 
@@ -14,7 +10,7 @@ use serde::Serialize;
 pub enum ReadError {
     #[error("Invalid reaction SMILES: {0}")]
     Invalid(&'static str),
-    #[error("Reaction SMILES exceeds the 10,000 atom or 16 MB limit")]
+    #[error("Reaction SMILES exceeds atom, input size or annotation work limits")]
     Limit,
     #[error(transparent)]
     Molecule(#[from] molecule::Error),
@@ -137,6 +133,8 @@ struct Part {
     metadata: Metadata,
     directions: Vec<Direction>,
     labels: Vec<Option<String>>,
+    indices: Vec<usize>,
+    rings: Vec<bool>,
 }
 impl Part {
     fn read(text: &str, count: &mut usize) -> Result<Self> {
@@ -155,39 +153,54 @@ impl Part {
             metadata: parsed.metadata,
             directions: parsed.directions,
             labels: parsed.dummy_labels,
+            indices: parsed.bond_indices,
+            rings: parsed.ring_bonds,
         })
     }
-    fn finish(self) -> Result<molecule::Imported> {
-        let clean = sanitize::sanitize(&self.graph, &self.metadata, &self.directions)?;
-        if clean.graph.atoms.iter().any(|a| a.radical_electrons > 2)
-            || clean.metadata.atoms.iter().any(|a| a.chiral_tag > 2)
-            || clean.metadata.bonds.iter().any(|b| b.stereo > 5)
-            || !clean.metadata.groups.is_empty()
-        {
-            return Err(invalid(
-                "Unsupported participant stereochemistry or radical count",
-            ));
-        }
-        let properties = Properties::unspecified(&clean.graph);
-        Ok(molecule::Imported {
-            prepared: molecule::Prepared {
-                state: State {
-                    graph: clean.graph,
-                    metadata: clean.metadata,
-                    directions: clean.directions,
-                    valences: clean.valences,
-                    conjugated: clean.conjugated,
-                    hybridizations: clean.hybridizations,
-                    rings: RingCache {
-                        kind: RingKind::Symmetric,
-                        atoms: clean.rings,
-                    },
-                    properties,
-                },
-                dummy_labels: self.labels,
-            },
-            conformers: Vec::new(),
-            name: None,
+    fn finish(
+        self,
+        suffix: &str,
+        atoms: &mut usize,
+        bonds: &mut usize,
+    ) -> Result<molecule::Imported> {
+        let topology = cx::Topology {
+            atoms: self.graph.atoms.len(),
+            bonds: self
+                .graph
+                .bonds
+                .iter()
+                .zip(&self.indices)
+                .zip(&self.rings)
+                .map(|((b, &index), &ring)| cx::ParseBond {
+                    a: b.a,
+                    b: b.b,
+                    index: ring.then_some(index),
+                })
+                .collect(),
+        };
+        let events = if suffix.is_empty() {
+            Vec::new()
+        } else {
+            cx::read_at(suffix, &topology, *atoms, *bonds)
+                .map_err(molecule::Error::from)?
+                .events
+        };
+        *atoms = atoms.checked_add(topology.atoms).ok_or(ReadError::Limit)?;
+        *bonds = bonds
+            .checked_add(topology.bonds.len())
+            .ok_or(ReadError::Limit)?;
+        let parsed = molecule::Parsed {
+            query_bonds: vec![false; self.graph.bonds.len()],
+            graph: self.graph,
+            metadata: self.metadata,
+            directions: self.directions,
+            dummy_labels: self.labels,
+            bond_indices: self.indices,
+            ring_bonds: self.rings,
+        };
+        molecule::reaction_part(parsed, events).map_err(|error| match error {
+            molecule::Error::Sanitization(error) => ReadError::Sanitization(error),
+            error => ReadError::Molecule(error),
         })
     }
 
@@ -225,6 +238,8 @@ impl Part {
                 metadata: Metadata::default(),
                 directions: Vec::new(),
                 labels: Vec::new(),
+                indices: Vec::new(),
+                rings: Vec::new(),
             });
         }
         let mut indices = vec![0; n];
@@ -255,13 +270,15 @@ impl Part {
                 .collect::<Result<_>>()?;
             part.metadata.bonds.push(meta);
             part.directions.push(*at(&self.directions, i)?);
+            part.indices.push(*at(&self.indices, i)?);
+            part.rings.push(*at(&self.rings, i)?);
         }
         Ok(parts)
     }
 }
 
-/// Read bare reaction SMILES without layout or CX extensions. This preparatory
-/// API is not the application's import path until extended syntax is migrated.
+/// Read reaction SMILES participants, including global CX annotations.
+/// Drawing layout and application import integration remain separate.
 pub fn read(text: &str) -> Result<SmilesReaction> {
     if text.len() > 16 * 1024 * 1024 {
         return Err(ReadError::Limit);
@@ -269,10 +286,15 @@ pub fn read(text: &str) -> Result<SmilesReaction> {
     // The Python entry point strips Unicode whitespace before passing a C string.
     let text = text.trim_matches(|c: char| c.is_whitespace() || matches!(c, '\u{1c}'..='\u{1f}'));
     let text = text.split('\0').next().unwrap_or_default();
-    if text.find('|').is_some_and(|i| i > 0) {
-        return Err(invalid("CX reaction extensions are not migrated yet"));
-    }
-    let text = text.trim_matches(|c: char| c.is_ascii_whitespace());
+    let (text, suffix) = if let Some(i) = text.find('|').filter(|&i| i > 0) {
+        (
+            text.get(..i).ok_or(ReadError::Limit)?,
+            cx::trim(text.get(i..).ok_or(ReadError::Limit)?),
+        )
+    } else {
+        (text, "")
+    };
+    let text = cx::trim(text);
     if text
         .bytes()
         .enumerate()
@@ -299,10 +321,10 @@ pub fn read(text: &str) -> Result<SmilesReaction> {
         return Err(invalid("A reaction needs reactants and products"));
     }
     let mut count = 0;
-    let mut row = |parts: Vec<&str>| -> Result<Vec<molecule::Imported>> {
+    let mut row = |parts: Vec<&str>| -> Result<Vec<Part>> {
         parts
             .into_iter()
-            .map(|p| Part::read(p, &mut count)?.finish())
+            .map(|p| Part::read(p, &mut count))
             .collect()
     };
     let reactants = row(reactants)?;
@@ -311,12 +333,27 @@ pub fn read(text: &str) -> Result<SmilesReaction> {
     let agents = if agents.is_empty() {
         Vec::new()
     } else {
-        Part::read(agents, &mut count)?
-            .fragments()?
-            .into_iter()
-            .map(Part::finish)
-            .collect::<Result<_>>()?
+        Part::read(agents, &mut count)?.fragments()?
     };
+    // Native CX indices traverse reactants, then agents, then products.
+    // Bound repeated syntax scans when many tiny participants share a suffix.
+    if suffix
+        .len()
+        .checked_mul(reactants.len() + agents.len() + products.len())
+        .is_none_or(|n| n > 32 * 1024 * 1024)
+    {
+        return Err(ReadError::Limit);
+    }
+    let (mut atoms, mut bonds) = (0, 0);
+    let mut finish = |parts: Vec<Part>| -> Result<Vec<molecule::Imported>> {
+        parts
+            .into_iter()
+            .map(|p| p.finish(suffix, &mut atoms, &mut bonds))
+            .collect()
+    };
+    let reactants = finish(reactants)?;
+    let agents = finish(agents)?;
+    let products = finish(products)?;
     Ok(SmilesReaction {
         reactants,
         products,

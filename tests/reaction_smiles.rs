@@ -47,15 +47,31 @@ fn difference(actual: &Value, expected: &Value, path: &str) -> Option<String> {
 
 #[test]
 fn reaction_smiles_preserves_native_participant_states() -> anyhow::Result<()> {
-    compare_reference(false)
+    compare_reference("bare")
 }
 
 #[test]
 fn mutated_reaction_smiles_preserves_native_framing() -> anyhow::Result<()> {
-    compare_reference(true)
+    compare_reference("mutations")
 }
 
-fn compare_reference(mutations: bool) -> anyhow::Result<()> {
+#[test]
+fn cx_reaction_smiles_preserves_global_annotation_targets() -> anyhow::Result<()> {
+    compare_reference("cx")
+}
+
+#[test]
+fn repeated_reaction_annotations_have_a_work_limit() {
+    let text = format!("C>{}>O |{}|", vec!["C"; 4000].join("."), "x".repeat(10_000));
+    assert!(matches!(
+        reaction::read_smiles(&text),
+        Err(reaction::SmilesError::Limit)
+    ));
+    // A failed read owns no shared chemistry and cannot damage a later import.
+    assert!(reaction::read_smiles("C>O>N |(1,2,3;4,5,6;7,8,9)|").is_ok());
+}
+
+fn compare_reference(suite: &str) -> anyhow::Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let python = root.join(if cfg!(windows) {
         ".venv/Scripts/python.exe"
@@ -64,8 +80,8 @@ fn compare_reference(mutations: bool) -> anyhow::Result<()> {
     });
     let mut command = Command::new(python);
     command.arg(root.join("tests/reaction_smiles_reference.py"));
-    if mutations {
-        command.arg("--mutations");
+    if suite != "bare" {
+        command.arg(format!("--{suite}"));
     }
     let mut child = command
         .env("PYTHONUTF8", "1")
@@ -106,14 +122,12 @@ fn compare_reference(mutations: bool) -> anyhow::Result<()> {
             if failures.is_empty() {
                 std::fs::create_dir_all(root.join("artifacts"))?;
                 std::fs::write(
-                    root.join(format!(
-                        "artifacts/reaction-smiles-{mutations}-mismatch.json"
-                    )),
+                    root.join(format!("artifacts/reaction-smiles-{suite}-mismatch.json")),
                     serde_json::to_vec_pretty(&case)?,
                 )?;
                 if let Ok(actual) = actual {
                     std::fs::write(
-                        root.join(format!("artifacts/reaction-smiles-{mutations}-actual.json")),
+                        root.join(format!("artifacts/reaction-smiles-{suite}-actual.json")),
                         serde_json::to_vec_pretty(&actual)?,
                     )?;
                 }
@@ -123,14 +137,12 @@ fn compare_reference(mutations: bool) -> anyhow::Result<()> {
     }
     assert!(child.wait()?.success(), "Reaction SMILES reference failed");
     eprintln!(
-        "Reaction SMILES (mutations={mutations}): {accepted} accepted, {rejected} rejected, {} mismatches",
+        "Reaction SMILES ({suite}): {accepted} accepted, {rejected} rejected, {} mismatches",
         failures.len()
     );
     if !failures.is_empty() {
         std::fs::write(
-            root.join(format!(
-                "artifacts/reaction-smiles-{mutations}-failures.txt"
-            )),
+            root.join(format!("artifacts/reaction-smiles-{suite}-failures.txt")),
             failures.join("\n"),
         )?;
     }
@@ -144,6 +156,6 @@ fn compare_reference(mutations: bool) -> anyhow::Result<()> {
             .collect::<Vec<_>>()
             .join("\n")
     );
-    assert!(accepted > if mutations { 50 } else { 1000 } && rejected > 1000);
+    assert!(accepted > if suite == "mutations" { 50 } else { 1000 } && rejected > 1000);
     Ok(())
 }

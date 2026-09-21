@@ -28,7 +28,9 @@ pub struct Topology {
 pub struct ParseBond {
     pub a: usize,
     pub b: usize,
-    pub index: usize,
+    /// Explicit parse-order index; ordinary reaction-fragment bonds use their
+    /// local position while ring closures retain the original parse index.
+    pub index: Option<usize>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -85,6 +87,17 @@ pub struct Read {
 }
 
 pub fn read(text: &str, graph: &Topology) -> Result<Read> {
+    read_at(text, graph, 0, 0)
+}
+
+/// Apply reaction-global annotations to one participant. Events use local
+/// indices; references outside this participant are ignored by the native reader.
+pub(crate) fn read_at(
+    text: &str,
+    graph: &Topology,
+    atom_offset: usize,
+    bond_offset: usize,
+) -> Result<Read> {
     if text.len() > 1024 * 1024 || graph.atoms > 100_000 || graph.bonds.len() > 300_000 {
         return Err(Error::Limit);
     }
@@ -100,9 +113,11 @@ pub fn read(text: &str, graph: &Topology) -> Result<Read> {
                 .ok_or(Error::Limit)?
                 .push((i, if atom == bond.a { bond.b } else { bond.a }));
         }
-        indices.entry(bond.index).or_insert(i);
-        if let Some(n) = earlier.get_mut(bond.index.checked_add(1).ok_or(Error::Limit)?) {
-            *n += 1;
+        if let Some(index) = bond.index {
+            indices.entry(index).or_insert(i);
+            if let Some(n) = earlier.get_mut(index.checked_add(1).ok_or(Error::Limit)?) {
+                *n += 1;
+            }
         }
     }
     // Match get_bond_with_smiles_idx, including fallback slots when recursive
@@ -124,6 +139,8 @@ pub fn read(text: &str, graph: &Topology) -> Result<Read> {
         input: text.as_bytes(),
         pos: 0,
         graph,
+        atom_offset,
+        bond_offset,
         degrees,
         neighbors,
         mapping,
@@ -149,9 +166,15 @@ pub fn read(text: &str, graph: &Topology) -> Result<Read> {
                 let mut atom = 0;
                 while p.peek() != Some(b'$') {
                     let value = p.text(b";$")?;
-                    if atom < p.graph.atoms && !value.is_empty() {
+                    if let Some(local) = p.atom_index(atom).filter(|_| !value.is_empty()) {
+                        // Native atom-value annotations check the global range
+                        // but use the unadjusted index when accessing the atom.
+                        let target = if name == b"molFileValue" { atom } else { local };
+                        if target >= p.graph.atoms {
+                            return Err(p.invalid());
+                        }
                         p.events.push(Event::AtomProperty {
-                            atom,
+                            atom: target,
                             name: name.to_vec(),
                             value,
                         });
@@ -178,8 +201,8 @@ pub fn read(text: &str, graph: &Topology) -> Result<Read> {
                                 kind: BondKind::Zero,
                             });
                         }
-                    } else if p.atom(id) {
-                        p.events.push(Event::QueryAtom(id as usize));
+                    } else if let Some(atom) = p.atom_index(id as usize) {
+                        p.events.push(Event::QueryAtom(atom));
                     }
                 }
             }
@@ -227,6 +250,8 @@ struct Extension<'a> {
     input: &'a [u8],
     pos: usize,
     graph: &'a Topology,
+    atom_offset: usize,
+    bond_offset: usize,
     degrees: Vec<usize>,
     neighbors: Vec<Vec<(usize, usize)>>,
     mapping: Vec<Option<usize>>,
@@ -332,24 +357,31 @@ impl Extension<'_> {
         Err(self.invalid())
     }
     fn atom(&self, id: u32) -> bool {
-        (id as usize) < self.graph.atoms
+        self.atom_index(id as usize).is_some()
+    }
+    fn atom_index(&self, id: usize) -> Option<usize> {
+        id.checked_sub(self.atom_offset)
+            .filter(|&id| id < self.graph.atoms)
     }
     fn bond(&self, id: u32) -> Result<Option<usize>> {
-        match self.mapping.get(id as usize) {
+        let Some(id) = (id as usize).checked_sub(self.bond_offset) else {
+            return Ok(None);
+        };
+        match self.mapping.get(id) {
             None => Ok(None),
             Some(Some(id)) => Ok(Some(*id)),
             Some(None) => Err(self.invalid()),
         }
     }
     fn endpoint(&self, atom: u32, bond: u32) -> Result<Option<usize>> {
-        if !self.atom(atom) {
+        let Some(atom) = self.atom_index(atom as usize) else {
             return Ok(None);
-        }
+        };
         let Some(id) = self.bond(bond)? else {
             return Ok(None);
         };
         let b = self.graph.bonds.get(id).ok_or(Error::Limit)?;
-        if atom as usize != b.a && atom as usize != b.b {
+        if atom != b.a && atom != b.b {
             return Err(self.invalid());
         }
         Ok(Some(id))
@@ -360,7 +392,7 @@ impl Extension<'_> {
         let mut points = Vec::new();
         while self.peek() != Some(b')') {
             let text = self.text(b";)")?;
-            if atom < self.graph.atoms {
+            if self.atom_index(atom).is_some() {
                 let mut point = [Vec::new(), Vec::new(), Vec::new()];
                 for (slot, field) in point.iter_mut().zip(text.split(|&b| b == b',')) {
                     let text = std::str::from_utf8(field).map_err(|_| self.invalid())?;
@@ -389,12 +421,9 @@ impl Extension<'_> {
                 if !name.is_empty() {
                     self.require(b'.')?;
                     let value = self.text(b":|,")?;
-                    if self.atom(atom) && !value.is_empty() {
-                        self.events.push(Event::AtomProperty {
-                            atom: atom as usize,
-                            name,
-                            value,
-                        });
+                    if let Some(atom) = self.atom_index(atom as usize).filter(|_| !value.is_empty())
+                    {
+                        self.events.push(Event::AtomProperty { atom, name, value });
                     }
                 }
             }
@@ -423,7 +452,7 @@ impl Extension<'_> {
             if let Some(bond) = self.endpoint(atom, bond)? {
                 self.events.push(Event::BondKind {
                     bond,
-                    begin: Some(atom as usize),
+                    begin: self.atom_index(atom as usize),
                     kind,
                 });
             }
@@ -444,22 +473,16 @@ impl Extension<'_> {
             self.advance()?;
             self.require(b':')?;
             let atom = self.number()?;
-            if self.atom(atom) {
-                self.events.push(Event::Radical {
-                    atom: atom as usize,
-                    electrons,
-                });
+            if let Some(atom) = self.atom_index(atom as usize) {
+                self.events.push(Event::Radical { atom, electrons });
             }
             while self.eat(b',') {
                 if self.peek().is_some_and(|b| !b.is_ascii_digit()) {
                     break;
                 }
                 let atom = self.number()?;
-                if self.atom(atom) {
-                    self.events.push(Event::Radical {
-                        atom: atom as usize,
-                        electrons,
-                    });
+                if let Some(atom) = self.atom_index(atom as usize) {
+                    self.events.push(Event::Radical { atom, electrons });
                 }
             }
             if self.peek().is_none() {
@@ -488,8 +511,8 @@ impl Extension<'_> {
             if self.atom(atom) && !atoms.insert(atom) {
                 return Err(self.invalid());
             }
-            if self.atom(atom) {
-                ordered.push(atom as usize);
+            if let Some(atom) = self.atom_index(atom as usize) {
+                ordered.push(atom);
             }
             self.eat(b',');
         }
@@ -520,8 +543,8 @@ impl Extension<'_> {
                     return Err(self.invalid());
                 }
             }
-            if self.atom(atom) {
-                self.events.push(Event::QueryAtom(atom as usize));
+            if let Some(atom) = self.atom_index(atom as usize) {
+                self.events.push(Event::QueryAtom(atom));
             }
             self.eat(b',');
         }
@@ -541,7 +564,10 @@ impl Extension<'_> {
                 // The native implementation skips this separator unchecked.
                 self.advance()?;
                 self.number()?;
-            } else if self.atom(atom) && self.degrees.get(atom as usize) != Some(&2) {
+            } else if self
+                .atom_index(atom as usize)
+                .is_some_and(|i| self.degrees.get(i) != Some(&2))
+            {
                 return Err(self.invalid());
             }
             self.eat(b',');
@@ -554,8 +580,7 @@ impl Extension<'_> {
         let atoms = self
             .list(b',')?
             .into_iter()
-            .filter(|&id| self.atom(id))
-            .map(|id| id as usize)
+            .filter_map(|id| self.atom_index(id as usize))
             .collect::<Vec<_>>();
         let keep = !atoms.is_empty();
         self.advance()?;
@@ -630,8 +655,7 @@ impl Extension<'_> {
         let atoms = self
             .list(b',')?
             .into_iter()
-            .filter(|&id| self.atom(id))
-            .map(|id| id as usize)
+            .filter_map(|id| self.atom_index(id as usize))
             .collect::<Vec<_>>();
         let mut keep = !atoms.is_empty();
         let mut crossings = Vec::new();
@@ -649,10 +673,10 @@ impl Extension<'_> {
             }
         }
         if keep {
-            if crossings
-                .iter()
-                .any(|&id| id as usize >= self.graph.bonds.len())
-            {
+            if crossings.iter().any(|&id| {
+                self.atom_index(id as usize)
+                    .is_none_or(|i| i >= self.graph.bonds.len())
+            }) {
                 return Err(self.invalid());
             }
             self.groups.insert(self.next_group);
@@ -660,7 +684,10 @@ impl Extension<'_> {
             let bonds = if crossings.is_empty() {
                 self.polymer_crossings(&atoms)?
             } else {
-                crossings.into_iter().map(|id| id as usize).collect()
+                crossings
+                    .into_iter()
+                    .filter_map(|id| self.atom_index(id as usize))
+                    .collect()
             };
             self.events.push(Event::SubstanceGroup { atoms, bonds });
         }
@@ -672,7 +699,10 @@ impl Extension<'_> {
         self.require(b':')?;
         while self.peek().is_some_and(|b| b.is_ascii_digit()) {
             let atom = self.number()?;
-            if self.atom(atom) && self.degrees.get(atom as usize) != Some(&1) {
+            if self
+                .atom_index(atom as usize)
+                .is_some_and(|i| self.degrees.get(i) != Some(&1))
+            {
                 return Err(self.invalid());
             }
             self.require(b':')?;
@@ -705,7 +735,7 @@ impl Extension<'_> {
                 }
                 self.events.push(Event::Wedge {
                     bond,
-                    begin: atom as usize,
+                    begin: self.atom_index(atom as usize).ok_or(Error::Limit)?,
                     kind,
                 });
             }

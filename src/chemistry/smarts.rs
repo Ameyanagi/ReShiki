@@ -606,7 +606,7 @@ impl Parser<'_> {
                             ParseBond {
                                 a: other,
                                 b: current,
-                                index: self.bond_index,
+                                index: Some(self.bond_index),
                             },
                         ));
                     }
@@ -627,7 +627,7 @@ impl Parser<'_> {
                     ordinary.push(ParseBond {
                         a: current,
                         b: count,
-                        index: self.bond_index,
+                        index: Some(self.bond_index),
                     });
                 }
                 self.bond_index += 1;

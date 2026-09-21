@@ -311,6 +311,86 @@ fn int_property(
     value
 }
 
+/// Reactions apply CX annotations after bare parsing and keep explicit H.
+/// They sanitize without the default molecule import's stereo perception.
+pub(crate) fn reaction_part(mut parsed: Parsed, events: Vec<cx::Event>) -> Result<Imported> {
+    use crate::chemistry::{
+        sanitize,
+        stereo::perception::{Properties, RingCache, RingKind, State},
+    };
+    let mut annotations = Annotations::new(&parsed);
+    for event in events {
+        annotations.apply(&mut parsed, event)?;
+    }
+    annotations.numeric_props(&mut parsed)?;
+    if annotations.queries.iter().any(|&q| q)
+        || annotations.context.unsupported_bonds.iter().any(|&b| b)
+        || parsed.query_bonds.iter().any(|&b| b)
+    {
+        return Err(Error::Unsupported("reaction query or bond type"));
+    }
+    if let Some(error) = annotations.context.property_errors.iter().flatten().next() {
+        return Err(Error::Unsupported(error));
+    }
+    let clean = sanitize::sanitize(&parsed.graph, &parsed.metadata, &parsed.directions)?;
+    if clean.graph.atoms.iter().any(|a| a.radical_electrons > 2)
+        || clean.metadata.atoms.iter().any(|a| a.chiral_tag > 2)
+        || clean.metadata.bonds.iter().any(|b| b.stereo > 5)
+        || !clean.metadata.groups.is_empty()
+    {
+        return Err(Error::Unsupported(
+            "reaction stereochemistry or radical count",
+        ));
+    }
+    let mut properties = Properties::unspecified(&clean.graph);
+    properties.needs_detection = annotations.context.needs_bond_stereo.then_some(true);
+    for (i, (props, atom)) in annotations
+        .properties
+        .iter()
+        .zip(&mut properties.atoms)
+        .enumerate()
+    {
+        atom.unknown = *at(&annotations.context.unknown, i)?;
+        atom.invalid_unknown = *at(&annotations.context.unknown_errors, i)?;
+        if let Some(code) = props.get(b"_CIPCode".as_slice()) {
+            atom.cip_code = Some(
+                String::from_utf8(code.clone())
+                    .map_err(|_| Error::Unsupported("non-UTF8 CIP code"))?,
+            );
+        }
+        if let Some(value) = props.get(b"_ChiralityPossible".as_slice()) {
+            // Preserve the optional legacy flag. The native property dictionary
+            // interprets numeric strings as numbers and leaves other text intact.
+            atom.possible = Some(
+                std::str::from_utf8(value)
+                    .ok()
+                    .and_then(|s| cx::coordinate(s.trim()))
+                    .is_none_or(|n| n != 0.0),
+            );
+        }
+    }
+    Ok(Imported {
+        prepared: Prepared {
+            state: State {
+                graph: clean.graph,
+                metadata: clean.metadata,
+                directions: clean.directions,
+                valences: clean.valences,
+                conjugated: clean.conjugated,
+                hybridizations: clean.hybridizations,
+                rings: RingCache {
+                    kind: RingKind::Symmetric,
+                    atoms: clean.rings,
+                },
+                properties,
+            },
+            dummy_labels: parsed.dummy_labels,
+        },
+        conformers: annotations.context.conformers,
+        name: None,
+    })
+}
+
 /// Read default SMILES/CXSMILES chemistry, retaining input conformers and name.
 /// Drawing layout and the application's editable-chemistry checks follow this.
 pub fn read(text: &str) -> Result<Imported> {
@@ -342,7 +422,7 @@ pub fn read(text: &str) -> Result<Imported> {
                 .map(|(b, &index)| cx::ParseBond {
                     a: b.a,
                     b: b.b,
-                    index,
+                    index: Some(index),
                 })
                 .collect(),
         };

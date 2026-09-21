@@ -1,6 +1,7 @@
 """Reaction SMILES participants from the original native parser and sanitizer."""
 
 import json
+import math
 import random
 import sys
 from itertools import product
@@ -10,12 +11,16 @@ from rdkit import Chem, RDLogger, rdBase
 from rdkit.Chem import rdChemReactions
 
 if TYPE_CHECKING or __package__:
-    from .perception_reference import snapshot
+    from .cxsmarts_reference import cases as extension_cases
+    from .cxsmiles_cases import cases as interaction_cases
     from .smiles_prepare_reference import all_cases as molecular_cases
+    from .smiles_read_reference import prepared_snapshot
     from .valence_reference import ORDERS
 else:
-    from perception_reference import snapshot
+    from cxsmarts_reference import cases as extension_cases
+    from cxsmiles_cases import cases as interaction_cases
     from smiles_prepare_reference import all_cases as molecular_cases
+    from smiles_read_reference import prepared_snapshot
     from valence_reference import ORDERS
 
 
@@ -59,13 +64,29 @@ def read(text):
             result[role].append(
                 dict(
                     prepared=dict(
-                        state=snapshot(mol, "symmetric"),
+                        state=prepared_snapshot(mol),
                         dummy_labels=[
                             a.GetProp("dummyLabel") if a.HasProp("dummyLabel") else None
                             for a in mol.GetAtoms()
                         ],
                     ),
-                    conformers=[],
+                    conformers=[
+                        dict(
+                            positions=[
+                                {
+                                    key: value if math.isfinite(value) else None
+                                    for key, value in zip(
+                                        ("x", "y", "z"),
+                                        conf.GetAtomPosition(a.GetIdx()),
+                                        strict=True,
+                                    )
+                                }
+                                for a in mol.GetAtoms()
+                            ],
+                            is_3d=conf.Is3D(),
+                        )
+                        for conf in mol.GetConformers()
+                    ],
                     name=None,
                 )
             )
@@ -178,6 +199,68 @@ def mutations():
         yield f"mutation/{index}/{text!r}", text
 
 
+def cx_cases():
+    for source, cases_fn in (("syntax", extension_cases), ("interactions", interaction_cases)):
+        for index, text in enumerate(cases_fn()):
+            body, marker, tail = text.partition("|")
+            if not marker:
+                continue
+            for role in range(3):
+                rows = ["CO", "N", "CC"]
+                rows[role] = body.strip()
+                yield f"cx/{source}/{index}/{role}", ">".join(rows) + " |" + tail
+    # Global indices address reactants, then connected agent fragments, then
+    # products. Agent ring-closure parse indices survive fragment extraction.
+    for reaction in (
+        "C.O>N.C1CC1.O.C2CCC2>CC(O)N",
+        "(C.O)>C1CC1.N.C1.O.C1>CC",
+        "C>C-2C=1CCC2C1.C1CC1>O",
+        "C1CC1>C1CC1>O.C1CC1",
+        "C>CC(F)Cl>F[C@](Cl)(Br)I",
+        "*.[13*]>*C*>*",
+        "F/C=C/F>F/C=C/F>F/C=C/F",
+    ):
+        for atom in range(20):
+            for section in (
+                f"^1:{atom}",
+                f"a:{atom}",
+                f"u:{atom}",
+                f"atomProp:{atom}.molAtomMapNumber.123",
+                "$" + ";" * atom + "Pol_p$",
+                "$_AV:" + ";" * atom + "value$",
+                f"Sg:n:{atom}",
+                f"LN:{atom}:1.2",
+                f"m:{atom}:0.1",
+                "(" + ";" * atom + "bad)",
+                "(" + ";" * atom + "1,2,3)",
+            ):
+                yield f"cx/offset/{reaction}/{section}", f"{reaction} |{section}|"
+            for bond in range(20):
+                for tag in ("w", "wU", "wD", "H", "C"):
+                    section = f"{tag}:{atom}.{bond}"
+                    yield f"cx/bond/{reaction}/{section}", f"{reaction} |{section}|"
+        for bond in range(20):
+            for tag in ("Z", "c", "t", "ctu"):
+                yield f"cx/stereo/{reaction}/{tag}/{bond}", f"{reaction} |{tag}:{bond}|"
+    rng = random.Random(551139)
+    for index in range(3000):
+        text = rng.choice(
+            (
+                "CC.O>C1CC1>CC |wU:2.1,$;;;Pol_p$|",
+                "CC>N>O |(1,2,3;4,5,6;7,8,9),^1:3|",
+                "[H][C@](F)(Cl)Br>CO>F/C=C/F |ctu:6,a:1|",
+            )
+        )
+        for _ in range(rng.randrange(1, 4)):
+            pos = rng.randrange(text.index("|") + 1, len(text) + 1)
+            text = (
+                text[:pos]
+                + rng.choice(("", ",", ":", ";", "$", "|", "0", "1", "9", "酸"))
+                + text[min(len(text), pos + rng.randrange(3)) :]
+            )
+        yield f"cx/mutation/{index}", text
+
+
 def emit(name, text):
     try:
         expected, failure = read(text), None
@@ -189,5 +272,6 @@ def emit(name, text):
 if __name__ == "__main__":
     RDLogger.DisableLog("rdApp.*")
     print(json.dumps(dict(rdkit_version=rdBase.rdkitVersion)))
-    for name, text in mutations() if "--mutations" in sys.argv else cases():
+    selected = cx_cases if "--cx" in sys.argv else mutations if "--mutations" in sys.argv else cases
+    for name, text in selected():
         emit(name, text)

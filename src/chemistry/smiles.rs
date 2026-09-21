@@ -10,6 +10,7 @@ mod chirality;
 mod prepare;
 pub use prepare::{Prepared, prepare};
 mod read;
+pub(crate) use read::reaction_part;
 pub use read::{Imported, read};
 
 use super::{
@@ -50,11 +51,13 @@ pub struct Parsed {
     pub directions: Vec<Direction>,
     /// Textual bond order, including ring closures, for CX bond references.
     pub bond_indices: Vec<usize>,
+    #[serde(skip)]
+    pub(crate) ring_bonds: Vec<bool>,
     pub dummy_labels: Vec<Option<String>>,
     // Import can remove a query bond with its explicit hydrogen. Preserve the
     // marker until that stage; surviving queries cannot become editable bonds.
     #[serde(skip)]
-    query_bonds: Vec<bool>,
+    pub(crate) query_bonds: Vec<bool>,
 }
 
 #[derive(Clone, Copy)]
@@ -127,6 +130,7 @@ fn parse_inner(text: &str) -> Result<Parsed> {
             metadata: Metadata::default(),
             directions: Vec::new(),
             bond_indices: Vec::new(),
+            ring_bonds: Vec::new(),
             dummy_labels: Vec::new(),
             query_bonds: Vec::new(),
         },
@@ -321,6 +325,7 @@ impl Reader<'_> {
         self.parsed.metadata.bonds.push(BondMetadata::default());
         self.parsed.directions.push(spec.direction);
         self.parsed.bond_indices.push(index);
+        self.parsed.ring_bonds.push(false);
         self.parsed.query_bonds.push(spec.query);
         self.adjacent.get_mut(a).ok_or(Error::Limit)?.push((b, id));
         self.adjacent.get_mut(b).ok_or(Error::Limit)?.push((a, id));
@@ -426,6 +431,7 @@ impl Reader<'_> {
                     };
                 }
                 let id = self.add_bond(chosen.atom, other.atom, spec, second.index)?;
+                *self.parsed.ring_bonds.get_mut(id).ok_or(Error::Limit)? = true;
                 for end in pair {
                     *self
                         .closures
