@@ -28,7 +28,7 @@ const CLSID: GUID = GUID::from_u128(0x3bac2b7e_73a2_4f3a_9ce7_5e9b438c59b4);
 const CLSID_TEXT: &str = "{3BAC2B7E-73A2-4F3A-9CE7-5E9B438C59B4}";
 const LIMIT: usize = 64 * 1024 * 1024;
 static ENABLED: AtomicBool = AtomicBool::new(false);
-type Render = fn(&[u8]) -> std::result::Result<Vec<u8>, String>;
+type Render = fn(&[u8]) -> std::result::Result<super::OfficePreview, String>;
 type CResult<T> = windows::core::Result<T>;
 thread_local! {
     static OBJECTS: RefCell<Vec<Weak<State>>> = const { RefCell::new(Vec::new()) };
@@ -79,6 +79,7 @@ struct Session {
     directory: std::path::PathBuf,
     child: std::process::Child,
     last: Vec<u8>,
+    refresh_preview: bool,
 }
 struct State {
     drawing: RefCell<Drawing>,
@@ -133,6 +134,7 @@ impl State {
             directory: directory.keep(),
             child,
             last: document,
+            refresh_preview: true,
         });
         if let Some(site) = self.site.borrow().clone() {
             unsafe {
@@ -154,7 +156,8 @@ impl State {
                 if let Ok(metadata) = path.metadata()
                     && metadata.len() <= LIMIT as u64
                     && let Ok(bytes) = std::fs::read(&path)
-                    && bytes != session.last
+                    && (bytes != session.last
+                        || (session.refresh_preview && self.pending_ack.get()))
                 {
                     let rendered = RENDER.with(|render| {
                         render
@@ -162,11 +165,13 @@ impl State {
                             .ok_or_else(|| "No Office renderer".to_owned())
                             .and_then(|render| render(&bytes))
                     });
-                    match rendered
-                        .and_then(|png| Drawing::new(bytes.clone(), png).map_err(|e| e.to_string()))
-                    {
+                    match rendered.and_then(|preview| {
+                        Drawing::new(bytes.clone(), preview.png, Some(preview.metafile))
+                            .map_err(|e| e.to_string())
+                    }) {
                         Ok(drawing) => {
                             session.last = bytes;
+                            session.refresh_preview = false;
                             updated = Some(drawing);
                         }
                         Err(error) => {
@@ -356,7 +361,10 @@ pub(super) fn copy(mut formats: BTreeMap<u32, Vec<u8>>) -> Result<()> {
             .get(&clipboard::format("PNG")?)
             .ok_or("Missing drawing preview")?
             .clone();
-        let drawing = Drawing::new(document, png)?;
+        let metafile = formats
+            .remove(&clipboard::format("dev.reshiki.office-metafile")?)
+            .ok_or("Missing Office vector preview")?;
+        let drawing = Drawing::new(document, png, Some(metafile))?;
         formats.remove(&clipboard::format("PNG")?);
         formats.remove(&8); // CF_DIB
         let data: IDataObject = object::ClipboardObject { drawing, formats }.into();

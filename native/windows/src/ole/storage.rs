@@ -145,7 +145,7 @@ fn read_stream(storage: &IStorage, name: PCWSTR) -> CResult<Vec<u8>> {
     }
 }
 impl Drawing {
-    pub fn new(document: Vec<u8>, png: Vec<u8>) -> CResult<Self> {
+    pub fn new(document: Vec<u8>, png: Vec<u8>, metafile: Option<Vec<u8>>) -> CResult<Self> {
         if document.is_empty() || document.len() + png.len() > LIMIT {
             return Err(error("Office drawing exceeds 64 MB"));
         }
@@ -169,6 +169,24 @@ impl Drawing {
             cy: (i64::from(height) * 100_000 / i64::from(yppu)).clamp(1, i64::from(i32::MAX))
                 as i32,
         };
+        if let Some(emf) = metafile {
+            if emf.len() > LIMIT || emf.len() < 88 {
+                return Err(error("Invalid Office vector preview size"));
+            }
+            let handle = unsafe { SetEnhMetaFileBits(&emf) };
+            if handle.is_invalid() {
+                return Err(error("Invalid Office vector preview"));
+            }
+            unsafe {
+                let _ = DeleteEnhMetaFile(handle);
+            }
+            return Ok(Self {
+                document,
+                png,
+                emf,
+                extent,
+            });
+        }
         let source = PreviewBitmap::new(&image)?;
         let frame = RECT {
             left: 0,
@@ -240,12 +258,18 @@ impl Drawing {
     pub fn load(storage: &IStorage) -> CResult<Self> {
         let document = read_stream(storage, w!("ReShiki.Drawing"))?;
         let png = read_stream(storage, w!("ReShiki.Preview"))?;
-        Self::new(document, png)
+        let emf = match read_stream(storage, w!("ReShiki.Metafile")) {
+            Ok(bytes) => Some(bytes),
+            Err(error) if error.code() == STG_E_FILENOTFOUND => None,
+            Err(error) => return Err(error),
+        };
+        Self::new(document, png, emf)
     }
     pub fn save(&self, storage: &IStorage) -> CResult<()> {
         trace("Save storage");
         write_stream(storage, w!("ReShiki.Drawing"), &self.document)?;
         write_stream(storage, w!("ReShiki.Preview"), &self.png)?;
+        write_stream(storage, w!("ReShiki.Metafile"), &self.emf)?;
         unsafe {
             WriteClassStg(storage, &CLSID)?;
             WriteFmtUserTypeStg(
@@ -344,14 +368,25 @@ mod tests {
             .unwrap()
             .write_image_data(&pixels)
             .unwrap();
-        let drawing =
-            Drawing::new(br#"{"version":15,"atoms":[],"bonds":[]}"#.to_vec(), png).unwrap();
+        let drawing = Drawing::new(
+            br#"{"version":15,"atoms":[],"bonds":[]}"#.to_vec(),
+            png,
+            None,
+        )
+        .unwrap();
         assert!((drawing.extent.cx - 338).abs() <= 1);
         let storage = drawing.storage().unwrap();
         assert_eq!(unsafe { ReadClassStg(&storage) }.unwrap(), CLSID);
         let restored = Drawing::load(&storage).unwrap();
         assert_eq!(restored.document, drawing.document);
         assert_eq!(restored.png, drawing.png);
+        assert_eq!(restored.emf, drawing.emf);
+        // Documents made before vector previews did not store this stream.
+        // Their original PNG remains a supported fallback.
+        unsafe { storage.DestroyElement(w!("ReShiki.Metafile")) }.unwrap();
+        let legacy = Drawing::load(&storage).unwrap();
+        assert_eq!(legacy.document, drawing.document);
+        assert!(!legacy.emf.is_empty());
         // The default handler can display the saved preview without launching
         // ReShiki; this is what a reopened Office document initially uses.
         let cache: IOleCache = unsafe { CreateDataCache(None, &CLSID) }.unwrap();

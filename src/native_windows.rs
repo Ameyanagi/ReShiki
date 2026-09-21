@@ -112,6 +112,22 @@ pub(crate) fn print_snapshot(doc: &Document) -> Result<Vec<u8>, String> {
     Ok(bytes)
 }
 
+pub(crate) fn office_metafile(doc: &Document) -> Result<Vec<u8>, String> {
+    doc.validate()?;
+    let mut options = usvg::Options::default();
+    options.fontdb_mut().load_system_fonts();
+    let tree = usvg::Tree::from_str(&scene::svg(doc), &options).map_err(|e| e.to_string())?;
+    let mut primitives = Vec::new();
+    collect(tree.root(), usvg::Transform::identity(), &mut primitives)?;
+    let bytes = serde_json::to_vec(&json!({
+        "version": 1, "width_pt": tree.size().width() * 0.75,
+        "height_pt": tree.size().height() * 0.75,
+        "pages": [[0., 0.]], "primitives": primitives
+    }))
+    .map_err(|e| e.to_string())?;
+    reshiki_windows::metafile(&bytes)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

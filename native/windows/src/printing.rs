@@ -53,7 +53,7 @@ fn parse(data: &[u8]) -> Result<Snapshot> {
     if s.version != 1
         || ![s.width_pt, s.height_pt]
             .iter()
-            .all(|v| v.is_finite() && (36. ..=2880.).contains(v))
+            .all(|v| v.is_finite() && (0.1..=2880.).contains(v))
         || s.pages.is_empty()
         || s.pages.len() > 100
         || !s.pages.iter().flatten().all(|v| v.is_finite())
@@ -163,6 +163,7 @@ owned!(Pen, gp::GpPen, gp::GdipDeletePen);
 owned!(Brush, gp::GpSolidFill, gp::GdipDeleteBrush);
 owned!(Matrix, gp::Matrix, gp::GdipDeleteMatrix);
 owned!(Bitmap, gp::GpBitmap, gp::GdipDisposeImage);
+owned!(Metafile, gp::GpMetafile, gp::GdipDisposeImage);
 struct Saved<'a>(&'a Graphics, u32);
 impl<'a> Saved<'a> {
     fn new(graphics: &'a Graphics) -> Result<Self> {
@@ -408,6 +409,80 @@ pub(super) fn render(data: &[u8], dpi: f32) -> Result<Vec<u8>> {
     encoder.write_header()?.write_image_data(&pixels)?;
     Ok(output)
 }
+
+pub(super) fn metafile(data: &[u8]) -> Result<Vec<u8>> {
+    let snapshot = parse(data)?;
+    let _runtime = GdiPlus::new()?;
+    let mut metafile = Metafile::default();
+    let frame = gp::RectF {
+        X: 0.,
+        Y: 0.,
+        Width: snapshot.width_pt * 2540. / 72.,
+        Height: snapshot.height_pt * 2540. / 72.,
+    };
+    // Record both GDI+ vectors and their GDI fallback for Office's default
+    // handler. No bitmap of the whole drawing or background fill is recorded.
+    unsafe {
+        let reference = GetDC(None);
+        if reference.is_invalid() {
+            return Err(windows::core::Error::from_win32().into());
+        }
+        // EMF playback uses the reference device's physical dimensions, which
+        // need not match its logical desktop DPI (especially on remote displays).
+        // Record physical points explicitly so Office preserves publication size.
+        let dpi_x = GetDeviceCaps(reference, HORZRES) as f32 * 25.4
+            / GetDeviceCaps(reference, HORZSIZE) as f32;
+        let dpi_y = GetDeviceCaps(reference, VERTRES) as f32 * 25.4
+            / GetDeviceCaps(reference, VERTSIZE) as f32;
+        if ![dpi_x, dpi_y]
+            .iter()
+            .all(|dpi| dpi.is_finite() && *dpi > 0.)
+        {
+            ReleaseDC(None, reference);
+            return Err("Invalid Office preview reference resolution".into());
+        }
+        let status = gp::GdipRecordMetafile(
+            reference,
+            gp::EmfTypeEmfPlusDual,
+            &frame,
+            gp::MetafileFrameUnitGdi,
+            PCWSTR::null(),
+            &mut metafile.0,
+        );
+        ReleaseDC(None, reference);
+        check(status)?;
+        {
+            let mut graphics = Graphics::default();
+            check(gp::GdipGetImageGraphicsContext(
+                metafile.0.cast(),
+                &mut graphics.0,
+            ))?;
+            check(gp::GdipSetPageUnit(graphics.0, gp::UnitPixel))?;
+            check(gp::GdipScaleWorldTransform(
+                graphics.0,
+                dpi_x / 72.,
+                dpi_y / 72.,
+                gp::MatrixOrderPrepend,
+            ))?;
+            draw(&graphics, &snapshot, 0)?;
+        }
+        let mut handle = HENHMETAFILE::default();
+        check(gp::GdipGetHemfFromMetafile(metafile.0, &mut handle))?;
+        let size = GetEnhMetaFileBits(handle, None);
+        if size == 0 || size > 64 * 1024 * 1024 {
+            let _ = DeleteEnhMetaFile(handle);
+            return Err("Office metafile is empty or exceeds 64 MB".into());
+        }
+        let mut bytes = vec![0; size as usize];
+        let copied = GetEnhMetaFileBits(handle, Some(&mut bytes));
+        let _ = DeleteEnhMetaFile(handle);
+        if copied != size {
+            return Err("Incomplete Office metafile".into());
+        }
+        Ok(bytes)
+    }
+}
+
 struct Dialog(PRINTDLGEXW);
 impl Drop for Dialog {
     fn drop(&mut self) {
@@ -629,4 +704,95 @@ pub(super) fn show(data: &[u8], title: &str) -> Result<bool> {
         &pages,
         dialog.0.Flags.contains(PD_PRINTTOFILE).then_some("FILE:"),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn office_metafile_keeps_vectors_transparency_and_physical_size() {
+        let snapshot = serde_json::json!({
+            "version": 1, "width_pt": 75., "height_pt": 75., "pages": [[0., 0.]],
+            "primitives": [{"kind": "path", "transform": [1., 0., 0., 1., 0., 0.],
+                "commands": [[0., 10., 10.], [1., 90., 10.], [1., 10., 90.], [4.]],
+                "fill": [20, 150, 220, 255]}]
+        });
+        let bytes = metafile(&serde_json::to_vec(&snapshot).unwrap()).unwrap();
+        let int = |i| u32::from_le_bytes(bytes[i..i + 4].try_into().unwrap());
+        assert!(
+            (int(32) as i32 - 2646).abs() <= 1,
+            "incorrect physical width"
+        );
+        assert!(
+            (int(36) as i32 - 2646).abs() <= 1,
+            "incorrect physical height"
+        );
+        let mut offset = 0;
+        let mut paths = 0;
+        while offset < bytes.len() {
+            let (kind, size) = (int(offset), int(offset + 4) as usize);
+            assert!(size >= 8 && offset + size <= bytes.len());
+            if [3, 8, 59, 86, 91].contains(&kind) {
+                paths += 1;
+            } // Path or polygon in the GDI fallback.
+            assert!(
+                ![77, 80, 81, 114, 116].contains(&kind),
+                "drawing became a raster"
+            );
+            if kind == 76 {
+                // EMR_BITBLT may delimit the dual EMF, without pixels.
+                assert_eq!(int(offset + 84), 0);
+                assert_eq!(int(offset + 92), 0);
+            }
+            offset += size;
+        }
+        assert!(paths > 0, "missing vector path");
+        // Exercise the same GDI fallback used by OLE's presentation cache at a
+        // much larger size. Empty space must keep the host's colored background.
+        unsafe {
+            let emf = SetEnhMetaFileBits(&bytes);
+            assert!(!emf.is_invalid());
+            let dc = CreateCompatibleDC(None);
+            let info = BITMAPINFO {
+                bmiHeader: BITMAPINFOHEADER {
+                    biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+                    biWidth: 800,
+                    biHeight: -800,
+                    biPlanes: 1,
+                    biBitCount: 32,
+                    ..Default::default()
+                },
+                ..Default::default()
+            };
+            let mut pixels = std::ptr::null_mut();
+            let bitmap = CreateDIBSection(dc, &info, DIB_RGB_COLORS, &mut pixels, None, 0).unwrap();
+            let old = SelectObject(dc, bitmap);
+            std::slice::from_raw_parts_mut(pixels.cast::<u8>(), 800 * 800 * 4).fill(230);
+            let played = PlayEnhMetaFile(
+                dc,
+                emf,
+                &RECT {
+                    left: 0,
+                    top: 0,
+                    right: 800,
+                    bottom: 800,
+                },
+            );
+            let _ = GdiFlush();
+            let result = std::slice::from_raw_parts(pixels.cast::<u8>(), 800 * 800 * 4);
+            let at = |x: usize, y: usize| result[(y * 800 + x) * 4..(y * 800 + x) * 4 + 3].to_vec();
+            let empty = at(760, 760);
+            let near_right = at(680, 100);
+            let near_bottom = at(100, 680);
+            SelectObject(dc, old);
+            let _ = DeleteObject(bitmap);
+            let _ = DeleteDC(dc);
+            let _ = DeleteEnhMetaFile(emf);
+            assert!(played.as_bool());
+            assert_eq!(empty, [230; 3], "preview painted a background");
+            assert_eq!(near_right, [220, 150, 20], "wrong horizontal scale");
+            assert_eq!(near_bottom, [220, 150, 20], "wrong vertical scale");
+        }
+    }
 }

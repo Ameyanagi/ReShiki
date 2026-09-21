@@ -52,6 +52,14 @@ pub fn clipboard_png(doc: &Document) -> Result<Vec<u8>, String> {
     render_drawing(doc, "png", true)
 }
 
+#[cfg(windows)]
+pub fn office_preview(doc: &Document) -> Result<reshiki_windows::OfficePreview, String> {
+    Ok(reshiki_windows::OfficePreview {
+        png: clipboard_png(doc)?,
+        metafile: crate::native_windows::office_metafile(doc)?,
+    })
+}
+
 fn render_drawing(doc: &Document, format: &str, transparent: bool) -> Result<Vec<u8>, String> {
     doc.validate()?;
     let svg = scene::svg(doc);

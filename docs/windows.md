@@ -23,7 +23,8 @@ succeeds. Ctrl+Shift+C copies an image; Ctrl+Shift+V explicitly pastes a picture
 
 Windows Copy provides native ReShiki data, supported ChemDraw interchange data
 and an editable Office object containing the complete drawing and a preview.
-The editable preview preserves transparency over colored pages and slides.
+The editable preview uses vector paths for bonds and outlined text, preserving
+smooth edges when resized and transparency over colored pages and slides.
 Copy Image provides PNG, SVG, PDF and a standard bitmap. PNG preserves
 transparency and resolution; the standard bitmap uses a white background.
 PNG file export also uses a white background.
@@ -48,6 +49,8 @@ a local copy. Use **Save as** to keep a separate editable original.
 Use **Copy Image** for a static figure or for applications that only accept
 pictures. Its SVG outlines text so Office cannot shift atom labels. Existing
 pictures are not converted into editable chemistry by installing this update.
+To refresh an existing embedded ReShiki object's older bitmap preview,
+double-click it, press **Ctrl+S** in ReShiki, then save the Office document.
 
 ### Share with a Mac
 

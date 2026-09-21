@@ -343,6 +343,14 @@ fn copy_images(
         (format, image.map(|bytes| Representation::new(kind, &bytes)))
     })
     .collect();
+    #[cfg(windows)]
+    if !image_only {
+        images.push((
+            "Office preview",
+            crate::native_windows::office_metafile(doc)
+                .map(|bytes| Representation::new("dev.reshiki.office-metafile", &bytes)),
+        ));
+    }
     if image_only && let Some((_, Ok(png))) = images.iter().find(|(format, _)| *format == "png") {
         // Keep Copy Image pasteable inside ReShiki as one picture, with the
         // same physical dimensions as the exported 1200 dpi raster.

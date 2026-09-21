@@ -28,9 +28,19 @@ pub fn wait_for_office_save(
 
 /// Run the out-of-process OLE server on its main STA thread.
 pub fn run_office_server(
-    render: fn(&[u8]) -> std::result::Result<Vec<u8>, String>,
+    render: fn(&[u8]) -> std::result::Result<OfficePreview, String>,
 ) -> std::result::Result<(), String> {
     ole::run(render).map_err(|error| error.to_string())
+}
+
+pub struct OfficePreview {
+    pub png: Vec<u8>,
+    pub metafile: Vec<u8>,
+}
+
+/// Record transparent vector paths and outlined text for Office's OLE cache.
+pub fn metafile(snapshot: &[u8]) -> std::result::Result<Vec<u8>, String> {
+    printing::metafile(snapshot).map_err(|e| e.to_string())
 }
 
 use windows::{

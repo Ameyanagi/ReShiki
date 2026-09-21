@@ -5,6 +5,7 @@ import json
 import os
 import platform
 import shutil
+import sys
 import tempfile
 from pathlib import Path
 
@@ -57,6 +58,8 @@ def windows_installer(folder, output_dir):
 
 def verify_windows_installer(installer, source):
     """Install, upgrade in place, run chemistry, and uninstall on a disposable CI runner."""
+    if sys.platform != "win32":
+        raise ValueError("Windows installer verification requires Windows")
     import winreg
 
     ole_key = r"Software\Classes\CLSID\{3BAC2B7E-73A2-4F3A-9CE7-5E9B438C59B4}\LocalServer32"

@@ -23,7 +23,7 @@ fn main() -> iced::Result {
             let result = reshiki_windows::run_office_server(|bytes| {
                 let document: reshiki::document::Document =
                     serde_json::from_slice(bytes).map_err(|error| error.to_string())?;
-                reshiki::export::clipboard_png(&document)
+                reshiki::export::office_preview(&document)
             });
             if let Err(error) = result {
                 eprintln!("Office integration failed: {error}");
