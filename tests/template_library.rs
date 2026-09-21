@@ -1,7 +1,7 @@
 use reshiki::{
     document::{Annotation, Document, Point},
     editing,
-    engine::{ChemistryEngine, PythonEngine, Request},
+    engine::{ChemistryEngine, LocalEngine, Request},
     template_library::Library,
     templates::{Anchor, place_anchored},
 };
@@ -22,7 +22,7 @@ async fn exact_source_atom_changes_regiochemistry_without_substitution_or_fallba
     let c = host.add_atom("C", Point::default());
     let f = host.add_atom("F", Point::new(-42., 0.));
     host.add_bond(c, f, 1, "plain");
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     for (source, expected) in [(1, "FCCO"), (2, "CC(O)F")] {
         let (doc, ids) = place_anchored(
             &host,

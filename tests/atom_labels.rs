@@ -2,7 +2,7 @@ use reshiki::{
     atom_labels::{self, Carbons, HydrogenPosition, Number, Owner},
     document::{Document, Point},
     editing,
-    engine::{PythonEngine, Request},
+    engine::{LocalEngine, Request},
     scene,
 };
 
@@ -28,7 +28,7 @@ fn sequences_support_numeric_prefixes_latin_and_greek_rollover() {
 
 #[tokio::test]
 async fn appearance_leaves_formula_and_identity_intact() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     let response = engine
         .request(Request::import_smiles("CCCO"))
         .await
@@ -89,7 +89,7 @@ fn indicators_move_transform_and_copy_with_their_owners() {
 
 #[tokio::test]
 async fn saved_chemdraw_fixture_preserves_owned_indicators_and_chemistry() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     let result = engine
         .request(Request::import(
             "cdxml",
@@ -142,7 +142,7 @@ async fn saved_chemdraw_fixture_preserves_owned_indicators_and_chemistry() {
 
 #[tokio::test]
 async fn cip_is_computed_and_exports_refresh_stale_cached_labels() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     for (smiles, expected) in [
         ("N[C@@H](Cc1ccccc1)C(O)=O", "S"),
         ("N[C@H](Cc1ccccc1)C(O)=O", "R"),
@@ -172,7 +172,7 @@ async fn cip_is_computed_and_exports_refresh_stale_cached_labels() {
 
 #[tokio::test]
 async fn automatic_numbers_reserve_later_manual_stereo_labels() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     let mut doc = engine
         .request(Request::import(
             "cdxml",

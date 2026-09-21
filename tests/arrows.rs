@@ -143,8 +143,8 @@ fn legacy_curves_materialize_before_reflection_and_invalid_styles_fail() {
 
 #[tokio::test]
 async fn arrow_styles_and_controls_survive_chemistry_and_cdxml_round_trip() {
-    use reshiki::engine::{PythonEngine, Request};
-    let engine = PythonEngine::default();
+    use reshiki::engine::{LocalEngine, Request};
+    let engine = LocalEngine::default();
     let mut doc = engine
         .request(Request::import_smiles("CCO"))
         .await

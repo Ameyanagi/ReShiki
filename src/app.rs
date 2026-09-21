@@ -3,7 +3,7 @@ use iced::{Color, Element, Subscription, Task, Theme};
 use reshiki::{
     document::{Annotation, Arrow, Document, History, Point},
     editing::{self, Arrange, Transform},
-    engine::{Analysis, ChemistryEngine, PythonEngine, Request, Response},
+    engine::{Analysis, ChemistryEngine, LocalEngine, Request, Response},
     graphics::{BracketSides, Graphic, GraphicChange, GraphicStyle},
     recovery::{Candidate, Recovery},
 };
@@ -273,7 +273,7 @@ pub struct App {
     guides: canvas::guides::Guides,
     view_open: bool,
     analysis: Option<Analysis>,
-    engine: PythonEngine,
+    engine: LocalEngine,
     revision: u64,
     busy: bool,
     clipboard_busy: bool,
@@ -370,7 +370,7 @@ impl App {
             guides: Default::default(),
             view_open: false,
             analysis: None,
-            engine: PythonEngine::default(),
+            engine: LocalEngine::default(),
             revision: 0,
             busy: false,
             clipboard_busy: false,

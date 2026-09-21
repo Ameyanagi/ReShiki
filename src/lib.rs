@@ -27,6 +27,7 @@ pub mod document;
 pub mod document_styles;
 pub mod editing;
 pub mod engine;
+pub mod exchange;
 pub mod export;
 pub mod graphics;
 pub mod grouping;

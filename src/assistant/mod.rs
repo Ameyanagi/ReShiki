@@ -5,7 +5,7 @@ mod layout;
 pub mod settings;
 use crate::{
     document::{Document, Point},
-    engine::PythonEngine,
+    engine::LocalEngine,
     typography::TextFormat,
 };
 use serde::{Deserialize, Serialize};
@@ -131,7 +131,7 @@ impl Default for DrawingSettings {
 }
 /// Validate and compose an editable scheme using the active drawing style.
 pub async fn render(
-    engine: &PythonEngine,
+    engine: &LocalEngine,
     proposal: &Proposal,
     settings: &DrawingSettings,
 ) -> Result<Document, String> {

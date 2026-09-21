@@ -66,7 +66,7 @@ impl CanvasTools {
         &self,
         name: &str,
         arguments: Value,
-        engine: &crate::engine::PythonEngine,
+        engine: &crate::engine::LocalEngine,
     ) -> Result<Value, String> {
         let snapshot = self.snapshot()?;
         let (document, text) = match name {

@@ -1,7 +1,7 @@
 use reshiki::{
     document::{Document, History, Point},
     editing::{self, Transform},
-    engine::{ChemistryEngine, PythonEngine, Request},
+    engine::{ChemistryEngine, LocalEngine, Request},
     graphics::{BracketSides, Graphic, GraphicKind, GraphicStyle, LinePattern, PathCommand},
 };
 
@@ -154,7 +154,7 @@ fn all_graphics_render_in_vector_and_raster_exports_with_colors_and_dashes() {
 
 #[tokio::test]
 async fn every_shape_survives_chemistry_and_cdxml_as_editable_geometry() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     let mut doc = engine
         .execute(Request::import_smiles("CCO"))
         .await

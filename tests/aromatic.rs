@@ -2,13 +2,13 @@ use reshiki::{
     aromatic,
     document::Point,
     editing,
-    engine::{PythonEngine, Request},
+    engine::{LocalEngine, Request},
     scene,
 };
 
 #[tokio::test]
 async fn circles_follow_ring_geometry_copy_color_and_editable_exchange() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     for (smiles, count) in [("c1ccccc1", 1), ("c1ccoc1", 1), ("c1ccc2ccccc2c1", 2)] {
         let original = engine
             .request(Request::import_smiles(smiles))
@@ -61,7 +61,7 @@ async fn circles_follow_ring_geometry_copy_color_and_editable_exchange() {
 
 #[tokio::test]
 async fn displayed_carbon_nitrogen_and_oxygen_hydrogens_follow_bond_valence() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     for (smiles, expected) in [
         ("C", vec![4]),
         ("CCC", vec![3, 2, 3]),

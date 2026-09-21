@@ -2,7 +2,7 @@ use image::{DynamicImage, ImageFormat, Rgba, RgbaImage};
 use reshiki::{
     document::{Document, History, Point},
     editing::{self, Transform},
-    engine::{ChemistryEngine, PythonEngine, Request},
+    engine::{ChemistryEngine, LocalEngine, Request},
     graphics::{Graphic, GraphicKind},
     pictures::Picture,
 };
@@ -204,7 +204,7 @@ fn exported_pictures_preserve_pixels_transparency_rotation_and_layer_order() {
 
 #[tokio::test]
 async fn chemistry_and_editable_exchange_preserve_mixed_pictures() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     let mut doc = engine
         .execute(Request::import_smiles("CCO"))
         .await

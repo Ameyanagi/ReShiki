@@ -1,7 +1,7 @@
 use reshiki::{
     document::{Document, Point},
     editing,
-    engine::{PythonEngine, Request},
+    engine::{LocalEngine, Request},
     graphics::{GraphicKind, GraphicStyle},
     scientific::{self, Drawing, MarkKind, OrbitalKind, Phase, SymbolKind},
 };
@@ -136,7 +136,7 @@ fn failed_attachment_is_atomic_and_combined_marks_track_two_radicals() {
 
 #[tokio::test]
 async fn attached_charges_and_radicals_recalculate_hydrogens_and_exchange() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     let mut doc = engine
         .request(Request::import_smiles("[NH4+]"))
         .await
@@ -179,7 +179,7 @@ async fn attached_charges_and_radicals_recalculate_hydrogens_and_exchange() {
 
 #[tokio::test]
 async fn mixed_phase_graphics_export_as_grouped_colored_vectors() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     let mut doc = Document::default();
     let mut tool = drawing(GraphicKind::Orbital(OrbitalKind::Dxy));
     tool.style.stroke = [32, 80, 145];

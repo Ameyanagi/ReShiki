@@ -444,7 +444,7 @@ impl App {
                 self.assistant.started = Some(std::time::Instant::now());
                 self.assistant.menu = None;
                 // A cancelled proposal must not interrupt the editor's chemistry stream.
-                let engine = reshiki::engine::PythonEngine::default();
+                let engine = reshiki::engine::LocalEngine::default();
                 return Task::perform(
                     async move {
                         let proposal = codex::propose(

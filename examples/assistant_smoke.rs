@@ -1,7 +1,7 @@
 //! Explicit, headless integration check. Does not open windows or touch clipboard.
 use reshiki::{
     assistant::{self, codex},
-    engine::PythonEngine,
+    engine::LocalEngine,
 };
 use std::io::Write;
 #[tokio::main]
@@ -57,7 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .unwrap_or("artifacts/assistant-qa"),
     );
     let document =
-        assistant::render(&PythonEngine::default(), &proposal, &Default::default()).await?;
+        assistant::render(&LocalEngine::default(), &proposal, &Default::default()).await?;
     document.validate()?;
     std::fs::create_dir_all(&output)?;
     std::fs::write(

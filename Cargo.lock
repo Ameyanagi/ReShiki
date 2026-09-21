@@ -3239,6 +3239,7 @@ dependencies = [
  "reqwest",
  "resvg",
  "rfd",
+ "roxmltree",
  "semver",
  "serde",
  "serde_json",

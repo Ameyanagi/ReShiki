@@ -38,6 +38,7 @@ svg2pdf = { version = "0.13", default-features = false, features = ["text", "ima
 reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
 semver = "1"
 open = "5"
+roxmltree = "0.20"
 
 [profile.dev]
 debug = 1

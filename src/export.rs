@@ -2,7 +2,7 @@ use crate::{document::Document, scene};
 
 /// Refresh derived chemistry for an export snapshot without touching editing history.
 pub async fn checked_document(
-    engine: &crate::engine::PythonEngine,
+    engine: &crate::engine::LocalEngine,
     mut doc: Document,
 ) -> Result<Document, String> {
     doc.validate()?;

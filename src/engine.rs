@@ -152,6 +152,76 @@ pub trait ChemistryEngine: Send + Sync {
     ) -> impl std::future::Future<Output = Result<Response, String>> + Send;
 }
 
+/// Local operations are migrated here one at a time; chemistry retains the
+/// same checked request/response interface and can use a different backend.
+#[derive(Clone)]
+pub struct LocalEngine<B = PythonEngine> {
+    chemistry: B,
+}
+
+impl Default for LocalEngine<PythonEngine> {
+    fn default() -> Self {
+        Self {
+            chemistry: PythonEngine::default(),
+        }
+    }
+}
+
+impl<B: ChemistryEngine> LocalEngine<B> {
+    pub fn with_backend(chemistry: B) -> Self {
+        Self { chemistry }
+    }
+
+    pub async fn request(&self, request: Request) -> Result<Response, String> {
+        self.execute(request).await
+    }
+}
+
+impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
+    async fn execute(&self, mut request: Request) -> Result<Response, String> {
+        use base64::{Engine, engine::general_purpose::STANDARD};
+        if request.protocol != 1 {
+            return Err("Unsupported protocol version".into());
+        }
+        let binary = request.format.as_deref() == Some("cdx");
+        let export_binary = binary && request.operation == "export";
+        if binary && request.operation == "import" {
+            let text = request.text.take().unwrap_or_default();
+            request.text = Some(
+                tokio::task::spawn_blocking(move || {
+                    if text.trim().is_empty() {
+                        return Err("Enter a structure first".into());
+                    }
+                    if text.len() > crate::exchange::LIMIT.div_ceil(3) * 4 {
+                        return Err("Drawing exceeds the 16 MB structure limit".into());
+                    }
+                    let bytes = STANDARD
+                        .decode(text)
+                        .map_err(|_| "Invalid binary drawing base64")?;
+                    crate::exchange::from_cdx(&bytes)
+                })
+                .await
+                .map_err(|e| format!("Drawing conversion failed: {e}"))??,
+            );
+            request.format = Some("cdxml".into());
+        } else if export_binary {
+            request.format = Some("cdxml".into());
+        }
+        let mut response = self.chemistry.execute(request).await?;
+        if export_binary {
+            let xml = response.output.take().ok_or("Missing exported drawing")?;
+            response.output = Some(
+                tokio::task::spawn_blocking(move || {
+                    crate::exchange::to_cdx(&xml).map(|bytes| STANDARD.encode(bytes))
+                })
+                .await
+                .map_err(|e| format!("Drawing conversion failed: {e}"))??,
+            );
+        }
+        Ok(response)
+    }
+}
+
 struct Worker {
     _child: Child,
     input: ChildStdin,

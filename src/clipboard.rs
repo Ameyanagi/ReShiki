@@ -2,7 +2,7 @@
 use crate::{
     document::Document,
     editing,
-    engine::{PythonEngine, Request},
+    engine::{LocalEngine, Request},
     export,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
@@ -201,7 +201,7 @@ async fn invoke(operation: &str, representations: &[Representation]) -> Result<P
 }
 
 pub async fn copy(
-    engine: PythonEngine,
+    engine: LocalEngine,
     original: Document,
     image_only: bool,
 ) -> Result<CopyOutcome, String> {
@@ -376,12 +376,12 @@ pub fn text_request(text: &str) -> Request {
     Request::import(format, text)
 }
 
-pub async fn paste(engine: PythonEngine, image_only: bool) -> Result<Document, String> {
+pub async fn paste(engine: LocalEngine, image_only: bool) -> Result<Document, String> {
     let packet = invoke(if image_only { "read_picture" } else { "read" }, &[]).await?;
     paste_packet(engine, packet).await
 }
 
-async fn paste_packet(engine: PythonEngine, packet: Packet) -> Result<Document, String> {
+async fn paste_packet(engine: LocalEngine, packet: Packet) -> Result<Document, String> {
     let item = packet
         .representations
         .first()
@@ -456,7 +456,7 @@ mod tests {
             ),
         ] {
             let restored = paste_packet(
-                PythonEngine::default(),
+                LocalEngine::default(),
                 Packet {
                     representations: vec![Representation::new(kind, contents.as_bytes())],
                 },
@@ -491,7 +491,7 @@ mod tests {
             .unwrap()
             .clone();
         let restored = paste_packet(
-            PythonEngine::default(),
+            LocalEngine::default(),
             Packet {
                 representations: vec![native],
             },
@@ -499,7 +499,7 @@ mod tests {
         .await
         .unwrap();
         let raster = paste_packet(
-            PythonEngine::default(),
+            LocalEngine::default(),
             Packet {
                 representations: vec![png],
             },
@@ -514,7 +514,7 @@ mod tests {
         let invalid = Representation::new("public.png", b"not a PNG");
         assert!(
             paste_packet(
-                PythonEngine::default(),
+                LocalEngine::default(),
                 Packet {
                     representations: vec![invalid]
                 }
@@ -532,7 +532,7 @@ mod tests {
                 .write_to(&mut data, format)
                 .unwrap();
             let result = paste_packet(
-                PythonEngine::default(),
+                LocalEngine::default(),
                 Packet {
                     representations: vec![Representation::new(kind, &data.into_inner())],
                 },

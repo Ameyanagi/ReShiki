@@ -30,7 +30,7 @@ fn main() -> iced::Result {
             }
         };
         match runtime.block_on(
-            reshiki::engine::PythonEngine::default()
+            reshiki::engine::LocalEngine::default()
                 .request(reshiki::engine::Request::import_smiles("CCO")),
         ) {
             Ok(response) => {

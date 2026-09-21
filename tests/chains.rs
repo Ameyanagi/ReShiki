@@ -1,7 +1,7 @@
 use reshiki::{
     chains::{self, BondDrawing, ChainDrawing},
     document::{Annotation, Document, Point},
-    engine::{ChemistryEngine, PythonEngine, Request},
+    engine::{ChemistryEngine, LocalEngine, Request},
 };
 
 fn chain(atoms: usize) -> ChainDrawing {
@@ -120,7 +120,7 @@ fn snaking_turns_retraces_and_handles_fast_pointer_moves() {
 
 #[tokio::test]
 async fn chains_attach_to_existing_atoms_and_survive_molecular_and_drawing_exchange() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     let mut doc = Document::default();
     let path = points(7);
     let n = doc.add_atom("N", path[0]);
@@ -171,7 +171,7 @@ async fn extending_and_joining_grouped_molecules_keeps_captions_and_valid_cdxml(
     joined.validate().unwrap();
     assert_eq!(joined.groups.len(), 1);
     assert_eq!(joined.groups[0].members.len(), 9);
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     let mut req = Request::molecule("export", joined);
     req.format = Some("cdxml".into());
     let xml = engine.execute(req).await.unwrap().output.unwrap();

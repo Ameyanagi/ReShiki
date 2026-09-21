@@ -136,8 +136,8 @@ fn styled_labels_survive_native_save_and_vector_and_raster_exports() {
 
 #[tokio::test]
 async fn cdxml_uses_rendered_text_metrics_and_keeps_caption_position() {
-    use reshiki::engine::{ChemistryEngine, PythonEngine, Request};
-    let engine = PythonEngine::default();
+    use reshiki::engine::{ChemistryEngine, LocalEngine, Request};
+    let engine = LocalEngine::default();
     let mut doc = engine
         .execute(Request::import_smiles("CCO"))
         .await

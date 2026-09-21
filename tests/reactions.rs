@@ -1,7 +1,7 @@
 use reshiki::{
     document::{Arrow, Document, History, Point},
     editing,
-    engine::{ChemistryEngine, PythonEngine, Request},
+    engine::{ChemistryEngine, LocalEngine, Request},
     reactions::{self, Role},
 };
 
@@ -77,7 +77,7 @@ fn growth_and_invalid_cross_role_edits_are_checked() {
 
 #[tokio::test]
 async fn reaction_bridge_preserves_roles_stereo_mapping_and_cleanup() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     for smiles in [
         "[CH3:1][OH:2]>O>[CH2:1]=[O:2]",
         "C[C@H](O)Cl>O>C[C@@H](O)Cl",

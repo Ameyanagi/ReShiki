@@ -197,8 +197,8 @@ fn concave_lasso_encloses_whole_objects_and_supports_add_subtract() {
 
 #[tokio::test]
 async fn nested_mixed_groups_survive_chemistry_and_cdxml_roundtrip() {
-    use reshiki::engine::{ChemistryEngine, PythonEngine, Request};
-    let engine = PythonEngine::default();
+    use reshiki::engine::{ChemistryEngine, LocalEngine, Request};
+    let engine = LocalEngine::default();
     let mut d = drawing();
     let a = d.add_atom("N", Point::new(300., 0.));
     d.group_selection(&[1, 3]).unwrap();

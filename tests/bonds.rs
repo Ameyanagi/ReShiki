@@ -2,7 +2,7 @@ use reshiki::{
     bonds::{BondPreset, DoublePosition},
     document::{Annotation, Document, Point},
     editing::{self, Transform},
-    engine::{ChemistryEngine, PythonEngine, Request},
+    engine::{ChemistryEngine, LocalEngine, Request},
     scene::{self, Primitive},
 };
 
@@ -114,7 +114,7 @@ fn bond_color_reaches_shared_vector_and_raster_exports() {
 
 #[tokio::test]
 async fn reflected_stereo_styles_keep_the_drawn_molecular_identity() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     for smiles in ["F[C@](Cl)(Br)I", "F[C@@](Cl)(Br)I"] {
         for up_style in ["bold", "hollow_wedge"] {
             let initial = engine
@@ -151,7 +151,7 @@ async fn reflected_stereo_styles_keep_the_drawn_molecular_identity() {
 
 #[tokio::test]
 async fn bond_gallery_survives_checks_cleanup_and_cdxml_with_appearance_intact() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     let mut gallery = Document::default();
     for (i, preset) in BondPreset::ALL.into_iter().enumerate() {
         let mut d = single(preset);

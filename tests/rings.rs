@@ -1,6 +1,6 @@
 use reshiki::{
     document::{Document, Point},
-    engine::{PythonEngine, Request},
+    engine::{LocalEngine, Request},
     rings::{Drawing, Preset},
     templates,
 };
@@ -60,7 +60,7 @@ fn chair_projections_close_with_equal_jacs_edges_and_mirror_geometry() {
 
 #[tokio::test]
 async fn fusion_and_atom_sharing_keep_host_coordinates_and_molecular_identity() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     for preset in [Preset::ChairUp, Preset::ChairDown, Preset::Cyclopentadiene] {
         let mut host = Document::default();
         let a = host.add_atom("C", p(-42., 0.));
@@ -111,7 +111,7 @@ async fn fusion_and_atom_sharing_keep_host_coordinates_and_molecular_identity() 
 
 #[tokio::test]
 async fn connecting_by_a_bond_keeps_the_whole_ring_and_rejects_full_valence() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     let mut host = Document::default();
     let c = host.add_atom("C", p(0., 0.));
     let o = host.add_atom("O", p(42., 0.));
@@ -139,7 +139,7 @@ async fn connecting_by_a_bond_keeps_the_whole_ring_and_rejects_full_valence() {
 
 #[tokio::test]
 async fn orientation_alternate_bonds_and_cdxml_preserve_the_drawing() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     let empty = Document::default();
     let (doc, _) = drawing(Preset::ChairDown)
         .place(&empty, p(120., 80.), Some(p(120., 160.)), 5.)

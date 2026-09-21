@@ -1,7 +1,7 @@
 use reshiki::{
     document::{Document, History, Point},
     editing,
-    engine::{PythonEngine, Request},
+    engine::{LocalEngine, Request},
     scene,
 };
 
@@ -98,7 +98,7 @@ fn invalid_fragments_are_atomic_and_chemical_changes_reveal_the_group() {
 }
 #[tokio::test]
 async fn checked_chemistry_cleanup_and_editable_exchange_keep_full_identity() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     let original = engine
         .request(Request::import_smiles("COc1ccc(NC(=O)OC(C)(C)C)cc1"))
         .await

@@ -2,7 +2,7 @@
 use super::{DrawingSettings, Molecule, Proposal};
 use crate::{
     document::{Annotation, Arrow, Document, Point},
-    engine::{ChemistryEngine, PythonEngine, Request},
+    engine::{ChemistryEngine, LocalEngine, Request},
     typography::{TextAlign, TextFormat},
 };
 use std::collections::HashSet;
@@ -72,7 +72,7 @@ fn separate_components(doc: &mut Document, gap: f32) {
     }
 }
 async fn prepare(
-    engine: &PythonEngine,
+    engine: &LocalEngine,
     molecule: &Molecule,
     settings: &DrawingSettings,
 ) -> Result<Participant, String> {
@@ -177,7 +177,7 @@ async fn prepare(
     })
 }
 async fn prepare_all(
-    engine: &PythonEngine,
+    engine: &LocalEngine,
     molecules: &[Molecule],
     settings: &DrawingSettings,
 ) -> Result<Vec<Participant>, String> {
@@ -262,7 +262,7 @@ fn place_row(
     Ok((bottom, participants))
 }
 pub async fn render(
-    engine: &PythonEngine,
+    engine: &LocalEngine,
     proposal: &Proposal,
     settings: &DrawingSettings,
 ) -> Result<Document, String> {

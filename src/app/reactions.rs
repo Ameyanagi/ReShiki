@@ -14,7 +14,7 @@ pub struct State {
 mod tests {
     use super::*;
     use reshiki::document::{Arrow, Point};
-    use reshiki::engine::{ChemistryEngine, PythonEngine};
+    use reshiki::engine::{ChemistryEngine, LocalEngine};
 
     #[test]
     fn role_edits_are_undoable_and_arrow_reversal_swaps_roles() {
@@ -70,7 +70,7 @@ mod tests {
     async fn reaction_headless_snapshot() {
         use iced::advanced::{layout, mouse, renderer::Headless, widget::Tree};
         let (mut app, _) = App::new();
-        app.doc = PythonEngine::default()
+        app.doc = LocalEngine::default()
             .execute(Request::import(
                 "rsmi",
                 "CC(=O)O.CCO>OS(=O)(=O)O>CCOC(C)=O.O",

@@ -132,8 +132,8 @@ fn page_pdf_uses_all_sheets_while_drawing_exports_stay_cropped() {
 }
 #[tokio::test]
 async fn chemistry_analysis_and_selection_cleanup_preserve_page_metadata() {
-    use reshiki::engine::{PythonEngine, Request};
-    let engine = PythonEngine::default();
+    use reshiki::engine::{LocalEngine, Request};
+    let engine = LocalEngine::default();
     let mut doc = engine
         .request(Request::import_smiles("CCO"))
         .await

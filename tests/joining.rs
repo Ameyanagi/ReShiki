@@ -1,12 +1,12 @@
 use reshiki::{
     document::{Annotation, Document, Point},
     editing,
-    engine::{ChemistryEngine, PythonEngine, Request},
+    engine::{ChemistryEngine, LocalEngine, Request},
     joining::Prepared,
     templates::{Anchor, Connection, LIBRARY},
 };
 
-async fn molecule(engine: &PythonEngine, smiles: &str) -> Document {
+async fn molecule(engine: &LocalEngine, smiles: &str) -> Document {
     engine
         .execute(Request::import_smiles(smiles))
         .await
@@ -14,7 +14,7 @@ async fn molecule(engine: &PythonEngine, smiles: &str) -> Document {
         .document
         .unwrap()
 }
-async fn identity(engine: &PythonEngine, doc: Document) -> String {
+async fn identity(engine: &LocalEngine, doc: Document) -> String {
     engine
         .execute(Request::molecule("analyze", doc))
         .await
@@ -39,7 +39,7 @@ fn midpoint(doc: &Document, a: u64, b: u64) -> Point {
 
 #[tokio::test]
 async fn connecting_and_sharing_existing_fragments_preserve_ids_and_unrelated_content() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     let host = molecule(&engine, "CO").await;
     let part = molecule(&engine, "CC").await;
     for (mode, expected, atom_count) in [
@@ -84,7 +84,7 @@ async fn connecting_and_sharing_existing_fragments_preserve_ids_and_unrelated_co
 
 #[tokio::test]
 async fn fused_aromatic_fragments_keep_their_ids_and_captions() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     let mut doc = template("Benzene");
     let host = doc.clone();
     let part = template("Furan");
@@ -190,7 +190,7 @@ fn single_atoms_and_edges_can_merge_without_duplicate_objects() {
 
 #[tokio::test]
 async fn moving_a_fragment_preserves_remote_tetrahedral_stereochemistry() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     let mut doc = molecule(&engine, "O").await;
     let source = molecule(&engine, "CC[C@H](F)Cl").await;
     let ids = editing::append(&mut doc, &source, Point::new(200., 100.));

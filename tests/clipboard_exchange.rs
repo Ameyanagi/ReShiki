@@ -1,8 +1,8 @@
-use reshiki::engine::{PythonEngine, Request};
+use reshiki::engine::{LocalEngine, Request};
 
 #[tokio::test]
 async fn binary_exchange_keeps_supported_structure_and_figure_objects() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     for name in [
         "bond-styles-chemdraw",
         "formatted-label-chemdraw",

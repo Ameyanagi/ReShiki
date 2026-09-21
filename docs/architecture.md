@@ -9,7 +9,8 @@ flowchart LR
     Doc --> Scene[Vector scene]
     Scene --> Canvas[Iced geometry]
     Scene --> SVG[SVG export]
-    App --> Contract[ChemistryEngine / protocol v1]
+    App --> Local[LocalEngine / Rust file conversion]
+    Local --> Contract[ChemistryEngine / protocol v1]
     Contract <--> Worker[Python process]
     Worker --> RDKit[RDKit]
     Contract -. future .-> Rust[Pure Rust engine]
@@ -30,7 +31,8 @@ flowchart LR
 | `src/recovery.rs`                              | Atomic session snapshots and recovery candidates                               |
 | `src/clipboard.rs`, `src/app/clipboard.rs`     | Native multi-format Copy/Paste, asynchronous completion guards and safe Cut    |
 | `native/macos/Clipboard.swift`                 | Bounded single-item AppKit pasteboard bridge                                   |
-| `engine/cdx_exchange.py`                       | Checked binary drawing conversion through the supported CDXML subset           |
+| `src/exchange/`                                | Bounded Rust CDX/CDXML codec and exact legacy text encodings                   |
+| `engine/cdx_exchange.py`                       | Python reference codec retained for differential tests                         |
 | `src/export.rs`                                | Vector PDF and raster PNG from the shared SVG scene                            |
 | `src/storage.rs`                               | Write complete files beside the destination, then atomically replace           |
 | `src/style.rs` and `engine/drawing_style.json` | Shared JACS / ACS defaults, publication units and font advances                |
@@ -64,7 +66,11 @@ The file-open panel is intentionally unfiltered, so opening a supported file doe
 
 ## Pure Rust migration
 
-The current app instantiates `PythonEngine`, which implements `ChemistryEngine`. A future backend implements the same request/response contract, and backend construction in `App` is changed. The trait uses a statically dispatched async future; it is not a runtime plugin ABI.
+The app uses `LocalEngine`, which implements `ChemistryEngine`. CDX encoding and decoding run in Rust on a blocking task; CDXML chemistry and document conversion still go to `PythonEngine`. Other chemistry requests pass through unchanged. A future backend can replace Python behind the same interface. The trait uses a statically dispatched async future; it is not a runtime plugin ABI.
+
+`tests/cdx_codec.rs` compares binary output and decoded XML with the Python reference, including native fixtures and every supported property. Its text corpus covers every defined character in the supported legacy codepages. `tests/engine_migration.rs` compares complete responses, stereo identities, isotopes, charges, radicals, figure objects, and rejected queries against RDKit. Malformed binary data must fail before reaching the chemistry backend. The ordinary integration tests use `LocalEngine`, so they exercise the app's migrated path.
+
+Regenerate codec constants and codepage tables with `uv run --locked python scripts/regenerate_cdx_rust_schema.py`, followed by `cargo fmt --all`. The generator uses the checked Python schema and standard-library codecs; released applications read only compiled Rust constants and tables.
 
 First move graph checks, formula/mass and simple descriptors into Rust. Then add parsers, aromaticity, stereochemistry and canonical identifiers with a reference corpus. Move 2D coordinate generation separately from depiction. Keep Python as a selectable verification backend until stereo, charges, isotopes, salts and interchange pass differential tests. Retiring the Python runtime is a later packaging milestone, not an existing capability.
 
@@ -74,7 +80,7 @@ Portable packages include the worker project and `uv.lock` in `Contents/Resource
 
 On macOS, explicit Copy/Paste starts a bundled AppKit helper with JSON on stdin/stdout and base64 representations. The helper prepares one item with a private ReShiki document, supported editable binary drawing data and PDF/PNG/SVG alternatives. Copy Image omits the editable structure and adds an embedded raster drawing object with physical bounds for readers that ignore PNG resolution metadata. The helper does not monitor clipboard changes or read previous contents during Copy.
 
-The worker accepts `format: "cdx"` with base64 input/output and converts through the existing CDXML checks. The binary codec bounds input, nesting, object count and property count. Unsupported object properties and query predicates return errors.
+The app accepts `format: "cdx"` with base64 input/output. `LocalEngine` converts it in Rust and sends CDXML to the worker for the existing chemistry checks. The binary codec bounds input, output, nesting, object count and property count. Unsupported object properties and query predicates return errors. The worker retains its original CDX path as the test oracle during migration.
 
 Clipboard tasks capture document epoch and revision. Cut removes the captured selection only after a successful write and only if the drawing remains unchanged. Paste validates and inserts in one Undo step, rejecting stale results. Rendering uses a snapshot and runs off the UI thread. The build script compiles the Swift helper beside the app executable; development builds use the helper compiled by Cargo's build script. Non-macOS builds retain text clipboard exchange.
 

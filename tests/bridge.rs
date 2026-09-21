@@ -1,4 +1,4 @@
-use reshiki::engine::{ChemistryEngine, PythonEngine, Request};
+use reshiki::engine::{ChemistryEngine, LocalEngine, Request};
 use reshiki::{
     document::{Document, Point},
     editing::{self, Transform},
@@ -6,7 +6,7 @@ use reshiki::{
 
 #[tokio::test]
 async fn ring_attachments_preserve_methyl_and_methylene_identity() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     for (order, expected) in [(1, "CC1CCCCC1"), (2, "C=C1CCCCC1")] {
         let mut doc = Document::default();
         let a = doc.add_atom("C", Point::default());
@@ -47,7 +47,7 @@ async fn ring_attachments_preserve_methyl_and_methylene_identity() {
 
 #[tokio::test]
 async fn copy_and_reflection_preserve_stereochemistry() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     for smiles in ["N[C@@H](C)C(=O)O", "F/C=C/F", "F/C=C\\F"] {
         let initial = engine
             .execute(Request::import_smiles(smiles))
@@ -77,7 +77,7 @@ async fn copy_and_reflection_preserve_stereochemistry() {
 
 #[tokio::test]
 async fn ring_tools_build_chemically_valid_rings_and_fused_aromatics() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     for n in 3..=8 {
         let mut doc = Document::default();
         editing::ring(&mut doc, Point::default(), n, false, 5.0);
@@ -115,7 +115,7 @@ async fn ring_tools_build_chemically_valid_rings_and_fused_aromatics() {
 
 #[tokio::test]
 async fn python_bridge_preserves_identity_across_cleanup() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     let imported = engine
         .execute(Request::import_smiles("N[C@@H](C)C(=O)O"))
         .await
@@ -142,7 +142,7 @@ async fn python_bridge_preserves_identity_across_cleanup() {
 
 #[tokio::test]
 async fn bridge_can_restart_after_invalid_input() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     assert!(
         engine
             .execute(Request::import_smiles("not a molecule"))

@@ -316,7 +316,7 @@ pub async fn propose(
         let mut streamed = String::new();
         let mut last_reply = String::new();
         let mut tool_calls = 0;
-        let tool_engine = crate::engine::PythonEngine::default();
+        let tool_engine = crate::engine::LocalEngine::default();
         loop {
             let event = server.event().await?;
             if event.get("id").and_then(Value::as_u64) == Some(request_id) && event.get("error").is_some() { return Err(event.pointer("/error/message").and_then(Value::as_str).unwrap_or("Codex could not start this request").chars().take(1000).collect()); }

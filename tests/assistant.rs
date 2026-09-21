@@ -1,7 +1,7 @@
 use reshiki::{
     assistant::{self, DrawingSettings, Molecule, Proposal, Step},
     document::{Document, Point},
-    engine::{ChemistryEngine, PythonEngine, Request},
+    engine::{ChemistryEngine, LocalEngine, Request},
 };
 fn molecule(smiles: &str, label: &str) -> Molecule {
     Molecule {
@@ -32,7 +32,7 @@ fn reaction() -> Proposal {
 }
 #[tokio::test]
 async fn reaction_is_editable_validated_styled_and_exchangeable() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     let mut settings = DrawingSettings {
         bond_length: 63.,
         bond_color: [40, 100, 140],
@@ -109,7 +109,7 @@ async fn reaction_is_editable_validated_styled_and_exchangeable() {
 
 #[tokio::test]
 async fn water_names_remain_captions_while_only_duplicate_formulas_are_hidden() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     for (label, coefficient, visible) in [
         ("Water", 1, true),
         ("water", 1, true),
@@ -154,7 +154,7 @@ async fn water_names_remain_captions_while_only_duplicate_formulas_are_hidden() 
 }
 #[tokio::test]
 async fn invalid_molecule_discards_entire_candidate_and_ambiguous_answer_has_no_drawing() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     let proposal = Proposal {
         replace_ids: vec![],
         explanation: "Which isomer?".into(),
@@ -213,7 +213,7 @@ async fn hydrolysis_uses_coefficients_and_editable_r_groups_without_overlapping_
             arrow: "forward".into(),
         }],
     };
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     let doc = assistant::render(&engine, &proposal, &Default::default())
         .await
         .unwrap();
@@ -288,7 +288,7 @@ async fn canvas_tools_return_live_data_and_images_without_mutating_the_document(
         revision: 8,
         epoch: 3,
     };
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     let inspect = tools
         .call("canvas_inspect", serde_json::json!({}), &engine)
         .await

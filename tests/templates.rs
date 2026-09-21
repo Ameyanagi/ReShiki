@@ -1,6 +1,6 @@
 use reshiki::{
     document::{Document, Point},
-    engine::{ChemistryEngine, PythonEngine, Request},
+    engine::{ChemistryEngine, LocalEngine, Request},
     templates::{LIBRARY, place},
 };
 
@@ -10,7 +10,7 @@ fn template(name: &str) -> &'static Document {
 
 #[tokio::test]
 async fn every_thumbnail_is_the_structure_that_gets_placed() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     for item in LIBRARY.iter() {
         let empty = Document::default();
         let (doc, ids) = place(&empty, &item.document, Point::new(150.0, 90.0), None, 5.0).unwrap();
@@ -35,7 +35,7 @@ async fn every_thumbnail_is_the_structure_that_gets_placed() {
 
 #[tokio::test]
 async fn fused_templates_reuse_atoms_match_scale_and_keep_chemical_identity() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     for (name, order, expected) in [
         ("Cyclopentane", 1, "C1CCCC1"),
         ("Cyclopentane", 2, "C1=CCCC1"),
@@ -88,7 +88,7 @@ async fn fused_templates_reuse_atoms_match_scale_and_keep_chemical_identity() {
 
 #[tokio::test]
 async fn atom_attachment_and_fused_aromatics_are_connected() {
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     let mut chain = Document::default();
     let a = chain.add_atom("C", Point::default());
     let b = chain.add_atom("C", Point::new(42.0, 0.0));
@@ -178,7 +178,7 @@ fn dragging_selects_attachment_side_and_invalid_targets_are_unchanged() {
 #[tokio::test]
 async fn explicit_atom_connection_keeps_both_rings_and_exact_source_atom() {
     use reshiki::templates::{Anchor, Connection, place_with_mode};
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     let benzene = template("Benzene");
     let furan = template("Furan");
     let target = benzene.atoms.first().unwrap();
@@ -240,7 +240,7 @@ async fn explicit_atom_connection_keeps_both_rings_and_exact_source_atom() {
 #[tokio::test]
 async fn chosen_aromatic_edges_fuse_regardless_of_kekule_phase() {
     use reshiki::templates::{Anchor, Connection, place_with_mode};
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     let benzene = template("Benzene");
     for name in ["Furan", "Benzene"] {
         let part = template(name);
@@ -305,7 +305,7 @@ async fn circle_benzene_fuses_at_the_chosen_furan_edge_and_undo_restores_the_cir
         editing,
         templates::{Anchor, Connection, place_with_mode},
     };
-    let engine = PythonEngine::default();
+    let engine = LocalEngine::default();
     let mut original = Document::default();
     editing::ring(&mut original, Point::new(100., 100.), 6, true, 5.);
     assert_eq!(reshiki::aromatic::circles(&original).len(), 1);
