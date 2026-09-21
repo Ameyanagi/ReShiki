@@ -11,6 +11,7 @@ pub mod descriptors;
 pub mod graph;
 pub mod kekulize;
 pub mod normalize;
+pub mod ranking;
 pub mod rings;
 
 pub use atomic_data::RDKIT_VERSION;

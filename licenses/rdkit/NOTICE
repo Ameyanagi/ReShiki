@@ -14,6 +14,15 @@ Copyright (C) 2003-2022 Greg Landrum and other RDKit contributors.
 Code/GraphMol/Kekulize.cpp (bond assignment and iterative backtracking)
 Copyright (C) 2001-2021 Greg Landrum and other RDKit contributors.
 
+Code/GraphMol/new_canon.cpp and new_canon.h (canonical atom ranking)
+Copyright (C) 2014 Greg Landrum, adapted from pseudocode from Roger Sayle.
+
+Code/RDGeneral/hanoiSort.h (partition merge sort)
+Copyright (C) 2014-2025 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/Atropisomers.cpp (controlling-neighbor ordering)
+Copyright (C) 2004-2021 Tad hurst/CDD and other RDKit contributors.
+
 Code/GraphMol/PeriodicTable.h (relative electronegativity)
 Copyright (C) 2001-2011 Rational Discovery LLC.
 

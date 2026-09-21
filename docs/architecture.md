@@ -27,7 +27,7 @@ flowchart LR
 | `src/app/workspace.rs`                         | Command bar, context options, compact palette, inspector and drawers           |
 | `src/app/icons.rs`                             | Original vector tool and command icons                                         |
 | `src/engine.rs`                                | Chemistry interface, worker lifecycle, timeout and response validation         |
-| `src/chemistry/`                               | Bounded graph, valence, hydrogen assignment, ring perception and descriptors   |
+| `src/chemistry/`                               | Bounded graph, properties, canonical ranking and sanitizer building blocks     |
 | `src/pictures/exchange/`                       | Bounded raster decoding, orientation, transparency and reflection              |
 | `src/editing.rs`                               | Clipboard remapping, transforms, component arrangement and ring placement      |
 | `src/recovery.rs`                              | Atomic session snapshots and recovery candidates                               |
@@ -79,9 +79,11 @@ The bridge requests a sanitized graph with `local_properties: true`, completes t
 
 `tests/valence.rs` compares over 278,000 cases with RDKit's strict/intermediate property caches and radical pass: allowed/rejected valences, charges, implicit-H policy, aromatic and partial bonds, dative direction and metal atoms. Graphs reject invalid endpoints, duplicate bonds and excessive size. Intermediate caches tolerate temporary valence excess during normalization; final validation remains strict.
 
-Rust sanitizer building blocks include functional-group charge normalization, radical assignment, Kekulé bond assignment, default aromaticity perception and hydrogen restoration. Independent tests compare complete graphs, including fused rings, macrocycles, exocyclic bonds and atom permutations. These passes are not yet enabled in the application: production sanitization stays in RDKit until canonical ranking, metal normalization and stereochemistry are ready.
+Rust sanitizer building blocks include functional-group charge normalization, radical assignment, canonical atom ranking, Kekulé bond assignment, default aromaticity perception and hydrogen restoration. Independent tests compare complete graphs, including fused rings, macrocycles, exocyclic bonds and atom permutations. These passes are not yet enabled in the application: production sanitization stays in RDKit until metal normalization, stereochemistry perception and the complete pipeline are ready.
 
-Kekulé assignment uses bounded, iterative backtracking and preserves bond directions according to the reference rules. `tests/kekulize.rs` compares over 51,000 cases, including rejected graphs, dummy atoms and wedged bonds. Canonical atom ranks are supplied separately in these tests; Rust canonical ranking remains to be implemented. Failed assignment leaves the caller's graph unchanged.
+Kekulé assignment uses bounded, iterative backtracking and preserves bond directions according to the reference rules. `tests/kekulize.rs` compares over 51,000 cases, including rejected graphs, dummy atoms and wedged bonds. Failed assignment leaves the caller's graph unchanged.
+
+Canonical ranking uses a separate record for atom maps and stereo metadata. `tests/ranking.rs` compares over 45,000 rank vectors against RDKit, including symmetry classes, different ring caches, tetrahedral and bond stereo, stereo groups, and atom permutations. It also checks over 10,000 bond assignments using Rust-generated ranks. Ranking reads stereo annotations; perceiving or repairing those annotations remains separate work.
 
 Rust also computes symmetric SSSR rings with iterative, bounded searches. `tests/ring_perception.rs` compares RDKit regressions, templates, the bundled NCI 5,000-molecule sample, atom permutations and dense synthetic graphs. All molecular cases match. Some dense graphs expose platform-dependent equal-size sorting in RDKit's pruning algorithm. Rust certifies the possible pruning choices and uses reference ring membership when it cannot prove agreement; that fallback still requires RDKit. This changes no document coordinates or bonds.
 
