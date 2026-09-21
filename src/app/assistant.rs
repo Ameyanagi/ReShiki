@@ -85,6 +85,12 @@ impl Drop for State {
     }
 }
 impl State {
+    pub(super) fn needs_poll(&self) -> bool {
+        self.busy
+            || self.waiting_for_canvas_edit
+            || (self.preferences_dirty && !self.preferences_saving)
+    }
+
     pub fn new() -> Self {
         let mut state = Self::default();
         if !cfg!(test) {

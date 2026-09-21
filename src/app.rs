@@ -447,11 +447,26 @@ impl App {
     }
     pub fn subscription(&self) -> Subscription<Message> {
         Subscription::batch([
-            iced::time::every(std::time::Duration::from_millis(200))
-                .map(|_| Message::Assistant(assistant::Action::Poll)),
-            iced::time::every(std::time::Duration::from_millis(250))
-                .map(|_| Message::RefreshLabels),
-            iced::time::every(std::time::Duration::from_secs(5)).map(|_| Message::Tick),
+            if self.assistant.needs_poll() {
+                iced::time::every(std::time::Duration::from_millis(200))
+                    .map(|_| Message::Assistant(assistant::Action::Poll))
+            } else {
+                Subscription::none()
+            },
+            if self.refresh_due.is_some() && !self.busy && self.cleanup.is_none() {
+                iced::time::every(std::time::Duration::from_millis(250))
+                    .map(|_| Message::RefreshLabels)
+            } else {
+                Subscription::none()
+            },
+            if self.recovery.is_some()
+                && ((self.dirty() && self.autosaved_revision != Some(self.revision))
+                    || (!self.dirty() && self.autosaved_revision.is_some()))
+            {
+                iced::time::every(std::time::Duration::from_secs(5)).map(|_| Message::Tick)
+            } else {
+                Subscription::none()
+            },
             iced::window::close_requests().map(Message::Close),
             iced::event::listen_with(|event, status, _window| {
                 use iced::keyboard::{Key, key::Named};
@@ -2719,6 +2734,48 @@ fn input_request(text: &str) -> Request {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn subscriptions(app: &App) -> usize {
+        iced::advanced::subscription::into_recipes(app.subscription()).len()
+    }
+
+    #[test]
+    fn idle_windows_stop_polling_and_pending_work_restarts_timers() -> Result<(), String> {
+        let (mut app, _) = App::new();
+        app.busy = false;
+        let idle = subscriptions(&app);
+        assert_eq!(idle, 2); // Window close and keyboard/mouse events only.
+        app.assistant.busy = true;
+        assert_eq!(subscriptions(&app), idle + 1);
+        app.assistant.busy = false;
+        app.refresh_due = Some(std::time::Instant::now());
+        assert_eq!(subscriptions(&app), idle + 1);
+        app.busy = true;
+        assert_eq!(subscriptions(&app), idle);
+        app.busy = false;
+        app.refresh_due = None;
+
+        let directory = tempfile::tempdir().map_err(|e| e.to_string())?;
+        app.recovery = Some(Recovery::in_directory(directory.path())?);
+        assert_eq!(subscriptions(&app), idle);
+        app.doc.add_atom("O", Point::default());
+        assert_eq!(subscriptions(&app), idle + 1);
+        let _ = app.update(Message::Tick);
+        assert_eq!(subscriptions(&app), idle);
+        let path = app
+            .recovery
+            .as_ref()
+            .ok_or("Missing recovery")?
+            .session
+            .clone();
+        assert!(path.exists());
+        app.saved = app.doc.clone();
+        assert_eq!(subscriptions(&app), idle + 1);
+        let _ = app.update(Message::Tick);
+        assert!(!path.exists());
+        assert_eq!(subscriptions(&app), idle);
+        Ok(())
+    }
 
     fn checked_labels(app: &mut App) {
         let mut checked = app.doc.clone();
