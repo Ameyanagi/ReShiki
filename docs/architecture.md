@@ -121,7 +121,7 @@ SMILES import runs in Rust through `src/chemistry/smiles/`: names, CX annotation
 
 RXN export runs in Rust through `src/chemistry/reaction.rs`. It preserves explicit participant roles, coefficients, maps, stereo and aromatic bond types without changing the drawing. Differential tests compare complete files and rejected inputs; a backend-free test verifies the runtime path. Only unresolved dense-ring ordering retains the reference fallback. Reaction import and reaction SMILES still use Python.
 
-The Rust RXN reader is tested before replacing the import path. It reuses the MOL parser for V2000/V3000 participants and checks roles, file limits, query unwrapping and stereo against RDKit. Canvas assembly and the runtime switch remain separate steps.
+The Rust RXN reader and canvas builder are tested before replacing the import path. They preserve participant roles, stereo, label spacing, reagent rows and separators. Placement keeps full precision until the final canvas coordinates. Complete-scene tests compare the original importer; incomplete labels and invalid coordinates cannot publish a partial drawing. The runtime switch remains a separate step.
 
 The bridge supplies 2D coordinates, identifiers and full CIP labels. Rust reconstructs the editable drawing after layout. CX coordinates used for perception can be nonfinite; they never enter drawing APIs. Complete-response tests include templates, isotope/stereo cases, names, malformed input and optional source fixtures. Concurrent imports keep separate layout results. Transport tests forbid native parsing, H removal, sanitization, Kekulé/wedge generation and drawing conversion. Explicit zero atom maps and independent atom/bond aromatic flags survive transport.
 

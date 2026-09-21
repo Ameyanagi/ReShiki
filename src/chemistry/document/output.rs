@@ -43,6 +43,22 @@ impl Drawing {
     pub fn molecule(&self) -> &Molecule {
         &self.molecule
     }
+    /// Reaction layout uses full-precision file coordinates until every row is
+    /// placed. Replace canvas positions before validating the finished drawing;
+    /// the conformer used for stereochemistry remains unchanged.
+    pub(crate) fn finish_at(
+        mut self,
+        labels: Labels,
+        positions: &[Point],
+    ) -> Result<Document, Error> {
+        if positions.len() != self.document.atoms.len() {
+            return Err(invalid("Reaction drawing position dimensions changed"));
+        }
+        for (atom, position) in self.document.atoms.iter_mut().zip(positions) {
+            atom.position = *position;
+        }
+        self.finish(labels)
+    }
     pub fn finish(mut self, labels: Labels) -> Result<Document, Error> {
         if labels.rdkit_version != RDKIT_VERSION
             || labels.atoms.len() != self.document.atoms.len()

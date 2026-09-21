@@ -9,6 +9,8 @@ use std::{
     collections::{BTreeSet, HashMap, HashSet},
     fmt::Write,
 };
+mod drawing;
+pub use drawing::Drawing;
 
 /// Parsed participants in file order; drawing placement is a separate operation.
 #[derive(Clone, Debug, serde::Serialize)]
