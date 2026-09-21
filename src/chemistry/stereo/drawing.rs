@@ -10,6 +10,7 @@ use crate::chemistry::{
 };
 use serde::{Deserialize, Serialize};
 mod bonds;
+pub mod wedging;
 pub use bonds::{BondGeometry, detect_bond_stereo, double_bond_directions};
 
 #[cfg(test)]

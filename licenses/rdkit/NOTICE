@@ -23,8 +23,11 @@ Copyright (C) 2014 Greg Landrum, adapted from pseudocode from Roger Sayle.
 Code/RDGeneral/hanoiSort.h (partition merge sort)
 Copyright (C) 2014-2025 Greg Landrum and other RDKit contributors.
 
-Code/GraphMol/Atropisomers.cpp (controlling-neighbor ordering and stereo-group repair)
+Code/GraphMol/Atropisomers.cpp (controlling-neighbor ordering, stereo-group repair and 2D/3D wedging)
 Copyright (C) 2004-2021 Tad hurst/CDD and other RDKit contributors.
+
+Code/GraphMol/WedgeBonds.cpp (wedge selection, orientation and optional second wedges)
+Copyright (C) 2023 Greg Landrum and other RDKit contributors.
 
 Code/GraphMol/Chirality.cpp (chiral-tag, permutation and stereo-group cleanup; wedge geometry, double-bond geometry, direction propagation, legacy CIP priorities and stereo perception)
 Copyright (C) 2004-2024 Greg Landrum and other RDKit contributors.
