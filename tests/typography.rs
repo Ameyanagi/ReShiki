@@ -187,6 +187,7 @@ async fn cdxml_uses_rendered_text_metrics_and_keeps_caption_position() {
 fn japanese_fallback_uses_real_advances_and_keeps_document_styles() {
     let style = TextStyle::default();
     let (family, advance) = reshiki::style::glyph_metrics('水', &style);
+    let (latin_family, _) = reshiki::style::glyph_metrics('H', &style);
     if family == "Arial" {
         return;
     } // Minimal CI images may not install any CJK font.
@@ -204,7 +205,9 @@ fn japanese_fallback_uses_real_advances_and_keeps_document_styles() {
         layout
             .fragments
             .iter()
-            .any(|r| r.style.family == "Arial" && r.text.contains("H"))
+            // Arial is not installed on every platform. Rendering resolves a
+            // real Latin face while the document keeps its requested family.
+            .any(|r| r.style.family == latin_family && r.text.contains("H"))
     );
     let measured = reshiki::style::styled_text_width("水素化 H₂O", style.size(), &style);
     assert!((layout.width - measured).abs() < 0.01);
