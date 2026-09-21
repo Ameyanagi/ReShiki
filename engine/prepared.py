@@ -219,6 +219,30 @@ def restore(data, document=None, *, file=None):
     return _ring_annotations(mol, [p["ring_members"] for p in properties["atoms"]])
 
 
+def label_reaction(parts):
+    """Label detached participants; their parsing and layout have already finished."""
+    if not isinstance(parts, list) or not 2 <= len(parts) <= 10000:
+        raise ValueError("Invalid prepared reaction participants")
+    total, ids = 0, set()
+    for part in parts:
+        if (
+            not isinstance(part, dict)
+            or set(part) != {"molecule", "file"}
+            or not isinstance(part["molecule"], dict)
+            or not isinstance(part["file"], dict)
+        ):
+            raise ValueError("Invalid prepared reaction participant")
+        atom_ids = part["molecule"].get("ids", [])
+        total += len(atom_ids)
+        if not atom_ids or total > 10000 or ids.intersection(atom_ids):
+            raise ValueError("Invalid prepared reaction atom count or identities")
+        ids.update(atom_ids)
+    return dict(
+        rdkit_version=rdBase.rdkitVersion,
+        labels=[label_drawing(restore(p["molecule"], file=p["file"])) for p in parts],
+    )
+
+
 def label_drawing(mol):
     """Full CIP labels, including the bond-stereo controls the native pass changes."""
     for item in list(mol.GetAtoms()) + list(mol.GetBonds()):

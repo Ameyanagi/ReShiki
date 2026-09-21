@@ -7,15 +7,107 @@ from pathlib import Path
 from unittest.mock import patch
 
 from rdkit import Chem, RDConfig
-from rdkit.Chem import rdCIPLabeler, rdDepictor
+from rdkit.Chem import rdChemReactions, rdCIPLabeler, rdDepictor
 
 from engine import prepared, worker
 from tests.document_preparation_reference import drawing, prepare
 from tests.molfile_import_reference import annotation_cases, native_molecules, read
 from tests.perception_reference import snapshot
+from tests.reaction_drawing_reference import expected as reaction_drawing
 
 
 class PreparedMoleculeTests(unittest.TestCase):
+    def test_rxn_import_bridge_only_labels_and_analyzes_prepared_graphs(self):
+        for text in (
+            "CCO.O>O>CC=O.O",
+            "F[C@](Cl)(Br)I>>F[C@@](Cl)(Br)I",
+            "c1ccccc1>C[C@@H](N)C(=O)O>c1ccccc1O",
+            "F/C=C/F>>F/C=C\\F",
+        ):
+            with self.subTest(text=text):
+                reaction = rdChemReactions.ReactionFromSmarts(text, useSmiles=True)
+                block = rdChemReactions.ReactionToV3KRxnBlock(reaction, separateAgents=True)
+                drawing = json.loads(json.dumps(reaction_drawing(block)))
+                expected = worker.handle(
+                    dict(protocol=1, operation="import", format="rxn", text=block)
+                )
+                analysis_graph = json.loads(json.dumps(prepare(drawing["document"])))
+                label_request = dict(
+                    protocol=1,
+                    operation="label_reaction",
+                    format="rxn",
+                    prepared_parts=drawing["participants"],
+                )
+                analysis_request = dict(
+                    protocol=1,
+                    operation="import",
+                    format="rxn",
+                    text="Must not be reparsed",
+                    prepared_reaction=True,
+                    prepared_molecule=analysis_graph,
+                    document=drawing["document"],
+                )
+                with (
+                    patch.object(
+                        rdChemReactions,
+                        "ReactionFromRxnBlock",
+                        side_effect=AssertionError("Native RXN read"),
+                    ),
+                    patch.object(
+                        Chem, "MolFromMolBlock", side_effect=AssertionError("Native MOL read")
+                    ),
+                    patch.object(
+                        Chem, "SanitizeMol", side_effect=AssertionError("Native sanitize")
+                    ),
+                    patch.object(
+                        Chem, "AssignStereochemistry", side_effect=AssertionError("Native stereo")
+                    ),
+                    patch.object(Chem, "Kekulize", side_effect=AssertionError("Native Kekulé")),
+                    patch.object(
+                        Chem, "WedgeMolBonds", side_effect=AssertionError("Native wedges")
+                    ),
+                    patch.object(
+                        rdDepictor, "Compute2DCoords", side_effect=AssertionError("Native layout")
+                    ),
+                    patch.object(
+                        worker, "from_document", side_effect=AssertionError("Native preparation")
+                    ),
+                    patch.object(
+                        worker, "to_document", side_effect=AssertionError("Native drawing")
+                    ),
+                ):
+                    self.assertEqual(
+                        worker.handle(label_request),
+                        dict(rdkit_version=worker.rdBase.rdkitVersion, labels=drawing["labels"]),
+                    )
+                    expected["document"] = None
+                    self.assertEqual(worker.handle(analysis_request), expected)
+                    for override in (
+                        dict(prepared_parts=None),
+                        dict(prepared_parts=[]),
+                        dict(prepared_parts={}),
+                        dict(prepared_parts=[{}]),
+                        dict(prepared_parts=[drawing["participants"][0]] * 2),
+                        dict(prepared_parts=drawing["participants"] * 10001),
+                        dict(operation="analyze"),
+                        dict(format="rsmi"),
+                        dict(prepared_reaction=True),
+                        dict(prepared_molecule=analysis_graph),
+                        dict(protocol=2),
+                    ):
+                        with self.assertRaises(ValueError):
+                            worker.handle({**label_request, **override})
+                    for override in (
+                        dict(prepared_molecule=None),
+                        dict(document=None),
+                        dict(format="mol"),
+                        dict(operation="analyze"),
+                        dict(prepared_reaction="true"),
+                        dict(prepared_drawing=analysis_graph),
+                    ):
+                        with self.assertRaises(ValueError):
+                            worker.handle({**analysis_request, **override})
+
     def test_smiles_import_only_uses_native_layout_identifiers_and_full_cip(self):
         for text in (
             "CCO",

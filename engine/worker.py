@@ -964,6 +964,31 @@ def export_cdxml(
 def handle(request):
     if request.get("protocol") != 1:
         raise ValueError("Unsupported protocol version")
+    prepared_reaction = request.get("prepared_reaction", False)
+    if not isinstance(prepared_reaction, bool):
+        raise ValueError("prepared_reaction must be a boolean")
+    if prepared_reaction and (
+        request.get("operation") != "import"
+        or request.get("format") != "rxn"
+        or not isinstance(request.get("document"), dict)
+        or not isinstance(request.get("prepared_molecule"), dict)
+        or any(
+            request.get(key) is not None
+            for key in ("prepared_parts", "prepared_import", "prepared_drawing")
+        )
+    ):
+        raise ValueError("Prepared reaction analysis requires an RXN drawing and molecule")
+    if request.get("prepared_parts") is not None and request.get("operation") != "label_reaction":
+        raise ValueError("Prepared participants require reaction labeling")
+    if request.get("operation") == "label_reaction" and (
+        request.get("format") != "rxn"
+        or prepared_reaction
+        or any(
+            request.get(key) is not None
+            for key in ("prepared_molecule", "prepared_import", "prepared_drawing", "document")
+        )
+    ):
+        raise ValueError("Reaction labeling requires detached RXN participants")
     prepared_import = request.get("prepared_import")
     if prepared_import is not None and (
         not isinstance(prepared_import, dict)
@@ -1013,6 +1038,15 @@ def handle(request):
     analyzer = partial(analyze, local_properties=local_properties)
     operation = request["operation"]
     response = {"engine_version": rdBase.rdkitVersion, "warnings": []}
+    if operation == "label_reaction":
+        return prepared.label_reaction(request.get("prepared_parts"))
+    if prepared_reaction:
+        doc = request["document"]
+        reactions.validate(doc)
+        mol = prepared.restore(request["prepared_molecule"], doc)
+        check_supported(mol)
+        response.update(document=None, analysis=analyzer(mol))
+        return response
     if operation == "layout_import":
         if prepared_import is None:
             raise ValueError("Import layout requires a prepared molecule")

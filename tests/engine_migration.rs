@@ -18,6 +18,71 @@ async fn rust_smiles_import_preserves_complete_reference_responses() -> TestResu
 }
 
 #[tokio::test]
+async fn rust_rxn_import_preserves_complete_reference_responses() -> TestResult {
+    import_responses("rxn", "tests/reaction_engine_reference.py").await
+}
+
+#[tokio::test]
+async fn overlapping_reaction_imports_keep_labels_and_analysis_with_their_drawing() -> TestResult {
+    let local = LocalEngine::default();
+    let reference = PythonEngine::default();
+    let mut tasks = tokio::task::JoinSet::new();
+    for text in [
+        "CCO.O>O>CC=O.O",
+        "F[C@](Cl)(Br)I>>F[C@@](Cl)(Br)I",
+        "c1ccccc1>C[C@@H](N)C(=O)O>c1ccccc1O",
+        "F/C=C/F>>F/C=C\\F",
+    ] {
+        let doc = reference
+            .execute(Request::import("rsmi", text))
+            .await
+            .map_err(anyhow::Error::msg)?
+            .document
+            .context("Missing reaction document")?;
+        let mut export = Request::molecule("export", doc);
+        export.format = Some("rxn".into());
+        let block = reference
+            .execute(export)
+            .await
+            .map_err(anyhow::Error::msg)?
+            .output
+            .context("Missing reaction file")?;
+        for text in [
+            block.as_str(),
+            "invalid",
+            block
+                .get(..block.len() / 2)
+                .context("Truncation boundary")?,
+        ] {
+            let request = Request::import("rxn", text);
+            let expected = reference.execute(request.clone()).await;
+            let engine = local.clone();
+            tasks.spawn(async move { (engine.execute(request).await, expected) });
+        }
+    }
+    while let Some(result) = tasks.join_next().await {
+        match result? {
+            (Ok(actual), Ok(expected)) => assert_response_matches(actual, expected)?,
+            (Err(_), Err(_)) => (),
+            (actual, expected) => {
+                anyhow::bail!("Reaction import changed: {actual:?} != {expected:?}")
+            }
+        }
+    }
+    let request = Request::import_smiles("N[C@@H](C)C(=O)O");
+    assert_response_matches(
+        local
+            .execute(request.clone())
+            .await
+            .map_err(anyhow::Error::msg)?,
+        reference
+            .execute(request)
+            .await
+            .map_err(anyhow::Error::msg)?,
+    )
+}
+
+#[tokio::test]
 async fn overlapping_imports_keep_their_own_layout_and_recover_after_errors() -> TestResult {
     let local = LocalEngine::default();
     let reference = PythonEngine::default();
@@ -506,6 +571,68 @@ async fn ambiguous_ring_pruning_keeps_the_complete_reference_analysis() -> TestR
                 .map_err(anyhow::Error::msg)?,
         )?;
     }
+    // RXN import retains the same narrow fallback when participant parsing
+    // encounters a ring order that cannot yet be certified across platforms.
+    // Use a supported element with unrestricted valence: native RXN export
+    // writes dummy atoms as R labels, which the original analysis cannot read.
+    for atom in &mut document.atoms {
+        atom.element = "Fe".into();
+    }
+    let product = document.add_atom("O", reshiki::document::Point::new(600., 0.));
+    let arrow = product.checked_add(1).context("Arrow ID overflow")?;
+    document.arrows.push(reshiki::document::Arrow::new(
+        arrow,
+        reshiki::document::Point::new(420., 0.),
+        reshiki::document::Point::new(560., 0.),
+        Default::default(),
+        Default::default(),
+    ));
+    let mut roles = reshiki::reactions::Reaction::new(arrow);
+    roles.reactants.push(reshiki::reactions::Participant {
+        atoms: ids,
+        coefficient: 1,
+    });
+    roles.products.push(reshiki::reactions::Participant {
+        atoms: vec![product],
+        coefficient: 1,
+    });
+    document.reactions.push(roles);
+    let mut request = Request::molecule("export", document);
+    request.format = Some("rxn".into());
+    let block = reference
+        .execute(request)
+        .await
+        .map_err(anyhow::Error::msg)?
+        .output
+        .context("Missing dense-ring reaction")?;
+    let error = reshiki::chemistry::reaction::read_rxn(&block)
+        .err()
+        .context("Expected unresolved reaction ring ordering")?;
+    assert!(
+        matches!(
+            error,
+            reshiki::chemistry::molfile::ReadError::Sanitization(
+                reshiki::chemistry::sanitize::Error {
+                    cause: reshiki::chemistry::sanitize::Cause::Rings(
+                        reshiki::chemistry::rings::RingError::UnresolvedOrdering
+                    ),
+                    ..
+                }
+            )
+        ),
+        "{error}"
+    );
+    let request = Request::import("rxn", &block);
+    assert_response_matches(
+        local
+            .execute(request.clone())
+            .await
+            .map_err(anyhow::Error::msg)?,
+        reference
+            .execute(request)
+            .await
+            .map_err(anyhow::Error::msg)?,
+    )?;
     Ok(())
 }
 

@@ -6,6 +6,7 @@ use tokio::{
     process::{Child, ChildStdin, ChildStdout, Command},
     sync::Mutex,
 };
+mod reaction;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Request {
@@ -329,6 +330,15 @@ impl PythonEngine {
         }
         if let Some(doc) = &request.document {
             doc.validate()?;
+        }
+        if self.local_documents
+            && request.operation == "import"
+            && request.format.as_deref() == Some("rxn")
+            && let Some(response) = self
+                .import_rxn(request.text.clone().unwrap_or_default())
+                .await?
+        {
+            return Ok(response);
         }
         let prepared_molecule = if self.local_documents
             && request.operation == "import"
