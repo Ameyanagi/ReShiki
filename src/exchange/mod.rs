@@ -2,6 +2,7 @@
 //! The Python codec is retained as a differential test oracle during migration.
 mod charsets;
 mod decode;
+pub mod drawing;
 mod encode;
 mod schema;
 mod values;

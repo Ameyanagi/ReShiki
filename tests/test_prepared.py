@@ -15,6 +15,56 @@ from tests.perception_reference import snapshot
 
 
 class PreparedMoleculeTests(unittest.TestCase):
+    def test_prepared_editable_export_skips_all_native_drawing_writers(self):
+        for text in ("c1ccccc1", "C[C@H](N)C(=O)O", "[13CH3:90][NH3+]", "N->[Cu+2]"):
+            doc = worker.handle(dict(protocol=1, operation="import", format="smiles", text=text))[
+                "document"
+            ]
+            payload = json.loads(json.dumps(prepare(doc)))
+            for fmt in ("cdxml", "cdx"):
+                request = dict(protocol=1, operation="export", document=doc, format=fmt)
+                expected = worker.handle(request)
+                request.update(
+                    prepared_molecule=payload, prepared_drawing=payload, local_drawing_output=True
+                )
+                with (
+                    patch.object(
+                        worker, "export_cdxml", side_effect=AssertionError("Native XML writer")
+                    ),
+                    patch.object(
+                        worker, "to_cdx", side_effect=AssertionError("Native binary writer")
+                    ),
+                    patch.object(worker, "from_document", side_effect=AssertionError("Reprepared")),
+                    patch.object(
+                        worker, "to_document", side_effect=AssertionError("Reconstructed")
+                    ),
+                ):
+                    actual = worker.handle(request)
+                    self.assertIsNone(actual["output"])
+                    self.assertIsNone(actual["document"])
+                    self.assertEqual(actual["analysis"], expected["analysis"])
+                    self.assertEqual(actual["warnings"], expected["warnings"])
+                    self.assertIn("drawing_labels", actual)
+                    for field in ("prepared_molecule", "prepared_drawing"):
+                        with self.assertRaisesRegex(ValueError, "requires a prepared"):
+                            worker.handle({**request, field: None})
+                    for value in ("true", 1, None):
+                        with self.assertRaisesRegex(ValueError, "must be a boolean"):
+                            worker.handle({**request, "local_drawing_output": value})
+        empty = dict(
+            protocol=1,
+            operation="export",
+            format="cdxml",
+            document=dict(atoms=[], bonds=[]),
+            local_drawing_output=True,
+        )
+        with patch.object(
+            worker, "export_cdxml", side_effect=AssertionError("Empty drawing writer")
+        ):
+            self.assertIsNone(worker.handle(empty)["output"])
+        with self.assertRaisesRegex(ValueError, "requires a prepared"):
+            worker.handle({**empty, "format": "smiles"})
+
     def test_prepared_mol_export_skips_native_writer(self):
         for text in ("c1ccccc1", "C[C@H](N)C(=O)O", "[13CH3:90][NH3+]", "N->[Cu+2]"):
             doc = worker.handle(dict(protocol=1, operation="import", format="smiles", text=text))[

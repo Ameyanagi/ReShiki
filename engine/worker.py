@@ -979,6 +979,20 @@ def handle(request):
         or request.get("prepared_molecule") is None
     ):
         raise ValueError("Local MOL output requires a prepared molecular export")
+    local_drawing_output = request.get("local_drawing_output", False)
+    if not isinstance(local_drawing_output, bool):
+        raise ValueError("local_drawing_output must be a boolean")
+    if local_drawing_output and (
+        request.get("operation") != "export"
+        or request.get("format") not in ("cdxml", "cdx")
+        or (
+            request.get("document", {}).get("atoms")
+            and (
+                request.get("prepared_molecule") is None or request.get("prepared_drawing") is None
+            )
+        )
+    ):
+        raise ValueError("Local drawing output requires a prepared drawing export")
     picture_exports = request.get("picture_exports", {}) if local_pictures else None
     if local_pictures and not isinstance(picture_exports, dict):
         raise ValueError("Prepared picture exports must be an object")
@@ -1064,6 +1078,9 @@ def handle(request):
         doc = request["document"]
         if not doc["atoms"]:
             if operation == "export" and request.get("format") in ("cdxml", "cdx"):
+                if local_drawing_output:
+                    response.update(document=doc, analysis=None, output=None)
+                    return response
                 output = export_cdxml(
                     doc,
                     request.get("text_layout"),
@@ -1093,7 +1110,11 @@ def handle(request):
             return response
         prepared_molecule = request.get("prepared_molecule")
         if prepared_molecule is not None:
-            if operation != "analyze" and request.get("format") not in ("mol", "smiles", "inchi"):
+            if (
+                operation != "analyze"
+                and request.get("format") not in ("mol", "smiles", "inchi")
+                and not local_drawing_output
+            ):
                 raise ValueError("Prepared molecules are not supported for this operation")
             mol = prepared.restore(prepared_molecule, doc)
             check_supported(mol)
@@ -1134,17 +1155,20 @@ def handle(request):
             elif fmt == "inchi":
                 response["output"] = Chem.MolToInchi(mol)
             elif fmt in ("cdxml", "cdx"):
-                output = export_cdxml(
-                    result_doc,
-                    request.get("text_layout"),
-                    request.get("graphic_paths"),
-                    request.get("graphic_parts"),
-                    request.get("atom_indicators"),
-                    picture_exports,
-                )
-                response["output"] = (
-                    base64.b64encode(to_cdx(output)).decode("ascii") if fmt == "cdx" else output
-                )
+                if local_drawing_output:
+                    response["output"] = None
+                else:
+                    output = export_cdxml(
+                        result_doc,
+                        request.get("text_layout"),
+                        request.get("graphic_paths"),
+                        request.get("graphic_parts"),
+                        request.get("atom_indicators"),
+                        picture_exports,
+                    )
+                    response["output"] = (
+                        base64.b64encode(to_cdx(output)).decode("ascii") if fmt == "cdx" else output
+                    )
             else:
                 raise ValueError("Unsupported export format")
     else:

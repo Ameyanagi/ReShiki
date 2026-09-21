@@ -30,7 +30,19 @@ fn assert_response_matches(actual: Response, expected: Response) -> TestResult {
             );
         }
     }
-    assert_eq!(actual, expected);
+    if actual != expected {
+        std::fs::create_dir_all("artifacts")?;
+        let name = std::thread::current().name().unwrap_or("engine").to_owned();
+        std::fs::write(
+            format!("artifacts/{name}-actual.json"),
+            serde_json::to_vec_pretty(&actual)?,
+        )?;
+        std::fs::write(
+            format!("artifacts/{name}-expected.json"),
+            serde_json::to_vec_pretty(&expected)?,
+        )?;
+        anyhow::bail!("Engine response mismatch; see artifacts/{name}-{{actual,expected}}.json");
+    }
     Ok(())
 }
 
@@ -330,17 +342,27 @@ async fn ambiguous_ring_pruning_keeps_the_complete_reference_analysis() -> TestR
     for bond in &graph.bonds {
         document.add_bond(ids[bond.a], ids[bond.b], 1, "plain");
     }
-    let request = Request::molecule("analyze", document);
-    assert_response_matches(
-        LocalEngine::default()
-            .execute(request.clone())
-            .await
-            .map_err(anyhow::Error::msg)?,
-        PythonEngine::default()
-            .execute(request)
-            .await
-            .map_err(anyhow::Error::msg)?,
-    )?;
+    let local = LocalEngine::default();
+    let reference = PythonEngine::default();
+    for (operation, format) in [
+        ("analyze", None),
+        ("export", Some("mol")),
+        ("export", Some("cdxml")),
+        ("export", Some("cdx")),
+    ] {
+        let mut request = Request::molecule(operation, document.clone());
+        request.format = format.map(str::to_owned);
+        assert_response_matches(
+            local
+                .execute(request.clone())
+                .await
+                .map_err(anyhow::Error::msg)?,
+            reference
+                .execute(request)
+                .await
+                .map_err(anyhow::Error::msg)?,
+        )?;
+    }
     Ok(())
 }
 

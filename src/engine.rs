@@ -296,8 +296,11 @@ impl PythonEngine {
         let prepared_molecule = if self.local_documents
             && (request.operation == "analyze"
                 || request.operation == "export"
-                    && matches!(request.format.as_deref(), Some("smiles" | "mol" | "inchi")))
-            && let Some(document) = request.document.clone()
+                    && matches!(
+                        request.format.as_deref(),
+                        Some("smiles" | "mol" | "inchi" | "cdxml" | "cdx")
+                    ))
+            && let Some(document) = request.document.clone().filter(|d| !d.atoms.is_empty())
         {
             tokio::task::spawn_blocking(move || {
                 use crate::chemistry::{document, rings::RingError, sanitize};
@@ -324,6 +327,15 @@ impl PythonEngine {
         let local_mol_output = prepared_molecule.is_some()
             && request.operation == "export"
             && request.format.as_deref() == Some("mol");
+        let local_drawing_output = self.local_documents
+            && request.operation == "export"
+            && matches!(request.format.as_deref(), Some("cdxml" | "cdx"))
+            && (prepared_molecule.is_some()
+                || request
+                    .document
+                    .as_ref()
+                    .is_some_and(|d| d.atoms.is_empty()));
+        let drawing_export = local_drawing_output.then(|| request.clone());
         let prepared_aromatic = if self.local_documents
             && request.operation == "aromatic"
             && let Some(document) = request.document.clone()
@@ -347,6 +359,7 @@ impl PythonEngine {
             None
         };
         let picture_exports = if self.local_pictures
+            && !local_drawing_output
             && request.operation == "export"
             && matches!(request.format.as_deref(), Some("cdxml" | "cdx"))
             && let Some(document) = request.document.clone()
@@ -393,6 +406,9 @@ impl PythonEngine {
             }
             if local_mol_output {
                 envelope.insert("local_mol_output".into(), true.into());
+            }
+            if local_drawing_output {
+                envelope.insert("local_drawing_output".into(), true.into());
             }
             if let Some(draft) = &prepared_aromatic {
                 envelope.insert(
@@ -495,6 +511,28 @@ impl PythonEngine {
                     }
                     if properties {
                         crate::chemistry::complete_analysis(&mut result)?;
+                    }
+                    if let Some(request) = drawing_export {
+                        let object = result.as_object_mut().ok_or("Invalid chemistry response")?;
+                        let document: Document = serde_json::from_value(
+                            object
+                                .get("document")
+                                .ok_or("Missing drawing for export")?
+                                .clone(),
+                        )
+                        .map_err(|e| format!("Invalid exported drawing: {e}"))?;
+                        let xml = crate::exchange::drawing::write(
+                            &document,
+                            crate::exchange::drawing::Options::from(&request),
+                        )
+                        .map_err(|e| e.to_string())?;
+                        let output = if request.format.as_deref() == Some("cdx") {
+                            use base64::{Engine, engine::general_purpose::STANDARD};
+                            STANDARD.encode(crate::exchange::to_cdx(&xml)?)
+                        } else {
+                            xml
+                        };
+                        object.insert("output".into(), output.into());
                     }
                     if pictures {
                         crate::pictures::exchange::complete_imports(result)
