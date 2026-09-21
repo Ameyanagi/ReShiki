@@ -54,7 +54,7 @@ pub(super) fn read(r: &mut Reader<'_>, p: &mut Parsed, n: usize, e: usize) -> Re
         let line = r.next()?;
         let a = r.index(r.field_integer(line, 0, 3)?, n)?;
         let b = r.index(r.field_integer(line, 3, 6)?, n)?;
-        let kind = order(r.field_integer(line, 6, 9)?, false)?;
+        let (kind, props) = order(r.field_integer(line, 6, 9)?, false);
         let code = r.optional_integer(line, 9, 12).unwrap_or(0);
         let dir = match code {
             1 => Direction::Wedge,
@@ -67,17 +67,19 @@ pub(super) fn read(r: &mut Reader<'_>, p: &mut Parsed, n: usize, e: usize) -> Re
         if r.optional_integer(line, 15, 18).unwrap_or(0) != 0 {
             return Err(ReadError::Unsupported("bond topology query"));
         }
-        p.bond(a, b, kind, dir);
+        p.bond(a, b, kind, dir, props);
     }
     properties(r, p)
 }
 
 fn properties(r: &mut Reader<'_>, p: &mut Parsed) -> Result<()> {
+    let mut groups = std::mem::take(&mut p.groups);
     let mut first_charge = true;
     let mut first_line = true;
     loop {
         let line = r.next()?;
         if line.starts_with("M  END") {
+            p.groups = groups;
             return Ok(());
         }
         if line.starts_with("$$$$") || first_line && line.is_empty() {
@@ -155,6 +157,7 @@ fn properties(r: &mut Reader<'_>, p: &mut Parsed) -> Result<()> {
                             14 => 0,
                             _ => return Err(ReadError::Unsupported("ZBO bond type")),
                         };
+                        p.bonds.get_mut(index).ok_or(ReadError::Limit)?.unspecified = false;
                         continue;
                     }
                     let atom = p
@@ -197,8 +200,10 @@ fn properties(r: &mut Reader<'_>, p: &mut Parsed) -> Result<()> {
             "M  PXA" => {
                 r.index(r.field_integer(line, 7, 10)?, p.graph.atoms.len())?;
             }
-            "M  STY" | "M  SAL" | "M  SDT" | "M  SDD" | "M  SED" | "M  SCD" => {
-                return Err(ReadError::Pending("substance groups"));
+            "M  STY" | "M  SAL" | "M  SDT" | "M  SDD" | "M  SED" | "M  SCD" | "M  SST"
+            | "M  SLB" | "M  SCN" | "M  SDS" | "M  SBL" | "M  SPA" | "M  SMT" | "M  SDI"
+            | "M  SBV" | "M  SPL" | "M  SNC" | "M  SAP" | "M  SCL" | "M  SBT" => {
+                groups.read_v2000(r, p, line)?
             }
             "M  LIN" => {
                 let count = r.count(r.field_integer(line, 6, 9)?, 999)?;

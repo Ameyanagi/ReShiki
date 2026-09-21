@@ -11,6 +11,7 @@ use crate::chemistry::{
     stereo::{self, Point3, perception},
 };
 use std::str::Lines;
+mod groups;
 mod v2000;
 mod v3000;
 
@@ -156,12 +157,19 @@ struct FileAtom {
     hyd_override: bool,
     attachment: bool,
 }
+#[derive(Default)]
+struct FileBond {
+    unspecified: bool,
+    query: bool,
+}
 struct Parsed {
     graph: Graph,
     metadata: Metadata,
     directions: Vec<Direction>,
     positions: Vec<Point3>,
     atoms: Vec<FileAtom>,
+    bonds: Vec<FileBond>,
+    groups: groups::Groups,
     chirality: bool,
     marked_3d: bool,
 }
@@ -176,6 +184,8 @@ impl Parsed {
             directions: Vec::new(),
             positions: Vec::new(),
             atoms: Vec::new(),
+            bonds: Vec::new(),
+            groups: groups::Groups::default(),
             chirality: false,
             marked_3d,
         }
@@ -186,7 +196,7 @@ impl Parsed {
         self.metadata.atoms.push(meta);
         self.atoms.push(props);
     }
-    fn bond(&mut self, a: usize, b: usize, order: u8, dir: Direction) {
+    fn bond(&mut self, a: usize, b: usize, order: u8, dir: Direction, props: FileBond) {
         // Graph validation also rejects self-bonds and duplicate endpoints.
         // Unlike the drawing bridge, file parsing marks only aromatic bonds.
         // Sanitization later determines atom aromaticity, including the native
@@ -202,6 +212,7 @@ impl Parsed {
             ..BondMetadata::default()
         });
         self.directions.push(dir);
+        self.bonds.push(props);
     }
     fn finish(mut self) -> Result<Molecule> {
         self.graph.validate().map_err(ReadError::Chemistry)?;
@@ -223,6 +234,11 @@ impl Parsed {
                 atom.explicit_hydrogens = u8::try_from(hs)
                     .map_err(|_| ReadError::Unsupported("excessive explicit hydrogens"))?;
             }
+        }
+        let groups = std::mem::take(&mut self.groups);
+        groups.apply(&mut self)?;
+        if self.bonds.iter().any(|b| b.unspecified || b.query) {
+            return Err(ReadError::Unsupported("query or unspecified bond order"));
         }
         let is_3d = self.positions.iter().any(|p| p.z.abs() > 1e-3)
             || self.marked_3d && !self.chirality && !self.graph.atoms.is_empty();
@@ -322,14 +338,24 @@ impl Parsed {
     }
 }
 
-fn order(code: i32, v3000: bool) -> Result<u8> {
-    match code {
-        1..=4 => Ok(code as u8),
-        9 => Ok(5),
-        10 if v3000 => Ok(0),
-        _ => Err(ReadError::Unsupported("query or unspecified bond order")),
-    }
+fn order(code: i32, v3000: bool) -> (u8, FileBond) {
+    let kind = match code {
+        1..=4 => code as u8,
+        9 => 5,
+        10 if v3000 => 0,
+        _ => {
+            return (
+                0,
+                FileBond {
+                    unspecified: true,
+                    query: code != 0,
+                },
+            );
+        }
+    };
+    (kind, FileBond::default())
 }
+
 fn radical(code: i32) -> Result<u8> {
     match code {
         0 => Ok(0),

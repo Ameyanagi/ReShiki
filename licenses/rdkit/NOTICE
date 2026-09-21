@@ -41,6 +41,15 @@ Copyright (C) 2003-2023 Greg Landrum and other RDKit contributors.
 Code/GraphMol/FileParsers/MolFileParser.cpp (V2000/V3000 molecular input)
 Copyright (C) 2002-2021 Greg Landrum and other RDKit contributors.
 
+Code/GraphMol/FileParsers/MolSGroupParsing.cpp (substance-group records and data fields)
+Copyright (C) 2002-2018 Greg Landrum and T5 Informatics GmbH.
+
+Code/GraphMol/SubstanceGroup.h and SubstanceGroup.cpp (group types and membership validation)
+Copyright (C) 2018-2020 Greg Landrum and T5 Informatics GmbH.
+
+Code/GraphMol/RWMol.cpp (hydrogen adjustment when replacing coordinate bonds)
+Copyright (C) 2003-2024 Greg Landrum and other RDKit contributors.
+
 Code/Geometry/point.h and point.cpp (stereo vector and dihedral arithmetic)
 Copyright (C) 2003-2025 Greg Landrum and other RDKit contributors.
 

@@ -72,15 +72,18 @@ fn molecular_file_import_matches_native_reader() -> anyhow::Result<()> {
         serde_json::from_str(&lines.next().context("Missing reference version")??)?;
     assert_eq!(version["rdkit_version"], RDKIT_VERSION);
     let (mut accepted, mut rejected, mut mismatches) = (0, 0, 0);
+    let (mut groups_accepted, mut groups_rejected) = (0, 0);
     let mut pending = BTreeMap::<String, usize>::new();
     let mut failures = Vec::new();
     let mut all_failures = Vec::new();
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
         let result = molfile::read(&case.text);
+        let group_case = case.name.starts_with("substance groups/");
         let failure = match (&result, &case.expected) {
             (Ok(actual), Some(expected)) => {
                 accepted += 1;
+                groups_accepted += usize::from(group_case);
                 difference(
                     &serde_json::json!({"state":actual.state,"positions":actual.positions}),
                     expected,
@@ -93,6 +96,7 @@ fn molecular_file_import_matches_native_reader() -> anyhow::Result<()> {
             }
             (Err(_), None) => {
                 rejected += 1;
+                groups_rejected += usize::from(group_case);
                 None
             }
             (Err(error), Some(_)) => Some(format!("Rejected supported input: {error}")),
@@ -129,16 +133,51 @@ fn molecular_file_import_matches_native_reader() -> anyhow::Result<()> {
     eprintln!(
         "MOL import: {accepted} accepted, {rejected} rejected, {mismatches} mismatches, pending {pending:?}"
     );
+    eprintln!("Substance groups: {groups_accepted} accepted, {groups_rejected} rejected");
     assert!(failures.is_empty(), "{}", failures.join("\n"));
     assert!(
-        pending.keys().all(|reason| reason == "substance groups"),
+        pending
+            .keys()
+            .all(|reason| reason == "substance-group SMARTS validation"),
         "Unexpected pending import operation: {pending:?}"
     );
     assert!(
         accepted > 1000 && rejected > 100,
         "Insufficient MOL import coverage"
     );
+    assert!(
+        groups_accepted > 500 && groups_rejected > 500,
+        "Insufficient substance-group coverage"
+    );
     Ok(())
+}
+
+#[test]
+fn group_defaults_and_fixed_fields_are_bounded() {
+    let header = "\n\n\n  0  0  0  0  0  0  0  0  0  0999 V3000\nM  V30 BEGIN CTAB\nM  V30 COUNTS 0 0 132 0 0\nM  V30 BEGIN SGROUP\n";
+    let records = (1..=132)
+        .map(|id| format!("M  V30 {id} DAT 0\n"))
+        .collect::<String>();
+    let input = format!(
+        "{header}M  V30 DEFAULT FIELDNAME={}\n{records}M  V30 END SGROUP\nM  V30 END CTAB\nM  END\n",
+        "x".repeat(131_072)
+    );
+    assert!(matches!(molfile::read(&input), Err(ReadError::Limit)));
+    let v2_header = "\n\n\n  0  0  0  0  0  0  0  0  0  0999 V2000\nM  STY  1   1 DAT\n";
+    assert!(molfile::read(&format!("{v2_header}M  END\n")).is_ok());
+    for prop in ["STY", "SAL", "SDT", "SCD", "SAP", "SDI"] {
+        for column in 0..30 {
+            let row = format!(
+                "M  {prop}{}酸{}",
+                " ".repeat(column),
+                " ".repeat(50 - column)
+            );
+            let input = format!("{v2_header}{row}\nM  END\n");
+            // Ignored unknown-group records may be accepted; neither result
+            // may use unchecked UTF-8 slicing or panic on short fields.
+            let _ = molfile::read(&input);
+        }
+    }
 }
 
 #[test]

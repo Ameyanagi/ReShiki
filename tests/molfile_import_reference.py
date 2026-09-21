@@ -12,10 +12,12 @@ from rdkit.Chem import rdDepictor
 
 if TYPE_CHECKING or __package__:
     from .atropisomer_reference import cases as axial_cases
+    from .molfile_groups_reference import cases as group_cases
     from .perception_reference import snapshot
     from .valence_reference import ORDERS
 else:
     from atropisomer_reference import cases as axial_cases
+    from molfile_groups_reference import cases as group_cases
     from perception_reference import snapshot
     from valence_reference import ORDERS
 
@@ -313,6 +315,8 @@ def main():
     print(json.dumps(dict(rdkit_version=rdBase.rdkitVersion)))
     rng = random.Random(98153)
     syntax_cases()
+    for name, text in group_cases():
+        emit(f"substance groups/{name}", text)
     for name, text, _ in axial_cases():
         emit(f"atropisomer/{name}", text)
     for name, original in native_molecules():

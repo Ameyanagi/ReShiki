@@ -2,8 +2,17 @@ use super::*;
 use crate::chemistry::ranking::StereoGroup;
 use std::collections::{HashMap, HashSet};
 
+// Native V3000 bookmark fields use unsigned from_chars without checking its
+// status. Preserve zero on invalid/overflowing input and signed map storage.
+fn bookmark(text: &str) -> i32 {
+    let length = text.bytes().take_while(u8::is_ascii_digit).count();
+    text.get(..length)
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(0) as i32
+}
+
 impl Reader<'_> {
-    fn v3(&mut self) -> Result<String> {
+    pub(super) fn v3(&mut self) -> Result<String> {
         let mut output = String::new();
         loop {
             let line = self.next()?;
@@ -97,16 +106,13 @@ pub(super) fn read(r: &mut Reader<'_>, p: &mut Parsed) -> Result<()> {
         .unwrap_or(0);
     let groups = r.count(groups, 100_000)?;
     let objects = r.count(objects, 100_000)?;
-    if groups != 0 {
-        return Err(ReadError::Pending("substance groups"));
-    }
     let mut indices = HashMap::new();
     if n != 0 {
         r.expect("BEGIN ATOM")?;
         for _ in 0..n {
             let line = r.v3()?;
             let tokens = r.tokens(&line)?;
-            let id = r.integer(r.token(&tokens, 0)?)?;
+            let id = bookmark(r.token(&tokens, 0)?);
             if indices.insert(id, p.graph.atoms.len()).is_some() {
                 return Err(r.invalid("Duplicate atom ID"));
             }
@@ -194,19 +200,22 @@ pub(super) fn read(r: &mut Reader<'_>, p: &mut Parsed) -> Result<()> {
         }
         r.expect("END ATOM")?;
     }
+    let mut bond_ids = HashMap::new();
     if e != 0 {
         r.expect("BEGIN BOND")?;
-        let mut ids = HashSet::new();
         for _ in 0..e {
             let line = r.v3()?;
             let tokens = r.tokens(&line)?;
-            if !ids.insert(r.integer(r.token(&tokens, 0)?)?) {
+            if bond_ids
+                .insert(bookmark(r.token(&tokens, 0)?), p.graph.bonds.len())
+                .is_some()
+            {
                 return Err(r.invalid("Duplicate bond ID"));
             }
-            let kind = order(r.integer(r.token(&tokens, 1)?)?, true)?;
+            let (kind, props) = order(bookmark(r.token(&tokens, 1)?), true);
             let endpoint = |i| -> Result<usize> {
                 indices
-                    .get(&r.integer(r.token(&tokens, i)?)?)
+                    .get(&bookmark(r.token(&tokens, i)?))
                     .copied()
                     .ok_or_else(|| r.invalid("Missing bond atom"))
             };
@@ -245,12 +254,13 @@ pub(super) fn read(r: &mut Reader<'_>, p: &mut Parsed) -> Result<()> {
                     _ => (),
                 }
             }
-            p.bond(a, b, kind, dir);
+            p.bond(a, b, kind, dir, props);
         }
         r.expect("END BOND")?;
     }
     let mut line = r.v3()?.to_ascii_uppercase();
     let mut objects_found = false;
+    let mut groups_found = false;
     while line.starts_with("LINKNODE") {
         line = r.v3()?.to_ascii_uppercase();
     }
@@ -261,7 +271,13 @@ pub(super) fn read(r: &mut Reader<'_>, p: &mut Parsed) -> Result<()> {
             continue;
         }
         if line.starts_with("BEGIN SGROUP") {
-            return Err(r.invalid("Unexpected substance group block"));
+            if groups == 0 || groups_found {
+                return Err(r.invalid("Unexpected or repeated substance group block"));
+            }
+            groups::read_v3000(r, p, groups, &indices, &bond_ids)?;
+            groups_found = true;
+            line = r.v3()?.to_ascii_uppercase();
+            continue;
         }
         if line.starts_with("BEGIN OBJ3D") {
             if objects == 0 || objects_found {
@@ -285,6 +301,9 @@ pub(super) fn read(r: &mut Reader<'_>, p: &mut Parsed) -> Result<()> {
     }
     if !line.starts_with("END CTAB") {
         return Err(r.invalid("Missing END CTAB"));
+    }
+    if groups != 0 && !groups_found {
+        return Err(r.invalid("Missing substance group block"));
     }
     if objects != 0 && !objects_found {
         return Err(r.invalid("Missing 3D constraint block"));
