@@ -117,6 +117,15 @@ class PreparedMoleculeTests(unittest.TestCase):
             with self.subTest(kind=kind), self.assertRaises(ValueError):
                 prepared.restore(value, doc)
 
+    def test_stereo_completion_is_a_computed_molecular_property(self):
+        doc = drawing(Chem.MolFromSmiles("C[C@H](O)Cl"))
+        payload = json.loads(json.dumps(prepare(doc)))
+        mol = prepared.restore(payload, doc)
+        self.assertTrue(mol.HasProp("_StereochemDone"))
+        self.assertNotIn("_StereochemDone", mol.GetPropNames(True, False))
+        mol.ClearComputedProps()
+        self.assertFalse(mol.HasProp("_StereochemDone"))
+
 
 if __name__ == "__main__":
     unittest.main()
