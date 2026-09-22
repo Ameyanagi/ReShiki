@@ -1,0 +1,68 @@
+name: Windows depiction parity
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/depiction-windows.yml"
+      - "scripts/setup_windows_depict_reference.py"
+      - "scripts/setup_linux_depict_reference.py"
+      - "tests/depict*"
+      - "tests/build_depict*"
+      - "tests/common/depict_windows.rs"
+      - "tests/fixtures/depict-*"
+      - "src/chemistry/depict/**"
+      - "crates/depict-math/**"
+permissions:
+  contents: read
+jobs:
+  depiction:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            msvc_arch: x64
+          - os: windows-11-arm
+            msvc_arch: arm64
+    runs-on: ${{ matrix.os }}
+    env:
+      UV_PYTHON: cpython-3.12-windows-x86_64-none
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup toolchain install 1.95.0 --profile minimal
+      - run: rustup default 1.95.0
+      - uses: Swatinem/rust-cache@63fed3e2fecf6f7b51dc6f043341b79ef82a9ae7 # v2.9.2
+        with:
+          shared-key: rust
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.3"
+          python-version: cpython-3.12-windows-x86_64-none
+      - run: uv sync --locked
+      - name: Select x64 MSVC for the original reference wheel
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        with:
+          arch: x64
+      - name: Build and record original native observers
+        run: uv run --locked python scripts/setup_windows_depict_reference.py
+      - name: Restore the native compiler for the Rust tests
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        with:
+          arch: ${{ matrix.msvc_arch }}
+      - name: Compare every depiction stage and the complete public pipeline
+        run: cargo test --locked --features rdkit-reference --test depict_geometry --test depict_rings --test depict_attachment --test depict_seeds --test depict_templates --test depict_collision --test depict_expansion --test depict_finalize --test depict_pipeline --no-fail-fast -- --nocapture
+      - name: Preserve native captures and runtime evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: depiction-reference-${{ matrix.os }}
+          path: |
+            artifacts/depict-live-windows/*.json*
+            artifacts/depict-live-windows/*.log
+            artifacts/depict-windows-*/compiler.log
+            artifacts/depict-windows-*/native-build.json
+            artifacts/depict-finalize-oracle/compiler.log
+            artifacts/depict-finalize-oracle/build.json
+            artifacts/depict-collision-observation/compiler.log
+            artifacts/depict-collision-observation/native-build.json
+          if-no-files-found: warn

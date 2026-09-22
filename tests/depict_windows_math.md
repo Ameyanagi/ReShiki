@@ -1,9 +1,52 @@
 # Windows CRT depiction profiles
 
-Windows x64 uses two native transcendental paths. The UCRT chooses whether to
-use FMA3 according to processor support. A fixture captured on an FMA3 machine
-therefore cannot describe every Windows x64 runner, even when both programs use
-the same original RDKit wheel and separate source-order arithmetic.
+The recorded fixtures cover two native CRT paths on the physical Windows
+capture host. Windows CRT implementations also vary across OS versions and
+processors. CI builds fresh observers against the pinned original wheel so each
+runner supplies its own exact expectations.
+
+## Fresh references on each runner
+
+`setup_windows_depict_reference.py` checks out the pinned source with LF bytes,
+verifies the Boost archive, and builds all eight x64 observers. It exports their
+paths only after every build succeeds. Windows ARM uses the x64 reference wheel
+under emulation; Rust continues to target native ARM64.
+
+The Rust tests replay the original corpus through these native observers and
+require exact f64/f32 bits, topology, ordering, and errors. Recorded fixtures
+remain cross-runtime audits. No application arithmetic, tolerance, or expected
+result is inferred from Rust output.
+
+The setup records two independent CRT probes: one inside the reference Python
+process and one compiled with MSVC `/MD`. Both record the loaded DLL path,
+SHA-256, file version, and acos/sine/cosine witnesses. Build provenance and fresh
+captures are retained by the targeted Windows depiction workflow, including
+when a test fails. The full Checks gate still runs every reference target.
+
+From an x64 MSVC developer environment:
+
+```powershell
+uv run --locked python scripts/setup_windows_depict_reference.py
+. ./artifacts/depict-live-windows/environment.ps1
+cargo test --locked --features rdkit-reference --test depict_geometry --test depict_rings --test depict_attachment --test depict_seeds --test depict_templates --test depict_collision --test depict_expansion --test depict_finalize --test depict_pipeline --no-fail-fast
+```
+
+Restore the native compiler environment before running ARM64 Rust tests.
+Observer binaries are rebuilt on each host; only the hash-checked Boost download
+is reusable.
+
+## Why a single CRT profile witness was insufficient
+
+The Windows Server 2022 run at `3aa2de5` reported the disabled-profile acos
+witness, while every one of its 35,192 ring scalars matched the physical host's
+enabled fixture. Four reflected scalars still differed from that fixture. The
+three-witness classifier could therefore identify neither complete native
+runtime. Adding more guessed profile labels would not establish native parity.
+Fresh original observers resolve the ambiguity without choosing expectations
+from Rust results. The optional static classifier now also checks independent
+ring sine/cosine witnesses and rejects unknown combinations.
+
+## Recorded physical-host profiles
 
 The Windows Server 2022 CI failure at `random-reflect/458` is reproduced by
 calling the original `RDDepict::reflectPoint` on the physical capture host, with
@@ -29,8 +72,8 @@ canonical orientations, bisectors and boxes are identical. Both captures
 contain the same 24 nonfinite one-atom rings. No projected f32 value differs
 between the profiles in this corpus.
 
-The tests ask the pinned **x64 reference interpreter** to observe these three
-UCRT witnesses. An unknown profile fails with its observed bits. On Windows
+Without live observers, the tests ask the pinned **x64 reference interpreter**
+to observe these UCRT and ring witnesses. An unknown profile fails with its observed bits. On Windows
 ARM64, this is the x64 interpreter running under emulation, as used by the
 original worker. The expected fixture is never chosen from Rust's result.
 

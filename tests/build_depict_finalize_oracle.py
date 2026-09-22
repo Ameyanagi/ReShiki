@@ -9,7 +9,6 @@ import ctypes
 import hashlib
 import json
 import os
-import platform
 import re
 import subprocess
 import sys
@@ -66,7 +65,7 @@ def main():
     adapter = b"#include <GraphMol/RWMol.h>\n#include <GraphMol/Conformer.h>\n#include <GraphMol/Depictor/EmbeddedFrag.h>\n"
     windows = sys.platform == "win32"
     if windows:
-        assert platform.machine().upper() == "AMD64"
+        assert sysconfig.get_platform() == "win-amd64"
         adapter += b"namespace RDDepict { namespace DepictorLocal {\n"
         adapter += extract(b"void _shiftCoords(", b"// we do not use std::copysign")
         adapter += b"}\n"

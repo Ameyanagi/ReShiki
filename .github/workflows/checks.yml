@@ -107,6 +107,19 @@ jobs:
       - name: Build live Linux depiction observers for the installed reference wheel
         if: runner.os == 'Linux'
         run: uv run --locked python scripts/setup_linux_depict_reference.py
+      - name: Select x64 MSVC for the original Windows reference wheel
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        with:
+          arch: x64
+      - name: Build live Windows depiction observers for the installed reference wheel
+        if: runner.os == 'Windows'
+        run: uv run --locked python scripts/setup_windows_depict_reference.py
+      - name: Restore the native Windows compiler for Rust tests
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        with:
+          arch: ${{ matrix.msvc_arch }}
       - name: Check the optional independent reference suite
         run: cargo clippy --workspace --all-targets --locked --features rdkit-reference -- -D warnings
       - run: cargo check --workspace --all-targets --locked --features rdkit-reference

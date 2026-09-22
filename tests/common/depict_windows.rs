@@ -6,6 +6,16 @@ pub fn fixture(stage: &str) -> anyhow::Result<Option<String>> {
     if !cfg!(windows) {
         return Ok(None);
     }
+    // A fresh observer supplies exact expectations from the installed wheel's
+    // runtime. Recorded fixtures remain cross-runtime audits in this mode.
+    let oracle = match stage {
+        "geometry" => "RESHIKI_DEPICT_ORACLE".to_owned(),
+        "expansion" => "DEPICT_EXPANSION_ORACLE".to_owned(),
+        _ => format!("RESHIKI_DEPICT_{}_ORACLE", stage.to_uppercase()),
+    };
+    if std::env::var_os(oracle).is_some() {
+        return Ok(None);
+    }
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let mut command = Command::new(root.join(".venv/Scripts/python.exe"));
     command.arg(root.join("tests/depict_windows_profile.py"));

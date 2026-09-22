@@ -11,10 +11,10 @@ import gzip
 import hashlib
 import json
 import os
-import platform
 import re
 import subprocess
 import sys
+import sysconfig
 from pathlib import Path
 
 import rdkit
@@ -63,7 +63,7 @@ def main():
     parser.add_argument("--output", type=Path)
     parser.add_argument("--fma3", "--geometry-fma3", dest="fma3", choices=("0", "1"))
     args = parser.parse_args()
-    if sys.platform != "win32" or platform.machine().upper() != "AMD64":
+    if sys.platform != "win32" or sysconfig.get_platform() != "win-amd64":
         raise SystemExit("Use the pinned x64 Windows RDKit Python and x64 MSVC compiler")
     assert rdBase.rdkitVersion == "2026.03.6"
     boost_header = args.boost_include / "boost/version.hpp"
