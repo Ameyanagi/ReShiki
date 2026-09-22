@@ -67,6 +67,22 @@ def main():
     ):
         assert body.count(before) == 1
         body = body.replace(before, after)
+    # Record successful cleanup predicates without changing their return value
+    # or any molecule operation. This proves the rare rewrite corpus reaches
+    # each rule, independently of the Rust implementation.
+    for match in reversed(list(re.finditer(r"bool (_Valence\w+)\([^)]*\) \{", body))):
+        start = match.end()
+        depth = 1
+        end = start
+        while depth:
+            depth += (body[end] == "{") - (body[end] == "}")
+            end += 1
+        name = match.group(1)
+        body = (
+            body[:start]
+            + body[start:end].replace("return true;", f'return rule_hit("{name}");')
+            + body[end:]
+        )
     (include / "inchi_adapter_body.h").write_text(notice + "\n" + body)
     inchi_include = args.inchi_source / "INCHI_BASE/src"
     assert hashlib.sha256((inchi_include / "inchi_api.h").read_bytes()).hexdigest() == HEADER_SHA256

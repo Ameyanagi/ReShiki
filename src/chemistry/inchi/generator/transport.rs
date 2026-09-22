@@ -1,12 +1,12 @@
-use super::{Error, MAX_REQUEST_BYTES, Output, Status};
+use super::{Error, MAX_REQUEST_BYTES, Output, Resource, Status};
 use crate::chemistry::inchi::{INCHI_VERSION, input::Input};
 use std::collections::BTreeSet;
 
 const MAGIC: &[u8; 8] = b"RSHINCHI";
-const PROTOCOL: u16 = 1;
+const PROTOCOL: u16 = 2;
 const MAX_STRING: usize = 2 * 1024 * 1024;
 
-pub(super) fn encode(input: &Input) -> Result<Vec<u8>, Error> {
+pub(super) fn encode(input: &Input, kernel_heap_bytes: usize) -> Result<Vec<u8>, Error> {
     let count = input.atoms.len();
     if count > i16::MAX as usize || input.stereo.len() > i16::MAX as usize {
         return Err(Error::Input(
@@ -16,6 +16,7 @@ pub(super) fn encode(input: &Input) -> Result<Vec<u8>, Error> {
     let mut body = Vec::new();
     body.try_reserve(8 + count * 119 + input.stereo.len() * 12)
         .map_err(|_| Error::Limit("request"))?;
+    body.extend_from_slice(&(kernel_heap_bytes as u32).to_le_bytes());
     body.extend_from_slice(&(count as u16).to_le_bytes());
     body.extend_from_slice(&(input.stereo.len() as u16).to_le_bytes());
     for (id, atom) in input.atoms.iter().enumerate() {
@@ -142,6 +143,34 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Output, Error> {
             return Err(Error::Protocol("Trailing rejection data"));
         }
         return Err(Error::Rejected(message));
+    }
+    if result_kind == 2 {
+        let resource = match u16::from_le_bytes(reader.number()?) {
+            1 => Resource::KernelHeap,
+            _ => return Err(Error::Protocol("Unknown resource scope")),
+        };
+        let reason = u16::from_le_bytes(reader.number()?);
+        let budget = u64::from_le_bytes(reader.number()?);
+        let used = u64::from_le_bytes(reader.number()?);
+        let requested = u64::from_le_bytes(reader.number()?);
+        if reader.position != bytes.len()
+            || budget == 0
+            || budget > super::MAX_KERNEL_HEAP_BYTES as u64
+            || used > budget
+        {
+            return Err(Error::Protocol("Invalid resource result"));
+        }
+        return Err(match reason {
+            1 => Error::ResourceLimit {
+                resource,
+                budget,
+                used,
+                requested,
+            },
+            2 => Error::ResourceUnavailable { resource, budget },
+            3 => Error::Protocol("Native allocator invariant failed"),
+            _ => Error::Protocol("Unknown resource failure"),
+        });
     }
     if result_kind != 0 {
         return Err(Error::Protocol("Unknown response kind"));

@@ -1,11 +1,14 @@
 // Isolated standard-InChI helper. The application communicates over bounded
 // binary frames and never links this native code into its address space.
 // Kernel: official InChI 1.07.3, MIT, see licenses/inchi/LICENSE.
+#include "arena.h"
 #include <inchi_api.h>
 #include <bcf_s.h>
 #include <algorithm>
 #include <array>
 #include <climits>
+#include <cstdio>
+#include <cstdlib>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -15,8 +18,13 @@
 #include <string>
 #include <vector>
 #ifdef _WIN32
+#define NOMINMAX
+#include <windows.h>
 #include <fcntl.h>
 #include <io.h>
+#else
+#include <cerrno>
+#include <unistd.h>
 #endif
 
 namespace {
@@ -64,20 +72,41 @@ struct Writer {
 bool index(int id, size_t count) { return id>=0 && size_t(id)<count; }
 bool direction(int code) { return code==-6 || code==-4 || code==-1 || code==0 || code==1 || code==3 || code==4 || code==6; }
 
+// No heap allocation is permitted on this path, including error formatting.
+[[noreturn]] void resource_failure(int reason, size_t budget, size_t used, size_t requested) {
+  unsigned char frame[30] = {2, 0, 1, 0, static_cast<unsigned char>(reason), 0};
+  const uint64_t values[3] = {uint64_t(budget), uint64_t(used), uint64_t(requested)};
+  for(size_t i=0;i<3;++i) for(size_t j=0;j<8;++j) frame[6+8*i+j]=static_cast<unsigned char>(values[i]>>(8*j));
+  size_t position=0;
+  while(position<sizeof(frame)) {
+#ifdef _WIN32
+    DWORD written=0;
+    if(!WriteFile(GetStdHandle(STD_OUTPUT_HANDLE),frame+position,DWORD(sizeof(frame)-position),&written,nullptr) || written==0) std::_Exit(4);
+#else
+    const auto written=write(STDOUT_FILENO,frame+position,sizeof(frame)-position);
+    if(written<0 && errno==EINTR) continue;
+    if(written<=0) std::_Exit(4);
+#endif
+    position+=size_t(written);
+  }
+  std::_Exit(0);
+}
 Writer response() {
   std::vector<unsigned char> header(16);
   if(!std::cin.read(reinterpret_cast<char *>(header.data()),16)) throw std::runtime_error("Truncated request header");
   Reader h{header};
   for(auto byte:magic) if(h.byte()!=byte) throw std::runtime_error("Invalid request magic");
-  if(h.u16()!=1 || h.byte()!=1 || h.byte()>1) throw std::runtime_error("Invalid request protocol or operation");
+  if(h.u16()!=2 || h.byte()!=1 || h.byte()>1) throw std::runtime_error("Invalid request protocol or operation");
   const size_t size=h.u32();
-  if(size>max_frame-header.size() || size<4) throw std::runtime_error("Invalid request frame length");
+  if(size>max_frame-header.size() || size<8) throw std::runtime_error("Invalid request frame length");
   std::vector<unsigned char> body(size);
   if(!std::cin.read(reinterpret_cast<char *>(body.data()),std::streamsize(size))) throw std::runtime_error("Truncated request body");
   if(std::cin.get()!=std::char_traits<char>::eof()) throw std::runtime_error("Trailing request data");
   Reader reader{body};
+  const size_t heap_budget=reader.u32();
+  if(heap_budget==0 || heap_budget>512*1024*1024) throw std::runtime_error("Invalid kernel heap budget");
   const size_t atom_count=reader.u16(), stereo_count=reader.u16();
-  if(atom_count>32767 || stereo_count>32767 || atom_count*39+stereo_count*12+4>body.size()) throw std::runtime_error("Invalid native counts");
+  if(atom_count>32767 || stereo_count>32767 || atom_count*39+stereo_count*12+8>body.size()) throw std::runtime_error("Invalid native counts");
   std::vector<inchi_Atom> atoms(atom_count);
   std::vector<inchi_Stereo0D> stereo(stereo_count);
   for(size_t id=0;id<atom_count;++id) {
@@ -114,6 +143,8 @@ Writer response() {
   input.atom=atoms.data(); input.stereo0D=stereo.data();
   input.num_atoms=AT_NUM(atom_count); input.num_stereo0D=AT_NUM(stereo_count);
   input.szOptions=nullptr;
+  struct ArenaGuard { ~ArenaGuard() { rsh_heap_destroy(); } } arena_guard;
+  rsh_heap_initialize(heap_budget,resource_failure);
   struct NativeOutput {
     inchi_Output value{};
     ~NativeOutput() { FreeINCHI(&value); }
@@ -131,10 +162,13 @@ int main() {
 #ifdef _WIN32
   if(_setmode(_fileno(stdin),_O_BINARY)==-1 || _setmode(_fileno(stdout),_O_BINARY)==-1) return 3;
 #endif
+  // The resource failure writer reuses this unbuffered stream; it cannot need
+  // a lazily allocated stdio buffer when the arena is exhausted.
+  if(std::setvbuf(stdout,nullptr,_IONBF,0)!=0) return 3;
   try {
     Writer header;
     for(auto c:magic) header.byte(c);
-    header.u16(1); header.text(CURRENT_VER);
+    header.u16(2); header.text(CURRENT_VER);
     std::cout.write(reinterpret_cast<const char *>(header.bytes.data()),std::streamsize(header.bytes.size()));
     std::cout.flush();
     Writer result;

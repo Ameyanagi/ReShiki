@@ -74,6 +74,18 @@ def native_command(raw, sanitize=False, remove=False):
 
 
 def cases(source):
+    for status, sanitize, remove in itertools.product(
+        (-100, -2, -1, 0, 1, 2, 3, 4, 5), (False, True), (False, True)
+    ):
+        yield (
+            dict(
+                name=f"empty/{status}/{sanitize}/{remove}",
+                operation="synthetic",
+                sanitize=sanitize,
+                remove=remove,
+            ),
+            native_command(dict(status=status, atoms=[]), sanitize, remove),
+        )
     identifiers = {
         "",
         "invalid",
@@ -194,8 +206,8 @@ def cases(source):
             ),
             native_command(raw),
         )
-    for kind, direction, reverse in itertools.product(
-        range(-1, 6), (-6, -4, -1, 0, 1, 3, 4, 6, 7), (False, True)
+    for kind, direction, reverse, sanitize in itertools.product(
+        range(-1, 6), (-6, -4, -1, 0, 1, 3, 4, 6, 7), (False, True), (False, True)
     ):
         rows = [dict(element="C", bonds=[]), dict(element="N", bonds=[])]
         rows[int(reverse)]["bonds"] = [dict(neighbor=int(not reverse), kind=kind, stereo=direction)]
@@ -203,12 +215,12 @@ def cases(source):
         rows[int(not reverse)]["bonds"] = [dict(neighbor=int(reverse), kind=1, stereo=0)]
         yield (
             dict(
-                name=f"bond/{kind}/{direction}/{reverse}",
+                name=f"bond/{kind}/{direction}/{reverse}/{sanitize}",
                 operation="synthetic",
-                sanitize=False,
+                sanitize=sanitize,
                 remove=False,
             ),
-            native_command(dict(atoms=rows)),
+            native_command(dict(atoms=rows), sanitize),
         )
     for number, degree, parity in itertools.product((6, 7, 15, 16), (3, 4), range(7)):
         for order in itertools.permutations(range(1, degree + 1)):
@@ -253,6 +265,24 @@ def cases(source):
         )
     # Standalone exact native cleanup captures exercise rare rules before the
     # Rust port; unlike InChI roundtrips, these preserve their triggering graphs.
+    for parity, sanitize, remove in itertools.product((1, 3), (False, True), (False, True)):
+        atoms = [
+            dict(element="C", bonds=[dict(neighbor=1, kind=2), dict(neighbor=2, kind=1)]),
+            dict(element="C", bonds=[dict(neighbor=3, kind=1)]),
+            dict(element="F"),
+            dict(element="Cl"),
+        ]
+        record = dict(central_atom=None, kind=1, parity=parity, neighbors=[2, 0, 1, 3])
+        raw = dict(atoms=atoms, stereo=[record, record])
+        yield (
+            dict(
+                name=f"duplicate-boundary/{parity}/{sanitize}/{remove}",
+                operation="duplicate_boundary",
+                sanitize=sanitize,
+                remove=remove,
+            ),
+            native_command(raw, sanitize, remove),
+        )
     cleanup = [
         "C1=NN=[N-]=N1",
         "C[N](=C)(=O)",
@@ -269,6 +299,22 @@ def cases(source):
         "Cl#S",
         "Br#[Se]",
         "CC(C1=CC=CC=N1=C2C(OC)=O)CC2=[OH+]",
+        "[N-](=N)(C)C",
+        "[N](=[N+])(C)(C)C",
+        "[N](#C[N-])(C)C",
+        "[N](=N)(C)(C)C",
+        "[N](=O)(C)(C)C",
+        "[N](=CC=O)(C)(C)C",
+        "CN1=NCOC(=O)C=1",
+        "[NH3]=C1N=CN=N1",
+        "[NH3]=C1C=CN=N1",
+        "[N](=CC=N=N)(C)(C)C",
+        "[N](=C)(C)(C)C",
+        "[N](=CC=O)(=CC=[OH+])C",
+        "[S-](=CC#N)(C)(C)(C)(C)C",
+        "[S-](=N)(C)(C)(C)(C)C",
+        "[S-](=CC=N)(C)(C)(C)(C)C",
+        "[S-](=O)(=O)(=O)F",
     ]
     rng = random.Random(738142)
     for text in cleanup:
@@ -280,10 +326,41 @@ def cases(source):
             order = list(range(mol.GetNumAtoms()))
             rng.shuffle(order)
             ordered = Chem.RenumberAtoms(mol, order)
+            bonds = list(ordered.GetBonds())
+            rng.shuffle(bonds)
+            shuffled = Chem.RWMol()
+            for atom in ordered.GetAtoms():
+                shuffled.AddAtom(Chem.Atom(atom))
+            for bond in bonds:
+                a, b = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()
+                if rng.randrange(2):
+                    a, b = b, a
+                shuffled.AddBond(a, b, bond.GetBondType())
+                shuffled.GetBondBetweenAtoms(a, b).SetIsAromatic(bond.GetIsAromatic())
+            shuffled.UpdatePropertyCache(strict=False)
             yield (
                 dict(name=f"cleanup/{text}/{order}", operation="cleanup"),
-                "C " + ordered.ToBinary(Chem.PropertyPickleOptions.AllProps).hex(),
+                "C " + shuffled.ToBinary(Chem.PropertyPickleOptions.AllProps).hex(),
             )
+    for filler_count in (999, 1000):
+        mol = Chem.RWMol()
+        for _ in range(filler_count):
+            a = mol.AddAtom(Chem.Atom(7))
+            b = mol.AddAtom(Chem.Atom(7))
+            mol.AddBond(a, b, Chem.BondType.DOUBLE)
+        tail = Chem.MolFromSmiles("[NH3]=CC=N=N", sanitize=False)
+        offset = mol.GetNumAtoms()
+        for atom in tail.GetAtoms():
+            mol.AddAtom(Chem.Atom(atom))
+        for bond in tail.GetBonds():
+            mol.AddBond(
+                offset + bond.GetBeginAtomIdx(), offset + bond.GetEndAtomIdx(), bond.GetBondType()
+            )
+        mol.UpdatePropertyCache(strict=False)
+        yield (
+            dict(name=f"cleanup/native-match-limit/{filler_count}", operation="cleanup"),
+            "C " + mol.ToBinary(Chem.PropertyPickleOptions.AllProps).hex(),
+        )
 
 
 def generate(args):
@@ -324,6 +401,7 @@ def generate(args):
         case["stages"] = {name: decode_state(state) for name, state in captured["stages"].items()}
         case["expected"] = decode_state(captured["final"])
         case["error"] = captured["error"]
+        case["cleanup_rules"] = captured["cleanup_rules"]
         if case["operation"] == "import":
             try:
                 mol, status, message, log = rdinchi.InchiToMol(

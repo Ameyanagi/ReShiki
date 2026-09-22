@@ -168,6 +168,13 @@ async fn helper_failures_are_bounded_and_typed() -> anyhow::Result<()> {
         "version",
         "truncated",
         "rejected",
+        "resource",
+        "resource-unavailable",
+        "resource-scope",
+        "resource-reason",
+        "resource-budget",
+        "resource-used",
+        "resource-truncated",
         "status",
         "string-length",
         "nonstandard",
@@ -197,12 +204,28 @@ async fn helper_failures_are_bounded_and_typed() -> anyhow::Result<()> {
         .await;
         let matches = match (mode, &result) {
             ("ok", Ok(output)) => output.inchi == "InChI=1S/CH4/h1H4",
-            ("version", Err(Error::Version(_)))
+            (
+                "resource",
+                Err(Error::ResourceLimit {
+                    resource: generator::Resource::KernelHeap,
+                    ..
+                }),
+            )
+            | (
+                "resource-unavailable",
+                Err(Error::ResourceUnavailable {
+                    resource: generator::Resource::KernelHeap,
+                    ..
+                }),
+            )
+            | ("version", Err(Error::Version(_)))
             | ("rejected", Err(Error::Rejected(_)))
             | ("oversized" | "stderr" | "string-length", Err(Error::Limit(_)))
             | ("hang", Err(Error::Timeout)) => true,
             (
-                "protocol" | "truncated" | "status" | "nonstandard" | "trailing" | "utf8",
+                "protocol" | "truncated" | "status" | "nonstandard" | "trailing" | "utf8"
+                | "resource-scope" | "resource-reason" | "resource-budget" | "resource-used"
+                | "resource-truncated",
                 Err(Error::Protocol(_)),
             ) => true,
             ("exit", Err(Error::Exit { code: Some(17), .. })) => true,
@@ -304,5 +327,59 @@ async fn dropping_generation_kills_the_child_and_bad_input_never_spawns() -> any
         Err(Error::Timeout)
     ));
     assert_stopped_if_started(dir.path()).await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn exhausted_kernel_heap_is_typed_and_does_not_affect_next_request() -> anyhow::Result<()> {
+    let Some(path) = helper("reshiki-inchi-helper")? else {
+        return Ok(());
+    };
+    for budget in [1, 64, 128, 1024] {
+        let mut previous = None;
+        for _ in 0..3 {
+            let result = generator::generate_with_limits(
+                &path,
+                &methane(),
+                generator::Limits {
+                    timeout: Duration::from_secs(5),
+                    kernel_heap_bytes: budget,
+                },
+            )
+            .await;
+            let Err(Error::ResourceLimit {
+                resource: generator::Resource::KernelHeap,
+                budget: actual_budget,
+                used,
+                requested,
+            }) = result
+            else {
+                anyhow::bail!("Expected typed resource limit at {budget}: {result:?}");
+            };
+            assert_eq!(actual_budget, budget as u64);
+            assert!(used <= actual_budget && requested > 0);
+            let current = (actual_budget, used, requested);
+            if let Some(expected) = previous {
+                assert_eq!(current, expected);
+            }
+            previous = Some(current);
+        }
+    }
+    let output = generator::generate(&path, &methane(), Duration::from_secs(5)).await?;
+    assert_eq!(output.inchi, "InChI=1S/CH4/h1H4");
+    for budget in [0, generator::MAX_KERNEL_HEAP_BYTES + 1] {
+        assert!(matches!(
+            generator::generate_with_limits(
+                Path::new("must-not-spawn-invalid-budget"),
+                &methane(),
+                generator::Limits {
+                    timeout: Duration::from_secs(5),
+                    kernel_heap_bytes: budget
+                }
+            )
+            .await,
+            Err(Error::Input(_))
+        ));
+    }
     Ok(())
 }

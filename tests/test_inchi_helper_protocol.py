@@ -16,7 +16,8 @@ HELPER = (
 )
 
 
-def frame(body, *, version=1, operation=1, flags=0, length=None):
+def frame(body, *, version=2, operation=1, flags=0, length=None, budget=64 * 1024 * 1024):
+    body = struct.pack("<I", budget) + body
     return (
         MAGIC
         + struct.pack("<HBBI", version, operation, flags, len(body) if length is None else length)
@@ -40,7 +41,7 @@ class ProtocolTests(unittest.TestCase):
         result = subprocess.run([str(HELPER)], input=payload, capture_output=True, timeout=3)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertLessEqual(len(result.stdout), 8 * 1024 * 1024)
-        self.assertEqual(result.stdout[:10], MAGIC + struct.pack("<H", 1))
+        self.assertEqual(result.stdout[:10], MAGIC + struct.pack("<H", 2))
         version_size = struct.unpack_from("<I", result.stdout, 10)[0]
         self.assertEqual(result.stdout[14 : 14 + version_size], b"1.07.3")
         result_kind = struct.unpack_from("<H", result.stdout, 14 + version_size)[0]
@@ -60,6 +61,23 @@ class ProtocolTests(unittest.TestCase):
         size = struct.unpack_from("<I", result, 2)[0]
         self.assertEqual(result[6 : 6 + size], b"InChI=1S/CH4/h1H4")
 
+    def test_kernel_heap_limits_are_typed_and_repeatable(self):
+        for budget in (1, 64, 128, 1024):
+            outcomes = [
+                self.run_frame(frame(struct.pack("<HH", 1, 0) + carbon(), budget=budget))
+                for _ in range(3)
+            ]
+            self.assertEqual(outcomes[0], outcomes[1])
+            self.assertEqual(outcomes[1], outcomes[2])
+            kind, payload = outcomes[0]
+            self.assertEqual(kind, 2)
+            scope, reason, reported_budget, used, requested = struct.unpack("<HHQQQ", payload)
+            self.assertEqual((scope, reason, reported_budget), (1, 1, budget))
+            self.assertLessEqual(used, budget)
+            self.assertGreater(requested, 0)
+        kind, _ = self.run_frame(frame(struct.pack("<HH", 1, 0) + carbon()))
+        self.assertEqual(kind, 0)
+
     def test_truncation_and_trailing_bytes(self):
         payload = frame(struct.pack("<HH", 1, 0) + carbon())
         for length in range(len(payload)):
@@ -71,9 +89,11 @@ class ProtocolTests(unittest.TestCase):
     def test_versions_counts_coordinates_and_record_validation(self):
         valid = struct.pack("<HH", 1, 0) + carbon()
         cases = [
-            frame(valid, version=2),
+            frame(valid, version=1),
             frame(valid, operation=2),
             frame(valid, flags=2),
+            frame(valid, budget=0),
+            frame(valid, budget=512 * 1024 * 1024 + 1),
             frame(b"", length=8 * 1024 * 1024),
             frame(b"", length=0xFFFFFFFF),
             frame(struct.pack("<HH", 32768, 0)),

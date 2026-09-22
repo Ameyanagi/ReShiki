@@ -27,28 +27,39 @@ to 2 MiB, atom/stereo counts to 32,767 and stored atom neighbors to 20. The
 kernel applies its own chemical and standard-generation atom limits. The
 parent separately limits stderr to 64 KiB and runtime to at most 120 seconds;
 timeout, cancellation and rejected/oversized output terminate the child.
-These bounds cover the bridge's buffers, not total kernel allocations. The
-official C allocator remains unchanged. Production integration still requires
-resource containment on Linux, macOS and Windows, portable builds, packaging
-and runtime dispatch before this helper is shipped to users.
+The native kernel's direct C heap uses a fixed arena: 64 MiB by default,
+including payload, alignment and allocator metadata. A request may set a
+budget from 1 byte to 512 MiB. Exhaustion terminates that process with a typed
+`KernelHeap` resource result; the error path does not allocate. A host that
+cannot allocate the arena returns `ResourceUnavailable` separately.
+
+This is not a process RSS ceiling. Stack, system-library internals and bounded
+bridge buffers remain outside the arena. See [the allocation audit](./ALLOCATION-AUDIT.md)
+for coverage and platform limits. Portable release builds, packaging, runtime
+dispatch and any additional OS containment remain separate integration work.
 
 All integer fields and IEEE-754 doubles use little endian:
 
 | Frame              | Fields                                                                                                       |
 | ------------------ | ------------------------------------------------------------------------------------------------------------ |
-| Request header     | `RSHINCHI`, protocol u16=1, operation u8=1, coordinate-presence u8, payload length u32                       |
-| Request payload    | atom count u16, stereo count u16, atom records, stereo records                                               |
+| Request header     | `RSHINCHI`, protocol u16=2, operation u8=1, coordinate-presence u8, payload length u32                       |
+| Request payload    | kernel heap budget u32, atom count u16, stereo count u16, atom records, stereo records                       |
 | Atom               | xyz f64×3, zero-padded element char×6, isotope mass i16, charge i8, H i8×4, radical i8, bond count u8, bonds |
 | Bond               | neighbor i16, type i8, direction i8                                                                          |
 | Stereo             | central atom i16 (-1 if absent), neighbors i16×4, type i8, parity i8                                         |
-| Response prefix    | `RSHINCHI`, protocol u16=1, version string (`1.07.3`)                                                        |
+| Response prefix    | `RSHINCHI`, protocol u16=2, version string (`1.07.3`)                                                        |
 | Native result      | kind u16=0, native status i16, InChI/message/log/auxiliary strings                                           |
+| Resource failure   | kind u16=2, scope u16=1, reason u16, budget/used/requested u64×3                                             |
 | Protocol rejection | kind u16=1, reason string                                                                                    |
 
 A string is its u32 byte length followed by UTF-8 bytes. No options, shell
 command, file path or second operation can be sent to the kernel. The helper
 reports its version before running the request. Empty native identifiers and
 all native return statuses remain distinct from process/protocol failures.
+Resource reasons distinguish budget exhaustion (1), host allocation failure
+(2), and an allocator invariant failure (3). `used` counts live blocks and
+their metadata; the fixed arena also contains free-block metadata. The
+entire arena remains within `budget` regardless of that live counter.
 The Rust input adapter's typed `NativeEmpty::TooManyNeighbors` outcome is
 separate: native preparation returns an empty identifier before calling the
 kernel and leaves its return-code field uninitialized. Rust retains the empty
@@ -65,3 +76,9 @@ The kernel is MIT licensed; retain `licenses/inchi/LICENSE` and `KERNEL-NOTICES`
 when distributing it. Its SHA-256 source permission applies when distributed
 as part of InChI. This helper includes the complete generation kernel, not a
 standalone reuse of its hashing implementation.
+
+Independent allocator tests cover alignment, calloc zeroing, realloc data
+preservation, zero sizes, free/coalescing, fragmentation, overflow, repeated
+requests and 20,000 mixed operations. `python -m unittest
+tests.test_inchi_arena tests.test_inchi_helper_protocol` runs them alongside
+the byte-level boundary tests after building the helper.

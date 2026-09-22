@@ -16,6 +16,7 @@
 #define get_pid getpid
 #endif
 void u16(uint16_t n) { std::cout.put(char(n&255)); std::cout.put(char(n>>8)); }
+void u64(uint64_t n) { for(unsigned i=0;i<8;++i) std::cout.put(char((n>>(8*i))&255)); }
 void u32(uint32_t n) { for(unsigned i=0;i<4;++i) std::cout.put(char((n>>(8*i))&255)); }
 void text(const std::string &s) { u32(uint32_t(s.size())); std::cout.write(s.data(),std::streamsize(s.size())); }
 int main(int argc,char **argv) {
@@ -36,7 +37,15 @@ int main(int argc,char **argv) {
     output.flush();
     for(;;) std::this_thread::sleep_for(std::chrono::seconds(1));
   }
-  std::cout << "RSHINCHI"; u16(mode=="protocol" ? 9 : 1); text(mode=="version" ? "1.07.4" : "1.07.3");
+  std::cout << "RSHINCHI"; u16(mode=="protocol" ? 9 : 2); text(mode=="version" ? "1.07.4" : "1.07.3");
+  if(mode.starts_with("resource")) {
+    u16(2); u16(mode=="resource-scope" ? 9 : 1);
+    u16(mode=="resource-unavailable" ? 2 : mode=="resource-reason" ? 9 : 1);
+    u64(mode=="resource-budget" ? 0 : 64*1024*1024);
+    if(mode=="resource-truncated") return 0;
+    u64(mode=="resource-used" ? 64*1024*1024+1 : 0); u64(1024);
+    return 0;
+  }
   if(mode=="truncated") { u16(0); return 0; }
   if(mode=="rejected") { u16(1); text("stub rejection"); return 0; }
   u16(0); u16(mode=="status" ? 127 : 0);

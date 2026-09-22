@@ -179,7 +179,7 @@ Copyright (C) 2007-2023 Greg Landrum.
 Code/GraphMol/QueryOps.h and QueryOps.cpp (query predicates, metal classification and bridgehead detection)
 Copyright (C) 2003-2021 Greg Landrum and other RDKit contributors.
 
-External/INCHI-API/inchi.cpp (molecular input for InChI, including reverse cleanup)
+External/INCHI-API/inchi.cpp (molecular input and output for InChI, including cleanup and stereo reconstruction)
 Copyright (C) 2011-2025 Novartis Institutes for BioMedical Research Inc.
 and other RDKit contributors. The full source notice is in INCHI-ADAPTER.
 

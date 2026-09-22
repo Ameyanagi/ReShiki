@@ -71,6 +71,8 @@ std::string state(const ROMol &mol) {
 }
 std::string captured="null";
 std::vector<std::pair<std::string,std::string>> stages;
+std::vector<std::string> cleanup_rules;
+bool rule_hit(const std::string &name) {cleanup_rules.push_back(name);return true;}
 void snapshot(const std::string &name, const ROMol &mol) {
   stages.emplace_back(name,state(mol));
 }
@@ -141,6 +143,7 @@ int main() {
   while(std::getline(std::cin,line)) {
     observe::captured="null";
     observe::stages.clear();
+    observe::cleanup_rules.clear();
     observe::injected=false;
     std::string final="null",error="null";
     try {
@@ -195,6 +198,12 @@ int main() {
       if(!first) std::cout<<',';
       first=false;std::cout<<observe::quoted(name)<<':'<<state;
     }
-    std::cout<<"},\"final\":"<<final<<",\"error\":"<<error<<'}'<<std::endl;
+    std::cout<<"},\"cleanup_rules\":[";
+    first=true;
+    for(const auto &name:observe::cleanup_rules) {
+      if(!first) std::cout<<',';
+      first=false;std::cout<<observe::quoted(name);
+    }
+    std::cout<<"],\"final\":"<<final<<",\"error\":"<<error<<'}'<<std::endl;
   }
 }

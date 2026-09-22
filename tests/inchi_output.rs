@@ -3,8 +3,9 @@ use anyhow::Context;
 use reshiki::chemistry::{RDKIT_VERSION, inchi::output};
 use serde::Deserialize;
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     io::{BufRead, BufReader},
     path::Path,
     process::{Command, Stdio},
@@ -17,6 +18,12 @@ struct Case {
     raw: Option<output::Output>,
     stages: BTreeMap<String, Value>,
     error: Option<String>,
+    expected: Option<Value>,
+    #[serde(default)]
+    sanitize: bool,
+    #[serde(default)]
+    remove: bool,
+    cleanup_rules: Vec<String>,
 }
 
 #[test]
@@ -39,10 +46,52 @@ fn native_import_assembly() -> anyhow::Result<()> {
         header["adapter_sha256"],
         "68c9b20d1d5920ed602ea931c1429395280c3d040971593073917618015183d1"
     );
-    let (mut topology, mut assembly, mut native_failures) = (0, 0, 0);
+    assert_eq!(
+        header["capture_sha256"],
+        format!(
+            "{:x}",
+            Sha256::digest(include_bytes!("inchi_output_reference.cpp"))
+        )
+    );
+    let mut rules = BTreeSet::new();
+    let (
+        mut topology,
+        mut assembly,
+        mut native_failures,
+        mut cleanup,
+        mut complete,
+        mut duplicate_boundaries,
+    ) = (0, 0, 0, 0, 0, 0);
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
+        rules.extend(case.cleanup_rules.iter().cloned());
         if case.operation == "cleanup" {
+            let state: reshiki::chemistry::stereo::perception::State = serde_json::from_value(
+                case.stages
+                    .get("assembled")
+                    .context("Missing cleanup input")?
+                    .clone(),
+            )?;
+            let input = output::Assembly {
+                unspecified_bonds: vec![false; state.graph.bonds.len()],
+                state: Some(state),
+                warnings: Vec::new(),
+            };
+            let before = serde_json::to_value(&input)?;
+            let result = output::clean_up(&input).with_context(|| case.name.clone())?;
+            anyhow::ensure!(
+                serde_json::to_value(&input)? == before,
+                "{} cleanup mutated input",
+                case.name
+            );
+            let value = serde_json::to_value(result.state)?;
+            let expected = case.expected.context("Missing cleanup expectation")?;
+            anyhow::ensure!(
+                value == expected,
+                "{} cleanup\nactual: {value}\nexpected: {expected}",
+                case.name
+            );
+            cleanup += 1;
             continue;
         }
         let raw = case.raw.context("Missing native records")?;
@@ -90,11 +139,113 @@ fn native_import_assembly() -> anyhow::Result<()> {
             }
         }
         assert_eq!(raw, before, "{} mutated native records", case.name);
+        if case.operation == "duplicate_boundary" {
+            // Native raw injection accepts these records. Preserve their exact
+            // assembly, while making the later shared-metadata limitation
+            // observable rather than certifying native rejection or truncation.
+            anyhow::ensure!(case.expected.is_some(), "Native duplicate fixture failed");
+            let assembled = output::assemble(&raw)?;
+            assert!(matches!(
+                output::clean_up(&assembled),
+                Err(output::Error::RepeatedStereoRecords { indices: 4, .. })
+            ));
+            assert!(matches!(
+                output::reconstruct(
+                    &raw,
+                    output::Options {
+                        sanitize: case.sanitize,
+                        remove_hydrogens: case.remove
+                    }
+                ),
+                Err(output::Error::RepeatedStereoRecords { indices: 4, .. })
+            ));
+            duplicate_boundaries += 1;
+            continue;
+        }
+        if let Some(expected) = case.stages.get("cleaned")
+            && expected["native_cache_boundary"] != true
+        {
+            let assembled = output::assemble(&raw)?;
+            let result = output::clean_up(&assembled).with_context(|| case.name.clone())?;
+            let value = serde_json::to_value(result.state)?;
+            anyhow::ensure!(
+                value == *expected,
+                "{} cleanup\nactual: {value}\nexpected: {expected}",
+                case.name
+            );
+            cleanup += 1;
+        }
+        let options = output::Options {
+            sanitize: case.sanitize,
+            remove_hydrogens: case.remove,
+        };
+        if let Some(expected) = case.stages.get("prepared")
+            && expected["native_cache_boundary"] != true
+        {
+            let cleaned = output::clean_up(&output::assemble(&raw)?)?;
+            let result = output::prepare(&cleaned, options).with_context(|| case.name.clone())?;
+            let value = serde_json::to_value(result.state)?;
+            anyhow::ensure!(
+                value == *expected,
+                "{} preparation\nactual: {value}\nexpected: {expected}",
+                case.name
+            );
+        }
+        match (case.expected.as_ref(), output::reconstruct(&raw, options)) {
+            (Some(expected), Err(output::Error::NativeCacheBoundary))
+                if expected["native_cache_boundary"] == true => {}
+            (Some(expected), Ok(actual)) => {
+                let value = serde_json::to_value(actual.state)?;
+                anyhow::ensure!(
+                    value == *expected,
+                    "{} final\nactual: {value}\nexpected: {expected}",
+                    case.name
+                );
+                complete += 1;
+            }
+            (None, Err(_)) if case.error.is_some() => {}
+            (None, Ok(actual)) if actual.state.is_none() && case.error.is_none() => {}
+            (Some(_), Err(error)) => anyhow::bail!("{} final: {error}", case.name),
+            (None, Err(error)) => {
+                anyhow::bail!("{} final error instead of native null: {error}", case.name)
+            }
+            (None, Ok(_)) => anyhow::bail!("{} unexpected final success", case.name),
+        }
+        assert_eq!(
+            raw, before,
+            "{} reconstruction mutated native records",
+            case.name
+        );
     }
     anyhow::ensure!(child.wait()?.success(), "Fixture reader failed");
     anyhow::ensure!(topology > 5000 && assembly > 5000 && native_failures > 10);
+    let expected_rules = [
+        "_Valence3ClCleanUp1",
+        "_Valence4NCleanUp1",
+        "_Valence4NCleanUp2",
+        "_Valence5NCleanUp1",
+        "_Valence5NCleanUp2",
+        "_Valence5NCleanUp3",
+        "_Valence5NCleanUp4",
+        "_Valence5NCleanUp5",
+        "_Valence5NCleanUp6",
+        "_Valence5NCleanUp7",
+        "_Valence5NCleanUp8",
+        "_Valence5NCleanUp9",
+        "_Valence5NCleanUpA",
+        "_Valence5NCleanUpB",
+        "_Valence7SCleanUp1",
+        "_Valence7SCleanUp2",
+        "_Valence7SCleanUp3",
+        "_Valence8ClCleanUp1",
+        "_Valence8SCleanUp1",
+    ];
+    assert_eq!(
+        rules,
+        expected_rules.into_iter().map(str::to_owned).collect()
+    );
     eprintln!(
-        "InChI captures: {topology} topologies, {assembly} stereo assemblies, {native_failures} rejected stages"
+        "InChI captures: {topology} topologies, {assembly} stereo assemblies, {cleanup} cleanups, {complete} final states, {native_failures} rejected stages; {duplicate_boundaries} explicit duplicate-record boundaries"
     );
     Ok(())
 }
@@ -186,5 +337,31 @@ fn native_record_bounds_and_ignored_fields() -> anyhow::Result<()> {
         input.status = status;
         assert!(output::assemble(&input)?.state.is_none());
     }
+    let mut malformed = output::assemble(&baseline)?;
+    malformed.unspecified_bonds.push(false);
+    assert!(matches!(
+        output::clean_up(&malformed),
+        Err(output::Error::Invalid(_))
+    ));
+    assert!(matches!(
+        output::prepare(
+            &malformed,
+            output::Options {
+                sanitize: false,
+                remove_hydrogens: false
+            }
+        ),
+        Err(output::Error::Invalid(_))
+    ));
+    let mut nitrogen = carbon();
+    nitrogen.element = "N".into();
+    nitrogen.hydrogens = [5, 0, 0, 0];
+    let mut expensive = baseline;
+    expensive.atoms = vec![nitrogen; 20_000];
+    let assembled = output::assemble(&expensive)?;
+    assert!(matches!(
+        output::clean_up(&assembled),
+        Err(output::Error::Limit(_))
+    ));
     Ok(())
 }

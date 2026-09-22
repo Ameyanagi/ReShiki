@@ -13,6 +13,21 @@ pub const MAX_REQUEST_BYTES: usize = 8 * 1024 * 1024;
 pub const MAX_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
 const MAX_STDERR_BYTES: usize = 64 * 1024;
 pub const MAX_TIMEOUT: Duration = Duration::from_secs(120);
+pub const DEFAULT_KERNEL_HEAP_BYTES: usize = 64 * 1024 * 1024;
+pub const MAX_KERNEL_HEAP_BYTES: usize = 512 * 1024 * 1024;
+
+/// The arena covers the kernel's direct C heap, including allocation metadata.
+/// It is not a process RSS limit; stack, system runtime and bridge buffers are separate.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Limits {
+    pub timeout: Duration,
+    pub kernel_heap_bytes: usize,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Resource {
+    KernelHeap,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Status {
@@ -87,6 +102,15 @@ pub enum Error {
         code: Option<i32>,
         diagnostic: String,
     },
+    #[error("InChI helper {resource:?} exhausted its {budget} byte budget")]
+    ResourceLimit {
+        resource: Resource,
+        budget: u64,
+        used: u64,
+        requested: u64,
+    },
+    #[error("InChI helper could not allocate its {budget} byte {resource:?} arena")]
+    ResourceUnavailable { resource: Resource, budget: u64 },
     #[error("InChI generation exceeded its time limit")]
     Timeout,
 }
@@ -119,12 +143,33 @@ async fn read_limited(
 /// warnings/errors are distinct from transport, timeout and process failures.
 /// The executable is launched directly, without arguments or a shell.
 pub async fn generate(helper: &Path, input: &Input, timeout: Duration) -> Result<Output, Error> {
-    if timeout.is_zero() || timeout > MAX_TIMEOUT {
+    generate_with_limits(
+        helper,
+        input,
+        Limits {
+            timeout,
+            kernel_heap_bytes: DEFAULT_KERNEL_HEAP_BYTES,
+        },
+    )
+    .await
+}
+
+pub async fn generate_with_limits(
+    helper: &Path,
+    input: &Input,
+    limits: Limits,
+) -> Result<Output, Error> {
+    if limits.timeout.is_zero() || limits.timeout > MAX_TIMEOUT {
         return Err(Error::Input(
             "Timeout must be greater than zero and at most 120 seconds",
         ));
     }
-    let request = transport::encode(input)?;
+    if limits.kernel_heap_bytes == 0 || limits.kernel_heap_bytes > MAX_KERNEL_HEAP_BYTES {
+        return Err(Error::Input(
+            "Kernel heap budget must be between 1 byte and 512 MiB",
+        ));
+    }
+    let request = transport::encode(input, limits.kernel_heap_bytes)?;
     let operation = async {
         let mut child = Command::new(helper)
             .stdin(Stdio::piped())
@@ -165,7 +210,7 @@ pub async fn generate(helper: &Path, input: &Input, timeout: Duration) -> Result
         }
         transport::decode(&response)
     };
-    tokio::time::timeout(timeout, operation)
+    tokio::time::timeout(limits.timeout, operation)
         .await
         .map_err(|_| Error::Timeout)?
 }

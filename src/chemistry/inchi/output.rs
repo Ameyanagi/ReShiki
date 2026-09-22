@@ -4,11 +4,15 @@
 //! Copyright (C) 2011-2025 Novartis Institutes for BioMedical Research Inc. and
 //! other RDKit contributors. BSD-3-Clause; see licenses/rdkit/LICENSE.
 mod assembly;
+mod cleanup;
+mod finish;
 
 use crate::chemistry::{graph::Graph, stereo::perception::State};
 use serde::{Deserialize, Serialize};
 
 pub use assembly::{assemble, topology};
+pub use cleanup::clean_up;
+pub use finish::{Options, prepare, reconstruct};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -62,6 +66,14 @@ pub enum Error {
     Chemistry(String),
     #[error("InChI atom cache exceeds the native signed-byte valence range")]
     NativeCacheBoundary,
+    #[error(
+        "Repeated InChI stereo records exceed the molecular metadata boundary at bond {bond} ({indices} atom indices)"
+    )]
+    RepeatedStereoRecords { bond: usize, indices: usize },
+    #[error(transparent)]
+    Sanitization(#[from] crate::chemistry::sanitize::Error),
+    #[error(transparent)]
+    Hydrogens(#[from] crate::chemistry::hydrogens::Error),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -77,7 +89,7 @@ pub enum Warning {
     ConflictingBondDirections,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Assembly {
     /// None has the same meaning as the native null molecule, including a
     /// failed kernel status or an illegal bond type. Errors describe malformed
@@ -118,6 +130,60 @@ impl Work {
             .ok_or(Error::Limit("the reconstruction work budget"))?;
         Ok(())
     }
+}
+
+fn validate_assembly(input: &Assembly) -> Result<(), Error> {
+    if input.warnings.len() > 1_000_000 || input.unspecified_bonds.len() > 300_000 {
+        return Err(Error::Limit("the assembly annotation size"));
+    }
+    let Some(state) = &input.state else {
+        return Ok(());
+    };
+    state
+        .graph
+        .cached_valences(Some(&state.valences))
+        .map_err(Error::Chemistry)?;
+    let (n, b) = (state.graph.atoms.len(), state.graph.bonds.len());
+    if input.unspecified_bonds.len() != b
+        || state.directions.len() != b
+        || state.conjugated.len() != b
+        || state.hybridizations.len() != n
+        || state.properties.atoms.len() != n
+        || state.properties.bond_codes.len() != b
+        || state.metadata.atoms.len() != n
+        || state.metadata.bonds.len() != b
+    {
+        return Err(invalid("Molecular annotation dimensions differ from graph"));
+    }
+    for (bond, metadata) in state.metadata.bonds.iter().enumerate() {
+        if metadata.stereo_atoms.len() > 2 {
+            return Err(Error::RepeatedStereoRecords {
+                bond,
+                indices: metadata.stereo_atoms.len(),
+            });
+        }
+    }
+    state
+        .metadata
+        .validate(&state.graph)
+        .map_err(Error::Chemistry)?;
+    let mut work = Work(2_000_000);
+    work.spend(state.rings.atoms.len())?;
+    for ring in &state.rings.atoms {
+        work.spend(ring.len())?;
+    }
+    for atom in &state.properties.atoms {
+        if let Some(code) = &atom.cip_code {
+            work.spend(code.len())?;
+        }
+        if let Some(members) = &atom.ring_members {
+            work.spend(members.len())?;
+        }
+    }
+    for code in state.properties.bond_codes.iter().flatten() {
+        work.spend(code.len())?;
+    }
+    Ok(())
 }
 struct Topology {
     edges: Vec<Vec<(usize, usize)>>,
