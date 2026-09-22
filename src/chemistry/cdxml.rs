@@ -8,9 +8,10 @@
 //! The molecular reader accepts chemical XML after abbreviation expansion and
 //! bond display normalization. Detached preprocessing expands explicit
 //! abbreviation definitions and normalizes bond depictions. These boundaries
-//! do not sanitize, remove hydrogen atoms, assemble drawings, assign final CIP
-//! labels, or calculate identifiers. Unsupported queries and malformed fragments
-//! fail atomically instead of losing chemistry.
+//! preserve raw unsanitized chemistry. `prepare_cdxml` then combines fragments,
+//! restores chemical orders and performs the original sanitization and legacy
+//! stereo sequence. Scene assembly, final CIP labels and identifiers remain
+//! separate. Unsupported queries and malformed fragments fail atomically.
 mod abbreviations;
 mod arrows;
 mod association;
@@ -22,6 +23,7 @@ mod marks;
 mod normalize;
 mod numeric;
 mod parse;
+mod preparation;
 pub mod presentation;
 mod read_abbreviations;
 mod stereo;
@@ -38,6 +40,9 @@ pub use labels::{
 };
 pub use marks::{AtomMarks, Marks, NativeMark, read_marks};
 pub use normalize::chemistry_xml;
+pub use preparation::{
+    PreparationCause, PreparationError, PreparationStage, PreparedCdxml, prepare_cdxml,
+};
 pub use read_abbreviations::read_abbreviations;
 
 use super::{graph::Graph, kekulize::Direction, ranking::Metadata, stereo::Point3};

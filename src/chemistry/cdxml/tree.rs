@@ -38,6 +38,15 @@ pub(super) struct Tree {
 }
 impl Tree {
     pub fn parse(text: &str) -> Result<Self> {
+        let tree = Self::parse_import(text)?;
+        if tree.node(0)?.tag != "CDXML" {
+            return Err(Error::Invalid("Expected CDXML root".into()));
+        }
+        Ok(tree)
+    }
+    /// Original import allows any permitted object as the XML root. Keep its
+    /// identity and ordinals; callers still validate allowed objects/pages.
+    pub fn parse_import(text: &str) -> Result<Self> {
         if text.len() > INPUT_BYTES {
             return Err(Error::Limit);
         }
@@ -51,9 +60,6 @@ impl Tree {
         )
         .map_err(|e| Error::Invalid(e.to_string()))?;
         let root = doc.root_element();
-        if !root.has_tag_name("CDXML") || root.tag_name().namespace().is_some() {
-            return Err(Error::Invalid("Expected CDXML root".into()));
-        }
         let mut tree = Self {
             elements: Vec::new(),
             work: Cell::new(20_000_000),

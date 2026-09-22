@@ -26,6 +26,10 @@ There are 11,772 matching arrays, 64 matching native failures, and 50 explicit
 rejections of undefined native inputs: tetrahedral annotations with total
 degree three or four but fewer than three graph neighbors leave native
 neighbor slots uninitialized. These cases are not executed by the C++ oracle.
+Two of the 64 adapter failures return an empty identifier before entering the
+kernel without initializing the native return-code field.
+`Error::NativeEmpty(TooManyNeighbors)` preserves this classification without
+inventing a kernel status, separately from other failures.
 
 The Rust library prepares owned input only. Calling a generator, its chemical
 acceptance rules and its 1,023-atom limit remain separate work. The input ABI

@@ -1,0 +1,17 @@
+The optional development helper compiles the unmodified official InChI 1.07.3
+kernel. Source/header notices remain in the external source tree. The IUPAC,
+InChI Trust and InChI Project MIT notices are retained in LICENSE.
+
+INCHI_BASE/src/sha2.c and sha2.h carry this additional notice:
+
+FIPS-180-2 compliant SHA-256 implementation
+Copyright (C) 2010 Paul Bakker.
+Originally written (2003-2006) by Christophe Devine.
+
+This code is free software; you can redistribute it and/or
+modify it, as a part of the International Chemical Identifier (InChI)
+software, under the terms of the MIT license
+https://opensource.org/license/mit
+
+Note that this licensing is only valid in combination with the InChI
+software package, for all other cases contact Paul Bakker.

@@ -19,8 +19,19 @@ use std::collections::BTreeSet;
 const MAX_ATOMS: usize = i16::MAX as usize;
 const MAX_NEIGHBORS: usize = 20;
 
+/// A checked equivalent of a native adapter return before the kernel is called.
+/// Its original public result is an empty identifier. The adapter never writes
+/// the native return-code field on this path, so there is no defined status.
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum NativeEmpty {
+    #[error("Atom {atom} exceeds {stored_bonds} stored neighbors")]
+    TooManyNeighbors { atom: usize, stored_bonds: usize },
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("Native InChI adapter returned an empty identifier: {0}")]
+    NativeEmpty(NativeEmpty),
     #[error("Invalid InChI input: {0}")]
     Invalid(String),
     #[error("InChI input exceeds {0}")]
@@ -205,7 +216,10 @@ pub fn prepare(state: &State, positions: Option<&[Point3]>) -> Result<Input, Err
         };
         let target = at_mut(&mut result.atoms, left)?;
         if target.bonds.len() >= MAX_NEIGHBORS {
-            return Err(Error::Limit("20 stored neighbors per atom"));
+            return Err(Error::NativeEmpty(NativeEmpty::TooManyNeighbors {
+                atom: left,
+                stored_bonds: target.bonds.len(),
+            }));
         }
         let stereo = match at(&assignment.assignment.directions, i)? {
             Direction::Wedge => sign,

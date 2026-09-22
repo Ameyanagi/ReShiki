@@ -11,7 +11,9 @@ use super::{Error, Result, tree::Tree};
 ///
 /// The detached tree's XML size, depth, work, namespace, and DTD limits apply.
 pub fn chemistry_xml(text: &str) -> Result<String> {
-    let mut tree = Tree::parse(text)?;
+    normalize_tree(Tree::parse(text)?)
+}
+pub(super) fn normalize_tree(mut tree: Tree) -> Result<String> {
     remove_pictures(&mut tree)?;
     for index in tree.descendants(0)? {
         let node = tree.node(index)?;

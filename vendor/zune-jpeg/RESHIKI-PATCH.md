@@ -5,7 +5,7 @@ Apache-2.0, and Zlib licenses. The registry package checksum is
 `27bc9d5b815bc103f142aa054f561d9187d191692ec7c2d1e2b4737f8dbd7296`;
 upstream source commit `31d81fed7551c8ccea456d9d8e2b1fd8bebb6995`,
 `crates/zune-jpeg`. Registry bookkeeping, lockfile, changelog and benchmark notes
-are omitted. `Cargo.toml`, `README.md` and `.cargo_vcs_info.json` have formatting-only changes required by the repository hooks. Trailing whitespace was removed from `src/color_convert/avx.rs`, `src/decoder.rs` and `src/upsampler/portable_simd.rs`. The application applies it through Cargo's `[patch.crates-io]`.
+are omitted. `Cargo.toml`, `Cargo.toml.orig`, `README.md` and `.cargo_vcs_info.json` have formatting-only changes required by the repository hooks. Trailing whitespace was removed from `src/color_convert/avx.rs`, `src/decoder.rs` and `src/upsampler/portable_simd.rs`. The application applies it through Cargo's `[patch.crates-io]`.
 
 The sampling and integer precision are checked against Pillow 12.3.0 with
 libjpeg-turbo 3.1.4.1. Reference algorithms are in that tag's

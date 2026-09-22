@@ -92,7 +92,10 @@ Copyright (C) 2002-2018 Greg Landrum and T5 Informatics GmbH.
 Code/GraphMol/SubstanceGroup.h and SubstanceGroup.cpp (group types and membership validation)
 Copyright (C) 2018-2020 Greg Landrum and T5 Informatics GmbH.
 
-Code/GraphMol/RWMol.cpp (hydrogen adjustment, atom/bond removal and stereo remapping)
+Code/GraphMol/ChemTransforms/ChemTransforms.cpp (CDXML fragment combination and conformer offsets)
+Copyright (C) 2006-2021 Greg Landrum.
+
+Code/GraphMol/RWMol.cpp (hydrogen adjustment, atom/bond removal, stereo remapping and CDXML fragment/stereo-group insertion)
 Copyright (C) 2003-2024 Greg Landrum and other RDKit contributors.
 
 Code/GraphMol/AddHs.cpp (default import hydrogen removal and stereo preservation)

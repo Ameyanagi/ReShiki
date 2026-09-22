@@ -119,7 +119,9 @@ fn attached(tree: &Tree, parent: usize, id: Option<&str>) -> Result<Vec<usize>> 
 /// declarations and namespaces are rejected. Input, output, tree depth, and
 /// transformation work are bounded.
 pub fn flatten_abbreviations(text: &str) -> Result<Flattened> {
-    let mut tree = Tree::parse(text)?;
+    flatten_tree(Tree::parse(text)?)
+}
+pub(super) fn flatten_tree(mut tree: Tree) -> Result<Flattened> {
     let source = tree.descendants(0)?;
     let before = chemical_count(&tree, &source)?;
     let wrappers = source
