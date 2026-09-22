@@ -90,7 +90,7 @@ async fn reaction_is_editable_validated_styled_and_exchangeable() {
     {
         let (_, hi) = reshiki::scene::selection_bounds(&doc, &part.atoms).unwrap();
         assert!(caption.position.y > hi.y);
-        assert!(caption.position.y - hi.y < settings.bond_length);
+        assert!((caption.position.y - product_caption.position.y).abs() < 0.001);
     }
     assert!(
         doc.annotations
@@ -649,4 +649,193 @@ async fn molecular_orientation_removes_small_tilts_without_changing_geometry() {
     )
     .unwrap();
     assert_eq!(rotated.bonds, doc.bonds);
+}
+
+#[tokio::test]
+async fn reaction_captions_share_a_baseline_with_multiline_names_and_coefficients() {
+    let mut proposal = reaction();
+    proposal.reactions[0].reactants[0].label = "Acetic acid\n(acyl donor)".into();
+    proposal.reactions[0].products[1].coefficient = 2;
+    let doc = assistant::render(
+        &LocalEngine::default(),
+        &proposal,
+        &DrawingSettings::default(),
+    )
+    .await
+    .unwrap();
+    let captions: Vec<_> = [
+        "Acetic acid\n(acyl donor)",
+        "Ethanol",
+        "Ethyl acetate",
+        "Water",
+    ]
+    .into_iter()
+    .map(|name| doc.annotations.iter().find(|a| a.text == name).unwrap())
+    .collect();
+    for caption in &captions {
+        assert!((caption.position.y - captions[0].position.y).abs() < 0.001);
+    }
+    for (part, caption) in doc.reactions[0]
+        .reactants
+        .iter()
+        .chain(&doc.reactions[0].products)
+        .zip(captions)
+    {
+        let (_, hi) = reshiki::scene::selection_bounds(&doc, &part.atoms).unwrap();
+        assert!(caption.position.y > hi.y);
+    }
+    let coefficient = doc.annotations.iter().find(|a| a.text == "2").unwrap();
+    assert!(coefficient.position.y < doc.arrows[0].start.y);
+    let conditions = doc
+        .annotations
+        .iter()
+        .find(|a| a.text.contains("H₂SO₄"))
+        .unwrap();
+    assert!(conditions.position.y + conditions.size().1 < doc.arrows[0].start.y);
+    let second = assistant::render(
+        &LocalEngine::default(),
+        &proposal,
+        &DrawingSettings::default(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(doc, second);
+}
+
+fn carbonyl_angle(doc: &Document, atoms: &[u64]) -> f32 {
+    for b in &doc.bonds {
+        if b.order != 2 || !atoms.contains(&b.a) || !atoms.contains(&b.b) {
+            continue;
+        }
+        let a = doc.atom(b.a).unwrap();
+        let z = doc.atom(b.b).unwrap();
+        let (c, o) = match (a.element.as_str(), z.element.as_str()) {
+            ("C", "O") => (a, z),
+            ("O", "C") => (z, a),
+            _ => continue,
+        };
+        return (o.position.y - c.position.y)
+            .atan2(o.position.x - c.position.x)
+            .to_degrees();
+    }
+    panic!("Expected a carbonyl");
+}
+
+#[tokio::test]
+async fn carbonyls_can_be_upright_in_proposals_and_visual_corrections() {
+    for smiles in ["CC=O", "CC(C)=O", "CCOC(C)=O", "C[C@H](O)C(=O)O"] {
+        let mut proposal = Proposal {
+            molecules: vec![molecule(smiles, "Carbonyl")],
+            ..Default::default()
+        };
+        let engine = LocalEngine::default();
+        let settings = DrawingSettings::default();
+        let original = assistant::render(&engine, &proposal, &settings)
+            .await
+            .unwrap();
+        let angle = carbonyl_angle(&original, &original.all_ids());
+        let degrees = ((-90. - angle) / 30.).round() * 30.;
+        let corrected = assistant::review::apply(
+            &original,
+            &[assistant::review::Edit::Rotate {
+                target: "molecule:0".into(),
+                degrees,
+            }],
+            true,
+        )
+        .unwrap();
+        assert!(
+            (carbonyl_angle(&corrected, &corrected.all_ids()) + 90.).abs() < 0.001,
+            "{smiles}: {degrees}"
+        );
+        assert_eq!(original.bonds, corrected.bonds);
+        for (old, new) in original.atoms.iter().zip(&corrected.atoms) {
+            let mut moved = old.clone();
+            moved.position = new.position;
+            assert_eq!(&moved, new);
+        }
+        for bond in &original.bonds {
+            let length = |doc: &Document| {
+                doc.atom(bond.a)
+                    .unwrap()
+                    .position
+                    .distance(doc.atom(bond.b).unwrap().position)
+            };
+            assert!((length(&original) - length(&corrected)).abs() < 0.001);
+        }
+        proposal.molecules[0].rotation = degrees;
+        let generated = assistant::render(&engine, &proposal, &settings)
+            .await
+            .unwrap();
+        assert!((carbonyl_angle(&generated, &generated.all_ids()) + 90.).abs() < 0.001);
+        if degrees.abs() > 0.01 {
+            assert_ne!(
+                assistant::review::images(&original).unwrap()[0].1,
+                assistant::review::images(&corrected).unwrap()[0].1
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn upright_carbonyls_keep_orthogonal_branch_arrows_and_independent_captions() {
+    let engine = LocalEngine::default();
+    let settings = DrawingSettings::default();
+    let mut aldehyde = molecule("CC=O", "Acetaldehyde");
+    let mut acid = molecule("CC(=O)O", "Acetic acid");
+    for part in [&mut aldehyde, &mut acid] {
+        let doc = assistant::render(
+            &engine,
+            &Proposal {
+                molecules: vec![part.clone()],
+                ..Default::default()
+            },
+            &settings,
+        )
+        .await
+        .unwrap();
+        part.rotation = ((-90. - carbonyl_angle(&doc, &doc.all_ids())) / 30.).round() * 30.;
+    }
+    let proposal = Proposal {
+        composition: assistant::composition::Composition {
+            arrangement: assistant::composition::Arrangement::Branching,
+            ..Default::default()
+        },
+        reactions: vec![
+            Step {
+                reactants: vec![aldehyde.clone()],
+                products: vec![molecule("CCO", "Ethanol")],
+                arrow: "forward".into(),
+                direction: Some(0.),
+                ..Default::default()
+            },
+            Step {
+                reactants: vec![aldehyde],
+                products: vec![acid],
+                arrow: "forward".into(),
+                direction: Some(-90.),
+                ..Default::default()
+            },
+        ],
+        ..Default::default()
+    };
+    let doc = assistant::render(&engine, &proposal, &settings)
+        .await
+        .unwrap();
+    assert_eq!(doc.reactions[0].reactants, doc.reactions[1].reactants);
+    for atoms in [
+        &doc.reactions[0].reactants[0].atoms,
+        &doc.reactions[1].products[0].atoms,
+    ] {
+        assert!((carbonyl_angle(&doc, atoms) + 90.).abs() < 0.001);
+    }
+    assert!((doc.arrows[0].start.y - doc.arrows[0].end.y).abs() < 0.001);
+    assert!((doc.arrows[1].start.x - doc.arrows[1].end.x).abs() < 0.001);
+    let name = |text: &str| doc.annotations.iter().find(|a| a.text == text).unwrap();
+    assert!(name("Acetic acid").position.y < name("Ethanol").position.y);
+    assert!(
+        assistant::review::quality(&doc, &proposal.composition)
+            .iter()
+            .all(|issue| !issue.contains("overlap"))
+    );
 }

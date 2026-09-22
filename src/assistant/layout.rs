@@ -203,11 +203,15 @@ async fn prepare_all(
     }
     Ok(result)
 }
+fn caption_baseline<'a>(parts: impl Iterator<Item = &'a Participant>, y: f32, gap: f32) -> f32 {
+    y + parts.map(|p| (p.hi.y - p.lo.y) / 2.).fold(0., f32::max) + gap * 0.6
+}
 fn place_row(
     doc: &mut Document,
     parts: &[Participant],
     x: &mut f32,
     y: f32,
+    caption_y: f32,
     settings: &DrawingSettings,
     separators: bool,
 ) -> Result<(f32, Vec<crate::reactions::Participant>), String> {
@@ -264,7 +268,6 @@ fn place_row(
                 .collect(),
             coefficient: part.coefficient,
         });
-        let caption_y = y + (part.hi.y - part.lo.y) / 2. + gap * 0.6;
         caption(
             doc,
             &part.label,
@@ -317,7 +320,8 @@ pub async fn render_progress(
     for chunk in proposal.molecules.chunks(3) {
         let first_id = doc.next_id();
         let parts = prepare_all(engine, chunk, &settings, progress, &mut prepared, total).await?;
-        y = place_row(&mut doc, &parts, &mut 0., y, &settings, false)?.0 + gap * 2.;
+        let baseline = caption_baseline(parts.iter(), y, gap);
+        y = place_row(&mut doc, &parts, &mut 0., y, baseline, &settings, false)?.0 + gap * 2.;
         panels.push((
             doc.all_ids()
                 .into_iter()
@@ -352,7 +356,19 @@ pub async fn render_progress(
         )
         .await?;
         let mut x = 0.;
-        let (left_bottom, reactants) = place_row(&mut doc, &left, &mut x, y, &settings, true)?;
+        let left_baseline = caption_baseline(left.iter(), y, gap);
+        let right_baseline = caption_baseline(right.iter(), y, gap);
+        // Branch product groups move independently; ordinary reaction rows share
+        // one baseline across both sides of the arrow.
+        let (left_baseline, right_baseline) =
+            if proposal.composition.arrangement == super::composition::Arrangement::Branching {
+                (left_baseline, right_baseline)
+            } else {
+                let baseline = left_baseline.max(right_baseline);
+                (baseline, baseline)
+            };
+        let (left_bottom, reactants) =
+            place_row(&mut doc, &left, &mut x, y, left_baseline, &settings, true)?;
         x += gap;
         let mut conditions_format = settings.format.clone();
         conditions_format.alignment = TextAlign::Center;
@@ -383,7 +399,8 @@ pub async fn render_progress(
             &conditions_format,
         );
         x += width + gap;
-        let (right_bottom, products) = place_row(&mut doc, &right, &mut x, y, &settings, true)?;
+        let (right_bottom, products) =
+            place_row(&mut doc, &right, &mut x, y, right_baseline, &settings, true)?;
         let panel_ids: Vec<_> = doc
             .all_ids()
             .into_iter()

@@ -24,6 +24,8 @@ The assistant receives your request and drawing context and uses the document's 
 
 Keep drawing, dragging, zooming, or typing while generation runs. Closing the panel keeps the job running; **Assistant · Working** in the toolbar lets you return to it. Intermediate drafts stay in the conversation. They do not repeatedly change your canvas.
 
+Opening composer menus keeps your place in the conversation. After reading earlier messages, use **Jump to result** to return to a completed draft. Reopening the panel restores your previous position.
+
 **Stop** ends the request and retains any completed preview. You can inspect or discard it, edit its layout, or ask the assistant to improve it.
 
 ## Choose an arrangement
@@ -37,7 +39,7 @@ Describe the roles of the parts as well as the chemistry:
 | Labeled grid                  | “Arrange these related reactions in two columns, with a caption for each.”                   |
 | Branching reactions           | “Put acetaldehyde in the center, reduction to the right, and oxidation above it.”            |
 
-ReShiki measures the actual structures and captions to place the panels. Bond lengths remain consistent. Branching currently supports one shared reactant with several outgoing reactions.
+ReShiki measures the actual structures and captions to place the panels. Compound names share a baseline within each horizontal reaction row. Bond lengths remain consistent, and the assistant can rotate molecules in 30-degree steps to make carbonyls upright. Branching currently supports one shared reactant with several outgoing reactions.
 
 Ask for compact long chains when they would overwhelm the figure. The underlying atoms and bonds remain editable and can be expanded again. Ask to **preserve full structural detail** when the complete chain should stay visible.
 
@@ -77,11 +79,11 @@ Ask for a follow-up, such as “Move the conditions above the arrow,” or use *
 
 ## Choose a model
 
-The model menu follows the latest available model until you choose one explicitly. Open the effort menu to choose reasoning effort and service tier. Defaults are **Low** and **Standard**.
+The assistant defaults to **GPT-6 Sol** when it is available in your Codex account. If it is unavailable, ReShiki uses your account’s default model. Choosing a model explicitly saves that choice. Open the effort menu to choose reasoning effort and service tier. Defaults are **Low** and **Standard**.
 
 <Screenshot
   src="/manual/assistant-model.png"
-  alt="The model selector can follow the latest model or use an explicit choice."
+  alt="The model selector defaults to GPT-6 Sol and also offers explicit model choices."
 />
 
 <Screenshot

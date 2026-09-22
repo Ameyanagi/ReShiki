@@ -102,7 +102,7 @@ impl Proposal {
                     || !(1..=99).contains(&m.coefficient)
                     || !m.rotation.is_finite()
                     || m.rotation.abs() > 360.
-                    || (m.rotation / 90. - (m.rotation / 90.).round()).abs() > 0.001
+                    || (m.rotation / 30. - (m.rotation / 30.).round()).abs() > 0.001
             })
         {
             return Err("Use at most 32 molecules with short labels and valid SMILES".into());
@@ -142,7 +142,7 @@ impl Proposal {
     }
 }
 pub fn schema() -> Value {
-    let molecule = json!({"type":"object","additionalProperties":false,"properties":{"smiles":{"type":"string"},"label":{"type":"string"},"coefficient":{"type":"integer","minimum":1,"maximum":99},"rotation":{"type":"number","enum":[-360,-270,-180,-90,0,90,180,270,360],"description":"Quarter turns only, preserving clean horizontal or vertical orientation."},"compact":{"type":"boolean","description":"Condense long carbon chains into expandable formula labels while retaining the full molecular graph. False when explicit chain detail is requested."}},"required":["smiles","label","coefficient","rotation","compact"]});
+    let molecule = json!({"type":"object","additionalProperties":false,"properties":{"smiles":{"type":"string"},"label":{"type":"string"},"coefficient":{"type":"integer","minimum":1,"maximum":99},"rotation":{"type":"number","enum":[-360,-330,-300,-270,-240,-210,-180,-150,-120,-90,-60,-30,0,30,60,90,120,150,180,210,240,270,300,330,360],"description":"Rotate in 30-degree increments to orient functional groups on the conventional bond grid."},"compact":{"type":"boolean","description":"Condense long carbon chains into expandable formula labels while retaining the full molecular graph. False when explicit chain detail is requested."}},"required":["smiles","label","coefficient","rotation","compact"]});
     let molecules = json!({"type":"array","items":molecule});
     json!({"type":"object","additionalProperties":false,"properties":{
         "explanation":{"type":"string","description":"Brief explanation or clarification question. Do not claim the drawing was applied."},

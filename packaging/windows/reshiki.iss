@@ -37,7 +37,7 @@ Name: "japanese"; MessagesFile: "compiler:Languages\Japanese.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked
-Name: "fileassoc"; Description: "Open .reshiki drawings with ReShiki"
+Name: "fileassoc"; Description: "Open .rsk and older ReShiki drawings with ReShiki"
 
 [InstallDelete]
 ; Retire only the former app-owned worker. Never remove user caches or drawings.
@@ -51,7 +51,7 @@ Name: "{userprograms}\ReShiki"; Filename: "{app}\reshiki.exe"
 Name: "{userdesktop}\ReShiki"; Filename: "{app}\reshiki.exe"; Tasks: desktopicon
 
 [Registry]
-; Editable Office objects are independent of the optional .reshiki file association.
+; Editable Office objects are independent of the optional drawing file associations.
 Root: HKCU; Subkey: "Software\Classes\CLSID\{{3BAC2B7E-73A2-4F3A-9CE7-5E9B438C59B4}"; ValueType: string; ValueData: "ReShiki drawing"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\CLSID\{{3BAC2B7E-73A2-4F3A-9CE7-5E9B438C59B4}\LocalServer32"; ValueType: string; ValueData: """{app}\reshiki.exe"" --ole-server"
 Root: HKCU; Subkey: "Software\Classes\CLSID\{{3BAC2B7E-73A2-4F3A-9CE7-5E9B438C59B4}\InprocHandler32"; ValueType: string; ValueData: "ole32.dll"
@@ -60,7 +60,9 @@ Root: HKCU; Subkey: "Software\Classes\CLSID\{{3BAC2B7E-73A2-4F3A-9CE7-5E9B438C59
 Root: HKCU; Subkey: "Software\Classes\CLSID\{{3BAC2B7E-73A2-4F3A-9CE7-5E9B438C59B4}\Verb\1"; ValueType: string; ValueData: "Open,0,2"
 Root: HKCU; Subkey: "Software\Classes\ReShiki.EmbeddedDrawing.1"; ValueType: string; ValueData: "ReShiki drawing"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\ReShiki.EmbeddedDrawing.1\CLSID"; ValueType: string; ValueData: "{{3BAC2B7E-73A2-4F3A-9CE7-5E9B438C59B4}"
+Root: HKCU; Subkey: "Software\Classes\.rsk\OpenWithProgids"; ValueType: string; ValueName: "ReShiki.Drawing"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
 Root: HKCU; Subkey: "Software\Classes\.reshiki\OpenWithProgids"; ValueType: string; ValueName: "ReShiki.Drawing"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
+Root: HKCU; Subkey: "Software\Classes\.moruno\OpenWithProgids"; ValueType: string; ValueName: "ReShiki.Drawing"; ValueData: ""; Flags: uninsdeletevalue; Tasks: fileassoc
 Root: HKCU; Subkey: "Software\Classes\ReShiki.Drawing"; ValueType: string; ValueData: "ReShiki drawing"; Flags: uninsdeletekey; Tasks: fileassoc
 Root: HKCU; Subkey: "Software\Classes\ReShiki.Drawing\shell\open\command"; ValueType: string; ValueData: """{app}\reshiki.exe"" --open ""%1"""; Tasks: fileassoc
 

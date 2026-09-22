@@ -16,7 +16,7 @@ ReShiki 0.6 opens on a blank canvas and includes its drawing and chemistry tools
 
 ## Assistant schemes
 
-Sending a request shows activity, elapsed time, and Stop immediately. Public composition summaries, actual structure counts, and editable previews appear as work becomes available. The canvas remains usable, and closing the assistant panel lets generation continue.
+GPT-6 Sol is the assistant default when available; saved model choices are preserved. Sending a request shows activity, elapsed time, and Stop immediately. Public composition summaries, actual structure counts, and editable previews appear as work becomes available. The canvas remains usable, and closing the assistant panel lets generation continue.
 
 Schemes support aligned reaction rows, a central general reaction with surrounding examples, labeled grids, and branching reactions with one shared reactant. Layout uses measured bounds and consistent bond lengths. Compact chains retain the complete graph and can be expanded. Conventional molecular orientations are straightened before review.
 
@@ -24,6 +24,6 @@ The assistant reviews overview and close-up images of the exact proposed drawing
 
 ## Installation and compatibility
 
-Downloads support Apple Silicon macOS, Windows x64/ARM64, and Linux x64/ARM64. Existing `.reshiki` drawings remain compatible. Keep portable package contents together so the application can find its bundled native helper. Python remains a developer build-script and optional reference-test dependency only.
+Downloads support Apple Silicon macOS, Windows x64/ARM64, and Linux x64/ARM64. New drawings use the shorter `.rsk` extension and the same readable JSON format. Existing `.reshiki` and `.moruno` drawings remain compatible; saving them preserves their filenames. Keep portable package contents together so the application can find its bundled native helper. Python remains a developer build-script and optional reference-test dependency only.
 
 See the [installation guide](/guide/install/), [assistant walkthrough](/guide/assistant/), and [release preparation record](release-0.6-validation.md).

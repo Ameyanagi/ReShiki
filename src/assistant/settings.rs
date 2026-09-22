@@ -1,4 +1,4 @@
-//! Catalog-driven assistant choices. Automatic selection never pins an old model.
+//! Catalog-driven assistant choices with an application default and explicit overrides.
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf};
 
@@ -84,6 +84,16 @@ pub fn latest(models: &[Model]) -> Option<&Model> {
         .max_by_key(|(i, m)| (generation(&m.id), m.is_default, std::cmp::Reverse(*i)))
         .map(|(_, m)| m)
 }
+pub const DEFAULT_MODEL: &str = "gpt-6-sol";
+
+/// Use the requested application default when available, then the account default.
+pub fn default_model(models: &[Model]) -> Option<&Model> {
+    models
+        .iter()
+        .find(|m| m.id == DEFAULT_MODEL)
+        .or_else(|| models.iter().find(|m| m.is_default))
+        .or_else(|| latest(models))
+}
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Preferences {
@@ -96,9 +106,10 @@ impl Preferences {
     pub fn resolve<'a>(&self, models: &'a [Model]) -> Result<&'a Model, String> {
         match &self.model {
             Some(id) => models.iter().find(|m| &m.id == id).ok_or_else(|| {
-                format!("{id} is no longer available. Choose a model or use Latest.")
+                format!("{id} is no longer available. Choose a model or use Default.")
             }),
-            None => latest(models).ok_or_else(|| "No available models. Reconnect to Codex.".into()),
+            None => default_model(models)
+                .ok_or_else(|| "No available models. Reconnect to Codex.".into()),
         }
     }
     pub fn effort<'a>(&'a self, model: &'a Model) -> &'a str {
@@ -142,18 +153,21 @@ mod tests {
         serde_json::from_value(serde_json::json!({"model":id,"displayName":id,"isDefault":default,"defaultReasoningEffort":"medium","supportedReasoningEfforts":[{"reasoningEffort":"medium","description":"Balanced"}]})).unwrap()
     }
     #[test]
-    fn automatic_follows_new_generation_but_explicit_choice_survives_refresh() {
+    fn default_prefers_sol_but_explicit_choice_survives_refresh() {
         let mut models = vec![model("gpt-5.6-sol", true), model("gpt-6-astra", false)];
         let mut prefs = Preferences::default();
-        assert_eq!(prefs.resolve(&models).unwrap().id, "gpt-6-astra");
+        assert_eq!(prefs.resolve(&models).unwrap().id, "gpt-5.6-sol");
+        models.push(model("gpt-6-sol", false));
+        assert_eq!(prefs.resolve(&models).unwrap().id, DEFAULT_MODEL);
         models.push(model("gpt-6.1", false));
-        assert_eq!(prefs.resolve(&models).unwrap().id, "gpt-6.1");
+        assert_eq!(prefs.resolve(&models).unwrap().id, DEFAULT_MODEL);
         prefs.model = Some("gpt-5.6-sol".into());
         let persisted: Preferences =
             serde_json::from_str(&serde_json::to_string(&prefs).unwrap()).unwrap();
         assert_eq!(persisted.resolve(&models).unwrap().id, "gpt-5.6-sol");
         models.remove(0);
         assert!(persisted.resolve(&models).is_err());
+        assert!(prefs.resolve(&[]).is_err());
     }
     #[test]
     fn unsupported_effort_uses_the_models_advertised_default() {

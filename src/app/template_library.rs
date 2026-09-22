@@ -304,16 +304,17 @@ impl App {
                 let library = self.templates.library.clone();
                 Some(Task::perform(
                     async move {
-                        let Some(file) = rfd::AsyncFileDialog::new()
-                            .set_title("Export my templates and favorites")
-                            .set_file_name("My templates.reshiki-templates")
-                            .save_file()
-                            .await
+                        let Some(path) = super::files::save_path(
+                            "Export my templates and favorites",
+                            "My templates.reshiki-templates",
+                            "reshiki-templates",
+                        )
+                        .await
                         else {
                             return Ok(None);
                         };
-                        library.save(file.path())?;
-                        Ok(Some(file.path().to_path_buf()))
+                        library.save(&path)?;
+                        Ok(Some(path))
                     },
                     Message::Exported,
                 ))

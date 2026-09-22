@@ -1,4 +1,16 @@
-use std::{io::Write, path::Path};
+use std::{
+    io::Write,
+    path::{Path, PathBuf},
+};
+
+/// Preserve explicit suffixes; supply the format suffix when a save name has none.
+pub fn with_default_extension(path: &Path, extension: &str) -> PathBuf {
+    if path.extension().is_none_or(|suffix| suffix.is_empty()) {
+        path.with_extension(extension)
+    } else {
+        path.to_path_buf()
+    }
+}
 
 /// Replace only after the complete file has been written beside its destination.
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
@@ -16,6 +28,32 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn save_names_keep_explicit_suffixes_and_gain_missing_format_extensions() {
+        for (name, extension, expected) in [
+            ("Ethanol", "rsk", "Ethanol.rsk"),
+            ("Ethanol.", "rsk", "Ethanol.rsk"),
+            ("Ethanol.RSK", "rsk", "Ethanol.RSK"),
+            ("Ethanol.RESHIKI", "rsk", "Ethanol.RESHIKI"),
+            ("Ethanol.moruno", "rsk", "Ethanol.moruno"),
+            ("drawing.custom", "rsk", "drawing.custom"),
+            ("反応 図", "svg", "反応 図.svg"),
+            ("figure", "pdf", "figure.pdf"),
+            ("picture", "png", "picture.png"),
+            ("structures", "smi", "structures.smi"),
+            (
+                "templates",
+                "reshiki-templates",
+                "templates.reshiki-templates",
+            ),
+        ] {
+            let parent = Path::new("folder.with.dots");
+            assert_eq!(
+                with_default_extension(&parent.join(name), extension),
+                parent.join(expected)
+            );
+        }
+    }
     #[test]
     fn replacing_a_longer_document_does_not_leave_old_bytes() {
         let directory = tempfile::tempdir().unwrap();

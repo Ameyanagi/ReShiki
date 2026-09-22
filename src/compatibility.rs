@@ -7,8 +7,13 @@ pub(crate) fn environment(suffix: &str) -> Option<OsString> {
         .or_else(|| std::env::var_os(format!("MORUNO_{suffix}")))
 }
 
+pub const NATIVE_EXTENSION: &str = "rsk";
+pub const NATIVE_EXTENSIONS: &[&str] = &[NATIVE_EXTENSION, "reshiki", "moruno"];
+
 pub fn is_native_extension(extension: &str) -> bool {
-    extension.eq_ignore_ascii_case("reshiki") || extension.eq_ignore_ascii_case("moruno")
+    NATIVE_EXTENSIONS
+        .iter()
+        .any(|native| extension.eq_ignore_ascii_case(native))
 }
 
 pub(crate) fn data_directory() -> Result<PathBuf, String> {
@@ -107,6 +112,8 @@ mod tests {
 
     #[test]
     fn native_extensions_accept_previous_drawings() {
+        assert!(is_native_extension("rsk"));
+        assert!(is_native_extension("RSK"));
         assert!(is_native_extension("reshiki"));
         assert!(is_native_extension("MORUNO"));
         assert!(!is_native_extension("mol"));

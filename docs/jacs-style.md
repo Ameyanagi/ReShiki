@@ -37,7 +37,7 @@ The 2026-09-20 chain update passed 83 Rust and 23 Python tests. The packaged app
 Headless export is available for repeatable checks:
 
 ```sh
-cargo run --locked --example export_drawing -- input.reshiki output-prefix
+cargo run --locked --example export_drawing -- input.rsk output-prefix
 ```
 
 The arrow update also resets arrow tool settings on New. A desktop check changed the text style to 20 pt, bold/red and the arrow tool to a custom unequal equilibrium, then verified New restored Arial 10 pt, black and the Forward arrow with a 0.6 pt line. See [arrow verification](arrows.md).
