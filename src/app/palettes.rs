@@ -471,7 +471,6 @@ impl App {
                         ArrowPreset::Forward,
                         ArrowStyle {
                             head: reshiki::arrows::Head::Left,
-                            shape: reshiki::arrows::HeadShape::Open,
                             ..ArrowStyle::default()
                         },
                     ),
@@ -518,7 +517,7 @@ impl App {
                     }
                     body = body.push(line);
                 }
-                body = body.push(text("Click to place a rightward arrow, or drag to set its length and direction. Drag the middle handle to bend it.").size(11));
+                body = body.push(text("Click to place or change an arrow. Click the same type again to switch direction or half-head side. Drag to draw; drag the middle handle to bend.").size(11));
             }
             Family::Rectangles | Family::Ellipses | Family::Brackets => {
                 for options in graphic_options(family).chunks(3) {

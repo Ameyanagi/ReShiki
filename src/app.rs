@@ -2319,6 +2319,7 @@ impl App {
             | Edit::EraseStart(_)
             | Edit::EraseTo(..)
             | Edit::EraseEnd => return,
+            Edit::ArrowClick(id) => self.apply_arrow_tool(id),
             Edit::Chain {
                 points,
                 source,
@@ -2725,8 +2726,7 @@ impl App {
                         if let Some(id) =
                             hit.filter(|id| self.doc.arrows.iter().any(|a| a.id == *id))
                         {
-                            self.selected = vec![id];
-                            self.sync_arrows();
+                            self.apply_arrow_tool(id);
                         } else {
                             let length = self.doc.drawing_style.bond_length_world * 2.;
                             self.place_arrow(p, p.offset(length, 0.));
@@ -3350,7 +3350,7 @@ mod tests {
     }
 
     #[test]
-    fn arrow_click_places_a_fixed_rightward_arrow_and_existing_arrows_are_selected() {
+    fn arrow_click_places_a_fixed_rightward_arrow_and_repeated_click_reverses_it() {
         use reshiki::arrows::{ArrowStyle, Preset};
         use reshiki::graphics::LinePattern;
         for zoom in [0.5, 2.5] {
@@ -3377,17 +3377,79 @@ mod tests {
             assert_eq!(arrow.appearance(), style);
             assert_eq!(app.selected, [arrow.id]);
             let placed = app.doc.clone();
-            let revision = app.revision;
             app.selected.clear();
             app.edit(Edit::Click(arrow.point(0.5)));
-            assert_eq!(app.doc, placed);
+            assert_eq!(app.doc.arrows.len(), 1);
+            assert_eq!(app.doc.arrows[0].start, arrow.end);
+            assert_eq!(app.doc.arrows[0].end, arrow.start);
             assert_eq!(app.selected, [arrow.id]);
-            assert_eq!(app.revision, revision);
+            let reversed = app.doc.clone();
+            let _ = app.update(Message::Undo);
+            assert_eq!(app.doc, placed);
             let _ = app.update(Message::Undo);
             assert_eq!(app.doc, blank);
             let _ = app.update(Message::Redo);
             assert_eq!(app.doc, placed);
+            let _ = app.update(Message::Redo);
+            assert_eq!(app.doc, reversed);
         }
+    }
+
+    #[test]
+    fn arrow_tool_click_applies_variants_and_cycles_half_heads_without_adding_objects() {
+        use reshiki::arrows::{ArrowStyle, Head, Preset};
+        let (mut app, _) = App::new();
+        let _ = app.update(Message::Tool(Tool::Arrow));
+        app.edit(Edit::Click(Point::default()));
+        let before = app.doc.clone();
+        let style = ArrowStyle {
+            head: Head::Left,
+            ..ArrowStyle::default()
+        };
+        let _ = app.update(Message::Palette(palettes::Action::ArrowVariant(
+            Preset::Forward,
+            style.clone(),
+        )));
+        let midpoint = app.doc.arrows[0].point(0.5);
+        app.edit(Edit::Click(midpoint));
+        assert_eq!(app.doc.arrows.len(), 1);
+        assert_eq!(app.doc.arrows[0].appearance(), style);
+        app.edit(Edit::Click(midpoint));
+        assert_eq!(app.doc.arrows[0].appearance().head, Head::Right);
+        app.edit(Edit::Click(midpoint));
+        assert_eq!(app.doc.arrows[0].appearance().head, Head::Left);
+        for _ in 0..3 {
+            let _ = app.update(Message::Undo);
+        }
+        assert_eq!(app.doc, before);
+    }
+
+    #[test]
+    fn repeated_arrow_click_reverses_reaction_roles_and_undo_restores_them() {
+        use reshiki::reactions::{Participant, Reaction};
+        let (mut app, _) = App::new();
+        let reactant = app.doc.add_atom("O", Point::new(-100., 0.));
+        let product = app.doc.add_atom("N", Point::new(200., 0.));
+        let _ = app.update(Message::Tool(Tool::Arrow));
+        app.edit(Edit::Click(Point::default()));
+        let arrow = &app.doc.arrows[0];
+        let midpoint = arrow.point(0.5);
+        let mut reaction = Reaction::new(arrow.id);
+        reaction.reactants.push(Participant {
+            atoms: vec![reactant],
+            coefficient: 1,
+        });
+        reaction.products.push(Participant {
+            atoms: vec![product],
+            coefficient: 1,
+        });
+        app.doc.reactions.push(reaction);
+        let before = app.doc.clone();
+        app.edit(Edit::Click(midpoint));
+        assert_eq!(app.doc.reactions[0].reactants, before.reactions[0].products);
+        assert_eq!(app.doc.reactions[0].products, before.reactions[0].reactants);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, before);
     }
 
     #[test]

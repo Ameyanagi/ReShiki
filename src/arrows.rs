@@ -98,6 +98,8 @@ impl ArrowStyle {
                 s.head = Head::Left;
                 s.tail = Head::Left;
                 s.shape = HeadShape::Open;
+                s.head_length_pt = 4.;
+                s.head_width_pt = 1.8;
             }
             Preset::Resonance => {
                 s.tail = Head::Full;
@@ -113,7 +115,6 @@ impl ArrowStyle {
             }
             Preset::Dipole => {
                 s.dipole = true;
-                s.shape = HeadShape::Open;
             }
             Preset::NoGo => s.no_go = NoGo::Cross,
             _ => {}
@@ -197,6 +198,51 @@ impl Arrow {
             None => lerp(self.start, self.end, t),
         }
     }
+    fn velocity(&self, t: f32) -> Point {
+        if let Some(c) = self.control_point() {
+            if self.kind == "bent" {
+                let (a, b) = if t < 0.5 {
+                    (self.start, c)
+                } else {
+                    (c, self.end)
+                };
+                return Point::new(2. * (b.x - a.x), 2. * (b.y - a.y));
+            }
+            Point::new(
+                2. * ((1. - t) * (c.x - self.start.x) + t * (self.end.x - c.x)),
+                2. * ((1. - t) * (c.y - self.start.y) + t * (self.end.y - c.y)),
+            )
+        } else {
+            Point::new(self.end.x - self.start.x, self.end.y - self.start.y)
+        }
+    }
+    fn offset_point(&self, t: f32, offset: f32) -> Point {
+        let v = self.velocity(t);
+        let speed = v.distance(Point::default());
+        let direction = if speed > 0.0001 {
+            Point::new(v.x / speed, v.y / speed)
+        } else {
+            unit(self.start, self.end)
+        };
+        self.point(t)
+            .offset(-direction.y * offset, direction.x * offset)
+    }
+    fn offset_velocity(&self, t: f32, offset: f32) -> Point {
+        let v = self.velocity(t);
+        let speed = v.distance(Point::default()).max(0.0001);
+        let Some(c) = self.control_point() else {
+            return v;
+        };
+        let a = Point::new(
+            2. * (self.end.x - 2. * c.x + self.start.x),
+            2. * (self.end.y - 2. * c.y + self.start.y),
+        );
+        let projection = (v.x * a.x + v.y * a.y) / (speed * speed);
+        v.offset(
+            offset * (-a.y + v.y * projection) / speed,
+            offset * (a.x - v.x * projection) / speed,
+        )
+    }
     pub fn handles(&self) -> [Point; 3] {
         [self.start, self.end, self.point(0.5)]
     }
@@ -234,6 +280,31 @@ impl Arrow {
     pub fn reverse(&mut self) {
         self.control = self.control_point();
         std::mem::swap(&mut self.start, &mut self.end);
+    }
+    /// Apply an arrow tool, or cycle its direction/half-head on another click.
+    /// Returns whether the reaction direction was reversed.
+    pub fn apply_tool(&mut self, preset: Preset, style: &ArrowStyle) -> bool {
+        if self.kind == preset.kind() && self.appearance() == *style {
+            if self.kind != "equilibrium" && matches!(style.head, Head::Left | Head::Right) {
+                let mut next = style.clone();
+                next.head = if style.head == Head::Left {
+                    Head::Right
+                } else {
+                    Head::Left
+                };
+                self.style = Some(next);
+                return false;
+            }
+            self.reverse();
+            return true;
+        }
+        let curved = |kind: &str| matches!(kind, "curved" | "fishhook");
+        if self.kind != preset.kind() && !(curved(&self.kind) && curved(preset.kind())) {
+            self.control = None;
+        }
+        self.kind = preset.kind().into();
+        self.style = Some(style.clone());
+        false
     }
     pub fn straighten(&mut self) {
         self.control = Some(lerp(self.start, self.end, 0.5));
@@ -343,6 +414,27 @@ impl Arrow {
                     commands.push(Line(shift(end)));
                     return commands;
                 }
+                if offset != 0. {
+                    // A curve's parallel follows its local normal. Hermite cubic
+                    // segments retain smooth tangents and a constant shaft gap.
+                    let steps = 16;
+                    let dt = (to - from) / steps as f32;
+                    let mut commands = vec![Move(self.offset_point(from, offset))];
+                    for i in 0..steps {
+                        let t0 = from + i as f32 * dt;
+                        let t1 = from + (i + 1) as f32 * dt;
+                        let p0 = self.offset_point(t0, offset);
+                        let p1 = self.offset_point(t1, offset);
+                        let v0 = self.offset_velocity(t0, offset);
+                        let v1 = self.offset_velocity(t1, offset);
+                        commands.push(Cubic(
+                            p0.offset(v0.x * dt / 3., v0.y * dt / 3.),
+                            p1.offset(-v1.x * dt / 3., -v1.y * dt / 3.),
+                            p1,
+                        ));
+                    }
+                    return commands;
+                }
                 let tangent = |t: f32| {
                     Point::new(
                         2. * ((1. - t) * (c.x - self.start.x) + t * (self.end.x - c.x)),
@@ -382,7 +474,7 @@ impl Arrow {
         if self.kind == "equilibrium" {
             path(body(0., 1., -gap), false, false);
             head(
-                self.end.offset(-n.x * gap, -n.y * gap),
+                self.offset_point(1., -gap),
                 tangent(1., false),
                 s.head,
                 &mut path,
@@ -390,7 +482,7 @@ impl Arrow {
             let inset = (1. - s.equilibrium_ratio) / 2.;
             path(body(1. - inset, inset, gap), false, false);
             head(
-                self.point(inset).offset(n.x * gap, n.y * gap),
+                self.offset_point(inset, gap),
                 tangent(inset, true),
                 s.tail,
                 &mut path,

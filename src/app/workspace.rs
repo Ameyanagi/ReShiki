@@ -342,7 +342,7 @@ impl App {
         ] {
             tools = tools.push(hover_hint(
                 button(
-                    canvas(Glyph(Icon::TextAlign(align), true))
+                    iced::widget::canvas(Glyph(Icon::TextAlign(align), true))
                         .width(24)
                         .height(24),
                 )
@@ -869,7 +869,9 @@ impl App {
                 } else {
                     Icon::Tool(*tool)
                 };
-                let item = canvas(super::tool_button::ToolButton {
+                // Vector tools can share a renderer layer. A separate clipped
+                // layer per icon adds GPU passes to every canvas redraw.
+                let item = iced::widget::canvas(super::tool_button::ToolButton {
                     tool: *tool,
                     icon,
                     active: self.tool == *tool,
@@ -1149,7 +1151,7 @@ impl App {
                         .padding(5),
                     )
                     .push(
-                        text("Click to place · Drag to draw · Middle handle bends")
+                        text("Click to place / change · Click again to switch · Drag to draw")
                             .size(11)
                             .color(muted()),
                     );
@@ -2003,12 +2005,16 @@ fn icon_button_at(
     position: tooltip::Position,
 ) -> Element<'static, Message> {
     hover_hint(
-        button(canvas(Glyph(icon, message.is_some())).width(24).height(24))
-            .width(36)
-            .height(36)
-            .padding(6)
-            .style(control(active))
-            .on_press_maybe(message),
+        button(
+            iced::widget::canvas(Glyph(icon, message.is_some()))
+                .width(24)
+                .height(24),
+        )
+        .width(36)
+        .height(36)
+        .padding(6)
+        .style(control(active))
+        .on_press_maybe(message),
         hint,
         position,
     )
@@ -2022,7 +2028,7 @@ fn action(
 ) -> Element<'static, Message> {
     button(
         row![
-            canvas(Glyph(icon, true)).width(24).height(24),
+            iced::widget::canvas(Glyph(icon, true)).width(24).height(24),
             text(label).size(12)
         ]
         .spacing(5)

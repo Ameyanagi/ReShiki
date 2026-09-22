@@ -8,6 +8,92 @@ use reshiki::{
 fn p(x: f32, y: f32) -> Point {
     Point::new(x, y)
 }
+
+#[test]
+fn repeated_tools_swap_equilibrium_preference_and_dipole_direction() {
+    let mut a = arrow(Preset::Equilibrium);
+    let style = ArrowStyle {
+        equilibrium_ratio: 0.6,
+        ..a.appearance()
+    };
+    a.style = Some(style.clone());
+    let (start, end) = (a.start, a.end);
+    let original = a.paths();
+    assert!(a.apply_tool(Preset::Equilibrium, &style));
+    near(a.start, end);
+    near(a.end, start);
+    assert_eq!(a.appearance().equilibrium_ratio, 0.6);
+    let reversed = a.paths();
+    let original_long = reshiki::graphics::flattened(&original[0].commands);
+    let reversed_long = reshiki::graphics::flattened(&reversed[0].commands);
+    assert!(original_long[0][0].y < 0. && reversed_long[0][0].y > 0.);
+    assert!(a.apply_tool(Preset::Equilibrium, &style));
+    near(a.start, start);
+    near(a.end, end);
+
+    assert!(!a.apply_tool(Preset::Dipole, &ArrowStyle::preset(Preset::Dipole)));
+    assert!(
+        a.paths()
+            .iter()
+            .any(|p| p.filled && p.style.fill == Some([0; 3]))
+    );
+    assert!(a.apply_tool(Preset::Dipole, &a.appearance()));
+    near(a.start, end);
+    near(a.end, start);
+    a.validate().unwrap();
+}
+
+#[test]
+fn half_heads_are_filled_and_repeated_clicks_mirror_only_the_head() {
+    for preset in [Preset::Forward, Preset::Fishhook] {
+        let mut a = arrow(preset);
+        a.style.as_mut().unwrap().head = Head::Left;
+        let original = a.clone();
+        assert!(a.paths()[1].filled);
+        assert_eq!(a.paths()[1].style.fill, Some([0; 3]));
+        assert!(!a.apply_tool(preset, &a.appearance()));
+        assert_eq!(a.appearance().head, Head::Right);
+        near(a.point(0.5), original.point(0.5));
+        near(a.start, original.start);
+        near(a.end, original.end);
+        assert!(!a.apply_tool(preset, &a.appearance()));
+        assert_eq!(a, original);
+    }
+}
+
+#[test]
+fn curved_equilibrium_shafts_keep_a_normal_gap_and_heads_meet_their_tips() {
+    for height in [-180., -60., 60., 180.] {
+        for ratio in [1., 0.6] {
+            let mut a = arrow(Preset::Equilibrium);
+            a.control = Some(p(60., height));
+            a.style.as_mut().unwrap().equilibrium_ratio = ratio;
+            let gap = reshiki::style::DEFAULT.world(a.appearance().gap_pt) * 0.5;
+            let paths = a.paths();
+            let inset = (1. - ratio) / 2.;
+            for (path, from, to, offset) in [
+                (&paths[0], 0., 1., -gap),
+                (&paths[2], 1. - inset, inset, gap),
+            ] {
+                for (i, command) in path.commands.iter().enumerate() {
+                    let t = from + (to - from) * i as f32 / 16.;
+                    let center = a.point(t);
+                    let v = p(120., 2. * height * (1. - 2. * t));
+                    let speed = v.distance(p(0., 0.));
+                    let expected = center.offset(-v.y / speed * offset, v.x / speed * offset);
+                    near(*command.points().last().unwrap(), expected);
+                }
+            }
+            for (shaft, head) in [(&paths[0], &paths[1]), (&paths[2], &paths[3])] {
+                let tip = *head.commands.last().unwrap().points().last().unwrap();
+                near(
+                    *shaft.commands.last().unwrap().points().last().unwrap(),
+                    tip,
+                );
+            }
+        }
+    }
+}
 fn arrow(preset: Preset) -> Arrow {
     Arrow::new(
         1,

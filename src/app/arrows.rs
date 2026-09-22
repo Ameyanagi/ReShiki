@@ -82,6 +82,18 @@ pub enum Action {
     Reset,
 }
 impl App {
+    pub(super) fn apply_arrow_tool(&mut self, id: u64) {
+        let Some(arrow) = self.doc.arrows.iter_mut().find(|a| a.id == id) else {
+            return;
+        };
+        if arrow.apply_tool(self.arrow_style, &self.arrows.style) {
+            for reaction in self.doc.reactions.iter_mut().filter(|r| r.arrow == id) {
+                std::mem::swap(&mut reaction.reactants, &mut reaction.products);
+            }
+        }
+        self.selected = vec![id];
+        self.sync_arrows();
+    }
     pub(super) fn sync_arrows(&mut self) {
         if let Some(a) = self
             .doc

@@ -75,7 +75,7 @@ impl Tool {
                 "Preview, then click an atom or bond to attach · Drag to choose the side · Escape cancels"
             }
             Self::Arrow => {
-                "Click to place a rightward arrow · Drag to set length and direction · Middle handle bends"
+                "Click to place or change an arrow · Click again to switch direction or half-head side · Drag the middle handle to bend"
             }
             Self::Text => "Click to type a label · Double-click a label to edit · Escape cancels",
             Self::Erase => {
@@ -115,6 +115,7 @@ pub enum Edit {
     AtomMark(u64, usize, World),
     AtomIndicator(reshiki::atom_labels::Owner, World),
     ArrowHandle(u64, usize, World),
+    ArrowClick(u64),
     Select(Vec<u64>),
     Move(Vec<u64>, f32, f32),
     Transform {
@@ -767,6 +768,17 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                     Gesture::ArrowHandle { id, index } => {
                         if !inside {
                             return Some(Action::request_redraw().and_capture());
+                        }
+                        if self.tool == Tool::Arrow
+                            && self
+                                .doc
+                                .arrows
+                                .iter()
+                                .find(|a| a.id == id)
+                                .and_then(|a| a.handles().get(index).copied())
+                                .is_some_and(|handle| handle.distance(p) < 3. / self.camera.zoom)
+                        {
+                            return Some(Action::publish(Edit::ArrowClick(id)).and_capture());
                         }
                         let end = if index < 2 {
                             self.doc
@@ -2538,6 +2550,10 @@ mod tests {
             },
             ..chain_canvas(&doc, ChainMode::Straight)
         };
+        assert!(matches!(
+            pointer_gesture(&canvas, Point::new(200., 95.), Point::new(200., 95.)),
+            Edit::ArrowClick(1)
+        ));
         assert!(matches!(
             pointer_gesture(&canvas, Point::new(260., 150.), Point::new(300., 150.)),
             Edit::ArrowHandle(1, 1, World { x: 100., y: 0. })
