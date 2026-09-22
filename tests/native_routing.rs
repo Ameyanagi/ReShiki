@@ -257,6 +257,49 @@ async fn cases(lazy: bool) -> anyhow::Result<Vec<Case>> {
             result.push(entry);
         }
     }
+    result.extend(aromatic_cases(&reference, lazy).await?);
+    Ok(result)
+}
+
+async fn aromatic_cases(reference: &PythonEngine, lazy: bool) -> anyhow::Result<Vec<Case>> {
+    let mut result = Vec::new();
+    for text in [
+        "c1ccccc1",
+        "c1cc[nH]c1",
+        "c1ccc2ccccc2c1",
+        "C[C@H](O)c1ccccc1",
+        "c1ccccc1.CCO",
+    ] {
+        let document = import(reference, text).await?;
+        for selected in [
+            None,
+            Some(vec![
+                document.atoms.first().context("Missing ring atom")?.id,
+            ]),
+        ] {
+            let mut entry = case(reference, "aromatic", None, document.clone()).await;
+            entry.selected = selected;
+            entry.expected = reference.execute(entry.request()).await;
+            anyhow::ensure!(entry.expected.is_err());
+            result.push(entry);
+        }
+        if !lazy {
+            let mut entry = case(reference, "aromatic", None, document).await;
+            entry.selected = Some(entry.document.all_ids());
+            for _ in 0..2 {
+                entry.expected = reference.execute(entry.request()).await;
+                let next = entry
+                    .expected
+                    .as_ref()
+                    .map_err(|e| anyhow::anyhow!(e.clone()))?
+                    .document
+                    .clone()
+                    .context("Missing aromatic edit")?;
+                result.push(entry.clone());
+                entry.document = next;
+            }
+        }
+    }
     Ok(result)
 }
 fn equal(actual: Response, expected: Response) -> anyhow::Result<()> {
@@ -419,6 +462,12 @@ async fn helper_errors_do_not_fall_back_to_python() -> anyhow::Result<()> {
     let reference = PythonEngine::default();
     let mut cases = vec![case(&reference, "analyze", None, import(&reference, "C").await?).await];
     let imports = import_cases().await?;
+    let aromatic = aromatic_cases(&reference, false)
+        .await?
+        .into_iter()
+        .find(|case| case.expected.is_ok())
+        .context("Missing aromatic case")?;
+    cases.push(aromatic.clone());
     for format in ["mol", "rxn", "cdxml", "cdx", "rsmi"] {
         cases.push(
             imports
@@ -450,6 +499,8 @@ async fn helper_errors_do_not_fall_back_to_python() -> anyhow::Result<()> {
         child("cancel", &executable, &cases).await?;
         std::fs::remove_file(temp.path().join("pid"))?;
         child("cancel", &executable, &imports).await?;
+        std::fs::remove_file(temp.path().join("pid"))?;
+        child("cancel", &executable, &[aromatic]).await?;
     }
     Ok(())
 }
@@ -480,6 +531,7 @@ async fn custom_backends_keep_existing_dispatch_and_binary_conversion() -> anyho
     doc.add_atom("C", Point::default());
     for (operation, format) in [
         ("analyze", None),
+        ("aromatic", None),
         ("finish_abbreviation", None),
         ("export", Some("smiles")),
         ("export", Some("mol")),
@@ -560,6 +612,12 @@ async fn routing_child() -> anyhow::Result<()> {
             .iter()
             .filter(|c| c.operation == "import" || !c.document.atoms.is_empty())
             .take(12)
+            .chain(
+                cases
+                    .iter()
+                    .filter(|case| case.operation == "aromatic")
+                    .take(4),
+            )
             .cloned()
         {
             let local = local.clone();

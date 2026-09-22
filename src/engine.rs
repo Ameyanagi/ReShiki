@@ -6,6 +6,7 @@ use tokio::{
     process::{Child, ChildStdin, ChildStdout, Command},
     sync::Mutex,
 };
+pub mod native_aromatic;
 pub mod native_import;
 pub mod native_response;
 mod reaction;
@@ -195,6 +196,11 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
         use base64::{Engine, engine::general_purpose::STANDARD};
         if request.protocol != 1 {
             return Err("Unsupported protocol version".into());
+        }
+        if self.native_responses && request.operation == "aromatic" {
+            return native_aromatic::execute(request, None)
+                .await
+                .map_err(|error| error.to_string());
         }
         if request.operation == "abbreviate" {
             let document = request
