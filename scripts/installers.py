@@ -7,11 +7,33 @@ import platform
 import shutil
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 from build_release import ROOT, run, verify_binary, verify_inchi_helper
 from check_runtime_dependencies import verify_payload, verify_runtime
 from inchi_source import manifest
+
+
+class InstallerCheckDirectory(tempfile.TemporaryDirectory):
+    def cleanup(self):
+        # Inno's clone deletes the original EXE after that process returns:
+        # https://jrsoftware.org/ishelp/topic_uninstexitcodes.htm
+        deadline = time.monotonic() + 30
+        delay = 0.05
+        while True:
+            try:
+                super().cleanup()
+                return
+            except OSError as error:
+                if getattr(error, "winerror", None) not in {5, 32, 33}:
+                    raise
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    error.add_note("Installer check cleanup remained locked after 30 seconds.")
+                    raise
+                time.sleep(min(delay, remaining))
+                delay = min(delay * 2, 0.25)
 
 
 def checksum(output):
@@ -65,7 +87,7 @@ def verify_windows_installer(installer, source):
     import winreg
 
     ole_key = r"Software\Classes\CLSID\{3BAC2B7E-73A2-4F3A-9CE7-5E9B438C59B4}\LocalServer32"
-    with tempfile.TemporaryDirectory(prefix="ReShiki installer check ") as temporary:
+    with InstallerCheckDirectory(prefix="ReShiki installer check ") as temporary:
         root = Path(temporary)
         destination = root / "Installed ReShiki"
         user_data = root / "User data"
