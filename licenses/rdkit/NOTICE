@@ -116,7 +116,7 @@ Copyright (C) 2002-2025 Greg Landrum and other RDKit contributors.
 Code/GraphMol/Canon.cpp (ranked SMILES traversal, ring closures, atom winding and bond directions)
 Copyright (C) 2001-2021 Greg Landrum and other RDKit contributors.
 
-Code/GraphMol/NontetrahedralStereo.cpp (coordination permutation tables)
+Code/GraphMol/NontetrahedralStereo.cpp (coordination permutation tables, across/axial queries and ideal ligand angles)
 Copyright (C) 2022 Greg Landrum and other RDKit contributors.
 
 Code/GraphMol/SmilesParse/CXSmilesOps.cpp (shared CX syntax, coordinate values and molecular/reaction annotations)
@@ -125,23 +125,29 @@ Copyright (C) 2016-2021 Greg Landrum and other RDKit contributors.
 Code/GraphMol/MolPickler.cpp and Code/RDGeneral/StreamOps.h (ring-stereo integer-vector transport in the temporary native bridge)
 Copyright (C) 2001-2021 Greg Landrum and Rational Discovery LLC.
 
-Code/Geometry/point.h and point.cpp (stereo vector and dihedral arithmetic)
+Code/Geometry/point.h and point.cpp (stereo vector/dihedral and depiction normal/angle arithmetic, including verified native ABI contraction order)
 Copyright (C) 2003-2025 Greg Landrum and other RDKit contributors.
 
-Code/GraphMol/Depictor/DepictUtils.cpp (regular-ring embedding, point bisectors, point reflection and ordered first/core/next ring selection)
-Copyright (C) 2003-2025 Greg Landrum and other RDKit contributors.
-
-Code/GraphMol/Depictor/EmbeddedFrag.cpp (ordered fragment centering, canonical orientation, signed box extents and no-template fused-ring construction, trans-ring mirroring, density reflection and ring metadata merging)
-Copyright (C) 2004-2025 Greg Landrum and other RDKit contributors.
-
-Code/GraphMol/Depictor/DepictUtils.h and EmbeddedFrag.h (geometry API declarations)
+Code/GraphMol/Depictor/RDDepictor.cpp (square-planar, trigonal-bipyramidal and octahedral initial fragments)
 Copyright (C) 2003-2022 Greg Landrum and other RDKit contributors.
 
-Code/Geometry/Transform2D.cpp and Transform2D.h (point transformations and two-point alignment)
+Code/GraphMol/Depictor/DepictUtils.cpp (regular-ring embedding, point bisectors, point reflection and ordered first/core/next ring selection, rankAtomsByRank and setNbrOrder)
+Copyright (C) 2003-2025 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/Depictor/EmbeddedFrag.cpp (ordered fragment centering, canonical orientation, signed box extents and no-template fused-ring construction, trans-ring mirroring, density reflection, ring metadata merging, single-atom initialization, setupNewNeighs/updateNewNeighs, addNonRingAtom, coordinate-map/cis-trans constructors and setupAttachmentPoints/computeNbrsAndAng)
+Copyright (C) 2004-2025 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/Depictor/DepictUtils.h and EmbeddedFrag.h (depiction metadata declarations and angle/normal helpers)
+Copyright (C) 2003-2022 Greg Landrum and other RDKit contributors.
+
+Code/Geometry/Transform2D.cpp and Transform2D.h (point transformations, two-point alignment and rotation about a point)
 Copyright (C) 2003-2006 Rational Discovery LLC.
 
 Code/RDGeneral/types.cpp (ordered ring union and intersection)
 Copyright (C) 2001-2021 Greg Landrum and other RDKit contributors.
+
+Code/Numerics/SquareMatrix.h (ordered 3x3 multiplication for rotation)
+Copyright (C) 2004-2006 Rational Discovery LLC.
 
 Code/Numerics/Vector.h (normalization tolerance)
 Copyright (C) 2004-2025 Greg Landrum and other RDKit contributors.
@@ -186,3 +192,12 @@ and other RDKit contributors. The full source notice is in INCHI-ADAPTER.
 Adaptations are in src/chemistry/, engine/prepared.py, scripts/regenerate_atomic_data.py,
 scripts/regenerate_descriptor_data.py and the *_reference.py fixtures in tests/.
 These portions are distributed under the accompanying BSD-3-Clause LICENSE.
+
+The builtin ring-template catalog and matching/template-assisted construction
+in src/chemistry/depict/templates.rs and its child modules are adapted from
+Depictor/Templates.cpp/.h, TemplateSmarts.h (Copyright (C) 2023 Schrödinger,
+LLC), EmbeddedFrag.cpp (Copyright (C) 2004-2025) and EmbeddedFrag.h
+(Copyright (C) 2003-2022 Greg Landrum and other RDKit contributors), at the
+pinned source revision above. Generated query and
+coordinate data retain original catalog order; no native library is linked
+into the application for these operations.

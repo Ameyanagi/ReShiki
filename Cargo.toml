@@ -5,7 +5,7 @@ edition = "2024"
 description = "A molecular drawing workspace"
 
 [workspace]
-members = ["native/windows"]
+members = ["native/windows", "crates/depict-math"]
 default-members = ["."]
 
 [target.'cfg(windows)'.dependencies]
@@ -16,6 +16,7 @@ iced = { version = "0.14", default-features = false, features = ["tiny-skia"] }
 iced = { version = "0.14", default-features = false, features = ["wgpu"] }
 
 [dependencies]
+reshiki-depict-math = { path = "crates/depict-math" }
 iced = { version = "0.14", default-features = false, features = [
   "canvas",
   "tokio",
@@ -62,6 +63,15 @@ sha2 = { version = "0.10.9", default-features = false, features = ["force-soft"]
 
 [profile.dev]
 debug = 1
+
+# RDKit's macOS ABI uses paired sincos. Compile only this non-inlined wrapper
+# with optimization so debug builds select the same libm call as release.
+# tests/depict_numeric.md records the native evidence and strict comparisons.
+[profile.dev.package.reshiki-depict-math]
+opt-level = 1
+
+[profile.test.package.reshiki-depict-math]
+opt-level = 1
 
 [dev-dependencies]
 anyhow = "1"

@@ -1,4 +1,9 @@
-The two depiction geometry fixtures contain identical input bits and independent
+The current ABI arithmetic policy and strict platform checks are documented in
+[depict_numeric.md](depict_numeric.md). The historical cross-native differences
+below describe platform build differences; same-platform Mac comparisons now
+require exact bits, just as Linux comparisons do. Live replay is always strict.
+
+The three depiction geometry fixtures contain identical input bits and independent
 calls to RDKit 2026.03.6, commit
 `0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985`. Their first JSON line records the
 platform, seven source hashes, native library hashes and helper executable hash.
@@ -14,15 +19,10 @@ on native layouts of 20 molecules. Of the 5,310 cases, 24 one-atom rings produce
 native nonfinite output and return Rust `Error::Numeric`. Other successful cases
 produce 71,754 scalar values. Inputs are repeated and checked for mutation.
 
-The library preserves explicit, unfused source expression order. Linux x86_64
-Rust 1.95 matches every Linux native output bit and every drawing-space f32 bit.
-The test requires that exact comparison on Linux x86_64. Elementary arithmetic
-and canonicalization must match the source-order fixture on other platforms too;
-their platform libm results for ring embedding/reflection are reported as a
-numerical audit. Set `RESHIKI_DEPICT_REQUIRE_EXACT=1` with a live oracle to require
-bit equality on another host. The macOS fixture is a separate audit, not an exact
-parity assertion. No epsilon converts these differences into a passing parity
-claim. Both fixtures are retained so a later layout contract can assess them.
+The library preserves source order with the verified ABI contractions described
+in the numeric audit. Linux x86_64 and macOS ARM64 require all native scalar
+and projected drawing-space f32 bits to agree. The three platform fixtures remain
+independent. No epsilon converts cross-native differences into a parity claim.
 
 Linux Rust versus the pinned macOS ARM64 native fixture:
 
@@ -57,7 +57,7 @@ Apple clang and Boost headers:
 
 ```sh
 CC=/usr/bin/clang CXX=/usr/bin/clang++ .venv/bin/python \
-  tests/build_depict_geometry_oracle.py --rdkit-source /path/to/pinned/rdkit
+  tests/build_depict_geometry_oracle.py --rdkit-source /path/to/pinned/rdkit --boost-include /path/to/boost185
 ```
 
 On Linux, use the pinned wheel's Python, a C++20 compiler and Boost headers. Replay
@@ -66,18 +66,12 @@ platform that generated initial molecular layouts:
 
 ```sh
 .venv/bin/python tests/build_depict_geometry_oracle.py \
-  --rdkit-source /path/to/pinned/rdkit --boost-include /usr/include --replay \
+  --rdkit-source /path/to/pinned/rdkit --boost-include /path/to/boost185 --replay \
   --output tests/fixtures/depict-geometry-linux-native.json.gz
 ```
 
-On Windows, compile `tests/depict_geometry_reference.cpp` with C++20 and a matching
-RDKit SDK from the pinned source. Include its `Code` tree and generated headers,
-and link the Depictor, GraphMol, RDGeometryLib and RDGeneral import libraries.
-The executable, DLLs, C++ runtime and Python wheel must share an architecture.
-Place dependent DLLs on `PATH`, then use the reference script with `--oracle`,
-`--rdkit-source`, `--replay`, `--write-fixture` and `--output`. The wheel alone does
-not supply a complete Windows development SDK. No Windows C++ fixture has been
-generated for this checkpoint.
+Windows x64 generation and all fixture hashes are documented in the numeric
+audit. Use `tests/build_depict_windows_oracle.py --component geometry`.
 
 For live replay during Rust tests, set `RESHIKI_DEPICT_ORACLE` to the executable
 and `RESHIKI_RDKIT_SOURCE` to the source tree. The replay checks the seven pinned
@@ -85,7 +79,7 @@ source hashes and RDKit version. On macOS set `DYLD_LIBRARY_PATH` to the wheel's
 `.dylibs`; on Linux set `LD_LIBRARY_PATH` to `rdkit.libs`. Then run:
 
 ```sh
-RESHIKI_DEPICT_REQUIRE_EXACT=1 CARGO_BUILD_JOBS=4 \
+CARGO_BUILD_JOBS=4 \
   cargo +1.95.0 test --locked --test depict_geometry -- --nocapture
 ```
 

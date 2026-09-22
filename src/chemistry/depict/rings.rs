@@ -33,7 +33,8 @@ pub struct NextRing {
     pub common_atoms: Vec<usize>,
 }
 
-/// The complete public EmbeddedAtom state immediately after ring construction.
+/// Native EmbeddedAtom state shared by ring construction and attachment stages.
+/// The map key is authoritative: a native no-angle attachment leaves `id` at 0.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EmbeddedAtom {
     pub id: usize,
@@ -50,8 +51,9 @@ pub struct EmbeddedAtom {
     pub fixed: bool,
 }
 
-/// Initial ring fragment; bounds have not yet been computed. Neighbor setup is
-/// a separate native stage, so neighbors and attachment points remain empty.
+/// Ordered embedded fragment shared by depiction stages. The ring constructor
+/// leaves bounds, neighbors and attachment points at their initial values;
+/// neighbor setup and non-ring attachment fill the latter two separately.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Fragment {
     pub atoms: BTreeMap<usize, EmbeddedAtom>,

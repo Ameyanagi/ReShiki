@@ -182,7 +182,8 @@ impl Audit {
 #[test]
 fn native_ring_selection_and_constructor() -> anyhow::Result<()> {
     compare("depict-rings-linux-native.json.gz", true)?;
-    compare("depict-rings-macos-native.json.gz", false)
+    compare("depict-rings-macos-native.json.gz", false)?;
+    compare("depict-rings-windows-native.json.gz", false)
 }
 fn compare(fixture: &str, baseline: bool) -> anyhow::Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -220,11 +221,13 @@ fn compare(fixture: &str, baseline: bool) -> anyhow::Result<()> {
             && header["provenance"]["templates"] == false,
         "Wrong native source or mode"
     );
-    let exact = if live {
-        std::env::var_os("RESHIKI_DEPICT_REQUIRE_EXACT").is_some()
-    } else {
-        baseline && cfg!(all(target_os = "linux", target_arch = "x86_64"))
-    };
+    // Same-platform fixtures and direct native replay always require every
+    // f64 bit. The other ABI remains a descriptive audit, never an epsilon.
+    let exact = live
+        || (baseline && cfg!(all(target_os = "linux", target_arch = "x86_64")))
+        || (fixture.ends_with("-macos-native.json.gz")
+            && cfg!(all(target_os = "macos", target_arch = "aarch64")))
+        || (fixture.ends_with("-windows-native.json.gz") && cfg!(windows));
     let mut audit = Audit::default();
     for line in lines {
         let case: Case = serde_json::from_str(line)?;

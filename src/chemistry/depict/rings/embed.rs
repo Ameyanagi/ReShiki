@@ -1,6 +1,9 @@
-//! The closed EmbeddedFrag(molecule, ordered_rings, false) constructor path.
+//! Ring construction shared by the ordinary and template-seeded constructors.
 use super::{EmbeddedAtom, Error, Fragment, Input, Work, at};
-use crate::chemistry::depict::geometry::{self, Bounds, Coordinates, Point, Transform};
+use crate::chemistry::depict::{
+    arithmetic,
+    geometry::{self, Bounds, Coordinates, Point, Transform},
+};
 use std::{collections::BTreeMap, f64::consts::PI};
 
 fn number(value: f64) -> Result<f64, Error> {
@@ -28,7 +31,7 @@ fn sub(a: Point, b: Point) -> Result<Point, Error> {
     })
 }
 fn length(value: Point) -> Result<f64, Error> {
-    number(value.x * value.x + value.y * value.y).map(f64::sqrt)
+    number(arithmetic::squared_length(value.x, value.y)).map(f64::sqrt)
 }
 fn atom(atoms: &BTreeMap<usize, EmbeddedAtom>, id: usize) -> Result<&EmbeddedAtom, Error> {
     atoms
@@ -91,10 +94,16 @@ fn from_ring(
 }
 
 impl Input<'_> {
-    /// Exact no-template constructor stage. Templates, neighbor setup,
-    /// canonicalization, collisions and packing are intentionally separate.
-    /// Errors leave all graph, stereo and cache inputs unchanged.
+    /// Exact no-template constructor stage. Errors leave inputs unchanged.
     pub fn embed_without_templates(&self, bond_length: f64) -> Result<Fragment, Error> {
+        self.begin(bond_length)?.finish(None)
+    }
+    /// Preserve native coordinate construction/mirroring before a core-template
+    /// attempt. Full-system templates bypass this stage in EmbeddedFrag.
+    pub(in crate::chemistry::depict) fn begin(
+        &self,
+        bond_length: f64,
+    ) -> Result<Construction<'_, '_>, Error> {
         if self.selected.is_empty() {
             return Err(Error::Invalid("empty ring system"));
         }
@@ -113,59 +122,11 @@ impl Input<'_> {
                 }
             }
         }
-        let first = self
-            .first(&mut work)?
-            .ok_or(Error::Invalid("empty ring system"))?;
-        let mut atoms = from_ring(self.ring(first)?, at(&coordinates, first)?)?;
-        let mut done = vec![first];
-        while atoms.len() < union.len() {
-            work.spend(1)?;
-            let next = self.next_with_work(&done, &mut work)?;
-            if work.contains(&done, next.ring)? {
-                return Err(Error::Invalid("ring selection made no progress"));
-            }
-            let mut other = from_ring(self.ring(next.ring)?, at(&coordinates, next.ring)?)?;
-            let common = &next.common_atoms;
-            let first = *common
-                .first()
-                .ok_or(Error::Invalid("disconnected ring system"))?;
-            let (transform, pins) = if common.len() == 1 {
-                (one_atom_transform(&atoms, &other, first)?, vec![first])
-            } else {
-                let last = *common.last().ok_or(Error::Invalid("missing common atom"))?;
-                (
-                    Transform::align(
-                        atom(&atoms, first)?.location,
-                        atom(&atoms, last)?.location,
-                        atom(&other, first)?.location,
-                        atom(&other, last)?.location,
-                    )?,
-                    vec![first, last],
-                )
-            };
-            work.spend(other.len())?;
-            for other_atom in other.values_mut() {
-                other_atom.transform(transform)?;
-            }
-            if common.len() > 1 {
-                reflect_density(&atoms, &mut other, &pins, &mut work)?;
-            }
-            merge(&mut atoms, other, common.len(), &pins, &mut work)?;
-            done.push(next.ring);
-            if done.len() > self.selected.len() {
-                return Err(Error::Invalid("ring selection made no progress"));
-            }
-        }
-        Ok(Fragment {
-            atoms,
-            done: false,
-            bounds: Bounds {
-                positive_x: 0.0,
-                negative_x: 0.0,
-                positive_y: 0.0,
-                negative_y: 0.0,
-            },
-            attachment_points: Vec::new(),
+        Ok(Construction {
+            input: self,
+            work,
+            coordinates,
+            union,
         })
     }
 
@@ -215,16 +176,107 @@ impl Input<'_> {
                 .get(&first)
                 .ok_or(Error::Invalid("missing mirror atom"))?;
             let d = sub(last, reference)?;
-            let denominator = number(d.x * d.x + d.y * d.y)?;
-            let a = number((d.x * d.x - d.y * d.y) / denominator)?;
+            let denominator = number(arithmetic::squared_length(d.x, d.y))?;
+            let a = number(arithmetic::multiply_subtract(d.x, d.x, d.y, d.y) / denominator)?;
             let b = number(2.0 * d.x * d.y / denominator)?;
             let result = point(Point {
-                x: a * (interest.x - reference.x) + b * (interest.y - reference.y) + reference.x,
-                y: b * (interest.x - reference.x) - a * (interest.y - reference.y) + reference.y,
+                x: arithmetic::dot(a, b, interest.x - reference.x, interest.y - reference.y)
+                    + reference.x,
+                y: arithmetic::multiply_subtract(
+                    b,
+                    interest.x - reference.x,
+                    a,
+                    interest.y - reference.y,
+                ) + reference.y,
             })?;
             coordinates.insert(first, result);
         }
         Ok(())
+    }
+}
+
+/// Detached continuation shared by ordinary and template-seeded ring assembly.
+pub(in crate::chemistry::depict) struct Construction<'a, 'g> {
+    input: &'a Input<'g>,
+    work: Work,
+    coordinates: Vec<Coordinates>,
+    union: Vec<usize>,
+}
+impl Construction<'_, '_> {
+    pub(in crate::chemistry::depict) fn finish(
+        self,
+        seed: Option<(Fragment, Vec<usize>)>,
+    ) -> Result<Fragment, Error> {
+        let Self {
+            input,
+            mut work,
+            coordinates,
+            union,
+        } = self;
+        let (mut atoms, mut done, attachment_points) = if let Some((fragment, done)) = seed {
+            if done.is_empty() || done.iter().any(|&i| i >= input.selected.len()) {
+                return Err(Error::Invalid("invalid template ring seed"));
+            }
+            (fragment.atoms, done, fragment.attachment_points)
+        } else {
+            let first = input
+                .first(&mut work)?
+                .ok_or(Error::Invalid("empty ring system"))?;
+            (
+                from_ring(input.ring(first)?, at(&coordinates, first)?)?,
+                vec![first],
+                Vec::new(),
+            )
+        };
+        while atoms.len() < union.len() {
+            work.spend(1)?;
+            let next = input.next_with_work(&done, &mut work)?;
+            if work.contains(&done, next.ring)? {
+                return Err(Error::Invalid("ring selection made no progress"));
+            }
+            let mut other = from_ring(input.ring(next.ring)?, at(&coordinates, next.ring)?)?;
+            let common = &next.common_atoms;
+            let first = *common
+                .first()
+                .ok_or(Error::Invalid("disconnected ring system"))?;
+            let (transform, pins) = if common.len() == 1 {
+                (one_atom_transform(&atoms, &other, first)?, vec![first])
+            } else {
+                let last = *common.last().ok_or(Error::Invalid("missing common atom"))?;
+                (
+                    Transform::align(
+                        atom(&atoms, first)?.location,
+                        atom(&atoms, last)?.location,
+                        atom(&other, first)?.location,
+                        atom(&other, last)?.location,
+                    )?,
+                    vec![first, last],
+                )
+            };
+            work.spend(other.len())?;
+            for other_atom in other.values_mut() {
+                other_atom.transform(transform)?;
+            }
+            if common.len() > 1 {
+                reflect_density(&atoms, &mut other, &pins, &mut work)?;
+            }
+            merge(&mut atoms, other, common.len(), &pins, &mut work)?;
+            done.push(next.ring);
+            if done.len() > input.selected.len() {
+                return Err(Error::Invalid("ring selection made no progress"));
+            }
+        }
+        Ok(Fragment {
+            atoms,
+            done: false,
+            bounds: Bounds {
+                positive_x: 0.0,
+                negative_x: 0.0,
+                positive_y: 0.0,
+                negative_y: 0.0,
+            },
+            attachment_points,
+        })
     }
 }
 

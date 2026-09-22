@@ -1,0 +1,6 @@
+[package]
+name = "reshiki-depict-math"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Paired math call for the pinned native depiction ABI"

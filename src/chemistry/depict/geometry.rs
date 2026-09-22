@@ -2,12 +2,11 @@
 //! EmbeddedFrag.cpp and Geometry/Transform2D.cpp. BSD-3-Clause;
 //! see licenses/rdkit/NOTICE for the individual copyright notices.
 //!
-//! Arithmetic follows the source expression order without fused multiply-add.
-//! This matches the pinned Linux x86_64 build exactly. Other native builds can
-//! contract operations or use different libm implementations; their raw
-//! differences are retained in the independent native fixture audit. This is
-//! a geometry library checkpoint, not a completed cross-platform layout engine.
+//! Arithmetic preserves source order and the verified contractions of the
+//! pinned native ABI. Platform libm behavior is validated separately; see the
+//! numeric audit. This remains a library stage, without layout dispatch.
 
+use super::arithmetic;
 use std::{collections::BTreeMap, f64::consts::PI};
 
 /// Maximum input/output coordinate count for one geometry operation.
@@ -64,7 +63,7 @@ impl Point {
     }
 
     fn length(self) -> f64 {
-        (self.x * self.x + self.y * self.y).sqrt()
+        arithmetic::squared_length(self.x, self.y).sqrt()
     }
 }
 
@@ -113,11 +112,12 @@ pub fn embed_ring(ring: &[usize], bond_length: f64) -> Result<Coordinates, Error
     for (index, &id) in ring.iter().enumerate() {
         let index = u32::try_from(index).map_err(|_| Error::Limit)?;
         let phase = f64::from(index) * angle;
+        let (sine, cosine) = arithmetic::sin_cos(phase);
         output.insert(
             id,
             Point {
-                x: arm * phase.cos(),
-                y: arm * phase.sin(),
+                x: arm * cosine,
+                y: arm * sine,
             }
             .result()?,
         );
@@ -180,10 +180,51 @@ impl Transform {
 
     pub(super) fn apply(self, p: Point) -> Result<Point, Error> {
         Point {
-            x: self.xx * p.x + self.xy * p.y + self.tx,
-            y: self.yx * p.x + self.yy * p.y + self.ty,
+            x: arithmetic::dot(self.xx, self.xy, p.x, p.y) + self.tx,
+            y: arithmetic::dot(self.yx, self.yy, p.x, p.y) + self.ty,
         }
         .result()
+    }
+
+    // Native rotation about a point composes two full 3x3 products. Keeping
+    // the zero-initialized accumulation (including zero products) preserves
+    // signed zeros and rounding; a simplified translation is not equivalent.
+    pub(super) fn rotate(center: Point, angle: f64) -> Result<Self, Error> {
+        center.input()?;
+        finite(angle)?;
+        fn multiply(a: [[f64; 3]; 3], b: [[f64; 3]; 3]) -> Result<[[f64; 3]; 3], Error> {
+            let mut result = [[0.0; 3]; 3];
+            for (row, output) in a.iter().zip(result.iter_mut()) {
+                for (column, cell) in output.iter_mut().enumerate() {
+                    for (left, right) in row.iter().zip(b.iter()) {
+                        *cell = arithmetic::multiply_add(
+                            *left,
+                            *right.get(column).ok_or(Error::Numeric)?,
+                            *cell,
+                        );
+                    }
+                    finite(*cell)?;
+                }
+            }
+            Ok(result)
+        }
+        let (sine, cosine) = arithmetic::sin_cos(angle);
+        let rotation = [[cosine, -sine, 0.0], [sine, cosine, 0.0], [0.0, 0.0, 1.0]];
+        let before = [
+            [1.0, 0.0, -center.x],
+            [0.0, 1.0, -center.y],
+            [0.0, 0.0, 1.0],
+        ];
+        let after = [[1.0, 0.0, center.x], [0.0, 1.0, center.y], [0.0, 0.0, 1.0]];
+        let [[xx, xy, tx], [yx, yy, ty], _] = multiply(after, multiply(rotation, before)?)?;
+        Ok(Self {
+            xx,
+            xy,
+            tx,
+            yx,
+            yy,
+            ty,
+        })
     }
 
     // Preserve Transform2D::SetTransform's acos/sign/cos/sin operation order.
@@ -198,23 +239,24 @@ impl Transform {
             y: p2.y - p1.y,
         }
         .result()?;
-        let dot = finite(r.x * p.x + r.y * p.y)?;
+        let dot = finite(arithmetic::dot(r.x, r.y, p.x, p.y))?;
         let length = finite(r.length() * p.length())?;
         if length <= 0.0 {
             return Ok(Self::identity());
         }
         let cosine = finite(dot / length)?.clamp(-1.0, 1.0);
         let mut angle = cosine.acos();
-        let cross = finite(p.x * r.y - p.y * r.x)?;
+        let cross = finite(arithmetic::cross(p.x, p.y, r.x, r.y))?;
         if cross < 0.0 {
             angle *= -1.0;
         }
+        let (sine, cosine) = arithmetic::sin_cos(angle);
         let mut transform = Self {
-            xx: angle.cos(),
-            xy: -angle.sin(),
+            xx: cosine,
+            xy: -sine,
             tx: 0.0,
-            yx: angle.sin(),
-            yy: angle.cos(),
+            yx: sine,
+            yy: cosine,
             ty: 0.0,
         };
         let rotated = transform.apply(p1)?;
@@ -275,15 +317,15 @@ pub fn canonical_orientation(points: &Coordinates) -> Result<Coordinates, Error>
             y: point.y - center.y,
         }
         .result()?;
-        xx += point.x * point.x;
-        xy += point.x * point.y;
-        yy += point.y * point.y;
+        xx = arithmetic::multiply_add(point.x, point.x, xx);
+        xy = arithmetic::multiply_add(point.x, point.y, xy);
+        yy = arithmetic::multiply_add(point.y, point.y, yy);
         result.insert(id, point);
     }
     finite(xx)?;
     finite(xy)?;
     finite(yy)?;
-    let delta = finite((xx - yy) * (xx - yy) + 4.0 * xy * xy)?.sqrt();
+    let delta = finite(arithmetic::multiply_add(xx - yy, xx - yy, 4.0 * xy * xy))?.sqrt();
     let mut first = Point {
         x: 2.0 * xy,
         y: (yy - xx) + delta,

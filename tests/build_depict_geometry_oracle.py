@@ -2,10 +2,9 @@
 
 macOS: .venv/bin/python tests/build_depict_geometry_oracle.py --rdkit-source /path/to/rdkit
 Linux: use the pinned wheel's Python, add --boost-include /usr/include if needed.
-Windows: build tests/depict_geometry_reference.cpp using C++20 and a matching
-RDKit 2026.03.6 SDK (Depictor, GraphMol, RDGeometryLib, RDGeneral import libraries),
-then run depict_geometry_reference.py --oracle path/to/oracle.exe --write-fixture.
-The SDK must use the pinned source commit and matching runtime/architecture.
+Windows: use tests/build_depict_windows_oracle.py from an x64 MSVC prompt.
+All platforms require Boost headers matching rdBase.boostVersion; the graph
+iterator ABI is not interchangeable with a newer Boost version.
 The checked-in fixture needs only standard-library Python on all three hosts.
 """
 
@@ -30,9 +29,22 @@ def main():
     parser.add_argument("--boost-include", type=Path, default=Path("/opt/homebrew/include"))
     parser.add_argument("--replay", action="store_true", help="Preserve the checked-in input bits")
     parser.add_argument("--output", type=Path)
-    parser.add_argument("--component", choices=("geometry", "rings"), default="geometry")
+    parser.add_argument(
+        "--component", choices=("geometry", "rings", "attachment", "seeds"), default="geometry"
+    )
     args = parser.parse_args()
     assert rdBase.rdkitVersion == "2026.03.6"
+    boost_version = re.search(
+        r"#define BOOST_VERSION\s+(\d+)",
+        (args.boost_include / "boost/version.hpp").read_text(),
+    )
+    assert boost_version is not None
+    version = int(boost_version[1])
+    assert f"{version // 100000}_{version // 100 % 1000}" == rdBase.boostVersion, (
+        "Pass --boost-include for the wheel's exact Boost version; graph iterator ABI differs",
+        version,
+        rdBase.boostVersion,
+    )
     assert (
         subprocess.check_output(
             ["git", "-C", str(args.rdkit_source), "rev-parse", "HEAD"], text=True
@@ -53,6 +65,16 @@ def main():
         "#pragma once\n" + "".join(f"#define {macro}\n" for macro in sorted(macros))
     )
     (include / "RDConfig.h").write_text("#pragma once\n")
+    observation = []
+    if args.component in ("attachment", "seeds"):
+        header = source / "GraphMol/Depictor/EmbeddedFrag.h"
+        original = header.read_text()
+        assert original.count(" private:") == 1
+        observation_root = root / f"artifacts/depict-{args.component}-observation"
+        observation = ["-I" + str(observation_root)]
+        exposed = observation_root / "GraphMol/Depictor/EmbeddedFrag.h"
+        exposed.parent.mkdir(parents=True, exist_ok=True)
+        exposed.write_text(original.replace(" private:", " public:"))
     package = Path(rdkit.__file__).parent
     names = ("Depictor", "GraphMol", "RDGeometryLib", "RDGeneral")
     python = Path(sysconfig.get_config_var("LIBDIR")) / sysconfig.get_config_var("LDLIBRARY")
@@ -85,8 +107,10 @@ def main():
         [
             compiler,
             "-std=c++20",
+            *observation,
             "-I" + str(include.parent),
             "-I" + str(source),
+            "-I" + str(source / "GraphMol/Depictor"),
             "-I" + str(args.boost_include),
             str(root / f"tests/depict_{args.component}_reference.cpp"),
             *library_files,
@@ -108,7 +132,7 @@ def main():
         generate.append("--write-fixture")
     elif not args.output:
         generate.extend(
-            ["--output", str(root / "tests/fixtures/depict-rings-macos-native.json.gz")]
+            ["--output", str(root / f"tests/fixtures/depict-{args.component}-macos-native.json.gz")]
         )
     if args.replay:
         generate.append("--replay")

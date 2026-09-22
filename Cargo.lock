@@ -3292,6 +3292,7 @@ dependencies = [
  "pdf-writer",
  "png 0.17.16",
  "reqwest",
+ "reshiki-depict-math",
  "reshiki-windows",
  "resvg",
  "rfd",
@@ -3309,6 +3310,10 @@ dependencies = [
  "zune-core 0.5.3",
  "zune-jpeg 0.5.15",
 ]
+
+[[package]]
+name = "reshiki-depict-math"
+version = "0.1.0"
 
 [[package]]
 name = "reshiki-windows"

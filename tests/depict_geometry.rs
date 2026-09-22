@@ -98,7 +98,8 @@ struct Differences {
 #[test]
 fn direct_native_geometry() -> anyhow::Result<()> {
     compare("depict-geometry-linux-native.json.gz", true)?;
-    compare("depict-geometry-native.json.gz", false)
+    compare("depict-geometry-native.json.gz", false)?;
+    compare("depict-geometry-windows-native.json.gz", false)
 }
 
 fn compare(fixture: &str, source_order: bool) -> anyhow::Result<()> {
@@ -168,17 +169,13 @@ fn compare(fixture: &str, source_order: bool) -> anyhow::Result<()> {
         let stat = stats.entry(case.op.clone()).or_default();
         stat.cases += 1;
         for (index, (a, b)) in values.into_iter().zip(expected).enumerate() {
-            // Linux's pinned x86_64 wheel uses the same unfused source order.
-            // On other platforms, elementary arithmetic/canonicalization must
-            // still match this baseline; libm calls are audited separately.
-            // A live oracle can explicitly demand exact parity on any host.
-            let exact = if live {
-                std::env::var_os("RESHIKI_DEPICT_REQUIRE_EXACT").is_some()
-            } else {
-                source_order
-                    && (cfg!(all(target_os = "linux", target_arch = "x86_64"))
-                        || matches!(case.op.as_str(), "bisect" | "box" | "canonical"))
-            };
+            // Native replay and the fixture for this ABI require exact bits.
+            // Cross-platform results remain an explicit descriptive audit.
+            let exact = live
+                || (source_order && cfg!(all(target_os = "linux", target_arch = "x86_64")))
+                || (fixture == "depict-geometry-native.json.gz"
+                    && cfg!(all(target_os = "macos", target_arch = "aarch64")))
+                || (fixture == "depict-geometry-windows-native.json.gz" && cfg!(windows));
             if exact {
                 anyhow::ensure!(
                     a.to_bits() == b.to_bits(),

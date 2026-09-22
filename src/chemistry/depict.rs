@@ -2,5 +2,10 @@
 //!
 //! These do not perform molecular layout or change application dispatch.
 
+mod arithmetic;
+
+pub mod attachment;
 pub mod geometry;
 pub mod rings;
+pub mod seeds;
+pub mod templates;

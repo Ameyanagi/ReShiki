@@ -1,3 +1,8 @@
+The current ABI arithmetic policy and strict platform checks are documented in
+[depict_numeric.md](depict_numeric.md). The historical cross-native differences
+below describe platform build differences; same-platform Mac comparisons now
+require exact bits, just as Linux comparisons do. Live replay is always strict.
+
 This checkpoint implements RDKit 2026.03.6's three ordered ring-selection helpers
 and `EmbeddedFrag(molecule, ordered_rings, false)`. It uses commit
 `0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985`. The independent C++ helper calls those
@@ -55,7 +60,7 @@ checked-in fixture and live native replay comparisons pass. The fixture-based
 two-test run takes approximately 1.5 seconds on the validation host; live replay
 takes approximately 1.7 seconds.
 
-macOS ARM64 native is audited separately. Its FMA/libm results differ in 3,450
+Linux-versus-macOS ARM64 native is audited separately. Its FMA/libm results differ in 3,450
 f64 scalars and 174 projected f32 scalars. Maximum absolute coordinate error is
 `2.11232904945291e-7`; maximum relative error is `1.9999999625361358` near nominal
 zero. Relative error uses `abs(a-b)/max(abs(a),abs(b))`. Projection uses `x*28`,
@@ -77,8 +82,8 @@ into `fnmul`/`fmadd`, producing `-5.497719261874257e-17`. The normalized dot pro
 is `-0.9999999999999998`, so `acos` gives an angle slightly below pi, and the tiny
 cross-product sign selects opposite rotations. The next native anchor's y
 residual is `+3.161013717445371e-8` on Linux and `-3.161013628627529e-8` on macOS.
-Later merges amplify that difference. Rust deliberately preserves the unfused
-source-order arithmetic; this is a documented native build difference.
+Later merges amplify that difference. Rust now reproduces each pinned ABI
+operation policy; the source-order difference remains visible across platforms.
 
 Build and regenerate in an isolated checkout, using the pinned Python wheel,
 matching RDKit source headers and Boost headers:
@@ -87,26 +92,21 @@ matching RDKit source headers and Boost headers:
 # macOS, with Apple clang:
 CC=/usr/bin/clang CXX=/usr/bin/clang++ .venv/bin/python \
   tests/build_depict_geometry_oracle.py --component rings \
-  --rdkit-source /path/to/pinned/rdkit
+  --rdkit-source /path/to/pinned/rdkit --boost-include /path/to/boost185
 
 # Linux: replay identical input bits and pickles, preserving the original corpus.
 .venv/bin/python tests/build_depict_geometry_oracle.py --component rings \
-  --rdkit-source /path/to/pinned/rdkit --boost-include /usr/include --replay \
+  --rdkit-source /path/to/pinned/rdkit --boost-include /path/to/boost185 --replay \
   --output tests/fixtures/depict-rings-linux-native.json.gz
 ```
 
-Windows requires a matching C++20 RDKit SDK and architecture-compatible import
-libraries/DLLs for Depictor, GraphMol, RDGeometryLib and RDGeneral. Compile
-`tests/depict_rings_reference.cpp`, then run `depict_rings_reference.py` with
-`--oracle`, `--rdkit-source`, `--replay` and `--output`. The default fixture reader
-requires only standard-library Python. No Windows native constructor fixture was
-generated for this checkpoint.
+Windows x64 generation and fixture hashes are in the numeric audit. Use
+`tests/build_depict_windows_oracle.py --component rings`.
 
 For live Rust-test replay, set `RESHIKI_DEPICT_RINGS_ORACLE` to the native helper,
 `RESHIKI_RDKIT_SOURCE` to its pinned source tree, and the wheel's native library
 directory in `DYLD_LIBRARY_PATH` (macOS), `LD_LIBRARY_PATH` (Linux) or `PATH`
-(Windows). `RESHIKI_DEPICT_REQUIRE_EXACT=1` requires raw bit equality for live
-replay. Run `cargo +1.95.0 test --locked --test depict_rings -- --nocapture`.
+(Windows). Live replay always requires raw bit equality. Run `cargo +1.95.0 test --locked --test depict_rings -- --nocapture`.
 
 Each fixture's first JSON line records all seven source hashes, helper executable
 hash, native library hashes and platform. Compressed and uncompressed SHA-256:
