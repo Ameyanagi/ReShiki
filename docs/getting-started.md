@@ -4,6 +4,8 @@ ReShiki is a desktop workspace for editable chemical drawings. Molecule processi
 
 ## Install
 
+The offline setup below applies to 0.6.0 builds. For version 0.5.0, follow its [release notes](changes-0.5.md), including the first-launch uv requirement.
+
 Download a package for your computer from [GitHub Releases](https://github.com/Ameyanagi/ReShiki/releases). The release workflow builds these packages:
 
 | Computer          | Package                   | Open                 |

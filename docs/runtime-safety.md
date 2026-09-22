@@ -1,5 +1,7 @@
 # Runtime safety audit — 2026-09-20
 
+This records the worker-based application at the time of the audit. The validation counts and process descriptions below are historical; see [architecture](architecture.md) for the current Rust engine and isolated native InChI helper.
+
 The application and library forbid Rust `unsafe` code. Non-test builds deny
 `clippy::unwrap_used`, `expect_used`, `panic`, `unreachable`, `todo`,
 `unimplemented`, and `indexing_slicing`. Both crate roots enforce the same rules;

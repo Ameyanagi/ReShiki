@@ -35,11 +35,11 @@ styles and offsets; previous supported document versions remain readable.
 
 CDXML imports and exports use node/bond-owned `objecttag` records,
 plus label-display attributes. Atom numbers do not become detached captions.
-Imported CIP text is never trusted as chemistry; RDKit recomputes the assignment.
+Imported CIP text is never trusted as chemistry; Rust recomputes the assignment.
 Desktop exports provide measured positions. Protocol clients that omit the
 `atom_indicators` payload receive a simple positional fallback.
 
-CIP assignments use [RDKit's CIP labeler](https://www.rdkit.org/docs/source/rdkit.Chem.rdCIPLabeler.html). The numbered phenylalanine interchange fixture retains `C9H11NO2`, the same InChIKey, 12 atom-owned numbers and an `(S)` label.
+CIP assignments use the Rust implementation, independently checked against [RDKit's CIP labeler](https://www.rdkit.org/docs/source/rdkit.Chem.rdCIPLabeler.html). The numbered phenylalanine interchange fixture retains `C9H11NO2`, the same InChIKey, 12 atom-owned numbers and an `(S)` label.
 
 Limits: tetrahedral R/S/r/s and ordinary double-bond E/Z are supported. Allene,
 atropisomer and enhanced-group stereochemistry are not implemented. Unknown
@@ -48,7 +48,7 @@ rejected. Dense diagrams can still need manual indicator positioning. Numbering
 is an explicit command; it does not automatically renumber after every edit.
 Further features remain listed in the [feature status](feature-status.md).
 
-Validation: 125 Rust and 36 Python tests passed, covering identity, sequences,
+Original update validation: 125 Rust and 36 Python tests passed, covering identity, sequences,
 native/CDXML ownership, transform/copy, exported geometry, stale refreshes and
 history. Native computer checks cover the imported interchange fixture, numbering,
 manual drag, Undo/Redo, native persistence and external reopening of the export.

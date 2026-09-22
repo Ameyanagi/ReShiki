@@ -1,6 +1,6 @@
 # ReShiki 0.6.0
 
-Install ReShiki and start drawing. Python, RDKit and uv are no longer required.
+ReShiki 0.6.0 builds include drawing and chemistry tools without a Python, RDKit or uv runtime requirement.
 
 - Chemistry runs locally in the native application, including imports, molecular properties, identifiers, stereochemistry and 2D layout.
 - Cleanup preserves selection boundaries; drawings keep their styles and editable objects. Undo restores changes.

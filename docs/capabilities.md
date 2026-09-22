@@ -1,6 +1,6 @@
 # Capability report
 
-This page retains earlier desktop verification records. For current packages and setup, see [installation](getting-started.md) and [release signing](releasing.md).
+This page retains earlier desktop verification records, including their capability table, worker-based runtime and test counts. They describe the builds tested at each milestone. For current implementation and setup, see [architecture](architecture.md), [feature status](feature-status.md), [installation](getting-started.md) and [release signing](releasing.md).
 
 [Document drawing styles](drawing-styles.md) now provide previewed font and bond settings, reusable style files and Undo. JACS / ACS remains the default for every new document.
 
@@ -8,7 +8,7 @@ The [picture workflow](pictures.md) adds asynchronous file import, macOS raster 
 
 Assessment date: 2026-09-16, with subsequent updates recorded below. Workflows were checked through the desktop app, saved documents, rendering and chemistry tests.
 
-**Several workflows remain incomplete.** Version 0.2 adds everyday editing, recovery and standalone packaging. The table records the current boundary; the original desktop test record is retained below.
+**Several workflows remained incomplete.** Version 0.2 added everyday editing, recovery and standalone packaging. The table records those earlier capability boundaries; the original desktop test record is retained below.
 
 The [feature-status inventory](feature-status.md) records supported toolbar, typography, drawing, template, chemistry and document workflows, together with their remaining limitations.
 

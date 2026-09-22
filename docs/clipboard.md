@@ -26,7 +26,7 @@ Paste prefers native drawing data and explicit external chemical formats, then P
 - If external editable export is unavailable, Copy still provides the native ReShiki drawing and available images, with a visible notice. Image representations that fail to render are also reported.
 - The binary codec accepts up to 16 MB. Native integration limits all representations to 64 MB combined and the rendered raster to 80 million pixels. Large drawings can exceed the combined clipboard limit before reaching the raster limit; file export remains available.
 - Linux uses the earlier text clipboard path; picture file import is available in the app. Windows Copy Image supplies CF_DIB alongside PNG, PDF and SVG. Only ReShiki's own OLE objects are read as editable native documents; arbitrary embedded objects are not activated or imported. See the [Windows guide](windows.md).
-- CDX is currently exposed through the clipboard and internal worker; the file Open/Export UI does not yet offer it.
+- CDX is exposed through the clipboard and internal Rust chemistry interface; the file Open/Export UI does not yet offer it.
 
 ## Verification
 
