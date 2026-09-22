@@ -17,6 +17,7 @@ pub(super) enum Icon {
     Export,
     Inspector,
     Close,
+    Keyboard,
 }
 pub(super) struct Glyph(pub Icon, pub bool);
 impl<Message> canvas::Program<Message> for Glyph {
@@ -65,6 +66,20 @@ impl Glyph {
             f.fill(&path, ink);
         };
         match self.0 {
+            Icon::Keyboard => {
+                let outline = Path::rounded_rectangle(
+                    Point::new(1., 5.),
+                    iced::Size::new(22., 15.),
+                    2.5.into(),
+                );
+                f.stroke(&outline, Stroke::default().with_width(1.3).with_color(ink));
+                for y in [9., 12.5] {
+                    for x in [5., 9.5, 14., 18.5] {
+                        line(f, &[(x, y), (x + 0.6, y)]);
+                    }
+                }
+                line(f, &[(7., 16.5), (17., 16.5)]);
+            }
             Icon::Tool(Tool::Chain(mode)) => {
                 if mode == reshiki::chains::ChainMode::Straight {
                     line(f, &[(2., 15.), (7., 8.), (12., 15.), (17., 8.), (22., 15.)]);

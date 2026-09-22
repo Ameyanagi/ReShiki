@@ -6,6 +6,7 @@ use reshiki::{
     graphics::{BracketSides, Graphic, GraphicKind, GraphicStyle, PathCommand},
     scene::{Primitive, primitives},
 };
+mod dashes;
 pub mod guides;
 pub mod layered;
 mod pages;
@@ -2012,22 +2013,20 @@ fn draw_document_with_minimum_stroke(
                     frame.fill(&path, rgb(c));
                 }
                 let dashes: Vec<_> = style.dashes().iter().map(|v| v * camera.zoom).collect();
-                let stroke = Stroke {
-                    line_dash: canvas::LineDash {
-                        segments: &dashes,
-                        offset: 0,
-                    },
-                    ..Stroke::default()
-                }
-                .with_color(rgb(style.stroke))
-                .with_width(if style.width_pt > 0. {
-                    (style.width() * camera.zoom).max(minimum)
+                let stroke = Stroke::default()
+                    .with_color(rgb(style.stroke))
+                    .with_width(if style.width_pt > 0. {
+                        (style.width() * camera.zoom).max(minimum)
+                    } else {
+                        0.
+                    })
+                    .with_line_cap(canvas::LineCap::Round)
+                    .with_line_join(canvas::LineJoin::Round);
+                if dashes.is_empty() {
+                    frame.stroke(&path, stroke);
                 } else {
-                    0.
-                })
-                .with_line_cap(canvas::LineCap::Round)
-                .with_line_join(canvas::LineJoin::Round);
-                frame.stroke(&path, stroke);
+                    frame.stroke(&dashes::dashed(&path, &dashes), stroke);
+                }
             }
             Primitive::Line(a, b, width) => frame.stroke(
                 &Path::line(camera.screen(a, bounds), camera.screen(b, bounds)),

@@ -68,6 +68,7 @@ fn curved_equilibrium_shafts_keep_a_normal_gap_and_heads_meet_their_tips() {
             let mut a = arrow(Preset::Equilibrium);
             a.control = Some(p(60., height));
             a.style.as_mut().unwrap().equilibrium_ratio = ratio;
+            a.style.as_mut().unwrap().shape = HeadShape::Open;
             let gap = reshiki::style::DEFAULT.world(a.appearance().gap_pt) * 0.5;
             let paths = a.paths();
             let inset = (1. - ratio) / 2.;
@@ -198,6 +199,7 @@ fn hollow_heads_leave_open_centers_and_unequal_equilibrium_keeps_the_long_shaft(
     assert!(start.x > 0. && end.x < 120.);
     let mut a = arrow(Preset::Equilibrium);
     a.style.as_mut().unwrap().equilibrium_ratio = 0.5;
+    a.style.as_mut().unwrap().shape = HeadShape::Open;
     let paths = a.paths();
     let second = &paths[2].commands;
     assert!(matches!(second[0],PathCommand::Move(q) if (q.x-90.).abs()<0.001));
@@ -319,5 +321,92 @@ fn double_shafts_join_the_retrosynthesis_head_at_its_actual_width() {
         };
         let expected_inset = length * end.y.abs() / width;
         assert!((a.end.x - end.x - expected_inset).abs() < 0.001);
+    }
+}
+
+#[test]
+fn filled_half_heads_cover_the_whole_shaft_cap_on_straight_and_curved_arrows() {
+    for kind in [Head::Left, Head::Right] {
+        for height in [0., -80., 80.] {
+            for angle in [0_f32, 90., 180.] {
+                let mut a = arrow(Preset::Forward);
+                let s = a.style.as_mut().unwrap();
+                s.head = kind;
+                s.tail = kind;
+                if height != 0. {
+                    a.control = Some(p(60., height));
+                }
+                let (sin, cos) = angle.to_radians().sin_cos();
+                a.map_points(|p| Point::new(p.x * cos - p.y * sin, p.x * sin + p.y * cos));
+                let paths = a.paths();
+                let shaft = &paths[0];
+                let r = shaft.style.width() * 0.5;
+                for (cap, head) in [
+                    (
+                        *shaft.commands.last().unwrap().points().last().unwrap(),
+                        &paths[1],
+                    ),
+                    (shaft.commands[0].points()[0], &paths[2]),
+                ] {
+                    assert!(head.filled);
+                    let polygon = &reshiki::graphics::flattened(&head.commands)[0];
+                    for i in 0..64 {
+                        let (sin, cos) = (i as f32 * std::f32::consts::TAU / 64.).sin_cos();
+                        let point = cap.offset(cos * r, sin * r);
+                        assert!(
+                            reshiki::selection_region::contains(polygon, point),
+                            "Exposed shaft cap: {kind:?}, bend {height}, angle {angle}, point {point:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn equilibrium_defaults_have_two_solid_half_heads_and_clean_straight_baselines() {
+    for ratio in [1., 0.6] {
+        let mut a = arrow(Preset::Equilibrium);
+        a.style.as_mut().unwrap().equilibrium_ratio = ratio;
+        assert_eq!(a.appearance().shape, HeadShape::Solid);
+        let paths = a.paths();
+        assert_eq!(paths.iter().filter(|p| p.filled).count(), 2);
+        let r = paths[0].style.width() * 0.5;
+        for (shaft, head, side) in [(&paths[0], &paths[1], 1.), (&paths[2], &paths[3], -1.)] {
+            let baseline = shaft.commands[0].points()[0].y + side * r;
+            let tip = head.commands[0].points()[0];
+            assert!((tip.y - baseline).abs() < 0.001);
+            assert!(
+                head.commands
+                    .iter()
+                    .flat_map(PathCommand::points)
+                    .all(|p| side * (p.y - baseline) <= 0.001)
+            );
+            let cap = *shaft.commands.last().unwrap().points().last().unwrap();
+            let polygon = &reshiki::graphics::flattened(&head.commands)[0];
+            assert!(reshiki::selection_region::contains(polygon, cap));
+        }
+    }
+}
+
+#[test]
+fn single_and_equilibrium_half_heads_share_default_dimensions_and_geometry() {
+    let mut single = arrow(Preset::Forward);
+    single.style.as_mut().unwrap().head = Head::Left;
+    let equilibrium = arrow(Preset::Equilibrium);
+    let s = single.appearance();
+    let e = equilibrium.appearance();
+    assert_eq!(s.head_length_pt, e.head_length_pt);
+    assert_eq!(s.head_width_pt, e.head_width_pt);
+    assert_eq!(s.head_notch, e.head_notch);
+    let gap = reshiki::style::DEFAULT.world(e.gap_pt) * 0.5;
+    let single_paths = single.paths();
+    let equilibrium_paths = equilibrium.paths();
+    let single_head = reshiki::graphics::flattened(&single_paths[1].commands);
+    let equilibrium_head = reshiki::graphics::flattened(&equilibrium_paths[1].commands);
+    assert_eq!(single_head[0].len(), equilibrium_head[0].len());
+    for (a, b) in single_head[0].iter().zip(&equilibrium_head[0]) {
+        near(*a, b.offset(0., gap));
     }
 }

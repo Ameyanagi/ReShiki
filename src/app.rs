@@ -18,6 +18,7 @@ mod context_menu;
 mod document_styles;
 mod file_shortcuts;
 mod graphics;
+mod help;
 mod icons;
 mod inline_text;
 mod inspector;
@@ -519,6 +520,9 @@ impl App {
                 if status == iced::event::Status::Captured {
                     return None;
                 }
+                if help::is_shortcut(&key, mods) {
+                    return Some(Message::ToggleHelp);
+                }
                 match key {
                     Key::Character(c) if mods.command() => match c.as_str() {
                         "y" | "Y" if cfg!(windows) => Some(Message::Redo),
@@ -582,7 +586,6 @@ impl App {
                         {
                             Some(Message::ContextKey(c.to_ascii_uppercase()))
                         }
-                        "?" => Some(Message::ToggleHelp),
                         _ => None,
                     },
                     Key::Named(Named::Delete | Named::Backspace) => Some(Message::Delete),
@@ -782,6 +785,10 @@ impl App {
             .unwrap_or(&self.doc)
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        if self.help_open && matches!(message, Message::Escape | Message::ToggleHelp) {
+            self.help_open = false;
+            return Task::none();
+        }
         if let Message::ContextMenu(action) = message {
             return self.context_action(action);
         }
@@ -1375,7 +1382,7 @@ impl App {
             Message::ToggleHelp => {
                 self.help_open = !self.help_open;
                 if self.help_open {
-                    self.import_open = false;
+                    self.palette = None;
                 }
             }
             Message::Viewport(size) => {
@@ -2799,7 +2806,10 @@ impl App {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        file_shortcuts::wrap(self.with_updates(self.with_palette(self.workspace())))
+        file_shortcuts::wrap(
+            self.with_updates(self.with_help(self.with_palette(self.workspace()))),
+            self.help_open,
+        )
     }
 }
 

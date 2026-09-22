@@ -546,9 +546,6 @@ impl App {
         if self.import_open {
             content = content.push(self.import_drawer());
         }
-        if self.help_open {
-            content = content.push(self.shortcut_drawer());
-        }
         if !self.recovered.is_empty() {
             content = content.push(
                 container(
@@ -919,8 +916,20 @@ impl App {
                         .spacing(3)
                 )),
             hover_hint(
-                command("?", Message::ToggleHelp).width(36),
-                "Keyboard shortcuts",
+                button(
+                    column![
+                        iced::widget::canvas(Glyph(Icon::Keyboard, true))
+                            .width(24)
+                            .height(24),
+                        text("Shortcuts").size(10),
+                    ]
+                    .spacing(3)
+                    .align_x(Alignment::Center)
+                )
+                .padding([5, 10])
+                .on_press(Message::ToggleHelp)
+                .style(control(self.help_open)),
+                "Keyboard shortcuts (?)",
                 tooltip::Position::Right,
             )
         ]
@@ -1877,13 +1886,6 @@ impl App {
         .padding([10, 18])
         .style(panel)
         .into()
-    }
-
-    fn shortcut_drawer(&self) -> Element<'_, Message> {
-        container(row![
-            column![text("Draw without leaving the canvas").size(13),text("V Select   L Lasso   B / 1 Bond   2 Double   3 Triple   4 Quadruple").size(12),text("Hover / select bond: S Single · D Double (repeat shifts lines) · T Triple").size(12),text("Selected aromatic ring: A Circle / alternating bonds").size(12),text("X Chain   Shift+X Snaking chain   Alt Free bond drawing").size(12),text("R Ring   A Arrow   T Text   E Erase   Shift+R Aromatic ring").size(12),text(super::platform_shortcut("⌘G Group   ⇧⌘G Ungroup   ⇧⌘A Invert selection", "Ctrl+G Group   Ctrl+Shift+G Ungroup   Ctrl+Shift+A Invert selection")).size(12),text(super::platform_shortcut("Hover atom: C / N / O / S / P / F / H   ⌘I Import   ⌘E Export   ⌘P Print   ⌘D Duplicate   Esc Select", "Hover atom: C / N / O / S / P / F / H   Ctrl+I Import   Ctrl+E Export   Ctrl+P Print   Ctrl+D Duplicate   Esc Select")).size(12)].spacing(5),
-            Space::new().width(Length::Fill),icon_button(Icon::Close,"Close shortcuts",Some(Message::ToggleHelp),false)
-        ].align_y(Alignment::Center)).padding([12,18]).style(panel).into()
     }
 
     fn view_options(&self) -> Element<'_, Message> {
