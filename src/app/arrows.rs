@@ -82,6 +82,18 @@ pub enum Action {
     Reset,
 }
 impl App {
+    pub(super) fn apply_arrow_tool(&mut self, id: u64) {
+        let Some(arrow) = self.doc.arrows.iter_mut().find(|a| a.id == id) else {
+            return;
+        };
+        if arrow.apply_tool(self.arrow_style, &self.arrows.style) {
+            for reaction in self.doc.reactions.iter_mut().filter(|r| r.arrow == id) {
+                std::mem::swap(&mut reaction.reactants, &mut reaction.products);
+            }
+        }
+        self.selected = vec![id];
+        self.sync_arrows();
+    }
     pub(super) fn sync_arrows(&mut self) {
         if let Some(a) = self
             .doc
@@ -265,12 +277,6 @@ impl App {
                 .width(Length::Fill)
             ]
             .align_y(Alignment::Center),
-            pick_list(HeadShape::ALL, Some(s.shape), |v| Message::ArrowAction(
-                Action::Shape(v)
-            ))
-            .text_size(12)
-            .padding(5)
-            .width(Length::Fill),
             row![
                 pick_list(
                     [LinePattern::Solid, LinePattern::Dashed, LinePattern::Dotted],
@@ -288,18 +294,28 @@ impl App {
             ]
             .spacing(6),
             number("Line width (pt)", Field::Line),
+        ]
+        .spacing(8);
+        let mut geometry = column![
+            text("Arrowhead shape").size(11).color(muted()),
+            pick_list(HeadShape::ALL, Some(s.shape), |v| Message::ArrowAction(
+                Action::Shape(v)
+            ))
+            .text_size(12)
+            .padding(6)
+            .width(Length::Fill),
             number("Head length (pt)", Field::Length),
             number("Head half-width (pt)", Field::Width),
             number("Head notch (0–0.9)", Field::Notch),
         ]
         .spacing(8);
         if self.arrow_style == Preset::Equilibrium {
-            panel = panel.push(number("Reverse length (0.2–1)", Field::Ratio));
+            geometry = geometry.push(number("Reverse length (0.2–1)", Field::Ratio));
         }
         if matches!(self.arrow_style, Preset::Equilibrium | Preset::Retro) {
-            panel = panel.push(number("Shaft separation (pt)", Field::Gap));
+            geometry = geometry.push(number("Shaft separation (pt)", Field::Gap));
         }
-        panel = panel
+        geometry = geometry
             .push(
                 row![
                     text("No reaction").size(11),
@@ -331,7 +347,11 @@ impl App {
                 .spacing(4),
             );
         }
-        panel.push(button(text("Reset arrow style").size(11)).on_press(Message::ArrowAction(Action::Reset)))
+        geometry = geometry.push(
+            button(text("Reset arrow style").size(11))
+                .on_press(Message::ArrowAction(Action::Reset)),
+        );
+        panel.push(self.inspector_section(super::inspector::Section::ArrowGeometry, "Arrowhead & markers", "", false, geometry))
             .push(text("Drag endpoints to resize; drag the square handle to bend. Return applies numeric and color fields.").size(11).color(muted())).into()
     }
 }

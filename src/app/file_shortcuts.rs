@@ -7,11 +7,11 @@ use iced::{Element, Event, Length, Rectangle, Renderer, Size, Theme, Vector, key
 
 /// Route file commands before text inputs see them. A subscription runs after
 /// widgets and cannot prevent a command's character from entering a field.
-pub fn wrap(content: Element<'_, Message>) -> Element<'_, Message> {
-    Element::new(FileShortcuts(content))
+pub fn wrap(content: Element<'_, Message>, help_open: bool) -> Element<'_, Message> {
+    Element::new(FileShortcuts(content, help_open))
 }
 
-struct FileShortcuts<'a>(Element<'a, Message>);
+struct FileShortcuts<'a>(Element<'a, Message>, bool);
 
 impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
     fn tag(&self) -> tree::Tag {
@@ -76,6 +76,17 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
+        if self.1
+            && let Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) = event
+        {
+            if matches!(key, keyboard::Key::Named(keyboard::key::Named::Escape))
+                || super::help::is_shortcut(key, *modifiers)
+            {
+                shell.publish(Message::ToggleHelp);
+            }
+            shell.capture_event();
+            return;
+        }
         if let Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) = event
             && modifiers.command()
             && let keyboard::Key::Character(c) = key

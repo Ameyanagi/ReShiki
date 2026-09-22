@@ -468,10 +468,21 @@ pub struct History {
 }
 impl History {
     pub fn commit(&mut self, before: Document, after: &Document) -> bool {
+        self.commit_continuing(before, after, false)
+    }
+    /// A continuous gesture keeps its first undo snapshot while updating the drawing live.
+    pub fn commit_continuing(
+        &mut self,
+        before: Document,
+        after: &Document,
+        continuing: bool,
+    ) -> bool {
         if before == *after {
             return false;
         }
-        self.undo.push(before);
+        if !continuing || self.undo.is_empty() {
+            self.undo.push(before);
+        }
         self.redo.clear();
         if self.undo.len() > 100 {
             self.undo.remove(0);

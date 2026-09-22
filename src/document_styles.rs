@@ -20,19 +20,46 @@ pub fn load(path: &std::path::Path) -> Result<DrawingStyle, String> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Preset {
     Jacs,
+    Nature,
+    Rsc,
     Presentation,
 }
 impl Preset {
+    pub const ALL: [Self; 4] = [Self::Jacs, Self::Nature, Self::Rsc, Self::Presentation];
     pub fn style(self) -> DrawingStyle {
         let mut style = DrawingStyle::default();
-        if self == Self::Presentation {
-            style.name = "Presentation".into();
-            style.set_bond_length(24.);
-            style.font_size_pt = 16.;
-            style.line_width_pt = 1.;
-            style.bold_width_pt = 3.;
-            style.margin_width_pt = 2.;
-            style.hash_spacing_pt = 3.;
+        match self {
+            Self::Jacs => {}
+            Self::Nature => {
+                // https://www.nature.com/documents/nr-chemical-structures-guide.pdf
+                let points = |cm: f32| (cm * 72. / 2.54 * 1000.).round() / 1000.;
+                style.name = "Nature".into();
+                style.set_bond_length(10.8);
+                style.font_size_pt = 6.;
+                style.line_width_pt = points(0.021);
+                style.bold_width_pt = points(0.055);
+                style.margin_width_pt = points(0.042);
+                style.hash_spacing_pt = points(0.06);
+            }
+            Self::Rsc => {
+                style.name = "RSC".into();
+                style.set_bond_length(12.2);
+                style.font_size_pt = 7.;
+                style.line_width_pt = 0.45;
+                style.bold_width_pt = 1.6;
+                style.margin_width_pt = 1.25;
+                style.hash_spacing_pt = 1.76;
+                style.bond_spacing_ratio = 0.2;
+            }
+            Self::Presentation => {
+                style.name = "Presentation".into();
+                style.set_bond_length(24.);
+                style.font_size_pt = 16.;
+                style.line_width_pt = 1.;
+                style.bold_width_pt = 3.;
+                style.margin_width_pt = 2.;
+                style.hash_spacing_pt = 3.;
+            }
         }
         style
     }
@@ -41,6 +68,8 @@ impl std::fmt::Display for Preset {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Self::Jacs => "JACS / ACS",
+            Self::Nature => "Nature",
+            Self::Rsc => "RSC",
             Self::Presentation => "Presentation",
         })
     }

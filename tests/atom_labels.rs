@@ -65,6 +65,57 @@ async fn appearance_leaves_formula_and_identity_intact() {
 }
 
 #[test]
+fn charged_skeletal_carbons_keep_their_vertex_and_charge_without_forcing_a_label() {
+    use reshiki::scientific::{self, SymbolKind};
+    let mut doc = Document::default();
+    let a = doc.add_atom("C", Point::new(0., 0.));
+    let b = doc.add_atom("C", Point::new(42., 0.));
+    doc.add_bond(a, b, 1, "plain");
+    doc.atom_mut(a).unwrap().charge = 1;
+    doc.atom_mut(a).unwrap().label_h = 3;
+    let runs = scene::primitives(&doc);
+    assert!(
+        runs.iter()
+            .any(|p| matches!(p, scene::Primitive::Text { text, .. } if text == "+"))
+    );
+    assert!(
+        !runs.iter().any(
+            |p| matches!(p, scene::Primitive::Text { text, .. } if text == "C" || text == "H")
+        )
+    );
+    assert!(runs.iter().any(|p| matches!(p, scene::Primitive::Line(start, end, _) if *start == Point::new(0., 0.) && *end == Point::new(42., 0.))));
+    scientific::attach(
+        doc.atom_mut(a).unwrap(),
+        SymbolKind::CirclePlus,
+        Point::new(0., -24.),
+    )
+    .unwrap();
+    let marked = scene::primitives(&doc);
+    assert!(
+        !marked
+            .iter()
+            .any(|p| matches!(p, scene::Primitive::Text { text, .. } if text == "C"))
+    );
+    assert!(
+        marked
+            .iter()
+            .any(|p| matches!(p, scene::Primitive::Path { .. }))
+    );
+    doc.atom_mut(a).unwrap().display.carbons = Some(Carbons::All);
+    assert!(
+        scene::primitives(&doc)
+            .iter()
+            .any(|p| matches!(p, scene::Primitive::Text { text, .. } if text == "C"))
+    );
+    doc.atom_mut(a).unwrap().display.carbons = None;
+    doc.atom_mut(a).unwrap().isotope = 13;
+    assert!(atom_labels::visible(doc.atom(a).unwrap(), &doc));
+    doc.bonds.clear();
+    doc.atom_mut(a).unwrap().isotope = 0;
+    assert!(atom_labels::visible(doc.atom(a).unwrap(), &doc));
+}
+
+#[test]
 fn indicators_move_transform_and_copy_with_their_owners() {
     let mut doc = Document::default();
     let a = doc.add_atom("N", Point::new(10., 20.));

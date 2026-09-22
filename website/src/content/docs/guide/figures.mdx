@@ -9,6 +9,8 @@ import Screenshot from "../../../components/Screenshot.astro";
 
 New documents use **JACS / ACS**. Click the style badge to change fonts, bond lengths, and line widths. Review the preview, then **Apply to document**.
 
+The preset menu also includes **Nature**, **RSC**, and **Presentation**. Nature uses 6 pt atom labels with 10.8 pt bonds; RSC uses 7 pt labels with 12.2 pt bonds. Page width and column layout are set separately. See the [Nature structure guide](https://www.nature.com/documents/nr-chemical-structures-guide.pdf) and [RSC author guidelines](https://www.rsc.org/publishing/publish-with-us/publish-a-journal-article/green-chemistry).
+
 <Screenshot
   src="/manual/drawing-style.png"
   alt="Drawing style panel with a structure preview and Apply to document."
@@ -18,13 +20,34 @@ New documents use **JACS / ACS**. Click the style badge to change fonts, bond le
 
 ## Add artwork
 
-| Add                                       | Where                                           |
-| ----------------------------------------- | ----------------------------------------------- |
-| Rectangle, ellipse, brackets, line, curve | Tools palette; choose variants above the canvas |
-| Chemical symbol or orbital                | Tools palette, then the contextual selector     |
-| A picture                                 | **Import → Picture…**                           |
+| Add                          | Where                                                                          |
+| ---------------------------- | ------------------------------------------------------------------------------ |
+| Rectangle, ellipse, brackets | Click to reuse the chosen style; hold or click the corner triangle for presets |
+| Line, curve                  | Tools palette                                                                  |
+| Chemical symbol or orbital   | Hold the toolbar button or click its corner triangle                           |
+| A picture                    | **Import → Picture…**                                                          |
+
+Rectangle presets include rounded, dashed, filled, and square shapes. Ellipses include outline, dashed, filled, and circle presets. Brackets include square brackets, parentheses, and braces, with both sides or either side alone.
+
+Select an object to see its controls in **Properties**. **Molecular properties** shows the calculation scope and formula at the top when atoms are selected. Expand **Atom details**, **Arrange & transform**, or **Grouping & frames** when needed. **Drawing style** remains available below the selection controls.
+
+<Screenshot
+  src="/manual/properties.png"
+  alt="Molecular properties calculated for the selected benzene, with the other molecule excluded."
+/>
 
 Select artwork to change its style in **Properties**. Pictures can be resized, rotated, replaced, or sent behind the drawing. Group a picture and caption to move them together.
+
+## Align objects
+
+Select two or more molecules, arrows, or groups. Right-click the selection and choose **Align middles** to put them on the same horizontal centerline. **Align & distribute…** offers the other edges, centers, and spacing options. The same controls appear first in **Properties → Arrange & transform** for multiple objects. Molecules and groups move together, preserving their internal layout. Undo restores the previous positions.
+
+Right-click an atom, bond, arrow, or selected object for editing commands and its relevant properties. Right-click within an existing selection to keep all its objects selected. **Escape** or a click outside closes the menu. Use the middle mouse button to pan.
+
+<Screenshot
+  src="/manual/context-menu.png"
+  alt="A selection context menu with Align middles, grouping, bond and arrow commands."
+/>
 
 <Screenshot
   src="/manual/picture.png"
@@ -36,7 +59,7 @@ Select artwork to change its style in **Properties**. Pictures can be resized, r
   alt="A p orbital with a colored outline and reversed gray phase."
 />
 
-At a bond crossing, select the bond's middle and choose **Properties → Bond in front / Bond behind** to control the gap.
+At a bond crossing, select the bond's middle and choose **Properties → Crossings & direction → In front / Behind** to control the gap.
 
 <Screenshot
   src="/manual/bond-crossing.png"
@@ -45,7 +68,7 @@ At a bond crossing, select the bond's middle and choose **Properties → Bond in
 
 ## Set the page
 
-Open **View → Page setup…** or **Export → Page setup…**. Choose paper, orientation, margins, and **Columns / Rows**, then **Apply page setup**.
+Open **View → Page setup…** or **Export → Pages & printing → Page setup…**. Choose paper, orientation, margins, and **Columns / Rows**, then **Apply page setup**.
 
 <Screenshot
   src="/manual/publication-pages.png"

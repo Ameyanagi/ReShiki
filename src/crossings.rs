@@ -120,6 +120,88 @@ fn intersection(a: Point, b: Point, pa: f32, pb: f32, bound: f32) -> Point {
     };
     Point::new(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)
 }
+fn path_half(
+    commands: &[crate::graphics::PathCommand],
+    g: Gap,
+    bound: f32,
+    below: bool,
+) -> Vec<crate::graphics::PathCommand> {
+    use crate::graphics::PathCommand::{self, Cubic, Line, Move};
+    let inside = |p| {
+        if below {
+            projection(p, g) <= bound
+        } else {
+            projection(p, g) >= bound
+        }
+    };
+    let lerp = |a: Point, b: Point, t: f32| a.offset((b.x - a.x) * t, (b.y - a.y) * t);
+    let mut out = vec![];
+    let mut cursor = None;
+    let mut pen = None;
+    for command in commands {
+        let end = match command {
+            Move(p) => {
+                cursor = Some(*p);
+                pen = None;
+                continue;
+            }
+            Line(p) | Cubic(_, _, p) => *p,
+            PathCommand::Close => continue,
+        };
+        let Some(start) = cursor.replace(end) else {
+            continue;
+        };
+        let mut from = start;
+        let clipped = match (inside(start), inside(end)) {
+            (false, false) => {
+                pen = None;
+                continue;
+            }
+            (true, true) => command.clone(),
+            (keep_start, _) => {
+                // Bond curves advance linearly along their axis; split the cubic
+                // itself so a crossing gap does not introduce polygonal edges.
+                let pa = projection(start, g);
+                let pb = projection(end, g);
+                let t = ((bound - pa) / (pb - pa)).clamp(0., 1.);
+                match command {
+                    Cubic(a, b, _) => {
+                        let a0 = lerp(start, *a, t);
+                        let a1 = lerp(*a, *b, t);
+                        let a2 = lerp(*b, end, t);
+                        let b0 = lerp(a0, a1, t);
+                        let b1 = lerp(a1, a2, t);
+                        let cut = lerp(b0, b1, t);
+                        if keep_start {
+                            Cubic(a0, b0, cut)
+                        } else {
+                            from = cut;
+                            Cubic(b1, a2, end)
+                        }
+                    }
+                    _ => {
+                        let cut = lerp(start, end, t);
+                        if keep_start {
+                            Line(cut)
+                        } else {
+                            from = cut;
+                            Line(end)
+                        }
+                    }
+                }
+            }
+        };
+        if pen != Some(from) {
+            out.push(Move(from));
+        }
+        pen = match clipped {
+            Line(p) | Cubic(_, _, p) => Some(p),
+            _ => None,
+        };
+        out.push(clipped);
+    }
+    out
+}
 fn half(primitive: &Primitive, g: Gap, bound: f32, below: bool) -> Option<Primitive> {
     let inside = |value: f32| {
         if below {
@@ -129,6 +211,18 @@ fn half(primitive: &Primitive, g: Gap, bound: f32, below: bool) -> Option<Primit
         }
     };
     match primitive {
+        Primitive::Path {
+            commands,
+            style,
+            filled: false,
+        } => {
+            let commands = path_half(commands, g, bound, below);
+            (!commands.is_empty()).then(|| Primitive::Path {
+                commands,
+                style: style.clone(),
+                filled: false,
+            })
+        }
         Primitive::Line(a, b, width) => {
             let pa = projection(*a, g);
             let pb = projection(*b, g);
@@ -174,7 +268,12 @@ pub fn cut(mut primitives: Vec<Primitive>, gaps: &[Gap]) -> Vec<Primitive> {
         primitives = primitives
             .iter()
             .flat_map(|p| {
-                let halves = if matches!(p, Primitive::Line(..) | Primitive::Polygon(_)) {
+                let halves = if matches!(
+                    p,
+                    Primitive::Line(..)
+                        | Primitive::Polygon(_)
+                        | Primitive::Path { filled: false, .. }
+                ) {
                     [half(p, *gap, gap.low, true), half(p, *gap, gap.high, false)]
                 } else {
                     [Some(p.clone()), None]

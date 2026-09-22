@@ -81,10 +81,10 @@ impl ArrowStyle {
         color: [0; 3],
         width_pt: 0.6,
         pattern: LinePattern::Solid,
-        head_length_pt: 3.0,
-        head_width_pt: 1.2,
+        head_length_pt: 6.0,
+        head_width_pt: 1.5,
         equilibrium_ratio: 1.0,
-        head_notch: 0.,
+        head_notch: 0.125,
         gap_pt: 2.0,
         no_go: NoGo::None,
         dipole: false,
@@ -97,7 +97,6 @@ impl ArrowStyle {
             Preset::Equilibrium => {
                 s.head = Head::Left;
                 s.tail = Head::Left;
-                s.shape = HeadShape::Open;
             }
             Preset::Resonance => {
                 s.tail = Head::Full;
@@ -113,7 +112,6 @@ impl ArrowStyle {
             }
             Preset::Dipole => {
                 s.dipole = true;
-                s.shape = HeadShape::Open;
             }
             Preset::NoGo => s.no_go = NoGo::Cross,
             _ => {}
@@ -197,6 +195,51 @@ impl Arrow {
             None => lerp(self.start, self.end, t),
         }
     }
+    fn velocity(&self, t: f32) -> Point {
+        if let Some(c) = self.control_point() {
+            if self.kind == "bent" {
+                let (a, b) = if t < 0.5 {
+                    (self.start, c)
+                } else {
+                    (c, self.end)
+                };
+                return Point::new(2. * (b.x - a.x), 2. * (b.y - a.y));
+            }
+            Point::new(
+                2. * ((1. - t) * (c.x - self.start.x) + t * (self.end.x - c.x)),
+                2. * ((1. - t) * (c.y - self.start.y) + t * (self.end.y - c.y)),
+            )
+        } else {
+            Point::new(self.end.x - self.start.x, self.end.y - self.start.y)
+        }
+    }
+    fn offset_point(&self, t: f32, offset: f32) -> Point {
+        let v = self.velocity(t);
+        let speed = v.distance(Point::default());
+        let direction = if speed > 0.0001 {
+            Point::new(v.x / speed, v.y / speed)
+        } else {
+            unit(self.start, self.end)
+        };
+        self.point(t)
+            .offset(-direction.y * offset, direction.x * offset)
+    }
+    fn offset_velocity(&self, t: f32, offset: f32) -> Point {
+        let v = self.velocity(t);
+        let speed = v.distance(Point::default()).max(0.0001);
+        let Some(c) = self.control_point() else {
+            return v;
+        };
+        let a = Point::new(
+            2. * (self.end.x - 2. * c.x + self.start.x),
+            2. * (self.end.y - 2. * c.y + self.start.y),
+        );
+        let projection = (v.x * a.x + v.y * a.y) / (speed * speed);
+        v.offset(
+            offset * (-a.y + v.y * projection) / speed,
+            offset * (a.x - v.x * projection) / speed,
+        )
+    }
     pub fn handles(&self) -> [Point; 3] {
         [self.start, self.end, self.point(0.5)]
     }
@@ -234,6 +277,31 @@ impl Arrow {
     pub fn reverse(&mut self) {
         self.control = self.control_point();
         std::mem::swap(&mut self.start, &mut self.end);
+    }
+    /// Apply an arrow tool, or cycle its direction/half-head on another click.
+    /// Returns whether the reaction direction was reversed.
+    pub fn apply_tool(&mut self, preset: Preset, style: &ArrowStyle) -> bool {
+        if self.kind == preset.kind() && self.appearance() == *style {
+            if self.kind != "equilibrium" && matches!(style.head, Head::Left | Head::Right) {
+                let mut next = style.clone();
+                next.head = if style.head == Head::Left {
+                    Head::Right
+                } else {
+                    Head::Left
+                };
+                self.style = Some(next);
+                return false;
+            }
+            self.reverse();
+            return true;
+        }
+        let curved = |kind: &str| matches!(kind, "curved" | "fishhook");
+        if self.kind != preset.kind() && !(curved(&self.kind) && curved(preset.kind())) {
+            self.control = None;
+        }
+        self.kind = preset.kind().into();
+        self.style = Some(style.clone());
+        false
     }
     pub fn straighten(&mut self) {
         self.control = Some(lerp(self.start, self.end, 0.5));
@@ -343,6 +411,27 @@ impl Arrow {
                     commands.push(Line(shift(end)));
                     return commands;
                 }
+                if offset != 0. {
+                    // A curve's parallel follows its local normal. Hermite cubic
+                    // segments retain smooth tangents and a constant shaft gap.
+                    let steps = 16;
+                    let dt = (to - from) / steps as f32;
+                    let mut commands = vec![Move(self.offset_point(from, offset))];
+                    for i in 0..steps {
+                        let t0 = from + i as f32 * dt;
+                        let t1 = from + (i + 1) as f32 * dt;
+                        let p0 = self.offset_point(t0, offset);
+                        let p1 = self.offset_point(t1, offset);
+                        let v0 = self.offset_velocity(t0, offset);
+                        let v1 = self.offset_velocity(t1, offset);
+                        commands.push(Cubic(
+                            p0.offset(v0.x * dt / 3., v0.y * dt / 3.),
+                            p1.offset(-v1.x * dt / 3., -v1.y * dt / 3.),
+                            p1,
+                        ));
+                    }
+                    return commands;
+                }
                 let tangent = |t: f32| {
                     Point::new(
                         2. * ((1. - t) * (c.x - self.start.x) + t * (self.end.x - c.x)),
@@ -379,58 +468,115 @@ impl Arrow {
             };
             if reverse { Point::new(-d.x, -d.y) } else { d }
         };
+        let half_head = |from: f32, to: f32, offset: f32, kind: Head| {
+            if s.shape != HeadShape::Solid || !matches!(kind, Head::Left | Head::Right) {
+                return None;
+            }
+            let sign = (to - from).signum();
+            let span = (to - from).abs();
+            let direction = tangent(to, sign < 0.);
+            let radius = DEFAULT.world(s.width_pt) * 0.5;
+            let length = DEFAULT
+                .world(s.head_length_pt)
+                .min(self.point(from).distance(self.point(to)) * 0.4);
+            let width = DEFAULT.world(s.head_width_pt).max(radius * 1.5);
+            let speed = self
+                .offset_velocity(to, offset)
+                .distance(Point::default())
+                .max(0.0001);
+            let neck = to - sign * (length * (1. - s.head_notch) / speed).min(span * 0.4);
+            let side = if kind == Head::Left { 1. } else { -1. };
+            let inner = offset + side * sign * radius;
+            let outer = offset - side * sign * radius;
+            // Continue the shaft's unbarbed edge all the way to the tip. Closing
+            // a triangle on the shaft centerline leaves its round cap exposed.
+            let tip = self.offset_point(to, inner);
+            let wing = tip.offset(
+                -direction.x * length + direction.y * side * (width + radius),
+                -direction.y * length - direction.x * side * (width + radius),
+            );
+            let mut commands = vec![
+                Move(tip),
+                Line(wing),
+                Line(self.offset_point(neck, outer)),
+                Line(self.offset_point(neck, inner)),
+            ];
+            if self.kind == "bent" || self.control_point().is_none() {
+                commands.push(Line(tip));
+            } else {
+                commands.extend(body(neck, to, inner).into_iter().skip(1));
+            }
+            commands.push(Close);
+            // Overlap the shortened shaft's cap inside the filled neck.
+            let overlap = (radius * 1.25 / speed).min((to - neck).abs() * 0.25);
+            Some((commands, neck + sign * overlap))
+        };
+        let trim = |kind: Head, at: f32, span: f32| {
+            if kind == Head::None || s.shape == HeadShape::Open {
+                return 0.;
+            }
+            let length = DEFAULT
+                .world(s.head_length_pt)
+                .min(self.start.distance(self.end) * 0.4);
+            let inset = if s.shape == HeadShape::Hollow && kind == Head::Full {
+                length * (1. - s.head_notch)
+            } else {
+                (DEFAULT.world(s.width_pt) * 0.5 * (s.head_length_pt / s.head_width_pt + 1.))
+                    .min(length * 0.7)
+            };
+            (inset / self.velocity(at).distance(Point::default()).max(0.0001)).min(span * 0.35)
+        };
+        let mut shaft = |from: f32, to: f32, offset: f32, head_kind: Head, tail_kind: Head| {
+            let sign = (to - from).signum();
+            let span = (to - from).abs();
+            let end_head = half_head(from, to, offset, head_kind);
+            let start_head = half_head(to, from, offset, tail_kind);
+            let start = start_head
+                .as_ref()
+                .map(|(_, at)| *at)
+                .unwrap_or_else(|| from + sign * trim(tail_kind, from, span));
+            let end = end_head
+                .as_ref()
+                .map(|(_, at)| *at)
+                .unwrap_or_else(|| to - sign * trim(head_kind, to, span));
+            path(body(start, end, offset), false, false);
+            if let Some((commands, _)) = end_head {
+                path(commands, true, true);
+            } else {
+                head(
+                    self.offset_point(to, offset),
+                    tangent(to, sign < 0.),
+                    head_kind,
+                    &mut path,
+                );
+            }
+            if let Some((commands, _)) = start_head {
+                path(commands, true, true);
+            } else {
+                head(
+                    self.offset_point(from, offset),
+                    tangent(from, sign > 0.),
+                    tail_kind,
+                    &mut path,
+                );
+            }
+        };
         if self.kind == "equilibrium" {
-            path(body(0., 1., -gap), false, false);
-            head(
-                self.end.offset(-n.x * gap, -n.y * gap),
-                tangent(1., false),
-                s.head,
-                &mut path,
-            );
+            shaft(0., 1., -gap, s.head, Head::None);
             let inset = (1. - s.equilibrium_ratio) / 2.;
-            path(body(1. - inset, inset, gap), false, false);
-            head(
-                self.point(inset).offset(n.x * gap, n.y * gap),
-                tangent(inset, true),
-                s.tail,
-                &mut path,
-            );
+            shaft(1. - inset, inset, gap, s.tail, Head::None);
         } else if self.kind == "retro" {
             // Keep the double shaft inside the angled arrowhead.
             let length = self.start.distance(self.end).max(0.001);
-            let inset = (DEFAULT.world(s.head_length_pt) * 0.4 / length).min(0.3);
+            let head_length = DEFAULT.world(s.head_length_pt).min(length * 0.4);
+            let head_width = DEFAULT.world(s.head_width_pt).max(0.001);
+            let inset = (head_length * gap / head_width / length).min(0.4);
             path(body(0., 1. - inset, -gap), false, false);
             path(body(0., 1. - inset, gap), false, false);
             head(self.end, tangent(1., false), s.head, &mut path);
             head(self.start, tangent(0., true), s.tail, &mut path);
         } else {
-            let trim = |head: Head, from: bool| {
-                if s.shape != HeadShape::Hollow || head != Head::Full {
-                    return 0.;
-                }
-                let c = self
-                    .control_point()
-                    .unwrap_or_else(|| lerp(self.start, self.end, 0.5));
-                let speed = 2.
-                    * if from {
-                        self.start.distance(c)
-                    } else {
-                        self.end.distance(c)
-                    };
-                (DEFAULT
-                    .world(s.head_length_pt)
-                    .min(self.start.distance(self.end) * 0.4)
-                    * (1. - s.head_notch)
-                    / speed.max(0.001))
-                .min(0.35)
-            };
-            path(
-                body(trim(s.tail, true), 1. - trim(s.head, false), 0.),
-                false,
-                false,
-            );
-            head(self.end, tangent(1., false), s.head, &mut path);
-            head(self.start, tangent(0., true), s.tail, &mut path);
+            shaft(0., 1., 0., s.head, s.tail);
         }
         if s.dipole {
             let p = self.point(0.);

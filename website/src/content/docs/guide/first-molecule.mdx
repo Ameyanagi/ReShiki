@@ -7,10 +7,12 @@ import Screenshot from "../../../components/Screenshot.astro";
 
 ## Draw ethanol
 
-1. Choose **New**, then press **B** for a single bond.
+ReShiki opens with a blank canvas.
+
+1. Press **B** for a single bond. Choose **New** first if a drawing is already open.
 2. Drag a bond. Drag from its endpoint to add a second bond.
 3. Select the last atom and press **O**. Its label becomes **OH**.
-4. Click **Check**. Ethanol should read **C2H6O**.
+4. Click empty space to clear the selection, then **Check**. Ethanol should read **C2H6O**.
 
 <Screenshot
   src="/manual/first-molecule.png"
@@ -19,9 +21,13 @@ import Screenshot from "../../../components/Screenshot.astro";
 
 Press **⌘S** on Mac or **Ctrl+S** elsewhere to save an editable `.reshiki` file. **⌘/Ctrl+Z** undoes an edit.
 
+**Molecular properties** follows the selected atoms and bonds automatically. With nothing selected, it shows the **Whole drawing**. A partial selection is treated as a separate fragment, with implicit hydrogens recalculated at cut bonds. Selecting only artwork shows no molecular values. **Copy SMILES** uses the same scope as the displayed properties.
+
+The examples under **Import** insert into the existing drawing. Each inserted molecule stays selected: drag it to position it, or use Delete or Undo to remove it.
+
 ## Choose an element
 
-Click **C** in the toolbar, choose an element, then click an atom to replace it or empty space to place it.
+Click **C** in the toolbar to reuse the current element. Hold the button or click its lower-right triangle to choose another element, then click an atom to replace it or empty space to place it.
 
 <Screenshot src="/manual/periodic-table.png" alt="The periodic table opens beside the atom tool." />
 
@@ -29,18 +35,18 @@ For common labels, hover an atom and press **C, N, O, S, P, F, or H**. ReShiki a
 
 ## Change a bond
 
-Click a bond tool to open its visual palette. Choose a style, then draw or click an existing bond.
+Click **Single**, **Double**, or **Triple** to select a bond immediately. Click **Other bonds** for wedges, dashed bonds, and the remaining styles. Choose a style, then draw or click an existing bond.
 
 <Screenshot
   src="/manual/bond-palette.png"
-  alt="The floating bond palette shows single, multiple, wedge, dashed and other bond styles."
+  alt="The floating bond palette shows wedge, dashed, coordination and other bond styles."
 />
 
-| With a bond selected or hovered  | Press             |
-| -------------------------------- | ----------------- |
-| Single / double / triple         | **S / D / T**     |
-| Move a double bond's second line | **D** again       |
-| Erase an object                  | **E**, then click |
+| With a bond selected or hovered  | Press                     |
+| -------------------------------- | ------------------------- |
+| Single / double / triple         | **S / D / T**             |
+| Move a double bond's second line | **D** again               |
+| Erase an object                  | **E**, then click or drag |
 
 <Screenshot
   src="/manual/double-bond.png"
@@ -49,16 +55,18 @@ Click a bond tool to open its visual palette. Choose a style, then draw or click
 
 The controls above the canvas set **Length** and **Angles**. Hold **Alt/Option** while dragging to draw freely.
 
+The eraser deletes atoms, bonds, labels, arrows, and artwork along the full drag path. One undo restores the entire stroke.
+
 ## Add a ring or chain
 
-Click the ring tool, choose a shape, then click empty space or an existing atom/bond.
+Click the ring tool to use the last chosen ring; it starts with a six-membered ring. Hold the button briefly or click its lower-right triangle to choose a ring, benzene, or a chair projection. Click empty space or an existing atom/bond to place it.
 
 <Screenshot
   src="/manual/ring-palette.png"
   alt="The ring palette includes regular rings, benzene and chair projections."
 />
 
-**X** draws a straight chain; **Shift+X** draws a snaking chain. Drag to set its length. **Straight chain** can use an exact atom count; **Snaking chain** has a **Max atoms** limit.
+Straight and snaking chains have separate one-click toolbar buttons. **X** selects a straight chain; **Shift+X** selects a snaking chain. Drag to set its length. **Straight chain** can use an exact atom count; **Snaking chain** has a **Max atoms** limit.
 
 <Screenshot
   src="/manual/chain.png"

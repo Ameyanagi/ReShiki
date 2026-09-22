@@ -1,7 +1,7 @@
 //! Compact visual flyouts for toolbar families.
 use super::{App, Message};
 use crate::canvas::layered::canvas;
-use crate::canvas::{ArrowPreview, OwnedDrawingPreview, Tool};
+use crate::canvas::{PalettePreview, Tool};
 use iced::widget::{
     Space, button, column, container, mouse_area, opaque, row, stack, text, tooltip,
 };
@@ -10,6 +10,7 @@ use reshiki::{
     arrows::{ArrowStyle, Preset as ArrowPreset},
     bonds::BondPreset,
     document::{Arrow, Document, Point},
+    graphics::{BracketSides, Graphic, GraphicKind, GraphicStyle, LinePattern},
     rings::Preset as RingPreset,
 };
 
@@ -19,6 +20,11 @@ pub enum Family {
     Bonds,
     Rings,
     Arrows,
+    Rectangles,
+    Ellipses,
+    Brackets,
+    Symbols,
+    Orbitals,
 }
 #[derive(Debug, Clone)]
 pub enum Action {
@@ -29,17 +35,169 @@ pub enum Action {
     Ring(u8, bool),
     RingPreset(RingPreset),
     Arrow(ArrowPreset),
+    ArrowVariant(ArrowPreset, ArrowStyle),
+    Graphic(GraphicOption),
+    Tool(Tool),
+}
+#[derive(Debug, Clone, PartialEq)]
+pub struct GraphicOption {
+    pub kind: GraphicKind,
+    pub style: GraphicStyle,
+    pub sides: BracketSides,
+    pub constrain: bool,
+}
+impl GraphicOption {
+    fn new(kind: GraphicKind) -> Self {
+        Self {
+            kind,
+            style: GraphicStyle::default(),
+            sides: BracketSides::Both,
+            constrain: false,
+        }
+    }
+    fn document(&self) -> Document {
+        let mut doc = Document::default();
+        doc.graphics.push(Graphic::dragged(
+            1,
+            self.kind,
+            Point::default(),
+            Point::new(64., 42.),
+            self.style.clone(),
+            self.sides,
+            self.constrain,
+        ));
+        doc
+    }
+}
+pub(super) struct Memory {
+    pub bond: Tool,
+    pub ring: Tool,
+    pub rectangle: GraphicOption,
+    pub ellipse: GraphicOption,
+    pub bracket: GraphicOption,
+    pub symbol: Tool,
+    pub orbital: Tool,
+}
+impl Default for Memory {
+    fn default() -> Self {
+        Self {
+            bond: Tool::Wedge,
+            ring: Tool::Ring,
+            rectangle: GraphicOption::new(GraphicKind::Rectangle),
+            ellipse: GraphicOption::new(GraphicKind::Ellipse),
+            bracket: GraphicOption::new(GraphicKind::Brackets),
+            symbol: Tool::Graphic(GraphicKind::Symbol(
+                reshiki::scientific::SymbolKind::CirclePlus,
+            )),
+            orbital: Tool::Graphic(GraphicKind::Orbital(reshiki::scientific::OrbitalKind::P)),
+        }
+    }
+}
+impl Memory {
+    pub fn graphic(&self, tool: Tool) -> Option<&GraphicOption> {
+        match family(tool) {
+            Some(Family::Rectangles) => Some(&self.rectangle),
+            Some(Family::Ellipses) => Some(&self.ellipse),
+            Some(Family::Brackets) => Some(&self.bracket),
+            _ => None,
+        }
+    }
+    pub fn remember(&mut self, tool: Tool) {
+        match family(tool) {
+            Some(Family::Bonds) => self.bond = tool,
+            Some(Family::Rings) => self.ring = tool,
+            Some(Family::Symbols) => self.symbol = tool,
+            Some(Family::Orbitals) => self.orbital = tool,
+            Some(Family::Rectangles | Family::Ellipses | Family::Brackets) => {
+                if let Tool::Graphic(kind) = tool {
+                    match family(tool) {
+                        Some(Family::Rectangles) => self.rectangle.kind = kind,
+                        Some(Family::Ellipses) => self.ellipse.kind = kind,
+                        _ => self.bracket.kind = kind,
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
 }
 pub fn family(tool: Tool) -> Option<Family> {
-    if tool.bond_preset().is_some() {
-        return Some(Family::Bonds);
-    }
     match tool {
+        Tool::Bond(_) => None,
+        Tool::StyledBond(_) | Tool::Wedge | Tool::Hash | Tool::Wavy => Some(Family::Bonds),
         Tool::Atom => Some(Family::Atoms),
         Tool::Ring | Tool::RingPreset(_) => Some(Family::Rings),
         Tool::Arrow => Some(Family::Arrows),
+        Tool::Graphic(GraphicKind::Rectangle | GraphicKind::RoundedRectangle) => {
+            Some(Family::Rectangles)
+        }
+        Tool::Graphic(GraphicKind::Ellipse) => Some(Family::Ellipses),
+        Tool::Graphic(GraphicKind::Brackets | GraphicKind::Parentheses | GraphicKind::Braces) => {
+            Some(Family::Brackets)
+        }
+        Tool::Graphic(GraphicKind::Symbol(_)) => Some(Family::Symbols),
+        Tool::Graphic(GraphicKind::Orbital(_)) => Some(Family::Orbitals),
         _ => None,
     }
+}
+fn bond_tool(preset: BondPreset) -> Tool {
+    match preset {
+        BondPreset::Single => Tool::Bond(1),
+        BondPreset::Double => Tool::Bond(2),
+        BondPreset::Triple => Tool::Bond(3),
+        BondPreset::Wedge => Tool::Wedge,
+        BondPreset::HashedWedge => Tool::Hash,
+        BondPreset::Wavy => Tool::Wavy,
+        _ => Tool::StyledBond(preset),
+    }
+}
+fn graphic_options(family: Family) -> Vec<(String, GraphicOption)> {
+    use GraphicKind as G;
+    let mut options = Vec::new();
+    let kinds: &[G] = match family {
+        Family::Rectangles => &[G::Rectangle, G::RoundedRectangle],
+        Family::Ellipses => &[G::Ellipse],
+        Family::Brackets => &[G::Brackets, G::Parentheses, G::Braces],
+        _ => &[],
+    };
+    for &kind in kinds {
+        if family == Family::Brackets {
+            for sides in [BracketSides::Both, BracketSides::Left, BracketSides::Right] {
+                let mut option = GraphicOption::new(kind);
+                option.sides = sides;
+                options.push((format!("{kind} · {sides}"), option));
+            }
+        } else {
+            for (name, pattern, filled) in [
+                ("Outline", LinePattern::Solid, false),
+                ("Dashed", LinePattern::Dashed, false),
+                ("Filled", LinePattern::Solid, true),
+            ] {
+                let mut option = GraphicOption::new(kind);
+                option.style.pattern = pattern;
+                option.style.fill = filled.then_some([0; 3]);
+                options.push((format!("{name} {kind}"), option));
+            }
+        }
+    }
+    if matches!(family, Family::Rectangles | Family::Ellipses) {
+        let mut option = GraphicOption::new(if family == Family::Rectangles {
+            G::Rectangle
+        } else {
+            G::Ellipse
+        });
+        option.constrain = true;
+        options.push((
+            if family == Family::Rectangles {
+                "Square"
+            } else {
+                "Circle"
+            }
+            .into(),
+            option,
+        ));
+    }
+    options
 }
 impl App {
     pub(super) fn palette_action(&mut self, action: Action) -> iced::Task<Message> {
@@ -47,12 +205,22 @@ impl App {
             Action::Open(tool) => {
                 self.assistant.menu = None;
                 let chosen = family(tool);
-                self.palette = if self.palette == chosen && self.tool == tool {
-                    None
-                } else {
-                    chosen
-                };
-                self.tool = tool;
+                self.palette = if self.palette == chosen { None } else { chosen };
+            }
+            Action::Tool(tool) => {
+                self.palette = None;
+                return self.update(Message::Tool(tool));
+            }
+            Action::Graphic(option) => {
+                self.palette = None;
+                let tool = Tool::Graphic(option.kind);
+                match family(tool) {
+                    Some(Family::Rectangles) => self.toolbar.rectangle = option,
+                    Some(Family::Ellipses) => self.toolbar.ellipse = option,
+                    Some(Family::Brackets) => self.toolbar.bracket = option,
+                    _ => {}
+                }
+                return self.update(Message::Tool(tool));
             }
             Action::Close => self.palette = None,
             Action::Atom(element) => {
@@ -61,17 +229,13 @@ impl App {
             }
             Action::Bond(preset) => {
                 self.palette = None;
-                self.tool = match preset {
-                    BondPreset::Single => Tool::Bond(1),
-                    BondPreset::Double => Tool::Bond(2),
-                    BondPreset::Triple => Tool::Bond(3),
-                    _ => Tool::StyledBond(preset),
-                };
+                return self.update(Message::Tool(bond_tool(preset)));
             }
             Action::Ring(size, aromatic) => {
                 self.palette = None;
                 self.ring_size = size;
                 self.aromatic_ring = aromatic;
+                self.toolbar.ring = Tool::Ring;
                 self.tool = Tool::Ring;
             }
             Action::RingPreset(preset) => {
@@ -79,10 +243,16 @@ impl App {
                 return self.update(Message::Tool(Tool::RingPreset(preset)));
             }
             Action::Arrow(preset) => {
+                return self
+                    .palette_action(Action::ArrowVariant(preset, ArrowStyle::preset(preset)));
+            }
+            Action::ArrowVariant(preset, style) => {
                 self.selected.clear();
                 self.palette = None;
-                self.tool = Tool::Arrow;
-                return self.update(Message::ArrowStyle(preset));
+                self.arrow_style = preset;
+                self.arrows.style = style;
+                self.arrows.refresh_inputs();
+                return self.update(Message::Tool(Tool::Arrow));
             }
         }
         iced::Task::none()
@@ -93,9 +263,14 @@ impl App {
         };
         let title = match family {
             Family::Atoms => "Choose an element",
-            Family::Bonds => "Bond styles",
+            Family::Bonds => "Other bonds",
             Family::Rings => "Rings",
             Family::Arrows => "Reaction & electron-flow arrows",
+            Family::Rectangles => "Rectangles",
+            Family::Ellipses => "Ellipses & circles",
+            Family::Brackets => "Brackets",
+            Family::Symbols => "Chemical symbols",
+            Family::Orbitals => "Orbitals",
         };
         let mut body = column![
             row![
@@ -150,7 +325,17 @@ impl App {
                 body = body.push(text("Choose an element, then click an atom to replace it or empty space to add it.").size(11));
             }
             Family::Bonds => {
-                for presets in BondPreset::ALL.chunks(4) {
+                let presets: Vec<_> = BondPreset::ALL
+                    .iter()
+                    .copied()
+                    .filter(|p| {
+                        !matches!(
+                            p,
+                            BondPreset::Single | BondPreset::Double | BondPreset::Triple
+                        )
+                    })
+                    .collect();
+                for presets in presets.chunks(4) {
                     let mut line = row![].spacing(8);
                     for preset in presets {
                         let mut doc = Document::default();
@@ -163,8 +348,11 @@ impl App {
                         }
                         line = line.push(super::workspace::hover_hint(
                             button(
-                                column![canvas(OwnedDrawingPreview(doc)).width(68).height(38)]
-                                    .align_x(Alignment::Center),
+                                column![
+                                    canvas(PalettePreview(doc)).width(68).height(42),
+                                    text(preset.name()).size(10).center().width(68)
+                                ]
+                                .align_x(Alignment::Center),
                             )
                             .padding(4)
                             .style(super::workspace::control(
@@ -177,7 +365,7 @@ impl App {
                     }
                     body = body.push(line);
                 }
-                body = body.push(text("Choose a style, then draw or click an existing bond. Repeated Double clicks shift its position.").size(11));
+                body = body.push(text("Choose a style, then draw or click an existing bond. Single, double and triple bonds also have direct toolbar buttons.").size(11));
             }
             Family::Rings => {
                 let mut options = Vec::new();
@@ -202,14 +390,23 @@ impl App {
                         line = line.push(super::workspace::hover_hint(
                             button(
                                 column![
-                                    canvas(OwnedDrawingPreview(doc.clone()))
-                                        .width(68)
-                                        .height(54)
+                                    canvas(PalettePreview(doc.clone())).width(68).height(48),
+                                    text(label.clone()).size(10).center().width(68)
                                 ]
                                 .align_x(Alignment::Center),
                             )
                             .padding(4)
-                            .style(super::workspace::control(false))
+                            .style(super::workspace::control(match action {
+                                Action::Ring(size, aromatic) => {
+                                    self.tool == Tool::Ring
+                                        && self.ring_size == *size
+                                        && self.aromatic_ring == *aromatic
+                                }
+                                Action::RingPreset(preset) => {
+                                    self.tool == Tool::RingPreset(*preset)
+                                }
+                                _ => false,
+                            }))
                             .on_press(Message::Palette(action.clone())),
                             label.clone(),
                             tooltip::Position::Bottom,
@@ -220,31 +417,177 @@ impl App {
                 body = body.push(text("Choose a ring, then click an atom or bond to attach. Templates offer more structures.").size(11));
             }
             Family::Arrows => {
-                for presets in ArrowPreset::ALL.chunks(3) {
+                let mut options: Vec<_> = ArrowPreset::ALL
+                    .iter()
+                    .map(|&preset| (preset.to_string(), preset, ArrowStyle::preset(preset)))
+                    .collect();
+                for (label, preset, style) in [
+                    (
+                        "Bold",
+                        ArrowPreset::Forward,
+                        ArrowStyle {
+                            width_pt: 1.4,
+                            head_length_pt: 7.,
+                            head_width_pt: 2.4,
+                            ..ArrowStyle::default()
+                        },
+                    ),
+                    (
+                        "Dashed",
+                        ArrowPreset::Forward,
+                        ArrowStyle {
+                            pattern: LinePattern::Dashed,
+                            ..ArrowStyle::default()
+                        },
+                    ),
+                    (
+                        "Hollow",
+                        ArrowPreset::Forward,
+                        ArrowStyle {
+                            shape: reshiki::arrows::HeadShape::Hollow,
+                            head_length_pt: 6.,
+                            head_width_pt: 2.,
+                            ..ArrowStyle::default()
+                        },
+                    ),
+                    (
+                        "Unequal equilibrium",
+                        ArrowPreset::Equilibrium,
+                        ArrowStyle {
+                            equilibrium_ratio: 0.6,
+                            ..ArrowStyle::preset(ArrowPreset::Equilibrium)
+                        },
+                    ),
+                    (
+                        "Angled",
+                        ArrowPreset::Forward,
+                        ArrowStyle {
+                            shape: reshiki::arrows::HeadShape::Open,
+                            ..ArrowStyle::default()
+                        },
+                    ),
+                    (
+                        "Half arrow",
+                        ArrowPreset::Forward,
+                        ArrowStyle {
+                            head: reshiki::arrows::Head::Left,
+                            ..ArrowStyle::default()
+                        },
+                    ),
+                ] {
+                    options.push((label.into(), preset, style));
+                }
+                for presets in options.chunks(3) {
                     let mut line = row![].spacing(8);
-                    for preset in presets {
+                    for (label, preset, style) in presets {
                         let arrow = Arrow::new(
                             1,
                             Point::new(0., 0.),
-                            Point::new(100., 0.),
+                            Point::new(80., 0.),
                             *preset,
-                            ArrowStyle::preset(*preset),
+                            style.clone(),
                         );
                         line = line.push(super::workspace::hover_hint(
                             button(
-                                column![canvas(ArrowPreview { arrow }).width(94).height(52)]
-                                    .align_x(Alignment::Center),
+                                column![
+                                    canvas(PalettePreview(Document {
+                                        arrows: vec![arrow],
+                                        ..Document::default()
+                                    }))
+                                    .width(94)
+                                    .height(50),
+                                    text(label.clone()).size(10).center().width(94)
+                                ]
+                                .align_x(Alignment::Center),
                             )
                             .padding(6)
-                            .style(super::workspace::control(self.arrow_style == *preset))
-                            .on_press(Message::Palette(Action::Arrow(*preset))),
-                            preset.to_string(),
+                            .style(super::workspace::control(
+                                self.arrow_style == *preset && self.arrows.style == *style,
+                            ))
+                            .on_press(Message::Palette(
+                                if style == &ArrowStyle::preset(*preset) {
+                                    Action::Arrow(*preset)
+                                } else {
+                                    Action::ArrowVariant(*preset, style.clone())
+                                },
+                            )),
+                            label.clone(),
                             tooltip::Position::Bottom,
                         ));
                     }
                     body = body.push(line);
                 }
-                body = body.push(text("Drag to draw. Select the arrow and drag its middle handle to adjust the bend.").size(11));
+                body = body.push(text("Click to place or change an arrow. Click the same type again to switch direction or half-head side. Drag to draw; drag the middle handle to bend.").size(11));
+            }
+            Family::Rectangles | Family::Ellipses | Family::Brackets => {
+                for options in graphic_options(family).chunks(3) {
+                    let mut line = row![].spacing(8);
+                    for (label, option) in options {
+                        line = line.push(
+                            button(
+                                column![
+                                    canvas(PalettePreview(option.document()))
+                                        .width(94)
+                                        .height(50),
+                                    text(label.clone()).size(10).width(94).center(),
+                                ]
+                                .align_x(Alignment::Center),
+                            )
+                            .padding(6)
+                            .style(super::workspace::control(
+                                self.tool == Tool::Graphic(option.kind)
+                                    && self.toolbar.graphic(self.tool) == Some(option),
+                            ))
+                            .on_press(Message::Palette(Action::Graphic(option.clone()))),
+                        );
+                    }
+                    body = body.push(line);
+                }
+                body = body.push(
+                    text(
+                        "Choose a style, then drag to draw. Hold the toolbar button to change it.",
+                    )
+                    .size(11),
+                );
+            }
+            Family::Symbols | Family::Orbitals => {
+                let tools: Vec<Tool> = match family {
+                    Family::Symbols => reshiki::scientific::SymbolKind::ALL
+                        .iter()
+                        .map(|k| Tool::Graphic(GraphicKind::Symbol(*k)))
+                        .collect(),
+                    _ => reshiki::scientific::OrbitalKind::ALL
+                        .iter()
+                        .map(|k| Tool::Graphic(GraphicKind::Orbital(*k)))
+                        .collect(),
+                };
+                for choices in tools.chunks(3) {
+                    let mut line = row![].spacing(8);
+                    for &tool in choices {
+                        let label = match tool {
+                            Tool::Graphic(kind) => kind.to_string(),
+                            _ => String::new(),
+                        };
+                        line = line.push(
+                            button(
+                                column![
+                                    canvas(super::icons::Glyph(
+                                        super::icons::Icon::Tool(tool),
+                                        true
+                                    ))
+                                    .width(24)
+                                    .height(24),
+                                    text(label.clone()).size(10).width(94).center(),
+                                ]
+                                .align_x(Alignment::Center),
+                            )
+                            .padding(6)
+                            .style(super::workspace::control(self.tool == tool))
+                            .on_press(Message::Palette(Action::Tool(tool))),
+                        );
+                    }
+                    body = body.push(line);
+                }
             }
         }
         let popup = container(body)
@@ -287,18 +630,94 @@ impl App {
 mod tests {
     use super::*;
     #[test]
+    fn remembered_tools_and_shape_presets_do_not_change_selected_objects() {
+        let (mut app, _) = App::new();
+        let _ = app.update(Message::Palette(Action::RingPreset(RingPreset::ChairDown)));
+        let _ = app.update(Message::Tool(Tool::Bond(2)));
+        assert_eq!(app.toolbar.ring, Tool::RingPreset(RingPreset::ChairDown));
+        let _ = app.update(Message::Tool(app.toolbar.ring));
+        assert!(app.palette.is_none());
+        assert_eq!(app.tool, Tool::RingPreset(RingPreset::ChairDown));
+        let circle = graphic_options(Family::Ellipses)
+            .into_iter()
+            .find(|(label, _)| label == "Circle")
+            .unwrap()
+            .1;
+        let _ = app.update(Message::Palette(Action::Graphic(circle)));
+        app.edit(crate::canvas::Edit::Graphic(
+            Point::default(),
+            Point::new(100., 30.),
+            true,
+        ));
+        let drawing = app.doc.clone();
+        let g = &app.doc.graphics[0];
+        assert!(
+            (g.axis_x.distance(Point::default()) - g.axis_y.distance(Point::default())).abs()
+                < 0.001
+        );
+        let filled = graphic_options(Family::Rectangles)
+            .into_iter()
+            .find(|(_, option)| option.style.fill.is_some())
+            .unwrap()
+            .1;
+        let _ = app.update(Message::Palette(Action::Graphic(filled)));
+        assert_eq!(app.doc, drawing);
+        assert!(app.graphic_style.fill.is_some());
+        let _ = app.update(Message::Tool(Tool::Graphic(GraphicKind::Ellipse)));
+        assert!(app.toolbar.ellipse.constrain);
+        assert!(app.graphic_style.fill.is_none());
+        for family in [
+            Family::Rectangles,
+            Family::Ellipses,
+            Family::Brackets,
+            Family::Arrows,
+            Family::Symbols,
+            Family::Orbitals,
+        ] {
+            app.palette = Some(family);
+            let _ = app.view();
+        }
+    }
+    #[test]
+    fn an_eraser_drag_is_one_undo_step_and_empty_strokes_leave_history_unchanged() {
+        use crate::canvas::Edit;
+        let (mut app, _) = App::new();
+        app.tool = Tool::Erase;
+        let a = app.doc.add_atom("C", Point::new(0., 0.));
+        app.doc.add_atom("O", Point::new(0., 50.));
+        let keep = app.doc.add_atom("N", Point::new(50., 50.));
+        let original = app.doc.clone();
+        app.edit(Edit::EraseStart(Point::new(0., -20.)));
+        app.edit(Edit::EraseTo(Point::new(0., -20.), Point::new(0., 20.)));
+        assert!(app.doc.atom(a).is_none());
+        app.edit(Edit::EraseTo(Point::new(0., 20.), Point::new(0., 80.)));
+        app.edit(Edit::EraseEnd);
+        let erased = app.doc.clone();
+        assert_eq!(erased.atoms.len(), 1);
+        assert!(erased.atom(keep).is_some());
+        assert!(app.history.undo(&mut app.doc));
+        assert_eq!(app.doc, original);
+        assert!(!app.history.can_undo());
+        assert!(app.history.redo(&mut app.doc));
+        assert_eq!(app.doc, erased);
+        app.edit(Edit::EraseStart(Point::new(1000., 1000.)));
+        app.edit(Edit::EraseEnd);
+        assert!(app.history.undo(&mut app.doc));
+        assert_eq!(app.doc, original);
+    }
+    #[test]
     fn toolbar_flyouts_choose_tools_without_mutating_the_drawing() {
         let (mut app, _) = App::new();
         app.doc.arrows.push(Arrow::new(
             1,
             Point::default(),
-            Point::new(100., 0.),
+            Point::new(80., 0.),
             ArrowPreset::Forward,
             ArrowStyle::default(),
         ));
         app.selected = vec![1];
         let original = app.doc.clone();
-        for tool in [Tool::Atom, Tool::Bond(1), Tool::Ring, Tool::Arrow] {
+        for tool in [Tool::Atom, Tool::Wedge, Tool::Ring, Tool::Arrow] {
             let _ = app.update(Message::Palette(Action::Open(tool)));
             assert!(app.palette.is_some());
             let _ = app.view();
@@ -314,6 +733,23 @@ mod tests {
         assert_eq!(app.ring_size, 7);
         let _ = app.update(Message::Palette(Action::Arrow(ArrowPreset::Bent)));
         assert_eq!(app.arrow_style, ArrowPreset::Bent);
+        assert_eq!(app.doc, original);
+    }
+    #[test]
+    fn undo_during_an_eraser_drag_does_not_merge_later_motion_into_older_edits() {
+        use crate::canvas::Edit;
+        let (mut app, _) = App::new();
+        let original = app.doc.clone();
+        app.doc.add_atom("C", Point::default());
+        app.changed(original.clone());
+        app.tool = Tool::Erase;
+        app.edit(Edit::EraseStart(Point::default()));
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc.atoms.len(), 1);
+        app.edit(Edit::EraseTo(Point::default(), Point::new(10., 0.)));
+        app.edit(Edit::EraseEnd);
+        assert_eq!(app.doc.atoms.len(), 1);
+        let _ = app.update(Message::Undo);
         assert_eq!(app.doc, original);
     }
     #[test]

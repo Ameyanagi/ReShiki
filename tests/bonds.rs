@@ -66,6 +66,55 @@ fn bond_presets_have_distinct_geometry_and_valid_native_state() {
 }
 
 #[test]
+fn wavy_bonds_are_continuous_curves_with_even_pitch_in_every_direction() {
+    use reshiki::graphics::PathCommand;
+    for end in [
+        Point::new(42., 0.),
+        Point::new(84., 0.),
+        Point::new(36., -36.),
+        Point::new(3., 0.),
+    ] {
+        let mut d = single(BondPreset::Wavy);
+        d.atoms[1].position = end;
+        d.bonds[0].color = [32, 80, 145];
+        let drawing = scene::primitives(&d);
+        assert_eq!(drawing.len(), 1, "A wave must be one stroked path");
+        let Primitive::Path {
+            commands,
+            style,
+            filled,
+        } = &drawing[0]
+        else {
+            panic!("Expected a smooth path");
+        };
+        assert!(!filled);
+        assert_eq!(style.stroke, [32, 80, 145]);
+        assert_eq!(style.width_pt, d.drawing_style.line_width_pt);
+        assert_eq!(commands.first(), Some(&PathCommand::Move(Point::default())));
+        let mut cursor = Point::default();
+        let mut incoming: Option<Point> = None;
+        for command in commands.iter().skip(1) {
+            let PathCommand::Cubic(a, b, c) = command else {
+                panic!("A wave must retain cubic geometry");
+            };
+            if let Some(incoming) = incoming {
+                let outgoing = Point::new(a.x - cursor.x, a.y - cursor.y);
+                assert!((incoming.x * outgoing.y - incoming.y * outgoing.x).abs() < 0.0001);
+                assert!(incoming.x * outgoing.x + incoming.y * outgoing.y > 0.);
+            }
+            incoming = Some(Point::new(c.x - b.x, c.y - b.y));
+            cursor = *c;
+        }
+        assert_eq!(cursor, end);
+        let svg = scene::svg(&d);
+        assert!(svg.contains("<path") && svg.contains("C") && !svg.contains("<line"));
+    }
+    let short = reshiki::bonds::wavy_path(Point::default(), Point::new(42., 0.), 10.5, 2.);
+    let long = reshiki::bonds::wavy_path(Point::default(), Point::new(84., 0.), 10.5, 2.);
+    assert_eq!(long.len() - 1, 2 * (short.len() - 1));
+}
+
+#[test]
 fn double_bond_side_reflects_and_reverses_without_changing_order() {
     let mut d = single(BondPreset::Double);
     for (position, expected) in [(DoublePosition::Left, -1.), (DoublePosition::Right, 1.)] {
