@@ -3,12 +3,15 @@
 //! Source atom IDs cannot safely identify the native graph after partial imports
 //! or reordering. Every direct fragment node must instead match exactly one atom
 //! of the same element within the original strict 0.02 world-unit tolerance.
+pub use super::graphics::NativeLayer;
 use super::{
     Fragment,
     numeric::{self, integer, quoted},
+    presentation::NativeColor,
 };
 use crate::{bonds::DoublePosition, document::Bond};
 use roxmltree::Node;
+use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 
 const MAX_ATOMS: usize = 100_000;
@@ -27,6 +30,8 @@ pub enum Error {
     Order,
     #[error("Invalid CDXML bond color")]
     Color,
+    #[error("CDXML bond color is outside the document channel range")]
+    ColorBoundary,
     #[error("Invalid CDXML double-bond position")]
     DoublePosition,
     #[error("Could not parse every CDXML molecular fragment; import was cancelled")]
@@ -58,6 +63,41 @@ impl From<numeric::Error> for Error {
             numeric::Error::IntegerDigits(count) => Self::IntegerDigits(count),
             numeric::Error::Float(value) => Self::Float(value),
         }
+    }
+}
+
+/// Original bond-reader values, before the editable document narrows layers
+/// and palette channels. The retained native colors use rounded f64 channels.
+#[derive(Clone, Debug, Serialize)]
+pub struct NativeBond {
+    pub a: u64,
+    pub b: u64,
+    pub order: u8,
+    pub display: String,
+    pub z_order: NativeLayer,
+    pub secondary_display: Option<String>,
+    pub double_position: DoublePosition,
+    pub color: NativeColor,
+}
+impl NativeBond {
+    pub fn into_document(self) -> Result<Bond> {
+        Ok(Bond {
+            a: self.a,
+            b: self.b,
+            order: self.order,
+            display: self.display,
+            z_order: self.z_order.decimal().parse().map_err(|_| Error::Layer)?,
+            secondary_display: self.secondary_display,
+            double_position: self.double_position,
+            color: self
+                .color
+                .into_document()
+                .map_err(|_| Error::ColorBoundary)?,
+            indicator: Default::default(),
+            cip_label: None,
+            stereo: None,
+            stereo_atoms: Vec::new(),
+        })
     }
 }
 
@@ -178,11 +218,28 @@ fn inherited<'a, 'input: 'a>(node: Node<'a, 'input>, name: &str) -> Option<&'a s
     node.ancestors().find_map(|node| node.attribute(name))
 }
 
-/// Preserve native appearance and dense IDs in the supplied fragment order.
-/// Every error leaves the XML and molecular fragments unchanged. The signed
-/// 16-bit layer limit is the editable document's bound; the Python helper alone
-/// accepts wider integers before the original response reaches that boundary.
+/// Compatibility wrapper applying the editable document boundary after native
+/// appearance reading. Inputs remain unchanged on any failure.
 pub fn read(text: &str, parts: &[Fragment], scale: f64, colors: &[[u8; 3]]) -> Result<Vec<Bond>> {
+    let colors = colors
+        .iter()
+        .map(|color| NativeColor(color.map(f64::from)))
+        .collect::<Vec<_>>();
+    read_native(text, parts, scale, &colors)?
+        .into_iter()
+        .map(NativeBond::into_document)
+        .collect()
+}
+
+/// Preserve native appearance and dense IDs in the supplied fragment order.
+/// Every error leaves the XML and molecular fragments unchanged. Wider layers
+/// and colors remain available until `NativeBond::into_document` is called.
+pub fn read_native(
+    text: &str,
+    parts: &[Fragment],
+    scale: f64,
+    colors: &[NativeColor],
+) -> Result<Vec<NativeBond>> {
     if text.len() > 16 * 1024 * 1024 || parts.len() > MAX_ATOMS {
         return Err(Error::Limit);
     }
@@ -304,10 +361,13 @@ pub fn read(text: &str, parts: &[Fragment], scale: f64, colors: &[[u8; 3]]) -> R
                     .transpose()?
             };
             let display = display(primary)?;
-            let z_order = integer(inherited(node, "Z").unwrap_or("0"))?
-                .and_then(|n| i16::try_from(n).ok())
-                .ok_or(Error::Layer)?;
-            result.push(Bond {
+            let layer = inherited(node, "Z").unwrap_or("0");
+            budget = budget.checked_sub(layer.len()).ok_or(Error::Limit)?;
+            let z_order = NativeLayer::parse(layer).map_err(|error| match error {
+                super::graphics::Error::Numeric(error) => Error::from(error),
+                other => Error::Invalid(other.to_string()),
+            })?;
+            result.push(NativeBond {
                 a,
                 b,
                 order,
@@ -316,10 +376,6 @@ pub fn read(text: &str, parts: &[Fragment], scale: f64, colors: &[[u8; 3]]) -> R
                 secondary_display,
                 double_position,
                 color,
-                indicator: Default::default(),
-                cip_label: None,
-                stereo: None,
-                stereo_atoms: Vec::new(),
             });
         }
         offset = next;

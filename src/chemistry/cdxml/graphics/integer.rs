@@ -50,7 +50,7 @@ impl NativeLayer {
     pub fn into_document(&self) -> Result<i32> {
         self.decimal().parse().map_err(|_| Error::LayerBoundary)
     }
-    pub(super) fn parse(text: &str) -> Result<Self> {
+    pub(in crate::chemistry::cdxml) fn parse(text: &str) -> Result<Self> {
         numeric::integer(text)?;
         let normalized = numeric::decimal_digits(text);
         let value = normalized.trim();
