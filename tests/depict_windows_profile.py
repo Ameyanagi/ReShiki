@@ -9,6 +9,29 @@ import sys
 import sysconfig
 from pathlib import Path
 
+PHYSICAL_UCRT = "5c52e3a303baaac0e0af8bd9b96134993da34bc9d834a31ef37e1d2cdc7fe192"
+SERVER2022_UCRT = "5e5ae0f8e4325ceb3ee767065dda6e03e980d401f00a2bdb8ca81ed90813920f"
+EMULATED_UCRT = "529e795875178b906ea8758abc8de5c28339f336b3e7a121d7778ae040908de9"
+PRIMITIVES = {
+    "fma3": ("3ff29f25c111e687", "3fed63011ebd161e", "3fd954d5989f7ab4"),
+    "no-fma3": ("3ff29f25c111e686", "3fed63011ebd161d", "3fd954d5989f7ab7"),
+}
+RINGS = {
+    "fma3": ("3febb67ae8584cab", "bfdffffffffffffc", "bfebb67ae8584ca9", "bfe0000000000004"),
+    "no-fma3": ("3febb67ae8584cab", "bfdffffffffffffc", "bfebb67ae8584ca8", "bfe0000000000004"),
+}
+
+
+def classify(module_sha256, observed, ring):
+    """Identify an independently captured DLL and dispatch, without Rust output."""
+    profiles = {
+        (PHYSICAL_UCRT, PRIMITIVES["fma3"], RINGS["fma3"]): "fma3",
+        (PHYSICAL_UCRT, PRIMITIVES["no-fma3"], RINGS["no-fma3"]): "no-fma3",
+        (EMULATED_UCRT, PRIMITIVES["no-fma3"], RINGS["no-fma3"]): "no-fma3",
+        (SERVER2022_UCRT, PRIMITIVES["no-fma3"], RINGS["fma3"]): "server2022",
+    }
+    return profiles.get((module_sha256, tuple(observed), tuple(ring)), "uncaptured")
+
 
 def bits(value):
     return struct.pack(">d", value).hex()
@@ -54,28 +77,21 @@ def main():
     if not length or length >= len(buffer):
         raise SystemExit("Cannot identify the loaded reference UCRT")
     module = Path(buffer.value)
-    profiles = {
-        ("3ff29f25c111e687", "3fed63011ebd161e", "3fd954d5989f7ab4"): "fma3",
-        ("3ff29f25c111e686", "3fed63011ebd161d", "3fd954d5989f7ab7"): "no-fma3",
-    }
-    ring_profiles = {
-        "fma3": ("3febb67ae8584cab", "bfdffffffffffffc", "bfebb67ae8584ca9", "bfe0000000000004"),
-        "no-fma3": ("3febb67ae8584cab", "bfdffffffffffffc", "bfebb67ae8584ca8", "bfe0000000000004"),
-    }
-    profile = profiles.get(observed)
-    if profile is None or ring != ring_profiles[profile]:
-        profile = "uncaptured"
-        if not args.observe:
-            raise SystemExit(
-                f"Uncaptured original Windows CRT: acos={observed}, ring={ring}. "
-                "Run scripts/setup_windows_depict_reference.py for exact live references."
-            )
+    module_sha256 = hashlib.sha256(module.read_bytes()).hexdigest()
+    profile = classify(module_sha256, observed, ring)
+    if profile == "uncaptured" and not args.observe:
+        raise SystemExit(
+            f"Uncaptured original Windows CRT: SHA256={module_sha256}, "
+            f"acos={observed}, ring={ring}. "
+            "Run scripts/setup_windows_depict_reference.py for exact live references, "
+            "then preserve the independently validated capture before using saved fixtures."
+        )
     print(
         json.dumps(
             dict(
                 profile=profile,
                 module=str(module),
-                module_sha256=hashlib.sha256(module.read_bytes()).hexdigest(),
+                module_sha256=module_sha256,
                 ring_bits=ring,
                 primitive_bits=observed,
                 python_platform=sysconfig.get_platform(),

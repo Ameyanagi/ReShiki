@@ -1,11 +1,26 @@
 # Windows CRT depiction profiles
 
-The recorded fixtures cover two native CRT paths on the physical Windows
-capture host. Windows CRT implementations also vary across OS versions and
-processors. CI builds fresh observers against the pinned original wheel so each
-runner supplies its own exact expectations.
+Saved fixtures cover the physical Windows capture host and the hosted Windows
+Server 2022 runtime. Tests identify the original x64 reference process by its
+UCRT DLL hash and acos/sine/cosine witnesses, then require exact saved results.
+An unknown DLL or dispatch fails with instructions for a fresh native capture.
 
-## Fresh references on each runner
+## Saved Server 2022 capture
+
+[Run 35709949046](https://github.com/Ameyanagi/ReShiki/actions/runs/35709949046)
+built all eight independent observers from the pinned source and passed all
+28 Windows x64 tests: 2,382,229 exact stage scalars, plus 2,854 public pipeline
+cases with 130,722 exact coordinates.
+
+The four new `windows-server2022` fixtures are unchanged files from that run.
+Attachment, collision, seeds, and finalization reuse existing fixtures: their
+independently captured data rows are byte-identical. The capture's DLL hashes,
+compiler provenance, and fixture hashes are retained in
+[`fixtures/depict-windows-server2022-profile.json`](fixtures/depict-windows-server2022-profile.json).
+No observers are compiled or queried during saved replay. Python reads the
+fixtures and probes the original CRT; it does not generate expected structures.
+
+## Refreshing native references
 
 `setup_windows_depict_reference.py` checks out the pinned source with LF bytes,
 verifies the Boost archive, and builds all eight x64 observers. It exports their
@@ -21,7 +36,7 @@ The setup records two independent CRT probes: one inside the reference Python
 process and one compiled with MSVC `/MD`. Both record the loaded DLL path,
 SHA-256, file version, and acos/sine/cosine witnesses. Build provenance and fresh
 captures are retained by the targeted Windows depiction workflow, including
-when a test fails. The full Checks gate still runs every reference target.
+when a test fails. Full reference validation still runs every reference target.
 
 From an x64 MSVC developer environment:
 
@@ -172,5 +187,5 @@ Disabled fixture SHA-256:
 - JSONL: `63353093f603d46938d48af90cc2d73bd9970e43664561d774ad1066fd0d29ca`
 - Capture UCRT: `5c52e3a303baaac0e0af8bd9b96134993da34bc9d834a31ef37e1d2cdc7fe192`
 
-The capture host is Windows 11 x64, AMD Ryzen 9 7940HS. This does not establish
-Windows ARM64 parity or claim a successful hosted CI rerun.
+The physical capture host is Windows 11 x64, AMD Ryzen 9 7940HS. This does not
+establish Windows ARM64 parity.

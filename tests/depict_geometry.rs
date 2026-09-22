@@ -103,7 +103,8 @@ fn direct_native_geometry() -> anyhow::Result<()> {
     compare("depict-geometry-linux-native.json.gz", true)?;
     compare("depict-geometry-native.json.gz", false)?;
     compare("depict-geometry-windows-native.json.gz", false)?;
-    compare("depict-geometry-windows-no-fma3-native.json.gz", false)
+    compare("depict-geometry-windows-no-fma3-native.json.gz", false)?;
+    compare("depict-geometry-windows-server2022-native.json.gz", false)
 }
 
 fn compare(fixture: &str, source_order: bool) -> anyhow::Result<()> {

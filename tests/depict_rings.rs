@@ -187,7 +187,8 @@ fn native_ring_selection_and_constructor() -> anyhow::Result<()> {
     compare("depict-rings-linux-native.json.gz", true)?;
     compare("depict-rings-macos-native.json.gz", false)?;
     compare("depict-rings-windows-native.json.gz", false)?;
-    compare("depict-rings-windows-no-fma3-native.json.gz", false)
+    compare("depict-rings-windows-no-fma3-native.json.gz", false)?;
+    compare("depict-rings-windows-server2022-native.json.gz", false)
 }
 fn compare(fixture: &str, baseline: bool) -> anyhow::Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
