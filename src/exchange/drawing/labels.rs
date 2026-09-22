@@ -196,7 +196,6 @@ impl Writer<'_> {
             let degree = degrees.get(&a.id).copied().unwrap_or(0);
             let mode = a.display.carbons.unwrap_or(doc.atom_labels.carbons);
             let visible = a.element != "C"
-                || a.charge != 0
                 || a.isotope != 0
                 || a.radical_electrons != 0
                 || degree == 0

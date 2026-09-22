@@ -635,9 +635,10 @@ impl App {
         .width(Length::Fill)
         .height(Length::Fill)
         .into();
-        let paper = sensor(self.with_inline_text(drawing.map(Message::Canvas)))
-            .on_show(Message::Viewport)
-            .on_resize(Message::Viewport);
+        let paper =
+            sensor(self.with_context_menu(self.with_inline_text(drawing.map(Message::Canvas))))
+                .on_show(Message::Viewport)
+                .on_resize(Message::Viewport);
         let context: Element<'_, Message> = if let Some(preview) = &self.cleanup {
             use reshiki::cleanup::Scope;
             let scopes = vec![Scope::SelectedAtoms, Scope::SelectedMolecules];
@@ -1857,12 +1858,12 @@ impl App {
                 .spacing(6)
                 .align_y(Alignment::Center),
                 row![
-                    text("Try").size(11).color(muted()),
+                    text("Insert example").size(11).color(muted()),
                     command("Ethanol", Message::Example("CCO")),
                     command("Benzene", Message::Example("c1ccccc1")),
                     command("Aspirin", Message::Example("CC(=O)Oc1ccccc1C(=O)O")),
                     command("Caffeine", Message::Example("Cn1c(=O)c2c(ncn2C)n(C)c1=O")),
-                    text("Examples replace the drawing; Undo restores it.")
+                    text("Drag to position · Delete or Undo to remove")
                         .size(11)
                         .color(muted())
                 ]

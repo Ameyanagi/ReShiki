@@ -75,7 +75,8 @@ fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
             })
             .collect();
     }
-    if !visible(a, doc) {
+    let show_element = visible(a, doc);
+    if !show_element && a.charge == 0 {
         return vec![];
     }
     let style = a
@@ -94,14 +95,18 @@ fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
     let small = size * 0.7;
     let element_width = text_width(&a.element, size);
     let origin = a.position.offset(-element_width / 2.0, -size * 0.58);
-    let mut runs = vec![text(origin, a.element.clone(), size)];
+    let mut runs = if show_element {
+        vec![text(origin, a.element.clone(), size)]
+    } else {
+        vec![]
+    };
     let mut right = origin.x + element_width;
     let isotope_width = if a.isotope > 0 {
         text_width(&a.isotope.to_string(), small)
     } else {
         0.0
     };
-    if a.element != "H" && a.label_h > 0 && crate::atom_labels::hydrogens(a, doc) {
+    if show_element && a.element != "H" && a.label_h > 0 && crate::atom_labels::hydrogens(a, doc) {
         let count = if a.label_h > 1 {
             a.label_h.to_string()
         } else {
@@ -400,7 +405,14 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
         .collect();
     let label_bounds: std::collections::HashMap<_, _> = labels
         .iter()
-        .map(|(id, runs)| (*id, text_bounds(runs)))
+        .map(|(id, runs)| {
+            // A charge beside an implicit carbon must not shorten its bonds.
+            let bounds = doc
+                .atom(*id)
+                .filter(|a| visible(a, doc) || doc.abbreviation(*id).is_some())
+                .and_then(|_| text_bounds(runs));
+            (*id, bounds)
+        })
         .collect();
     let crossing_gaps = crate::crossings::gaps(doc);
     for (bond_index, b) in doc

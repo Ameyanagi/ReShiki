@@ -476,11 +476,10 @@ impl App {
                 .into();
         };
         let candidate = editor.candidate();
-        let preset = candidate.as_ref().ok().and_then(|style| {
-            [Preset::Jacs, Preset::Presentation]
-                .into_iter()
-                .find(|p| p.style() == *style)
-        });
+        let preset = candidate
+            .as_ref()
+            .ok()
+            .and_then(|style| Preset::ALL.into_iter().find(|p| p.style() == *style));
         let mut body = column![
             command("‹ Properties")
                 .on_press(action(Action::Cancel))
@@ -489,12 +488,10 @@ impl App {
             text("Physical sizes for this document")
                 .size(12)
                 .color(super::workspace::muted()),
-            pick_list([Preset::Jacs, Preset::Presentation], preset, move |p| {
-                action(Action::Preset(p))
-            })
-            .placeholder("Custom style")
-            .width(Length::Fill)
-            .text_size(13),
+            pick_list(Preset::ALL, preset, move |p| { action(Action::Preset(p)) })
+                .placeholder("Custom style")
+                .width(Length::Fill)
+                .text_size(13),
         ]
         .spacing(10);
         if let Ok(style) = &candidate {

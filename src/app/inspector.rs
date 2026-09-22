@@ -3,12 +3,14 @@ use super::workspace::{command, muted};
 use super::{App, InspectorTab, Message};
 use crate::canvas::Tool;
 use iced::widget::{button, checkbox, column, container, pick_list, row, text, text_input};
-use iced::{Alignment, Border, Color, Element, Length};
+use iced::{Alignment, Border, Color, Element, Length, Subscription, Task};
 use reshiki::{
     bonds::{BondPreset, DoublePosition},
+    document::Document,
     editing::{Arrange, Transform},
+    engine::{Analysis, ChemistryEngine, Request},
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Section {
@@ -102,12 +104,22 @@ pub enum Action {
     Section(Section, bool),
     Figure(FigureFormat),
     Chemical(ChemicalFormat),
+    RefreshProperties,
+    PropertiesCalculated(PropertyKey, Box<Result<Analysis, String>>),
+}
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PropertyKey {
+    revision: u64,
+    epoch: u64,
+    atoms: Vec<u64>,
 }
 #[derive(Default)]
 pub(super) struct State {
     expanded: HashMap<Section, bool>,
     figure: FigureFormat,
     chemical: ChemicalFormat,
+    pending: Option<PropertyKey>,
+    properties: Option<(PropertyKey, Result<Analysis, String>)>,
 }
 impl State {
     pub(super) fn update(&mut self, action: Action) {
@@ -117,6 +129,7 @@ impl State {
             }
             Action::Figure(format) => self.figure = format,
             Action::Chemical(format) => self.chemical = format,
+            Action::RefreshProperties | Action::PropertiesCalculated(..) => {}
         }
     }
 }
@@ -135,6 +148,133 @@ fn card<'a>(body: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
         .into()
 }
 impl App {
+    fn property_key(&self) -> Option<PropertyKey> {
+        if self.selected.is_empty() {
+            return None;
+        }
+        let ids: HashSet<_> = self
+            .doc
+            .expand_abbreviation_selection(&self.selected)
+            .into_iter()
+            .collect();
+        Some(PropertyKey {
+            revision: self.revision,
+            epoch: self.file_epoch,
+            atoms: self
+                .doc
+                .atoms
+                .iter()
+                .filter(|a| ids.contains(&a.id))
+                .map(|a| a.id)
+                .collect(),
+        })
+    }
+
+    fn property_document(&self, key: &PropertyKey) -> Document {
+        let mut part = reshiki::editing::selection(&self.doc, &key.atoms);
+        reshiki::atom_labels::clear_computed(&mut part);
+        part
+    }
+
+    pub(super) fn property_analysis(&self) -> Option<&Analysis> {
+        let Some(key) = self.property_key() else {
+            return self.analysis.as_ref();
+        };
+        self.inspector_ui
+            .properties
+            .as_ref()
+            .filter(|(saved, _)| *saved == key)
+            .and_then(|(_, result)| result.as_ref().ok())
+    }
+
+    pub(super) fn properties_subscription(&self) -> Subscription<Message> {
+        if !self.inspector_open
+            || self.inspector_tab != InspectorTab::Properties
+            || self.busy
+            || self.erase_stroke
+            || self.cleanup.is_some()
+            || self.inspector_ui.pending.is_some()
+        {
+            return Subscription::none();
+        }
+        let Some(key) = self.property_key().filter(|key| !key.atoms.is_empty()) else {
+            return Subscription::none();
+        };
+        if self
+            .inspector_ui
+            .properties
+            .as_ref()
+            .is_some_and(|(saved, _)| *saved == key)
+        {
+            return Subscription::none();
+        }
+        // Changing the selection restarts the delay, so dragging does not queue chemistry jobs.
+        iced::time::every(std::time::Duration::from_millis(350))
+            .with(key)
+            .map(|_| Message::InspectorAction(Action::RefreshProperties))
+    }
+
+    pub(super) fn inspector_action(&mut self, action: Action) -> Task<Message> {
+        match action {
+            Action::RefreshProperties => {
+                let Some(key) = self.property_key() else {
+                    return self.update(Message::Analyze);
+                };
+                if key.atoms.is_empty() || self.inspector_ui.pending.is_some() {
+                    return Task::none();
+                }
+                let request = Request::molecule("analyze", self.property_document(&key));
+                self.inspector_ui.pending = Some(key.clone());
+                self.inspector_ui.properties = None;
+                let engine = self.engine.clone();
+                Task::perform(
+                    async move {
+                        engine
+                            .execute(request)
+                            .await?
+                            .analysis
+                            .ok_or_else(|| "No molecular properties were returned.".into())
+                    },
+                    move |result| {
+                        Message::InspectorAction(Action::PropertiesCalculated(
+                            key.clone(),
+                            Box::new(result),
+                        ))
+                    },
+                )
+            }
+            Action::PropertiesCalculated(key, result) => {
+                if self.inspector_ui.pending.as_ref() == Some(&key) {
+                    self.inspector_ui.pending = None;
+                    if self.property_key().as_ref() == Some(&key) {
+                        // Never apply fragment labels or hydrogen counts to the original drawing.
+                        self.inspector_ui.properties = Some((key, *result));
+                    }
+                }
+                Task::none()
+            }
+            other => {
+                self.inspector_ui.update(other);
+                Task::none()
+            }
+        }
+    }
+
+    fn property_summary(&self) -> String {
+        let scope = if self.selected.is_empty() {
+            "Whole drawing"
+        } else {
+            "Selection"
+        };
+        if let Some(a) = self.property_analysis() {
+            format!("{scope} · {}", a.formula)
+        } else if self.property_key().is_some_and(|key| key.atoms.is_empty()) {
+            "No atoms selected".into()
+        } else {
+            scope.into()
+        }
+    }
+
     pub(super) fn inspector_section<'a>(
         &'a self,
         section: Section,
@@ -200,6 +340,14 @@ impl App {
             .color(muted())
         ]
         .spacing(10);
+        let molecular_first = self.selected.is_empty()
+            || self.property_key().is_some_and(|key| !key.atoms.is_empty());
+        if molecular_first {
+            body = body.push(self.molecular_section());
+        }
+        if self.alignment_count() >= 2 {
+            body = body.push(self.arrangement_panel(true));
+        }
         if let Tool::RingPreset(preset) = self.tool {
             body = body.push(card(container(column![
                 text(preset.to_string()).size(14),
@@ -249,24 +397,9 @@ impl App {
         if let Some(error) = &self.chemistry_notice {
             body = body.push(text(error).size(12).color(Color::from_rgb8(182, 66, 61)));
         }
-        body = body.push(
-            self.inspector_section(
-                Section::Molecule,
-                "Molecular properties",
-                self.analysis
-                    .as_ref()
-                    .map(|a| a.formula.clone())
-                    .unwrap_or_else(|| {
-                        format!(
-                            "{} atoms · {} bonds",
-                            self.doc.atoms.len(),
-                            self.doc.bonds.len()
-                        )
-                    }),
-                self.selected.is_empty() && self.tool == Tool::Select && !self.doc.atoms.is_empty(),
-                self.molecular_properties(),
-            ),
-        );
+        if !molecular_first {
+            body = body.push(self.molecular_section());
+        }
         let chemistry = column![
             command(
                 "Reaction roles…",
@@ -316,18 +449,54 @@ impl App {
         .into()
     }
 
+    fn molecular_section(&self) -> Element<'_, Message> {
+        self.inspector_section(
+            Section::Molecule,
+            "Molecular properties",
+            self.property_summary(),
+            self.selected.is_empty() && self.tool == Tool::Select && !self.doc.atoms.is_empty(),
+            self.molecular_properties(),
+        )
+    }
+
     fn molecular_properties(&self) -> Element<'_, Message> {
+        let key = self.property_key();
+        let ids: HashSet<_> = key
+            .as_ref()
+            .map(|key| key.atoms.iter().copied().collect())
+            .unwrap_or_default();
+        let (atoms, bonds) = if key.is_some() {
+            (
+                ids.len(),
+                self.doc
+                    .bonds
+                    .iter()
+                    .filter(|b| ids.contains(&b.a) && ids.contains(&b.b))
+                    .count(),
+            )
+        } else {
+            (self.doc.atoms.len(), self.doc.bonds.len())
+        };
         let mut body = column![
-            text(format!(
-                "{} atoms · {} bonds",
-                self.doc.atoms.len(),
-                self.doc.bonds.len()
-            ))
-            .size(11)
-            .color(muted())
+            text(format!("{} atoms · {} bonds", atoms, bonds))
+                .size(11)
+                .color(muted())
         ]
         .spacing(8);
-        if let Some(a) = &self.analysis {
+        if key.is_some()
+            && self
+                .doc
+                .bonds
+                .iter()
+                .any(|b| ids.contains(&b.a) != ids.contains(&b.b))
+        {
+            body = body.push(
+                text("Selected fragment: implicit hydrogens are recalculated at cut bonds.")
+                    .size(11)
+                    .color(muted()),
+            );
+        }
+        if let Some(a) = self.property_analysis() {
             for (label, value) in [
                 ("Weight (g/mol)", format!("{:.3}", a.mass)),
                 ("Exact mass (Da)", format!("{:.5}", a.exact_mass)),
@@ -361,21 +530,106 @@ impl App {
                     command("Copy SMILES", Message::CopySmiles)
                         .on_press_maybe((!a.smiles.is_empty()).then_some(Message::CopySmiles)),
                 );
+        } else if atoms == 0 {
+            return body.push(text(if key.is_some() { "Select atoms or bonds to calculate their properties. Clear the selection to use the whole drawing." } else { "Draw or import a molecule to calculate its properties." }).size(12).color(muted())).into();
+        } else if let Some((_, Err(error))) = self
+            .inspector_ui
+            .properties
+            .as_ref()
+            .filter(|(saved, _)| Some(saved) == key.as_ref())
+        {
+            body = body.push(text(error).size(12).color(Color::from_rgb8(182, 66, 61)));
         } else {
             body = body.push(
-                text("Check the structure to calculate its formula and properties.")
-                    .size(12)
-                    .color(muted()),
+                text(if key.is_some() {
+                    "Calculating selection…"
+                } else {
+                    "Check the structure to calculate its formula and properties."
+                })
+                .size(12)
+                .color(muted()),
             );
         }
         body.push(
-            command("Check structure", Message::Analyze)
-                .on_press_maybe((!self.busy).then_some(Message::Analyze)),
+            command(
+                if key.is_some() {
+                    "Recalculate selection"
+                } else {
+                    "Check structure"
+                },
+                Message::InspectorAction(Action::RefreshProperties),
+            )
+            .on_press_maybe(
+                (!self.busy && self.inspector_ui.pending.is_none())
+                    .then_some(Message::InspectorAction(Action::RefreshProperties)),
+            ),
         )
         .into()
     }
 
+    pub(super) fn alignment_count(&self) -> usize {
+        reshiki::editing::groups(&self.doc, &self.selected).len()
+    }
+
+    fn arrangement_panel(&self, multiple: bool) -> Element<'_, Message> {
+        let arrange = column![
+            text("Rotate & reflect").size(11).color(muted()),
+            row![
+                command("↶ 30°", Message::Transform(Transform::Rotate(-30.))).width(Length::Fill),
+                command("↷ 30°", Message::Transform(Transform::Rotate(30.))).width(Length::Fill)
+            ]
+            .spacing(6),
+            row![
+                command("Flip H", Message::Transform(Transform::FlipHorizontal))
+                    .width(Length::Fill),
+                command("Flip V", Message::Transform(Transform::FlipVertical)).width(Length::Fill)
+            ]
+            .spacing(6),
+            text("Align horizontally").size(11).color(muted()),
+            row![
+                command("Left", Message::Arrange(Arrange::AlignLeft)).width(Length::Fill),
+                command("Center", Message::Arrange(Arrange::AlignHorizontal)).width(Length::Fill),
+                command("Right", Message::Arrange(Arrange::AlignRight)).width(Length::Fill)
+            ]
+            .spacing(2),
+            text("Align vertically").size(11).color(muted()),
+            row![
+                command("Top", Message::Arrange(Arrange::AlignTop)).width(Length::Fill),
+                command("Middles", Message::Arrange(Arrange::AlignVertical)).width(Length::Fill),
+                command("Bottom", Message::Arrange(Arrange::AlignBottom)).width(Length::Fill)
+            ]
+            .spacing(2),
+            text("Distribute").size(11).color(muted()),
+            row![
+                command(
+                    "Horizontally",
+                    Message::Arrange(Arrange::DistributeHorizontal)
+                )
+                .width(Length::Fill),
+                command("Vertically", Message::Arrange(Arrange::DistributeVertical))
+                    .width(Length::Fill)
+            ]
+            .spacing(2),
+            text("Drag a box corner to resize. Drag the top handle to rotate; Shift snaps to 15°.")
+                .size(11)
+                .color(muted()),
+        ]
+        .spacing(6);
+        self.inspector_section(
+            Section::Arrange,
+            "Arrange & transform",
+            if multiple {
+                "Align selected molecules, arrows & groups"
+            } else {
+                ""
+            },
+            multiple,
+            arrange,
+        )
+    }
+
     fn selection_panel(&self) -> Element<'_, Message> {
+        let multiple = self.alignment_count() >= 2;
         let atoms: Vec<_> = self
             .doc
             .atoms
@@ -546,56 +800,9 @@ impl App {
                 ),
             );
         }
-        let arrange = column![
-            text("Rotate & reflect").size(11).color(muted()),
-            row![
-                command("↶ 30°", Message::Transform(Transform::Rotate(-30.))).width(Length::Fill),
-                command("↷ 30°", Message::Transform(Transform::Rotate(30.))).width(Length::Fill)
-            ]
-            .spacing(6),
-            row![
-                command("Flip H", Message::Transform(Transform::FlipHorizontal))
-                    .width(Length::Fill),
-                command("Flip V", Message::Transform(Transform::FlipVertical)).width(Length::Fill)
-            ]
-            .spacing(6),
-            text("Align horizontally").size(11).color(muted()),
-            row![
-                command("Left", Message::Arrange(Arrange::AlignLeft)).width(Length::Fill),
-                command("Center", Message::Arrange(Arrange::AlignHorizontal)).width(Length::Fill),
-                command("Right", Message::Arrange(Arrange::AlignRight)).width(Length::Fill)
-            ]
-            .spacing(2),
-            text("Align vertically").size(11).color(muted()),
-            row![
-                command("Top", Message::Arrange(Arrange::AlignTop)).width(Length::Fill),
-                command("Center", Message::Arrange(Arrange::AlignVertical)).width(Length::Fill),
-                command("Bottom", Message::Arrange(Arrange::AlignBottom)).width(Length::Fill)
-            ]
-            .spacing(2),
-            text("Distribute").size(11).color(muted()),
-            row![
-                command(
-                    "Horizontally",
-                    Message::Arrange(Arrange::DistributeHorizontal)
-                )
-                .width(Length::Fill),
-                command("Vertically", Message::Arrange(Arrange::DistributeVertical))
-                    .width(Length::Fill)
-            ]
-            .spacing(2),
-            text("Drag a box corner to resize. Drag the top handle to rotate; Shift snaps to 15°.")
-                .size(11)
-                .color(muted()),
-        ]
-        .spacing(6);
-        body = body.push(self.inspector_section(
-            Section::Arrange,
-            "Arrange & transform",
-            "",
-            false,
-            arrange,
-        ));
+        if !multiple {
+            body = body.push(self.arrangement_panel(false));
+        }
         let groups = self.doc.outer_selected_groups(&self.selected);
         let mut grouping = column![
             row![
@@ -803,6 +1010,83 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+    async fn calculate(app: &mut App) {
+        let key = app.property_key().unwrap();
+        let doc = app.property_document(&key);
+        let _ = app.inspector_action(Action::RefreshProperties);
+        let result = app
+            .engine
+            .execute(Request::molecule("analyze", doc))
+            .await
+            .unwrap()
+            .analysis
+            .unwrap();
+        let _ = app.inspector_action(Action::PropertiesCalculated(key, Box::new(Ok(result))));
+    }
+
+    #[tokio::test]
+    async fn selected_properties_use_only_the_fragment_without_changing_the_drawing() {
+        let (mut app, _) = App::new();
+        let result = app
+            .engine
+            .execute(Request::import_smiles("CCO.CN"))
+            .await
+            .unwrap();
+        app.doc = result.document.unwrap();
+        app.analysis = result.analysis;
+        let whole = app.analysis.as_ref().unwrap().formula.clone();
+        let before = app.doc.clone();
+        app.selected = app.doc.atoms[..3].iter().map(|a| a.id).collect();
+        calculate(&mut app).await;
+        assert_eq!(app.property_analysis().unwrap().formula, "C2H6O");
+        assert_eq!(app.property_analysis().unwrap().smiles, "CCO");
+        app.selected.pop();
+        assert!(
+            app.property_analysis().is_none(),
+            "Old results must disappear immediately"
+        );
+        calculate(&mut app).await;
+        assert_eq!(app.property_analysis().unwrap().formula, "C2H6");
+        app.selected.clear();
+        assert_eq!(app.property_analysis().unwrap().formula, whole);
+        app.selected = vec![u64::MAX];
+        assert!(
+            app.property_analysis().is_none(),
+            "Artwork selection must not show whole-drawing values"
+        );
+        assert_eq!(app.doc, before);
+        assert!(!app.history.can_undo());
+        assert_eq!(app.revision, 0);
+    }
+
+    #[tokio::test]
+    async fn stale_property_results_cannot_replace_a_new_selection_or_document() {
+        let (mut app, _) = App::new();
+        let result = app
+            .engine
+            .execute(Request::import_smiles("CCO"))
+            .await
+            .unwrap();
+        app.doc = result.document.unwrap();
+        let analysis = result.analysis.unwrap();
+        app.selected = vec![app.doc.atoms[0].id];
+        let old = app.property_key().unwrap();
+        let _ = app.inspector_action(Action::RefreshProperties);
+        app.selected = vec![app.doc.atoms[2].id];
+        let _ = app.inspector_action(Action::PropertiesCalculated(
+            old,
+            Box::new(Ok(analysis.clone())),
+        ));
+        assert!(app.inspector_ui.pending.is_none());
+        assert!(app.property_analysis().is_none());
+        let old = app.property_key().unwrap();
+        let _ = app.inspector_action(Action::RefreshProperties);
+        app.file_epoch += 1;
+        let _ = app.inspector_action(Action::PropertiesCalculated(old, Box::new(Ok(analysis))));
+        assert!(app.property_analysis().is_none());
+        assert!(app.inspector_ui.pending.is_none());
+    }
+
     #[test]
     fn inspector_preferences_preserve_drawing_selection_and_history() {
         let (mut app, _) = App::new();

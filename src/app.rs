@@ -14,6 +14,7 @@ mod assistant;
 mod atom_labels;
 mod cleanup;
 mod clipboard;
+mod context_menu;
 mod document_styles;
 mod file_shortcuts;
 mod graphics;
@@ -48,6 +49,7 @@ pub enum InspectorTab {
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    ContextMenu(context_menu::Action),
     InspectorAction(inspector::Action),
     Updates(updates::Action),
     Reaction(reactions::Action),
@@ -223,6 +225,7 @@ struct CleanupPreview {
 }
 
 pub struct App {
+    context_menu: Option<context_menu::State>,
     updates: updates::State,
     styles: document_styles::State,
     palette: Option<palettes::Family>,
@@ -336,6 +339,7 @@ impl App {
             abbreviations: Default::default(),
             refresh_due: None,
             chemistry_notice: None,
+            context_menu: None,
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),
             drawing_length_input: reshiki::style::DEFAULT.bond_length_pt.to_string(),
@@ -471,6 +475,7 @@ impl App {
     pub fn subscription(&self) -> Subscription<Message> {
         Subscription::batch([
             self.updates.subscription(),
+            self.properties_subscription(),
             if self.assistant.needs_poll() {
                 iced::time::every(std::time::Duration::from_millis(200))
                     .map(|_| Message::Assistant(assistant::Action::Poll))
@@ -777,9 +782,28 @@ impl App {
             .unwrap_or(&self.doc)
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
-        if let Message::InspectorAction(action) = message {
-            self.inspector_ui.update(action);
+        if let Message::ContextMenu(action) = message {
+            return self.context_action(action);
+        }
+        if self.context_menu.is_some() && matches!(message, Message::Escape) {
+            self.context_menu = None;
             return Task::none();
+        }
+        if !matches!(
+            message,
+            Message::Canvas(Edit::Hover(_))
+                | Message::Tick
+                | Message::RefreshLabels
+                | Message::InspectorScroll(_)
+                | Message::EngineDone { .. }
+                | Message::InspectorAction(_)
+                | Message::Viewport(_)
+                | Message::Updates(_)
+        ) {
+            self.context_menu = None;
+        }
+        if let Message::InspectorAction(action) = message {
+            return self.inspector_action(action);
         }
         if let Message::Updates(action) = message {
             return self.update_action(action);
@@ -1362,7 +1386,7 @@ impl App {
                     self.fit();
                 }
             }
-            Message::InspectorAction(_) => {}
+            Message::InspectorAction(_) | Message::ContextMenu(_) => {}
             Message::Tool(tool) => {
                 self.erase_stroke = false;
                 self.palette = None;
@@ -1716,7 +1740,7 @@ impl App {
             Message::Import => return self.run(input_request(&self.smiles), Job::Import),
             Message::Example(smiles) => {
                 self.smiles = smiles.into();
-                return self.run(Request::import_smiles(smiles), Job::Import);
+                return self.run(Request::import_smiles(smiles), Job::Insert);
             }
             Message::Analyze => {
                 return self.run(Request::molecule("analyze", self.doc.clone()), Job::Analyze);
@@ -1813,18 +1837,26 @@ impl App {
                             if let Some(document) = response.document {
                                 let before = self.doc.clone();
                                 let center = editing::center(&document, &document.all_ids());
-                                self.selected = editing::append(
-                                    &mut self.doc,
-                                    &document,
+                                let offset = if self.doc.all_ids().is_empty() {
                                     Point::new(
                                         self.camera.center.x - center.x,
                                         self.camera.center.y - center.y,
-                                    ),
-                                );
+                                    )
+                                } else {
+                                    let (_, existing_max) = self.doc.bounds();
+                                    let (insert_min, _) = document.bounds();
+                                    Point::new(
+                                        existing_max.x + self.doc.drawing_style.bond_length_world
+                                            - insert_min.x,
+                                        self.camera.center.y - center.y,
+                                    )
+                                };
+                                self.selected = editing::append(&mut self.doc, &document, offset);
                                 self.changed(before);
+                                self.fit();
                                 self.tool = Tool::Select;
                                 self.status =
-                                    "Inserted structure · Drag selection to position it".into();
+                                    "Inserted structure · Drag to position · Delete or Undo to remove".into();
                             }
                             return Task::none();
                         }
@@ -2011,7 +2043,7 @@ impl App {
                 }
             },
             Message::CopySmiles => {
-                if let Some(a) = &self.analysis {
+                if let Some(a) = self.property_analysis() {
                     return iced::clipboard::write(a.smiles.clone());
                 }
             }
@@ -2217,6 +2249,18 @@ impl App {
         }
     }
     fn edit(&mut self, edit: Edit) {
+        if let Edit::ContextMenu { position, selected } = edit {
+            if self.cleanup.is_none() {
+                self.selected = selected;
+                self.tool = Tool::Select;
+                self.sync_typography();
+                self.context_menu = Some(context_menu::State {
+                    position,
+                    page: Default::default(),
+                });
+            }
+            return;
+        }
         match edit {
             Edit::EraseStart(p) => {
                 self.erase_stroke = self.tool == Tool::Erase && self.cleanup.is_none();
@@ -2237,7 +2281,7 @@ impl App {
                 self.hover = None;
                 return;
             }
-            Edit::Hover(_) => {}
+            Edit::Hover(_) | Edit::ContextMenu { .. } => {}
             _ => self.erase_stroke = false,
         }
         if matches!(edit, Edit::Pan(..) | Edit::Zoom(..)) {
@@ -2269,6 +2313,7 @@ impl App {
         }
         let before = self.doc.clone();
         match edit {
+            Edit::ContextMenu { .. } => return,
             Edit::Hover(_)
             | Edit::BeginText(_)
             | Edit::EraseStart(_)

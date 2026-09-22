@@ -96,6 +96,10 @@ impl Tool {
 }
 #[derive(Debug, Clone)]
 pub enum Edit {
+    ContextMenu {
+        position: Point,
+        selected: Vec<u64>,
+    },
     EraseStart(World),
     EraseTo(World, World),
     EraseEnd,
@@ -374,6 +378,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Option<Action<Edit>> {
+        let canvas_bounds = bounds;
         let bounds = self.guides.paper(bounds);
         // Iced may dispatch a batch with the final cursor position. Preserve the
         // position carried by each motion event so fast drags retain their origin.
@@ -447,9 +452,31 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                 });
                 Some(Action::request_redraw().and_capture())
             }
-            Event::Mouse(mouse::Event::ButtonPressed(
-                mouse::Button::Right | mouse::Button::Middle,
-            )) if inside => {
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)) if inside => {
+                let p = self.camera.world(point?, bounds);
+                let mut hit = hit_selection(self.doc, p, 10. / self.camera.zoom);
+                if hit.is_empty() {
+                    hit = reshiki::editing::ring_at(self.doc, p).unwrap_or_default();
+                }
+                hit = self.doc.expand_groups(&hit);
+                let inside_selection = hit.is_empty()
+                    && reshiki::scene::selection_bounds(self.doc, self.selected).is_some_and(
+                        |(lo, hi)| p.x >= lo.x && p.x <= hi.x && p.y >= lo.y && p.y <= hi.y,
+                    );
+                let selected = if inside_selection
+                    || (!hit.is_empty() && hit.iter().all(|id| self.selected.contains(id)))
+                {
+                    self.selected.to_vec()
+                } else {
+                    hit
+                };
+                state.gesture = None;
+                state.last_click = None;
+                let position = point?
+                    + iced::Vector::new(bounds.x - canvas_bounds.x, bounds.y - canvas_bounds.y);
+                Some(Action::publish(Edit::ContextMenu { position, selected }).and_capture())
+            }
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Middle)) if inside => {
                 state.gesture = Some(Gesture::Pan { last: point? });
                 Some(Action::capture())
             }
@@ -607,7 +634,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                     }),
                     _ => return Some(Action::publish(Edit::Click(p)).and_capture()),
                 };
-                Some(Action::request_redraw().and_capture())
+                Some(Action::publish(Edit::Hover(None)).and_capture())
             }
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
                 if let Some(Gesture::Erase { last }) = &mut state.gesture {
@@ -674,7 +701,12 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                         .and_capture(),
                     );
                 }
-                if state.gesture.is_some() || inside || was_inside {
+                if state.gesture.is_some() {
+                    // A drag only changes its canvas preview. Avoid rebuilding and laying
+                    // out the whole application for every intermediate pointer event.
+                    return Some(Action::request_redraw().and_capture());
+                }
+                if inside || was_inside {
                     let hover = if inside && state.gesture.is_none() {
                         point.map(|p| self.camera.world(p, bounds))
                     } else {
@@ -2581,6 +2613,93 @@ mod tests {
             bracket_sides: BracketSides::Both,
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),
+        }
+    }
+
+    #[test]
+    fn dragging_redraws_the_canvas_without_publishing_intermediate_application_updates() {
+        let mut doc = Document::default();
+        let atom = doc.add_atom("C", World::default());
+        let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+        canvas.tool = Tool::Select;
+        let bounds = Rectangle::with_size(iced::Size::new(400., 300.));
+        let mut state = State::default();
+        let start = Point::new(200., 150.);
+        let end = Point::new(260., 180.);
+        let cursor = mouse::Cursor::Available(end);
+        canvas.update(
+            &mut state,
+            &Event::Mouse(mouse::Event::CursorMoved { position: start }),
+            bounds,
+            cursor,
+        );
+        canvas.update(
+            &mut state,
+            &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+            bounds,
+            cursor,
+        );
+        for x in 201..=260 {
+            let action = canvas
+                .update(
+                    &mut state,
+                    &Event::Mouse(mouse::Event::CursorMoved {
+                        position: Point::new(x as f32, 180.),
+                    }),
+                    bounds,
+                    cursor,
+                )
+                .unwrap();
+            assert!(action.into_inner().0.is_none());
+        }
+        let action = canvas
+            .update(
+                &mut state,
+                &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                bounds,
+                cursor,
+            )
+            .unwrap();
+        assert!(
+            matches!(action.into_inner().0, Some(Edit::Move(ids, 60., 30.)) if ids == vec![atom])
+        );
+        assert_eq!(doc.atom(atom).unwrap().position, World::default());
+    }
+
+    #[test]
+    fn secondary_click_selects_its_target_and_preserves_an_existing_multi_selection() {
+        let mut doc = Document::default();
+        let a = doc.add_atom("C", World::default());
+        let b = doc.add_atom("N", World::new(60., 0.));
+        let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+        canvas.tool = Tool::Select;
+        let selected = [a, b];
+        canvas.selected = &selected;
+        let bounds = Rectangle::with_size(iced::Size::new(400., 300.));
+        let mut state = State::default();
+        for (point, expected) in [
+            (Point::new(200., 150.), vec![a, b]),
+            (Point::new(350., 250.), vec![]),
+        ] {
+            let cursor = mouse::Cursor::Available(point);
+            canvas.update(
+                &mut state,
+                &Event::Mouse(mouse::Event::CursorMoved { position: point }),
+                bounds,
+                cursor,
+            );
+            let action = canvas
+                .update(
+                    &mut state,
+                    &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)),
+                    bounds,
+                    cursor,
+                )
+                .unwrap();
+            assert!(
+                matches!(action.into_inner().0, Some(Edit::ContextMenu { selected, position }) if selected == expected && position == point)
+            );
+            assert!(state.gesture.is_none());
         }
     }
 

@@ -166,7 +166,6 @@ pub fn visible(a: &Atom, doc: &Document) -> bool {
         .filter(|b| b.a == a.id || b.b == a.id)
         .count();
     a.element != "C"
-        || a.charge != 0
         || a.radical_electrons != 0
         || a.isotope != 0
         || degree == 0
