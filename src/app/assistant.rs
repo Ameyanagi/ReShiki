@@ -22,12 +22,16 @@ pub enum Action {
     Model(Option<String>),
     Menu(Option<Menu>),
     Search(String),
+    ChatScrolled(bool),
     Effort(String),
     Tier(String),
     PreferencesSaved(Result<(), String>),
     Replace(bool),
     AutoApply(bool),
     Send,
+    Improve,
+    PreviewTarget(String),
+    PreviewEdit(assistant::review::Edit),
     Stop,
     Poll,
     Reset,
@@ -38,12 +42,13 @@ pub enum Action {
         epoch: u64,
         revision: u64,
         replace: Vec<u64>,
-        result: Box<Result<(Proposal, Document), String>>,
+        result: Box<Result<assistant::review::Outcome, String>>,
     },
 }
 pub struct Draft {
     pub proposal: Proposal,
     pub fragment: Document,
+    pub review: assistant::review::Report,
     pub revision: u64,
     pub epoch: u64,
     pub replace: Vec<u64>,
@@ -67,7 +72,18 @@ pub struct State {
     preferences_saving: bool,
     pub(super) menu: Option<Menu>,
     search: String,
+    follow_chat: bool,
+    completed: Option<(Document, assistant::review::Report)>,
     reply: String,
+    plan: String,
+    preview: Option<Document>,
+    preview_target: Option<String>,
+    structures: Option<(usize, usize)>,
+    checking: usize,
+    last_activity: Option<std::time::Instant>,
+    elapsed: u64,
+    pending_scope: Option<(u64, u64, Vec<u64>)>,
+    pending_proposal: Option<Proposal>,
     started: Option<std::time::Instant>,
     running_model: String,
     replace: bool,
@@ -98,6 +114,24 @@ impl State {
         }
         state
     }
+    fn retain_preview(&mut self, reason: &str) {
+        if let Some(fragment) = self.preview.clone()
+            && let Some((epoch, revision, replace)) = self.pending_scope.clone()
+        {
+            self.draft = Some(Draft {
+                proposal: self.pending_proposal.clone().unwrap_or_default(),
+                fragment,
+                revision,
+                epoch,
+                replace,
+                review: assistant::review::Report {
+                    summary: "Completed preview retained for inspection and editing.".into(),
+                    issues: vec![reason.into()],
+                    ..Default::default()
+                },
+            });
+        }
+    }
     fn model(&self) -> Option<&codex::Model> {
         self.account
             .as_ref()
@@ -112,9 +146,9 @@ impl State {
 }
 impl App {
     pub(super) fn assistant_action(&mut self, action: Action) -> Task<Message> {
-        let scroll = matches!(
+        let mut scroll = matches!(
             &action,
-            Action::Done { .. } | Action::Apply | Action::Reject
+            Action::Send | Action::Improve | Action::Done { .. } | Action::Apply | Action::Reject
         );
         match action {
             Action::Open => {
@@ -139,7 +173,14 @@ impl App {
                 self.assistant.preferences.auto_apply = value;
                 self.assistant.preferences_dirty = true;
                 self.assistant.menu = None;
-                if value && self.assistant.draft.is_some() && !self.assistant.busy {
+                if value
+                    && self
+                        .assistant
+                        .draft
+                        .as_ref()
+                        .is_some_and(|d| d.review.can_auto_apply())
+                    && !self.assistant.busy
+                {
                     return self.assistant_action(Action::Apply);
                 }
             }
@@ -157,6 +198,7 @@ impl App {
                 self.assistant.search.clear();
             }
             Action::Search(value) => self.assistant.search = value,
+            Action::ChatScrolled(follow) => self.assistant.follow_chat = follow,
             Action::Effort(value) => {
                 if let Some(id) = self.assistant.model().map(|m| m.id.clone()) {
                     self.assistant.preferences.efforts.insert(id, value);
@@ -184,6 +226,9 @@ impl App {
                 self.assistant.cancel.stop();
                 let serial = self.assistant.serial.wrapping_add(1);
                 self.assistant.draft = None;
+                self.assistant.preview = None;
+                self.assistant.plan.clear();
+                self.assistant.completed = None;
                 self.assistant.messages.clear();
                 self.assistant.status.clear();
                 self.assistant.error = false;
@@ -200,10 +245,20 @@ impl App {
                 self.assistant.busy = false;
                 self.assistant.progress = None;
                 self.assistant.reply.clear();
+                self.assistant.elapsed = self
+                    .assistant
+                    .started
+                    .map(|t| t.elapsed().as_secs())
+                    .unwrap_or(0);
                 self.assistant.started = None;
-                self.assistant.status = "Stopped · Your drawing is unchanged".into();
-                self.assistant
-                    .record("ReShiki", "Stopped. You can send another request.".into());
+                self.assistant.retain_preview(
+                    "Quality review has not finished. Review the draft before applying.",
+                );
+                self.assistant.status = "Stopped · Completed previews are retained".into();
+                self.assistant.record(
+                    "ReShiki",
+                    "Stopped. Completed previews remain available below.".into(),
+                );
             }
             Action::Connect => {
                 if self.assistant.busy {
@@ -267,7 +322,44 @@ impl App {
                 }
                 if let Some(progress) = &mut self.assistant.progress {
                     while let Ok(message) = progress.try_recv() {
+                        if matches!(
+                            message,
+                            codex::Progress::Preview(_)
+                                | codex::Progress::Plan(_)
+                                | codex::Progress::Checking { .. }
+                        ) && self.assistant.follow_chat
+                        {
+                            scroll = true;
+                        }
+                        self.assistant.last_activity = Some(std::time::Instant::now());
                         match message {
+                            codex::Progress::Proposal(proposal) => {
+                                if !proposal.replace_ids.is_empty()
+                                    && let Some((_, _, ids)) = &mut self.assistant.pending_scope
+                                {
+                                    *ids = proposal.replace_ids.clone();
+                                }
+                                self.assistant.pending_proposal = Some(*proposal);
+                            }
+                            codex::Progress::Plan(plan) => {
+                                if self.assistant.plan.is_empty() {
+                                    self.assistant.plan = plan;
+                                }
+                                self.assistant.status = "Composition planned".into();
+                            }
+                            codex::Progress::Structures { completed, total } => {
+                                self.assistant.structures = Some((completed, total));
+                                self.assistant.status = "Preparing structures…".into();
+                            }
+                            codex::Progress::Preview(doc) => {
+                                self.assistant.preview = Some(*doc);
+                                self.assistant.status = "Layout assembled".into();
+                            }
+                            codex::Progress::Checking { pass } => {
+                                self.assistant.checking = pass;
+                                self.assistant.status =
+                                    format!("Checking the rendered draft · Pass {pass} of 3");
+                            }
                             codex::Progress::Status(message) => self.assistant.status = message,
                             codex::Progress::Catalog(account) => {
                                 self.assistant.account = Some(account)
@@ -300,6 +392,7 @@ impl App {
             Action::Reject => {
                 self.assistant.waiting_for_canvas_edit = false;
                 self.assistant.draft = None;
+                self.assistant.preview = None;
                 self.assistant.record(
                     "ReShiki",
                     "Proposal rejected. The drawing was not changed.".into(),
@@ -332,6 +425,11 @@ impl App {
                         self.doc = document;
                         self.selected = ids;
                         self.changed(before);
+                        self.assistant.completed = self
+                            .assistant
+                            .draft
+                            .as_ref()
+                            .map(|d| (d.fragment.clone(), d.review.clone()));
                         self.assistant.draft = None;
                         self.tool = crate::canvas::Tool::Select;
                         if let Some((lo, hi)) =
@@ -363,11 +461,48 @@ impl App {
                     }
                 }
             }
-            Action::Send => {
+            Action::PreviewTarget(target) => {
+                self.assistant.preview_target = (target != "Overview").then_some(target);
+            }
+            Action::PreviewEdit(edit) => {
+                self.assistant.waiting_for_canvas_edit = false;
+                if self.assistant.busy {
+                    let _ = self.assistant_action(Action::Stop);
+                }
+                if let Some(draft) = &mut self.assistant.draft {
+                    match assistant::review::apply(
+                        &draft.fragment,
+                        &[edit],
+                        !draft.proposal.composition.preserve_details,
+                    ) {
+                        Ok(doc) => {
+                            draft.fragment = doc.clone();
+                            draft.review.verified = false;
+                            draft.review.summary =
+                                "Draft edited. Run Improve layout to check this version.".into();
+                            draft.review.issues =
+                                vec!["This edited version has not been visually checked.".into()];
+                            self.assistant.preview = Some(doc);
+                        }
+                        Err(error) => {
+                            self.assistant.status = error;
+                            self.assistant.error = true;
+                        }
+                    }
+                }
+            }
+            action @ (Action::Send | Action::Improve) => {
+                let improving = matches!(action, Action::Improve);
+
                 if self.assistant.busy || self.cleanup.is_some() {
                     return Task::none();
                 }
                 let prompt = self.assistant.input.text().trim().to_string();
+                let prompt = if improving && prompt.is_empty() {
+                    self.assistant.messages.iter().rev().find(|(r,_)| r == "You").map(|(_,s)| s.clone()).unwrap_or_else(|| "Improve this scheme’s spacing, alignment and captions while preserving all chemistry and structural detail.".into())
+                } else {
+                    prompt
+                };
                 if prompt.is_empty() {
                     return Task::none();
                 }
@@ -378,7 +513,7 @@ impl App {
                         "Please shorten your request to 12,000 characters".into();
                     return Task::none();
                 }
-                if self.assistant.replace && self.selected.is_empty() {
+                if !improving && self.assistant.replace && self.selected.is_empty() {
                     self.assistant.error = true;
                     self.assistant.status = "Select the objects to replace first".into();
                     return Task::none();
@@ -404,18 +539,80 @@ impl App {
                     labels: self.doc.atom_labels.clone(),
                 };
                 let request = json!({"request":prompt,"conversation":self.assistant.messages,"previous_proposal":self.assistant.draft.as_ref().map(|d|&d.proposal),"drawing_summary":{"atoms":context.atoms.len(),"bonds":context.bonds.len(),"arrows":context.arrows.len()},"selected_ids":self.selected,"placement":if self.assistant.replace {"replace selected objects"} else {"add new drawing objects"},"style":{"name":self.doc.drawing_style.name,"bond_length_pt":self.bond_drawing.length * reshiki::style::DEFAULT.points_per_world(),"text":settings.format,"bond_color":settings.bond_color}}).to_string();
-                let replace = if self.assistant.replace {
+                let seed = if improving {
+                    Some(if let Some(draft) = &self.assistant.draft {
+                        if draft.epoch != self.file_epoch
+                            || (!draft.replace.is_empty() && draft.revision != self.revision)
+                        {
+                            self.assistant.status = "Your drawing changed. Discard this draft, then review the current selection.".into();
+                            self.assistant.error = true;
+                            return Task::none();
+                        }
+                        assistant::review::Outcome {
+                            proposal: draft.proposal.clone(),
+                            document: draft.fragment.clone(),
+                            review: Default::default(),
+                        }
+                    } else {
+                        let ids = assistant::review::scope(&self.doc, &self.selected);
+                        let mut proposal = Proposal {
+                            replace_ids: ids.clone(),
+                            ..Default::default()
+                        };
+                        proposal.composition.preserve_details = true;
+                        assistant::review::Outcome {
+                            proposal,
+                            document: assistant::review::fragment(&self.doc, &ids),
+                            review: Default::default(),
+                        }
+                    })
+                } else {
+                    None
+                };
+                if seed
+                    .as_ref()
+                    .is_some_and(|s| s.document.all_ids().is_empty())
+                {
+                    self.assistant.status = "Draw or select a scheme to improve first".into();
+                    return Task::none();
+                }
+                let replace = if improving {
+                    self.assistant
+                        .draft
+                        .as_ref()
+                        .map(|d| d.replace.clone())
+                        .unwrap_or_else(|| assistant::review::scope(&self.doc, &self.selected))
+                } else if self.assistant.replace {
                     self.doc.expand_abbreviation_selection(&self.selected)
                 } else {
                     vec![]
                 };
-                self.assistant.record("You", prompt);
+                self.assistant.record(
+                    "You",
+                    if improving {
+                        format!("Improve layout: {prompt}")
+                    } else {
+                        prompt
+                    },
+                );
                 self.assistant.input = text_editor::Content::new();
                 self.assistant.serial = self.assistant.serial.wrapping_add(1);
                 self.assistant.cancel = Default::default();
                 self.assistant.busy = true;
                 self.assistant.error = false;
-                self.assistant.status = "Connecting to Codex…".into();
+                self.assistant.status = "Preparing your scheme…".into();
+                self.assistant.completed = None;
+                self.assistant.follow_chat = true;
+                self.assistant.preview = seed.as_ref().map(|s| s.document.clone());
+                self.assistant.draft = None;
+                self.assistant.pending_proposal = seed.as_ref().map(|s| s.proposal.clone());
+                self.assistant.plan.clear();
+                self.assistant.preview_target = None;
+                self.assistant.structures = None;
+                self.assistant.checking = 0;
+                self.assistant.last_activity = Some(std::time::Instant::now());
+                self.assistant.pending_scope =
+                    Some((self.file_epoch, self.revision, replace.clone()));
                 let (tx, rx) = tokio::sync::mpsc::channel(32);
                 self.assistant.progress = Some(rx);
                 let cancel = self.assistant.cancel.clone();
@@ -443,43 +640,28 @@ impl App {
                 self.assistant.running_model.clear();
                 self.assistant.started = Some(std::time::Instant::now());
                 self.assistant.menu = None;
-                // A cancelled proposal must not interrupt the editor's chemistry stream.
-                let engine = reshiki::engine::LocalEngine::default();
-                return Task::perform(
-                    async move {
-                        let proposal = codex::propose(
-                            request,
-                            preferences,
-                            cancel.clone(),
-                            tx.clone(),
-                            Some(canvas),
-                        )
-                        .await?;
-                        if cancel.stopped() {
-                            return Err("Stopped".into());
-                        }
-                        let _ = tx.try_send(codex::Progress::Status(
-                            "Validating molecules and laying out the proposal…".into(),
-                        ));
-                        let document = tokio::select! {
-                            result = assistant::render(&engine, &proposal, &settings) => result?,
-                            _ = cancel.cancelled() => return Err("Stopped".into()),
-                        };
-                        if cancel.stopped() {
-                            return Err("Stopped".into());
-                        }
-                        Ok((proposal, document))
-                    },
-                    move |result| {
-                        Message::Assistant(Action::Done {
-                            serial,
-                            epoch,
-                            revision,
-                            replace: replace.clone(),
-                            result: Box::new(result),
-                        })
-                    },
-                );
+                // Generation and visual review run independently of the editor’s chemistry stream.
+                return Task::batch([
+                    iced::widget::operation::snap_to_end("assistant-chat"),
+                    Task::perform(
+                        async move {
+                            if let Some(seed) = seed {
+                                codex::improve(request, preferences, cancel, tx, canvas, seed).await
+                            } else {
+                                codex::propose(request, preferences, cancel, tx, Some(canvas)).await
+                            }
+                        },
+                        move |result| {
+                            Message::Assistant(Action::Done {
+                                serial,
+                                epoch,
+                                revision,
+                                replace: replace.clone(),
+                                result: Box::new(result),
+                            })
+                        },
+                    ),
+                ]);
             }
             Action::Done {
                 serial,
@@ -494,26 +676,38 @@ impl App {
                 self.assistant.busy = false;
                 self.assistant.progress = None;
                 self.assistant.reply.clear();
+                self.assistant.elapsed = self
+                    .assistant
+                    .started
+                    .map(|t| t.elapsed().as_secs())
+                    .unwrap_or(0);
                 self.assistant.started = None;
                 match *result {
-                    Ok((proposal, fragment)) => {
+                    Ok(assistant::review::Outcome {
+                        proposal,
+                        document: fragment,
+                        review,
+                    }) => {
                         let replace = if proposal.replace_ids.is_empty() {
                             replace
                         } else {
                             proposal.replace_ids.clone()
                         };
                         self.assistant.record("Codex", proposal.explanation.clone());
-                        if proposal.has_drawing() {
+                        if !fragment.all_ids().is_empty() {
+                            self.assistant.preview = None;
+                            let can_auto_apply = review.can_auto_apply();
                             self.assistant.draft = Some(Draft {
                                 proposal,
                                 fragment,
+                                review,
                                 revision,
                                 epoch,
                                 replace,
                             });
                             self.assistant.status =
                                 "Ready for review · Nothing has been applied".into();
-                            if self.assistant.preferences.auto_apply {
+                            if self.assistant.preferences.auto_apply && can_auto_apply {
                                 return self.assistant_action(Action::Apply);
                             }
                         } else {
@@ -522,6 +716,8 @@ impl App {
                         }
                     }
                     Err(error) => {
+                        self.assistant
+                            .retain_preview(&format!("Generation or review stopped: {error}"));
                         self.assistant.status = error;
                         self.assistant.error = true;
                     }
@@ -534,9 +730,104 @@ impl App {
             Task::none()
         }
     }
+    fn assistant_preview_controls<'a>(&'a self, doc: &'a Document) -> Element<'a, Message> {
+        let targets = assistant::review::targets(doc);
+        let labels: Vec<_> = std::iter::once("Overview".to_string())
+            .chain(targets.iter().map(|t| t.label()))
+            .collect();
+        let selected = self
+            .assistant
+            .preview_target
+            .as_ref()
+            .filter(|s| labels.contains(s));
+        let mut controls = column![
+            iced::widget::pick_list(
+                labels.clone(),
+                Some(selected.cloned().unwrap_or_else(|| "Overview".into())),
+                |s| Message::Assistant(Action::PreviewTarget(s))
+            )
+            .placeholder("Inspect or edit a panel…")
+            .text_size(11)
+            .width(Length::Fill)
+        ]
+        .spacing(6);
+        if let Some(target) =
+            selected.and_then(|label| targets.iter().find(|t| t.label() == *label))
+        {
+            let moving = |label, dx_pt, dy_pt| {
+                action(
+                    label,
+                    Action::PreviewEdit(assistant::review::Edit::Move {
+                        target: target.name.clone(),
+                        dx_pt,
+                        dy_pt,
+                    }),
+                )
+                .padding([4, 8])
+            };
+            let mut buttons = row![
+                text("Move").size(11),
+                moving("←", -6., 0.),
+                moving("→", 6., 0.),
+                moving("↑", 0., -6.),
+                moving("↓", 0., 6.)
+            ]
+            .spacing(3)
+            .align_y(Alignment::Center);
+            if target.kind == "arrow" {
+                let length = doc
+                    .arrows
+                    .iter()
+                    .find(|a| target.ids.contains(&a.id))
+                    .map(|a| a.start.distance(a.end) * reshiki::style::DEFAULT.points_per_world())
+                    .unwrap_or(40.);
+                buttons = buttons.push(
+                    action(
+                        "Shorten",
+                        Action::PreviewEdit(assistant::review::Edit::ArrowLength {
+                            target: target.name.clone(),
+                            length_pt: (length - 6.).max(12.),
+                        }),
+                    )
+                    .padding([4, 6]),
+                );
+            }
+            controls = controls.push(buttons);
+        }
+        controls.into()
+    }
+    fn assistant_preview_canvas<'a>(&'a self, doc: &'a Document) -> Element<'a, Message> {
+        if let Some(target) = self.assistant.preview_target.as_ref().and_then(|label| {
+            assistant::review::targets(doc)
+                .into_iter()
+                .find(|t| t.label() == *label)
+        }) {
+            let ids = if target.kind == "panel" {
+                target
+                    .name
+                    .strip_prefix("reaction:")
+                    .and_then(|s| s.parse::<usize>().ok())
+                    .and_then(|i| doc.reactions.get(i))
+                    .map(|r| r.ids())
+                    .unwrap_or(target.ids)
+            } else {
+                target.ids
+            };
+            return canvas(crate::canvas::OwnedDrawingPreview(
+                assistant::review::fragment(doc, &ids),
+            ))
+            .width(Length::Fill)
+            .height(200)
+            .into();
+        }
+        canvas(crate::canvas::DrawingPreview(doc))
+            .width(Length::Fill)
+            .height(200)
+            .into()
+    }
     pub(super) fn assistant_panel(&self) -> Element<'_, Message> {
         let state = &self.assistant;
-        let mut chat = column![].spacing(16).padding([4, 2]);
+        let mut chat = column![].spacing(16).padding([4, 2]).width(Length::Fill);
         if state.messages.is_empty() {
             chat = chat.push(Space::new().height(20))
                 .push(text("What would you like to draw?").size(19))
@@ -548,7 +839,7 @@ impl App {
         for (role, message) in &state.messages {
             if role == "You" {
                 chat = chat.push(
-                    container(text(message).size(13))
+                    container(text(message).size(13).width(Length::Fill))
                         .padding([10, 12])
                         .width(Length::Fill)
                         .style(|_| surface(Color::from_rgb8(234, 241, 239), 12.)),
@@ -559,7 +850,7 @@ impl App {
                 chat = chat.push(
                     column![
                         text("Codex").size(11).color(Color::from_rgb8(17, 126, 108)),
-                        text(message).size(13)
+                        text(message).size(13).width(Length::Fill)
                     ]
                     .spacing(6),
                 );
@@ -569,19 +860,94 @@ impl App {
             chat = chat.push(
                 column![
                     text("Codex").size(11).color(Color::from_rgb8(17, 126, 108)),
-                    text(&state.reply).size(13)
+                    text(&state.reply).size(13).width(Length::Fill)
                 ]
                 .spacing(6),
+            );
+        }
+        if state.busy {
+            let seconds = state.started.map(|t| t.elapsed().as_secs()).unwrap_or(0);
+            let mut activity = column![
+                row![
+                    text(&state.status).size(13).width(Length::Fill),
+                    action("Stop", Action::Stop)
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center),
+                text(format!(
+                    "Elapsed {seconds}s · You can keep drawing or close this panel"
+                ))
+                .size(11)
+                .color(super::workspace::muted()),
+            ]
+            .spacing(10);
+            if !state.running_model.is_empty() {
+                activity = activity.push(
+                    text(&state.running_model)
+                        .size(10)
+                        .color(super::workspace::muted()),
+                );
+            }
+            if !state.plan.is_empty() {
+                activity = activity.push(text(&state.plan).size(12));
+            }
+            if let Some((completed, total)) = state.structures {
+                activity = activity
+                    .push(text(format!("{completed} of {total} structures prepared")).size(11));
+                if total > 0 {
+                    activity = activity.push(
+                        iced::widget::progress_bar(0. ..=total as f32, completed as f32).girth(3),
+                    );
+                }
+            }
+            if state
+                .last_activity
+                .is_some_and(|t| t.elapsed().as_secs() >= 8)
+            {
+                activity = activity.push(
+                    text("Generation is still running. Waiting for the next completed step…")
+                        .size(11)
+                        .color(super::workspace::muted()),
+                );
+            }
+            if let Some(doc) = &state.preview {
+                activity = activity.push(self.assistant_preview_canvas(doc));
+                activity = activity.push(
+                    text("Editable draft · Changes here stop generation and retain this preview.")
+                        .size(11),
+                );
+                activity = activity.push(self.assistant_preview_controls(doc));
+            }
+            chat = chat.push(
+                container(activity)
+                    .padding(12)
+                    .width(Length::Fill)
+                    .style(|_| card()),
+            );
+        } else if state.draft.is_none()
+            && let Some(doc) = &state.preview
+        {
+            chat = chat.push(
+                container(column![
+                    text("Retained preview").size(12),
+                    self.assistant_preview_canvas(doc),
+                    text("Review did not finish. The completed preview is retained.").size(11)
+                ])
+                .padding(12)
+                .style(|_| card()),
             );
         }
         if let Some(draft) = &state.draft {
             let current = draft.epoch == self.file_epoch
                 && (draft.replace.is_empty() || draft.revision == self.revision);
             let mut proposal = column![
-                text("Drawing preview").size(12),
-                canvas(crate::canvas::DrawingPreview(&draft.fragment))
-                    .width(Length::Fill)
-                    .height(180),
+                text(if draft.review.can_auto_apply() {
+                    "Quality checked"
+                } else {
+                    "Draft · Review needed"
+                })
+                .size(13),
+                self.assistant_preview_canvas(&draft.fragment),
                 text(if draft.replace.is_empty() {
                     "Adds editable objects to your drawing"
                 } else {
@@ -591,6 +957,18 @@ impl App {
                 .color(super::workspace::muted())
             ]
             .spacing(10);
+            for change in &draft.review.changes {
+                proposal = proposal.push(text(change).size(12));
+            }
+            proposal = proposal.push(text(&draft.review.summary).size(12));
+            for issue in &draft.review.issues {
+                proposal = proposal.push(
+                    text(format!("• {issue}"))
+                        .size(11)
+                        .color(Color::from_rgb8(151, 86, 24)),
+                );
+            }
+            proposal = proposal.push(self.assistant_preview_controls(&draft.fragment));
             if !current {
                 proposal = proposal.push(
                     text("Your drawing changed. Send a follow-up to refresh this proposal.")
@@ -605,6 +983,9 @@ impl App {
                                 .then_some(Message::Assistant(Action::Apply))
                         )
                         .style(button::primary),
+                    action("Improve layout", Action::Improve).on_press_maybe(
+                        (current && !state.busy).then_some(Message::Assistant(Action::Improve))
+                    ),
                     action("Discard", Action::Reject).on_press_maybe(
                         (!state.busy).then_some(Message::Assistant(Action::Reject))
                     )
@@ -612,6 +993,38 @@ impl App {
                 .spacing(6),
             );
             chat = chat.push(container(proposal).padding(12).style(|_| card()));
+        }
+        if let Some((doc, report)) = &state.completed {
+            let mut result = column![
+                text(format!("Applied · Elapsed {}s", state.elapsed)).size(12),
+                canvas(crate::canvas::DrawingPreview(doc))
+                    .width(Length::Fill)
+                    .height(180)
+            ]
+            .spacing(8);
+            for change in &report.changes {
+                result = result.push(text(change).size(12).width(Length::Fill));
+            }
+            result = result.push(text(&report.summary).size(12).width(Length::Fill));
+            for issue in &report.issues {
+                result = result.push(text(format!("• {issue}")).size(11).width(Length::Fill));
+            }
+            chat = chat.push(
+                container(result)
+                    .padding(12)
+                    .width(Length::Fill)
+                    .style(|_| card()),
+            );
+        }
+        if !state.busy && state.draft.is_none() && !self.doc.all_ids().is_empty() {
+            chat = chat.push(action(
+                if self.selected.is_empty() {
+                    "Improve drawing layout"
+                } else {
+                    "Improve selected layout"
+                },
+                Action::Improve,
+            ));
         }
         let header = row![
             super::workspace::hover_hint(
@@ -643,20 +1056,22 @@ impl App {
         let mut activity = column![].spacing(6);
         if state.busy {
             let seconds = state.started.map(|t| t.elapsed().as_secs()).unwrap_or(0);
-            activity = activity.push(row![
-                text(format!("{} · {seconds}s", state.status))
-                    .size(11)
-                    .width(Length::Fill)
-                    .color(super::workspace::muted()),
-            ]);
-            if !state.running_model.is_empty() {
-                activity = activity.push(
-                    text(&state.running_model)
-                        .size(10)
-                        .color(super::workspace::muted()),
-                );
-            }
-        } else if state.error {
+            activity = activity.push(
+                text(format!(
+                    "{} · {seconds}s",
+                    if state.checking > 0 {
+                        "Checking draft"
+                    } else if state.structures.is_some() {
+                        "Preparing structures"
+                    } else {
+                        "Preparing scheme"
+                    }
+                ))
+                .size(11)
+                .color(super::workspace::muted()),
+            );
+        }
+        if state.error {
             activity = activity.push(
                 text(&state.status)
                     .size(11)
@@ -774,7 +1189,13 @@ impl App {
         let base: Element<'_, Message> = container(
             column![
                 header,
-                scrollable(chat).id("assistant-chat").height(Length::Fill),
+                scrollable(chat)
+                    .id("assistant-chat")
+                    .height(Length::Fill)
+                    .on_scroll(|v| Message::Assistant(Action::ChatScrolled(
+                        v.content_bounds().height <= v.bounds().height
+                            || v.relative_offset().y >= 0.97
+                    ))),
                 footer
             ]
             .spacing(14),
@@ -1114,12 +1535,14 @@ mod tests {
         fragment.add_atom("O", reshiki::document::Point::default());
         let proposal = Proposal {
             replace_ids: vec![],
+            composition: Default::default(),
             explanation: "Water".into(),
             molecules: vec![assistant::Molecule {
                 smiles: "O".into(),
                 label: "".into(),
                 coefficient: 1,
                 rotation: 0.,
+                compact: false,
             }],
             reactions: vec![],
         };
@@ -1128,7 +1551,14 @@ mod tests {
             epoch: app.file_epoch,
             revision: app.revision,
             replace: vec![],
-            result: Box::new(Ok((proposal, fragment))),
+            result: Box::new(Ok(assistant::review::Outcome {
+                proposal,
+                document: fragment,
+                review: assistant::review::Report {
+                    verified: true,
+                    ..Default::default()
+                },
+            })),
         });
     }
     #[test]
@@ -1239,5 +1669,36 @@ mod tests {
         assert_eq!(app.doc, before);
         assert!(app.assistant.draft.is_some());
         assert!(app.assistant.error);
+    }
+    #[test]
+    fn immediate_activity_stop_retains_preview_and_unverified_drafts_require_review() {
+        let (mut app, _) = App::new();
+        app.busy = false;
+        let _ = app.assistant_action(Action::Example("Draw water"));
+        let start = std::time::Instant::now();
+        let _ = app.assistant_action(Action::Send);
+        assert!(start.elapsed() < std::time::Duration::from_millis(200));
+        assert!(app.assistant.busy && app.assistant.started.is_some());
+        assert_eq!(app.assistant.status, "Preparing your scheme…");
+        let original = app.doc.clone();
+        let mut preview = Document::default();
+        preview.add_atom("O", reshiki::document::Point::default());
+        app.assistant.preview = Some(preview.clone());
+        let _ = app.assistant_action(Action::Stop);
+        assert!(!app.assistant.busy);
+        assert_eq!(app.assistant.draft.as_ref().unwrap().fragment, preview);
+        let _ = app.assistant_action(Action::AutoApply(true));
+        assert_eq!(app.doc, original);
+        assert!(app.assistant.draft.is_some());
+        let _ = app.assistant_action(Action::PreviewEdit(assistant::review::Edit::Move {
+            target: "molecule:0".into(),
+            dx_pt: 6.,
+            dy_pt: 0.,
+        }));
+        assert_ne!(
+            app.assistant.draft.as_ref().unwrap().fragment.atoms[0].position,
+            preview.atoms[0].position
+        );
+        assert_eq!(app.doc, original);
     }
 }

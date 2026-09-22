@@ -2332,17 +2332,32 @@ impl canvas::Program<crate::app::Message> for ScientificPreview {
 }
 
 /// Shared, read-only preview for palettes and reviewed drawing proposals.
+#[derive(Default)]
+pub struct PreviewState(std::cell::RefCell<Option<PreviewCache>>);
+struct PreviewCache {
+    document: Document,
+    size: iced::Size,
+    geometry: Vec<<Geometry as iced::advanced::graphics::cache::Cached>::Cache>,
+}
 pub struct DrawingPreview<'a>(pub &'a Document);
 impl canvas::Program<crate::app::Message> for DrawingPreview<'_> {
-    type State = ();
+    type State = PreviewState;
     fn draw(
         &self,
-        _: &(),
+        state: &PreviewState,
         renderer: &Renderer,
         _: &Theme,
         bounds: Rectangle,
         _: mouse::Cursor,
     ) -> Vec<Geometry> {
+        use iced::advanced::graphics::cache::Cached;
+        let mut cache = state.0.borrow_mut();
+        if let Some(cached) = cache.as_ref()
+            && cached.size == bounds.size()
+            && &cached.document == self.0
+        {
+            return cached.geometry.iter().map(Cached::load).collect();
+        }
         let mut frame = layered::Frame::new(renderer, bounds.size());
         frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::WHITE);
         let (lo, hi) =
@@ -2353,8 +2368,19 @@ impl canvas::Program<crate::app::Message> for DrawingPreview<'_> {
                 .min((bounds.height - 24.) / (hi.y - lo.y).max(1.))
                 .clamp(0.001, 1.4),
         };
-        draw_document(&mut frame, self.0, camera, bounds);
-        frame.finish()
+        draw_document_with_minimum_stroke(&mut frame, self.0, camera, bounds, 0.6);
+        let geometry: Vec<_> = frame
+            .finish()
+            .into_iter()
+            .map(|g| g.cache(iced::advanced::graphics::cache::Group::unique(), None))
+            .collect();
+        let result = geometry.iter().map(Cached::load).collect();
+        *cache = Some(PreviewCache {
+            document: self.0.clone(),
+            size: bounds.size(),
+            geometry,
+        });
+        result
     }
 }
 
@@ -2386,10 +2412,10 @@ impl canvas::Program<crate::app::Message> for PalettePreview {
 
 pub struct OwnedDrawingPreview(pub Document);
 impl canvas::Program<crate::app::Message> for OwnedDrawingPreview {
-    type State = ();
+    type State = PreviewState;
     fn draw(
         &self,
-        state: &(),
+        state: &PreviewState,
         renderer: &Renderer,
         theme: &Theme,
         bounds: Rectangle,

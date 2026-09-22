@@ -36,6 +36,7 @@ serde_json = { version = "1", features = ["float_roundtrip"] }
 base64 = "0.22"
 tokio = { version = "1", features = [
   "process",
+  "fs",
   "io-util",
   "sync",
   "time",

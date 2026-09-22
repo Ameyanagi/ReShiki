@@ -106,6 +106,8 @@ async fn prepare(
         return Err("A proposed molecule exceeds 300 atoms".into());
     }
     doc.drawing_style = settings.drawing_style.clone();
+    let ids = doc.all_ids();
+    super::composition::straighten(&mut doc, &ids);
     let scale = settings.bond_length / crate::style::DEFAULT.bond_length_world;
     let angle = molecule.rotation.to_radians();
     let (sin, cos) = angle.sin_cos();
@@ -134,6 +136,10 @@ async fn prepare(
         bond.color = settings.bond_color;
     }
     doc.atom_labels = settings.labels.clone();
+    if molecule.compact {
+        let ids = doc.all_ids();
+        super::composition::compact_chains(&mut doc, &ids)?;
+    }
     separate_components(&mut doc, settings.bond_length * 0.8);
     let (lo, hi) =
         crate::scene::selection_bounds(&doc, &doc.all_ids()).ok_or("Empty proposed molecule")?;
@@ -180,10 +186,20 @@ async fn prepare_all(
     engine: &LocalEngine,
     molecules: &[Molecule],
     settings: &DrawingSettings,
+    progress: Option<&tokio::sync::mpsc::Sender<super::codex::Progress>>,
+    prepared: &mut usize,
+    total: usize,
 ) -> Result<Vec<Participant>, String> {
     let mut result = Vec::new();
     for molecule in molecules {
         result.push(prepare(engine, molecule, settings).await?);
+        *prepared += 1;
+        if let Some(progress) = progress {
+            let _ = progress.try_send(super::codex::Progress::Structures {
+                completed: *prepared,
+                total,
+            });
+        }
     }
     Ok(result)
 }
@@ -192,13 +208,12 @@ fn place_row(
     parts: &[Participant],
     x: &mut f32,
     y: f32,
-    caption_y: f32,
     settings: &DrawingSettings,
     separators: bool,
 ) -> Result<(f32, Vec<crate::reactions::Participant>), String> {
     let mut participants = Vec::new();
     let gap = settings.bond_length;
-    let mut bottom = caption_y;
+    let mut bottom = y;
     for (index, part) in parts.iter().enumerate() {
         if index > 0 {
             if separators {
@@ -249,6 +264,7 @@ fn place_row(
                 .collect(),
             coefficient: part.coefficient,
         });
+        let caption_y = y + (part.hi.y - part.lo.y) / 2. + gap * 0.6;
         caption(
             doc,
             &part.label,
@@ -266,6 +282,15 @@ pub async fn render(
     proposal: &Proposal,
     settings: &DrawingSettings,
 ) -> Result<Document, String> {
+    render_progress(engine, proposal, settings, None).await
+}
+
+pub async fn render_progress(
+    engine: &LocalEngine,
+    proposal: &Proposal,
+    settings: &DrawingSettings,
+    progress: Option<&tokio::sync::mpsc::Sender<super::codex::Progress>>,
+) -> Result<Document, String> {
     proposal.validate()?;
     let mut settings = settings.clone();
     settings.format.spans.clear();
@@ -281,33 +306,53 @@ pub async fn render(
         ..Default::default()
     };
     let mut y = 0.;
-    for chunk in proposal.molecules.chunks(3) {
-        let parts = prepare_all(engine, chunk, &settings).await?;
-        let height = parts.iter().map(|p| p.hi.y - p.lo.y).fold(gap, f32::max);
-        y = place_row(
-            &mut doc,
-            &parts,
-            &mut 0.,
-            y,
-            y + height / 2. + gap * 0.6,
-            &settings,
-            false,
-        )?
-        .0 + gap * 2.;
-    }
-    for reaction in &proposal.reactions {
-        let first_id = doc.next_id();
-        let left = prepare_all(engine, &reaction.reactants, &settings).await?;
-        let right = prepare_all(engine, &reaction.products, &settings).await?;
-        let height = left
+    let mut panels = Vec::new();
+    let mut prepared = 0;
+    let total = proposal.molecules.len()
+        + proposal
+            .reactions
             .iter()
-            .chain(&right)
-            .map(|p| p.hi.y - p.lo.y)
-            .fold(gap, f32::max);
-        let caption_y = y + height / 2. + gap * 0.6;
+            .map(|r| r.reactants.len() + r.products.len())
+            .sum::<usize>();
+    for chunk in proposal.molecules.chunks(3) {
+        let first_id = doc.next_id();
+        let parts = prepare_all(engine, chunk, &settings, progress, &mut prepared, total).await?;
+        y = place_row(&mut doc, &parts, &mut 0., y, &settings, false)?.0 + gap * 2.;
+        panels.push((
+            doc.all_ids()
+                .into_iter()
+                .filter(|id| *id >= first_id)
+                .collect(),
+            super::composition::Role::Reaction,
+        ));
+        if let Some(progress) = progress {
+            let mut preview = doc.clone();
+            compose(&mut preview, &panels, proposal)?;
+            let _ = progress.try_send(super::codex::Progress::Preview(Box::new(preview)));
+        }
+    }
+    for (index, reaction) in proposal.reactions.iter().enumerate() {
+        let first_id = doc.next_id();
+        let left = prepare_all(
+            engine,
+            &reaction.reactants,
+            &settings,
+            progress,
+            &mut prepared,
+            total,
+        )
+        .await?;
+        let right = prepare_all(
+            engine,
+            &reaction.products,
+            &settings,
+            progress,
+            &mut prepared,
+            total,
+        )
+        .await?;
         let mut x = 0.;
-        let (left_bottom, reactants) =
-            place_row(&mut doc, &left, &mut x, y, caption_y, &settings, true)?;
+        let (left_bottom, reactants) = place_row(&mut doc, &left, &mut x, y, &settings, true)?;
         x += gap;
         let mut conditions_format = settings.format.clone();
         conditions_format.alignment = TextAlign::Center;
@@ -338,8 +383,34 @@ pub async fn render(
             &conditions_format,
         );
         x += width + gap;
-        let (right_bottom, products) =
-            place_row(&mut doc, &right, &mut x, y, caption_y, &settings, true)?;
+        let (right_bottom, products) = place_row(&mut doc, &right, &mut x, y, &settings, true)?;
+        let panel_ids: Vec<_> = doc
+            .all_ids()
+            .into_iter()
+            .filter(|id| *id >= first_id)
+            .collect();
+        if let Some((lo, hi)) = crate::scene::selection_bounds(&doc, &panel_ids) {
+            let title = if reaction.title.is_empty()
+                && proposal.composition.arrangement == super::composition::Arrangement::Grid
+            {
+                format!("Reaction {}", index + 1)
+            } else {
+                reaction.title.clone()
+            };
+            caption(
+                &mut doc,
+                &title,
+                Point::new((lo.x + hi.x) / 2., lo.y - gap * 1.2),
+                &settings.format,
+            );
+        }
+        panels.push((
+            doc.all_ids()
+                .into_iter()
+                .filter(|id| *id >= first_id)
+                .collect(),
+            reaction.role,
+        ));
         doc.reactions.push(crate::reactions::Reaction {
             arrow: arrow_id,
             reactants,
@@ -353,7 +424,29 @@ pub async fn render(
                 .collect(),
         });
         y = left_bottom.max(right_bottom) + gap * 3.;
+        if let Some(progress) = progress {
+            let mut preview = doc.clone();
+            compose(&mut preview, &panels, proposal)?;
+            let _ = progress.try_send(super::codex::Progress::Preview(Box::new(preview)));
+        }
+    }
+    compose(&mut doc, &panels, proposal)?;
+    if doc.atoms.len() > 1500 {
+        return Err("The scheme exceeds 1500 atoms; request fewer examples".into());
     }
     doc.validate()?;
     Ok(doc)
+}
+
+fn compose(
+    doc: &mut Document,
+    panels: &[(Vec<u64>, super::composition::Role)],
+    proposal: &Proposal,
+) -> Result<(), String> {
+    if proposal.composition.arrangement == super::composition::Arrangement::Branching {
+        super::branching::merge(doc, &proposal.reactions)?;
+    } else {
+        super::composition::arrange(doc, panels, &proposal.composition);
+    }
+    Ok(())
 }
