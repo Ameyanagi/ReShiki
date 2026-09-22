@@ -175,7 +175,7 @@ Regenerate codec constants and codepage tables with `uv run --locked python scri
 
 Element, isotope, allowed-valence and outer-electron data come from RDKit `Release_2026_03_6`. Regenerate them with `uv run --locked python scripts/regenerate_atomic_data.py --rdkit-source ~/dev/rdkit`, then `cargo fmt --all`. The generator verifies the source checksum and compares every entry with installed RDKit. Its BSD license and attribution are in `licenses/rdkit/` and are included in release packages.
 
-Regenerate descriptor rules with `uv run --locked python scripts/regenerate_descriptor_data.py --rdkit-source ~/dev/rdkit`, then `npx --no-install oxfmt src/chemistry/descriptor_data.json`. The generator verifies source checksums and compiles the fixed queries into checked-in data. The application reads that data without invoking Python or parsing SMARTS.
+Regenerate descriptor rules with `uv run --locked python scripts/regenerate_descriptor_data.py --rdkit-source ~/dev/rdkit`, then `bun run --bun oxfmt src/chemistry/descriptor_data.json`. The generator verifies source checksums and compiles the fixed queries into checked-in data. The application reads that data without invoking Python or parsing SMARTS.
 
 Packages contain no Python interpreter, worker project or uv environment. Native InChI runs from `Contents/MacOS` on macOS or beside the application executable on Windows/Linux. Archive and installer checks exercise relocated binaries with Python/uv unavailable and reject chemistry-cache creation. macOS bundles retain license notices and signing; Windows upgrades remove only the old app-owned `chemistry` directory, preserving user data and caches.
 

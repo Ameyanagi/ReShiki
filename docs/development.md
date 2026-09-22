@@ -76,26 +76,26 @@ The `rdkit-reference` feature enables `PythonEngine` and independent differentia
 
 ## Pre-commit checks
 
-Install Node.js 24 LTS, then run `npm ci` to install Lefthook. Use `npx --no-install lefthook install` to reinstall hooks. Python changes also need the uv development environment above.
+Install [Bun 1.4.2](https://bun.com/docs/installation), then run `bun install --frozen-lockfile` to install the web tools and Lefthook hooks. Use `bun run --bun lefthook install` to reinstall hooks. Python changes also need the uv development environment above.
 
 Hooks check staged file types: Oxlint/Oxfmt for web and configuration files, Ruff/ty for Python, and Cargo fmt/Clippy/check for Rust. They do not rewrite or restage changes. Rust checks run sequentially. The repository uses LF line endings, including on Windows.
 
 ```sh
-npm run lint:js
-npm run format:check
+bun run lint:js
+bun run format:check
 uv run --locked ruff check engine scripts tests
 uv run --locked ruff format --check engine scripts tests
 uv run --locked ty check
 ```
 
-To format, use `npm run format`, `uv run --locked ruff format engine scripts tests`, or `cargo fmt --all`.
+To format, use `bun run format`, `uv run --locked ruff format engine scripts tests`, or `cargo fmt --all`.
 
 ## Documentation
 
 ```sh
-npm run docs:dev
-npm run docs:check
-npm run docs:build
+bun run docs:dev
+bun run docs:check
+bun run docs:build
 ```
 
 Edit the visual manual in `website/src/content/docs/guide/` and developer notes in `docs/*.md`. The sync script generates ignored Starlight copies of the developer notes; edit their originals. Landing page, navigation and theme live in `website/`. The production build checks local page and asset links.
