@@ -126,7 +126,7 @@ impl<'a> Digraph<'a> {
         graph.add_node(Some(atom), visit, 1, 0, None)?;
         Ok(graph)
     }
-    fn check(&self, mol: &Molecule<'_>) -> Result<(), Error> {
+    pub(super) fn check(&self, mol: &Molecule<'_>) -> Result<(), Error> {
         if self.failed {
             return Err(invalid("CIP graph is unavailable after expansion failure"));
         }

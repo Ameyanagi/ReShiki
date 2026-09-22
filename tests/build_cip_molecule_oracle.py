@@ -22,7 +22,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--rdkit-source", required=True, type=Path)
     parser.add_argument("--boost-include", type=Path, default=Path("/opt/homebrew/include"))
-    parser.add_argument("--component", choices=("molecule", "digraph"), default="molecule")
+    parser.add_argument("--component", choices=("molecule", "digraph", "rules"), default="molecule")
     args = parser.parse_args()
     assert rdBase.rdkitVersion == "2026.03.6"
     assert (

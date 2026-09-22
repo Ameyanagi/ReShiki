@@ -3,6 +3,7 @@
 //! The labeling pass is separate; this adapter never edits the input state.
 pub mod digraph;
 mod mancude;
+pub mod rules;
 use super::perception::{RingCache, RingKind, State};
 use crate::chemistry::{graph::Graph, kekulize, ranking, rings};
 use serde::Serialize;
@@ -19,6 +20,8 @@ pub enum Error {
     Limit,
     #[error("CIP graph expansion reached the 100,000-node limit")]
     Nodes,
+    #[error("CIP comparison iteration limit exceeded")]
+    Iterations,
     #[error("CIP bond {index} has unsupported noninteger order {order}")]
     BondOrder { index: usize, order: u8 },
     #[error(transparent)]
