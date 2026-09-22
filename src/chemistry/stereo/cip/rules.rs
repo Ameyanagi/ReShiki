@@ -2,11 +2,16 @@
 //! SequenceRule.cpp, Sort.cpp, Rules.h and the individual sequence rules.
 //! Copyright (C) 2020 Schrödinger, LLC. BSD-3-Clause; see licenses/rdkit/.
 mod machine;
+mod pairing;
 mod scalar;
 #[cfg(test)]
 mod tests;
-use super::{Error, Molecule, digraph::Digraph, invalid};
-use machine::{Frame, Machine, Scope, Value};
+use super::{
+    Error, Molecule,
+    digraph::{Descriptor, Digraph},
+    invalid,
+};
+use machine::{Frame, Machine, Scope, Spec, Value};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]
@@ -17,8 +22,10 @@ pub enum Rule {
     Isotope,
     DoubleBondStereo,
     DescriptorType,
+    DescriptorPair,
     PseudoDescriptor,
     LegacyDescriptor,
+    PseudoPair,
     ReferenceAtom,
 }
 
@@ -78,6 +85,7 @@ pub struct Sorted {
 pub struct Rules {
     rules: Vec<Rule>,
     combined: bool,
+    reference: Descriptor,
 }
 impl Rules {
     pub fn new(rules: &[Rule]) -> Result<Self, Error> {
@@ -87,18 +95,59 @@ impl Rules {
         Ok(Self {
             rules: rules.to_vec(),
             combined: true,
+            reference: Descriptor::None,
         })
     }
     pub fn single(rule: Rule) -> Self {
         Self {
             rules: vec![rule],
             combined: false,
+            reference: Descriptor::None,
         }
     }
     pub fn constitutional() -> Self {
         Self {
             rules: vec![Rule::AtomicNumber, Rule::RingDuplicate, Rule::Isotope],
             combined: true,
+            reference: Descriptor::None,
+        }
+    }
+    pub fn full() -> Self {
+        Self {
+            rules: vec![
+                Rule::AtomicNumber,
+                Rule::RingDuplicate,
+                Rule::Isotope,
+                Rule::DoubleBondStereo,
+                Rule::DescriptorType,
+                Rule::DescriptorPair,
+                Rule::PseudoDescriptor,
+                Rule::PseudoPair,
+                Rule::ReferenceAtom,
+            ],
+            combined: true,
+            reference: Descriptor::None,
+        }
+    }
+    pub fn with_reference(rule: Rule, reference: Descriptor) -> Result<Self, Error> {
+        if !matches!(rule, Rule::DescriptorPair | Rule::PseudoPair) {
+            return Err(invalid("Only descriptor-pair rules accept a reference"));
+        }
+        Ok(Self {
+            rules: vec![rule],
+            combined: false,
+            reference,
+        })
+    }
+    fn spec(&self, index: usize) -> Spec {
+        Spec {
+            index,
+            reference: if self.combined {
+                Descriptor::None
+            } else {
+                self.reference
+            },
+            isolated: false,
         }
     }
     fn scope(&self) -> Scope {
@@ -120,9 +169,9 @@ impl Rules {
         let frame = if self.combined {
             Frame::composite(a, b)
         } else if deep {
-            Frame::sequence(0, a, b)
+            Frame::sequence(self.spec(0), a, b)
         } else {
-            Frame::direct(0, a, b)
+            Frame::direct(self.spec(0), a, b)
         };
         match Machine::run(self, ctx, frame)? {
             Value::Number(n) => Ok(n),

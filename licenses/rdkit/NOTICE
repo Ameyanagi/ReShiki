@@ -41,7 +41,7 @@ Copyright (C) 2020 Schrödinger, LLC.
 Code/GraphMol/CIPLabeler/Digraph.cpp, Node.cpp, Edge.cpp and Descriptor.h (lazy CIP graph expansion, duplicate nodes, re-rooting and auxiliary descriptors)
 Copyright (C) 2020 Schrödinger, LLC.
 
-Code/GraphMol/CIPLabeler/Sort.cpp and rules/SequenceRule.cpp, Rules.h, Rule1a.cpp, Rule1b.cpp, Rule2.cpp, Rule3.cpp, Rule4a.cpp, Rule4c.cpp, Rule5.cpp and Rule6.cpp (iterative sequence comparison and priority sorting)
+Code/GraphMol/CIPLabeler/Sort.cpp and rules/SequenceRule.cpp, Rules.h, Rule1a.cpp, Rule1b.cpp, Rule2.cpp, Rule3.cpp, Rule4a.cpp, Rule4b.cpp, Rule4c.cpp, Rule5.cpp, Rule5New.cpp, Rule6.cpp and Pairlist.h (iterative sequence comparison, descriptor pairing and priority sorting)
 Copyright (C) 2020 Schrödinger, LLC.
 
 Code/GraphMol/CIPLabeler/catch_tests.cpp (VS040 graph expansion regression example)

@@ -1,14 +1,69 @@
 //! Explicit continuations for native recursive comparison and insertion sort.
 //! No Rust call-stack depth depends on molecular depth.
-use super::{Context, Error, Rules, Sorted, invalid, scalar};
+use super::{Context, Error, Rule, Rules, Sorted, invalid, pairing, scalar};
+use crate::chemistry::stereo::cip::digraph::Descriptor;
 
 #[derive(Clone, Copy)]
 pub(super) enum Scope {
     Composite,
     Prefix(usize),
+    Only(Spec),
+    Replacing { index: usize, reference: Descriptor },
+}
+#[derive(Clone, Copy)]
+pub(super) struct Spec {
+    pub index: usize,
+    pub reference: Descriptor,
+    pub isolated: bool,
+}
+impl Spec {
+    pub fn sorter(self) -> Scope {
+        if self.isolated {
+            Scope::Only(self)
+        } else {
+            Scope::Prefix(self.index + 1)
+        }
+    }
+    pub fn replacement(self, reference: Descriptor) -> Scope {
+        if self.isolated {
+            Scope::Only(Self { reference, ..self })
+        } else {
+            Scope::Replacing {
+                index: self.index,
+                reference,
+            }
+        }
+    }
+}
+impl Scope {
+    fn count(self) -> usize {
+        match self {
+            Self::Composite | Self::Only(_) => 1,
+            Self::Prefix(n) => n,
+            Self::Replacing { index, .. } => index + 1,
+        }
+    }
+    fn spec(self, index: usize, rules: &Rules) -> Result<Spec, Error> {
+        match self {
+            Self::Only(spec) if index == 0 => Ok(spec),
+            Self::Replacing {
+                index: last,
+                reference,
+            } if index == last => Ok(Spec {
+                index,
+                reference,
+                isolated: true,
+            }),
+            Self::Prefix(n) if index < n => Ok(rules.spec(index)),
+            Self::Replacing { index: last, .. } if index < last => Ok(rules.spec(index)),
+            _ => Err(invalid("Invalid CIP sorter rule")),
+        }
+    }
 }
 pub(super) enum Value {
     Number(i8),
+    Descriptors(Vec<Descriptor>),
+    Pairs(pairing::PairList),
     Sorted(Sorted),
     Groups(Vec<Vec<usize>>),
 }
@@ -16,6 +71,8 @@ impl Value {
     fn storage(&self) -> usize {
         match self {
             Self::Number(_) => 0,
+            Self::Descriptors(d) => d.capacity(),
+            Self::Pairs(p) => p.storage(),
             Self::Sorted(s) => s.edges.capacity(),
             Self::Groups(g) => group_storage(g),
         }
@@ -24,19 +81,19 @@ impl Value {
 fn group_storage(groups: &Vec<Vec<usize>>) -> usize {
     groups.capacity() * 3 + groups.iter().map(Vec::capacity).sum::<usize>()
 }
-fn number(value: Option<Value>) -> Result<i8, Error> {
+pub(super) fn number(value: Option<Value>) -> Result<i8, Error> {
     match value {
         Some(Value::Number(n)) => Ok(n),
         _ => Err(invalid("Missing comparison result")),
     }
 }
-fn sorted(value: Option<Value>) -> Result<Vec<usize>, Error> {
+pub(super) fn sorted(value: Option<Value>) -> Result<Vec<usize>, Error> {
     match value {
         Some(Value::Sorted(s)) => Ok(s.edges),
         _ => Err(invalid("Missing sorted edges")),
     }
 }
-fn at<T: Copy>(values: &[T], index: usize) -> Result<T, Error> {
+pub(super) fn at<T: Copy>(values: &[T], index: usize) -> Result<T, Error> {
     values
         .get(index)
         .copied()
@@ -45,7 +102,7 @@ fn at<T: Copy>(values: &[T], index: usize) -> Result<T, Error> {
 
 pub(super) enum Frame {
     Direct {
-        rule: usize,
+        rule: Spec,
         a: usize,
         b: usize,
     },
@@ -67,6 +124,10 @@ pub(super) enum Frame {
     Sort(Sorting),
     Groups(Grouping),
     Sequence(Sequence),
+    Pairing(Box<pairing::Pairing>),
+    References(Box<pairing::References>),
+    Fill(pairing::Fill),
+    ComparePairs(pairing::ComparePairs),
 }
 pub(super) struct Sorting {
     node: usize,
@@ -98,7 +159,7 @@ enum Phase {
     Compared(bool),
 }
 pub(super) struct Sequence {
-    rule: usize,
+    rule: Spec,
     queue: Vec<(usize, usize)>,
     position: usize,
     phase: Phase,
@@ -108,13 +169,13 @@ pub(super) struct Sequence {
     b: Vec<usize>,
     index: usize,
 }
-enum Step {
+pub(super) enum Step {
     Done(Value),
     Again(Frame),
     Call(Frame, Frame),
 }
 impl Frame {
-    pub(super) fn direct(rule: usize, a: usize, b: usize) -> Self {
+    pub(super) fn direct(rule: Spec, a: usize, b: usize) -> Self {
         Self::Direct { rule, a, b }
     }
     pub(super) fn composite(a: usize, b: usize) -> Self {
@@ -125,7 +186,7 @@ impl Frame {
             waiting: false,
         }
     }
-    pub(super) fn sequence(rule: usize, a: usize, b: usize) -> Self {
+    pub(super) fn sequence(rule: Spec, a: usize, b: usize) -> Self {
         Self::Sequence(Sequence {
             rule,
             queue: vec![(a, b)],
@@ -178,6 +239,10 @@ impl Frame {
             // Count retained capacity without rescanning every earlier group.
             Self::Groups(g) => g.edges.capacity() + g.groups.capacity() * 3 + g.contents,
             Self::Sequence(s) => s.queue.capacity() * 2 + s.a.capacity() + s.b.capacity(),
+            Self::Pairing(p) => p.storage(),
+            Self::References(r) => r.storage(),
+            Self::Fill(f) => f.storage(),
+            Self::ComparePairs(p) => p.storage(),
             _ => 0,
         }
     }
@@ -188,12 +253,13 @@ impl Frame {
         input: Option<Value>,
     ) -> Result<Step, Error> {
         Ok(match self {
-            Self::Direct { rule, a, b } => Step::Done(Value::Number(scalar::compare(
-                ctx.graph,
-                at(&rules.rules, rule)?,
-                a,
-                b,
-            )?)),
+            Self::Direct { rule, a, b } => {
+                let kind = at(&rules.rules, rule.index)?;
+                if matches!(kind, Rule::DescriptorPair | Rule::PseudoPair) {
+                    return pairing::direct(ctx, rule, kind, a, b);
+                }
+                Step::Done(Value::Number(scalar::compare(ctx.graph, kind, a, b)?))
+            }
             Self::Composite {
                 a,
                 b,
@@ -217,7 +283,7 @@ impl Frame {
                             index,
                             waiting: true,
                         },
-                        Self::sequence(index, a, b),
+                        Self::sequence(rules.spec(index), a, b),
                     )
                 }
             }
@@ -245,20 +311,18 @@ impl Frame {
                         return Ok(Step::Done(Value::Number(if bb { 1 } else { -1 })));
                     }
                 }
-                let count = match scope {
-                    Scope::Composite => 1,
-                    Scope::Prefix(n) => n,
-                };
+                let count = scope.count();
                 if index == count {
                     Step::Done(Value::Number(0))
                 } else {
                     let child = match scope {
                         Scope::Composite => Self::composite(a, b),
-                        Scope::Prefix(_) => {
+                        _ => {
+                            let spec = scope.spec(index, rules)?;
                             if deep {
-                                Self::sequence(index, a, b)
+                                Self::sequence(spec, a, b)
                             } else {
-                                Self::direct(index, a, b)
+                                Self::direct(spec, a, b)
                             }
                         }
                     };
@@ -350,6 +414,10 @@ impl Frame {
                 }
             }
             Self::Sequence(s) => return s.step(ctx, input),
+            Self::Pairing(p) => return p.step(input),
+            Self::References(r) => return r.step(ctx, input),
+            Self::Fill(f) => return f.step(ctx, input),
+            Self::ComparePairs(p) => return p.step(ctx, input),
         })
     }
 }
@@ -387,7 +455,7 @@ impl Sequence {
                 let child = Frame::sort(
                     self.bn,
                     std::mem::take(&mut self.b),
-                    Scope::Prefix(self.rule + 1),
+                    self.rule.sorter(),
                     deep,
                 );
                 return Ok(Step::Call(Frame::Sequence(self), child));
@@ -442,7 +510,7 @@ impl Sequence {
         let child = Frame::sort(
             self.an,
             std::mem::take(&mut self.a),
-            Scope::Prefix(self.rule + 1),
+            self.rule.sorter(),
             deep,
         );
         Step::Call(Frame::Sequence(self), child)

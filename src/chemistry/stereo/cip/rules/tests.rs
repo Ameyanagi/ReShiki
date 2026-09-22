@@ -141,3 +141,65 @@ fn many_groups_do_not_rescan_previous_group_storage() -> anyhow::Result<()> {
     assert_eq!(graph.node_count(), 3);
     Ok(())
 }
+
+#[test]
+fn full_pair_rules_keep_enantiomorphic_branches_pseudoasymmetric() -> anyhow::Result<()> {
+    let state = chain(7)?;
+    let before = serde_json::to_value(&state)?;
+    let mut mol = Molecule::new(&state)?;
+    let mut graph = Digraph::new(&mol, 3, false)?;
+    graph.nodes_for_atom(&mut mol, 0)?;
+    for (atom, aux) in [
+        (1, Descriptor::R),
+        (2, Descriptor::R),
+        (4, Descriptor::S),
+        (5, Descriptor::S),
+    ] {
+        for node in graph.nodes_for_atom(&mut mol, atom)? {
+            graph.set_node_aux(node, aux)?;
+        }
+    }
+    let edges = graph.edges(&mut mol, 0)?.to_vec();
+    let mut limit = Iterations::new(2_000);
+    let sorted = Rules::full().sort(
+        &mut Context::new(&mut mol, &mut graph, &mut limit)?,
+        0,
+        &edges,
+        true,
+    )?;
+    assert!(sorted.unique);
+    assert!(sorted.pseudo);
+    assert_eq!(before, serde_json::to_value(&state)?);
+    assert!(Rules::with_reference(Rule::AtomicNumber, Descriptor::R).is_err());
+    Ok(())
+}
+
+#[test]
+fn full_pair_search_handles_long_ties_and_iteration_retry() -> anyhow::Result<()> {
+    let state = chain(2_049)?;
+    let mut mol = Molecule::new(&state)?;
+    let mut graph = Digraph::new(&mol, 1_024, false)?;
+    let edges = graph.edges(&mut mol, 0)?.to_vec();
+    let rules = Rules::full();
+    let mut limit = Iterations::new(1);
+    assert!(matches!(
+        rules.sort(
+            &mut Context::new(&mut mol, &mut graph, &mut limit)?,
+            0,
+            &edges,
+            true
+        ),
+        Err(Error::Iterations)
+    ));
+    let mut limit = Iterations::new(0);
+    let sorted = rules.sort(
+        &mut Context::new(&mut mol, &mut graph, &mut limit)?,
+        0,
+        &edges,
+        true,
+    )?;
+    assert!(!sorted.unique);
+    assert!(!sorted.pseudo);
+    assert_eq!(sorted.edges, edges);
+    Ok(())
+}

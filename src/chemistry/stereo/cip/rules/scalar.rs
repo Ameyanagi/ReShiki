@@ -46,6 +46,9 @@ pub(super) fn compare(g: &Digraph<'_>, rule: Rule, a: usize, b: usize) -> Result
         Descriptor::None
     };
     Ok(match rule {
+        Rule::DescriptorPair | Rule::PseudoPair => {
+            return Err(invalid("Pair rule requires graph traversal"));
+        }
         Rule::AtomicNumber => order(
             u64::from(an.fraction.0) * u64::from(bn.fraction.1),
             u64::from(bn.fraction.0) * u64::from(an.fraction.1),

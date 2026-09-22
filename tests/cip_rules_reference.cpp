@@ -9,6 +9,8 @@
 #include <GraphMol/CIPLabeler/rules/Rule4c.h>
 #include <GraphMol/CIPLabeler/rules/Rule5.h>
 #include <GraphMol/CIPLabeler/rules/Rule6.h>
+#include <GraphMol/CIPLabeler/rules/Rule4b.h>
+#include <GraphMol/CIPLabeler/rules/Rule5New.h>
 #include <algorithm>
 #include <memory>
 
@@ -22,6 +24,16 @@ std::unique_ptr<SequenceRule> rule(unsigned id) {
     case 5: return std::make_unique<Rule4c>();
     case 6: return std::make_unique<Rule5>();
     case 7: return std::make_unique<Rule6>();
+    case 10: return std::make_unique<Rule4b>();
+    case 11: return std::make_unique<Rule5New>();
+    case 12: return std::make_unique<Rules>(std::initializer_list<SequenceRule*>{
+      new Rule1a(),new Rule1b(),new Rule2(),new Rule3(),new Rule4a(),new Rule4b(),new Rule4c(),new Rule5New(),new Rule6()});
+    case 13: return std::make_unique<Rule4b>(Descriptor::R);
+    case 14: return std::make_unique<Rule4b>(Descriptor::S);
+    case 15: return std::make_unique<Rule5New>(Descriptor::R);
+    case 16: return std::make_unique<Rule5New>(Descriptor::S);
+    case 17: return std::make_unique<Rule4b>(Descriptor::UNKNOWN);
+    case 18: return std::make_unique<Rule5New>(Descriptor::UNKNOWN);
     default: {
       auto combined=std::make_unique<Rules>(std::initializer_list<SequenceRule*>{});
       for(unsigned i=0;i<(id==8?3:8);++i) combined->add(rule(i).release());
