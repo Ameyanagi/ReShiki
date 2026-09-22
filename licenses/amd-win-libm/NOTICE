@@ -1,0 +1,12 @@
+The bounded Windows non-FMA rotation implementation in
+src/chemistry/abbreviations/replacement/trigonometry.rs is adapted from AMD's
+win-libm sin.asm, cos.asm, and Lsincos_array.asm (MIT license).
+
+Source: https://github.com/amd/win-libm
+Commit: 6121d02aef0c775947d5dc655d7fc4ccfe2144ab
+Copyright (c) 2002-2019 Advanced Micro Devices, Inc.
+
+The Rust adaptation preserves the SSE2 operation ordering for finite attachment
+rotations in [-2*pi, 2*pi], adds explicit bounds checking and signed-zero
+preservation, and omits assembly, FMA dispatch, large-argument reduction,
+exception flags, errno handling, and unrelated math functions.

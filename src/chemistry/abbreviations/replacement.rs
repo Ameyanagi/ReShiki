@@ -15,6 +15,9 @@ use crate::{
     },
     document::Document,
 };
+#[cfg(any(test, all(target_os = "windows", target_arch = "aarch64")))]
+mod trigonometry;
+
 use serde::Deserialize;
 use std::{
     collections::{HashMap, HashSet},
@@ -290,8 +293,10 @@ pub fn replace(document: &Document, selection: &[u64], label: &str) -> Result<Do
         .map(|p| (p.y - origin.y).atan2(p.x - origin.x))
         .unwrap_or(std::f64::consts::PI);
     let angle = desired_angle - original_angle;
-    let c = angle.cos();
-    let s = angle.sin();
+    #[cfg(all(target_os = "windows", target_arch = "aarch64"))]
+    let (s, c) = trigonometry::sin_cos(angle).ok_or(Error::Geometry)?;
+    #[cfg(not(all(target_os = "windows", target_arch = "aarch64")))]
+    let (c, s) = (angle.cos(), angle.sin());
     let scale = outside
         .map(|p| native_hypot(p.x - origin.x, p.y - origin.y) / 1.5)
         .unwrap_or(28.0);
