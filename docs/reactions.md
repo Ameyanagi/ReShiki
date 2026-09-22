@@ -44,4 +44,4 @@ This is explicit role assignment and chemical exchange. Automatic reaction inter
 
 Regression checks cover role reassignment, native save/copy/delete, ID remapping, growth, rejected cross-role joins, undo/redo, arrow reversal, assistant roles, coefficients, selected-step export, atom maps, tetrahedral and E/Z stereochemistry, cleanup, and abbreviation replacement. Offscreen native UI checks cover 1280 × 820 and 1040 × 680 layouts and export-button mouse events without opening a desktop window. Full desktop acceptance testing of this inspector remains pending.
 
-The exchange implementation uses the [RDKit reaction APIs](https://www.rdkit.org/docs/source/rdkit.Chem.rdChemReactions.html).
+Reaction parsing, layout and export run in Rust. Independent tests compare the results with the original [RDKit reaction APIs](https://www.rdkit.org/docs/source/rdkit.Chem.rdChemReactions.html).

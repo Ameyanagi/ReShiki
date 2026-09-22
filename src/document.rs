@@ -362,6 +362,14 @@ impl Document {
                 return Err("Duplicate or zero object ID".into());
             }
         }
+        let atom_ids: HashSet<_> = self.atoms.iter().map(|a| a.id).collect();
+        let mut neighbors: std::collections::HashMap<_, HashSet<_>> =
+            std::collections::HashMap::new();
+        for bond in &self.bonds {
+            neighbors.entry(bond.a).or_default().insert(bond.b);
+            neighbors.entry(bond.b).or_default().insert(bond.a);
+        }
+        let empty_neighbors = HashSet::new();
         for a in &self.atoms {
             a.display.validate()?;
             if a.cip_label
@@ -392,21 +400,9 @@ impl Document {
                 return Err("Invalid element symbol".into());
             }
             if let Some(s) = &a.stereo {
-                let actual: HashSet<_> = self
-                    .bonds
-                    .iter()
-                    .filter_map(|b| {
-                        if b.a == a.id {
-                            Some(b.b)
-                        } else if b.b == a.id {
-                            Some(b.a)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
+                let actual = neighbors.get(&a.id).unwrap_or(&empty_neighbors);
                 if !["cw", "ccw"].contains(&s.winding.as_str())
-                    || actual != s.neighbors.iter().copied().collect()
+                    || actual != &s.neighbors.iter().copied().collect()
                     || actual.len() != s.neighbors.len()
                 {
                     return Err("Invalid stereocenter neighbor mapping".into());
@@ -422,7 +418,7 @@ impl Document {
             {
                 return Err("Unsupported bond CIP label".into());
             }
-            if b.a == b.b || self.atom(b.a).is_none() || self.atom(b.b).is_none() || b.order > 7 {
+            if b.a == b.b || !atom_ids.contains(&b.a) || !atom_ids.contains(&b.b) || b.order > 7 {
                 return Err("Invalid bond endpoints or order".into());
             }
             if !pairs.insert((b.a.min(b.b), b.a.max(b.b))) {
@@ -431,7 +427,7 @@ impl Document {
             b.validate_appearance()?;
             if b.stereo.is_some()
                 && (b.stereo_atoms.len() != 2
-                    || b.stereo_atoms.iter().any(|id| self.atom(*id).is_none()))
+                    || b.stereo_atoms.iter().any(|id| !atom_ids.contains(id)))
             {
                 return Err("Invalid bond stereo references".into());
             }

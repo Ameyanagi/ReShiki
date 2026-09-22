@@ -1,5 +1,7 @@
 # Framework decision
 
+This records the initial framework decision and worker-based prototype. For the Rust chemistry engine and native InChI helper used in 0.6.0 builds, see [architecture](architecture.md).
+
 Use Iced 0.14 for ReShiki's desktop UI, with a custom canvas and a Python/RDKit worker. Keep graph storage, drawing geometry and chemistry contracts outside the UI layer.
 
 Iced's message/update model gives the editor a clear location for commands, undoable changes, selection and asynchronous results. Its [Canvas API](https://docs.rs/iced/0.14.0/iced/widget/canvas/) supports custom geometry and interaction. [Tasks](https://docs.rs/iced/0.14.0/iced/struct.Task.html) support asynchronous work, and the [0.14 release](https://github.com/iced-rs/iced/releases/tag/0.14.0) adds relevant rendering, input and testing work. This is a good fit for a custom molecular editor, but it does not supply chemical hit testing, a document model, rich atom labels or publication export; those remain ReShiki responsibilities.

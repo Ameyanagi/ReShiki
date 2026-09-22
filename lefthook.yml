@@ -3,10 +3,10 @@ pre-commit:
   commands:
     oxlint:
       glob: "*.{js,mjs,cjs,ts,tsx,jsx,json}"
-      run: npm run lint:js
+      run: bun run lint:js
     oxfmt:
       glob: "*.{js,mjs,cjs,ts,tsx,jsx,json,css,md,mdx,yml,yaml,toml}"
-      run: npx --no-install oxfmt --check {staged_files}
+      run: bun run --bun oxfmt --check {staged_files}
     ruff:
       glob: "*.{py,toml,lock}"
       run: uv run --locked ruff check engine scripts tests
@@ -21,7 +21,7 @@ pre-commit:
       run: cargo fmt --all --check
     cargo-clippy:
       glob: "*.{rs,toml,lock}"
-      run: cargo clippy --all-targets --locked -- -D warnings
+      run: cargo clippy --all-targets --all-features --locked -- -D warnings
     cargo-check:
       glob: "*.{rs,toml,lock}"
-      run: cargo check --all-targets --locked
+      run: cargo check --all-targets --all-features --locked

@@ -1,0 +1,259 @@
+[
+  {
+    "platform": {
+      "system": "Darwin",
+      "machine": "arm64",
+      "python": "3.12.12",
+      "rdkit": "2026.03.6",
+      "boost": "1_85"
+    },
+    "cases": [
+      {
+        "name": "molecule/0/substance groups/SMARTS grammar/8106",
+        "format": "rxn",
+        "input_sha256": "e0320ccb3c91e8a86d781d89987634eb461b211c43ac7ff69a7b23b483bcfb3b",
+        "repeats": 10,
+        "outcome": {
+          "accepted": false,
+          "failure": "Query reaction atoms are not supported yet"
+        },
+        "parsed": {
+          "participant_queries": [
+            [
+              "AtomType 6 = val\n",
+              "AtomAtomicNum 6 = val\n",
+              "AtomAtomicNum 8 = val\n"
+            ],
+            [
+              "AtomAtomicNum 8 = val\n"
+            ]
+          ]
+        },
+        "independent_full_corpus_match": true
+      },
+      {
+        "name": "molecule/1/substance groups/SMARTS grammar/8044",
+        "format": "rxn",
+        "input_sha256": "4d01bc320bacc70640f5e7adaeeddadc57806c74f189bdfd42fecd61231cb87a",
+        "repeats": 10,
+        "outcome": {
+          "accepted": false,
+          "failure": "Query reaction atoms are not supported yet"
+        },
+        "parsed": {
+          "participant_queries": [
+            [
+              "AtomAtomicNum 8 = val\n"
+            ],
+            [
+              "AtomType 6 = val\n",
+              "AtomAtomicNum 6 = val\n",
+              "AtomAtomicNum 8 = val\n"
+            ]
+          ]
+        },
+        "independent_full_corpus_match": true
+      },
+      {
+        "name": "smiles/cx/8094/C |(0x1.1p-1075)|",
+        "format": "smiles",
+        "input_sha256": "48a8bb1424ea611ee0f0a4bd51665e0565edcc7fb2823b4d25e1c0b2e785600e",
+        "repeats": 10,
+        "outcome": {
+          "accepted": false,
+          "failure": "Could not parse this structure"
+        },
+        "parsed": null,
+        "independent_full_corpus_match": true
+      },
+      {
+        "name": "smiles/cx/8191/C |(0x1.123456789abcdefp-1074)|",
+        "format": "smiles",
+        "input_sha256": "0f4757f07492dbd6792c9d1fd90309019fc190bf271dc812e4f76116f5c74fe6",
+        "repeats": 10,
+        "outcome": {
+          "accepted": false,
+          "failure": "Could not parse this structure"
+        },
+        "parsed": null,
+        "independent_full_corpus_match": true
+      }
+    ]
+  },
+  {
+    "platform": {
+      "system": "Linux",
+      "machine": "x86_64",
+      "python": "3.12.8",
+      "rdkit": "2026.03.6",
+      "boost": "1_85"
+    },
+    "cases": [
+      {
+        "name": "molecule/0/substance groups/SMARTS grammar/8106",
+        "format": "rxn",
+        "input_sha256": "e0320ccb3c91e8a86d781d89987634eb461b211c43ac7ff69a7b23b483bcfb3b",
+        "repeats": 10,
+        "outcome": {
+          "accepted": true,
+          "response_sha256": "dffb732bae9339e926bf1d32daefe4fc16b95eee99c8d2e8a4149d99c431e61a"
+        },
+        "parsed": {
+          "participant_queries": [
+            [
+              "AtomAtomicNum 6 = val\n",
+              "AtomAtomicNum 6 = val\n",
+              "AtomAtomicNum 8 = val\n"
+            ],
+            [
+              "AtomAtomicNum 8 = val\n"
+            ]
+          ]
+        },
+        "independent_full_corpus_match": true
+      },
+      {
+        "name": "molecule/1/substance groups/SMARTS grammar/8044",
+        "format": "rxn",
+        "input_sha256": "4d01bc320bacc70640f5e7adaeeddadc57806c74f189bdfd42fecd61231cb87a",
+        "repeats": 10,
+        "outcome": {
+          "accepted": true,
+          "response_sha256": "1543ae8831e550f31d6a993d1482bcd25d5cdeb4865adf89e365b1e6ac43280a"
+        },
+        "parsed": {
+          "participant_queries": [
+            [
+              "AtomAtomicNum 8 = val\n"
+            ],
+            [
+              "AtomAtomicNum 6 = val\n",
+              "AtomAtomicNum 6 = val\n",
+              "AtomAtomicNum 8 = val\n"
+            ]
+          ]
+        },
+        "independent_full_corpus_match": true
+      },
+      {
+        "name": "smiles/cx/8094/C |(0x1.1p-1075)|",
+        "format": "smiles",
+        "input_sha256": "48a8bb1424ea611ee0f0a4bd51665e0565edcc7fb2823b4d25e1c0b2e785600e",
+        "repeats": 10,
+        "outcome": {
+          "accepted": false,
+          "failure": "Could not parse this structure"
+        },
+        "parsed": null,
+        "independent_full_corpus_match": true
+      },
+      {
+        "name": "smiles/cx/8191/C |(0x1.123456789abcdefp-1074)|",
+        "format": "smiles",
+        "input_sha256": "0f4757f07492dbd6792c9d1fd90309019fc190bf271dc812e4f76116f5c74fe6",
+        "repeats": 10,
+        "outcome": {
+          "accepted": false,
+          "failure": "Could not parse this structure"
+        },
+        "parsed": null,
+        "independent_full_corpus_match": true
+      }
+    ]
+  },
+  {
+    "platform": {
+      "system": "Windows",
+      "machine": "AMD64",
+      "python": "3.12.13",
+      "rdkit": "2026.03.6",
+      "boost": "1_85"
+    },
+    "cases": [
+      {
+        "name": "molecule/0/substance groups/SMARTS grammar/8106",
+        "format": "rxn",
+        "input_sha256": "e0320ccb3c91e8a86d781d89987634eb461b211c43ac7ff69a7b23b483bcfb3b",
+        "repeats": 10,
+        "outcome": {
+          "accepted": false,
+          "failure": "Query reaction atoms are not supported yet"
+        },
+        "parsed": {
+          "participant_queries": [
+            [
+              "AtomType 6 = val\n",
+              "AtomAtomicNum 6 = val\n",
+              "AtomAtomicNum 8 = val\n"
+            ],
+            [
+              "AtomAtomicNum 8 = val\n"
+            ]
+          ]
+        }
+      },
+      {
+        "name": "molecule/1/substance groups/SMARTS grammar/8044",
+        "format": "rxn",
+        "input_sha256": "4d01bc320bacc70640f5e7adaeeddadc57806c74f189bdfd42fecd61231cb87a",
+        "repeats": 10,
+        "outcome": {
+          "accepted": false,
+          "failure": "Query reaction atoms are not supported yet"
+        },
+        "parsed": {
+          "participant_queries": [
+            [
+              "AtomAtomicNum 8 = val\n"
+            ],
+            [
+              "AtomType 6 = val\n",
+              "AtomAtomicNum 6 = val\n",
+              "AtomAtomicNum 8 = val\n"
+            ]
+          ]
+        }
+      },
+      {
+        "name": "smiles/cx/8094/C |(0x1.1p-1075)|",
+        "format": "smiles",
+        "input_sha256": "48a8bb1424ea611ee0f0a4bd51665e0565edcc7fb2823b4d25e1c0b2e785600e",
+        "repeats": 10,
+        "outcome": {
+          "accepted": true,
+          "response_sha256": "4b9a18cd8be58515710a0f00be0532720d46f0bb3d45dda767d6fef200d79c80"
+        },
+        "parsed": {
+          "input_coordinates": [
+            [
+              "0x0.0000000000001p-1022",
+              "0x0.0p+0",
+              "0x0.0p+0"
+            ]
+          ]
+        },
+        "independent_full_corpus_match": true
+      },
+      {
+        "name": "smiles/cx/8191/C |(0x1.123456789abcdefp-1074)|",
+        "format": "smiles",
+        "input_sha256": "0f4757f07492dbd6792c9d1fd90309019fc190bf271dc812e4f76116f5c74fe6",
+        "repeats": 10,
+        "outcome": {
+          "accepted": true,
+          "response_sha256": "4b9a18cd8be58515710a0f00be0532720d46f0bb3d45dda767d6fef200d79c80"
+        },
+        "parsed": {
+          "input_coordinates": [
+            [
+              "0x0.0000000000001p-1022",
+              "0x0.0p+0",
+              "0x0.0p+0"
+            ]
+          ]
+        },
+        "independent_full_corpus_match": true
+      }
+    ]
+  }
+]

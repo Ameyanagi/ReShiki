@@ -1,0 +1,22 @@
+[
+  {
+    "name": "molecule/0/substance groups/SMARTS grammar/8106",
+    "format": "rxn",
+    "text": "$RXN\nreference\n\n\n  1  1  0\n$MOL\n\n     RDKit          2D\n\n  0  0  0  0  0  0  0  0  0  0999 V3000\nM  V30 BEGIN CTAB\nM  V30 COUNTS 3 2 1 0 0\nM  V30 BEGIN ATOM\nM  V30 1 C -1.299038 -0.250000 0.000000 0\nM  V30 2 C 0.000000 0.500000 0.000000 0\nM  V30 3 O 1.299038 -0.250000 0.000000 0\nM  V30 END ATOM\nM  V30 BEGIN BOND\nM  V30 1 1 1 2\nM  V30 2 1 2 3\nM  V30 END BOND\nM  V30 BEGIN SGROUP\nM  V30 1 DAT 0 ATOMS=(1 1) QUERYTYPE=SMARTSQ QUERYOP=\"=\" FIELDDATA=\"C |(0x1)|\"\nM  V30 END SGROUP\nM  V30 END CTAB\nM  END\n$MOL\n\n     RDKit          2D\n\n  1  0  0  0  0  0  0  0  0  0999 V2000\n    0.0000    0.0000    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\nM  END\n"
+  },
+  {
+    "name": "molecule/1/substance groups/SMARTS grammar/8044",
+    "format": "rxn",
+    "text": "$RXN\nreference\n\n\n  1  1  0\n$MOL\n\n     RDKit          2D\n\n  1  0  0  0  0  0  0  0  0  0999 V2000\n    0.0000    0.0000    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0\nM  END\n$MOL\n\n     RDKit          2D\n\n  0  0  0  0  0  0  0  0  0  0999 V3000\nM  V30 BEGIN CTAB\nM  V30 COUNTS 3 2 1 0 0\nM  V30 BEGIN ATOM\nM  V30 1 C -1.299038 -0.250000 0.000000 0\nM  V30 2 C 0.000000 0.500000 0.000000 0\nM  V30 3 O 1.299038 -0.250000 0.000000 0\nM  V30 END ATOM\nM  V30 BEGIN BOND\nM  V30 1 1 1 2\nM  V30 2 1 2 3\nM  V30 END BOND\nM  V30 BEGIN SGROUP\nM  V30 1 DAT 0 ATOMS=(1 1) QUERYTYPE=SMARTSQ QUERYOP=\"=\" FIELDDATA=\"C |(0x1.fffffffffffff8p-1023)|\"\nM  V30 END SGROUP\nM  V30 END CTAB\nM  END\n"
+  },
+  {
+    "name": "smiles/cx/8094/C |(0x1.1p-1075)|",
+    "format": "smiles",
+    "text": "C |(0x1.1p-1075)|"
+  },
+  {
+    "name": "smiles/cx/8191/C |(0x1.123456789abcdefp-1074)|",
+    "format": "smiles",
+    "text": "C |(0x1.123456789abcdefp-1074)|"
+  }
+]

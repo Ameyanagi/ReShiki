@@ -5,8 +5,8 @@ description: Windows shortcuts, native clipboard and printing, with tested relea
 
 import Screenshot from "../../../components/Screenshot.astro";
 
-ReShiki's Windows integration is written in Rust. Install the Windows package
-and uv; no .NET installation is needed. See [installation](/guide/install/).
+Download the Windows x64 or ARM64 installer and open ReShiki from Start.
+See [installation](/guide/install/).
 
 ## Use Windows shortcuts
 
@@ -90,6 +90,5 @@ snapshot of the selected objects. Cancel leaves the drawing unchanged.
 
 Use a release build for performance checks. Windows uses a direct 2D software
 renderer to avoid expensive GPU emulation on virtual machines and remote
-desktops. First chemistry setup may download dependencies. The idle timer fix
-is included in v0.4.0. See [Windows development and verification](/developer/windows/)
+desktops. The idle timer fix is included in v0.4.0. See [Windows development and verification](/developer/windows/)
 for the tested scope and remaining hardware checks.

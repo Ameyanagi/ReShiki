@@ -3,10 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "sync": "node scripts/sync-docs.mjs",
-    "dev": "npm run sync && astro dev",
-    "build": "npm run sync && astro build && node scripts/check-links.mjs",
-    "check": "npm run sync && astro check"
+    "sync": "bun scripts/sync-docs.mjs",
+    "dev": "bun run sync && bun --bun astro dev",
+    "build": "bun run sync && bun --bun astro build && bun scripts/check-links.mjs",
+    "check": "bun run sync && bun --bun astro check"
   },
   "dependencies": {
     "@astrojs/markdown-remark": "7.3.1",

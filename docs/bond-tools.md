@@ -9,12 +9,12 @@ Added 2026-09-20. The bond palette and contextual menu now offer **17 presets**.
 | Hollow wedge, parallel hashed                     | Alternate up/down depictions                                                   |
 | Bold                                              | Up depiction for a single bond; thick stroke                                   |
 | Wavy                                              | Unspecified single-bond stereochemistry                                        |
-| Coordination (dashed), dative                     | Directed donor-to-acceptor RDKit dative bond; dashed line or arrow             |
+| Coordination (dashed), dative                     | Directed donor-to-acceptor dative bond; dashed line or arrow                   |
 | Hydrogen bond                                     | Noncovalent interaction from an explicit bonded H to an acceptor               |
 | Partial (solid / dashed), partial (double dashed) | Fractional 1.5 order and the indicated line pattern; see semantic limits below |
 | Bold double                                       | Bold primary line and ordinary secondary line                                  |
 | Crossed double                                    | Double bond with unspecified E/Z stereochemistry                               |
-| Quadruple                                         | Four-line bond and RDKit quadruple order; shortcut `4`                         |
+| Quadruple                                         | Four-line bond and quadruple order; shortcut `4`                               |
 
 ## Workflow
 
@@ -28,7 +28,7 @@ Added 2026-09-20. The bond palette and contextual menu now offer **17 presets**.
 
 ## Native and chemical representation
 
-Native document version **6** adds `double_position`, `secondary_display` and per-bond RGB `color`, with defaults for older files. The app and worker continue to accept native versions 1–5. Existing order 4 means aromatic; new order values are 0 hydrogen, 5 dative, 6 quadruple and 7 fractional 1.5. These numeric values belong to ReShiki's file format, not chemical bond-order notation.
+Native document version **6** added `double_position`, `secondary_display` and per-bond RGB `color`, with defaults for older files. The app still accepts native versions 1–5. Order 4 means aromatic; version 6 added order values 0 hydrogen, 5 dative, 6 quadruple and 7 fractional 1.5. These numeric values belong to ReShiki's file format, not chemical bond-order notation.
 
 Cleanup preserves bond appearance and restates visible tetrahedral stereochemistry against the new coordinates. Tests remove stored atom stereochemistry and infer identity from the resulting drawing independently. Bold/hollow up depictions can become parallel hashes when a reflected or regenerated projection requires a down depiction; exact stylistic restoration is not guaranteed by two reflections. Undo restores the original style.
 

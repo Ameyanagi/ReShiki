@@ -1,8 +1,9 @@
+use anyhow::Context;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use reshiki::pictures::exchange::{self, Budget};
 use serde::Deserialize;
-use std::{error::Error, path::Path, process::Command};
-type TestResult = Result<(), Box<dyn Error>>;
+use std::{path::Path, process::Command};
+type TestResult = anyhow::Result<()>;
 
 #[derive(Deserialize)]
 struct Case {
@@ -96,7 +97,7 @@ fn pixel_normalization_matches_pillow() -> TestResult {
     Ok(())
 }
 
-fn raster() -> Result<Vec<u8>, Box<dyn Error>> {
+fn raster() -> anyhow::Result<Vec<u8>> {
     let pixels = image::RgbaImage::from_fn(7, 5, |x, y| {
         image::Rgba([(x * 30) as u8, (y * 40) as u8, 200, (x * 13 + y * 30) as u8])
     });
@@ -131,13 +132,13 @@ fn rejects_invalid_images_and_enforces_budgets_before_committing() -> TestResult
         )
         .is_err()
     );
-    let picture = exchange::import(&data, "PNG", 1., &mut budget)?;
+    let picture = exchange::import(&data, "PNG", 1., &mut budget).map_err(anyhow::Error::msg)?;
     assert_eq!(budget.pixels, 35);
     let mut limit = Budget {
         pixels: 64_000_000 - 35,
         bytes: 0,
     };
-    exchange::import(&data, "PNG", 1., &mut limit)?;
+    exchange::import(&data, "PNG", 1., &mut limit).map_err(anyhow::Error::msg)?;
     let saved = (limit.bytes, limit.pixels);
     assert!(exchange::import(&data, "PNG", 1., &mut limit).is_err());
     assert_eq!((limit.bytes, limit.pixels), saved);
@@ -147,7 +148,7 @@ fn rejects_invalid_images_and_enforces_budgets_before_committing() -> TestResult
     };
     assert!(exchange::import(&data, "PNG", 1., &mut limit).is_err());
     assert_eq!(limit.pixels, 0);
-    let flipped = exchange::export(&picture, true)?;
+    let flipped = exchange::export(&picture, true).map_err(anyhow::Error::msg)?;
     let expected = image::load_from_memory(picture.png())?.flipv().to_rgba8();
     assert_eq!(image::load_from_memory(&flipped)?.to_rgba8(), expected);
     Ok(())
@@ -183,19 +184,21 @@ async fn malformed_picture_cannot_return_a_partial_drawing() -> TestResult {
                 "PNG=\"{hex}\" alpha=\"0.5\" RotationAngle=\"2424832\""
             )),
         ))
-        .await?;
+        .await
+        .map_err(anyhow::Error::msg)?;
     let doc = actual
         .document
-        .ok_or("Missing drawing after rejected images")?;
+        .context("Missing drawing after rejected images")?;
     assert_eq!(doc.atoms.len(), 1);
     assert_eq!(doc.graphics.len(), 1);
-    doc.validate()?;
+    doc.validate().map_err(anyhow::Error::msg)?;
     let picture = doc
         .graphics
         .first()
         .and_then(|g| g.picture.as_ref())
-        .ok_or("Missing normalized picture")?;
-    let expected = exchange::import(&data, "PNG", 0.5, &mut Budget::default())?;
+        .context("Missing normalized picture")?;
+    let expected =
+        exchange::import(&data, "PNG", 0.5, &mut Budget::default()).map_err(anyhow::Error::msg)?;
     assert_eq!(picture, &expected);
     Ok(())
 }

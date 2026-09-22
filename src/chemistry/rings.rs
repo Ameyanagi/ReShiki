@@ -4,7 +4,6 @@
 //!
 //! Preserve pruning, duplicate recovery and symmetry rules; replace recursive
 //! walks and unchecked indexing with bounded, fallible operations.
-mod ordering;
 mod search;
 #[cfg(test)]
 mod tests;
@@ -12,12 +11,9 @@ use super::graph::Graph;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 type Ring = Vec<usize>;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum RingError {
-    /// The legacy greedy pruning depends on unspecified C++ sort tie ordering,
-    /// or proving its independence exceeded the bounded verification budget.
-    /// Keep the backend's ring result until this case has a portable replacement.
-    UnresolvedOrdering,
+    #[error("{0}")]
     Failed(String),
 }
 impl From<String> for RingError {
@@ -25,17 +21,6 @@ impl From<String> for RingError {
         Self::Failed(message)
     }
 }
-impl std::fmt::Display for RingError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::UnresolvedOrdering => {
-                f.write_str("Ring pruning has unresolved equal-size ordering")
-            }
-            Self::Failed(message) => f.write_str(message),
-        }
-    }
-}
-impl std::error::Error for RingError {}
 
 #[derive(Clone, Copy, Default)]
 pub struct Options {
@@ -177,7 +162,6 @@ struct State {
     seen: BTreeSet<Vec<usize>>,
     extras: Vec<Ring>,
     budget: Budget,
-    ordering_resolved: bool,
 }
 impl State {
     fn trim(
@@ -367,7 +351,22 @@ impl State {
     }
 
     fn remove_extra(&mut self, top: &Topology, rings: &mut Vec<Ring>) -> Result<(), String> {
-        rings.sort_by_key(Vec::len);
+        let keys = rings
+            .iter()
+            .map(|r| i32::try_from(r.len()).map_err(|_| "Ring size limit exceeded".to_string()))
+            .collect::<Result<Vec<_>, _>>()?;
+        self.budget.spend(
+            rings
+                .len()
+                .saturating_mul(1 + rings.len().checked_ilog2().unwrap_or(0) as usize),
+        )?;
+        let order = super::native_order::indices(&keys).map_err(|e| e.to_string())?;
+        let mut original = std::mem::take(rings);
+        for i in order {
+            rings.push(std::mem::take(
+                original.get_mut(i).ok_or("Missing sorted ring")?,
+            ));
+        }
         let bonds = rings
             .iter()
             .map(|r| top.bonds(r).map(|v| v.into_iter().collect::<HashSet<_>>()))
@@ -413,7 +412,6 @@ impl State {
             }
         }
         let original = std::mem::take(rings);
-        self.ordering_resolved &= ordering::independent(&bonds, &keep, &mut self.budget);
         for (ring, keep) in original.into_iter().zip(keep) {
             if keep {
                 rings.push(ring);
@@ -577,7 +575,64 @@ impl State {
     }
 }
 
+/// Depth-first cycle basis used when canonical ranking needs ring membership
+/// before full ring perception. Includes every bond type, including dative and
+/// hydrogen bonds. These cycles are not necessarily smallest or symmetric.
+pub fn fast(graph: &Graph) -> Result<Rings, String> {
+    let top = Topology::new(graph)?;
+    let atoms = search::fast(&top, &mut Budget::default())?;
+    let bonds = atoms
+        .iter()
+        .map(|ring| top.bonds(ring))
+        .collect::<Result<_, _>>()?;
+    Ok(Rings {
+        basis_count: atoms.len(),
+        atoms,
+        bonds,
+        approximate: true,
+    })
+}
+
 pub fn perceive(graph: &Graph, options: Options) -> Result<Rings, RingError> {
+    perceive_with_budget(graph, options, &mut Budget::default())
+}
+
+/// Share a depiction session's work allowance, including topology preparation.
+/// Ordinary ring perception retains its independent default budget above.
+pub(crate) fn perceive_with_work(
+    graph: &Graph,
+    options: Options,
+    remaining: &mut usize,
+) -> Result<Rings, RingError> {
+    let initial = (*remaining).min(50_000_000);
+    let mut budget = Budget {
+        work: initial,
+        ..Budget::default()
+    };
+    let result = (|| {
+        budget.spend(
+            graph
+                .atoms
+                .len()
+                .checked_add(graph.bonds.len())
+                .ok_or_else(|| "Ring input work overflow".to_owned())?,
+        )?;
+        perceive_with_budget(graph, options, &mut budget)
+    })();
+    let used = initial
+        .checked_sub(budget.work)
+        .ok_or_else(|| "Ring work accounting overflow".to_owned())?;
+    *remaining = remaining
+        .checked_sub(used)
+        .ok_or_else(|| "Ring work accounting overflow".to_owned())?;
+    result
+}
+
+fn perceive_with_budget(
+    graph: &Graph,
+    options: Options,
+    budget: &mut Budget,
+) -> Result<Rings, RingError> {
     let top = Topology::new(graph)?;
     let active = graph
         .bonds
@@ -604,11 +659,12 @@ pub fn perceive(graph: &Graph, options: Options) -> Result<Rings, RingError> {
         seen: BTreeSet::new(),
         extras: Vec::new(),
         budget: Budget::default(),
-        ordering_resolved: true,
     };
-    let (basis, approximate) = state.basis(&top)?;
-    if !state.ordering_resolved {
-        return Err(RingError::UnresolvedOrdering);
-    }
-    Ok(state.symmetric(&top, basis, approximate)?)
+    std::mem::swap(&mut state.budget, budget);
+    let result = (|| {
+        let (basis, approximate) = state.basis(&top)?;
+        state.symmetric(&top, basis, approximate)
+    })();
+    std::mem::swap(&mut state.budget, budget);
+    Ok(result?)
 }

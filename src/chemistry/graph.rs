@@ -40,10 +40,56 @@ pub struct Graph {
     pub bonds: Vec<Bond>,
 }
 
-#[derive(Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Valence {
     pub explicit_valence: u32,
     pub implicit_hydrogens: u32,
+}
+
+impl Bond {
+    /// Half-bond units; call only after graph validation rejects unknown orders.
+    pub(crate) fn twice_contribution(&self, atom: usize) -> i32 {
+        match self.order {
+            0 => 0,
+            1..=3 => i32::from(self.order) * 2,
+            4 | 7 => 3,
+            5 if self.b == atom => 2,
+            5 => 0,
+            6 => 8,
+            _ => 0,
+        }
+    }
+}
+
+/// Available pi electrons, shared by aromaticity and conjugation. Adapted from
+/// RDKit Aromaticity.cpp countAtomElec, Copyright (C) 2003-2022 Greg Landrum.
+/// Inputs are degrees and cached valences from a validated, bounded graph.
+pub(crate) fn pi_electron_count(
+    atom: &Atom,
+    valence: &Valence,
+    degree: usize,
+    zero_bonds: usize,
+) -> Result<i32, String> {
+    let table = element(atom.atomic_number)?;
+    let default = *table.valences.first().ok_or("Missing default valence")?;
+    if default <= 1 {
+        return Ok(-1);
+    }
+    let bonded = degree
+        .checked_sub(zero_bonds)
+        .ok_or("Invalid bond degree")?;
+    let total_degree =
+        bonded as i32 + i32::from(atom.explicit_hydrogens) + valence.implicit_hydrogens as i32;
+    if total_degree > 3 {
+        return Ok(-1);
+    }
+    let lone_pairs = (table.outer_electrons - default - i32::from(atom.charge)).max(0);
+    let result = default - total_degree + lone_pairs - i32::from(atom.radical_electrons);
+    if result > 1 && valence.explicit_valence as i32 - degree as i32 > 1 {
+        Ok(1)
+    } else {
+        Ok(result)
+    }
 }
 
 struct Environment {
@@ -74,7 +120,7 @@ impl Atom {
             || (effective > 34 && matches!(self.atomic_number, 33 | 34))
     }
 
-    fn valence(&self, env: &Environment) -> Result<Valence, String> {
+    fn valence(&self, env: &Environment, strict: bool) -> Result<Valence, String> {
         let original = element(self.atomic_number)?;
         let effective_number = self.effective_number(original);
         let effective = element(effective_number)?;
@@ -107,13 +153,14 @@ impl Atom {
         if self.atomic_number == 1 && self.charge == -1 {
             maximum = 2;
         }
-        if maximum >= 0 && original_max >= 0 && explicit + offset > maximum {
+        if strict && maximum >= 0 && original_max >= 0 && explicit + offset > maximum {
             return Err(format!(
                 "Explicit valence {explicit} is too large for {}",
                 original.symbol
             ));
         }
-        let implicit = self.implicit_valence(env.aromatic, explicit, original, effective_number)?;
+        let implicit =
+            self.implicit_valence(env.aromatic, explicit, original, effective_number, strict)?;
         Ok(Valence {
             explicit_valence: explicit as u32,
             implicit_hydrogens: implicit as u32,
@@ -126,6 +173,7 @@ impl Atom {
         explicit: i32,
         original: &Element,
         effective_number: u8,
+        strict: bool,
     ) -> Result<i32, String> {
         if self.no_implicit || self.atomic_number == 0 {
             return Ok(0);
@@ -134,7 +182,8 @@ impl Atom {
             return match self.charge {
                 -1 | 1 => Ok(0),
                 0 => Ok(1),
-                _ => Err("Unreasonable formal charge on hydrogen".into()),
+                _ if strict => Err("Unreasonable formal charge on hydrogen".into()),
+                _ => Ok(0),
             };
         }
         if effective_number == 0 {
@@ -166,7 +215,11 @@ impl Atom {
             {
                 return Ok(0);
             }
-            return Err("Aromatic atom has no matching allowed valence".into());
+            return if strict {
+                Err("Aromatic atom has no matching allowed valence".into())
+            } else {
+                Ok(0)
+            };
         }
         if let Some(&allowed) = valences
             .iter()
@@ -175,7 +228,10 @@ impl Atom {
         {
             return Ok(allowed - explicit_radical);
         }
-        if valences.last() != Some(&-1) && original.valences.last().is_some_and(|&v| v > 0) {
+        if strict
+            && valences.last() != Some(&-1)
+            && original.valences.last().is_some_and(|&v| v > 0)
+        {
             return Err(format!(
                 "Valence including radicals is too large for {}",
                 original.symbol
@@ -235,16 +291,88 @@ impl Graph {
     /// Strict RDKit property-cache semantics. This does not perceive aromaticity
     /// or normalize functional groups: callers must supply that chemistry first.
     pub fn valences(&self) -> Result<Vec<Valence>, String> {
+        self.calculate_valences(true)
+    }
+
+    /// Intermediate cache used during sanitization. Topology and field limits
+    /// still apply, but excessive valences are retained for normalization.
+    /// This must never replace the final strict valence check.
+    pub fn provisional_valences(&self) -> Result<Vec<Valence>, String> {
+        self.calculate_valences(false)
+    }
+
+    /// A sanitizer cache can intentionally predate bond-order changes. Keep its
+    /// values until the reference stage refreshes them, with checked size/ranges.
+    pub(crate) fn cached_valences(
+        &self,
+        cache: Option<&[Valence]>,
+    ) -> Result<Vec<Valence>, String> {
+        let Some(cache) = cache else {
+            return self.provisional_valences();
+        };
+        self.validate()?;
+        let maximum = self.bonds.len() as u32 * 4 + u32::from(u8::MAX);
+        if cache.len() != self.atoms.len()
+            || cache
+                .iter()
+                .any(|v| v.explicit_valence > maximum || v.implicit_hydrogens > u32::from(u8::MAX))
+        {
+            return Err("Invalid sanitizer valence cache".into());
+        }
+        Ok(cache.to_vec())
+    }
+
+    /// RDKit calcImplicitValence(false), retaining an existing explicit cache.
+    pub(crate) fn refresh_implicit(&self, cache: &[Valence]) -> Result<Vec<Valence>, String> {
+        let mut result = self.cached_valences(Some(cache))?;
+        for ((atom, env), valence) in self.atoms.iter().zip(self.environments()?).zip(&mut result) {
+            let table = element(atom.atomic_number)?;
+            valence.implicit_hydrogens = u32::try_from(atom.implicit_valence(
+                env.aromatic,
+                valence.explicit_valence as i32,
+                table,
+                atom.effective_number(table),
+                false,
+            )?)
+            .map_err(|_| "Invalid cached implicit hydrogen count")?;
+        }
+        Ok(result)
+    }
+
+    fn calculate_valences(&self, strict: bool) -> Result<Vec<Valence>, String> {
         let environments = self.environments()?;
         self.atoms
             .iter()
             .zip(environments)
             .enumerate()
             .map(|(i, (atom, env))| {
-                atom.valence(&env)
+                atom.valence(&env, strict)
                     .map_err(|e| format!("Atom {}: {e}", i + 1))
             })
             .collect()
+    }
+
+    /// Refresh only edited atoms, as native per-atom updatePropertyCache does.
+    /// Build environments once so many H promotions remain linear.
+    pub(crate) fn refresh_atoms(
+        &self,
+        cache: &[Valence],
+        atoms: &[usize],
+        strict: bool,
+    ) -> Result<Vec<Valence>, String> {
+        let mut result = self.cached_valences(Some(cache))?;
+        if atoms.len() > self.atoms.len() {
+            return Err("Too many atom cache updates".into());
+        }
+        let environments = self.environments()?;
+        for &id in atoms {
+            let atom = self.atoms.get(id).ok_or("Missing cache-update atom")?;
+            let env = environments
+                .get(id)
+                .ok_or("Missing cache-update environment")?;
+            *result.get_mut(id).ok_or("Missing atom cache")? = atom.valence(env, strict)?;
+        }
+        Ok(result)
     }
 
     /// RDKit's radical-assignment pass, to be called after kekulization. Return

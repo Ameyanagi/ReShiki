@@ -1,6 +1,6 @@
 use super::*;
 use crate::chemistry::graph::{Atom, Bond};
-type TestResult = Result<(), Box<dyn std::error::Error>>;
+type TestResult = anyhow::Result<()>;
 
 fn graph(n: usize, edges: &[(usize, usize)]) -> Graph {
     Graph {
@@ -88,6 +88,7 @@ fn long_chains_and_macrocycles_do_not_use_recursive_traversal() -> TestResult {
     let edges = (1..n).map(|i| (i - 1, i)).collect::<Vec<_>>();
     let mut graph = graph(n, &edges);
     assert!(perceive(&graph, Options::default())?.atoms.is_empty());
+    assert!(fast(&graph).map_err(anyhow::Error::msg)?.atoms.is_empty());
     graph.bonds.push(Bond {
         a: n - 1,
         b: 0,
@@ -98,6 +99,40 @@ fn long_chains_and_macrocycles_do_not_use_recursive_traversal() -> TestResult {
     assert_eq!(rings.atoms.len(), 1);
     assert_eq!(rings.atoms[0].len(), n);
     assert_cycles(&graph, &rings);
+    let rings = fast(&graph).map_err(anyhow::Error::msg)?;
+    assert_eq!(rings.atoms.len(), 1);
+    assert_eq!(rings.atoms[0].len(), n);
+    assert_cycles(&graph, &rings);
+    Ok(())
+}
+
+#[test]
+fn fast_ring_work_and_storage_are_bounded() -> TestResult {
+    let graph = graph(3, &[(0, 1), (1, 2), (2, 0)]);
+    let top = Topology::new(&graph).map_err(anyhow::Error::msg)?;
+    assert!(search::fast(&top, &mut Budget { work: 0, stored: 3 }).is_err());
+    assert!(
+        search::fast(
+            &top,
+            &mut Budget {
+                work: 100,
+                stored: 2
+            }
+        )
+        .is_err()
+    );
+    assert_eq!(
+        search::fast(
+            &top,
+            &mut Budget {
+                work: 100,
+                stored: 3
+            }
+        )
+        .map_err(anyhow::Error::msg)?
+        .len(),
+        1
+    );
     Ok(())
 }
 
@@ -115,21 +150,14 @@ fn dense_degree_four_graph_uses_iterative_reference_fallback() -> TestResult {
 }
 
 #[test]
-fn ordering_ambiguity_is_explicit_and_budgeted() -> TestResult {
+fn dense_ordering_is_local_and_search_is_budgeted() -> TestResult {
     let graph: Graph = serde_json::from_str(include_str!(
         "../../../tests/fixtures/ring-order-dependent.json"
     ))?;
-    assert!(matches!(
-        perceive(&graph, Options::default()),
-        Err(RingError::UnresolvedOrdering)
-    ));
+    let rings = perceive(&graph, Options::default())?;
+    assert_cycles(&graph, &rings);
     let mut budget = Budget { work: 0, stored: 0 };
-    assert!(!ordering::independent(
-        &[HashSet::from([0, 1, 2])],
-        &[true],
-        &mut budget
-    ));
-    let top = Topology::new(&graph)?;
+    let top = Topology::new(&graph).map_err(anyhow::Error::msg)?;
     assert!(search::smallest(&top, 0, &vec![true; graph.bonds.len()], &[], &mut budget).is_err());
     Ok(())
 }
@@ -151,6 +179,7 @@ fn malformed_graphs_fail_without_mutation() -> TestResult {
             perceive(&bad, Options::default()),
             Err(RingError::Failed(_))
         ));
+        assert!(fast(&bad).is_err());
         assert_eq!(serde_json::to_value(&bad)?, before);
     }
     Ok(())

@@ -1,0 +1,635 @@
+{
+  "reference_version": "2026.03.6",
+  "reference_commit": "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
+  "profile": "no-fma3",
+  "host": "Windows 11 x64, AMD Ryzen 9 7940HS",
+  "audit": "Identical input cases; every changed value is an expected binary64 bit string. No input, topology, order, outcome, or error changes.",
+  "stages": {
+    "rings": {
+      "cases": 1338,
+      "changed_values": 3212,
+      "compressed_sha256": "ff11469725f24eca7d90a718c1e8a5dea6ea6139bb6fdf2ae161c5caea48e00f",
+      "jsonl_sha256": "d3640e7a74a3859f4df393e3d29df5a1a3f9d8a227fcb2dcf9ef2b52e6284c7c",
+      "row_sha256": "2f7f053d56d4f10e91007cf5d9940a428bf83f37fc7199d7e6a1a9c6c72ef535",
+      "enabled_compressed_sha256": "950dfc2ec3a399b79b28f86b1361490b25c0a8ec9842c644d6aed94786742779",
+      "capture_native_build": {
+        "compiler_command": [
+          "cl",
+          "/nologo",
+          "/Bv",
+          "/std:c++20",
+          "/O2",
+          "/MD",
+          "/EHsc",
+          "/DWIN32",
+          "/DBOOST_ALL_NO_LIB",
+          "/utf-8",
+          "/IF:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-rings\\generated",
+          "/IF:\\reshiki-depict-numeric-probe-20260922\\include\\rdkit\\Code",
+          "/IF:\\reshiki-depict-numeric-probe-20260922\\include\\rdkit\\Code\\GraphMol\\Depictor",
+          "/IF:\\reshiki-depict-numeric-probe-20260922\\boost185",
+          "F:\\reshiki-windows-geometry-parity-20260922\\tests\\depict_rings_reference.cpp",
+          "F:\\reshiki-windows-geometry-parity-20260922\\tests\\depict_windows_runtime.cpp",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-rings\\Depictor.lib",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-rings\\GraphMol.lib",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-rings\\RDGeometryLib.lib",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-rings\\RDGeneral.lib",
+          "/Fe:F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-rings\\oracle.exe",
+          "/FoF:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-rings\\"
+        ],
+        "compiler_log_sha256": "67560c1cacf50d66bfa42ff78cff7c324eb87852f350e8477864bfb465d7a44c",
+        "boost_version": "1_85",
+        "boost_version_header_sha256": "063ed28eceb611d52f58e57aca61edb1e086ed902fbded81ac61936009c52cf0",
+        "reference_sha256": "4b19c2b94998c4530248c0b1afd7238dba93efc86eeeaa0320d090134dade769",
+        "export_header_sha256": "cd92c47fa237576fdce827e0a599cda181f641af693ab736b2201bfbcf94cf45",
+        "source_adapter": null,
+        "observation_sha256": {},
+        "runtime": "/MD, x64 MSVC and the pinned x64 wheel",
+        "geometry_fma3": null,
+        "fma3": "0",
+        "runtime_initializer_sha256": "01a514ab81ac36ab498fe71a1e812e49e66735e43d444c6430f7bc215920b3cd",
+        "ucrt_sha256": "5c52e3a303baaac0e0af8bd9b96134993da34bc9d834a31ef37e1d2cdc7fe192"
+      },
+      "fixture": "depict-rings-windows-no-fma3-native.json.gz"
+    },
+    "attachment": {
+      "cases": 970,
+      "changed_values": 3084,
+      "compressed_sha256": "2ebc4e35307c7e4d046d457aabcb96d5fb2fd77dad3ffbacbff65fb47151bbc2",
+      "jsonl_sha256": "49ca2c085bce05021a3a7c379b4b034fa30359f99ca2ed293ba9ab1285e9acbf",
+      "row_sha256": "eb4fe2a33945828df6259f8aafd1c241f08d163afe098d0596d2b55472b5aa08",
+      "enabled_compressed_sha256": "6b859b518551339ea0902c874b3397395a40ad60961048e6bc24f0dea2d52ca7",
+      "capture_native_build": {
+        "compiler_command": [
+          "cl",
+          "/nologo",
+          "/Bv",
+          "/std:c++20",
+          "/O2",
+          "/MD",
+          "/EHsc",
+          "/DWIN32",
+          "/DBOOST_ALL_NO_LIB",
+          "/utf-8",
+          "/IF:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-attachment\\observation",
+          "/IF:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-attachment\\generated",
+          "/IF:\\reshiki-depict-numeric-probe-20260922\\include\\rdkit\\Code",
+          "/IF:\\reshiki-depict-numeric-probe-20260922\\include\\rdkit\\Code\\GraphMol\\Depictor",
+          "/IF:\\reshiki-depict-numeric-probe-20260922\\boost185",
+          "F:\\reshiki-windows-geometry-parity-20260922\\tests\\depict_attachment_reference.cpp",
+          "F:\\reshiki-windows-geometry-parity-20260922\\tests\\depict_windows_runtime.cpp",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-attachment\\Depictor.lib",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-attachment\\GraphMol.lib",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-attachment\\RDGeometryLib.lib",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-attachment\\RDGeneral.lib",
+          "/Fe:F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-attachment\\oracle.exe",
+          "/FoF:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-attachment\\"
+        ],
+        "compiler_log_sha256": "59b69050ecf275fd83e29c3d16983dac7577a8580b0ba7dae76461bc0a6e8132",
+        "boost_version": "1_85",
+        "boost_version_header_sha256": "063ed28eceb611d52f58e57aca61edb1e086ed902fbded81ac61936009c52cf0",
+        "reference_sha256": "8621eb1999a97623e02136ebb4d057a3ad68b8da1addabfd869b36ca392fcca9",
+        "export_header_sha256": "cd92c47fa237576fdce827e0a599cda181f641af693ab736b2201bfbcf94cf45",
+        "source_adapter": null,
+        "observation_sha256": {
+          "GraphMol/Depictor/EmbeddedFrag.h": "bf49eb06e2296abcf79f215ebb147930344171b565386835fc6dc3ec701dc7a2"
+        },
+        "runtime": "/MD, x64 MSVC and the pinned x64 wheel",
+        "geometry_fma3": null,
+        "fma3": "0",
+        "runtime_initializer_sha256": "01a514ab81ac36ab498fe71a1e812e49e66735e43d444c6430f7bc215920b3cd",
+        "ucrt_sha256": "5c52e3a303baaac0e0af8bd9b96134993da34bc9d834a31ef37e1d2cdc7fe192"
+      },
+      "fixture": "depict-attachment-windows-no-fma3-native.json.gz"
+    },
+    "seeds": {
+      "cases": 991,
+      "changed_values": 0,
+      "compressed_sha256": "34ee1ef02c8a6f4f61f5d84ff91b52baf66881edd6e1bb9f2273d005573b636b",
+      "jsonl_sha256": "c2c94e9b17c9b5b4e25b095afb77271ab83e4580f67866fa27be3ce4735e92d8",
+      "row_sha256": "a6bcbc93df204a1fc96a39bf893b247af91c9189f157139d61bf113e78ec34f6",
+      "enabled_compressed_sha256": "c9d05d51f96af38d6bdf5bc5dd058012a4e5aec4eb956e699c11792e13539b93",
+      "capture_native_build": {
+        "compiler_command": [
+          "cl",
+          "/nologo",
+          "/Bv",
+          "/std:c++20",
+          "/O2",
+          "/MD",
+          "/EHsc",
+          "/DWIN32",
+          "/DBOOST_ALL_NO_LIB",
+          "/utf-8",
+          "/IF:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-seeds\\observation",
+          "/IF:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-seeds\\generated",
+          "/IF:\\reshiki-depict-numeric-probe-20260922\\include\\rdkit\\Code",
+          "/IF:\\reshiki-depict-numeric-probe-20260922\\include\\rdkit\\Code\\GraphMol\\Depictor",
+          "/IF:\\reshiki-depict-numeric-probe-20260922\\boost185",
+          "F:\\reshiki-windows-geometry-parity-20260922\\tests\\depict_seeds_reference.cpp",
+          "F:\\reshiki-windows-geometry-parity-20260922\\tests\\depict_windows_runtime.cpp",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-seeds\\seed_source.cpp",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-seeds\\Depictor.lib",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-seeds\\GraphMol.lib",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-seeds\\RDGeometryLib.lib",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-seeds\\RDGeneral.lib",
+          "/Fe:F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-seeds\\oracle.exe",
+          "/FoF:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-seeds\\"
+        ],
+        "compiler_log_sha256": "2d0480f6b72aaf0e6b9e090ef637e21d20e76e49445e54dc38b0e2b2dc126a4f",
+        "boost_version": "1_85",
+        "boost_version_header_sha256": "063ed28eceb611d52f58e57aca61edb1e086ed902fbded81ac61936009c52cf0",
+        "reference_sha256": "c0c4564b5776fba615698de96cf6b394e057d0a3c64eba98e254567f3657e4e7",
+        "export_header_sha256": "cd92c47fa237576fdce827e0a599cda181f641af693ab736b2201bfbcf94cf45",
+        "source_adapter": {
+          "source": "Code/GraphMol/Depictor/RDDepictor.cpp",
+          "source_sha256": "f1ae9e705405d5254575c595c09c5d2ee240d4d2abf05209dd42dad5ae99b31f",
+          "byte_range": [
+            1068,
+            7003
+          ],
+          "verbatim_body_sha256": "0be8a251293bea662453dbd671d7dc1ca39b5b0b2fc12f2cced897821b5e3f39",
+          "generated_sha256": "37dab5b6ea2a26e86b3e054c580979135ed282bc50e001288f67143a7fcca9c3",
+          "functions": [
+            "getRankedAtomNeighbors",
+            "embedSquarePlanar",
+            "embedTBP",
+            "embedOctahedral"
+          ]
+        },
+        "observation_sha256": {
+          "GraphMol/Depictor/EmbeddedFrag.h": "bf49eb06e2296abcf79f215ebb147930344171b565386835fc6dc3ec701dc7a2"
+        },
+        "runtime": "/MD, x64 MSVC and the pinned x64 wheel",
+        "geometry_fma3": null,
+        "fma3": "0",
+        "runtime_initializer_sha256": "01a514ab81ac36ab498fe71a1e812e49e66735e43d444c6430f7bc215920b3cd",
+        "ucrt_sha256": "5c52e3a303baaac0e0af8bd9b96134993da34bc9d834a31ef37e1d2cdc7fe192"
+      },
+      "capture_provenance": {
+        "version": "2026.03.6",
+        "commit": "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
+        "source_sha256": {
+          "Code/GraphMol/Depictor/DepictUtils.cpp": "ba3868f339635889b1533fc6a706a5a1d8f6739846e1e25e66e7efa0617eddd5",
+          "Code/GraphMol/Depictor/RDDepictor.cpp": "f1ae9e705405d5254575c595c09c5d2ee240d4d2abf05209dd42dad5ae99b31f",
+          "Code/GraphMol/NontetrahedralStereo.cpp": "cbc6e41125c88e0fc532d167a03bc2850f00cd60ea3c3cfa20321ca26f89f86a",
+          "Code/GraphMol/Depictor/DepictUtils.h": "0e29dd5bcb355ef24c0d2b442ab4af0fc78b435cca1acdde795352bf4273ec45",
+          "Code/GraphMol/Depictor/EmbeddedFrag.cpp": "a3c55426a09deb23443e53cb2b59b4056e9d312b8fdb1c749da5033bc5a1eb33",
+          "Code/GraphMol/Depictor/EmbeddedFrag.h": "a45692bbffd2dff60aa608565dc98d366a2aae7cfb75eeb372f1cf35a8f3f0f4",
+          "Code/RDGeneral/types.cpp": "401941b91e556787e671febb3a99e1b43e43b1674235e0acccb91306f469e1b9",
+          "Code/RDGeneral/types.h": "9a5715aa09ec01b989082ef6d7305191ee344a8a3960c81625ffe6e9d00ef4f1",
+          "Code/Numerics/SquareMatrix.h": "188f0a833400b055fa14cb399def70134459e5c1084765d210825f4ee86c2133",
+          "Code/Geometry/Transform2D.cpp": "c8cf18d72544c276836d74a17312b7d425ed2cbeed67409ca09fe9b5c80d1a4f",
+          "Code/Geometry/point.h": "aa985364528748f3c94b0e0f969fe63cbeb2b830e93df26c5b22f8cee8bfb393"
+        },
+        "library_sha256": {
+          "RDKitDepictor-19426461995069227f5ab91609668dc8.dll": "5da046343d199d646c95c776d7097137e836a44d9c1b6fad359ff9bb1ffd2d73",
+          "RDKitGraphMol-7597846ebcec6406eb0f7996bcfc42fd.dll": "615b1e6e36ef6f7c6c05a562e86bfcdfd18b150cba7e3c2281a8e588d82b2ed1",
+          "RDKitRDGeometryLib-fd70de113a7b47f5663e758fe1c7b393.dll": "73580fa74e7642e2a5963f5a2010490c6e4d04793ae2ebfe79ca4ca694729eb5",
+          "RDKitRDGeneral-f732472631d75f08a1bb4f30a0eda7cd.dll": "2838baa523739c392f7b829f5ad53730f8b927d8a94079d6ed288424781d3054"
+        },
+        "platform": "Windows-11-10.0.26200-SP0",
+        "oracle_sha256": "0072a3e5ea8331e19ae4604f3680a61bf11a044f3e551e9b2238c71bc2f76e88",
+        "cases": 991,
+        "templates": false,
+        "observation_patch": "EmbeddedFrag.h: replace the single private: line with public:",
+        "observation_header_sha256": "bf49eb06e2296abcf79f215ebb147930344171b565386835fc6dc3ec701dc7a2",
+        "native_build": {
+          "compiler_command": [
+            "cl",
+            "/nologo",
+            "/Bv",
+            "/std:c++20",
+            "/O2",
+            "/MD",
+            "/EHsc",
+            "/DWIN32",
+            "/DBOOST_ALL_NO_LIB",
+            "/utf-8",
+            "/IF:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-seeds\\observation",
+            "/IF:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-seeds\\generated",
+            "/IF:\\reshiki-depict-numeric-probe-20260922\\include\\rdkit\\Code",
+            "/IF:\\reshiki-depict-numeric-probe-20260922\\include\\rdkit\\Code\\GraphMol\\Depictor",
+            "/IF:\\reshiki-depict-numeric-probe-20260922\\boost185",
+            "F:\\reshiki-windows-geometry-parity-20260922\\tests\\depict_seeds_reference.cpp",
+            "F:\\reshiki-windows-geometry-parity-20260922\\tests\\depict_windows_runtime.cpp",
+            "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-seeds\\seed_source.cpp",
+            "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-seeds\\Depictor.lib",
+            "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-seeds\\GraphMol.lib",
+            "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-seeds\\RDGeometryLib.lib",
+            "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-seeds\\RDGeneral.lib",
+            "/Fe:F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-seeds\\oracle.exe",
+            "/FoF:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-seeds\\"
+          ],
+          "compiler_log_sha256": "2d0480f6b72aaf0e6b9e090ef637e21d20e76e49445e54dc38b0e2b2dc126a4f",
+          "boost_version": "1_85",
+          "boost_version_header_sha256": "063ed28eceb611d52f58e57aca61edb1e086ed902fbded81ac61936009c52cf0",
+          "reference_sha256": "c0c4564b5776fba615698de96cf6b394e057d0a3c64eba98e254567f3657e4e7",
+          "export_header_sha256": "cd92c47fa237576fdce827e0a599cda181f641af693ab736b2201bfbcf94cf45",
+          "source_adapter": {
+            "source": "Code/GraphMol/Depictor/RDDepictor.cpp",
+            "source_sha256": "f1ae9e705405d5254575c595c09c5d2ee240d4d2abf05209dd42dad5ae99b31f",
+            "byte_range": [
+              1068,
+              7003
+            ],
+            "verbatim_body_sha256": "0be8a251293bea662453dbd671d7dc1ca39b5b0b2fc12f2cced897821b5e3f39",
+            "generated_sha256": "37dab5b6ea2a26e86b3e054c580979135ed282bc50e001288f67143a7fcca9c3",
+            "functions": [
+              "getRankedAtomNeighbors",
+              "embedSquarePlanar",
+              "embedTBP",
+              "embedOctahedral"
+            ]
+          },
+          "observation_sha256": {
+            "GraphMol/Depictor/EmbeddedFrag.h": "bf49eb06e2296abcf79f215ebb147930344171b565386835fc6dc3ec701dc7a2"
+          },
+          "runtime": "/MD, x64 MSVC and the pinned x64 wheel",
+          "geometry_fma3": null,
+          "fma3": "0",
+          "runtime_initializer_sha256": "01a514ab81ac36ab498fe71a1e812e49e66735e43d444c6430f7bc215920b3cd",
+          "ucrt_sha256": "5c52e3a303baaac0e0af8bd9b96134993da34bc9d834a31ef37e1d2cdc7fe192"
+        }
+      },
+      "fixture": "shared with enabled profile; identical rows"
+    },
+    "templates": {
+      "cases": 1921,
+      "changed_values": 1202,
+      "compressed_sha256": "11ff7ab399aee2bf874110cf1cca3bd034f7a846e3f5d68e735b781a11a9aa68",
+      "jsonl_sha256": "a3cd181fadccc7571edf951fc25bc8e77e13e63533bd327e6b46be86f6194fb9",
+      "row_sha256": "c3a87c4636e1d4634adefdc961501a5556e57ba5f5012401706d8046b7f526ba",
+      "enabled_compressed_sha256": "33a099dee5644b1ff2af2433fc6a11277e3088d7f4ffb5bdb1661936c1755f71",
+      "capture_native_build": {
+        "compiler_command": [
+          "cl",
+          "/nologo",
+          "/Bv",
+          "/std:c++20",
+          "/O2",
+          "/MD",
+          "/EHsc",
+          "/DWIN32",
+          "/DBOOST_ALL_NO_LIB",
+          "/utf-8",
+          "/IF:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-templates\\observation",
+          "/IF:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-templates\\generated",
+          "/IF:\\reshiki-depict-numeric-probe-20260922\\include\\rdkit\\Code",
+          "/IF:\\reshiki-depict-numeric-probe-20260922\\include\\rdkit\\Code\\GraphMol\\Depictor",
+          "/IF:\\reshiki-depict-numeric-probe-20260922\\boost185",
+          "F:\\reshiki-windows-geometry-parity-20260922\\tests\\depict_templates_reference.cpp",
+          "F:\\reshiki-windows-geometry-parity-20260922\\tests\\depict_windows_runtime.cpp",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-templates\\Depictor.lib",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-templates\\GraphMol.lib",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-templates\\RDGeometryLib.lib",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-templates\\RDGeneral.lib",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-templates\\SubstructMatch.lib",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-templates\\SmilesParse.lib",
+          "/Fe:F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-templates\\oracle.exe",
+          "/FoF:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-templates\\"
+        ],
+        "compiler_log_sha256": "c58c9158e4b078245dae46281afe2d42d932d3ed387a14290698b7cb80fa7a2b",
+        "boost_version": "1_85",
+        "boost_version_header_sha256": "063ed28eceb611d52f58e57aca61edb1e086ed902fbded81ac61936009c52cf0",
+        "reference_sha256": "8a530dd83a9f86c0266588eb2ebf9f809c8286186af3589cd3f98e22f5eecca0",
+        "export_header_sha256": "cd92c47fa237576fdce827e0a599cda181f641af693ab736b2201bfbcf94cf45",
+        "source_adapter": null,
+        "observation_sha256": {
+          "depict-native-fragment-observation.inc": "2d45424f41e2a62ce0451dd2cab03d511f45c1ac511c5c40fddc7d8e777bf059",
+          "depict-template-observation.inc": "d4f17d26d9ef3732135e9160acb4050266fc1544a4c0617691e9556ad0e5f8e1",
+          "GraphMol/Depictor/EmbeddedFrag.h": "d0d481b16e3145bf64679d93bd9da4dfae8be7bd79ababc81874359ae0f6ffc2"
+        },
+        "runtime": "/MD, x64 MSVC and the pinned x64 wheel",
+        "geometry_fma3": null,
+        "fma3": "0",
+        "runtime_initializer_sha256": "01a514ab81ac36ab498fe71a1e812e49e66735e43d444c6430f7bc215920b3cd",
+        "ucrt_sha256": "5c52e3a303baaac0e0af8bd9b96134993da34bc9d834a31ef37e1d2cdc7fe192"
+      },
+      "fixture": "depict-templates-windows-no-fma3-native.json.gz"
+    },
+    "expansion": {
+      "cases": 1877,
+      "changed_values": 28746,
+      "compressed_sha256": "c3b50d71732a728a077b04b44ed5e5913779987137af87fd9e2eb7c1afcee6d9",
+      "jsonl_sha256": "f0b473564e404d29cabc5f8d769c265484e708f03e13aec3ca0e806d9d28f49e",
+      "row_sha256": "77707f84b87e5feaf2264cbb6bf952942487f5e7021cc4c5fea969f3cff525cf",
+      "enabled_compressed_sha256": "09f282ffff0ad085cfd0960525d1f7bae2122e7f4c3fa44f1c119ff4e3f91c50",
+      "capture_native_build": {
+        "fma3": "0",
+        "runtime_initializer_sha256": "01a514ab81ac36ab498fe71a1e812e49e66735e43d444c6430f7bc215920b3cd",
+        "ucrt_sha256": "5c52e3a303baaac0e0af8bd9b96134993da34bc9d834a31ef37e1d2cdc7fe192",
+        "builder_sha256": "3f50cea36df7fa1fd53e55e4b031d7166c11af60cdb7787387d1efa072e88f71",
+        "compiler_command": [
+          "cl",
+          "/nologo",
+          "/Bv",
+          "/std:c++20",
+          "/O2",
+          "/MD",
+          "/EHsc",
+          "/DWIN32",
+          "/DBOOST_ALL_NO_LIB",
+          "/DRESHIKI_EXPANSION_WINDOWS_SOURCE",
+          "/utf-8",
+          "/IF:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-expansion\\generated",
+          "/IF:\\reshiki-depict-numeric-probe-20260922\\include\\rdkit\\Code",
+          "/IF:\\reshiki-depict-numeric-probe-20260922\\include\\rdkit\\Code\\GraphMol\\Depictor",
+          "/IF:\\reshiki-depict-numeric-probe-20260922\\boost185",
+          "F:\\reshiki-windows-geometry-parity-20260922\\tests\\depict_expansion_reference.cpp",
+          "F:\\reshiki-windows-geometry-parity-20260922\\tests\\depict_windows_runtime.cpp",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-expansion\\Depictor.lib",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-expansion\\GraphMol.lib",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-expansion\\RDGeometryLib.lib",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-expansion\\RDGeneral.lib",
+          "/Fe:F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-expansion\\oracle.exe",
+          "/FoF:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-windows-expansion\\"
+        ],
+        "machine": "AMD64",
+        "processor": "AMD64 Family 25 Model 116 Stepping 1, AuthenticAMD",
+        "input_fixture_jsonl_sha256": "d8d5835b3e359981fd070fb47b83f93b25099a6f4b86ec11c1d06f77215426b1",
+        "import_table_sha256": "80052f4d80a3e3b5f7bbf80f7960fe74461608cfa1f40e254c335d3ee8671a2c",
+        "raw_initial_source": "Exact source adapter validated against original public full layout",
+        "input_headers_sha256": "5097b7296cf17cecc5ea1786b96302d28dc15882aea631f68990bc28ca4ed955",
+        "compiler_log_sha256": "fc7c03020c73558aa030fc88ae4cf07180b08194638be218c327afc99b3665e7",
+        "boost_version": "1_85",
+        "boost_version_header_sha256": "063ed28eceb611d52f58e57aca61edb1e086ed902fbded81ac61936009c52cf0",
+        "source_adapter": {
+          "source": "Code/GraphMol/Depictor/RDDepictor.cpp",
+          "source_sha256": "f1ae9e705405d5254575c595c09c5d2ee240d4d2abf05209dd42dad5ae99b31f",
+          "sections": [
+            {
+              "name": "DepictorLocal helpers",
+              "byte_range": [
+                1068,
+                12454
+              ],
+              "verbatim_sha256": "2ac60d86ff6a22f437ce4f222212fa8b716db102fcbba19c9b2a3c00a54eddaa",
+              "compiled_sha256": "2ac60d86ff6a22f437ce4f222212fa8b716db102fcbba19c9b2a3c00a54eddaa",
+              "replacements": []
+            },
+            {
+              "name": "initial",
+              "byte_range": [
+                12726,
+                15699
+              ],
+              "verbatim_sha256": "c24f2050866c89924472011f083daec4a9781216b1cae9c6052046216174f1ba",
+              "compiled_sha256": "878f2cc349b326012bce2d51af8994b9bba26159553327fe0ba02754ebb26b96",
+              "replacements": [
+                [
+                  "void computeInitialCoords(",
+                  "void expansionSourceInitial("
+                ]
+              ]
+            },
+            {
+              "name": "conformer copy",
+              "byte_range": [
+                15699,
+                16729
+              ],
+              "verbatim_sha256": "518e6b4134c503c841fd2c0e5d7c4d83e9c48d2c4e0a64d7283694736aa1c571",
+              "compiled_sha256": "7703bd475025865d50fa65b13f18d71a07d266e0edf5d3438524730df5e36b52",
+              "replacements": [
+                [
+                  "unsigned int copyCoordinate(",
+                  "unsigned int expansionSourceCopy("
+                ]
+              ]
+            },
+            {
+              "name": "complete wrapper",
+              "byte_range": [
+                18810,
+                21400
+              ],
+              "verbatim_sha256": "4dbb3015ebe0825b76256e8f4e3329ee8d18b006ce68db9d815842edcc901f93",
+              "compiled_sha256": "a9d3f0f8c3ed1478044e819967ef37f0e5826a554a70c0cc9124e395fab33d5b",
+              "replacements": [
+                [
+                  "unsigned int compute2DCoords(",
+                  "unsigned int expansionSourceFull("
+                ],
+                [
+                  "  computeInitialCoords(cp, params.coordMap, efrags, params.useRingTemplates);",
+                  "  expansionSourceInitial(cp, params.coordMap, efrags, params.useRingTemplates);"
+                ],
+                [
+                  "copyCoordinate(mol, efrags, params.clearConfs)",
+                  "expansionSourceCopy(mol, efrags, params.clearConfs)"
+                ]
+              ]
+            }
+          ],
+          "generated_sha256": "db7fc68f65d609e07b990939fb7032dc41768747868bd0907cff8c166924ba12"
+        },
+        "observation_sha256": "46b41042d4264ebbcdd84317bfc6249f2496a8ee3b66b3b856b186b90e6a5a4e",
+        "export_hashes": {
+          "Depictor": "bf09b29e9c5273e795c09e2152b65973b977b55c2c3b8f76ad35fefe7564edda",
+          "GraphMol": "1adff9e0b8b79665359dcbf0e6e3af910172cf16da3228695a2267b7ab742a2e",
+          "RDGeometryLib": "abed638e618da8433ad4e922b01cb18d13814c66e252523eb5db41ee7fc67f37",
+          "RDGeneral": "2b8d3a3a506a7cc4b914b5998c64566ead319e75995aeb9be8d602ab303d0470"
+        },
+        "export_header_sha256": "cd92c47fa237576fdce827e0a599cda181f641af693ab736b2201bfbcf94cf45",
+        "runtime": "/MD, x64 MSVC and pinned x64 wheel",
+        "independent_check": "Every request: original exported compute2DCoords vs extracted full wrapper; both canonical settings; exact outcome and conformer bits"
+      },
+      "fixture": "depict-expansion-windows-no-fma3-native.json.gz"
+    },
+    "finalize": {
+      "cases": 2312,
+      "changed_values": 0,
+      "compressed_sha256": "55e61b220204516fa24184c32bac7930fe58b56a96aa6f9b5c0de22c5c827803",
+      "jsonl_sha256": "7766c03805719080b5e702fb87490b07476116e755647c71559c50b59b05db1e",
+      "row_sha256": "7415e2f68a1717c9ff561768465cb5a1c07b173cce965704aaa64c1cdeccb53b",
+      "enabled_compressed_sha256": "c91b1dad3e165857943f0fa65dcacbf1647d78ea012b89ad7b6aece3ebb39540",
+      "capture_native_build": {
+        "compiler_command": [
+          "cl",
+          "/nologo",
+          "/Bv",
+          "/std:c++20",
+          "/O2",
+          "/MD",
+          "/EHsc",
+          "/DWIN32",
+          "/DBOOST_ALL_NO_LIB",
+          "/utf-8",
+          "/IF:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-finalize-oracle\\observation",
+          "/IF:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-finalize-oracle\\generated",
+          "/IF:\\reshiki-depict-numeric-probe-20260922\\include\\rdkit\\Code",
+          "/IF:\\reshiki-depict-numeric-probe-20260922\\include\\rdkit\\Code\\GraphMol\\Depictor",
+          "/IF:\\reshiki-depict-numeric-probe-20260922\\boost185",
+          "F:\\reshiki-windows-geometry-parity-20260922\\tests\\depict_finalize_reference.cpp",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-finalize-oracle\\source_adapter.cpp",
+          "F:\\reshiki-windows-geometry-parity-20260922\\tests\\depict_windows_runtime.cpp",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-finalize-oracle\\Depictor.lib",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-finalize-oracle\\GraphMol.lib",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-finalize-oracle\\RDGeometryLib.lib",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-finalize-oracle\\RDGeneral.lib",
+          "/Fe:F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-finalize-oracle\\oracle.exe",
+          "/FoF:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-finalize-oracle\\"
+        ],
+        "compiler_log_sha256": "7f95fc7be9d4d2e668a9fe3f96457d1c0ae29c9812cfcdc4b184b2dcc0033c74",
+        "source_adapter_sha256": "d806cba28b5e73f610282fcae7e4ef10751a398e604d67434582d0052beabf62",
+        "verbatim_ranges": [
+          {
+            "byte_range": [
+              11495,
+              12454
+            ],
+            "sha256": "66b0c210af235d3c6e03c5dbc2c1cf6fa26061dd47d4ed24b9118aa2e65bcd27"
+          },
+          {
+            "byte_range": [
+              15699,
+              16729
+            ],
+            "sha256": "518e6b4134c503c841fd2c0e5d7c4d83e9c48d2c4e0a64d7283694736aa1c571"
+          },
+          {
+            "byte_range": [
+              20846,
+              21383
+            ],
+            "sha256": "0ae2bb59b3bb0e51836b530a06ab048a9efd0ce8dc10de946fd94cc95e78cfec"
+          }
+        ],
+        "observation_header_sha256": "bf49eb06e2296abcf79f215ebb147930344171b565386835fc6dc3ec701dc7a2",
+        "boost_version": "1_85",
+        "boost_header_sha256": "063ed28eceb611d52f58e57aca61edb1e086ed902fbded81ac61936009c52cf0",
+        "reference_sha256": "d663b14e5b3063d8410e3d075c658d470442a9e5aa6672b11167561ff9f2b5f1",
+        "fma3": "0",
+        "runtime_initializer_sha256": "01a514ab81ac36ab498fe71a1e812e49e66735e43d444c6430f7bc215920b3cd",
+        "ucrt_sha256": "5c52e3a303baaac0e0af8bd9b96134993da34bc9d834a31ef37e1d2cdc7fe192"
+      },
+      "capture_provenance": {
+        "version": "2026.03.6",
+        "commit": "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "source_sha256": {
+          "Code/GraphMol/Depictor/RDDepictor.cpp": "f1ae9e705405d5254575c595c09c5d2ee240d4d2abf05209dd42dad5ae99b31f",
+          "Code/GraphMol/Depictor/EmbeddedFrag.cpp": "a3c55426a09deb23443e53cb2b59b4056e9d312b8fdb1c749da5033bc5a1eb33",
+          "Code/GraphMol/Depictor/EmbeddedFrag.h": "a45692bbffd2dff60aa608565dc98d366a2aae7cfb75eeb372f1cf35a8f3f0f4",
+          "Code/GraphMol/Conformer.h": "0b320f84bbe9fed1e414a290780e466a59d792a1111460a17297685614102e2c",
+          "Code/GraphMol/ROMol.cpp": "e1ee1e69c33712673dd80f2220982074e85926864f6a25881755e6a690016b84",
+          "Code/Geometry/Transform2D.cpp": "c8cf18d72544c276836d74a17312b7d425ed2cbeed67409ca09fe9b5c80d1a4f",
+          "Code/Geometry/point.h": "aa985364528748f3c94b0e0f969fe63cbeb2b830e93df26c5b22f8cee8bfb393"
+        },
+        "library_sha256": {
+          "RDKitDepictor-19426461995069227f5ab91609668dc8.dll": "5da046343d199d646c95c776d7097137e836a44d9c1b6fad359ff9bb1ffd2d73",
+          "RDKitGraphMol-7597846ebcec6406eb0f7996bcfc42fd.dll": "615b1e6e36ef6f7c6c05a562e86bfcdfd18b150cba7e3c2281a8e588d82b2ed1",
+          "RDKitRDGeneral-f732472631d75f08a1bb4f30a0eda7cd.dll": "2838baa523739c392f7b829f5ad53730f8b927d8a94079d6ed288424781d3054",
+          "RDKitRDGeometryLib-fd70de113a7b47f5663e758fe1c7b393.dll": "73580fa74e7642e2a5963f5a2010490c6e4d04793ae2ebfe79ca4ca694729eb5"
+        },
+        "oracle_sha256": "7504c7e06ebba5f4c7144f03d65f4288826f3d4bb7f73acd0237ca5d78dd9119",
+        "cases": 2312,
+        "native_build": {
+          "compiler_command": [
+            "cl",
+            "/nologo",
+            "/Bv",
+            "/std:c++20",
+            "/O2",
+            "/MD",
+            "/EHsc",
+            "/DWIN32",
+            "/DBOOST_ALL_NO_LIB",
+            "/utf-8",
+            "/IF:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-finalize-oracle\\observation",
+            "/IF:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-finalize-oracle\\generated",
+            "/IF:\\reshiki-depict-numeric-probe-20260922\\include\\rdkit\\Code",
+            "/IF:\\reshiki-depict-numeric-probe-20260922\\include\\rdkit\\Code\\GraphMol\\Depictor",
+            "/IF:\\reshiki-depict-numeric-probe-20260922\\boost185",
+            "F:\\reshiki-windows-geometry-parity-20260922\\tests\\depict_finalize_reference.cpp",
+            "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-finalize-oracle\\source_adapter.cpp",
+            "F:\\reshiki-windows-geometry-parity-20260922\\tests\\depict_windows_runtime.cpp",
+            "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-finalize-oracle\\Depictor.lib",
+            "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-finalize-oracle\\GraphMol.lib",
+            "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-finalize-oracle\\RDGeometryLib.lib",
+            "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-finalize-oracle\\RDGeneral.lib",
+            "/Fe:F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-finalize-oracle\\oracle.exe",
+            "/FoF:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-finalize-oracle\\"
+          ],
+          "compiler_log_sha256": "7f95fc7be9d4d2e668a9fe3f96457d1c0ae29c9812cfcdc4b184b2dcc0033c74",
+          "source_adapter_sha256": "d806cba28b5e73f610282fcae7e4ef10751a398e604d67434582d0052beabf62",
+          "verbatim_ranges": [
+            {
+              "byte_range": [
+                11495,
+                12454
+              ],
+              "sha256": "66b0c210af235d3c6e03c5dbc2c1cf6fa26061dd47d4ed24b9118aa2e65bcd27"
+            },
+            {
+              "byte_range": [
+                15699,
+                16729
+              ],
+              "sha256": "518e6b4134c503c841fd2c0e5d7c4d83e9c48d2c4e0a64d7283694736aa1c571"
+            },
+            {
+              "byte_range": [
+                20846,
+                21383
+              ],
+              "sha256": "0ae2bb59b3bb0e51836b530a06ab048a9efd0ce8dc10de946fd94cc95e78cfec"
+            }
+          ],
+          "observation_header_sha256": "bf49eb06e2296abcf79f215ebb147930344171b565386835fc6dc3ec701dc7a2",
+          "boost_version": "1_85",
+          "boost_header_sha256": "063ed28eceb611d52f58e57aca61edb1e086ed902fbded81ac61936009c52cf0",
+          "reference_sha256": "d663b14e5b3063d8410e3d075c658d470442a9e5aa6672b11167561ff9f2b5f1",
+          "fma3": "0",
+          "runtime_initializer_sha256": "01a514ab81ac36ab498fe71a1e812e49e66735e43d444c6430f7bc215920b3cd",
+          "ucrt_sha256": "5c52e3a303baaac0e0af8bd9b96134993da34bc9d834a31ef37e1d2cdc7fe192"
+        }
+      },
+      "fixture": "shared with enabled profile; identical rows"
+    },
+    "collision": {
+      "cases": 1634,
+      "changed_values": 161,
+      "compressed_sha256": "77a3b7cccc1b7bfdea38655df9704bfe9d830af6f1ad070cbb5daf6313969ee6",
+      "jsonl_sha256": "de2078048b6979c1babd920a8be8260ff5972408a8bf84a2e10627eae3a01fe0",
+      "row_sha256": "d774e8ffa093232d861ebc5c4ccbb8dc8feba7563601e425cb783e83b78444ff",
+      "enabled_compressed_sha256": "ac73fc2a1d43149d35a33faddc31710f9e0544ab45c237a4f5296970e9d02ffc",
+      "capture_native_build": {
+        "compiler_command": [
+          "cl",
+          "/nologo",
+          "/Bv",
+          "/std:c++20",
+          "/O2",
+          "/MD",
+          "/EHsc",
+          "/DWIN32",
+          "/DBOOST_ALL_NO_LIB",
+          "/utf-8",
+          "/IF:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-collision-observation",
+          "/IF:\\reshiki-depict-collision-validation\\artifacts\\rdkit\\Code",
+          "/IF:\\reshiki-depict-collision-validation\\artifacts\\rdkit\\Code\\GraphMol\\Depictor",
+          "/IF:\\reshiki-depict-collision-validation\\artifacts\\boost185",
+          "F:\\reshiki-windows-geometry-parity-20260922\\tests\\depict_collision_reference.cpp",
+          "F:\\reshiki-windows-geometry-parity-20260922\\tests\\depict_windows_runtime.cpp",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-collision-observation\\Depictor.lib",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-collision-observation\\GraphMol.lib",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-collision-observation\\RDGeometryLib.lib",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-collision-observation\\RDGeneral.lib",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-collision-observation\\SubstructMatch.lib",
+          "F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-collision-observation\\SmilesParse.lib",
+          "/Fe:F:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-collision-oracle.exe",
+          "/FoF:\\reshiki-windows-geometry-parity-20260922\\artifacts\\depict-collision-observation\\"
+        ],
+        "compiler_log_sha256": "d0f691f2b1b82c9f6919ce198a1a6d703814d6d71570f2a2e39378e41a949ebd",
+        "runtime_initializer_sha256": "01a514ab81ac36ab498fe71a1e812e49e66735e43d444c6430f7bc215920b3cd",
+        "boost_version": "1_85",
+        "boost_header_sha256": "063ed28eceb611d52f58e57aca61edb1e086ed902fbded81ac61936009c52cf0",
+        "fma3": "0",
+        "ucrt_sha256": "5c52e3a303baaac0e0af8bd9b96134993da34bc9d834a31ef37e1d2cdc7fe192"
+      },
+      "fixture": "depict-collision-windows-no-fma3-native.json.gz"
+    }
+  }
+}

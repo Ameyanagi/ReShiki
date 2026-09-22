@@ -14,6 +14,12 @@ concurrency:
   group: release-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || 'tag' }}
   cancel-in-progress: false
 jobs:
+  reference:
+    needs: validate
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/checks.yml
+    with:
+      live_reference: true
   validate:
     runs-on: ubuntu-22.04
     steps:
@@ -42,11 +48,13 @@ jobs:
           - os: windows-2022
             artifact: windows-x64
             target: x86_64-pc-windows-msvc
+            msvc_arch: x64
             python: cpython-3.12-windows-x86_64-none
           - os: windows-11-arm
             artifact: windows-arm64
             target: aarch64-pc-windows-msvc
-            # RDKit has no Windows ARM wheel. Windows 11 runs the x64 worker.
+            msvc_arch: arm64
+            # RDKit reference tests use the x64 wheel through Windows 11 emulation.
             python: cpython-3.12-windows-x86_64-none
           - os: ubuntu-22.04
             artifact: linux-x64
@@ -73,6 +81,11 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libfontconfig1-dev libudev-dev
       - run: rustup toolchain install 1.95.0 --profile minimal --target ${{ matrix.target }}
       - run: rustup default 1.95.0
+      - name: Select the native Windows compiler
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/setup-msvc
+        with:
+          arch: ${{ matrix.msvc_arch }}
       - run: uv sync --locked
       - name: Install pinned Windows installer compiler
         if: runner.os == 'Windows'
@@ -87,12 +100,12 @@ jobs:
           "RESHIKI_ISCC=$compilerDir\ISCC.exe" >> $env:GITHUB_ENV
       - name: Test chemistry and packaging on this platform
         run: uv run --locked python -m unittest discover -s tests -p 'test_*.py'
-      - name: Verify production dependencies
-        run: uv run --locked python scripts/check_runtime_dependencies.py
+      - name: Verify reference dependencies
+        run: uv run --locked python scripts/check_reference_dependencies.py
       - name: Build and test extracted portable archive
         env:
           MACOSX_DEPLOYMENT_TARGET: "14.0"
-        run: uv run --locked python scripts/build_release.py --target ${{ matrix.target }} --installer
+        run: uv run --locked python scripts/build_release.py --target ${{ matrix.target }} --fetch-inchi-source --installer
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: unsigned-${{ matrix.artifact }}
@@ -135,7 +148,7 @@ jobs:
           path: dist/releases/*
           if-no-files-found: error
   publish:
-    needs: [build, sign]
+    needs: [build, sign, reference]
     if: github.event_name == 'push'
     runs-on: ubuntu-22.04
     permissions:

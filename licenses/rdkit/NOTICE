@@ -1,22 +1,215 @@
-ReShiki includes atomic data and adapted molecular property, valence and ring calculations
+ReShiki includes atomic data and adapted sanitization, molecular property, valence, ring and descriptor calculations
 from RDKit 2026.03.6, commit 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985:
 https://github.com/rdkit/rdkit/tree/Release_2026_03_6
 
 Code/GraphMol/atomic_data.cpp, Code/GraphMol/Atom.cpp and Code/GraphMol/Bond.cpp
 Copyright (C) 2001-2024 Greg Landrum and other RDKit contributors.
 
-Code/GraphMol/MolOps.cpp (radical assignment)
+Code/GraphMol/MolOps.cpp (sanitization order, functional-group/metal/atropisomer cleanup, radicals, hydrogen adjustment and component splitting)
 Copyright (C) 2001-2023 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/Aromaticity.cpp (default aromaticity model; makeRingNeighborMap and pickFusedRings ordered ring-system traversal)
+Copyright (C) 2003-2022 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/ConjugHybrid.cpp (conjugation and hybridization)
+Copyright (C) 2001-2024 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/Kekulize.cpp (bond assignment, optional-attempt snapshots and iterative backtracking)
+Copyright (C) 2001-2021 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/new_canon.cpp and new_canon.h (canonical atom ranking)
+Copyright (C) 2014 Greg Landrum, adapted from pseudocode from Roger Sayle.
+
+Code/RDGeneral/hanoiSort.h (partition merge sort)
+Copyright (C) 2014-2025 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/Atropisomers.cpp (controlling-neighbor ordering, stereo-group repair, axial stereo detection and 2D/3D wedging)
+Copyright (C) 2004-2021 Tad hurst/CDD and other RDKit contributors.
+
+Code/GraphMol/WedgeBonds.cpp (wedge selection, orientation and optional second wedges)
+Copyright (C) 2023 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/Chirality.cpp (chiral-tag, permutation and stereo-group cleanup; wedge, 3D atom and coordination geometry, double-bond geometry, direction propagation, legacy CIP priorities and stereo perception)
+Copyright (C) 2004-2024 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/FindStereo.cpp (potential atom and double-bond stereochemistry for output)
+Copyright (C) 2020 Greg Landrum and T5 Informatics GmbH.
+
+Code/GraphMol/Abbreviations/Abbreviations.cpp and AbbreviationsUtils.cpp (fixed abbreviation queries and overlap ordering)
+Copyright (C) 2020 Greg Landrum and T5 Informatics GmbH.
+
+Code/GraphMol/Substruct/vf2.hpp (iterative substructure matching)
+Extensively modified by Greg Landrum, initially April 2009,
+from vflib-2.0 files by P. Foggia.
+
+Code/GraphMol/CIPLabeler/CIPMol.cpp and Mancude.cpp (CIP bond orders, ring membership and resonance-averaged atomic numbers)
+Copyright (C) 2020 Schrödinger, LLC.
+
+Code/GraphMol/CIPLabeler/Digraph.cpp, Node.cpp, Edge.cpp and Descriptor.h (lazy CIP graph expansion, duplicate nodes, re-rooting and auxiliary descriptors)
+Copyright (C) 2020 Schrödinger, LLC.
+
+Code/GraphMol/CIPLabeler/Sort.cpp and rules/SequenceRule.cpp, Rules.h, Rule1a.cpp, Rule1b.cpp, Rule2.cpp, Rule3.cpp, Rule4a.cpp, Rule4b.cpp, Rule4c.cpp, Rule5.cpp, Rule5New.cpp, Rule6.cpp and Pairlist.h (iterative sequence comparison, descriptor pairing and priority sorting)
+Copyright (C) 2020 Schrödinger, LLC.
+
+Code/GraphMol/CIPLabeler/CIPLabeler.cpp, Wrap/rdCIPLabeler.cpp and configs/{Configuration,Tetrahedral,Sp2Bond,AtropisomerBond}.{h,cpp} (configuration evaluation, carrier parity, auxiliary descriptors and complete label assignment)
+Copyright (C) 2020 Schrödinger, LLC.
+
+Code/GraphMol/CIPLabeler/catch_tests.cpp (VS040 graph expansion regression example)
+Copyright (C) 2020-2025 Schrödinger, LLC and other RDKit contributors.
+
+Code/GraphMol/FileParsers/MolFileWriter.cpp (V2000/V3000 molecular output)
+Copyright (C) 2003-2023 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/ChemReactions/ReactionWriter.cpp (reaction SMILES grouping and ordering; V3000 reaction output)
+Copyright (C) 2010-2024 Novartis Institutes for BioMedical Research Inc.
+and other RDKit contributors.
+
+Code/GraphMol/ChemReactions/MDLParser.cpp (V2000/V3000 reaction input)
+Copyright (C) 2007-2026 Novartis Institutes for BioMedical Research Inc.
+and other RDKit contributors.
+
+Code/GraphMol/ChemReactions/DaylightParser.cpp (reaction SMILES framing and participant grouping)
+Copyright (C) 2007-2021 Novartis Institutes for BioMedical Research Inc.
+and other RDKit contributors.
+
+Code/GraphMol/QueryAtom.h (reaction atom wrapper predicates)
+Copyright (C) 2001-2022 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/QueryAtom.cpp and Code/Query/NullQueryAlgebra.h (exact atomic-number queries)
+Copyright (C) 2001-2006 Greg Landrum and Rational Discovery LLC.
+Copyright (C) 2019 Greg Landrum and T5 Informatics GmbH.
+
+Code/GraphMol/FileParsers/MolFileParser.cpp (V2000/V3000 molecular input)
+Copyright (C) 2002-2021 Greg Landrum and other RDKit contributors.
+
+External/ChemDraw/{chemdraw,node,bond,fragment,utils}.cpp (molecular CDXML parsing)
+Copyright (c) 2024 Glysade Inc. See licenses/cdxml-native/ for its license and
+the underlying reader's coordinate and object-ordering attribution.
+
+Code/GraphMol/FileParsers/MolSGroupParsing.cpp (substance-group records and data fields)
+Copyright (C) 2002-2018 Greg Landrum and T5 Informatics GmbH.
+
+Code/GraphMol/SubstanceGroup.h and SubstanceGroup.cpp (group types and membership validation)
+Copyright (C) 2018-2020 Greg Landrum and T5 Informatics GmbH.
+
+Code/GraphMol/ChemTransforms/ChemTransforms.cpp (CDXML fragment combination and conformer offsets)
+Copyright (C) 2006-2021 Greg Landrum.
+
+Code/GraphMol/RWMol.cpp (hydrogen adjustment, atom/bond removal, stereo remapping and CDXML fragment/stereo-group insertion)
+Copyright (C) 2003-2024 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/AddHs.cpp (default import hydrogen removal and stereo preservation)
+Copyright (C) 2003-2025 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/SmilesParse/smarts.ll and smarts.yy (SMARTS grammar)
+Copyright (C) 2003-2025 Greg Landrum, Rational Discovery LLC and other RDKit contributors.
+
+Code/GraphMol/SmilesParse/smiles.ll and smiles.yy (SMILES grammar)
+Copyright (C) 2001-2016 Randal Henne, Greg Landrum and Rational Discovery LLC.
+
+Code/GraphMol/SmilesParse/SmilesParse.cpp and SmilesParseOps.cpp (SMILES/SMARTS preprocessing, ring closure and chiral validation)
+Copyright (C) 2001-2022 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/SmilesParse/SmilesWrite.cpp (atom/bond symbols, ring labels and molecular SMILES assembly)
+Copyright (C) 2002-2025 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/Canon.cpp (ranked SMILES traversal, ring closures, atom winding and bond directions)
+Copyright (C) 2001-2021 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/NontetrahedralStereo.cpp (coordination permutation tables, across/axial queries and ideal ligand angles)
+Copyright (C) 2022 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/SmilesParse/CXSmilesOps.cpp (shared CX syntax, coordinate values and molecular/reaction annotations)
+Copyright (C) 2016-2021 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/MolPickler.cpp and Code/RDGeneral/StreamOps.h (ring-stereo integer-vector transport in the temporary native bridge)
+Copyright (C) 2001-2021 Greg Landrum and Rational Discovery LLC.
+
+Code/Geometry/point.h and point.cpp (stereo vector/dihedral and depiction normal/angle arithmetic, including verified native ABI contraction order)
+Copyright (C) 2003-2025 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/Depictor/RDDepictor.cpp (square-planar, trigonal-bipyramidal and octahedral initial fragments; computeInitialCoords seed/expansion orchestration; ordered fragment packing, conformer assembly and single-anchor translation)
+Copyright (C) 2003-2022 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/Depictor/DepictUtils.cpp (regular-ring embedding, point bisectors, point reflection and ordered first/core/next ring selection, rotatable bonds and spiro-center checks, rankAtomsByRank and setNbrOrder)
+Copyright (C) 2003-2025 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/Depictor/EmbeddedFrag.cpp (ordered fragment centering, canonical orientation, signed box extents and no-template fused-ring construction, trans-ring mirroring, density reflection, ring metadata merging, single-atom initialization, setupNewNeighs/updateNewNeighs, addNonRingAtom, coordinate-map/cis-trans constructors and setupAttachmentPoints/computeNbrsAndAng, expandEfrag, mergeWithCommon/mergeNoCommon and merge transforms/reflection)
+Copyright (C) 2004-2025 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/Depictor/DepictUtils.h and EmbeddedFrag.h (depiction metadata declarations and angle/normal helpers)
+Copyright (C) 2003-2022 Greg Landrum and other RDKit contributors.
+
+Code/Geometry/Transform2D.cpp and Transform2D.h (point transformations, two-point alignment and rotation about a point)
+Copyright (C) 2003-2006 Rational Discovery LLC.
+
+Code/RDGeneral/types.cpp (ordered ring union and intersection)
+Copyright (C) 2001-2021 Greg Landrum and other RDKit contributors.
+
+Code/Numerics/SquareMatrix.h (ordered 3x3 multiplication for rotation)
+Copyright (C) 2004-2006 Rational Discovery LLC.
+
+Code/Numerics/Vector.h (normalization tolerance)
+Copyright (C) 2004-2025 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/StereoGroup.h and StereoGroup.cpp (group metadata and membership validation)
+Copyright (C) 2018-2021 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/PeriodicTable.h (relative electronegativity)
+Copyright (C) 2001-2011 Rational Discovery LLC.
+
+Code/GraphMol/catch_graphmol.cpp (aromaticity, Kekulé and metal-cleanup regression examples)
+Copyright (C) 2018-2026 Greg Landrum and other RDKit contributors.
 
 Code/GraphMol/MolProps.cpp
 Copyright (C) 2024 Greg Landrum and other RDKit contributors.
 
+Code/GraphMol/Matrices.cpp (ordered shortest paths and unit-edge topological distances)
+Copyright (C) 2003-2008 Greg Landrum and Rational Discovery LLC.
+
 Code/GraphMol/FindRings.cpp
 Copyright (C) 2003-2021 Greg Landrum and other RDKit contributors.
 
-Code/GraphMol/molopstest.cpp (ring regression examples)
+Code/GraphMol/testChirality.cpp (dependent and ring stereo regression examples)
+Copyright (C) 2007-2025 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/molopstest.cpp (ring, conjugation and hybridization regression examples)
 Copyright (C) 2002-2025 Greg Landrum and other RDKit contributors.
 
-Adaptations are in src/chemistry/, scripts/regenerate_atomic_data.py and
-tests/ring_perception_reference.py.
+Code/GraphMol/Descriptors/Crippen.cpp (atom types and logP/MR contributions)
+Copyright (C) 2004-2012 Greg Landrum and Rational Discovery LLC.
+
+Code/GraphMol/Descriptors/Lipinski.cpp (hydrogen donor/acceptor queries)
+Copyright (C) 2011-2013 Greg Landrum.
+
+Code/GraphMol/Descriptors/MolSurf.cpp (polar surface area contributions)
+Copyright (C) 2007-2023 Greg Landrum.
+
+Code/GraphMol/QueryOps.h and QueryOps.cpp (query predicates, metal classification and bridgehead detection)
+Copyright (C) 2003-2021 Greg Landrum and other RDKit contributors.
+
+External/INCHI-API/inchi.cpp (molecular input and output for InChI, including cleanup and stereo reconstruction)
+Copyright (C) 2011-2025 Novartis Institutes for BioMedical Research Inc.
+and other RDKit contributors. The full source notice is in INCHI-ADAPTER.
+
+Adaptations are in src/chemistry/, engine/prepared.py, scripts/regenerate_atomic_data.py,
+scripts/regenerate_descriptor_data.py and the *_reference.py fixtures in tests/.
 These portions are distributed under the accompanying BSD-3-Clause LICENSE.
+
+The builtin ring-template catalog and matching/template-assisted construction
+in src/chemistry/depict/templates.rs and its child modules are adapted from
+Depictor/Templates.cpp/.h, TemplateSmarts.h (Copyright (C) 2023 Schrödinger,
+LLC), EmbeddedFrag.cpp (Copyright (C) 2004-2025) and EmbeddedFrag.h
+(Copyright (C) 2003-2022 Greg Landrum and other RDKit contributors), at the
+pinned source revision above. Generated query and
+coordinate data retain original catalog order; no native library is linked
+into the application for these operations.
+
+Code/GraphMol/Conformer.h (zero-initialized coordinate storage and 2D dimensionality)
+Copyright (C) 2001-2024 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/ROMol.cpp (clear-conformer assembly policy)
+Copyright (C) 2003-2024 Greg Landrum and other RDKit contributors.
+
+Code/RDGeneral/RDValue.h (lazy string-property numeric conversion and right trimming)
+Copyright (C) 2015 Novartis Institutes for BioMedical Research Inc.

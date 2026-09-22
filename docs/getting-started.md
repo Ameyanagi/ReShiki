@@ -1,47 +1,26 @@
 # Getting started
 
-ReShiki is a desktop workspace for editable chemical drawings. Molecule processing runs locally with RDKit. The optional assistant uses your Codex connection when you send a request.
+ReShiki is a desktop workspace for editable chemical drawings. Molecule processing runs locally. The optional assistant uses your Codex connection when you send a request.
 
 ## Install
 
-Download a package for your computer from [GitHub Releases](https://github.com/Ameyanagi/ReShiki/releases). If no release is listed yet, use the source instructions below. The release workflow builds these packages:
+The offline setup below applies to 0.6.0 builds. For version 0.5.0, follow its [release notes](changes-0.5.md), including the first-launch uv requirement.
 
-| Computer          | Package              | Open          |
-| ----------------- | -------------------- | ------------- |
-| Apple Silicon Mac | `macos-arm64.zip`    | `ReShiki.app` |
-| Windows x64       | `windows-x64.zip`    | `reshiki.exe` |
-| Windows ARM       | `windows-arm64.zip`  | `reshiki.exe` |
-| Linux x64         | `linux-x64.tar.gz`   | `./reshiki`   |
-| Linux ARM         | `linux-arm64.tar.gz` | `./reshiki`   |
+Download a package for your computer from [GitHub Releases](https://github.com/Ameyanagi/ReShiki/releases). The release workflow builds these packages:
 
-Extract the archive before opening the app, and keep its contents together. On macOS, move the included app to Applications. **Install uv before opening ReShiki.** ReShiki uses it to create a local Python/RDKit environment on first chemistry use; a separate Python installation is unnecessary. macOS release builds target Apple Silicon with macOS 14 or later; Intel Macs are unsupported. Linux packages target Ubuntu 22.04+ on x64 and 24.04+ on ARM, with a desktop session and compatible graphics libraries. Windows x64 targets Windows 10/11. Windows ARM requires Windows 11; the app is native ARM64 and its local chemistry worker uses built-in x64 emulation.
+| Computer          | Package                   | Open                 |
+| ----------------- | ------------------------- | -------------------- |
+| Apple Silicon Mac | `macos-arm64.dmg`         | Drag to Applications |
+| Windows x64       | `windows-x64-setup.exe`   | Run setup            |
+| Windows ARM       | `windows-arm64-setup.exe` | Run setup            |
+| Linux x64         | `linux-x64.tar.gz`        | `./reshiki`          |
+| Linux ARM         | `linux-arm64.tar.gz`      | `./reshiki`          |
 
-Tagged macOS releases require Developer ID signing and Apple notarization. Windows and Linux packages do not currently have publisher signatures. Manual workflow builds may be unsigned and are intended for testing. Packaging smoke tests check local dependency setup and offline chemistry reuse; they do not establish feature parity or full graphical compatibility on every operating system. Native clipboard and printing support Windows and macOS; see the [Windows guide](windows.md) for workflows and verification limits.
+Drawing and chemistry tools are included and work offline from the first launch. Portable ZIP downloads are also available; extract them and keep their contents together.
 
-## Install uv
+Mac requires Apple Silicon and macOS 14+. Windows x64 supports Windows 10/11; Windows ARM requires Windows 11. Linux packages target Ubuntu 22.04+ on x64 and 24.04+ on ARM, with a desktop session and compatible graphics libraries.
 
-Follow the [official uv installation instructions](https://docs.astral.sh/uv/getting-started/installation/), or use a package manager:
-
-```sh
-# macOS with Homebrew
-brew install uv
-```
-
-```powershell
-# Windows with WinGet
-winget install --id astral-sh.uv -e
-```
-
-```sh
-# Linux (also supported on macOS)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-Restart your terminal after installation and run `uv --version` to verify it. Then open ReShiki. The app also searches uv's standard installation directory when launched from Finder or a desktop shortcut.
-
-On first chemistry use, ReShiki runs uv in the background to install Python 3.12 and the exact chemistry dependencies from the release's lockfile. Allow an internet connection for this setup. The drawing canvas remains responsive; failed setup reports an actionable error and you can retry the chemistry operation. Once installed, the local packages support offline use.
-
-The environment is stored in ReShiki's per-user cache, outside the application bundle. Different dependency sets receive separate environments. Advanced overrides: `RESHIKI_UV` selects a uv executable, `RESHIKI_RUNTIME_DIR` selects an absolute cache directory, and `RESHIKI_PYTHON` selects an already prepared external Python environment.
+Tagged macOS releases are signed and notarized. Windows and Linux packages are unsigned. See the [visual installation guide](/guide/install/) for screenshots and updates, or [development](development.md) to build from source.
 
 ## Draw your first molecule
 
@@ -60,13 +39,4 @@ Use SVG or PDF for vector figures and PNG for an image. Editable copy and CDXML 
 
 ## Run from source
 
-Install Rust 1.95 or later and [uv](https://docs.astral.sh/uv/), then:
-
-```sh
-git clone https://github.com/Ameyanagi/ReShiki.git reshiki
-cd reshiki
-uv sync --locked --python 3.12
-cargo run --locked
-```
-
-For development checks, hooks, and documentation previews, see [development](development.md).
+Follow the [development guide](development.md) to build the app and its native helper, run checks, or preview the documentation.

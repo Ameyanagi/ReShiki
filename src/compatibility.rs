@@ -81,7 +81,7 @@ mod tests {
 
     #[test]
     fn migration_preserves_originals_and_current_choices_and_does_not_resurrect_drafts()
-    -> Result<(), Box<dyn std::error::Error>> {
+    -> anyhow::Result<()> {
         let directory = tempfile::tempdir()?;
         let old = directory.path().join("old");
         let new = directory.path().join("new");
@@ -91,7 +91,7 @@ mod tests {
         std::fs::write(old.join("assistant-preferences.json"), b"old choice")?;
         std::fs::write(new.join("assistant-preferences.json"), b"new choice")?;
         std::fs::write(old.join("recovery/draft.json"), b"drawing")?;
-        migrate_data(&old, &new)?;
+        migrate_data(&old, &new).map_err(anyhow::Error::msg)?;
         assert_eq!(std::fs::read(new.join("templates.json"))?, b"templates");
         assert_eq!(
             std::fs::read(new.join("assistant-preferences.json"))?,
@@ -100,7 +100,7 @@ mod tests {
         assert_eq!(std::fs::read(new.join("recovery/draft.json"))?, b"drawing");
         assert_eq!(std::fs::read(old.join("recovery/draft.json"))?, b"drawing");
         std::fs::remove_file(new.join("recovery/draft.json"))?;
-        migrate_data(&old, &new)?;
+        migrate_data(&old, &new).map_err(anyhow::Error::msg)?;
         assert!(!new.join("recovery/draft.json").exists());
         Ok(())
     }

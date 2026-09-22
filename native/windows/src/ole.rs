@@ -6,6 +6,7 @@ mod object;
 mod storage;
 
 use super::{Result, clipboard};
+use anyhow::Context;
 use object::{DrawingObject, Factory};
 use std::{
     cell::{Cell, RefCell},
@@ -355,15 +356,15 @@ pub(super) fn copy(mut formats: BTreeMap<u32, Vec<u8>>) -> Result<()> {
         formats.remove(&clipboard::format("image/svg+xml")?);
         let document = formats
             .get(&clipboard::format("dev.reshiki.drawing")?)
-            .ok_or("Missing drawing")?
+            .context("Missing drawing")?
             .clone();
         let png = formats
             .get(&clipboard::format("PNG")?)
-            .ok_or("Missing drawing preview")?
+            .context("Missing drawing preview")?
             .clone();
         let metafile = formats
             .remove(&clipboard::format("dev.reshiki.office-metafile")?)
-            .ok_or("Missing Office vector preview")?;
+            .context("Missing Office vector preview")?;
         let drawing = Drawing::new(document, png, Some(metafile))?;
         formats.remove(&clipboard::format("PNG")?);
         formats.remove(&8); // CF_DIB
@@ -375,7 +376,7 @@ pub(super) fn copy(mut formats: BTreeMap<u32, Vec<u8>>) -> Result<()> {
         Ok(())
     })
     .join()
-    .map_err(|_| "Office clipboard thread failed")?
+    .map_err(|_| anyhow::anyhow!("Office clipboard thread failed"))?
 }
 
 pub(super) fn read_own(picture_only: bool) -> Result<Option<Vec<u8>>> {
@@ -401,7 +402,8 @@ pub(super) fn read_own(picture_only: bool) -> Result<Option<Vec<u8>>> {
             if medium.0.tymed != TYMED_ISTORAGE.0 as u32 {
                 continue;
             }
-            let storage = unsafe { medium.0.u.pstg.as_ref() }.ok_or("Missing embedded storage")?;
+            let storage =
+                unsafe { medium.0.u.pstg.as_ref() }.context("Missing embedded storage")?;
             if unsafe { ReadClassStg(storage)? } == CLSID {
                 let drawing = Drawing::load(storage)?;
                 return Ok(Some(if picture_only {
@@ -414,7 +416,7 @@ pub(super) fn read_own(picture_only: bool) -> Result<Option<Vec<u8>>> {
         Ok(None)
     })
     .join()
-    .map_err(|_| "Office clipboard read thread failed")?
+    .map_err(|_| anyhow::anyhow!("Office clipboard read thread failed"))?
 }
 
 pub(super) fn run(render: Render) -> Result<()> {

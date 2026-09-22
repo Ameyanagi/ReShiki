@@ -1,9 +1,9 @@
 //! Every supported element/isotope and representative graphs against RDKit.
 use reshiki::chemistry::{AtomFacts, Properties, RDKIT_VERSION, graph::Graph, properties};
 use serde::Deserialize;
-use std::{error::Error, path::Path, process::Command};
+use std::{path::Path, process::Command};
 
-type TestResult = Result<(), Box<dyn Error>>;
+type TestResult = anyhow::Result<()>;
 
 #[derive(Deserialize)]
 struct Reference {
@@ -43,8 +43,9 @@ fn agrees_with_rdkit_for_every_isotope_templates_and_hydrogen_representations() 
     assert!(reference.cases.len() > 3500);
     for case in reference.cases {
         for actual in [
-            properties(&case.atoms)?,
-            properties(&case.graph.atom_facts()?)?,
+            properties(&case.atoms).map_err(anyhow::Error::msg)?,
+            properties(&case.graph.atom_facts().map_err(anyhow::Error::msg)?)
+                .map_err(anyhow::Error::msg)?,
         ] {
             assert_eq!(actual.formula, case.expected.formula, "{}", case.name);
             assert_eq!(

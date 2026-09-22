@@ -1,10 +1,10 @@
 # Release builds and macOS signing
 
-The Release builds workflow produces a signed macOS disk image, Windows x64/ARM64 setup programs, and portable packages for all five platforms. Linux supports x64 and ARM64; macOS supports Apple Silicon only. Users install uv. Packages include the chemistry source and lockfile; uv installs Python and chemistry libraries locally on first use.
+The Release builds workflow produces a signed macOS disk image, Windows x64/ARM64 setup programs, and portable packages for all five platforms. Linux supports x64 and ARM64; macOS supports Apple Silicon only. Packages include the Rust application and native InChI helper. Drawing and chemistry work offline without Python, RDKit or uv.
 
-Windows setup uses Inno Setup 6.7.3, downloaded with a pinned SHA-256 checksum. It installs per user, adds a Start menu shortcut, and offers a desktop shortcut and `.reshiki` file association. Setup and uninstall preserve user data. CI installs twice to check upgrades, runs the installed chemistry worker, and checks uninstallation.
+Windows setup uses Inno Setup 6.7.3, downloaded with a pinned SHA-256 checksum. It installs per user, adds a Start menu shortcut, and offers a desktop shortcut and `.reshiki` file association. Setup and uninstall preserve user data. CI installs twice to check upgrades, runs native chemistry, and checks uninstallation. Upgrades remove the old app-owned worker while preserving user drawings and caches.
 
-The macOS disk image contains the signed app and an Applications shortcut. Both the app and disk image are notarized and stapled. CI mounts the image, copies the app out, and verifies its signature and Gatekeeper status. The release has eight downloads plus `SHA256SUMS`.
+The macOS disk image contains the signed app and an Applications shortcut. Both the app and disk image are notarized and stapled. CI mounts the image, copies the app out, and verifies chemistry, its signature and Gatekeeper status. The release has eight downloads plus `SHA256SUMS`.
 
 ## Test a build
 
@@ -16,9 +16,9 @@ gh workflow run release.yml --ref main
 gh workflow run release.yml --ref main -f sign_macos=true
 ```
 
-Each archive is extracted into a temporary directory with spaces outside the checkout. The extracted executable must report clear missing-uv instructions, set up a fresh local environment and return the expected ethanol formula and SMILES. A second launch must work with uv in offline mode. On macOS, the app signature is verified again after setup. This is a packaging check, not a complete graphical acceptance test. Record desktop checks separately from package verification.
+Each archive is extracted into a temporary directory with spaces outside the checkout. Two launches must return the expected ethanol formula and SMILES with an empty executable search path and unavailable Python/uv overrides. Packages must contain no Python worker or interpreter and create no chemistry environment. The relocated app must discover its bundled helper. macOS signatures are checked again afterward. Record graphical acceptance separately.
 
-The [2026-09-20 release validation](https://github.com/Ameyanagi/ReShiki/actions/runs/35510386732) passed all five package checks, including native ARM Windows/Linux applications, fresh chemistry setup, and offline reuse. Apple Silicon also passed Developer ID signing, notarization, stapling, and Gatekeeper assessment. This manual run did not publish a release.
+Before the native-runtime cutover, the [2026-09-20 release validation](https://github.com/Ameyanagi/ReShiki/actions/runs/35510386732) passed all five package checks, including native ARM Windows/Linux applications, fresh chemistry setup, and offline reuse. Apple Silicon also passed Developer ID signing, notarization, stapling, and Gatekeeper assessment. This manual run did not publish a release.
 
 ## Publish a version
 
@@ -31,7 +31,7 @@ git tag -a v0.3.0 -m "ReShiki 0.3.0"
 git push origin v0.3.0
 ```
 
-A `v*` tag triggers builds. A mismatched version fails before packaging. The macOS archive must be signed, notarized, stapled and verified before the release publishes; missing credentials fail the job instead of silently publishing an unsigned macOS download. All five targets must succeed. Windows and Linux packages remain unsigned. Tags containing a prerelease suffix create a GitHub prerelease. Manual builds never publish a release.
+A `v*` tag triggers builds. A mismatched version fails before packaging. The macOS archive must be signed, notarized, stapled and verified before the release publishes; missing credentials fail the job instead of silently publishing an unsigned macOS download. All five packages and the complete live reference tests on macOS ARM64, Linux x64, and Windows x64 must pass before publication. Windows and Linux packages remain unsigned. Tags containing a prerelease suffix create a GitHub prerelease. Manual builds never publish a release.
 
 ## Configure macOS signing
 
@@ -51,13 +51,13 @@ The `macos-signing` GitHub environment contains:
 Authenticate with `gh auth login`. To configure an exported certificate and notarization credentials locally:
 
 ```sh
-uv run --locked python scripts/configure_macos_signing.py --certificate /path/to/developer-id.p12
+python3 scripts/configure_macos_signing.py --certificate /path/to/developer-id.p12
 ```
 
 The script prompts for the certificate password, team, identity and notarization credentials. Password entry is hidden. Credentials are sent to GitHub through standard input; they are never written into tracked files or printed. To add or rotate only the Apple account credentials after the certificate is configured:
 
 ```sh
-uv run --locked python scripts/configure_macos_signing.py
+python3 scripts/configure_macos_signing.py
 ```
 
 Create an app-specific password at [Apple Account](https://account.apple.com/). Do not use your normal account password. GitHub secrets cannot be read back or copied directly from another repository. Keep the original encrypted certificate and password in your secure credential store.
@@ -69,15 +69,24 @@ Setup references: [Apple notarization](https://developer.apple.com/documentation
 ## Build locally
 
 ```sh
-uv sync --locked --python 3.12
-uv run --locked python scripts/build_release.py --installer
+python3 scripts/build_release.py --fetch-inchi-source --installer
 ```
 
-Windows ARM uses a native ARM64 application and an x64 Python/RDKit worker through Windows 11's built-in emulation, because RDKit does not publish Windows ARM wheels. Linux ARM uses native aarch64 chemistry packages. The lock resolver checks the supported chemistry environments. Packaging checks the CPU architecture of both the application and its installed worker, and every build runs the Python regression suite before packaging.
+The native InChI helper is built for the application’s architecture and bundled beside it.
+`--fetch-inchi-source` downloads only the pinned official archive and verifies its checksum
+and source hashes. For offline builds, use `--inchi-source /path/to/INCHI-1-SRC` or
+`--inchi-archive /path/to/INCHI-1-SRC.zip`; `--inchi-helper /path/to/reshiki-inchi-helper`
+reuses a matching build with its adjacent `build.json`. The installed app never builds
+or downloads this helper. Developers can select an existing helper with an absolute
+`RESHIKI_INCHI_HELPER` path.
+
+The application and InChI helper must match the selected CPU architecture, including ARM64 on Windows and Linux. Packaging checks both executable headers. Python is used for build scripts and optional reference tests only; it is not copied into the package.
 
 Build runners are macOS 14, Windows Server 2022 x64, Windows 11 ARM, Ubuntu 22.04 x64, and Ubuntu 24.04 ARM. Pass `--target` to `scripts/build_release.py` to select the explicit Rust target; package names derive from that target, including when packaging Python uses a different architecture.
 
-Build on the target operating system. Python and RDKit are installed by the user’s uv at runtime. Archives are written to `dist/releases/`. On macOS, `scripts/build_macos_app.py` still builds the development app, and `--portable --release` builds an optimized app with the worker source and lockfile included.
+Build on the target operating system with Rust 1.95, a C/C++ compiler and Python 3.12. On Windows, use `python` instead of `python3`. Archives are written to `dist/releases/`.
+
+On macOS, build the native helper first, then run `python3 scripts/build_macos_app.py` for a development app. Add `--portable --release` for an optimized bundle in `dist/ReShiki.app`. Both forms include the helper, license notices and an ad-hoc signature; release signing replaces that signature. `--inchi-helper` selects a matching prebuilt helper.
 
 Install Inno Setup 6.7.3 for local Windows installer builds, or set `RESHIKI_ISCC` to its `ISCC.exe`. Installer verification installs and uninstalls the app, so run it in a disposable Windows account or CI runner. Omit `--installer` to build only a portable archive.
 

@@ -42,7 +42,7 @@ ReShiki desktop checks, using an isolated library directory:
 - Renamed it to **Pyridine ligand**, moved it to **Ligands**, replaced it with the three-group drawing, then undid that library change. The six-atom template and its remembered anchor were restored; the drawing stayed unchanged.
 - Inspected both the invalid-target message and the tinted free-placement preview in the final desktop build. Clicking the green preview committed black JACS drawing colors; Undo restored the saved three-instance drawing. Selecting a grouped caption also kept Templates open. Local evidence is under ignored `artifacts/template-library-qa-20260920/`.
 
-Validation: **89 Rust tests**, including exact-anchor regioisomer identity, wrong-anchor rejection, mixed-object transformation/group remapping, hit testing, authoring isolation from drawing history, repeated placement/Undo, persistence, conflict-safe merging, stale concurrent writers, and corruption handling. The prior **23 Python tests** still cover the unchanged worker. Formatting, Clippy and bundle verification accompany the final build.
+Original update validation: **89 Rust tests**, including exact-anchor regioisomer identity, wrong-anchor rejection, mixed-object transformation/group remapping, hit testing, authoring isolation from drawing history, repeated placement/Undo, persistence, conflict-safe merging, stale concurrent writers, and corruption handling. The existing **23 Python tests** covered the worker at that milestone. Formatting, Clippy and bundle verification accompanied that build.
 
 ## Remaining limits
 

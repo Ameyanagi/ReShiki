@@ -1,0 +1,17 @@
+The molecular CDXML parser in src/chemistry/cdxml/ adapts:
+
+RDKit 2026.03.6, commit 0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985
+External/ChemDraw/{chemdraw,node,bond,fragment,utils}.cpp
+Copyright (c) 2024 Glysade Inc.
+See glysade-LICENSE for the original license and disclaimer.
+
+Glysade/chemdraw v1.0.14
+chemdraw/{CDXObject.h,CDXNode.cpp,CDXBond.cpp,CDXIO.cpp,CDXIO.h}
+Copyright (c) 1986-2025 Revvity Inc, CambridgeSoft Corp and others.
+Object-type ordering and signed 16.16 coordinate conversion.
+See reader-LICENSE for the original license and disclaimer.
+
+Native source fixtures in tests/fixtures/cdxml-molecular/ come from the
+pinned RDKit External/ChemDraw/test_data/ directory. Their provenance is
+recorded beside the files. The native libraries are development references;
+the application parser uses Rust and does not link them.

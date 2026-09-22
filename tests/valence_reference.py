@@ -50,7 +50,7 @@ def emit(name, mol, operation="cache"):
             Chem.SanitizeMol(mol, sanitizeOps=Chem.SanitizeFlags.SANITIZE_FINDRADICALS)
             expected = [a.GetNumRadicalElectrons() for a in mol.GetAtoms()]
         else:
-            mol.UpdatePropertyCache(strict=True)
+            mol.UpdatePropertyCache(strict=operation != "provisional")
             expected = [
                 dict(
                     explicit_valence=a.GetValence(Chem.ValenceType.EXPLICIT),
@@ -91,6 +91,7 @@ def main():
                             number, charge, hydrogens, radical, no_implicit, aromatic
                         )
                         emit(name, mol)
+                        emit(name, mol, "provisional")
                         if no_implicit:
                             # The radical pass reads the unrounded bond-order sum.
                             emit(name, mol, "radicals")
@@ -107,6 +108,7 @@ def main():
                             mol.AddBond(a, b, ORDERS[order])
                         name = f"star {number}/{charge}/{degree}/{order}/{reverse}"
                         emit(name, mol)
+                        emit(name, mol, "provisional")
                         mol.GetAtomWithIdx(0).SetNoImplicit(True)
                         emit(name, mol, "radicals")
 

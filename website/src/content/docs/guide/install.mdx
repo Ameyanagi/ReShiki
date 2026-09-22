@@ -1,37 +1,13 @@
 ---
 title: Install ReShiki
-description: Install uv, download ReShiki, and open your first drawing.
+description: Download ReShiki and open your first drawing.
 ---
 
 import Screenshot from "../../../components/Screenshot.astro";
 
-## 1. Install uv
+Drawing and chemistry tools are included with 0.6.0 builds. For version 0.5.0, follow its [release notes](/developer/changes-0.5/), including the first-launch uv requirement.
 
-ReShiki uses **uv 0.12.3 or later** to set up its chemistry tools on your computer. You do not need to install Python separately.
-
-import { Code, Tabs, TabItem } from "@astrojs/starlight/components";
-
-<Tabs>
-  <TabItem label="macOS">
-    With Homebrew:
-
-    <Code code="brew install uv" lang="sh" />
-
-    Or follow the [uv installer instructions](https://docs.astral.sh/uv/getting-started/installation/).
-
-  </TabItem>
-  <TabItem label="Windows">
-    In PowerShell:
-
-    <Code code="winget install --id astral-sh.uv -e" lang="powershell" />
-
-  </TabItem>
-  <TabItem label="Linux">
-    Follow the [uv installer instructions](https://docs.astral.sh/uv/getting-started/installation/).
-  </TabItem>
-</Tabs>
-
-## 2. Download and open
+## 1. Download and open
 
 [Choose a download on GitHub Releases](https://github.com/Ameyanagi/ReShiki/releases).
 
@@ -47,16 +23,16 @@ Windows setup installs for your account. Mac downloads are signed and notarized;
 
 Upgrading from Moruno? Open your existing `.moruno` drawings normally. Templates, assistant preferences, and recovery drafts are copied on first launch; the originals stay in place. New drawings use `.reshiki`.
 
-Mac requires Apple Silicon and macOS 14+. Windows x64 requires Windows 10/11; Windows ARM requires Windows 11 and uses its built-in x64 emulation for chemistry. Linux builds target Ubuntu 22.04+ on x64 and 24.04+ on ARM. Intel Macs are not supported.
+Mac requires Apple Silicon and macOS 14+. Windows requires Windows 10/11 on x64 or Windows 11 on ARM64. Linux builds target Ubuntu 22.04+ on x64 and 24.04+ on ARM. Intel Macs are not supported.
 
-## 3. Start drawing
+## 2. Start drawing
 
 <Screenshot
   src="/manual/workspace.png"
   alt="ReShiki opens with an editable example molecule and the drawing tools beside it."
 />
 
-First use needs internet access to install the chemistry tools. Later drawing and chemistry checks work offline. The optional assistant needs a Codex connection.
+Drawing and chemistry checks work offline from the first launch. The optional assistant needs a Codex connection.
 
 [Draw your first molecule →](/guide/first-molecule/)
 

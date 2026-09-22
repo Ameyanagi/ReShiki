@@ -15,7 +15,7 @@ Start with JACS / ACS styling. Attach templates, refine selected structures, or 
 
 ## Install
 
-Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then download ReShiki for Apple Silicon macOS, Windows (x64 / ARM64), or Linux (x64 / ARM64). The first launch needs internet access to set up local chemistry tools.
+Download ReShiki for Apple Silicon macOS, Windows (x64 / ARM64), or Linux (x64 / ARM64). Drawing and chemistry tools are included and work offline.
 
 On Mac, open the disk image and drag ReShiki to Applications. On Windows, run setup. Click **ReShiki** in the app to check for updates.
 
@@ -23,6 +23,6 @@ On Mac, open the disk image and drag ReShiki to Applications. On Windows, run se
 
 ## Contribute
 
-ReShiki uses Rust, Iced, and a local Python/RDKit worker. See the [developer guide](https://reshiki.com/developer/development/) for setup, checks, and contribution instructions.
+ReShiki uses Rust, Iced, and a bundled native InChI helper. See the [developer guide](https://reshiki.com/developer/development/) for setup, checks, and contribution instructions.
 
 ReShiki is under active development. [Report a problem](https://github.com/Ameyanagi/ReShiki/issues).

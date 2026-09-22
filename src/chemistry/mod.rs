@@ -1,13 +1,37 @@
-//! Properties and valence calculated in Rust from the backend's sanitized graph.
+//! Molecular preparation, drawing reconstruction and properties in safe Rust.
 //!
-//! Aromaticity, resonance cleanup and other sanitization still belong to the
-//! backend. Never use cached drawing labels: they may predate the latest edit.
+//! Migrated operations use local sanitization and stereo perception. Remaining
+//! imports, full CIP labels and identifiers still use the backend. Never use cached
+//! drawing labels: they may predate the latest edit.
 //! Mass/formula semantics adapted from RDKit MolProps.cpp and Atom::getMass.
 //! Copyright (C) 2001-2024 Greg Landrum and other RDKit contributors.
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
+pub mod abbreviations;
+pub mod aromaticity;
 mod atomic_data;
+pub mod cdxml;
+pub mod cleanup;
+pub mod cx;
+pub mod depict;
+pub mod descriptors;
+pub mod document;
+pub mod electronic;
 pub mod graph;
+pub mod hydrogens;
+pub mod inchi;
+pub mod kekulize;
+pub mod molfile;
+mod native_order;
+pub mod normalize;
+pub mod ranking;
+pub mod reaction;
 pub mod rings;
+pub mod sanitize;
+pub mod smarts;
+pub mod smiles;
+pub mod stereo;
+#[cfg(any(test, all(target_os = "windows", target_arch = "aarch64")))]
+mod windows_trigonometry;
 
 pub use atomic_data::RDKIT_VERSION;
 use atomic_data::{ELECTRON_MASS, ELEMENTS, ISOTOPES};
@@ -37,6 +61,7 @@ struct Element {
     symbol: &'static str,
     average: f64,
     exact: f64,
+    common_isotope: u16,
     outer_electrons: i32,
     valences: &'static [i32],
 }
@@ -122,6 +147,7 @@ pub fn properties(atoms: &[AtomFacts]) -> Result<Properties, String> {
 }
 
 /// Complete the private worker response before exposing the public engine API.
+#[cfg(any(test, feature = "rdkit-reference"))]
 pub(crate) fn complete_analysis(result: &mut serde_json::Value) -> Result<(), String> {
     let Some(analysis) = result.get_mut("analysis").filter(|a| !a.is_null()) else {
         // Figure-only and reaction-export responses may have no analysis.
@@ -132,8 +158,6 @@ pub(crate) fn complete_analysis(result: &mut serde_json::Value) -> Result<(), St
     struct Input {
         rdkit_version: String,
         graph: graph::Graph,
-        // Temporary fallback for platform-dependent legacy ring pruning.
-        reference_rings: u32,
     }
     let input: Input = serde_json::from_value(
         analysis
@@ -148,19 +172,37 @@ pub(crate) fn complete_analysis(result: &mut serde_json::Value) -> Result<(), St
             input.rdkit_version
         ));
     }
-    let ring_count = match rings::perceive(&input.graph, rings::Options::default()) {
-        Ok(rings) => {
-            u32::try_from(rings.atoms.len()).map_err(|_| "Ring count exceeds supported range")?
-        }
-        Err(rings::RingError::UnresolvedOrdering) => input.reference_rings,
-        Err(error) => return Err(error.to_string()),
+    if analysis.get("inchikey").is_some() {
+        return Err("Unexpected native InChIKey".into());
+    }
+    let inchi = analysis
+        .get("inchi")
+        .and_then(serde_json::Value::as_str)
+        .ok_or("Missing molecular InChI input")?;
+    // Empty molecules and unsupported identifier chemistry keep empty keys.
+    // Every nonempty identifier must pass the bounded Rust key parser.
+    let inchikey = if inchi.is_empty() {
+        String::new()
+    } else {
+        inchi::key::from_inchi(inchi).map_err(|e| format!("Invalid molecular InChI: {e}"))?
     };
+    let ring_atoms = rings::perceive(&input.graph, rings::Options::default())
+        .map_err(|e| e.to_string())?
+        .atoms;
+    let descriptors = descriptors::calculate(&input.graph, &ring_atoms)?;
+    let ring_count =
+        u32::try_from(ring_atoms.len()).map_err(|_| "Ring count exceeds supported range")?;
     let mut derived = serde_json::to_value(properties(&input.graph.atom_facts()?)?)
         .map_err(|error| format!("Invalid molecular properties: {error}"))?;
-    derived
+    let fields = derived
         .as_object_mut()
-        .ok_or("Invalid molecular properties")?
-        .insert("rings".into(), ring_count.into());
+        .ok_or("Invalid molecular properties")?;
+    fields.insert("rings".into(), ring_count.into());
+    fields.insert("logp".into(), descriptors.logp.into());
+    fields.insert("tpsa".into(), descriptors.tpsa.into());
+    fields.insert("donors".into(), descriptors.donors.into());
+    fields.insert("acceptors".into(), descriptors.acceptors.into());
+    fields.insert("inchikey".into(), inchikey.into());
     let fields = derived.as_object().ok_or("Invalid molecular properties")?;
     let analysis = analysis
         .as_object_mut()
@@ -177,20 +219,26 @@ mod tests {
 
     #[test]
     fn worker_completion_is_atomic_and_requires_matching_data() -> Result<(), String> {
-        let input = json!({"rdkit_version": RDKIT_VERSION, "reference_rings": 99, "graph": {"atoms": [{
+        let input = json!({"rdkit_version": RDKIT_VERSION, "graph": {"atoms": [{
             "atomic_number": 6, "isotope": 0, "charge": 0,
             "explicit_hydrogens": 0, "radical_electrons": 0,
             "no_implicit": false, "aromatic": false,
         }], "bonds": []}});
-        let mut response = json!({"analysis": {"smiles": "C", "property_input": input}});
+        let mut response = json!({"analysis": {
+            "smiles": "C", "inchi": "InChI=1S/CH4/h1H4", "property_input": input,
+        }});
         complete_analysis(&mut response)?;
         assert_eq!(response["analysis"]["formula"], "CH4");
         assert_eq!(response["analysis"]["mass"], 16.043);
-        // Ordinary graphs use the Rust result, not the reference fallback.
+        // Ring counts are calculated from the graph.
         assert_eq!(response["analysis"]["rings"], 0);
         assert_eq!(response["analysis"]["smiles"], "C");
+        assert_eq!(
+            response["analysis"]["inchikey"],
+            "VNWKTOKETHGBQD-UHFFFAOYSA-N"
+        );
         assert!(response["analysis"].get("property_input").is_none());
-        for mut bad_input in [
+        for bad_input in [
             json!(null),
             json!({"rdkit_version": "different", "graph": {"atoms": [], "bonds": []}}),
             json!({"rdkit_version": RDKIT_VERSION, "graph": {"atoms": [{"atomic_number": 6}]}}),
@@ -206,10 +254,9 @@ mod tests {
                 "radical_electrons": 0, "no_implicit": false, "aromatic": false,
             }], "bonds": []}}),
         ] {
-            if let Some(input) = bad_input.as_object_mut() {
-                input.insert("reference_rings".into(), 0.into());
-            }
-            let mut bad = json!({"analysis": {"smiles": "C", "property_input": bad_input}});
+            let mut bad = json!({"analysis": {
+                "smiles": "C", "inchi": "InChI=1S/CH4/h1H4", "property_input": bad_input,
+            }});
             let original = bad.clone();
             assert!(complete_analysis(&mut bad).is_err());
             assert_eq!(bad, original);
@@ -222,32 +269,72 @@ mod tests {
     }
 
     #[test]
-    fn unresolved_ring_ordering_retains_reference_and_missing_fallback_is_rejected()
-    -> Result<(), String> {
-        let graph: serde_json::Value = serde_json::from_str(include_str!(
-            "../../tests/fixtures/ring-order-dependent.json"
-        ))
-        .map_err(|e| e.to_string())?;
-        let input = json!({"rdkit_version": RDKIT_VERSION, "reference_rings": 32, "graph": graph});
-        let mut response = json!({"analysis": {"property_input": input}});
-        complete_analysis(&mut response)?;
-        assert_eq!(response["analysis"]["rings"], 32);
-        assert!(response["analysis"].get("property_input").is_none());
-        for bad in [json!(null), json!(-1), json!(1.5), json!(4294967296u64)] {
-            let mut input = input.clone();
-            input["reference_rings"] = bad;
-            let mut response = json!({"analysis": {"property_input": input}});
+    fn worker_identifiers_are_checked_before_any_response_changes() -> anyhow::Result<()> {
+        let original = json!({"analysis": {
+            "smiles": "C", "inchi": "InChI=1S/CH4/h1H4",
+            "property_input": {"rdkit_version": RDKIT_VERSION, "graph": {
+                "atoms": [], "bonds": [],
+            }},
+        }});
+        for malformed in [
+            json!(null),
+            json!(42),
+            json!([]),
+            json!("bad"),
+            json!("InChI=1S/é"),
+            json!("C".repeat(inchi::key::MAX_INPUT_BYTES + 1)),
+        ] {
+            let mut response = original.clone();
+            response["analysis"]["inchi"] = malformed;
             let before = response.clone();
             assert!(complete_analysis(&mut response).is_err());
             assert_eq!(response, before);
         }
-        let mut input = input;
-        input
+        let mut missing = original.clone();
+        missing["analysis"]
             .as_object_mut()
-            .ok_or("Missing fixture")?
-            .remove("reference_rings");
-        let mut response = json!({"analysis": {"property_input": input}});
+            .ok_or_else(|| anyhow::anyhow!("No analysis"))?
+            .remove("inchi");
+        let before = missing.clone();
+        assert!(complete_analysis(&mut missing).is_err());
+        assert_eq!(missing, before);
+        for unexpected in [json!(null), json!(""), json!("VNWKTOKETHGBQD-UHFFFAOYSA-N")] {
+            let mut response = original.clone();
+            response["analysis"]["inchikey"] = unexpected;
+            let before = response.clone();
+            assert_eq!(
+                complete_analysis(&mut response).err().as_deref(),
+                Some("Unexpected native InChIKey")
+            );
+            assert_eq!(response, before);
+        }
+        let mut empty = original;
+        empty["analysis"]["inchi"] = "".into();
+        complete_analysis(&mut empty).map_err(anyhow::Error::msg)?;
+        assert_eq!(empty["analysis"]["inchikey"], "");
+        Ok(())
+    }
+
+    #[test]
+    fn dense_ring_analysis_needs_no_reference_override() -> anyhow::Result<()> {
+        let graph: serde_json::Value = serde_json::from_str(include_str!(
+            "../../tests/fixtures/ring-order-dependent.json"
+        ))?;
+        let input = json!({"rdkit_version": RDKIT_VERSION, "graph": graph});
+        let mut response = json!({"analysis": {"inchi": "", "property_input": input}});
+        complete_analysis(&mut response).map_err(anyhow::Error::msg)?;
+        assert!(
+            response["analysis"]["rings"]
+                .as_u64()
+                .is_some_and(|n| n > 1)
+        );
+        assert!(response["analysis"].get("property_input").is_none());
+        let mut stale = input;
+        stale["reference_rings"] = json!([[0, 8, 16]]);
+        let mut response = json!({"analysis": {"property_input": stale}});
+        let original = response.clone();
         assert!(complete_analysis(&mut response).is_err());
+        assert_eq!(response, original);
         Ok(())
     }
 }

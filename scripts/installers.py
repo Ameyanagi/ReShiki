@@ -7,9 +7,33 @@ import platform
 import shutil
 import sys
 import tempfile
+import time
 from pathlib import Path
 
-from build_release import ROOT, run, verify_binary
+from build_release import ROOT, run, verify_binary, verify_inchi_helper
+from check_runtime_dependencies import verify_payload, verify_runtime
+from inchi_source import manifest
+
+
+class InstallerCheckDirectory(tempfile.TemporaryDirectory):
+    def cleanup(self):
+        # Inno's clone deletes the original EXE after that process returns:
+        # https://jrsoftware.org/ishelp/topic_uninstexitcodes.htm
+        deadline = time.monotonic() + 30
+        delay = 0.05
+        while True:
+            try:
+                super().cleanup()
+                return
+            except OSError as error:
+                if getattr(error, "winerror", None) not in {5, 32, 33}:
+                    raise
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    error.add_note("Installer check cleanup remained locked after 30 seconds.")
+                    raise
+                time.sleep(min(delay, remaining))
+                delay = min(delay * 2, 0.25)
 
 
 def checksum(output):
@@ -63,21 +87,18 @@ def verify_windows_installer(installer, source):
     import winreg
 
     ole_key = r"Software\Classes\CLSID\{3BAC2B7E-73A2-4F3A-9CE7-5E9B438C59B4}\LocalServer32"
-    with tempfile.TemporaryDirectory(prefix="ReShiki installer check ") as temporary:
+    with InstallerCheckDirectory(prefix="ReShiki installer check ") as temporary:
         root = Path(temporary)
         destination = root / "Installed ReShiki"
-        environment = dict(os.environ)
-        for key in ("RESHIKI_PYTHON", "MORUNO_PYTHON"):
-            environment.pop(key, None)
-        environment.update(
-            RESHIKI_DATA_DIR=str(root / "User data"),
-            RESHIKI_RUNTIME_DIR=str(root / "Chemistry runtime"),
-            RESHIKI_ROOT=str(root / "No checkout"),
-        )
-        user_data = Path(environment["RESHIKI_DATA_DIR"])
+        user_data = root / "User data"
         user_data.mkdir()
         sentinel = user_data / "keep.reshiki"
         sentinel.write_text("User drawing", encoding="utf-8")
+        # Old user-owned caches and drawings must survive app-owned worker retirement.
+        user_cache = root / "User cache/chemistry"
+        user_cache.mkdir(parents=True)
+        cache_sentinel = user_cache / "keep.txt"
+        cache_sentinel.write_text("User cache", encoding="utf-8")
         flags = [
             "/VERYSILENT",
             "/SUPPRESSMSGBOXES",
@@ -88,13 +109,20 @@ def verify_windows_installer(installer, source):
             f"/DIR={destination}",
         ]
         try:
-            for _ in range(2):
+            verify_payload(source)
+            for installation in range(2):
+                if installation == 1:
+                    legacy = destination / "chemistry/engine"
+                    legacy.mkdir(parents=True)
+                    (legacy / "worker.py").write_text("Legacy worker", encoding="utf-8")
+                    (legacy.parent / "uv.lock").write_text("Legacy lock", encoding="utf-8")
                 run([installer, *flags], timeout=180)
                 with winreg.OpenKey(winreg.HKEY_CURRENT_USER, ole_key) as key:
                     command, _ = winreg.QueryValueEx(key, "")
                 if command != f'"{destination / "reshiki.exe"}" --ole-server':
                     raise ValueError("Installed Office editor registration is incorrect")
-                # Every shipped byte, including the worker/lockfile, must survive setup and upgrade.
+                verify_payload(destination)
+                # Every shipped byte must survive setup and upgrade.
                 for original in source.rglob("*"):
                     if original.is_file():
                         installed = destination / original.relative_to(source)
@@ -103,16 +131,11 @@ def verify_windows_installer(installer, source):
                             or installed.read_bytes() != original.read_bytes()
                         ):
                             raise ValueError(f"Installed file mismatch: {original.name}")
-            response = run(
-                [destination / "reshiki.exe", "--engine-check"],
-                cwd=root,
-                env=environment,
-                capture_output=True,
-                text=True,
-                timeout=660,
-            )
-            if json.loads(response.stdout).get("analysis", {}).get("smiles") != "CCO":
-                raise ValueError("Installed Windows chemistry check failed")
+            metadata = json.loads((source / "build.json").read_text(encoding="utf-8"))
+            helper = destination / "reshiki-inchi-helper.exe"
+            verify_binary(helper, "windows", metadata["architecture"])
+            verify_inchi_helper(helper, manifest()["inchi_version"])
+            verify_runtime(destination / "reshiki.exe", destination, user_data=user_data)
         finally:
             uninstaller = destination / "unins000.exe"
             if uninstaller.is_file():
@@ -121,6 +144,8 @@ def verify_windows_installer(installer, source):
             raise ValueError("Uninstaller left the application executable behind")
         if sentinel.read_text(encoding="utf-8") != "User drawing":
             raise ValueError("Uninstaller modified user data")
+        if cache_sentinel.read_text(encoding="utf-8") != "User cache":
+            raise ValueError("Installer or uninstaller modified the user chemistry cache")
     print("Windows installation, upgrade, chemistry, and uninstallation verified.")
 
 
@@ -134,8 +159,7 @@ def mac_disk_image(folder, output_dir, signed=False):
         (staging / "Applications").symlink_to("/Applications")
         (staging / "Install ReShiki.txt").write_text(
             "Drag ReShiki.app to Applications.\n\n"
-            "Install uv before opening ReShiki:\n    brew install uv\n\n"
-            "First use installs the chemistry tools and needs internet access.\n"
+            "Drawing and chemistry tools are included and work offline.\n"
             "https://reshiki.com/guide/install/\n",
             encoding="utf-8",
         )
@@ -178,6 +202,10 @@ def verify_mac_disk_image(output, signed):
         finally:
             run(["hdiutil", "detach", mount])
         verify_binary(installed / "Contents/MacOS/reshiki", "macos", "arm64")
+        helper = installed / "Contents/MacOS/reshiki-inchi-helper"
+        verify_binary(helper, "macos", "arm64")
+        verify_inchi_helper(helper, manifest()["inchi_version"])
+        verify_runtime(installed / "Contents/MacOS/reshiki", installed)
         run(["codesign", "--verify", "--deep", "--strict", installed])
         if signed:
             from sign_macos import verify_app

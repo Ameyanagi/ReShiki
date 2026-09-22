@@ -1,11 +1,13 @@
 use crate::document::Document;
 use serde::{Deserialize, Serialize};
-use std::{path::PathBuf, process::Stdio, sync::Arc, time::Duration};
-use tokio::{
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
-    process::{Child, ChildStdin, ChildStdout, Command},
-    sync::Mutex,
-};
+pub mod native_aromatic;
+pub mod native_cleanup;
+pub mod native_import;
+pub mod native_response;
+#[cfg(feature = "rdkit-reference")]
+mod reference;
+#[cfg(feature = "rdkit-reference")]
+pub use reference::PythonEngine;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Request {
@@ -77,8 +79,8 @@ impl Request {
                 .map(|g| (g.id, g.commands()))
                 .collect()
         });
-        // Exchange uses the renderer's measured text, avoiding a second font
-        // engine in Python and keeping centered/right-aligned captions in place.
+        // Exchange uses the renderer's measured text to keep centered and
+        // right-aligned captions in place.
         let text_layout = (operation == "export").then(|| {
             document
                 .annotations
@@ -144,7 +146,7 @@ pub struct Response {
     pub warnings: Vec<String>,
 }
 
-/// Shared contract for local Rust operations and the remaining chemistry backend.
+/// Shared contract for native operations and optional custom chemistry backends.
 pub trait ChemistryEngine: Send + Sync {
     fn execute(
         &self,
@@ -152,28 +154,41 @@ pub trait ChemistryEngine: Send + Sync {
     ) -> impl std::future::Future<Output = Result<Response, String>> + Send;
 }
 
-/// Local operations are migrated here one at a time; chemistry retains the
-/// same checked request/response interface and can use a different backend.
-#[derive(Clone)]
-pub struct LocalEngine<B = PythonEngine> {
-    chemistry: B,
+/// Molecular response backend used after local drawing operations are dispatched.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NativeBackend;
+
+impl ChemistryEngine for NativeBackend {
+    async fn execute(&self, request: Request) -> Result<Response, String> {
+        native_response::execute(request)
+            .await
+            .map_err(|error| error.to_string())
+    }
 }
 
-impl Default for LocalEngine<PythonEngine> {
+/// Native drawing and chemistry operations behind a checked request interface.
+/// `with_backend` retains local exchange conversions for custom backends.
+#[derive(Clone)]
+pub struct LocalEngine<B = NativeBackend> {
+    chemistry: B,
+    native_responses: bool,
+}
+
+impl Default for LocalEngine<NativeBackend> {
     fn default() -> Self {
         Self {
-            chemistry: PythonEngine {
-                local_properties: true,
-                local_pictures: true,
-                ..PythonEngine::default()
-            },
+            native_responses: true,
+            chemistry: NativeBackend,
         }
     }
 }
 
 impl<B: ChemistryEngine> LocalEngine<B> {
     pub fn with_backend(chemistry: B) -> Self {
-        Self { chemistry }
+        Self {
+            chemistry,
+            native_responses: false,
+        }
     }
 
     pub async fn request(&self, request: Request) -> Result<Response, String> {
@@ -186,6 +201,99 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
         use base64::{Engine, engine::general_purpose::STANDARD};
         if request.protocol != 1 {
             return Err("Unsupported protocol version".into());
+        }
+        if self.native_responses && request.operation == "clean" {
+            return native_cleanup::execute(request, None)
+                .await
+                .map_err(|error| error.to_string());
+        }
+        if self.native_responses && request.operation == "aromatic" {
+            return native_aromatic::execute(request, None)
+                .await
+                .map_err(|error| error.to_string());
+        }
+        if request.operation == "abbreviate" {
+            let document = request
+                .document
+                .take()
+                .ok_or("Missing abbreviation drawing")?;
+            let selected = request.selected_ids.clone().unwrap_or_default();
+            let label = request.text.clone();
+            let replace = request.format.as_deref() == Some("replace");
+            request.document = Some(
+                tokio::task::spawn_blocking(move || {
+                    use crate::chemistry::{abbreviations, document as chemistry};
+                    document.validate()?;
+                    abbreviations::validate(&document).map_err(|e| e.to_string())?;
+                    let molecule = chemistry::prepare(&document).map_err(|e| e.to_string())?;
+                    if replace {
+                        abbreviations::replace(&document, &selected, label.as_deref().unwrap_or(""))
+                            .map_err(|e| e.to_string())
+                    } else {
+                        abbreviations::find(&document, &molecule, &selected, label.as_deref())
+                            .map_err(|e| e.to_string())
+                    }
+                })
+                .await
+                .map_err(|e| format!("Abbreviation edit failed: {e}"))??,
+            );
+            // Reuse drawing reconstruction and analysis for the edited snapshot.
+            // Unlike Analyze, the original abbreviation operation accepts an empty drawing.
+            request.operation = "finish_abbreviation".into();
+        }
+        if self.native_responses
+            && (matches!(
+                request.operation.as_str(),
+                "analyze" | "finish_abbreviation"
+            ) || request.operation == "export"
+                && matches!(
+                    request.format.as_deref(),
+                    Some("smiles" | "mol" | "inchi" | "cdxml" | "cdx")
+                ))
+        {
+            return native_response::execute(request)
+                .await
+                .map_err(|e| e.to_string());
+        }
+        if request.operation == "export"
+            && let Some(format @ ("rxn" | "rsmi")) = request.format.as_deref()
+        {
+            let reaction_smiles = format == "rsmi";
+            use crate::chemistry::reaction;
+            let document = request.document.clone().ok_or("Missing reaction drawing")?;
+            let selected = request.selected_ids.clone();
+            let output = tokio::task::spawn_blocking(move || {
+                if reaction_smiles {
+                    reaction::write_smiles(&document, selected.as_deref())
+                } else {
+                    reaction::write_rxn(&document, selected.as_deref())
+                }
+            })
+            .await
+            .map_err(|e| format!("Reaction export failed: {e}"))?;
+            match output {
+                Ok(output) => {
+                    return Ok(Response {
+                        document: None,
+                        analysis: None,
+                        output: Some(output),
+                        engine_version: crate::chemistry::RDKIT_VERSION.into(),
+                        warnings: vec![reaction::EXPORT_WARNING.into()],
+                    });
+                }
+                Err(error) => return Err(error.to_string()),
+            }
+        }
+        if self.native_responses && request.operation == "import" {
+            return match native_import::execute(request, None)
+                .await
+                .map_err(|e| e.to_string())?
+            {
+                native_import::Outcome::Complete(response) => Ok(*response),
+                native_import::Outcome::Deferred(_) => {
+                    Err("Native import unexpectedly deferred an import operation".into())
+                }
+            };
         }
         let binary = request.format.as_deref() == Some("cdx");
         let export_binary = binary && request.operation == "export";
@@ -226,188 +334,5 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
     }
 }
 
-struct Worker {
-    _child: Child,
-    input: ChildStdin,
-    output: BufReader<ChildStdout>,
-    next_id: u64,
-}
-#[derive(Clone, Default)]
-pub struct PythonEngine {
-    worker: Arc<Mutex<Option<Worker>>>,
-    // Default false keeps an independent reference backend for differential tests.
-    local_properties: bool,
-    local_pictures: bool,
-}
-impl PythonEngine {
-    async fn spawn() -> Result<Worker, String> {
-        let packaged = std::env::current_exe()
-            .ok()
-            .and_then(|exe| crate::python_runtime::packaged_project(&exe));
-        let root = packaged.clone().unwrap_or_else(|| {
-            crate::compatibility::environment("ROOT")
-                .map(PathBuf::from)
-                .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")))
-        });
-        let python = if let Some(path) = crate::compatibility::environment("PYTHON") {
-            PathBuf::from(path)
-        } else if let Some(project) = &packaged {
-            crate::python_runtime::prepare(project).await?
-        } else {
-            root.join(if cfg!(windows) {
-                ".venv/Scripts/python.exe"
-            } else {
-                ".venv/bin/python"
-            })
-        };
-        let mut command = Command::new(python);
-        command
-            .arg("-u")
-            .arg(root.join("engine/worker.py"))
-            .env("PYTHONDONTWRITEBYTECODE", "1")
-            .env("PYTHONUTF8", "1");
-        // A GUI launch on Windows must not open a console for the local worker.
-        #[cfg(windows)]
-        command.creation_flags(0x08000000);
-        let mut child = command
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
-            .kill_on_drop(true)
-            .spawn()
-            .map_err(|e| {
-                format!(
-                    "Could not start chemistry worker: {e}. Run `uv sync` in the project directory."
-                )
-            })?;
-        Ok(Worker {
-            input: child.stdin.take().ok_or("Missing worker input")?,
-            output: BufReader::new(child.stdout.take().ok_or("Missing worker output")?),
-            _child: child,
-            next_id: 1,
-        })
-    }
-    pub async fn request(&self, request: Request) -> Result<Response, String> {
-        if let Some(doc) = &request.document {
-            doc.validate()?;
-        }
-        let picture_exports = if self.local_pictures
-            && request.operation == "export"
-            && matches!(request.format.as_deref(), Some("cdxml" | "cdx"))
-            && let Some(document) = request.document.clone()
-        {
-            Some(
-                tokio::task::spawn_blocking(move || {
-                    crate::pictures::exchange::prepare_exports(&document)
-                })
-                .await
-                .map_err(|e| format!("Picture preparation failed: {e}"))??,
-            )
-        } else {
-            None
-        };
-        let mut slot = self.worker.lock().await;
-        let starting = slot.is_none();
-        if starting {
-            *slot = Some(Self::spawn().await?);
-        }
-        // A newly installed RDKit environment may need additional time for the
-        // operating system to load and validate its native libraries once.
-        let timeout_seconds = if starting { 120 } else { 30 };
-        let result = tokio::time::timeout(Duration::from_secs(timeout_seconds), async {
-            let worker = slot.as_mut().ok_or("Chemistry worker is unavailable")?;
-            let id = worker.next_id;
-            worker.next_id = worker
-                .next_id
-                .checked_add(1)
-                .ok_or("Chemistry request counter exhausted; retry to restart the worker")?;
-            let mut message = serde_json::to_value(request).map_err(|e| e.to_string())?;
-            let envelope = message
-                .as_object_mut()
-                .ok_or("Invalid chemistry request envelope")?;
-            envelope.insert("id".into(), id.into());
-            if self.local_properties {
-                envelope.insert("local_properties".into(), true.into());
-            }
-            if self.local_pictures {
-                envelope.insert("local_pictures".into(), true.into());
-                if let Some(exports) = picture_exports {
-                    envelope.insert(
-                        "picture_exports".into(),
-                        serde_json::to_value(exports).map_err(|e| e.to_string())?,
-                    );
-                }
-            }
-            let mut bytes = serde_json::to_vec(&message).map_err(|e| e.to_string())?;
-            bytes.push(b'\n');
-            worker
-                .input
-                .write_all(&bytes)
-                .await
-                .map_err(|e| e.to_string())?;
-            worker.input.flush().await.map_err(|e| e.to_string())?;
-            let mut line = String::new();
-            if worker
-                .output
-                .read_line(&mut line)
-                .await
-                .map_err(|e| e.to_string())?
-                == 0
-            {
-                return Err("Chemistry worker exited unexpectedly".into());
-            }
-            let value: serde_json::Value =
-                serde_json::from_str(&line).map_err(|e| e.to_string())?;
-            if value.get("id").and_then(serde_json::Value::as_u64) != Some(id) {
-                return Err("Chemistry response ID mismatch".into());
-            }
-            if value.get("ok").and_then(serde_json::Value::as_bool) != Some(true) {
-                return Err(value
-                    .get("error")
-                    .and_then(serde_json::Value::as_str)
-                    .unwrap_or("Chemistry error")
-                    .to_string());
-            }
-            let mut result = value
-                .get("result")
-                .ok_or("Missing chemistry result")?
-                .clone();
-            if self.local_properties || self.local_pictures {
-                let (properties, pictures) = (self.local_properties, self.local_pictures);
-                result = tokio::task::spawn_blocking(move || {
-                    if properties {
-                        crate::chemistry::complete_analysis(&mut result)?;
-                    }
-                    if pictures {
-                        crate::pictures::exchange::complete_imports(result)
-                    } else {
-                        Ok(result)
-                    }
-                })
-                .await
-                .map_err(|e| format!("Local chemistry completion failed: {e}"))??;
-            }
-            let response: Response = serde_json::from_value(result).map_err(|e| e.to_string())?;
-            if let Some(doc) = &response.document {
-                doc.validate()?;
-            }
-            Ok(response)
-        })
-        .await
-        .unwrap_or_else(|_| {
-            Err(format!(
-                "Chemistry operation timed out after {timeout_seconds} seconds"
-            ))
-        });
-        // Reset also on chemistry errors: the next request always has a clean stream.
-        if result.is_err() {
-            *slot = None;
-        }
-        result
-    }
-}
-impl ChemistryEngine for PythonEngine {
-    async fn execute(&self, request: Request) -> Result<Response, String> {
-        self.request(request).await
-    }
-}
+#[cfg(test)]
+mod tests;

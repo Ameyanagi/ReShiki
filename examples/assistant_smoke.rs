@@ -5,8 +5,10 @@ use reshiki::{
 };
 use std::io::Write;
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let account = codex::connect(Default::default()).await?;
+async fn main() -> anyhow::Result<()> {
+    let account = codex::connect(Default::default())
+        .await
+        .map_err(anyhow::Error::msg)?;
     writeln!(
         std::io::stdout(),
         "Codex connected: {}; available models: {}",
@@ -50,15 +52,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tx,
         Some(canvas),
     )
-    .await?;
+    .await
+    .map_err(anyhow::Error::msg)?;
     let output = std::path::PathBuf::from(
         option("--output")
             .map(String::as_str)
             .unwrap_or("artifacts/assistant-qa"),
     );
-    let document =
-        assistant::render(&LocalEngine::default(), &proposal, &Default::default()).await?;
-    document.validate()?;
+    let document = assistant::render(&LocalEngine::default(), &proposal, &Default::default())
+        .await
+        .map_err(anyhow::Error::msg)?;
+    document.validate().map_err(anyhow::Error::msg)?;
     std::fs::create_dir_all(&output)?;
     std::fs::write(
         output.join("proposal.json"),
@@ -71,7 +75,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     std::fs::write(output.join("proposal.svg"), reshiki::scene::svg(&document))?;
     std::fs::write(
         output.join("proposal.png"),
-        reshiki::export::drawing(&document, "png")?,
+        reshiki::export::drawing(&document, "png").map_err(anyhow::Error::msg)?,
     )?;
     writeln!(
         std::io::stdout(),

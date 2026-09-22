@@ -10,7 +10,7 @@
     "website/dist/**",
     "website/src/content/docs/reference/**",
     "website/src/content/docs/developer/**",
-    "package-lock.json",
+    "bun.lock",
     "uv.lock",
     "Cargo.lock"
   ]

@@ -485,11 +485,10 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn previous_native_and_text_clipboards_remain_editable()
-    -> Result<(), Box<dyn std::error::Error>> {
+    async fn previous_native_and_text_clipboards_remain_editable() -> anyhow::Result<()> {
         let json = include_str!("../tests/fixtures/legacy-drawing.moruno");
         let expected: Document = serde_json::from_str(json)?;
-        expected.validate()?;
+        expected.validate().map_err(anyhow::Error::msg)?;
         for (kind, contents) in [
             ("dev.moruno.drawing", json.to_owned()),
             (NATIVE, json.to_owned()),
@@ -508,7 +507,8 @@ mod tests {
                     representations: vec![Representation::new(kind, contents.as_bytes())],
                 },
             )
-            .await?;
+            .await
+            .map_err(anyhow::Error::msg)?;
             assert_eq!(restored, expected);
         }
         Ok(())

@@ -1,9 +1,4 @@
-Install uv before opening ReShiki.
-
-In PowerShell:
-    winget install --id astral-sh.uv -e
-
-ReShiki uses uv to install its chemistry tools on first use. You do not need to install Python yourself. First use needs an internet connection; later drawing and chemistry checks work offline.
+Drawing and chemistry tools are included and work offline.
 
 Setup installs ReShiki for your Windows account. Updating or uninstalling keeps your drawings, templates, preferences and recovery drafts.
 

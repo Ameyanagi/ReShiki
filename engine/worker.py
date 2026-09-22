@@ -19,6 +19,7 @@ if TYPE_CHECKING or __package__:
         aromatic,
         cleanup,
         drawing_styles,
+        prepared,
         reactions,
     )
     from .arrows_exchange import read_arrow, write_arrow
@@ -36,6 +37,7 @@ else:
     import aromatic
     import cleanup
     import drawing_styles
+    import prepared
     import reactions
     from arrows_exchange import read_arrow, write_arrow
     from bonds_exchange import chemistry_xml, read_bonds, write_bond, write_crossings
@@ -341,7 +343,7 @@ def to_document(mol, base=None, rewedge=False):
     }
 
 
-def analyze(mol, *, local_properties=False):
+def analyze(mol, *, local_properties=False, local_smiles=False):
     identifiers = not any(
         b.GetBondType() in (Chem.BondType.HYDROGEN, Chem.BondType.ONEANDAHALF)
         for b in mol.GetBonds()
@@ -350,13 +352,8 @@ def analyze(mol, *, local_properties=False):
         b.GetBondType() in (Chem.BondType.DATIVE, Chem.BondType.QUADRUPLE) for b in mol.GetBonds()
     )
     result = {
-        "smiles": Chem.MolToSmiles(mol) if identifiers else "",
-        "logp": rdMolDescriptors.CalcCrippenDescriptors(mol)[0],
-        "tpsa": rdMolDescriptors.CalcTPSA(mol),
-        "donors": rdMolDescriptors.CalcNumHBD(mol),
-        "acceptors": rdMolDescriptors.CalcNumHBA(mol),
+        "smiles": Chem.MolToSmiles(mol) if identifiers and not local_smiles else "",
         "inchi": Chem.MolToInchi(mol) if inchi_ok else "",
-        "inchikey": Chem.MolToInchiKey(mol) if inchi_ok else "",
     }
     if local_properties:
         # Supply the sanitized graph, not toolkit-computed H counts. Rust owns
@@ -365,7 +362,6 @@ def analyze(mol, *, local_properties=False):
             "rdkit_version": rdBase.rdkitVersion,
             # Retain only as a fallback while Rust certifies equal-sized ring
             # pruning. Some dense graphs depend on the C++ sort implementation.
-            "reference_rings": rdMolDescriptors.CalcNumRings(mol),
             "graph": {
                 "atoms": [
                     {
@@ -391,7 +387,15 @@ def analyze(mol, *, local_properties=False):
             },
         }
     else:
+        # The independent reference retains its original native key call.
+        # Migrated analysis derives the key from the InChI already generated,
+        # avoiding a second molecular canonicalization in the native library.
         result.update(
+            inchikey=Chem.MolToInchiKey(mol) if inchi_ok else "",
+            logp=rdMolDescriptors.CalcCrippenDescriptors(mol)[0],
+            tpsa=rdMolDescriptors.CalcTPSA(mol),
+            donors=rdMolDescriptors.CalcNumHBD(mol),
+            acceptors=rdMolDescriptors.CalcNumHBA(mol),
             rings=rdMolDescriptors.CalcNumRings(mol),
             formula=rdMolDescriptors.CalcMolFormula(mol),
             mass=rdMolDescriptors._CalcMolWt(mol),
@@ -962,18 +966,138 @@ def export_cdxml(
 def handle(request):
     if request.get("protocol") != 1:
         raise ValueError("Unsupported protocol version")
+    prepared_reaction = request.get("prepared_reaction", False)
+    if not isinstance(prepared_reaction, bool):
+        raise ValueError("prepared_reaction must be a boolean")
+    if prepared_reaction and (
+        request.get("operation") != "import"
+        or request.get("format") not in ("rxn", "rsmi")
+        or not isinstance(request.get("document"), dict)
+        or not isinstance(request.get("prepared_molecule"), dict)
+        or any(
+            request.get(key) is not None
+            for key in ("prepared_parts", "prepared_import", "prepared_drawing")
+        )
+    ):
+        raise ValueError("Prepared reaction analysis requires a reaction drawing and molecule")
+    if request.get("prepared_parts") is not None and request.get("operation") not in (
+        "label_reaction",
+        "layout_reaction",
+    ):
+        raise ValueError("Prepared participants require reaction labeling or layout")
+    if request.get("operation") in ("label_reaction", "layout_reaction") and (
+        request.get("format") not in ("rxn", "rsmi")
+        or request.get("operation") == "layout_reaction"
+        and request.get("format") != "rsmi"
+        or prepared_reaction
+        or any(
+            request.get(key) is not None
+            for key in ("prepared_molecule", "prepared_import", "prepared_drawing", "document")
+        )
+    ):
+        raise ValueError("Reaction labeling or layout requires detached participants")
+    prepared_import = request.get("prepared_import")
+    if prepared_import is not None and (
+        not isinstance(prepared_import, dict)
+        or request.get("prepared_molecule") is None
+        or not (
+            request.get("operation") == "import"
+            and request.get("format", "smiles") in ("mol", "smiles")
+            and request.get("prepared_drawing") is not None
+            or request.get("operation") == "layout_import"
+            and request.get("format") == "smiles"
+            and request.get("prepared_drawing") is None
+        )
+    ):
+        raise ValueError("Prepared import requires a molecular file and drawing")
     local_properties = request.get("local_properties", False)
     if not isinstance(local_properties, bool):
         raise ValueError("local_properties must be a boolean")
+    local_cip = request.get("local_cip", False)
+    if not isinstance(local_cip, bool):
+        raise ValueError("local_cip must be a boolean")
+    if local_cip and (
+        not isinstance(request.get("prepared_molecule"), dict)
+        or not isinstance(request.get("prepared_drawing"), dict)
+        or not (
+            request.get("operation") == "import"
+            and request.get("format", "smiles") in ("mol", "smiles")
+            and isinstance(prepared_import, dict)
+            or request.get("operation") in ("analyze", "finish_abbreviation")
+            or request.get("operation") == "export"
+            and request.get("format") in ("mol", "smiles", "inchi", "cdxml", "cdx")
+        )
+    ):
+        raise ValueError("Local CIP labeling requires a prepared molecular drawing")
     local_pictures = request.get("local_pictures", False)
     if not isinstance(local_pictures, bool):
         raise ValueError("local_pictures must be a boolean")
+    local_smiles = request.get("local_smiles", False)
+    if not isinstance(local_smiles, bool):
+        raise ValueError("local_smiles must be a boolean")
+    if local_smiles and (
+        not (
+            request.get("operation") in ("import", "analyze", "export", "finish_abbreviation")
+            and request.get("prepared_molecule") is not None
+            or request.get("operation") == "aromatic"
+            and request.get("prepared_aromatic") is not None
+        )
+    ):
+        raise ValueError("Local SMILES requires a prepared molecular operation")
+    local_mol_output = request.get("local_mol_output", False)
+    if not isinstance(local_mol_output, bool):
+        raise ValueError("local_mol_output must be a boolean")
+    if local_mol_output and (
+        request.get("operation") != "export"
+        or request.get("format") != "mol"
+        or request.get("prepared_molecule") is None
+    ):
+        raise ValueError("Local MOL output requires a prepared molecular export")
+    local_drawing_output = request.get("local_drawing_output", False)
+    if not isinstance(local_drawing_output, bool):
+        raise ValueError("local_drawing_output must be a boolean")
+    if local_drawing_output and (
+        request.get("operation") != "export"
+        or request.get("format") not in ("cdxml", "cdx")
+        or (
+            request.get("document", {}).get("atoms")
+            and (
+                request.get("prepared_molecule") is None or request.get("prepared_drawing") is None
+            )
+        )
+    ):
+        raise ValueError("Local drawing output requires a prepared drawing export")
     picture_exports = request.get("picture_exports", {}) if local_pictures else None
     if local_pictures and not isinstance(picture_exports, dict):
         raise ValueError("Prepared picture exports must be an object")
-    analyzer = partial(analyze, local_properties=local_properties)
+    analyzer = partial(analyze, local_properties=local_properties, local_smiles=local_smiles)
     operation = request["operation"]
     response = {"engine_version": rdBase.rdkitVersion, "warnings": []}
+    if operation == "label_reaction":
+        return prepared.label_reaction(request.get("prepared_parts"))
+    if operation == "layout_reaction":
+        return prepared.layout_reaction(request.get("prepared_parts"))
+    if prepared_reaction:
+        doc = request["document"]
+        reactions.validate(doc)
+        mol = prepared.restore(request["prepared_molecule"], doc)
+        check_supported(mol)
+        response.update(document=None, analysis=analyzer(mol))
+        return response
+    if operation == "layout_import":
+        if prepared_import is None:
+            raise ValueError("Import layout requires a prepared molecule")
+        mol = prepared.restore(request["prepared_molecule"], file=prepared_import)
+        check_supported(mol)
+        rdDepictor.Compute2DCoords(mol)
+        conf = mol.GetConformer()
+        return dict(
+            rdkit_version=rdBase.rdkitVersion,
+            positions=[
+                dict(x=p.x, y=p.y, z=p.z)
+                for p in (conf.GetAtomPosition(i) for i in range(mol.GetNumAtoms()))
+            ],
+        )
     if operation == "import" and request.get("format") in ("rxn", "rsmi"):
         doc = reactions.import_reaction(
             request.get("text", ""), request["format"], to_document, check_supported
@@ -989,6 +1113,11 @@ def handle(request):
         )
         return response
     if operation == "aromatic":
+        if (data := request.get("prepared_aromatic")) is not None:
+            after = prepared.restore(data, request["document"])
+            check_supported(after)
+            response.update(document=None, analysis=analyzer(after))
+            return response
         result, mol = aromatic.toggle(
             request["document"], request.get("selected_ids"), from_document, to_document
         )
@@ -1006,6 +1135,18 @@ def handle(request):
         response.update(document=to_document(checked, result), analysis=analyzer(checked))
         return response
     if operation == "import":
+        if prepared_import is not None:
+            mol = prepared.restore(request["prepared_molecule"], file=prepared_import)
+            drawing = prepared.restore(request["prepared_drawing"], file=prepared_import)
+            check_supported(mol)
+            check_supported(drawing)
+            if not local_cip:
+                response["drawing_labels"] = prepared.label_drawing(drawing)
+            response.update(
+                document=None,
+                analysis=analyzer(mol) if mol.GetNumAtoms() else None,
+            )
+            return response
         fmt, text = request.get("format", "smiles"), request.get("text", "")
         if not text.strip():
             raise ValueError("Enter a structure first")
@@ -1034,10 +1175,13 @@ def handle(request):
         response.update(
             document=to_document(mol, base), analysis=analyzer(mol) if mol.GetNumAtoms() else None
         )
-    elif operation in ("analyze", "clean", "export"):
+    elif operation in ("analyze", "clean", "export", "finish_abbreviation"):
         doc = request["document"]
-        if not doc["atoms"]:
+        if not doc["atoms"] and operation != "finish_abbreviation":
             if operation == "export" and request.get("format") in ("cdxml", "cdx"):
+                if local_drawing_output:
+                    response.update(document=doc, analysis=None, output=None)
+                    return response
                 output = export_cdxml(
                     doc,
                     request.get("text_layout"),
@@ -1065,8 +1209,31 @@ def handle(request):
                 )
             )
             return response
-        mol = from_document(doc)
-        result_doc = to_document(mol, doc)
+        prepared_molecule = request.get("prepared_molecule")
+        if prepared_molecule is not None:
+            if (
+                operation not in ("analyze", "finish_abbreviation")
+                and request.get("format") not in ("mol", "smiles", "inchi")
+                and not local_drawing_output
+            ):
+                raise ValueError("Prepared molecules are not supported for this operation")
+            mol = prepared.restore(prepared_molecule, doc)
+            check_supported(mol)
+        else:
+            mol = from_document(doc)
+        prepared_drawing = request.get("prepared_drawing")
+        if prepared_drawing is not None:
+            if prepared_molecule is None:
+                raise ValueError("A prepared drawing requires its prepared molecule")
+            drawing = prepared.restore(prepared_drawing, doc)
+            check_supported(drawing)
+            if not local_cip:
+                response["drawing_labels"] = prepared.label_drawing(drawing)
+            drawing_bonds = prepared_drawing["state"]["graph"]["bonds"]
+            result_doc = None
+        else:
+            result_doc = to_document(mol, doc)
+            drawing_bonds = result_doc["bonds"]
         response.update(document=result_doc, analysis=analyzer(mol))
         if operation == "export":
             fmt = request["format"]
@@ -1074,7 +1241,7 @@ def handle(request):
                 response["warnings"].append(
                     "This drawing or molecule format does not retain reaction roles. Use RXN/reaction SMILES for reaction data, or .reshiki for the complete scheme."
                 )
-            exotic = {b["order"] for b in result_doc["bonds"]} & {0, 5, 6, 7}
+            exotic = {b["order"] for b in drawing_bonds} & {0, 5, 6, 7}
             if (
                 (fmt == "mol" and exotic & {0, 6, 7})
                 or (fmt == "smiles" and exotic & {0, 7})
@@ -1084,23 +1251,28 @@ def handle(request):
                     "This export cannot preserve the hydrogen, partial, dative or quadruple bonds in this drawing; use native or CDXML"
                 )
             if fmt == "mol":
-                response["output"] = Chem.MolToMolBlock(mol)
+                response["output"] = None if local_mol_output else Chem.MolToMolBlock(mol)
             elif fmt == "smiles":
-                response["output"] = Chem.MolToSmiles(mol)
+                response["output"] = None if local_smiles else Chem.MolToSmiles(mol)
             elif fmt == "inchi":
-                response["output"] = Chem.MolToInchi(mol)
-            elif fmt in ("cdxml", "cdx"):
-                output = export_cdxml(
-                    result_doc,
-                    request.get("text_layout"),
-                    request.get("graphic_paths"),
-                    request.get("graphic_parts"),
-                    request.get("atom_indicators"),
-                    picture_exports,
-                )
                 response["output"] = (
-                    base64.b64encode(to_cdx(output)).decode("ascii") if fmt == "cdx" else output
+                    response["analysis"]["inchi"] if local_properties else Chem.MolToInchi(mol)
                 )
+            elif fmt in ("cdxml", "cdx"):
+                if local_drawing_output:
+                    response["output"] = None
+                else:
+                    output = export_cdxml(
+                        result_doc,
+                        request.get("text_layout"),
+                        request.get("graphic_paths"),
+                        request.get("graphic_parts"),
+                        request.get("atom_indicators"),
+                        picture_exports,
+                    )
+                    response["output"] = (
+                        base64.b64encode(to_cdx(output)).decode("ascii") if fmt == "cdx" else output
+                    )
             else:
                 raise ValueError("Unsupported export format")
     else:
