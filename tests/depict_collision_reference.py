@@ -166,6 +166,7 @@ def main():
     parser.add_argument("--output", type=Path)
     parser.add_argument("--fixture", type=Path, default=FIXTURE)
     parser.add_argument("--replay", action="store_true")
+    parser.add_argument("--fma3", choices=("0", "1"))
     args = parser.parse_args()
     if args.oracle is None:
         print(gzip.decompress(args.fixture.read_bytes()).decode(), end="")
@@ -198,6 +199,12 @@ def main():
         if platform.system() == "Windows"
         else os.environ
     )
+    if platform.system() == "Windows":
+        native_env.pop("RESHIKI_REFERENCE_FMA3", None)
+        if args.fma3 is not None:
+            native_env["RESHIKI_REFERENCE_FMA3"] = args.fma3
+    elif args.fma3 is not None:
+        raise SystemExit("--fma3 requires the Windows native observer")
     result = subprocess.run(
         [str(args.oracle.resolve())],
         input="".join(map(request, inputs)),
@@ -235,6 +242,17 @@ def main():
             "observation": "Single private: access changed to public: in EmbeddedFrag.h; original wheel functions unchanged; totalDensity source fold used on Windows because symbol is not exported, checked against native on Linux/macOS",
         }
     }
+    if platform.system() == "Windows":
+        build = json.loads(
+            (ROOT / "artifacts/depict-collision-observation/native-build.json").read_text()
+        )
+        header["provenance"]["native_build"] = {
+            **build,
+            "fma3": args.fma3,
+            "ucrt_sha256": hashlib.sha256(
+                (Path(os.environ["SYSTEMROOT"]) / "System32/ucrtbase.dll").read_bytes()
+            ).hexdigest(),
+        }
     lines = [json.dumps(header, separators=(",", ":"))]
     for case, output in zip(inputs, outputs, strict=True):
         case["expected"] = json.loads(output)

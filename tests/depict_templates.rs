@@ -1,3 +1,6 @@
+#[path = "common/depict_windows.rs"]
+mod depict_windows;
+
 use anyhow::Context;
 use reshiki::chemistry::{
     depict::{attachment::AtomData, rings::Fragment, templates},
@@ -157,8 +160,9 @@ fn builtin_templates_match_direct_native_order_and_construction() -> anyhow::Res
         ".venv/bin/python"
     }));
     command.arg(root.join("tests/depict_templates_reference.py"));
-    let fixture = if cfg!(windows) {
-        "depict-templates-windows-native.json.gz"
+    let windows_fixture = depict_windows::fixture("templates")?;
+    let fixture = if let Some(fixture) = windows_fixture.as_deref() {
+        fixture
     } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
         "depict-templates-macos-native.json.gz"
     } else {

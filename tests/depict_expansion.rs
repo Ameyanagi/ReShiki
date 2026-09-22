@@ -1,3 +1,6 @@
+#[path = "common/depict_windows.rs"]
+mod depict_windows;
+
 use anyhow::Context;
 use reshiki::chemistry::{
     depict::{
@@ -255,15 +258,21 @@ fn compare(
 #[test]
 fn native_initial_orchestration_and_merge_stages() -> anyhow::Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let mut child = Command::new(root.join(if cfg!(windows) {
+    let mut command = Command::new(root.join(if cfg!(windows) {
         ".venv/Scripts/python.exe"
     } else {
         ".venv/bin/python"
-    }))
-    .arg(root.join("tests/depict_expansion_reference.py"))
-    .stdout(Stdio::piped())
-    .stderr(Stdio::inherit())
-    .spawn()?;
+    }));
+    command.arg(root.join("tests/depict_expansion_reference.py"));
+    if let Some(fixture) = depict_windows::fixture("expansion")? {
+        command
+            .arg("--fixture")
+            .arg(root.join("tests/fixtures").join(fixture));
+    }
+    let mut child = command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()?;
     let mut lines = BufReader::new(child.stdout.take().context("fixture output")?).lines();
     let header: serde_json::Value = serde_json::from_str(&lines.next().context("header")??)?;
     assert_eq!(

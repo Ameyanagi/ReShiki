@@ -1,3 +1,6 @@
+#[path = "common/depict_windows.rs"]
+mod depict_windows;
+
 use anyhow::Context;
 use reshiki::chemistry::{
     depict::{
@@ -233,7 +236,7 @@ fn compare(fixture: &str, baseline: bool) -> anyhow::Result<()> {
         || (baseline && cfg!(all(target_os = "linux", target_arch = "x86_64")))
         || (fixture.ends_with("-macos-native.json.gz")
             && cfg!(all(target_os = "macos", target_arch = "aarch64")))
-        || (fixture.ends_with("-windows-native.json.gz") && cfg!(windows));
+        || depict_windows::fixture("seeds")?.as_deref() == Some(fixture);
     let mut audit = Audit::default();
     let mut errors = 0usize;
     let mut queries = 0usize;

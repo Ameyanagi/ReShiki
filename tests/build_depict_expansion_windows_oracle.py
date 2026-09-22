@@ -97,6 +97,7 @@ def main():
     parser.add_argument("--rdkit-source", type=Path, required=True)
     parser.add_argument("--boost-include", type=Path, required=True)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--fma3", choices=("0", "1"))
     args = parser.parse_args()
     assert sys.platform == "win32" and platform.machine().upper() == "AMD64"
     assert rdBase.rdkitVersion == "2026.03.6"
@@ -205,6 +206,7 @@ def main():
         "/I" + str(source / "GraphMol/Depictor"),
         "/I" + str(args.boost_include.resolve()),
         str(reference),
+        str(root / "tests/depict_windows_runtime.cpp"),
         *links,
         "/Fe:" + str(binary),
         "/Fo" + str(directory) + "\\",
@@ -216,6 +218,9 @@ def main():
     assert b"?compute2DCoords@RDDepict@@" in imports and b"?BOND_LEN@RDDepict@@" in imports
     (directory / "imports.txt").write_bytes(imports)
     native_build = dict(
+        fma3=args.fma3,
+        runtime_initializer_sha256=digest(root / "tests/depict_windows_runtime.cpp"),
+        ucrt_sha256=digest(Path(os.environ["SYSTEMROOT"]) / "System32/ucrtbase.dll"),
         builder_sha256=digest(Path(__file__)),
         compiler_command=command,
         machine=platform.machine(),
@@ -250,6 +255,10 @@ def main():
         args.output or root / "tests/fixtures/depict-expansion-windows-native.json.gz"
     ).resolve()
     previous = ctypes.windll.kernel32.SetErrorMode(0x0001 | 0x0002 | 0x8000)
+    environment = {**os.environ, "PATH": str(library_dir) + os.pathsep + os.environ["PATH"]}
+    environment.pop("RESHIKI_REFERENCE_FMA3", None)
+    if args.fma3 is not None:
+        environment["RESHIKI_REFERENCE_FMA3"] = args.fma3
     try:
         subprocess.run(
             [
@@ -268,7 +277,7 @@ def main():
             cwd=root,
             check=True,
             timeout=600,
-            env={**os.environ, "PATH": str(library_dir) + os.pathsep + os.environ["PATH"]},
+            env=environment,
         )
     finally:
         ctypes.windll.kernel32.SetErrorMode(previous)

@@ -8,6 +8,7 @@ Private access changes declarations' visibility only; native code is unchanged.
 import argparse
 import glob
 import hashlib
+import json
 import os
 import re
 import subprocess
@@ -122,6 +123,7 @@ def main():
             "/I" + str(source / "GraphMol/Depictor"),
             "/I" + str(args.boost_include.resolve()),
             str(root / "tests/depict_collision_reference.cpp"),
+            str(root / "tests/depict_windows_runtime.cpp"),
             *links,
             "/Fe:" + str(root / "artifacts/depict-collision-oracle.exe"),
             "/Fo" + str(generated) + "\\",
@@ -129,6 +131,21 @@ def main():
         result = subprocess.run(command, cwd=generated, capture_output=True)
         (generated / "compiler.log").write_bytes(result.stdout + result.stderr)
         result.check_returncode()
+        (generated / "native-build.json").write_text(
+            json.dumps(
+                dict(
+                    compiler_command=command,
+                    compiler_log_sha256=hashlib.sha256(result.stdout + result.stderr).hexdigest(),
+                    runtime_initializer_sha256=hashlib.sha256(
+                        (root / "tests/depict_windows_runtime.cpp").read_bytes()
+                    ).hexdigest(),
+                    boost_version=rdBase.boostVersion,
+                    boost_header_sha256=hashlib.sha256(
+                        (args.boost_include / "boost/version.hpp").read_bytes()
+                    ).hexdigest(),
+                )
+            )
+        )
         return
     if sys.platform.startswith("linux"):
         libs = package.parent / "rdkit.libs"

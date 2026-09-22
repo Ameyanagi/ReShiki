@@ -1,4 +1,4 @@
-# Windows CRT geometry profiles
+# Windows CRT depiction profiles
 
 Windows x64 uses two native transcendental paths. The UCRT chooses whether to
 use FMA3 according to processor support. A fixture captured on an FMA3 machine
@@ -29,12 +29,45 @@ canonical orientations, bisectors and boxes are identical. Both captures
 contain the same 24 nonfinite one-atom rings. No projected f32 value differs
 between the profiles in this corpus.
 
-The Rust test identifies the CRT profile with the three primitive witnesses
-above. `black_box` prevents compile-time folding of the runtime probe. An unknown
-profile fails with its observed bits. The matching independently generated
-fixture then requires exact bits for all 71,754 finite scalars. The other profile
-remains an explicit cross-profile audit. Neither tolerance nor a fixed allowed
-difference count is used.
+The tests ask the pinned **x64 reference interpreter** to observe these three
+UCRT witnesses. An unknown profile fails with its observed bits. On Windows
+ARM64, this is the x64 interpreter running under emulation, as used by the
+original worker. The expected fixture is never chosen from Rust's result.
+
+The matching independent geometry fixture requires exact bits for all 71,754
+finite scalars. The other profile remains an explicit cross-profile audit.
+Neither tolerance nor a fixed allowed difference count is used.
+
+## Companion stages
+
+All seven companion observers were also recaptured with FMA3 disabled. Each
+received the same original input cases. Every changed value is an expected f64
+bit string: no input, topology, order, outcome, or error changed.
+
+| Stage        | Cases | Changed f64 values |
+| ------------ | ----: | -----------------: |
+| Rings        | 1,338 |              3,212 |
+| Attachment   |   970 |              3,084 |
+| Seeds        |   991 |                  0 |
+| Templates    | 1,921 |              1,202 |
+| Collision    | 1,634 |                161 |
+| Expansion    | 1,877 |             20,210 |
+| Finalization | 2,312 |                  0 |
+
+Expansion additionally checks the extracted full wrapper against the original
+exported `compute2DCoords` in both canonical settings for every request; 8,536
+public-check scalars differ between profiles. Those checks remain exact within
+each profile.
+
+Seeds and finalization use their existing fixtures because the independently
+recaptured data rows are byte-identical. Attachment needs a separate capture
+even though its old-fixture replay passed: that stage restores the captured
+initial ring before exercising attachment operations.
+
+Capture hashes, native compiler commands, runtime initializer hashes, and the
+invariant captures' provenance are recorded in
+[`fixtures/depict-windows-profile-audit.json`](fixtures/depict-windows-profile-audit.json).
+The five changed companion fixtures retain their full native provenance.
 
 ## Capture and validation
 
@@ -43,18 +76,24 @@ Run from an x64 MSVC developer prompt, with the pinned wheel and Boost 1.85:
 ```bat
 python tests\build_depict_windows_oracle.py --component geometry ^
   --rdkit-source F:\reference\rdkit --boost-include F:\reference\boost185 ^
-  --geometry-fma3 0 ^
+  --fma3 0 ^
   --output tests\fixtures\depict-geometry-windows-no-fma3-native.json.gz
 ```
 
-Use `--geometry-fma3 1` and a separate output path to audit the enabled fixture.
+Use `--fma3 1` and a separate output path to audit the enabled fixture.
+The shared Windows builder accepts `--fma3` for geometry, rings, attachment,
+seeds, and templates. The Windows expansion builder, finalization builder, and
+collision reference capture accept the same option. Their diagnostic initializer
+sets the CRT profile before any native requests execute; source adapters and
+original DLL calls are unchanged.
+
 The observer rejects an unavailable requested profile. The fixture records the
 requested setting, UCRT hash, original DLL/source hashes, compiler command and
 observer hash. The control affects only the C++ observer process.
 
 To exercise the disabled path on an FMA3-capable development host, compile
 `tests/depict_windows_fma3_disabled.cpp` with `/c /O2 /MD /EHsc` and link the
-resulting object directly into the geometry test executable using:
+resulting object directly into a stage test executable, for example:
 
 ```bat
 cargo rustc --locked --features rdkit-reference --test depict_geometry -- ^
@@ -62,9 +101,11 @@ cargo rustc --locked --features rdkit-reference --test depict_geometry -- ^
 ```
 
 Run that executable with `RESHIKI_TEST_WINDOWS_MATH_PROFILE=no-fma3`; ordinary
-validation on the capture host uses `fma3`. The required-profile check prevents
-an ineffective initializer from passing unnoticed. This development-only object
-is never linked into the application or included in release build commands.
+validation on the capture host uses `fma3`. This diagnostic variable also sets
+the independently probed reference process to the requested profile. The full
+exact stage comparison detects an ineffective Rust test initializer. Normal CI
+leaves this variable unset and observes the original reference runtime as-is.
+This development-only object is never linked into the application or included in release build commands.
 
 Disabled fixture SHA-256:
 

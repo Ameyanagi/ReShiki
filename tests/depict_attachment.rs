@@ -1,3 +1,6 @@
+#[path = "common/depict_windows.rs"]
+mod depict_windows;
+
 use anyhow::Context;
 use reshiki::chemistry::{
     depict::{
@@ -255,7 +258,8 @@ fn restore(native: &NativeFragment) -> anyhow::Result<Fragment> {
 fn native_neighbor_setup_and_attachment() -> anyhow::Result<()> {
     compare("depict-attachment-linux-native.json.gz", true)?;
     compare("depict-attachment-macos-native.json.gz", false)?;
-    compare("depict-attachment-windows-native.json.gz", false)
+    compare("depict-attachment-windows-native.json.gz", false)?;
+    compare("depict-attachment-windows-no-fma3-native.json.gz", false)
 }
 fn compare(fixture: &str, baseline: bool) -> anyhow::Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -298,7 +302,7 @@ fn compare(fixture: &str, baseline: bool) -> anyhow::Result<()> {
         || (baseline && cfg!(all(target_os = "linux", target_arch = "x86_64")))
         || (fixture.ends_with("-macos-native.json.gz")
             && cfg!(all(target_os = "macos", target_arch = "aarch64")))
-        || (fixture.ends_with("-windows-native.json.gz") && cfg!(windows));
+        || depict_windows::fixture("attachment")?.as_deref() == Some(fixture);
     let mut audit = Audit::default();
     let mut steps = 0usize;
     let mut native_errors = 0usize;

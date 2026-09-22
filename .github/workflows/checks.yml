@@ -110,4 +110,4 @@ jobs:
       - name: Check the optional independent reference suite
         run: cargo clippy --workspace --all-targets --locked --features rdkit-reference -- -D warnings
       - run: cargo check --workspace --all-targets --locked --features rdkit-reference
-      - run: cargo test --workspace --locked --features rdkit-reference
+      - run: cargo test --workspace --locked --features rdkit-reference --no-fail-fast

@@ -33,7 +33,10 @@ def main():
     parser.add_argument("--fixture", type=Path)
     parser.add_argument("--replay", action="store_true")
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--fma3", choices=("0", "1"))
     args = parser.parse_args()
+    if args.fma3 is not None and sys.platform != "win32":
+        parser.error("--fma3 requires the Windows native observer")
     assert rdBase.rdkitVersion == "2026.03.6"
     boost = args.boost_include.resolve()
     match = re.search(r"#define BOOST_VERSION\s+(\d+)", (boost / "boost/version.hpp").read_text())
@@ -136,6 +139,7 @@ def main():
             *("/I" + str(i) for i in includes),
             str(cpp),
             str(adapted),
+            str(root / "tests/depict_windows_runtime.cpp"),
             *links,
             "/Fe:" + str(binary),
             "/Fo" + str(directory) + "\\",
@@ -145,6 +149,9 @@ def main():
             "PATH": str(libraries) + os.pathsep + os.environ["PATH"],
             "VSLANG": "1033",
         }
+        env.pop("RESHIKI_REFERENCE_FMA3", None)
+        if args.fma3 is not None:
+            env["RESHIKI_REFERENCE_FMA3"] = args.fma3
     else:
         python = Path(sysconfig.get_config_var("LIBDIR")) / sysconfig.get_config_var("LDLIBRARY")
         for name in names:
@@ -187,6 +194,12 @@ def main():
         boost_header_sha256=digest(boost / "boost/version.hpp"),
         reference_sha256=digest(cpp),
     )
+    if windows:
+        provenance.update(
+            fma3=args.fma3,
+            runtime_initializer_sha256=digest(root / "tests/depict_windows_runtime.cpp"),
+            ucrt_sha256=digest(Path(os.environ["SYSTEMROOT"]) / "System32/ucrtbase.dll"),
+        )
     metadata = directory / "build.json"
     metadata.write_text(json.dumps(provenance, indent=2) + "\n")
     generate = [

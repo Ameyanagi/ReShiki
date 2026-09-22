@@ -1,3 +1,6 @@
+#[path = "common/depict_windows.rs"]
+mod depict_windows;
+
 use anyhow::Context;
 use reshiki::chemistry::{
     depict::{
@@ -189,6 +192,7 @@ fn corpus() -> anyhow::Result<Vec<Case>> {
     } else {
         ".venv/bin/python"
     }));
+    let windows_fixture = depict_windows::fixture("collision")?;
     command
         .arg(root.join("tests/depict_collision_reference.py"))
         .arg("--fixture")
@@ -196,10 +200,10 @@ fn corpus() -> anyhow::Result<Vec<Case>> {
             root.join("tests/fixtures")
                 .join(if cfg!(target_os = "macos") {
                     "depict-collision-macos-native.json.gz"
-                } else if cfg!(windows) {
-                    "depict-collision-windows-native.json.gz"
                 } else {
-                    "depict-collision-linux-native.json.gz"
+                    windows_fixture
+                        .as_deref()
+                        .unwrap_or("depict-collision-linux-native.json.gz")
                 }),
         );
     if let Some(oracle) = std::env::var_os("RESHIKI_DEPICT_COLLISION_ORACLE") {

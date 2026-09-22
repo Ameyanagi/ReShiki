@@ -16,6 +16,9 @@ struct Case {
     values: Vec<String>,
     expected: Native,
 }
+#[path = "common/depict_windows.rs"]
+mod depict_windows;
+
 type Output = (Vec<usize>, Vec<f64>);
 fn floats(values: &[String]) -> anyhow::Result<Vec<f64>> {
     values
@@ -103,39 +106,6 @@ fn direct_native_geometry() -> anyhow::Result<()> {
     compare("depict-geometry-windows-no-fma3-native.json.gz", false)
 }
 
-// The Windows CRT dispatches transcendental functions by processor capability.
-// Classify only independently observed primitive results; unknown CRT profiles
-// fail closed. The complete native corpus is then compared bit for bit.
-fn windows_fixture() -> anyhow::Result<Option<&'static str>> {
-    if !cfg!(windows) {
-        return Ok(None);
-    }
-    let ratio = std::hint::black_box(f64::from_bits(0x3fd9_54d5_989f_7ab5));
-    let angle = std::hint::black_box(ratio.acos());
-    let observed = (
-        angle.to_bits(),
-        angle.sin().to_bits(),
-        angle.cos().to_bits(),
-    );
-    let (profile, fixture) = match observed {
-        (0x3ff2_9f25_c111_e687, 0x3fed_6301_1ebd_161e, 0x3fd9_54d5_989f_7ab4) => {
-            ("fma3", "depict-geometry-windows-native.json.gz")
-        }
-        (0x3ff2_9f25_c111_e686, 0x3fed_6301_1ebd_161d, 0x3fd9_54d5_989f_7ab7) => {
-            ("no-fma3", "depict-geometry-windows-no-fma3-native.json.gz")
-        }
-        _ => anyhow::bail!("Uncaptured Windows CRT geometry profile: {observed:x?}"),
-    };
-    if let Ok(required) = std::env::var("RESHIKI_TEST_WINDOWS_MATH_PROFILE") {
-        anyhow::ensure!(
-            profile == required,
-            "Windows CRT profile {profile} != {required}"
-        );
-    }
-    eprintln!("Strict Windows CRT geometry profile: {profile}");
-    Ok(Some(fixture))
-}
-
 fn compare(fixture: &str, source_order: bool) -> anyhow::Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let python = if cfg!(windows) {
@@ -182,7 +152,7 @@ fn compare(fixture: &str, source_order: bool) -> anyhow::Result<()> {
         || (source_order && cfg!(all(target_os = "linux", target_arch = "x86_64")))
         || (fixture == "depict-geometry-native.json.gz"
             && cfg!(all(target_os = "macos", target_arch = "aarch64")))
-        || windows_fixture()? == Some(fixture);
+        || depict_windows::fixture("geometry")?.as_deref() == Some(fixture);
     let mut stats: BTreeMap<String, Differences> = BTreeMap::new();
     let mut numeric = 0;
     let mut count = 0;
