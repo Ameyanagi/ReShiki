@@ -46,6 +46,22 @@ Fresh original observers resolve the ambiguity without choosing expectations
 from Rust results. The optional static classifier now also checks independent
 ring sine/cosine witnesses and rejects unknown combinations.
 
+The targeted run `35709016632` independently confirmed the mixed witnesses in
+both Python and a separately compiled native process on Server 2022, using UCRT
+`10.0.20348.5622` (SHA-256
+`5e5ae0f8e4325ceb3ee767065dda6e03e980d401f00a2bdb8ca81ed90813920f`).
+The ARM runner's x64 reference process used UCRT `10.0.26100.9444` (SHA-256
+`529e795875178b906ea8758abc8de5c28339f336b3e7a121d7778ae040908de9`)
+and matched the recorded disabled witnesses. This identifies reference runtimes;
+it does not establish Rust parity on those runners.
+
+That run also exposed a checkout failure before native compilation. RDKit marks
+C++ files as `text`, so `core.autocrlf=false` alone still permits native CRLF
+endings on Windows. Fresh reference repositories now set **both**
+`core.autocrlf=false` and `core.eol=lf` before their first checkout. The original
+source hashes remain mandatory. A real Git regression forces a CRLF default and
+checks that the new checkout exactly preserves the committed source blob.
+
 ## Recorded physical-host profiles
 
 The Windows Server 2022 CI failure at `random-reflect/458` is reproduced by

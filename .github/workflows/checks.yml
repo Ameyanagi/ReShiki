@@ -124,3 +124,18 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked --features rdkit-reference -- -D warnings
       - run: cargo check --workspace --all-targets --locked --features rdkit-reference
       - run: cargo test --workspace --locked --features rdkit-reference --no-fail-fast
+      - name: Preserve failed reference comparisons
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: reference-failures-${{ matrix.target }}
+          path: |
+            artifacts/*-actual.json
+            artifacts/*-expected.json
+            artifacts/*-engine-failures.txt
+            artifacts/native-import-*-failures.log
+            artifacts/depict-live-windows/*.json*
+            artifacts/depict-live-windows/*.log
+            artifacts/depict-windows-*/compiler.log
+          if-no-files-found: ignore
+          retention-days: 7

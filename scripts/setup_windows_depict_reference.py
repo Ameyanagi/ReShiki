@@ -29,13 +29,19 @@ from setup_linux_depict_reference import (
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def initialize_checkout(path):
+    subprocess.run(["git", "init", "--quiet", str(path)], check=True)
+    # RDKit explicitly marks C++ files as text. Disabling autocrlf alone still
+    # lets Git choose the platform's native line endings for those attributes.
+    for key, value in (("core.autocrlf", "false"), ("core.eol", "lf")):
+        subprocess.run(["git", "-C", str(path), "config", key, value], check=True)
+
+
 def source_checkout(path):
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(prefix="rdkit-fetch-", dir=path.parent) as temporary:
-            subprocess.run(["git", "init", "--quiet", temporary], check=True)
-            # Windows Git defaults must not change the audited source bytes.
-            subprocess.run(["git", "-C", temporary, "config", "core.autocrlf", "false"], check=True)
+            initialize_checkout(Path(temporary))
             subprocess.run(
                 [
                     "git",
