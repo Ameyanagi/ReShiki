@@ -1010,6 +1010,22 @@ def handle(request):
     local_properties = request.get("local_properties", False)
     if not isinstance(local_properties, bool):
         raise ValueError("local_properties must be a boolean")
+    local_cip = request.get("local_cip", False)
+    if not isinstance(local_cip, bool):
+        raise ValueError("local_cip must be a boolean")
+    if local_cip and (
+        not isinstance(request.get("prepared_molecule"), dict)
+        or not isinstance(request.get("prepared_drawing"), dict)
+        or not (
+            request.get("operation") == "import"
+            and request.get("format", "smiles") in ("mol", "smiles")
+            and isinstance(prepared_import, dict)
+            or request.get("operation") in ("analyze", "finish_abbreviation")
+            or request.get("operation") == "export"
+            and request.get("format") in ("mol", "smiles", "inchi", "cdxml", "cdx")
+        )
+    ):
+        raise ValueError("Local CIP labeling requires a prepared molecular drawing")
     local_pictures = request.get("local_pictures", False)
     if not isinstance(local_pictures, bool):
         raise ValueError("local_pictures must be a boolean")
@@ -1121,9 +1137,10 @@ def handle(request):
             drawing = prepared.restore(request["prepared_drawing"], file=prepared_import)
             check_supported(mol)
             check_supported(drawing)
+            if not local_cip:
+                response["drawing_labels"] = prepared.label_drawing(drawing)
             response.update(
                 document=None,
-                drawing_labels=prepared.label_drawing(drawing),
                 analysis=analyzer(mol) if mol.GetNumAtoms() else None,
             )
             return response
@@ -1207,7 +1224,8 @@ def handle(request):
                 raise ValueError("A prepared drawing requires its prepared molecule")
             drawing = prepared.restore(prepared_drawing, doc)
             check_supported(drawing)
-            response["drawing_labels"] = prepared.label_drawing(drawing)
+            if not local_cip:
+                response["drawing_labels"] = prepared.label_drawing(drawing)
             drawing_bonds = prepared_drawing["state"]["graph"]["bonds"]
             result_doc = None
         else:

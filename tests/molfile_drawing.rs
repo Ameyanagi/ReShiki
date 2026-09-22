@@ -76,7 +76,7 @@ fn imported_drawings_match_native_coordinates_wedges_and_labels() -> anyhow::Res
     let (mut accepted, mut rejected, mut spatial, mut attachments, mut wedges) = (0, 0, 0, 0, 0);
     let mut failures = Vec::new();
     for line in lines {
-        let mut case: Case = serde_json::from_str(&line?)?;
+        let case: Case = serde_json::from_str(&line?)?;
         let imported = molfile::read(&case.text);
         let result = match &imported {
             Ok(imported) => {
@@ -112,14 +112,19 @@ fn imported_drawings_match_native_coordinates_wedges_and_labels() -> anyhow::Res
                     expected,
                     "state",
                 );
-                let actual =
-                    drawing.finish(case.labels.take().context("Missing native labels")?)?;
+                let labels = drawing.labels()?;
+                let labeling = difference(
+                    &serde_json::to_value(&labels)?,
+                    &serde_json::to_value(case.labels.as_ref().context("Missing native labels")?)?,
+                    "labels",
+                );
+                let actual = drawing.finish(labels)?;
                 wedges += actual
                     .bonds
                     .iter()
                     .filter(|b| matches!(b.display.as_str(), "wedge" | "hash"))
                     .count();
-                state.or(difference(
+                state.or(labeling).or(difference(
                     &serde_json::to_value(&actual)?,
                     &serde_json::to_value(&case.document)?,
                     "drawing",

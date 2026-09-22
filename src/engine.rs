@@ -214,7 +214,7 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
                 .await
                 .map_err(|e| format!("Abbreviation edit failed: {e}"))??,
             );
-            // Reuse drawing reconstruction and the remaining identifier/CIP bridge.
+            // Reuse Rust drawing reconstruction and the remaining identifier bridge.
             // Unlike Analyze, the original abbreviation operation accepts an empty drawing.
             request.operation = "finish_abbreviation".into();
         }
@@ -524,6 +524,7 @@ impl PythonEngine {
             .as_object_mut()
             .ok_or("Invalid chemistry request envelope")?;
         if let Some((molecule, drawing, file)) = &prepared_molecule {
+            envelope.insert("local_cip".into(), true.into());
             envelope.insert(
                 "prepared_molecule".into(),
                 serde_json::to_value(molecule).map_err(|e| e.to_string())?,
@@ -603,15 +604,11 @@ impl PythonEngine {
                         .map_err(|e| e.to_string())?;
                         object.insert("output".into(), output.into());
                     }
-                    let labels = object
-                        .remove("drawing_labels")
-                        .ok_or("Missing full stereochemical labels")?;
-                    let document = drawing
-                        .finish(
-                            serde_json::from_value(labels)
-                                .map_err(|e| format!("Invalid drawing labels: {e}"))?,
-                        )
-                        .map_err(|e| e.to_string())?;
+                    if object.contains_key("drawing_labels") {
+                        return Err("Unexpected native stereochemical labels".into());
+                    }
+                    let labels = drawing.labels().map_err(|e| e.to_string())?;
+                    let document = drawing.finish(labels).map_err(|e| e.to_string())?;
                     object.insert(
                         "document".into(),
                         serde_json::to_value(document).map_err(|e| e.to_string())?,
@@ -787,3 +784,6 @@ impl ChemistryEngine for PythonEngine {
         self.request(request).await
     }
 }
+
+#[cfg(test)]
+mod tests;

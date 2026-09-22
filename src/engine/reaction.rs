@@ -1,5 +1,5 @@
 //! Reaction parsing, chemical preparation and canvas assembly stay in Rust.
-//! The temporary bridge supplies missing layouts, full CIP labels and identifiers.
+//! The temporary bridge supplies missing layouts and identifiers.
 use super::{PythonEngine, Response};
 use crate::chemistry::{RDKIT_VERSION, document, reaction};
 use serde::Deserialize;
@@ -20,33 +20,11 @@ impl PythonEngine {
             .await
             .map_err(|e| format!("Reaction import failed: {e}"))??
         };
-        #[derive(Deserialize)]
-        #[serde(deny_unknown_fields)]
-        struct Labels {
-            rdkit_version: String,
-            labels: Vec<document::Labels>,
-        }
-        let parts: Vec<_> = draft
-            .participants()
-            .map(|(molecule, file)| serde_json::json!({ "molecule": molecule, "file": file }))
-            .collect();
-        let labeled: Labels = serde_json::from_value(
-            self.exchange(serde_json::json!({
-                "protocol": 1,
-                "operation": "label_reaction",
-                "format": format,
-                "prepared_parts": parts,
-            }))
-            .await?,
-        )
-        .map_err(|e| format!("Invalid reaction labels: {e}"))?;
-        if labeled.rdkit_version != RDKIT_VERSION {
-            return Err("Reaction labeling version changed".into());
-        }
         // Full CIP labeling can change double-bond control atoms. Prepare the
         // combined analysis graph only after those labels finish the drawing.
         let drawing = tokio::task::spawn_blocking(move || {
-            let doc = draft.finish(labeled.labels).map_err(|e| e.to_string())?;
+            let labels = draft.labels().map_err(|e| e.to_string())?;
+            let doc = draft.finish(labels).map_err(|e| e.to_string())?;
             let molecule = document::prepare(&doc).map_err(|e| e.to_string())?;
             let smiles = super::molecular_smiles(&molecule.state)?;
             Ok::<_, String>((doc, molecule, smiles))

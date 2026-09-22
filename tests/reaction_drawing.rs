@@ -111,11 +111,17 @@ fn reaction_drawings_match_native_scene_assembly() -> anyhow::Result<()> {
                     &expected.participants,
                     "participants",
                 );
-                match draft.finish(std::mem::take(&mut expected.labels)) {
+                let labels = draft.labels()?;
+                let labeling = difference(
+                    &serde_json::to_value(&labels)?,
+                    &serde_json::to_value(&expected.labels)?,
+                    "labels",
+                );
+                match draft.finish(labels) {
                     Ok(doc) => {
                         separators += doc.annotations.len();
                         agents += doc.reactions.iter().map(|r| r.agents.len()).sum::<usize>();
-                        state.or(difference(
+                        state.or(labeling).or(difference(
                             &serde_json::to_value(doc)?,
                             &serde_json::to_value(document)?,
                             "drawing",
@@ -131,8 +137,8 @@ fn reaction_drawings_match_native_scene_assembly() -> anyhow::Result<()> {
             (Err(e), Some(_)) => Some(format!("Rejected supported drawing: {e}")),
             (Ok(draft), None) => {
                 // Drawing bounds are checked after placement and full CIP labels.
-                if let Some(expected) = case.expected.as_mut() {
-                    match draft.finish(std::mem::take(&mut expected.labels)) {
+                if case.expected.is_some() {
+                    match draft.labels().and_then(|labels| draft.finish(labels)) {
                         Err(_) => {
                             rejected += 1;
                             None

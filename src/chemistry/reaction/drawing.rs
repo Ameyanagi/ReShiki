@@ -45,6 +45,14 @@ impl Drawing {
         self.parts.iter().map(|p| (p.drawing.molecule(), &p.file))
     }
 
+    /// Compute each participant's complete CIP labels before publishing a scene.
+    pub fn labels(&self) -> Result<Vec<document::Labels>, Error> {
+        self.parts
+            .iter()
+            .map(|part| part.drawing.labels().map_err(Error::from))
+            .collect()
+    }
+
     pub fn finish(self, labels: Vec<document::Labels>) -> Result<Document, Error> {
         if labels.len() != self.parts.len() {
             return Err(invalid("Reaction label participant count changed"));

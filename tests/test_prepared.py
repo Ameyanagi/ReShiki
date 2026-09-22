@@ -18,6 +18,75 @@ from tests.reaction_drawing_reference import expected as reaction_drawing
 
 
 class PreparedMoleculeTests(unittest.TestCase):
+    def test_local_cip_skips_native_assignment_and_checks_its_boundary(self):
+        for text in ("F[C@](Cl)(Br)I", "F/C=C/F", "c1ccccc1", "[13CH3:4][NH3+]", ""):
+            doc = drawing(Chem.MolFromSmiles(text))
+            molecule = json.loads(json.dumps(prepare(doc)))
+            for operation, fmt in (
+                ("import", "mol"),
+                ("import", "smiles"),
+                ("analyze", None),
+                ("finish_abbreviation", None),
+                ("export", "mol"),
+                ("export", "smiles"),
+                ("export", "inchi"),
+                ("export", "cdxml"),
+                ("export", "cdx"),
+            ):
+                if not text and operation not in ("import", "finish_abbreviation"):
+                    continue
+                request = dict(
+                    protocol=1,
+                    operation=operation,
+                    format=fmt,
+                    document=doc,
+                    prepared_molecule=molecule,
+                    prepared_drawing=molecule,
+                )
+                if operation == "import":
+                    request["prepared_import"] = dict(
+                        is_3d=False,
+                        attachment_points=[None] * len(doc["atoms"]),
+                        dummy_labels=[None] * len(doc["atoms"]),
+                    )
+                if fmt in ("cdxml", "cdx"):
+                    request["local_drawing_output"] = True
+                expected = worker.handle(request)
+                expected.pop("drawing_labels")
+                request["local_cip"] = True
+                with (
+                    self.subTest(text=text, operation=operation, format=fmt),
+                    patch.object(
+                        prepared, "label_drawing", side_effect=AssertionError("Native labels")
+                    ),
+                    patch.object(
+                        rdCIPLabeler, "AssignCIPLabels", side_effect=AssertionError("Native CIP")
+                    ),
+                    patch.object(worker, "to_document", side_effect=AssertionError("Native draw")),
+                ):
+                    before = copy.deepcopy(request)
+                    self.assertEqual(worker.handle(request), expected)
+                    self.assertEqual(request, before)
+                    for value in (None, 1, 0, "true", [], {}):
+                        with self.assertRaisesRegex(ValueError, "must be a boolean"):
+                            worker.handle({**request, "local_cip": value})
+                    for override in (
+                        dict(prepared_molecule=None),
+                        dict(prepared_drawing=None),
+                        dict(operation="clean"),
+                        dict(operation="aromatic"),
+                        dict(operation="abbreviate"),
+                        dict(operation="layout_import"),
+                        dict(operation="export", format="rxn"),
+                        dict(operation="import", format="inchi"),
+                    ):
+                        with self.assertRaises(ValueError):
+                            worker.handle({**request, **override})
+                    invalid = copy.deepcopy(request)
+                    invalid["prepared_drawing"]["ids"].append(999)
+                    with self.assertRaises(ValueError):
+                        worker.handle(invalid)
+
     def test_reaction_layout_preserves_prepared_chemistry(self):
         for text in (
             "[H][C@](F)(Cl)Br>O>F/C=C/F",
