@@ -1,4 +1,6 @@
-use anyhow::Context;
+#[path = "common/fixture.rs"]
+mod fixture;
+
 use reshiki::chemistry::{
     RDKIT_VERSION,
     electronic::Hybridization,
@@ -8,11 +10,15 @@ use reshiki::chemistry::{
     stereo::{Point3, perception::State},
 };
 use serde::Deserialize;
-use std::{
-    io::{BufRead, BufReader},
-    path::Path,
-    process::{Command, Stdio},
-};
+
+#[derive(Deserialize)]
+struct Capture {
+    rdkit_version: String,
+    rdkit_commit: String,
+    adapter_sha256: String,
+    header_sha256: String,
+    rows: Vec<Case>,
+}
 
 #[derive(Deserialize)]
 struct Case {
@@ -25,45 +31,26 @@ struct Case {
 
 #[test]
 fn prepared_arrays_match_the_pinned_native_adapter() -> anyhow::Result<()> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let python = root.join(if cfg!(windows) {
-        ".venv/Scripts/python.exe"
-    } else {
-        ".venv/bin/python"
-    });
-    let mut child = Command::new(python)
-        .arg(root.join("tests/inchi_input_reference.py"))
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .spawn()?;
-    let mut lines = BufReader::new(
-        child
-            .stdout
-            .take()
-            .context("Missing native adapter output")?,
-    )
-    .lines();
-    let header: serde_json::Value =
-        serde_json::from_str(&lines.next().context("Missing native adapter header")??)?;
-    assert_eq!(header["rdkit_version"], RDKIT_VERSION);
+    let capture: Capture = serde_json::from_reader(fixture::open("inchi-input-native.json.gz")?)?;
+    assert_eq!(capture.rdkit_version, RDKIT_VERSION);
     assert_eq!(
-        header["rdkit_commit"],
+        capture.rdkit_commit,
         "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985"
     );
     assert_eq!(
-        header["adapter_sha256"],
+        capture.adapter_sha256,
         "68c9b20d1d5920ed602ea931c1429395280c3d040971593073917618015183d1"
     );
     assert_eq!(
-        header["header_sha256"],
+        capture.header_sha256,
         "2d41d745be35a47853bf67fea03a46b1f518e85c42af9027a104662dbcb20116"
     );
     let mut accepted = 0;
     let mut rejected = 0;
     let mut undefined = 0;
     let mut failures = Vec::new();
-    for line in lines {
-        let case: Case = serde_json::from_str(&line?)?;
+    assert_eq!(capture.rows.len(), 11_886, "Native input corpus changed");
+    for case in capture.rows {
         let before = serde_json::to_value(&case.state)?;
         let result = input::prepare(&case.state, case.positions.as_deref());
         assert_eq!(
@@ -91,12 +78,11 @@ fn prepared_arrays_match_the_pinned_native_adapter() -> anyhow::Result<()> {
             }
         }
     }
-    assert!(child.wait()?.success());
     println!(
         "Native input arrays: {accepted} accepted, {rejected} native failures, {undefined} undefined-native inputs rejected"
     );
     assert!(failures.is_empty(), "{}", failures.join("\n"));
-    assert!(accepted > 10_000 && rejected > 20 && undefined > 0);
+    assert_eq!((accepted, rejected, undefined), (11_772, 64, 50));
     Ok(())
 }
 
