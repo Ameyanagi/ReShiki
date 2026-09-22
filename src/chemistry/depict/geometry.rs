@@ -346,11 +346,11 @@ pub(super) fn canonical_basis(
         y: (yy - xx) + delta,
     }
     .result()?;
-    if finite(first.length())? <= 1e-4 {
+    if finite(canonical_length(first))? <= 1e-4 {
         return Ok((result, None));
     }
     let first_value = finite((xx + yy + delta) / 2.0)?;
-    let length = finite(first.length())?;
+    let length = finite(canonical_length(first))?;
     first.x /= length;
     first.y /= length;
     let mut second = Point {
@@ -359,8 +359,8 @@ pub(super) fn canonical_basis(
     }
     .result()?;
     let second_value = finite((xx + yy - delta) / 2.0)?;
-    if finite(second.length())? > 1e-4 {
-        let length = second.length();
+    if finite(canonical_length(second))? > 1e-4 {
+        let length = canonical_length(second);
         second.x /= length;
         second.y /= length;
         if second_value > first_value {
@@ -376,6 +376,20 @@ pub(super) fn canonical_basis(
         ty: 0.0,
     };
     Ok((result, Some(transform)))
+}
+
+// The GNU ARM64 wheel inlines these norms with the y product fused; the
+// generic Point2D length and the Mac wheel instead fuse the x product.
+fn canonical_length(point: Point) -> f64 {
+    if cfg!(all(
+        target_os = "linux",
+        target_env = "gnu",
+        target_arch = "aarch64"
+    )) {
+        point.y.mul_add(point.y, point.x * point.x).sqrt()
+    } else {
+        point.length()
+    }
 }
 
 /// Compute the native signed box extents, including its finite sentinels.

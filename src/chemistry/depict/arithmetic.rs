@@ -1,13 +1,19 @@
 //! Arithmetic contractions observed in the pinned native wheel.
 //!
-//! The macOS ARM64 compiler contracts these source expressions. The Linux
-//! x86_64 wheel keeps their multiply and add separate. This policy is private
-//! to depiction: it does not change the application's general floating math.
+//! The macOS and GNU/Linux ARM64 wheels contract these source expressions.
+//! The Linux x86_64 wheel keeps their multiply and add separate. This policy
+//! is private to depiction: it does not change the application's general floating math.
 //! Exact instruction sites and native probes are recorded in the numeric audit.
 
 /// A source multiply followed by an add at a verified contraction site.
 pub(super) fn multiply_add(first: f64, second: f64, addend: f64) -> f64 {
-    if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+    if cfg!(all(
+        target_arch = "aarch64",
+        any(
+            target_os = "macos",
+            all(target_os = "linux", target_env = "gnu")
+        )
+    )) {
         first.mul_add(second, addend)
     } else {
         first * second + addend
@@ -23,9 +29,16 @@ pub(super) fn squared_length(x: f64, y: f64) -> f64 {
     dot(x, y, x, y)
 }
 
-/// Native ARM64 fnmul of the second product, then fmadd of the first.
+/// Native ARM64 fuses the first product, after separately rounding the second.
+/// Mac uses fnmul/fmadd; GNU uses fnmsub.
 pub(super) fn multiply_subtract(a: f64, b: f64, c: f64, d: f64) -> f64 {
-    if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+    if cfg!(all(
+        target_arch = "aarch64",
+        any(
+            target_os = "macos",
+            all(target_os = "linux", target_env = "gnu")
+        )
+    )) {
         a.mul_add(b, -(c * d))
     } else {
         a * b - c * d

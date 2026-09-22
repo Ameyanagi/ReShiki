@@ -99,7 +99,9 @@ fn length(p: Point) -> Result<f64, Error> {
     number(number(arithmetic::squared_length(p.x, p.y))?.sqrt())
 }
 fn normalize(p: Point) -> Result<Point, Error> {
-    let size = length(p)?;
+    normalize_with_length(p, length(p)?)
+}
+fn normalize_with_length(p: Point, size: f64) -> Result<Point, Error> {
     if size < 1.0e-16 {
         return Err(geometry::Error::Numeric.into());
     }
@@ -635,10 +637,20 @@ impl<'a> Input<'a> {
             angle *= -1.0;
         }
         location = Transform::rotate(Point::default(), angle)?.apply(location)?;
-        location.x *= bond_length;
-        location.y *= bond_length;
-        location.x += reference.location.x;
-        location.y += reference.location.y;
+        if cfg!(all(
+            target_os = "linux",
+            target_env = "gnu",
+            target_arch = "aarch64"
+        )) {
+            // GNU contracts the consecutive scale and translation into fmla.
+            location.x = location.x.mul_add(bond_length, reference.location.x);
+            location.y = location.y.mul_add(bond_length, reference.location.y);
+        } else {
+            location.x *= bond_length;
+            location.y *= bond_length;
+            location.x += reference.location.x;
+            location.y += reference.location.y;
+        }
         location = point(location)?;
         let direction = sub(reference.location, location)?;
         let mut normal = Point {
@@ -651,7 +663,17 @@ impl<'a> Input<'a> {
         }
         let mut added = fresh(0); // Native no-angle helper leaves aid at its default.
         added.location = location;
-        added.normal = normalize(normal)?;
+        added.normal = if cfg!(all(
+            target_os = "linux",
+            target_env = "gnu",
+            target_arch = "aarch64"
+        )) {
+            // The native compiler computes length before swapping direction's
+            // components for the perpendicular normal. Its first square fuses.
+            normalize_with_length(normal, length(direction)?)?
+        } else {
+            normalize(normal)?
+        };
         added.neighbor1 = Some(target);
         added.counter_clockwise = (!ccw) ^ flip;
         value.atoms.insert(id, added);

@@ -1,6 +1,6 @@
 //! Windows x64 CRT's non-FMA rotation arithmetic, used by the reference worker
 //! under Windows ARM emulation. Adapted from AMD win-libm's SSE2 sin/cos paths;
-//! see licenses/amd-win-libm. Only the [-2π, 2π] attachment-rotation domain is
+//! see licenses/amd-win-libm. Only the [-2π, 2π] rotation domain is
 //! supported. Keep the separate multiply/add operations and their order.
 
 const SIN: [f64; 6] = [
@@ -66,7 +66,7 @@ fn small_cosine(x: f64) -> f64 {
 }
 
 /// Return (sine, cosine), retaining the reference CRT's f64 rounding. A caller
-/// can only obtain this domain by subtracting two finite atan2 results.
+/// may use a finite atan2 result or the difference of two such results.
 pub(super) fn sin_cos(angle: f64) -> Option<(f64, f64)> {
     if !angle.is_finite() || angle.abs() > std::f64::consts::TAU {
         return None;
@@ -121,10 +121,9 @@ mod tests {
 
     #[test]
     fn bounded_rotations_match_independent_windows_crt() -> anyhow::Result<()> {
-        let data =
-            include_bytes!("../../../../tests/fixtures/abbreviation-trigonometry-windows.bin");
+        let data = include_bytes!("../../tests/fixtures/abbreviation-trigonometry-windows.bin");
         let header: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../../tests/fixtures/abbreviation-trigonometry-windows.json"
+            "../../tests/fixtures/abbreviation-trigonometry-windows.json"
         ))?;
         anyhow::ensure!(header["fma3"] == false, "Wrong native math algorithm");
         anyhow::ensure!(data.len().is_multiple_of(24), "Truncated native corpus");

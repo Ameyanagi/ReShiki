@@ -30,6 +30,8 @@ pub mod sanitize;
 pub mod smarts;
 pub mod smiles;
 pub mod stereo;
+#[cfg(any(test, all(target_os = "windows", target_arch = "aarch64")))]
+mod windows_trigonometry;
 
 pub use atomic_data::RDKIT_VERSION;
 use atomic_data::{ELECTRON_MASS, ELEMENTS, ISOTOPES};

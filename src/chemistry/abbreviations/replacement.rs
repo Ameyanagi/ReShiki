@@ -2,6 +2,8 @@
 //! preparation and drawing reconstruction remain Rust calculations; the final
 //! whole-document check and full CIP labels are the caller's responsibility.
 use super::{Preset, check_size, presets, validate};
+#[cfg(all(target_os = "windows", target_arch = "aarch64"))]
+use crate::chemistry::windows_trigonometry as trigonometry;
 use crate::{
     abbreviations::Abbreviation,
     chemistry::{
@@ -15,8 +17,6 @@ use crate::{
     },
     document::Document,
 };
-#[cfg(any(test, all(target_os = "windows", target_arch = "aarch64")))]
-mod trigonometry;
 
 use serde::Deserialize;
 use std::{
