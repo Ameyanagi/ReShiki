@@ -315,9 +315,10 @@ class HelperTests(unittest.TestCase):
             binary.write_bytes(b"\xcf\xfa\xed\xfe")
             helper = root / "reshiki-inchi-helper"
             helper.write_bytes(b"\xcf\xfa\xed\xfe" + b"native helper")
-            worker = root / "worker"
-            worker.mkdir()
             app = root / "ReShiki.app"
+            legacy = app / "Contents/Resources/chemistry/engine"
+            legacy.mkdir(parents=True)
+            (legacy / "worker.py").write_text("obsolete")
             copied = app / "Contents/MacOS/reshiki-inchi-helper"
 
             def run(command, **_kwargs):
@@ -325,15 +326,24 @@ class HelperTests(unittest.TestCase):
                     Path(command[command.index("-o") + 1]).write_bytes(b"\xcf\xfa\xed\xfe")
                 elif command[0] == "codesign":
                     self.assertEqual(copied.read_bytes(), helper.read_bytes())
+                    self.assertFalse(legacy.parent.exists())
+                    self.assertTrue((app / "Contents/Resources/Licenses/NOTICE").is_file())
 
             with (
                 patch("build_release.ROOT", root),
                 patch("build_release.version", return_value="1.2.3"),
                 patch("build_release.target_directory", return_value=root / "custom-target"),
                 patch("build_release.run", side_effect=run),
-                patch("build_release.notices"),
+                patch("build_release.notices") as notices,
             ):
-                build_release.mac_bundle(app, "debug", worker=worker, inchi_helper=helper)
+
+                def write_notice(destination):
+                    destination.mkdir(parents=True)
+                    (destination / "NOTICE").write_text("Native licenses")
+
+                notices.side_effect = write_notice
+                build_release.mac_bundle(app, "debug", inchi_helper=helper)
+                notices.assert_called_once_with(app / "Contents/Resources/Licenses")
             with (
                 patch(
                     "sign_macos.signing_keychain",
@@ -379,9 +389,11 @@ class HelperTests(unittest.TestCase):
         with (
             patch("installers.run", side_effect=run),
             patch("installers.verify_inchi_helper", side_effect=helper),
+            patch("installers.verify_runtime") as runtime,
         ):
             installers.verify_mac_disk_image(Path("fixture.dmg"), False)
         self.assertEqual(len(checked), 1)
+        runtime.assert_called_once_with(checked[0].with_name("reshiki"), checked[0].parents[2])
 
     def test_windows_setup_and_upgrade_verify_the_relocated_helper(self):
         import installers
@@ -408,6 +420,13 @@ class HelperTests(unittest.TestCase):
                             if str(arg).startswith("/DIR=")
                         )
                     )
+                    if installed:
+                        self.assertEqual(
+                            (destination / "chemistry/engine/worker.py").read_text(),
+                            "Legacy worker",
+                        )
+                        # Simulate the installer's app-owned cleanup, preserving user sentinels.
+                        shutil.rmtree(destination / "chemistry")
                     shutil.copytree(source, destination, dirs_exist_ok=True)
                     (destination / "unins000.exe").touch()
                     installed.append(destination)
@@ -436,8 +455,13 @@ class HelperTests(unittest.TestCase):
                 patch.dict(sys.modules, {"winreg": registry}),
                 patch("installers.run", side_effect=run),
                 patch("installers.verify_inchi_helper", side_effect=helper),
+                patch("installers.verify_runtime") as runtime,
             ):
                 installers.verify_windows_installer(Path("setup.exe"), source)
+            self.assertEqual(runtime.call_args.args, (installed[-1] / "reshiki.exe", installed[-1]))
+            self.assertEqual(
+                runtime.call_args.kwargs["user_data"], installed[-1].parent / "User data"
+            )
             self.assertEqual(len(installed), 2)
             self.assertEqual(len(checked), 1)
 

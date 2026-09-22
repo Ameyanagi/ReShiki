@@ -46,6 +46,18 @@ pub enum Error {
     #[error("Cleanup rewedge failed: {0}")]
     Wedge(String),
 }
+impl Error {
+    /// Original public chemical diagnostics, retaining this error's typed cause.
+    /// Native implementation assertions use truthful Rust messages instead.
+    pub(crate) fn diagnostic(&self) -> String {
+        if let Self::Chemistry(error) = self
+            && let Some(message) = warnings::native_message(error)
+        {
+            return message;
+        }
+        self.to_string()
+    }
+}
 type Result<T> = std::result::Result<T, Error>;
 
 struct Part {
@@ -57,8 +69,8 @@ struct Part {
 }
 
 /// One Compute2DCoords call, before cleanup's rigid orientation. The solver
-/// must preserve atom order and use the fixed map unchanged. Static native
-/// coordination-template lengths remain their default 1.5.
+/// must preserve atom order and use the fixed map unchanged. Coordination
+/// templates use the requested bond length, independently of previous calls.
 #[derive(serde::Serialize)]
 pub struct LayoutRequest<'a> {
     pub molecule: &'a Molecule,
@@ -278,6 +290,20 @@ impl Prepared {
         if layouts.len() > self.parts.len() {
             return Err(Error::Layout);
         }
+        let mut layouts = layouts.into_iter();
+        self.finish_with(|_| layouts.next().ok_or(Error::Layout))
+    }
+
+    /// Lay out and verify each component before starting the next one. This
+    /// preserves the original first failure when a later solver call could fail.
+    /// Callback errors remain typed and no intermediate drawing is published.
+    pub fn finish_with<E>(
+        self,
+        mut compute: impl FnMut(LayoutRequest<'_>) -> std::result::Result<Vec<Point3>, E>,
+    ) -> std::result::Result<Cleaned, E>
+    where
+        E: From<Error>,
+    {
         let mut result = self.source;
         let mut result_positions = positions(&result);
         let atom_indices: HashMap<_, _> = result
@@ -294,15 +320,21 @@ impl Prepared {
             .collect();
         let mut crossed = 0usize;
         let mut work = 50_000_000usize;
-        let mut layouts = layouts.into_iter();
         for part in self.parts {
-            let mut layout = layouts.next().ok_or(Error::Layout)?;
+            let mut layout = compute(LayoutRequest {
+                molecule: &part.molecule,
+                fixed: &part.fixed,
+                bond_length: self.bond_length,
+                canonical_orientation: false,
+                use_ring_templates: true,
+                force_rdkit: true,
+            })?;
             if layout.len() != part.molecule.ids.len()
                 || layout
                     .iter()
                     .any(|p| !p.x.is_finite() || !p.y.is_finite() || p.z != 0.)
             {
-                return Err(Error::Layout);
+                return Err(Error::Layout.into());
             }
             numeric::orient(
                 &part.molecule.positions,
@@ -313,7 +345,7 @@ impl Prepared {
             for (&index, fixed) in &part.fixed {
                 let point = layout.get_mut(index).ok_or(Error::Layout)?;
                 if native_hypot(point.x - fixed.x, point.y - fixed.y) > 1e-6 {
-                    return Err(Error::Fixed);
+                    return Err(Error::Fixed.into());
                 }
                 *point = Point3 {
                     x: fixed.x,
@@ -323,10 +355,10 @@ impl Prepared {
             }
             let mut molecule = part.molecule;
             molecule.positions = layout;
-            let drawing = molecular::for_drawing(&molecule, &part.base)?;
+            let drawing = molecular::for_drawing(&molecule, &part.base).map_err(Error::from)?;
             let displays = rewedge(drawing.molecule(), &part.base, &mut work)?;
-            let labels = drawing.labels()?;
-            let mut generated = drawing.finish(labels)?;
+            let labels = drawing.labels().map_err(Error::from)?;
+            let mut generated = drawing.finish(labels).map_err(Error::from)?;
             for (bond, display) in generated.bonds.iter_mut().zip(displays) {
                 bond.display = display;
             }
@@ -355,7 +387,7 @@ impl Prepared {
                     *target = generated;
                 }
             }
-            let checked = molecular::prepare_at(&merged, &raw)?;
+            let checked = molecular::prepare_at(&merged, &raw).map_err(Error::from)?;
             for ((old, new), bond) in molecule
                 .state
                 .metadata
@@ -374,8 +406,10 @@ impl Prepared {
                     crossed += 1;
                 }
             }
-            if identity(&molecular::prepare_at(&merged, &raw)?)? != part.identity {
-                return Err(Error::ChemistryChanged);
+            if identity(&molecular::prepare_at(&merged, &raw).map_err(Error::from)?)?
+                != part.identity
+            {
+                return Err(Error::ChemistryChanged.into());
             }
             let mut before = part.base;
             let mut after = merged.clone();
@@ -388,10 +422,10 @@ impl Prepared {
                     bond.stereo_atoms.clear();
                 }
             }
-            if identity(&molecular::prepare(&before)?)?
-                != identity(&molecular::prepare_at(&after, &raw)?)?
+            if identity(&molecular::prepare(&before).map_err(Error::from)?)?
+                != identity(&molecular::prepare_at(&after, &raw).map_err(Error::from)?)?
             {
-                return Err(Error::VisibleChanged);
+                return Err(Error::VisibleChanged.into());
             }
             for (atom, point) in merged.atoms.into_iter().zip(raw) {
                 if part.moving.contains(&atom.id) {
@@ -410,7 +444,7 @@ impl Prepared {
             }
         }
         if let Some(error) = self.deferred_error {
-            return Err(error);
+            return Err(error.into());
         }
         result.version = 15;
         result.validate().map_err(Error::Document)?;
@@ -430,10 +464,10 @@ impl Prepared {
             Ok(molecule) => (Some(molecule), None),
             Err(error) => {
                 if analysis_policy == AnalysisPolicy::Required {
-                    return Err(error.into());
+                    return Err(Error::from(error).into());
                 }
                 let Some(message) = warnings::native_message(&error) else {
-                    return Err(error.into());
+                    return Err(Error::from(error).into());
                 };
                 warnings.push(format!("Selected geometry cleaned. Another part of the drawing needs checking: {message}"));
                 (None, Some(error))

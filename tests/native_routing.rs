@@ -355,7 +355,7 @@ async fn child(mode: &str, helper: &Path, cases: &[Case]) -> anyhow::Result<()> 
         .env("RESHIKI_NATIVE_ROUTING_FIXTURE", fixture)
         .env("RESHIKI_ROOT", &guard)
         .env(
-            "RESHIKI_PYTHON",
+            "RESHIKI_REFERENCE_PYTHON",
             root.join(if cfg!(windows) {
                 ".venv/Scripts/python.exe"
             } else {
@@ -681,8 +681,8 @@ async fn routing_child() -> anyhow::Result<()> {
         anyhow::ensure!(local.execute(empty).await.is_ok());
     }
     anyhow::ensure!(!marker.exists(), "Supported operation launched Python");
-    // Positive controls: the original oracle stays independent and an operation
-    // outside this migration still reaches the retained Python worker.
+    // Positive controls: the independent oracle and explicitly selected custom
+    // backend both reach the guard. Default dispatch above never starts it.
     let mut carbon = Document::default();
     carbon.add_atom("C", Point::default());
     assert_eq!(
@@ -699,13 +699,13 @@ async fn routing_child() -> anyhow::Result<()> {
         ("rsmi", "C>>O"),
     ] {
         assert_eq!(
-            local
+            LocalEngine::with_backend(PythonEngine::default())
                 .execute(Request::import(format, text))
                 .await
                 .err()
                 .as_deref(),
             Some("Python routing guard"),
-            "{format} layout failed to reach the backend"
+            "{format} custom backend failed to reach the guard"
         );
     }
     anyhow::ensure!(

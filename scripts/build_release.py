@@ -1,4 +1,4 @@
-"""Build and verify a portable native ReShiki distribution, with a uv-managed local chemistry environment."""
+"""Build and verify a portable native ReShiki distribution."""
 
 import argparse
 import hashlib
@@ -15,6 +15,8 @@ import tempfile
 import tomllib
 import zipfile
 from pathlib import Path
+
+from check_runtime_dependencies import verify_runtime
 
 ROOT = Path(__file__).resolve().parents[1]
 RELEASE_TARGETS = {
@@ -64,11 +66,6 @@ def target_directory():
         text=True,
     )
     return Path(json.loads(result.stdout)["target_directory"])
-
-
-def chemistry_architecture(system, architecture):
-    # Windows 11 ARM runs the available RDKit x64 wheel in a separate process.
-    return "x64" if system == "windows" else architecture
 
 
 def verify_binary(binary, system, architecture):
@@ -201,52 +198,6 @@ def verify_inchi_helper(binary, version):
         raise ValueError("Packaged InChI helper returned invalid auxiliary data")
 
 
-def verify_interpreter(python, system, architecture, environment=None):
-    """Inspect the running Python, since uv's launcher may use a different CPU."""
-    response = run(
-        [
-            python,
-            "-c",
-            "import json, platform, struct, sysconfig; "
-            "print(json.dumps({'system': platform.system(), 'machine': platform.machine(), "
-            "'platform': sysconfig.get_platform(), 'bits': struct.calcsize('P') * 8}))",
-        ],
-        env=environment,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    details = json.loads(response.stdout)
-    actual_system = {"Darwin": "macos", "Windows": "windows", "Linux": "linux"}.get(
-        details.get("system")
-    )
-    if actual_system == "windows":
-        # platform.machine() can describe the ARM host under x64 emulation.
-        actual_arch = {"win-amd64": "x64", "win-arm64": "arm64"}.get(details.get("platform"))
-    else:
-        actual_arch = {"arm64": "arm64", "aarch64": "arm64", "x86_64": "x64"}.get(
-            details.get("machine")
-        )
-    if actual_system != system or actual_arch != architecture or details.get("bits") != 64:
-        raise ValueError(f"Expected {system} {architecture} Python interpreter, found {details}")
-
-
-def runtime_project():
-    """Package source and locked dependencies; users provide uv, not Python."""
-    destination = ROOT / "target/runtime-project"
-    if destination.exists():
-        shutil.rmtree(destination)
-    destination.mkdir(parents=True)
-    for name in ["pyproject.toml", "uv.lock"]:
-        shutil.copy2(ROOT / name, destination / name)
-    shutil.copytree(
-        ROOT / "engine",
-        destination / "engine",
-        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
-    )
-    return destination
-
-
 def notices(destination):
     destination.mkdir(parents=True, exist_ok=True)
     shutil.copytree(ROOT / "licenses", destination / "sources", dirs_exist_ok=True)
@@ -264,7 +215,7 @@ def notices(destination):
                 shutil.copy2(candidate, folder / candidate.name)
 
 
-def mac_bundle(destination, profile, worker=None, target=None, inchi_helper=None):
+def mac_bundle(destination, profile, *, target=None, inchi_helper=None):
     executable = destination / "Contents/MacOS/reshiki"
     executable.parent.mkdir(parents=True, exist_ok=True)
     staged = executable.with_suffix(".new")
@@ -313,14 +264,15 @@ def mac_bundle(destination, profile, worker=None, target=None, inchi_helper=None
             info["LSUIElement"] = True
         with (bundle / "Contents/Info.plist").open("wb") as stream:
             plistlib.dump(info, stream)
-    if worker:
-        chemistry = destination / "Contents/Resources/chemistry"
-        if chemistry.exists():
-            shutil.rmtree(chemistry)
-        shutil.copytree(worker, chemistry, symlinks=True)
-        notices(destination / "Contents/Resources/Licenses")
-        # Development/manual unsigned builds. Release signing replaces these signatures.
-        run(["codesign", "--force", "--deep", "--sign", "-", destination])
+    # Reusing a development bundle must not retain the previous worker payload.
+    chemistry = destination / "Contents/Resources/chemistry"
+    if chemistry.is_symlink() or chemistry.is_file():
+        chemistry.unlink()
+    elif chemistry.exists():
+        shutil.rmtree(chemistry)
+    notices(destination / "Contents/Resources/Licenses")
+    # Development/manual unsigned builds. Release signing replaces these signatures.
+    run(["codesign", "--force", "--deep", "--sign", "-", destination])
     return destination
 
 
@@ -331,7 +283,7 @@ def archive(folder, output):
         run(["ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", folder, output])
     elif platform.system() == "Windows":
         output = Path(str(output) + ".zip")
-        # Some wheel files have reproducible 1970 timestamps; ZIP starts in 1980.
+        # Source files may have reproducible 1970 timestamps; ZIP starts in 1980.
         with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED, strict_timestamps=False) as stream:
             for entry in sorted(folder.rglob("*")):
                 if entry.is_file():
@@ -368,73 +320,15 @@ def verify_archive(archive_path, signed=False):
 
                 verify_app(app)
         else:
-            binary = folder / ("reshiki.exe" if os.name == "nt" else "reshiki")
+            binary = folder / ("reshiki.exe" if metadata["platform"] == "windows" else "reshiki")
         verify_binary(binary, metadata["platform"], metadata["architecture"])
         helper = binary.with_name(inchi_helper_name(metadata["platform"]))
         verify_binary(helper, metadata["platform"], metadata["architecture"])
         verify_inchi_helper(helper, metadata["inchi_helper"]["version"])
-        environment = dict(os.environ)
-        environment.pop("RESHIKI_PYTHON", None)
-        environment.pop("MORUNO_PYTHON", None)
-        environment.pop("RESHIKI_INCHI_HELPER", None)
-        environment["RESHIKI_RUNTIME_DIR"] = str(extracted / "user runtime")
-        environment["RESHIKI_ROOT"] = str(extracted / "no-checkout")
-        missing_uv = subprocess.run(
-            [str(binary), "--engine-check"],
-            cwd=extracted,
-            env={**environment, "RESHIKI_UV": str(extracted / "missing-uv")},
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        if missing_uv.returncode == 0 or "Install uv" not in missing_uv.stderr:
-            raise ValueError("Missing-uv setup instructions were not reported")
-        try:
-            response = run(
-                [binary, "--engine-check"],
-                cwd=extracted,
-                env=environment,
-                capture_output=True,
-                text=True,
-                timeout=660,
-            )
-        except subprocess.CalledProcessError as error:
-            raise RuntimeError(
-                f"Packaged engine check failed:\n{error.stdout}\n{error.stderr}"
-            ) from error
-        result = json.loads(response.stdout)
-        if (
-            result.get("analysis", {}).get("formula") != "C2H6O"
-            or result.get("analysis", {}).get("smiles") != "CCO"
-        ):
-            raise ValueError("Packaged chemistry engine did not return ethanol")
-        python_name = "Scripts/python.exe" if os.name == "nt" else "bin/python"
-        interpreters = list((extracted / "user runtime").glob(f"*/{python_name}"))
-        if len(interpreters) != 1:
-            raise ValueError("Expected one locally installed chemistry interpreter")
-        verify_interpreter(
-            interpreters[0],
-            metadata["platform"],
-            chemistry_architecture(metadata["platform"], metadata["architecture"]),
-            environment,
-        )
-        # Reuse exactly this environment with network disabled on the next launch.
-        environment["UV_OFFLINE"] = "1"
-        offline = run(
-            [binary, "--engine-check"],
-            cwd=extracted,
-            env=environment,
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-        if json.loads(offline.stdout).get("analysis", {}).get("smiles") != "CCO":
-            raise ValueError("Offline chemistry environment reuse failed")
+        verify_runtime(binary, folder)
         if platform.system() == "Darwin":
             run(["codesign", "--verify", "--deep", "--strict", app])
-        print(
-            "Extracted application, missing-uv guidance, first-use setup, and offline reuse verified."
-        )
+        print("Extracted application and native chemistry verified without Python or uv.")
 
 
 def main():
@@ -491,11 +385,8 @@ def main():
     build = target_directory() / target / "release"
     binary_name = "reshiki.exe" if system == "windows" else "reshiki"
     verify_binary(build / binary_name, system, arch)
-    worker = runtime_project()
     if system == "macos":
-        app = mac_bundle(
-            folder / "ReShiki.app", "release", worker, target=target, inchi_helper=helper
-        )
+        app = mac_bundle(folder / "ReShiki.app", "release", target=target, inchi_helper=helper)
         if args.sign:
             from sign_macos import sign_and_notarize
 
@@ -503,7 +394,6 @@ def main():
     else:
         shutil.copy2(build / binary_name, folder / binary_name)
         shutil.copy2(helper, folder / inchi_helper_name(system))
-        shutil.copytree(worker, folder / "chemistry", symlinks=True)
         notices(folder / "Licenses")
     metadata = dict(
         version=version(),
@@ -511,7 +401,6 @@ def main():
         architecture=arch,
         rust_target=target,
         inchi_helper=helper_metadata,
-        chemistry_architecture=chemistry_architecture(system, arch),
         signed=args.sign,
         notarized=args.sign,
         commit=os.environ.get("GITHUB_SHA", "local"),
@@ -519,14 +408,11 @@ def main():
     (folder / "build.json").write_text(json.dumps(metadata, indent=2) + "\n")
     (folder / "README.txt").write_text(
         "ReShiki — molecular drawing workspace\n\n"
-        "Install uv first: https://docs.astral.sh/uv/getting-started/installation/\n"
-        "ReShiki installs Python and RDKit into its local user environment on first use.\n"
-        "First setup requires internet access; later use works offline.\n"
+        "Drawing and chemistry tools are included and work offline.\n"
         "Keep the entire extracted folder together.\n"
         "Documentation: https://reshiki.com/\n"
         + (
-            "Windows 11 on ARM is required. The app is native ARM64; its local chemistry\n"
-            "worker uses Windows' built-in x64 emulation.\n"
+            "Windows 11 on ARM is required. The app and chemistry helper are native ARM64.\n"
             if system == "windows" and arch == "arm64"
             else ""
         )

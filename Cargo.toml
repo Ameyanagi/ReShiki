@@ -4,6 +4,11 @@ version = "0.5.0"
 edition = "2024"
 description = "A molecular drawing workspace"
 
+[features]
+default = []
+# Optional Python/RDKit development oracles, never part of release builds.
+rdkit-reference = []
+
 [workspace]
 members = ["native/windows", "crates/depict-math"]
 default-members = ["."]
@@ -85,3 +90,357 @@ anyhow = "1"
 [patch.crates-io]
 # Preserve libjpeg's small-component and edge chroma sampling semantics.
 zune-jpeg = { path = "vendor/zune-jpeg" }
+
+# Independent oracle suites explicitly require the development reference.
+
+[[test]]
+name = "abbreviation_detection"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "abbreviation_engine"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "abbreviation_replacement"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "aromatic_display"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "aromaticity"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "atropisomer"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "bond_geometry"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "cdx_codec"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "cdxml_abbreviation_ids"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "cdxml_abbreviations"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "cdxml_arrows"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "cdxml_bonds"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "cdxml_graphics"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "cdxml_groups"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "cdxml_labels"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "cdxml_marks"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "cdxml_molecular"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "cdxml_native_bonds"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "cdxml_normalization"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "cdxml_preparation"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "cdxml_presentation"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "cdxml_scene"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "cleanup"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "cip_configuration"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "cip_digraph"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "cip_labeling"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "cip_molecule"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "cip_pairing"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "cip_ranking"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "cip_rules"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "cx_coordinate"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "depict_attachment"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "depict_collision"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "depict_expansion"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "depict_finalize"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "depict_geometry"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "depict_pipeline"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "depict_rank_properties"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "depict_rings"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "depict_seeds"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "depict_templates"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "descriptors"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "document_preparation"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "drawing_exchange"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "drawing_output"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "drawn_stereo"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "electronic"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "engine_migration"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "hydrogen_removal"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "inchi_generator"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "inchi_input"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "inchi_key"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "inchi_output"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "inchi_reader"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "jpeg_sampling"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "kekulize"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "molfile"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "molfile_drawing"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "molfile_import"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "native_aromatic"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "native_cleanup"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "native_import"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "native_response"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "native_routing"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "organometallic"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "perception"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "picture_migration"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "properties"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "ranking"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "reaction_drawing"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "reaction_import"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "reaction_output"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "reaction_smiles"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "ring_perception"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "sanitization"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "sanitize"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "smarts"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "smiles_parse"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "smiles_prepare"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "smiles_read"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "smiles_stereo"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "smiles_symbols"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "smiles_traversal"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "smiles_write"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "spatial_stereo"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "stereo"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "valence"
+required-features = ["rdkit-reference"]
+
+[[test]]
+name = "wedging"
+required-features = ["rdkit-reference"]

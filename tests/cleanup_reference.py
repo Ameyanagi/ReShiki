@@ -85,6 +85,10 @@ def emit(name, document, scope="drawing", selected=(), keep=True):
         before_stereo = stereo()
         record = dict(
             ids=[int(a.GetProp("reshiki_id")) for a in mol.GetAtoms()],
+            chiral_ranks=[
+                a.GetUnsignedProp("_chiralAtomRank") if a.HasProp("_chiralAtomRank") else None
+                for a in mol.GetAtoms()
+            ],
             old=points(mol),
             fixed={str(i): dict(x=p.x, y=p.y) for i, p in kwargs["coordMap"].items()},
             bond_length=kwargs["bondLength"],

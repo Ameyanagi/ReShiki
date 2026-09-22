@@ -1,10 +1,10 @@
-"""Build a development bundle, or a portable bundle with --portable (requires uv)."""
+"""Build a native development bundle, or a portable bundle with --portable."""
 
 import argparse
 import platform
 from pathlib import Path
 
-from build_release import ROOT, mac_bundle, prepare_inchi_helper, run, runtime_project
+from build_release import ROOT, mac_bundle, prepare_inchi_helper, run
 
 
 def main():
@@ -14,7 +14,7 @@ def main():
         "--standalone",
         dest="portable",
         action="store_true",
-        help="Include worker project; uv is required",
+        help="Write the portable bundle to dist/ReShiki.app",
     )
     parser.add_argument("--release", action="store_true", help="Use an optimized Rust binary")
     parser.add_argument(
@@ -41,7 +41,6 @@ def main():
         mac_bundle(
             destination,
             profile,
-            runtime_project() if args.portable else None,
             inchi_helper=helper,
         )
     )

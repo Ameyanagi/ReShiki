@@ -116,7 +116,7 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
         .stdout(Stdio::piped())
         .spawn()?;
     let lines = BufReader::new(process.stdout.take().context("Missing reference output")?).lines();
-    let (mut accepted, mut rejected, mut deferred, mut restricted) = (0, 0, 0, 0);
+    let (mut accepted, mut rejected, mut restricted) = (0, 0, 0);
     let mut failures = Vec::new();
     for line in lines {
         let record: Value = serde_json::from_str(&line?)?;
@@ -155,12 +155,6 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
                 rejected += 1;
                 None
             }
-            (Ok(Outcome::Deferred(reason)), _)
-                if format == "rsmi" && reason == Deferred::ReactionLayout =>
-            {
-                deferred += 1;
-                None
-            }
             (a, b) => Some(format!(
                 "Outcome changed: {a:?} != {b:?}; native error {:?}",
                 case.failure
@@ -178,7 +172,7 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
         )?;
     }
     println!(
-        "Native {format} import: {accepted} complete responses, {rejected} matching failures, {restricted} explicit bounds, {deferred} missing layouts"
+        "Native {format} import: {accepted} complete responses, {rejected} matching failures, {restricted} explicit bounds"
     );
     anyhow::ensure!(
         failures.is_empty(),
@@ -214,16 +208,18 @@ const FIGURE: &str =
 async fn routing_distinguishes_layouts_errors_and_helper_failures() -> anyhow::Result<()> {
     let dir = tempfile::tempdir()?;
     let missing = Config::new(dir.path().join("missing-helper"));
-    for format in ["smiles", "inchi"] {
+    for (format, text) in [
+        ("smiles", "C"),
+        ("inchi", "InChI=1S/CH4/h1H4"),
+        ("rsmi", "C>>O"),
+    ] {
         assert!(matches!(
-            native_import::execute(Request::import(format, "C"), Some(missing.clone())).await?,
-            Outcome::Deferred(Deferred::MolecularLayout)
+            native_import::execute(Request::import(format, text), Some(missing.clone())).await,
+            Err(Error::Analysis(
+                reshiki::engine::native_response::Error::Helper(generator::Error::Io(_))
+            ))
         ));
     }
-    assert!(matches!(
-        native_import::execute(Request::import("rsmi", "C>>O"), Some(missing.clone())).await?,
-        Outcome::Deferred(Deferred::ReactionLayout)
-    ));
     let request = Request::molecule("analyze", Default::default());
     assert!(matches!(
         native_import::execute(request, Some(missing.clone())).await?,
@@ -337,6 +333,69 @@ async fn cdx_conversion_and_kernel_budget_keep_import_atomic() -> anyhow::Result
         )
         .await,
         Err(Error::BinaryLimit)
+    ));
+    Ok(())
+}
+
+#[tokio::test]
+async fn layouts_match_complete_original_import_responses() -> anyhow::Result<()> {
+    reference_cases("layout", "tests/native_import_layout_reference.py").await
+}
+
+#[tokio::test]
+async fn layout_and_inchi_reader_failures_preserve_the_entire_request() -> anyhow::Result<()> {
+    let Some(path) = helper("reshiki-inchi-helper")? else {
+        return Ok(());
+    };
+    let config = Config::new(path);
+    for (format, text) in [
+        ("smiles", "CC |atomProp:1._CIPRank.bad|"),
+        ("rsmi", "CC>>O |atomProp:1._chiralAtomRank.bad|"),
+    ] {
+        let source = std::sync::Arc::new(Request::import(format, text));
+        let before = serde_json::to_value(source.as_ref())?;
+        assert!(matches!(
+            native_import::execute(source.clone(), Some(config.clone())).await,
+            Err(Error::Layout(_))
+        ));
+        assert_eq!(serde_json::to_value(source.as_ref())?, before);
+    }
+    let source = std::sync::Arc::new(Request::import(
+        "inchi",
+        "InChI=1S/C2H6O/c1-2-3/h3H,2H2,1H3",
+    ));
+    let before = serde_json::to_value(source.as_ref())?;
+    let tiny = Config {
+        limits: generator::Limits {
+            kernel_heap_bytes: 1,
+            ..config.limits
+        },
+        ..config.clone()
+    };
+    assert!(matches!(
+        native_import::execute(source.clone(), Some(tiny)).await,
+        Err(Error::Analysis(
+            reshiki::engine::native_response::Error::Helper(generator::Error::ResourceLimit { .. })
+        ))
+    ));
+    assert_eq!(serde_json::to_value(source.as_ref())?, before);
+    let Outcome::Complete(response) =
+        native_import::execute(source.clone(), Some(config.clone())).await?
+    else {
+        anyhow::bail!("Recovered InChI import was deferred");
+    };
+    assert_eq!(
+        response
+            .document
+            .context("Missing recovered drawing")?
+            .atoms
+            .len(),
+        3
+    );
+    assert_eq!(serde_json::to_value(source.as_ref())?, before);
+    assert!(matches!(
+        native_import::execute(Request::import("inchi", "InChI=1S/invalid"), Some(config)).await,
+        Err(Error::Parse)
     ));
     Ok(())
 }

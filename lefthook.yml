@@ -21,7 +21,7 @@ pre-commit:
       run: cargo fmt --all --check
     cargo-clippy:
       glob: "*.{rs,toml,lock}"
-      run: cargo clippy --all-targets --locked -- -D warnings
+      run: cargo clippy --all-targets --all-features --locked -- -D warnings
     cargo-check:
       glob: "*.{rs,toml,lock}"
-      run: cargo check --all-targets --locked
+      run: cargo check --all-targets --all-features --locked

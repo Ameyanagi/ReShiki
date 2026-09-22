@@ -94,6 +94,10 @@ impl<'a> Input<'a> {
             work_limit: MAX_WORK,
         })
     }
+    pub(super) fn with_rank_properties(mut self, ranks: super::ranks::Input<'_>) -> Result<Self> {
+        self.seeds = self.seeds.with_rank_properties(ranks)?;
+        Ok(self)
+    }
     pub fn with_work_limit(mut self, limit: usize) -> Self {
         self.work_limit = limit.min(MAX_WORK);
         self.seeds = self.seeds.with_work_limit(self.work_limit);

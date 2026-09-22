@@ -74,7 +74,7 @@ pub(super) fn orient(
     Ok(())
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "rdkit-reference"))]
 mod tests {
     use super::*;
     use serde::Deserialize;

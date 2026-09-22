@@ -511,12 +511,48 @@ pub fn read(text: &str) -> Result<Imported> {
         conf,
         stereo::CoordinateBounds::NativeImport,
     )?;
-    let (prepared, conformers) = prepare::finish(parsed, annotations.context)?;
+    let (prepared, conformers, kept_atoms) = prepare::finish(parsed, annotations.context)?;
+    // Native RemoveHs preserves properties on retained atoms. Keep the raw
+    // values for the later depiction stage, which converts rank properties
+    // only when the selected fragment/neighbor ordering reads them.
+    let reaction_properties = kept_atoms
+        .iter()
+        .map(|&id| {
+            let mut entries = annotations
+                .properties
+                .get(id)
+                .ok_or(Error::Limit)?
+                .iter()
+                .map(|(name, value)| (name.clone(), value.clone()))
+                .collect::<Vec<_>>();
+            entries.sort();
+            Ok(entries)
+        })
+        .collect::<Result<Vec<_>>>()?;
     Ok(Imported {
         prepared,
         conformers,
         name: (!name.is_empty()).then(|| name.to_owned()),
         reaction_attachments: Vec::new(),
-        reaction_properties: Vec::new(),
+        reaction_properties,
     })
+}
+
+#[cfg(test)]
+mod retained_properties {
+    #[test]
+    fn hydrogen_removal_retains_raw_properties_by_original_atom() -> anyhow::Result<()> {
+        let imported = super::read(
+            "[H]CO |atomProp:0._CIPRank.dropped:1._chiralAtomRank.bad:2._CIPRank.4294967295|",
+        )?;
+        assert_eq!(imported.prepared.state.graph.atoms.len(), 2);
+        assert_eq!(
+            imported.reaction_properties,
+            vec![
+                vec![(b"_chiralAtomRank".to_vec(), b"bad".to_vec())],
+                vec![(b"_CIPRank".to_vec(), b"4294967295".to_vec())],
+            ]
+        );
+        Ok(())
+    }
 }

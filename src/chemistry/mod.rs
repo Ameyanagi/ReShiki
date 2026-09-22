@@ -145,6 +145,7 @@ pub fn properties(atoms: &[AtomFacts]) -> Result<Properties, String> {
 }
 
 /// Complete the private worker response before exposing the public engine API.
+#[cfg(any(test, feature = "rdkit-reference"))]
 pub(crate) fn complete_analysis(result: &mut serde_json::Value) -> Result<(), String> {
     let Some(analysis) = result.get_mut("analysis").filter(|a| !a.is_null()) else {
         // Figure-only and reaction-export responses may have no analysis.

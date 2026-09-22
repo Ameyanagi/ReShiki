@@ -1,9 +1,13 @@
 //! Raster normalization for editable exchange, independent of Python/Pillow.
 use super::{MAX_BYTES, Picture, decode_limited};
+#[cfg(feature = "rdkit-reference")]
 use crate::document::Document;
+#[cfg(feature = "rdkit-reference")]
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use image::{DynamicImage, ImageFormat};
+#[cfg(feature = "rdkit-reference")]
 use serde::Deserialize;
+#[cfg(feature = "rdkit-reference")]
 use std::collections::HashMap;
 mod tiff;
 
@@ -95,6 +99,7 @@ pub fn export(picture: &Picture, flip: bool) -> Result<Vec<u8>, String> {
     Ok(Picture::from_decoded(pixels.flipv())?.png().to_vec())
 }
 
+#[cfg(feature = "rdkit-reference")]
 pub(crate) fn prepare_exports(document: &Document) -> Result<HashMap<u64, String>, String> {
     document
         .graphics
@@ -108,6 +113,7 @@ pub(crate) fn prepare_exports(document: &Document) -> Result<HashMap<u64, String
 }
 
 /// Replace private deferred image payloads before deserializing a Document.
+#[cfg(feature = "rdkit-reference")]
 pub(crate) fn complete_imports(mut result: serde_json::Value) -> Result<serde_json::Value, String> {
     let Some(graphics) = result
         .get_mut("document")

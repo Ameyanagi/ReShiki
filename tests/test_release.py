@@ -21,7 +21,6 @@ from build_release import (
     notices,
     release_platform,
     verify_binary,
-    verify_interpreter,
     version,
 )
 from sign_macos import is_macho, private_run
@@ -59,15 +58,11 @@ class ReleaseTests(unittest.TestCase):
             binary.write_bytes(self.pe_image(0xAA64))
             helper = binary.with_name("reshiki-inchi-helper.exe")
             helper.write_bytes(self.pe_image(0xAA64))
-            worker = root / "worker"
-            worker.mkdir()
-            (worker / "pyproject.toml").write_text("fixture")
             with (
                 patch("build_release.ROOT", root),
                 patch("build_release.version", return_value="1.2.3"),
                 patch("build_release.platform.system", return_value="Windows"),
                 patch("build_release.platform.machine", return_value="AMD64"),
-                patch("build_release.runtime_project", return_value=worker),
                 patch("build_release.target_directory", return_value=root / "target"),
                 patch("build_release.notices"),
                 patch(
@@ -92,7 +87,11 @@ class ReleaseTests(unittest.TestCase):
                 metadata = json.loads(stream.read("reshiki-1.2.3-windows-arm64/build.json"))
                 self.assertEqual(metadata["architecture"], "arm64")
                 self.assertEqual(metadata["rust_target"], target)
-                self.assertEqual(metadata["chemistry_architecture"], "x64")
+                self.assertNotIn("chemistry_architecture", metadata)
+                self.assertFalse(any("chemistry/" in name for name in stream.namelist()))
+                self.assertFalse(
+                    any(name.endswith((".py", "uv.lock")) for name in stream.namelist())
+                )
                 self.assertEqual(metadata["inchi_helper"]["version"], "1.07.3")
                 self.assertEqual(
                     stream.read("reshiki-1.2.3-windows-arm64/reshiki-inchi-helper.exe"),
@@ -131,38 +130,6 @@ class ReleaseTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Unsupported release target"):
                 release_platform(target)
 
-    def test_interpreter_check_uses_the_running_python_not_the_uv_launcher(self):
-        fixtures = [
-            (
-                "windows",
-                "x64",
-                {"system": "Windows", "machine": "ARM64", "platform": "win-amd64", "bits": 64},
-            ),
-            (
-                "macos",
-                "arm64",
-                {
-                    "system": "Darwin",
-                    "machine": "arm64",
-                    "platform": "macosx-11.0-universal2",
-                    "bits": 64,
-                },
-            ),
-        ]
-        with tempfile.TemporaryDirectory() as temporary:
-            launcher = Path(temporary) / "python"
-            # A launcher is not necessarily the actual interpreter executable.
-            launcher.write_text("launcher fixture")
-            for system, architecture, details in fixtures:
-                with self.subTest(system=system):
-                    response = subprocess.CompletedProcess([], 0, stdout=json.dumps(details))
-                    with patch("build_release.run", return_value=response) as run:
-                        verify_interpreter(launcher, system, architecture)
-                        self.assertEqual(run.call_args.args[0][0:2], [launcher, "-c"])
-                        wrong_arch = "arm64" if architecture == "x64" else "x64"
-                        with self.assertRaisesRegex(ValueError, "Python interpreter"):
-                            verify_interpreter(launcher, system, wrong_arch)
-
     def test_tag_must_match_package_version(self):
         check_tag(f"v{version()}")
         with self.assertRaisesRegex(ValueError, "must match"):
@@ -181,7 +148,7 @@ class ReleaseTests(unittest.TestCase):
             self.assertEqual(output.name, "reshiki-1.2.3-macos-arm64.zip")
             self.assertIn("--keepParent", run.call_args.args[0])
 
-    def test_windows_archive_accepts_reproducible_wheel_timestamps(self):
+    def test_windows_archive_accepts_reproducible_source_timestamps(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             folder = root / "reshiki-1.2.3-windows-x64"

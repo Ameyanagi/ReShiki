@@ -39,6 +39,10 @@ Name: "japanese"; MessagesFile: "compiler:Languages\Japanese.isl"
 Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked
 Name: "fileassoc"; Description: "Open .reshiki drawings with ReShiki"
 
+[InstallDelete]
+; Retire only the former app-owned worker. Never remove user caches or drawings.
+Type: filesandordirs; Name: "{app}\chemistry"
+
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 

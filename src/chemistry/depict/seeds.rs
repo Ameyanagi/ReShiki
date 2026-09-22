@@ -24,6 +24,8 @@ pub const MAX_ANGLE_PAIRS: usize = 1_000_000;
 pub enum Error {
     #[error("Invalid depiction seed input: {0}")]
     Invalid(&'static str),
+    #[error("bad any cast")]
+    BadRank { atom: usize, property: &'static str },
     #[error("Depiction seed work or storage limit exceeded")]
     Limit,
     #[error(transparent)]
@@ -34,6 +36,7 @@ impl From<attachment::Error> for Error {
         match error {
             attachment::Error::Invalid(reason) => Self::Invalid(reason),
             attachment::Error::Limit => Self::Limit,
+            attachment::Error::BadRank { atom, property } => Self::BadRank { atom, property },
             attachment::Error::Geometry(error) => Self::Geometry(error),
         }
     }
@@ -154,6 +157,13 @@ impl<'a> Input<'a> {
             ring_counts: (rings.kind != RingKind::None).then_some(counts),
             work_limit: MAX_WORK,
         })
+    }
+    pub(super) fn with_rank_properties(
+        mut self,
+        ranks: super::ranks::Input<'_>,
+    ) -> Result<Self, Error> {
+        self.attachment = self.attachment.with_rank_properties(ranks)?;
+        Ok(self)
     }
     /// Lower the independent work bounds for neighbor setup and seed geometry.
     pub fn with_work_limit(mut self, limit: usize) -> Self {

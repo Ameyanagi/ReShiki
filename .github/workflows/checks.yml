@@ -47,7 +47,7 @@ jobs:
       - run: uv run --locked ruff format --check engine scripts tests
       - run: uv run --locked ty check
       - run: uv run --locked python -m unittest discover -s tests -p 'test_*.py'
-      - run: uv run --locked python scripts/check_runtime_dependencies.py
+      - run: uv run --locked python scripts/check_reference_dependencies.py
   rust:
     strategy:
       fail-fast: false
@@ -91,14 +91,20 @@ jobs:
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
         with:
           arch: ${{ matrix.msvc_arch }}
-      - run: uv sync --locked
       - name: Build the audited native helper and test executables
-        run: uv run --locked python scripts/build_inchi_helper.py --fetch-source --target ${{ matrix.target }}
+        run: uv run --no-project python scripts/build_inchi_helper.py --fetch-source --target ${{ matrix.target }}
       - name: Select the helper for runtime integration tests
-        run: uv run --locked python -c "import os,pathlib; p=pathlib.Path('artifacts/inchi-helper/reshiki-inchi-helper'+('.exe' if os.name=='nt' else '')).resolve(); open(os.environ['GITHUB_ENV'],'a').write('RESHIKI_INCHI_HELPER='+str(p)+'\n')"
+        run: uv run --no-project python -c "import os,pathlib; p=pathlib.Path('artifacts/inchi-helper/reshiki-inchi-helper'+('.exe' if os.name=='nt' else '')).resolve(); open(os.environ['GITHUB_ENV'],'a').write('RESHIKI_INCHI_HELPER='+str(p)+'\n')"
       - name: Check native allocation and byte protocol boundaries
-        run: uv run --locked python -m unittest tests.test_inchi_arena tests.test_inchi_helper_protocol tests.test_inchi_source_patch
+        run: uv run --no-project python -m unittest tests.test_inchi_arena tests.test_inchi_helper_protocol tests.test_inchi_source_patch
       - run: cargo fmt --all --check
-      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - run: cargo check --workspace --all-targets --locked
-      - run: cargo test --workspace --locked
+      - name: Check the native application without reference dependencies
+        run: cargo clippy --workspace --all-targets --locked --no-default-features -- -D warnings
+      - run: cargo check --workspace --all-targets --locked --no-default-features
+      - run: cargo test --workspace --locked --no-default-features
+      - name: Install the optional reference dependencies after native checks
+        run: uv sync --locked
+      - name: Check the optional independent reference suite
+        run: cargo clippy --workspace --all-targets --locked --features rdkit-reference -- -D warnings
+      - run: cargo check --workspace --all-targets --locked --features rdkit-reference
+      - run: cargo test --workspace --locked --features rdkit-reference

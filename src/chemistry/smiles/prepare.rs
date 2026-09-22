@@ -18,7 +18,7 @@ pub struct Prepared {
 pub fn prepare(text: &str) -> Result<Prepared> {
     let parsed = parse_inner(text)?;
     let context = Context::new(&parsed);
-    finish(parsed, context).map(|(prepared, _)| prepared)
+    finish(parsed, context).map(|(prepared, _, _)| prepared)
 }
 
 pub(super) struct Context {
@@ -46,7 +46,10 @@ impl Context {
     }
 }
 
-pub(super) fn finish(parsed: Parsed, mut context: Context) -> Result<(Prepared, Vec<Conformer>)> {
+pub(super) fn finish(
+    parsed: Parsed,
+    mut context: Context,
+) -> Result<(Prepared, Vec<Conformer>, Vec<usize>)> {
     let removed = hydrogens::before_sanitization(&hydrogens::Input {
         graph: parsed.graph,
         metadata: parsed.metadata,
@@ -164,5 +167,6 @@ pub(super) fn finish(parsed: Parsed, mut context: Context) -> Result<(Prepared, 
             dummy_labels,
         },
         context.conformers,
+        removed.kept_atoms,
     ))
 }

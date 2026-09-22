@@ -1,6 +1,6 @@
 //! RDKit 2026.03.6 RDDepictor.cpp compute2DCoords orchestration.
 //! BSD-3-Clause; see licenses/rdkit/NOTICE.
-use super::{collision, expansion, finalize, geometry::Coordinates, seeds};
+use super::{collision, expansion, finalize, geometry::Coordinates, ranks, seeds};
 use crate::chemistry::stereo::{perception::State, wedging::Conformer};
 
 #[derive(Debug, thiserror::Error)]
@@ -47,6 +47,36 @@ pub fn compute(
     coordinates: Option<&Coordinates>,
     options: Options,
 ) -> Result<Conformer, Error> {
+    compute_inner(
+        state,
+        ranks::Input::Numeric(chiral_ranks),
+        coordinates,
+        options,
+    )
+}
+
+/// Retain native property-conversion failures until a selected ordering reads
+/// the property. Generated CIP ranks take precedence over literal CX values.
+pub fn compute_with_rank_properties(
+    state: &State,
+    properties: &[ranks::AtomProperties],
+    coordinates: Option<&Coordinates>,
+    options: Options,
+) -> Result<Conformer, Error> {
+    compute_inner(
+        state,
+        ranks::Input::Properties(properties),
+        coordinates,
+        options,
+    )
+}
+
+fn compute_inner(
+    state: &State,
+    rank_properties: ranks::Input<'_>,
+    coordinates: Option<&Coordinates>,
+    options: Options,
+) -> Result<Conformer, Error> {
     if !options.bond_length.is_finite() || options.bond_length <= 0.0 {
         return Err(Error::BondLength);
     }
@@ -54,9 +84,9 @@ pub fn compute(
     if remaining == 0 {
         return Err(Error::Limit);
     }
-    let mut initial = expansion::compute_initial_with_work(
+    let mut initial = expansion::compute_initial_ranks_with_work(
         state,
-        chiral_ranks,
+        rank_properties,
         coordinates,
         expansion::Options {
             bond_length: options.bond_length,

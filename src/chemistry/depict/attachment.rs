@@ -8,6 +8,7 @@
 use super::{
     arithmetic,
     geometry::{self, Bounds, Point, Transform},
+    ranks::{self, AtomProperties, Property},
     rings::{EmbeddedAtom, Fragment},
 };
 use crate::chemistry::{electronic::Hybridization, graph::Graph};
@@ -21,6 +22,8 @@ const MAX_NEIGHBORS: usize = 600_000;
 pub enum Error {
     #[error("Invalid depiction attachment input: {0}")]
     Invalid(&'static str),
+    #[error("bad any cast")]
+    BadRank { atom: usize, property: &'static str },
     #[error("Depiction attachment work or storage limit exceeded")]
     Limit,
     #[error(transparent)]
@@ -114,7 +117,7 @@ pub struct Input<'a> {
     graph: &'a Graph,
     data: &'a [AtomData],
     neighbors: Vec<Vec<usize>>,
-    ranks: Vec<i32>,
+    ranks: Vec<Result<i32, Error>>,
     work_limit: usize,
 }
 impl<'a> Input<'a> {
@@ -158,7 +161,7 @@ impl<'a> Input<'a> {
                 let degree = u32::try_from(at(&neighbors, id)?.len()).map_err(|_| Error::Limit)?;
                 rank.wrapping_add(count.wrapping_mul(100 * element + degree))
             };
-            ranks.push(rank as i32);
+            ranks.push(Ok(rank as i32));
         }
         Ok(Self {
             graph,
@@ -167,6 +170,51 @@ impl<'a> Input<'a> {
             ranks,
             work_limit: MAX_WORK,
         })
+    }
+    pub(super) fn with_rank_properties(mut self, ranks: ranks::Input<'_>) -> Result<Self, Error> {
+        if ranks.len() != self.data.len() {
+            return Err(Error::Invalid("atom rank property count"));
+        }
+        let count = u32::try_from(self.data.len()).map_err(|_| Error::Limit)?;
+        for (id, properties) in self.data.iter().enumerate() {
+            let AtomProperties { cip, chiral } = ranks
+                .get(id)
+                .ok_or(Error::Invalid("atom rank properties"))?;
+            let cip = properties.cip_rank.map_or(cip, Property::Value);
+            let key = match cip {
+                Property::Value(value) => Ok(value as i32),
+                Property::Invalid => Err(Error::BadRank {
+                    atom: id,
+                    property: "_CIPRank",
+                }),
+                Property::Absent => {
+                    let rank = match chiral {
+                        Property::Absent => Ok(id as u32),
+                        Property::Value(value) => Ok(count.wrapping_sub(value)),
+                        Property::Invalid => Err(Error::BadRank {
+                            atom: id,
+                            property: "_chiralAtomRank",
+                        }),
+                    };
+                    let atomic_number = u32::from(at(&self.graph.atoms, id)?.atomic_number);
+                    let element = if atomic_number == 1 {
+                        1000
+                    } else {
+                        atomic_number
+                    };
+                    let degree =
+                        u32::try_from(at(&self.neighbors, id)?.len()).map_err(|_| Error::Limit)?;
+                    rank.map(|rank| {
+                        rank.wrapping_add(count.wrapping_mul(100 * element + degree)) as i32
+                    })
+                }
+            };
+            *self
+                .ranks
+                .get_mut(id)
+                .ok_or(Error::Invalid("atom rank key"))? = key;
+        }
+        Ok(self)
     }
     pub(super) fn adjacent(&self, id: usize) -> Result<&[usize], Error> {
         Ok(at(&self.neighbors, id)?.as_slice())
@@ -199,7 +247,7 @@ impl<'a> Input<'a> {
         work.spend(ids.len().checked_mul(log + 1).ok_or(Error::Limit)?)?;
         let mut keys = Vec::with_capacity(ids.len());
         for &id in ids {
-            keys.push((*at(&self.ranks, id)?, id));
+            keys.push((at(&self.ranks, id)?.clone()?, id));
         }
         if ascending {
             keys.sort();

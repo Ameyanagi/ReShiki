@@ -203,6 +203,12 @@ impl<'a> Input<'a> {
             work_limit: MAX_WORK,
         })
     }
+    fn with_rank_properties(mut self, ranks: super::ranks::Input<'_>) -> Result<Self> {
+        self.attachment = self.attachment.with_rank_properties(ranks)?;
+        self.seeds = self.seeds.with_rank_properties(ranks)?;
+        self.templates = self.templates.with_rank_properties(ranks)?;
+        Ok(self)
+    }
     pub fn with_work_limit(mut self, limit: usize) -> Self {
         self.work_limit = limit.min(MAX_WORK);
         self.attachment = self.attachment.with_work_limit(self.work_limit);
@@ -265,9 +271,25 @@ pub(crate) fn compute_initial_with_work(
     options: Options,
     remaining: &mut usize,
 ) -> Result<Initial> {
+    compute_initial_ranks_with_work(
+        input,
+        super::ranks::Input::Numeric(chiral_ranks),
+        coordinates,
+        options,
+        remaining,
+    )
+}
+
+pub(crate) fn compute_initial_ranks_with_work(
+    input: &State,
+    rank_properties: super::ranks::Input<'_>,
+    coordinates: Option<&Coordinates>,
+    options: Options,
+    remaining: &mut usize,
+) -> Result<Initial> {
     let initial = (*remaining).min(MAX_WORK);
     let mut work = Budget::new(initial);
-    let result = compute_initial_inner(input, chiral_ranks, coordinates, options, &mut work);
+    let result = compute_initial_inner(input, rank_properties, coordinates, options, &mut work);
     let used = initial.checked_sub(work.0).ok_or(Error::Limit)?;
     *remaining = remaining.checked_sub(used).ok_or(Error::Limit)?;
     result
@@ -275,12 +297,12 @@ pub(crate) fn compute_initial_with_work(
 
 fn compute_initial_inner(
     input: &State,
-    chiral_ranks: &[Option<u32>],
+    rank_properties: super::ranks::Input<'_>,
     coordinates: Option<&Coordinates>,
     options: Options,
     work: &mut Budget,
 ) -> Result<Initial> {
-    if chiral_ranks.len() != input.graph.atoms.len() {
+    if rank_properties.len() != input.graph.atoms.len() {
         return Err(Error::Invalid("chiral rank count"));
     }
     if input.graph.atoms.len() > geometry::MAX_POINTS || input.graph.bonds.len() > 300_000 {
@@ -385,11 +407,13 @@ fn compute_initial_inner(
             Ok(AtomData {
                 hybridization,
                 cip_rank: at(&state.properties.atoms, i)?.cip_rank,
-                chiral_rank: *at(chiral_ranks, i)?,
+                chiral_rank: None,
             })
         })
         .collect::<Result<Vec<_>>>()?;
-    let mut prepared = Input::new(&state.graph, &state.metadata, &state.rings, &data)?;
+    work.spend(state.graph.atoms.len().checked_mul(3).ok_or(Error::Limit)?)?;
+    let mut prepared = Input::new(&state.graph, &state.metadata, &state.rings, &data)?
+        .with_rank_properties(rank_properties)?;
     prepared.ranks = ranks;
     let fragments = prepared.initial_with_budget(coordinates, options, work)?;
     Ok(Initial {

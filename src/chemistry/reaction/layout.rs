@@ -23,6 +23,15 @@ pub(crate) struct Request<'a> {
     file: &'a molfile::FileAnnotations,
     atom_properties: &'a [Vec<(Vec<u8>, Vec<u8>)>],
 }
+impl<'a> Request<'a> {
+    pub(crate) fn molecule(&self) -> &'a document::Molecule {
+        self.molecule
+    }
+    pub(crate) fn atom_properties(&self) -> &'a [Vec<(Vec<u8>, Vec<u8>)>] {
+        self.atom_properties
+    }
+}
+
 impl SmilesReaction {
     pub(crate) fn layout(self) -> Result<Layout, Error> {
         let mut parts = Vec::new();

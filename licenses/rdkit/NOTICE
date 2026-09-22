@@ -210,3 +210,6 @@ Copyright (C) 2001-2024 Greg Landrum and other RDKit contributors.
 
 Code/GraphMol/ROMol.cpp (clear-conformer assembly policy)
 Copyright (C) 2003-2024 Greg Landrum and other RDKit contributors.
+
+Code/RDGeneral/RDValue.h (lazy string-property numeric conversion and right trimming)
+Copyright (C) 2015 Novartis Institutes for BioMedical Research Inc.

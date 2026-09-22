@@ -1,12 +1,17 @@
-//! Finish coordinate-bearing imports without starting the Python worker.
+//! Finish molecular, drawing and reaction imports without a Python worker.
 //!
 //! Molecular files and drawing scenes retain their original chemical state for
 //! analysis. Reactions deliberately prepare their finished combined drawing,
-//! matching the original reaction import path. Missing layouts are explicit;
-//! parse, chemistry and helper errors never request a fallback.
+//! matching the original reaction import path. Layout and drawing construction
+//! stay detached; parse, chemistry and helper errors never request a fallback.
 use super::{Request, Response, native_response};
 use crate::{
-    chemistry::{self, cdxml, document as molecular, molfile, reaction},
+    chemistry::{
+        self, cdxml, depict, document as molecular,
+        inchi::{generator, helper, output},
+        molfile, reaction, smiles,
+        stereo::{Point3, perception::State},
+    },
     document::Document,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
@@ -32,6 +37,18 @@ pub enum Error {
     Protocol,
     #[error("Enter a structure first")]
     Empty,
+    #[error("Could not parse this structure")]
+    Parse,
+    #[error("Imported molecule exceeds the stable atom ID limit")]
+    AtomIds,
+    #[error("This bond type is not supported yet.")]
+    BondType,
+    #[error(transparent)]
+    Smiles(#[from] smiles::Error),
+    #[error(transparent)]
+    Inchi(#[from] output::Error),
+    #[error(transparent)]
+    Layout(#[from] depict::Error),
     #[error("Unsupported import format")]
     Format,
     #[error("Drawing exceeds the 16 MB structure limit")]
@@ -68,6 +85,7 @@ struct Prepared {
 }
 enum Preparation {
     Complete(Box<Prepared>),
+    Inchi(String),
     Deferred(Deferred),
 }
 
@@ -76,14 +94,29 @@ enum Preparation {
 /// this future cancels an active helper and cannot publish a partial drawing.
 pub async fn execute(
     request: impl Into<Arc<Request>> + Send,
-    config: Option<native_response::Config>,
+    mut config: Option<native_response::Config>,
 ) -> Result<Outcome, Error> {
     let request = request.into();
-    // Retain an immutable source snapshot for a possible layout deferral. Any
-    // large text/document clone belongs on the blocking executor, with parsing.
+    // Retain the caller snapshot. Large text/document clones and chemical work
+    // belong on the blocking executor; only the bounded InChI exchange is async.
     let prepared = tokio::task::spawn_blocking(move || prepare((*request).clone())).await??;
     let prepared = match prepared {
         Preparation::Complete(prepared) => prepared,
+        Preparation::Inchi(text) => {
+            let reader = match config.clone() {
+                Some(config) => config,
+                None => native_response::Config::new(
+                    tokio::task::spawn_blocking(helper::discover)
+                        .await?
+                        .map_err(native_response::Error::Discovery)?,
+                ),
+            };
+            let output = generator::read_with_limits(&reader.helper, &text, reader.limits)
+                .await
+                .map_err(native_response::Error::Helper)?;
+            config = Some(reader);
+            Box::new(tokio::task::spawn_blocking(move || prepare_inchi(output)).await??)
+        }
         Preparation::Deferred(reason) => return Ok(Outcome::Deferred(reason)),
     };
     let Prepared { molecule, document } = *prepared;
@@ -112,14 +145,18 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
         return Ok(Preparation::Deferred(Deferred::OtherOperation));
     }
     let format = request.format.as_deref().unwrap_or("smiles");
-    if matches!(format, "smiles" | "inchi") {
-        return Ok(Preparation::Deferred(Deferred::MolecularLayout));
-    }
     let text = request.text.unwrap_or_default();
-    if text.trim().is_empty() {
+    if !matches!(format, "rxn" | "rsmi") && text.trim().is_empty() {
         return Err(Error::Empty);
     }
     let prepared = match format {
+        "inchi" => return Ok(Preparation::Inchi(text)),
+        "smiles" => {
+            let imported = smiles::read(&text)?;
+            let mut molecule = molecule(imported.prepared.state)?;
+            layout(&mut molecule, &imported.reaction_properties)?;
+            finish_molecule(molecule, &imported.prepared.dummy_labels)?
+        }
         "mol" => {
             let imported = molfile::read(&text)?;
             let drawing = imported.drawing()?;
@@ -139,9 +176,10 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             } else {
                 text
             };
-            let scene = cdxml::assemble_cdxml(&cdxml::prepare_cdxml(&xml)?)?;
-            if !scene.molecule.state.graph.atoms.is_empty() && scene.conformer_3d.is_none() {
-                return Ok(Preparation::Deferred(Deferred::DrawingLayout));
+            let mut scene = cdxml::assemble_cdxml(&cdxml::prepare_cdxml(&xml)?)?;
+            if scene.conformer_3d.is_none() {
+                layout(&mut scene.molecule, &[])?;
+                scene.conformer_3d = Some(false);
             }
             let imported = scene.into_document()?;
             Prepared {
@@ -152,10 +190,14 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
         "rxn" => finish_reaction(reaction::read_rxn(&text)?.drawing()?)?,
         "rsmi" => {
             let layout = reaction::read_smiles(&text)?.layout()?;
-            if layout.requests().next().is_some() {
-                return Ok(Preparation::Deferred(Deferred::ReactionLayout));
-            }
-            finish_reaction(layout.finish(Vec::new())?)?
+            let positions = layout
+                .requests()
+                .map(|request| {
+                    molecular::validate_molecule(request.molecule())?;
+                    coordinates(&request.molecule().state, request.atom_properties())
+                })
+                .collect::<Result<Vec<_>, Error>>()?;
+            finish_reaction(layout.finish(positions)?)?
         }
         _ => return Err(Error::Format),
     };
@@ -168,4 +210,79 @@ fn finish_reaction(drawing: reaction::Drawing) -> Result<Prepared, Error> {
     let document = drawing.finish(labels)?;
     let molecule = molecular::prepare(&document)?;
     Ok(Prepared { molecule, document })
+}
+
+fn molecule(state: State) -> Result<molecular::Molecule, Error> {
+    let count = state.graph.atoms.len();
+    let last = u64::try_from(count).map_err(|_| Error::AtomIds)?;
+    Ok(molecular::Molecule {
+        rdkit_version: chemistry::RDKIT_VERSION,
+        ids: (1..=last).collect(),
+        positions: vec![Point3::default(); count],
+        state,
+    })
+}
+
+fn coordinates(
+    state: &State,
+    properties: &[Vec<(Vec<u8>, Vec<u8>)>],
+) -> Result<Vec<Point3>, Error> {
+    let ranks = if properties.is_empty() {
+        vec![depict::ranks::AtomProperties::default(); state.graph.atoms.len()]
+    } else {
+        properties
+            .iter()
+            .map(|pairs| depict::ranks::AtomProperties::from_pairs(pairs))
+            .collect()
+    };
+    Ok(depict::compute_with_rank_properties(
+        state,
+        &ranks,
+        None,
+        depict::Options {
+            // Native public Compute2DCoords defaults. Cleanup explicitly opts in
+            // to templates, while original import calls supply no such option.
+            use_ring_templates: false,
+            ..depict::Options::default()
+        },
+    )?
+    .positions)
+}
+
+fn layout(
+    molecule: &mut molecular::Molecule,
+    properties: &[Vec<(Vec<u8>, Vec<u8>)>],
+) -> Result<(), Error> {
+    molecular::validate_molecule(molecule)?;
+    molecule.positions = coordinates(&molecule.state, properties)?;
+    Ok(())
+}
+
+fn finish_molecule(
+    molecule: molecular::Molecule,
+    labels: &[Option<String>],
+) -> Result<Prepared, Error> {
+    let drawing = molecular::for_import(&molecule, false, labels)?;
+    let labels = drawing.labels()?;
+    let document = drawing.finish(labels)?;
+    document.validate().map_err(Error::Document)?;
+    Ok(Prepared { molecule, document })
+}
+
+fn prepare_inchi(output: output::Output) -> Result<Prepared, Error> {
+    let imported = output::reconstruct(
+        &output,
+        output::Options {
+            sanitize: true,
+            remove_hydrogens: false,
+        },
+    )?;
+    let state = imported.state.ok_or(Error::Parse)?;
+    if imported.unspecified_bonds.iter().any(|&value| value) {
+        return Err(Error::BondType);
+    }
+    let mut molecule = molecule(state)?;
+    layout(&mut molecule, &[])?;
+    let labels = vec![None; molecule.ids.len()];
+    finish_molecule(molecule, &labels)
 }

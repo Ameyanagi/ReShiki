@@ -48,7 +48,7 @@ jobs:
             artifact: windows-arm64
             target: aarch64-pc-windows-msvc
             msvc_arch: arm64
-            # RDKit has no Windows ARM wheel. Windows 11 runs the x64 worker.
+            # RDKit reference tests use the x64 wheel through Windows 11 emulation.
             python: cpython-3.12-windows-x86_64-none
           - os: ubuntu-22.04
             artifact: linux-x64
@@ -94,8 +94,8 @@ jobs:
           "RESHIKI_ISCC=$compilerDir\ISCC.exe" >> $env:GITHUB_ENV
       - name: Test chemistry and packaging on this platform
         run: uv run --locked python -m unittest discover -s tests -p 'test_*.py'
-      - name: Verify production dependencies
-        run: uv run --locked python scripts/check_runtime_dependencies.py
+      - name: Verify reference dependencies
+        run: uv run --locked python scripts/check_reference_dependencies.py
       - name: Build and test extracted portable archive
         env:
           MACOSX_DEPLOYMENT_TARGET: "14.0"
