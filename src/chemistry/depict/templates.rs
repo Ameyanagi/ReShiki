@@ -102,9 +102,28 @@ impl<'a> Input<'a> {
     /// Native EmbeddedFrag(molecule, selected rings, useRingTemplates=true).
     /// Default template coordinates are absolute and are not bond-length scaled.
     pub fn embed(&self, selected: &[usize], bond_length: f64) -> Result<TemplateEmbedding> {
+        self.embed_with_budget(selected, bond_length, &mut { self.work_limit })
+    }
+    pub(super) fn embed_with_budget(
+        &self,
+        selected: &[usize],
+        bond_length: f64,
+        remaining: &mut usize,
+    ) -> Result<TemplateEmbedding> {
+        let mut work = Work((*remaining).min(self.work_limit));
+        let result = self.embed_work(selected, bond_length, &mut work);
+        *remaining = work.0;
+        result
+    }
+    fn embed_work(
+        &self,
+        selected: &[usize],
+        bond_length: f64,
+        work: &mut Work,
+    ) -> Result<TemplateEmbedding> {
+        work.spend(self.graph.atoms.len() + self.graph.bonds.len())?;
         let rings = rings::Input::new(self.graph, self.metadata, self.cache, selected)?
             .with_work_limit(self.work_limit);
-        let mut work = Work(self.work_limit);
         let union = |ids: &[usize], work: &mut Work| -> Result<Vec<usize>> {
             let mut result = Vec::new();
             let mut seen = std::collections::HashSet::new();
@@ -121,7 +140,7 @@ impl<'a> Input<'a> {
         };
         if (selected.len() > 1
             || (selected.len() == 1 && at(&self.cache.atoms, *at(selected, 0)?)?.len() > 8))
-            && let Some(matched) = self.match_with_work(&union(selected, &mut work)?, &mut work)?
+            && let Some(matched) = self.match_with_work(&union(selected, work)?, work)?
         {
             return Ok(TemplateEmbedding {
                 fragment: matched.fragment,
@@ -129,23 +148,24 @@ impl<'a> Input<'a> {
                 core: false,
             });
         }
-        let construction = rings.begin(bond_length)?;
-        let core = rings.core()?;
+        let construction = rings.begin_with_budget(bond_length, &mut work.0)?;
+        let core = rings.core_with_budget(&mut work.0)?;
         if core.len() > 1 && core.len() < selected.len() {
             let source = core
                 .iter()
                 .map(|&i| at(selected, i).copied())
                 .collect::<Result<Vec<_>>>()?;
-            if let Some(matched) = self.match_with_work(&union(&source, &mut work)?, &mut work)? {
+            if let Some(matched) = self.match_with_work(&union(&source, work)?, work)? {
                 return Ok(TemplateEmbedding {
-                    fragment: construction.finish(Some((matched.fragment, core)))?,
+                    fragment: construction
+                        .finish_with_budget(Some((matched.fragment, core)), &mut work.0)?,
                     template: Some(matched.ordinal),
                     core: true,
                 });
             }
         }
         Ok(TemplateEmbedding {
-            fragment: construction.finish(None)?,
+            fragment: construction.finish_with_budget(None, &mut work.0)?,
             template: None,
             core: false,
         })
@@ -158,6 +178,7 @@ impl<'a> Input<'a> {
             return Err(Error::Limit);
         }
         let catalog = catalog::builtin()?;
+        work.spend(self.graph.atoms.len() + atoms.len())?;
         let mut included = vec![false; self.graph.atoms.len()];
         for &id in atoms {
             let slot = included
@@ -202,7 +223,9 @@ impl<'a> Input<'a> {
                 .copied()
                 .zip(template.positions.iter().copied())
                 .collect();
-            let fragment = self.seeds.from_coordinates(&coordinates)?;
+            let fragment = self
+                .seeds
+                .coordinates_with_budget(&coordinates, &mut work.0)?;
             return Ok(Some(TemplateMatch {
                 ordinal,
                 mapping,

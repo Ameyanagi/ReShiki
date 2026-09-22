@@ -296,9 +296,24 @@ pub fn reflect_point(point: Point, first: Point, second: Point) -> Result<Point,
 /// the eigenvector threshold, so a degenerate early return remains centered.
 /// All reductions follow increasing atom IDs; input coordinates are unchanged.
 pub fn canonical_orientation(points: &Coordinates) -> Result<Coordinates, Error> {
+    let (mut centered, transform) = canonical_basis(points)?;
+    if let Some(transform) = transform {
+        for point in centered.values_mut() {
+            *point = transform.apply(*point)?;
+        }
+    }
+    Ok(centered)
+}
+
+// Expose the existing centered coordinates and optional rotation to the final
+// fragment stage, which must also transform EmbeddedAtom normals. A degenerate
+// early return keeps those normals unchanged, exactly as the native method.
+pub(super) fn canonical_basis(
+    points: &Coordinates,
+) -> Result<(Coordinates, Option<Transform>), Error> {
     validate(points)?;
     if points.len() <= 1 {
-        return Ok(points.clone());
+        return Ok((points.clone(), None));
     }
     let count = u32::try_from(points.len()).map_err(|_| Error::Limit)?;
     let mut center = Point::default();
@@ -332,7 +347,7 @@ pub fn canonical_orientation(points: &Coordinates) -> Result<Coordinates, Error>
     }
     .result()?;
     if finite(first.length())? <= 1e-4 {
-        return Ok(result);
+        return Ok((result, None));
     }
     let first_value = finite((xx + yy + delta) / 2.0)?;
     let length = finite(first.length())?;
@@ -360,10 +375,7 @@ pub fn canonical_orientation(points: &Coordinates) -> Result<Coordinates, Error>
         yy: first.x,
         ty: 0.0,
     };
-    for point in result.values_mut() {
-        *point = transform.apply(*point)?;
-    }
-    Ok(result)
+    Ok((result, Some(transform)))
 }
 
 /// Compute the native signed box extents, including its finite sentinels.

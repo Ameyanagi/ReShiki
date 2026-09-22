@@ -36,9 +36,9 @@ pub struct AtomData {
     pub chiral_rank: Option<u32>,
 }
 
-struct Work(usize);
+pub(super) struct Work(pub(super) usize);
 impl Work {
-    fn spend(&mut self, amount: usize) -> Result<(), Error> {
+    pub(super) fn spend(&mut self, amount: usize) -> Result<(), Error> {
         self.0 = self.0.checked_sub(amount).ok_or(Error::Limit)?;
         Ok(())
     }
@@ -178,6 +178,16 @@ impl<'a> Input<'a> {
     fn work(&self) -> Work {
         Work(self.work_limit)
     }
+    fn with_budget<T>(
+        &self,
+        remaining: &mut usize,
+        run: impl FnOnce(&mut Work) -> Result<T, Error>,
+    ) -> Result<T, Error> {
+        let mut work = Work((*remaining).min(self.work_limit));
+        let result = run(&mut work);
+        *remaining = work.0;
+        result
+    }
     fn rank(&self, ids: &[usize], ascending: bool, work: &mut Work) -> Result<Vec<usize>, Error> {
         if ids.len() > MAX_NEIGHBORS {
             return Err(Error::Limit);
@@ -199,7 +209,7 @@ impl<'a> Input<'a> {
     pub fn ranked_atoms(&self, ids: &[usize], ascending: bool) -> Result<Vec<usize>, Error> {
         self.rank(ids, ascending, &mut self.work())
     }
-    fn validate(&self, value: &Fragment, work: &mut Work) -> Result<(), Error> {
+    pub(super) fn validate(&self, value: &Fragment, work: &mut Work) -> Result<(), Error> {
         if value.atoms.len() > self.graph.atoms.len()
             || value.attachment_points.len() > self.graph.atoms.len()
         {
@@ -303,7 +313,12 @@ impl<'a> Input<'a> {
         }
         Ok(ordered)
     }
-    fn update(&self, value: &mut Fragment, id: usize, work: &mut Work) -> Result<(), Error> {
+    pub(super) fn update(
+        &self,
+        value: &mut Fragment,
+        id: usize,
+        work: &mut Work,
+    ) -> Result<(), Error> {
         atom(value, id)?;
         let adjacent = at(&self.neighbors, id)?;
         work.spend(adjacent.len())?;
@@ -334,6 +349,16 @@ impl<'a> Input<'a> {
         Ok(())
     }
     pub fn single_atom(&self, id: usize) -> Result<Fragment, Error> {
+        self.single_atom_with_budget(id, &mut { self.work_limit })
+    }
+    pub(super) fn single_atom_with_budget(
+        &self,
+        id: usize,
+        remaining: &mut usize,
+    ) -> Result<Fragment, Error> {
+        self.with_budget(remaining, |work| self.single_atom_work(id, work))
+    }
+    fn single_atom_work(&self, id: usize, work: &mut Work) -> Result<Fragment, Error> {
         at(self.data, id)?;
         let mut a = fresh(id);
         a.normal = Point { x: 1.0, y: 0.0 };
@@ -348,7 +373,7 @@ impl<'a> Input<'a> {
             },
             attachment_points: Vec::new(),
         };
-        self.update(&mut value, id, &mut self.work())?;
+        self.update(&mut value, id, work)?;
         Ok(value)
     }
     /// Rebuild one neighbor list. Native stale attachment entries are retained.
@@ -361,14 +386,23 @@ impl<'a> Input<'a> {
     }
     /// Rebuild every list in ascending map order, then rank attachment points.
     pub fn setup_neighbors(&self, fragment: &Fragment) -> Result<Fragment, Error> {
-        let mut work = self.work();
-        self.validate(fragment, &mut work)?;
+        self.setup_with_budget(fragment, &mut { self.work_limit })
+    }
+    pub(super) fn setup_with_budget(
+        &self,
+        fragment: &Fragment,
+        remaining: &mut usize,
+    ) -> Result<Fragment, Error> {
+        self.with_budget(remaining, |work| self.setup_work(fragment, work))
+    }
+    fn setup_work(&self, fragment: &Fragment, work: &mut Work) -> Result<Fragment, Error> {
+        self.validate(fragment, work)?;
         let mut value = fragment.clone();
         value.attachment_points.clear();
         for &id in fragment.atoms.keys() {
-            self.update(&mut value, id, &mut work)?;
+            self.update(&mut value, id, work)?;
         }
-        value.attachment_points = self.rank(&value.attachment_points, true, &mut work)?;
+        value.attachment_points = self.rank(&value.attachment_points, true, work)?;
         Ok(value)
     }
     pub fn add_non_ring_atom(
@@ -380,30 +414,43 @@ impl<'a> Input<'a> {
     ) -> Result<Fragment, Error> {
         let mut work = self.work();
         self.validate(fragment, &mut work)?;
+        let mut value = fragment.clone();
+        self.add_in_place(&mut value, id, target, bond_length, &mut work)?;
+        Ok(value)
+    }
+    // The caller owns a previously validated detached fragment. A failed
+    // mutation is discarded by its public atomic operation, never published.
+    pub(super) fn add_in_place(
+        &self,
+        value: &mut Fragment,
+        id: usize,
+        target: usize,
+        bond_length: f64,
+        work: &mut Work,
+    ) -> Result<(), Error> {
         at(self.data, id)?;
         if !bond_length.is_finite() {
             return Err(geometry::Error::NonFinite.into());
         }
-        if fragment.atoms.contains_key(&id) {
+        if value.atoms.contains_key(&id) {
             return Err(Error::Invalid("atom already embedded"));
         }
-        let reference = atom(fragment, target)?;
+        let reference = atom(value, target)?;
         let adjacent = at(&self.neighbors, target)?;
         work.spend(adjacent.len() + reference.neighbors.len())?;
         if !adjacent.contains(&id) || !reference.neighbors.contains(&id) {
             return Err(Error::Invalid("atom is not a pending bonded neighbor"));
         }
-        let mut value = fragment.clone();
         if reference.angle > 0.0 {
-            self.with_angle(&mut value, id, target, &mut work)?;
+            self.with_angle(value, id, target, work)?;
         } else {
-            self.without_angle(&mut value, id, target, bond_length)?;
+            self.without_angle(value, id, target, bond_length)?;
         }
-        atom_mut(&mut value, target)?
+        atom_mut(value, target)?
             .neighbors
             .retain(|&other| other != id);
-        self.update(&mut value, id, &mut work)?;
-        Ok(value)
+        self.update(value, id, work)?;
+        Ok(())
     }
     fn nearby(value: &Fragment, p: Point, radius: f64, work: &mut Work) -> Result<usize, Error> {
         work.spend(value.atoms.len())?;

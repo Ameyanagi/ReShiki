@@ -167,10 +167,37 @@ impl<'a> Input<'a> {
     fn work(&self) -> Work {
         Work(self.work_limit)
     }
+    fn with_budget<T>(
+        &self,
+        remaining: &mut usize,
+        run: impl FnOnce(&mut Work) -> Result<T, Error>,
+    ) -> Result<T, Error> {
+        let mut work = Work((*remaining).min(self.work_limit));
+        let result = run(&mut work);
+        *remaining = work.0;
+        result
+    }
     /// Direct stereobond constructor: neighbor setup is deliberately separate,
     /// as in native embedCisTransSystems. Controls must be adjacent substituents.
     pub fn cis_trans(&self, bond: usize, current_length: f64) -> Result<Fragment, Error> {
-        let mut work = self.work();
+        self.cis_trans_with_budget(bond, current_length, &mut { self.work_limit })
+    }
+    pub(super) fn cis_trans_with_budget(
+        &self,
+        bond: usize,
+        current_length: f64,
+        remaining: &mut usize,
+    ) -> Result<Fragment, Error> {
+        self.with_budget(remaining, |work| {
+            self.cis_trans_work(bond, current_length, work)
+        })
+    }
+    fn cis_trans_work(
+        &self,
+        bond: usize,
+        current_length: f64,
+        work: &mut Work,
+    ) -> Result<Fragment, Error> {
         work.spend(2)?;
         let edge = at(&self.graph.bonds, bond)?;
         let stereo = at(&self.metadata.bonds, bond)?;
@@ -209,6 +236,15 @@ impl<'a> Input<'a> {
     /// Native coordinate-map constructor, including fixed flags, neighbor
     /// setup and attachment geometry. Input points are used without alignment.
     pub fn from_coordinates(&self, coordinates: &Coordinates) -> Result<Fragment, Error> {
-        self.coordinate_fragment(coordinates, &mut self.work())
+        self.coordinates_with_budget(coordinates, &mut { self.work_limit })
+    }
+    pub(super) fn coordinates_with_budget(
+        &self,
+        coordinates: &Coordinates,
+        remaining: &mut usize,
+    ) -> Result<Fragment, Error> {
+        self.with_budget(remaining, |work| {
+            self.coordinate_fragment(coordinates, work)
+        })
     }
 }

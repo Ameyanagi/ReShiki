@@ -69,7 +69,7 @@ predicate; these diagnostics do not alter expected native results. The builder
 verifies pinned source hashes. Captures record source, executable and wheel
 library hashes and preserve all floating-point values as hexadecimal bits.
 
-The Linux x86_64 corpus has 1,921 cases: every builtin in original and permuted
+Each native-platform corpus has the same 1,921 inputs: every builtin in original and permuted
 atom order, outside-degree perturbations, oversized ring systems requiring core
 fallback, fused/spiro/bridged rings, macrocycles, side chains, alternate stereo
 controls and several bond lengths. It records 1,712 direct matches, 209 direct
@@ -81,13 +81,30 @@ fragments match bit for bit, including signed zero; all drawing-space f32
 projections agree. These counts are asserted, not merely printed.
 
 The two dedicated tests also cover bounded error paths and source immutability.
-The 11 existing ring, seed and attachment tests pass unchanged. Their previously
-recorded macOS-versus-Linux arithmetic differences remain explicitly audited.
-This checkpoint has native template captures and Rust validation on Linux only;
-it does not establish macOS ARM64 or Windows x64 template parity. Those platforms
-need same-host native captures and the separate depiction arithmetic checkpoint.
-A cross-platform replay reports raw binary64 and drawing-space f32 differences
-without widening the Linux exact contract or treating that report as parity.
+Matching-platform fixture replay is strict on Linux x86_64, macOS ARM64 and
+Windows. Mac and Windows fixtures reuse every original input pickle and bit
+pattern; only native expected outputs and provenance change. Linux ARM64 still
+audits the Linux x86_64 fixture. Windows ARM64 uses the x64 reference fixture and
+requires separate CI verification; the physical Windows capture host is x64.
+Cross-platform audits are not evidence of native parity. Live native replay
+always requires exact binary64 values, independently of fixture platform.
+
+The template builder requires the wheel's Boost version (1.85), records compiler,
+reference, generated-observation and native library hashes, and never compiles
+Rust. macOS execution sets the wheel library directory for its original install
+names. The Windows builder derives import libraries from the wheel's DLL exports.
+MSVC includes private/public access in method names, so a friend observer calls
+`matchToTemplate` while retaining its original private declaration. Its method
+body and the template-enabled constructor execute in the original DLL; no copied
+replacement implementation is used. The matching trace and stereo diagnostics
+remain independent source observers as described above.
+
+New fixture SHA-256 values:
+
+| Platform    | Compressed fixture                                                 | Uncompressed JSONL                                                 |
+| ----------- | ------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| macOS ARM64 | `8e6d800c10616584e450ef24d8f15b5e151057c509cd2d8c81b34a576b2a4c4c` | `7b1c365e09b58c2dec2ee2c0eefca5cd2b3b188728555e41ca015b79a7713248` |
+| Windows x64 | `33a099dee5644b1ff2af2433fc6a11277e3088d7f4ffb5bdb1661936c1755f71` | `94073e1235675784210b42bf58c014323b730c3f487b835328deb61f503f2fdb` |
 
 Regenerate or verify the catalog from the pinned original checkout:
 
@@ -96,11 +113,11 @@ Regenerate or verify the catalog from the pinned original checkout:
 ```
 
 Omit `--check` to regenerate and run `oxfmt` on the generated JSON afterward.
-Build and capture the independent native oracle on Linux:
+Build and capture the independent native oracle on Linux or macOS:
 
 ```sh
-.venv/bin/python tests/build_depict_templates_oracle.py --rdkit-source /path/to/rdkit
-.venv/bin/python tests/depict_templates_reference.py --rdkit-source /path/to/rdkit --oracle artifacts/depict-templates-oracle --output tests/fixtures/depict-templates-linux-native.json.gz
+.venv/bin/python tests/build_depict_templates_oracle.py --rdkit-source /path/to/rdkit --boost-include /path/to/boost185
+.venv/bin/python tests/depict_templates_reference.py --rdkit-source /path/to/rdkit --oracle artifacts/depict-templates-oracle --replay --output /path/to/native-fixture.json.gz
 CARGO_BUILD_JOBS=4 cargo +1.95.0 test --locked --test depict_templates --test depict_rings --test depict_seeds --test depict_attachment -- --nocapture
 ```
 
@@ -110,6 +127,13 @@ identical native input pickles on another host. Plain fixture replay requires on
 Python's standard library; expected values never come from Rust. The Rust test
 supports live same-host replay with `RESHIKI_DEPICT_TEMPLATES_ORACLE` pointing to
 the built observer and `RESHIKI_RDKIT_SOURCE` to the pinned source or snapshot.
-Set `RESHIKI_DEPICT_REQUIRE_EXACT=1` to enforce exact binary64 values during that
-replay; otherwise the live mode is a numerical audit, with discrete differences
-still failing. Default Linux fixture replay always requires exact values.
+Live replay is always strict. `RESHIKI_DEPICT_REQUIRE_EXACT=1` also opts a
+cross-platform fixture audit into exact comparisons.
+
+Windows capture uses the pinned x64 wheel's Python from an x64 MSVC developer
+prompt, with the same isolated source and Boost headers:
+
+```bat
+python tests\build_depict_windows_oracle.py --component templates ^
+  --rdkit-source F:\isolated\rdkit --boost-include F:\isolated\boost185
+```

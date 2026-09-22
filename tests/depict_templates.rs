@@ -157,6 +157,16 @@ fn builtin_templates_match_direct_native_order_and_construction() -> anyhow::Res
         ".venv/bin/python"
     }));
     command.arg(root.join("tests/depict_templates_reference.py"));
+    let fixture = if cfg!(windows) {
+        "depict-templates-windows-native.json.gz"
+    } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+        "depict-templates-macos-native.json.gz"
+    } else {
+        "depict-templates-linux-native.json.gz"
+    };
+    command
+        .arg("--fixture")
+        .arg(root.join("tests/fixtures").join(fixture));
     let live = std::env::var_os("RESHIKI_DEPICT_TEMPLATES_ORACLE").is_some();
     if live {
         command
@@ -195,8 +205,13 @@ fn builtin_templates_match_direct_native_order_and_construction() -> anyhow::Res
             .context("native catalog slot")
     };
     let mut audit = Audit {
-        exact: std::env::var_os("RESHIKI_DEPICT_REQUIRE_EXACT").is_some()
-            || (!live && cfg!(all(target_os = "linux", target_arch = "x86_64"))),
+        exact: live
+            || std::env::var_os("RESHIKI_DEPICT_REQUIRE_EXACT").is_some()
+            || cfg!(any(
+                windows,
+                all(target_os = "linux", target_arch = "x86_64"),
+                all(target_os = "macos", target_arch = "aarch64")
+            )),
         ..Default::default()
     };
     let (mut matched, mut unmatched, mut embedded, mut rejected, mut core) = (0, 0, 0, 0, 0);
@@ -348,6 +363,10 @@ fn builtin_templates_match_direct_native_order_and_construction() -> anyhow::Res
     );
     assert_eq!(first_mapping_witnesses, 8);
     assert_eq!(audit.scalars, 695876);
+    if audit.exact {
+        assert_eq!(audit.unequal, 0);
+        assert_eq!(audit.projected, 0);
+    }
     eprintln!("Separate native-nonfinite geometry restrictions: {nonfinite_restrictions}");
     assert_eq!(nonfinite_restrictions, 1);
     assert!(

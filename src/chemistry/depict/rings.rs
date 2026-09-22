@@ -204,7 +204,15 @@ impl<'a> Input<'a> {
     /// Preserve its two remembered atom IDs, including revisits after the
     /// intersection count exceeds two; a set-based rewrite changes behavior.
     pub fn core(&self) -> Result<Vec<usize>, Error> {
-        let mut work = self.work();
+        self.core_with_budget(&mut { self.work_limit })
+    }
+    pub(super) fn core_with_budget(&self, remaining: &mut usize) -> Result<Vec<usize>, Error> {
+        let mut work = Work((*remaining).min(self.work_limit));
+        let result = self.core_work(&mut work);
+        *remaining = work.0;
+        result
+    }
+    fn core_work(&self, work: &mut Work) -> Result<Vec<usize>, Error> {
         let mut removed = vec![false; self.selected.len()];
         loop {
             let mut changed = false;

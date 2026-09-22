@@ -47,7 +47,7 @@ impl Input<'_> {
             atom.fixed = true;
             fragment.atoms.insert(id, atom);
         }
-        fragment = self.attachment.setup_neighbors(&fragment)?;
+        fragment = self.attachment.setup_with_budget(&fragment, &mut work.0)?;
         for id in fragment.attachment_points.clone() {
             let pending = &atom(&fragment, id)?.neighbors;
             let adjacent = self.neighbors(id)?;

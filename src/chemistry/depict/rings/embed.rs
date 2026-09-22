@@ -96,18 +96,31 @@ fn from_ring(
 impl Input<'_> {
     /// Exact no-template constructor stage. Errors leave inputs unchanged.
     pub fn embed_without_templates(&self, bond_length: f64) -> Result<Fragment, Error> {
-        self.begin(bond_length)?.finish(None)
+        self.embed_with_budget(bond_length, &mut { self.work_limit })
+    }
+    pub(in crate::chemistry::depict) fn embed_with_budget(
+        &self,
+        bond_length: f64,
+        remaining: &mut usize,
+    ) -> Result<Fragment, Error> {
+        self.begin_with_budget(bond_length, remaining)?
+            .finish_with_budget(None, remaining)
     }
     /// Preserve native coordinate construction/mirroring before a core-template
     /// attempt. Full-system templates bypass this stage in EmbeddedFrag.
-    pub(in crate::chemistry::depict) fn begin(
+    pub(in crate::chemistry::depict) fn begin_with_budget(
         &self,
         bond_length: f64,
+        remaining: &mut usize,
     ) -> Result<Construction<'_, '_>, Error> {
+        let result = self.begin_work(bond_length, Work((*remaining).min(self.work_limit)));
+        *remaining = result.as_ref().map_or(0, |stage| stage.work.0);
+        result
+    }
+    fn begin_work(&self, bond_length: f64, mut work: Work) -> Result<Construction<'_, '_>, Error> {
         if self.selected.is_empty() {
             return Err(Error::Invalid("empty ring system"));
         }
-        let mut work = self.work();
         let mut coordinates = Vec::new();
         let mut union = Vec::new();
         for index in 0..self.selected.len() {
@@ -203,10 +216,17 @@ pub(in crate::chemistry::depict) struct Construction<'a, 'g> {
     union: Vec<usize>,
 }
 impl Construction<'_, '_> {
-    pub(in crate::chemistry::depict) fn finish(
-        self,
+    pub(in crate::chemistry::depict) fn finish_with_budget(
+        mut self,
         seed: Option<(Fragment, Vec<usize>)>,
+        remaining: &mut usize,
     ) -> Result<Fragment, Error> {
+        self.work.0 = self.work.0.min(*remaining);
+        let result = self.finish_work(seed);
+        *remaining = result.as_ref().map_or(0, |(_, left)| *left);
+        result.map(|(fragment, _)| fragment)
+    }
+    fn finish_work(self, seed: Option<(Fragment, Vec<usize>)>) -> Result<(Fragment, usize), Error> {
         let Self {
             input,
             mut work,
@@ -266,17 +286,20 @@ impl Construction<'_, '_> {
                 return Err(Error::Invalid("ring selection made no progress"));
             }
         }
-        Ok(Fragment {
-            atoms,
-            done: false,
-            bounds: Bounds {
-                positive_x: 0.0,
-                negative_x: 0.0,
-                positive_y: 0.0,
-                negative_y: 0.0,
+        Ok((
+            Fragment {
+                atoms,
+                done: false,
+                bounds: Bounds {
+                    positive_x: 0.0,
+                    negative_x: 0.0,
+                    positive_y: 0.0,
+                    negative_y: 0.0,
+                },
+                attachment_points,
             },
-            attachment_points,
-        })
+            work.0,
+        ))
     }
 }
 

@@ -21,7 +21,7 @@ import rdkit
 from rdkit import rdBase
 
 PIN = "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985"
-COMPONENTS = ("geometry", "rings", "attachment", "seeds")
+COMPONENTS = ("geometry", "rings", "attachment", "seeds", "templates")
 
 
 def digest(path):
@@ -97,7 +97,12 @@ def main():
     )
     (generated / "RDConfig.h").write_bytes(b"#pragma once\n")
     includes = []
-    if args.component in ("attachment", "seeds"):
+    if args.component == "templates":
+        from build_depict_templates_oracle import prepare_observation
+
+        prepare_observation(root, source, directory / "observation")
+        includes.append("/I" + str(directory / "observation"))
+    elif args.component in ("attachment", "seeds"):
         data = (source / "GraphMol/Depictor/EmbeddedFrag.h").read_bytes()
         assert data.count(b" private:") == 1
         observer = directory / "observation/GraphMol/Depictor/EmbeddedFrag.h"
@@ -107,7 +112,10 @@ def main():
     library_dir = Path(rdkit.__file__).parent.parent / "rdkit.libs"
     libraries = {}
     links = []
-    for name in ("Depictor", "GraphMol", "RDGeometryLib", "RDGeneral"):
+    names = ["Depictor", "GraphMol", "RDGeometryLib", "RDGeneral"]
+    if args.component == "templates":
+        names.extend(("SubstructMatch", "SmilesParse"))
+    for name in names:
         matches = list(library_dir.glob(f"RDKit{name}-*.dll"))
         assert len(matches) == 1, (name, matches)
         dll = matches[0]
@@ -198,6 +206,11 @@ def main():
         "reference_sha256": digest(reference),
         "export_header_sha256": digest(generated / "export.h"),
         "source_adapter": adapter,
+        "observation_sha256": {
+            p.relative_to(directory / "observation").as_posix(): digest(p)
+            for p in sorted((directory / "observation").rglob("*"))
+            if p.is_file()
+        },
         "runtime": "/MD, x64 MSVC and the pinned x64 wheel",
     }
     data = json.dumps(metadata, separators=(",", ":")).encode() + b"\n" + body

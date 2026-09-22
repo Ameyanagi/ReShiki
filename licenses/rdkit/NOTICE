@@ -8,7 +8,7 @@ Copyright (C) 2001-2024 Greg Landrum and other RDKit contributors.
 Code/GraphMol/MolOps.cpp (sanitization order, functional-group/metal/atropisomer cleanup, radicals, hydrogen adjustment and component splitting)
 Copyright (C) 2001-2023 Greg Landrum and other RDKit contributors.
 
-Code/GraphMol/Aromaticity.cpp (default aromaticity model)
+Code/GraphMol/Aromaticity.cpp (default aromaticity model; makeRingNeighborMap and pickFusedRings ordered ring-system traversal)
 Copyright (C) 2003-2022 Greg Landrum and other RDKit contributors.
 
 Code/GraphMol/ConjugHybrid.cpp (conjugation and hybridization)
@@ -128,13 +128,13 @@ Copyright (C) 2001-2021 Greg Landrum and Rational Discovery LLC.
 Code/Geometry/point.h and point.cpp (stereo vector/dihedral and depiction normal/angle arithmetic, including verified native ABI contraction order)
 Copyright (C) 2003-2025 Greg Landrum and other RDKit contributors.
 
-Code/GraphMol/Depictor/RDDepictor.cpp (square-planar, trigonal-bipyramidal and octahedral initial fragments)
+Code/GraphMol/Depictor/RDDepictor.cpp (square-planar, trigonal-bipyramidal and octahedral initial fragments; computeInitialCoords seed/expansion orchestration; ordered fragment packing, conformer assembly and single-anchor translation)
 Copyright (C) 2003-2022 Greg Landrum and other RDKit contributors.
 
-Code/GraphMol/Depictor/DepictUtils.cpp (regular-ring embedding, point bisectors, point reflection and ordered first/core/next ring selection, rankAtomsByRank and setNbrOrder)
+Code/GraphMol/Depictor/DepictUtils.cpp (regular-ring embedding, point bisectors, point reflection and ordered first/core/next ring selection, rotatable bonds and spiro-center checks, rankAtomsByRank and setNbrOrder)
 Copyright (C) 2003-2025 Greg Landrum and other RDKit contributors.
 
-Code/GraphMol/Depictor/EmbeddedFrag.cpp (ordered fragment centering, canonical orientation, signed box extents and no-template fused-ring construction, trans-ring mirroring, density reflection, ring metadata merging, single-atom initialization, setupNewNeighs/updateNewNeighs, addNonRingAtom, coordinate-map/cis-trans constructors and setupAttachmentPoints/computeNbrsAndAng)
+Code/GraphMol/Depictor/EmbeddedFrag.cpp (ordered fragment centering, canonical orientation, signed box extents and no-template fused-ring construction, trans-ring mirroring, density reflection, ring metadata merging, single-atom initialization, setupNewNeighs/updateNewNeighs, addNonRingAtom, coordinate-map/cis-trans constructors and setupAttachmentPoints/computeNbrsAndAng, expandEfrag, mergeWithCommon/mergeNoCommon and merge transforms/reflection)
 Copyright (C) 2004-2025 Greg Landrum and other RDKit contributors.
 
 Code/GraphMol/Depictor/DepictUtils.h and EmbeddedFrag.h (depiction metadata declarations and angle/normal helpers)
@@ -163,6 +163,9 @@ Copyright (C) 2018-2026 Greg Landrum and other RDKit contributors.
 
 Code/GraphMol/MolProps.cpp
 Copyright (C) 2024 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/Matrices.cpp (ordered shortest paths and unit-edge topological distances)
+Copyright (C) 2003-2008 Greg Landrum and Rational Discovery LLC.
 
 Code/GraphMol/FindRings.cpp
 Copyright (C) 2003-2021 Greg Landrum and other RDKit contributors.
@@ -201,3 +204,9 @@ LLC), EmbeddedFrag.cpp (Copyright (C) 2004-2025) and EmbeddedFrag.h
 pinned source revision above. Generated query and
 coordinate data retain original catalog order; no native library is linked
 into the application for these operations.
+
+Code/GraphMol/Conformer.h (zero-initialized coordinate storage and 2D dimensionality)
+Copyright (C) 2001-2024 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/ROMol.cpp (clear-conformer assembly policy)
+Copyright (C) 2003-2024 Greg Landrum and other RDKit contributors.

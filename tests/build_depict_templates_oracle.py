@@ -28,30 +28,8 @@ SOURCE_SHA256 = {
 }
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--rdkit-source", type=Path, required=True)
-    parser.add_argument("--boost-include", type=Path, default=Path("/usr/include"))
-    args = parser.parse_args()
-    assert rdBase.rdkitVersion == "2026.03.6"
-    root = Path(__file__).resolve().parents[1]
-    source = args.rdkit_source.resolve() / "Code"
-    for relative, digest in SOURCE_SHA256.items():
-        assert hashlib.sha256((args.rdkit_source / relative).read_bytes()).hexdigest() == digest
-    catalog = json.loads((root / "src/chemistry/depict/templates/builtin.json").read_text())
-    assert catalog["source_commit"] == PIN
-    assert (
-        hashlib.sha256((source / "GraphMol/Depictor/TemplateSmarts.h").read_bytes()).hexdigest()
-        == catalog["source_sha256"]
-    )
-    if (args.rdkit_source / ".git").exists():
-        assert (
-            subprocess.check_output(
-                ["git", "-C", str(args.rdkit_source), "rev-parse", "HEAD"], text=True
-            ).strip()
-            == PIN
-        )
-    generated = root / "artifacts/depict-template-observation"
+def prepare_observation(root, source, generated):
+    """Expose native private methods and record the unchanged matching trace."""
     (generated / "GraphMol/Depictor").mkdir(parents=True, exist_ok=True)
     helpers = (
         (root / "tests/depict_attachment_reference.cpp").read_text().split("int main() {", 1)[0]
@@ -59,9 +37,15 @@ def main():
     (generated / "depict-native-fragment-observation.inc").write_text(helpers)
     header = (source / "GraphMol/Depictor/EmbeddedFrag.h").read_text()
     assert header.count(" private:") == 1
-    (generated / "GraphMol/Depictor/EmbeddedFrag.h").write_text(
-        header.replace(" private:", " public:")
+    declaration = "  bool matchToTemplate(const RDKit::INT_VECT &ringSystemAtoms);"
+    assert header.count(declaration) == 1
+    observed_header = header.replace(" private:", " public:").replace(
+        declaration,
+        " private:\n  friend struct NativeTemplateAccess;\n" + declaration + "\n public:",
     )
+    # MSVC encodes access in method symbols. Keep this method private and use a
+    # friend observer so its call resolves to the wheel's original private ABI.
+    (generated / "GraphMol/Depictor/EmbeddedFrag.h").write_text(observed_header)
     code = (source / "GraphMol/Depictor/EmbeddedFrag.cpp").read_text()
     start = code.index("static bool checkStereoChemistry(")
     middle = code.index("bool EmbeddedFrag::matchToTemplate(", start)
@@ -84,6 +68,42 @@ def main():
         + observed
         + "return {observed_slot,match};\n}\n}\n"
     )
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--rdkit-source", type=Path, required=True)
+    parser.add_argument("--boost-include", type=Path, default=Path("/usr/include"))
+    args = parser.parse_args()
+    assert rdBase.rdkitVersion == "2026.03.6"
+    boost_header = args.boost_include / "boost/version.hpp"
+    match = re.search(r"#define BOOST_VERSION\s+(\d+)", boost_header.read_text())
+    assert match is not None
+    version = int(match[1])
+    assert f"{version // 100000}_{version // 100 % 1000}" == rdBase.boostVersion, (
+        "Boost headers must match the wheel's graph iterator ABI",
+        version,
+        rdBase.boostVersion,
+    )
+    root = Path(__file__).resolve().parents[1]
+    source = args.rdkit_source.resolve() / "Code"
+    for relative, digest in SOURCE_SHA256.items():
+        assert hashlib.sha256((args.rdkit_source / relative).read_bytes()).hexdigest() == digest
+    catalog = json.loads((root / "src/chemistry/depict/templates/builtin.json").read_text())
+    assert catalog["source_commit"] == PIN
+    assert (
+        hashlib.sha256((source / "GraphMol/Depictor/TemplateSmarts.h").read_bytes()).hexdigest()
+        == catalog["source_sha256"]
+    )
+    if (args.rdkit_source / ".git").exists():
+        assert (
+            subprocess.check_output(
+                ["git", "-C", str(args.rdkit_source), "rev-parse", "HEAD"], text=True
+            ).strip()
+            == PIN
+        )
+    generated = root / "artifacts/depict-template-observation"
+    prepare_observation(root, source, generated)
     config = generated / "RDGeneral"
     config.mkdir(exist_ok=True)
     macros = set()
@@ -112,22 +132,35 @@ def main():
     else:
         raise SystemExit("Use the matching C++20 SDK on Windows, retaining the observation source.")
     libraries += [str(python), "-Wl,-rpath," + str(python.parent), "-Wl,-rpath," + str(libs)]
-    subprocess.run(
-        [
-            os.environ.get("CXX", "c++"),
-            "-std=c++20",
-            "-I" + str(generated),
-            "-I" + str(source),
-            "-I" + str(source / "GraphMol/Depictor"),
-            "-I" + str(args.boost_include),
-            str(root / "tests/depict_templates_reference.cpp"),
-            *libraries,
-            "-o",
-            str(root / "artifacts/depict-templates-oracle"),
-        ],
-        check=True,
-        cwd=root,
-    )
+    binary = root / "artifacts/depict-templates-oracle"
+    command = [
+        os.environ.get("CXX", "c++"),
+        "-std=c++20",
+        "-I" + str(generated),
+        "-I" + str(source),
+        "-I" + str(source / "GraphMol/Depictor"),
+        "-I" + str(args.boost_include),
+        str(root / "tests/depict_templates_reference.cpp"),
+        *libraries,
+        "-o",
+        str(binary),
+    ]
+    subprocess.run(command, check=True, cwd=root)
+    metadata = {
+        "compiler_command": command,
+        "compiler_version": subprocess.check_output([command[0], "--version"], text=True),
+        "boost_version": rdBase.boostVersion,
+        "boost_version_header_sha256": hashlib.sha256(boost_header.read_bytes()).hexdigest(),
+        "reference_sha256": hashlib.sha256(
+            (root / "tests/depict_templates_reference.cpp").read_bytes()
+        ).hexdigest(),
+        "generated_sha256": {
+            p.relative_to(generated).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in sorted(generated.rglob("*"))
+            if p.is_file()
+        },
+    }
+    binary.with_suffix(".build.json").write_text(json.dumps(metadata, indent=2) + "\n")
 
 
 if __name__ == "__main__":

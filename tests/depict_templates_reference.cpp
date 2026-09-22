@@ -8,6 +8,14 @@
 #include <GraphMol/QueryAtom.h>
 #include "depict-template-observation.inc"
 
+namespace RDDepict {
+struct NativeTemplateAccess {
+  static bool match(EmbeddedFrag &fragment,const RDKit::INT_VECT &atoms) {
+    return fragment.matchToTemplate(atoms);
+  }
+};
+}
+
 void trace(std::ostream &out,const RDKit::ROMol &mol,const RDKit::INT_VECT &atoms) {
   auto [slot,match]=RDDepict::observedMatch(&mol,atoms);
   out<<"{\"slot\":"<<slot<<",\"mapping\":[";
@@ -15,7 +23,7 @@ void trace(std::ostream &out,const RDKit::ROMol &mol,const RDKit::INT_VECT &atom
   for(auto [query,target]:match){if(comma)out<<',';comma=true;out<<'['<<query<<','<<target<<']';}
   out<<"],\"fragment\":";
   RDDepict::EmbeddedFrag value;value.dp_mol=&mol;
-  if(value.matchToTemplate(atoms))fragment(out,value);else out<<"null";
+  if(RDDepict::NativeTemplateAccess::match(value,atoms))fragment(out,value);else out<<"null";
   out<<'}';
 }
 void alternatives(std::ostream &out,const RDKit::ROMol &mol,const RDKit::INT_VECT &atoms) {

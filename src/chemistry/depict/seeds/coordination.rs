@@ -113,6 +113,26 @@ impl Input<'_> {
         ranks: &[i32],
         lengths: &IdealLengths,
     ) -> Result<Option<Fragment>, Error> {
+        self.coordination_with_budget(center, ranks, lengths, &mut { self.work_limit })
+    }
+    pub(in crate::chemistry::depict) fn coordination_with_budget(
+        &self,
+        center: usize,
+        ranks: &[i32],
+        lengths: &IdealLengths,
+        remaining: &mut usize,
+    ) -> Result<Option<Fragment>, Error> {
+        self.with_budget(remaining, |work| {
+            self.coordination_work(center, ranks, lengths, work)
+        })
+    }
+    fn coordination_work(
+        &self,
+        center: usize,
+        ranks: &[i32],
+        lengths: &IdealLengths,
+        work: &mut super::Work,
+    ) -> Result<Option<Fragment>, Error> {
         let tag = at(&self.metadata.atoms, center)?.chiral_tag;
         let length = match tag {
             6 => lengths.square_planar,
@@ -121,13 +141,16 @@ impl Input<'_> {
             _ => return Ok(None),
         };
         let length = input_number(length)?;
+        let degree = self.neighbors(center)?.len();
+        let log =
+            usize::try_from(usize::BITS - degree.leading_zeros()).map_err(|_| Error::Limit)?;
+        work.spend(degree.checked_mul(log + 1).ok_or(Error::Limit)?)?;
         let neighbors = self.ranked_neighbors(center, ranks)?;
         if tag == 6 && neighbors.is_empty() {
             return Err(Error::Invalid("coordination degree"));
         }
         let mut points = Coordinates::new();
         points.insert(center, Point::default());
-        let mut work = self.work();
         work.spend(
             neighbors
                 .len()
@@ -282,7 +305,7 @@ impl Input<'_> {
             }
             _ => return Err(Error::Invalid("coordination tag")),
         }
-        Ok(Some(self.coordinate_fragment(&points, &mut work)?))
+        Ok(Some(self.coordinate_fragment(&points, work)?))
     }
 }
 

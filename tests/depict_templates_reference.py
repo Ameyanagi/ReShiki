@@ -4,6 +4,7 @@ import argparse
 import gzip
 import hashlib
 import json
+import os
 import platform
 import random
 import struct
@@ -204,6 +205,17 @@ def main():
         inputs = previous[1:]
     else:
         inputs = list(cases(args.rdkit_source))
+    package = Path(rdkit.__file__).parent
+    libraries = (
+        package / ".dylibs" if platform.system() == "Darwin" else package.parent / "rdkit.libs"
+    )
+    environment = dict(os.environ)
+    if platform.system() == "Darwin":
+        environment["DYLD_LIBRARY_PATH"] = str(libraries)
+    elif platform.system() == "Windows":
+        environment["PATH"] = str(libraries) + os.pathsep + environment.get("PATH", "")
+    else:
+        environment["LD_LIBRARY_PATH"] = str(libraries)
     result = subprocess.run(
         [str(args.oracle.resolve())],
         input="".join(map(request, inputs)),
@@ -211,13 +223,10 @@ def main():
         capture_output=True,
         check=True,
         timeout=240,
+        env=environment,
     )
     outputs = result.stdout.splitlines()
     assert len(outputs) == len(inputs), (len(outputs), len(inputs), result.stderr)
-    package = Path(rdkit.__file__).parent
-    libraries = (
-        package / ".dylibs" if platform.system() == "Darwin" else package.parent / "rdkit.libs"
-    )
     header = dict(
         provenance=dict(
             commit=PIN,
@@ -235,6 +244,9 @@ def main():
             templates=True,
         )
     )
+    build = args.oracle.with_suffix(".build.json")
+    if build.exists():
+        header["provenance"]["native_build"] = json.loads(build.read_text())
     lines = [json.dumps(header, separators=(",", ":"))]
     for case, line in zip(inputs, outputs, strict=True):
         case["expected"] = json.loads(line)
