@@ -426,6 +426,45 @@ async fn overlapping_builds_retain_their_immutable_snapshots() -> anyhow::Result
 }
 
 #[tokio::test]
+async fn shared_prepared_analysis_preserves_chemical_state_and_native_results() -> anyhow::Result<()>
+{
+    let Some(path) = helper("reshiki-inchi-helper")? else {
+        return Ok(());
+    };
+    let reference = PythonEngine::default();
+    for text in [
+        "C",
+        "*",
+        "F[C@](Cl)(Br)I",
+        "F/C=C/F",
+        "[13CH3:41][NH3+]",
+        "[NH3]->[Cu+2]",
+        "[Mo]$[Mo]",
+    ] {
+        let document = imported(&reference, text).await?;
+        let request = Request::molecule("analyze", document.clone());
+        let expected = reference
+            .execute(request)
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let molecule = Arc::new(molecular::prepare(&document)?);
+        let before = serde_json::to_value(&*molecule)?;
+        let analysis = native_response::analyze_prepared(
+            Arc::clone(&molecule),
+            Some(Config::new(path.clone())),
+        )
+        .await?;
+        let actual = Response {
+            analysis: Some(analysis),
+            ..expected.clone()
+        };
+        equal(actual, expected)?;
+        assert_eq!(before, serde_json::to_value(&*molecule)?);
+    }
+    Ok(())
+}
+
+#[tokio::test]
 async fn native_adapter_early_empty_result_does_not_require_a_helper() -> anyhow::Result<()> {
     let reference = PythonEngine::default();
     let mut document = Document::default();

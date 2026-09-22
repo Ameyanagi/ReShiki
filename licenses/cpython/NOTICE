@@ -18,3 +18,8 @@ including or invoking the Python interpreter.
 
 The specialization in src/chemistry/cdxml/graphics/shapes.rs preserves
 chemical-symbol size thresholds using the same compensated norm in safe Rust.
+
+The adaptation in src/chemistry/cdxml/scene/circles.rs follows the compensated
+float summation in Python/bltinmodule.c, builtin_sum_impl, from the same pinned
+CPython release. Together with the arrow norm specialization, it preserves the
+original aromatic-circle ownership thresholds without invoking Python.

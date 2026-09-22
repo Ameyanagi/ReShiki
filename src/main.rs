@@ -44,10 +44,18 @@ fn main() -> iced::Result {
                 std::process::exit(1);
             }
         };
-        match runtime.block_on(
-            reshiki::engine::LocalEngine::default()
-                .request(reshiki::engine::Request::import_smiles("CCO")),
-        ) {
+        match runtime.block_on(async {
+            let engine = reshiki::engine::LocalEngine::default();
+            let imported = engine
+                .request(reshiki::engine::Request::import_smiles("CCO"))
+                .await?;
+            let document = imported
+                .document
+                .ok_or("Chemistry import returned no drawing")?;
+            engine
+                .request(reshiki::engine::Request::molecule("analyze", document))
+                .await
+        }) {
             Ok(response) => {
                 use std::io::Write;
                 if let Err(error) = serde_json::to_writer_pretty(std::io::stdout(), &response) {

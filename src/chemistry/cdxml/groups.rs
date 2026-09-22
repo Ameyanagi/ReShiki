@@ -13,7 +13,7 @@ pub fn read_groups(xml: &str, object_map: &[ObjectMapEntry], first_id: u64) -> R
     if object_map.len() > 100_000 {
         return Err(Error::Limit);
     }
-    let tree = Tree::parse(xml)?;
+    let tree = Tree::parse_import(xml)?;
     let order = tree.descendants(0)?;
     let mut mapped = HashMap::new();
     let mut members = 0usize;

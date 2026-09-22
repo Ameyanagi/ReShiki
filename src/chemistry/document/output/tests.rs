@@ -144,3 +144,57 @@ fn bond_labels_follow_identity_when_base_order_changes() -> anyhow::Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn detached_scene_draft_requires_appearance_and_callback_success() -> anyhow::Result<()> {
+    #[derive(Debug, thiserror::Error)]
+    enum Failure {
+        #[error(transparent)]
+        Drawing(#[from] Error),
+        #[error("restoration failed")]
+        Restore,
+    }
+    let mut base = Document::default();
+    let a = base.add_atom("O", Point::new(0., 0.));
+    let h = base.add_atom("H", Point::new(42., 0.));
+    let b = base.add_atom("O", Point::new(84., 0.));
+    base.add_bond(a, h, 1, "plain");
+    base.add_bond(h, b, 0, "dotted");
+    let molecule = prepare(&base)?;
+    let before = serde_json::to_value(&molecule)?;
+    assert!(for_import(&molecule, false, &[None, None, None]).is_err());
+    let draft = for_import_scene(&molecule, false)?;
+    let data = labels(&draft);
+    assert!(draft.finish(data).is_err());
+    let draft = for_import_scene(&molecule, false)?;
+    let data = labels(&draft);
+    let failed: Result<Document, Failure> = draft.finish_with(data, |document| {
+        for bond in &mut document.bonds {
+            if bond.order == 0 {
+                bond.display = "dotted".into();
+            }
+        }
+        Err(Failure::Restore)
+    });
+    assert!(matches!(failed, Err(Failure::Restore)));
+    let draft = for_import_scene(&molecule, false)?;
+    let data = labels(&draft);
+    let restored: Result<Document, Failure> = draft.finish_with(data, |document| {
+        for bond in &mut document.bonds {
+            if bond.order == 0 {
+                bond.display = "dotted".into();
+            }
+        }
+        Ok(())
+    });
+    restored?.validate().map_err(anyhow::Error::msg)?;
+    assert_eq!(serde_json::to_value(&molecule)?, before);
+    let mut invalid_base = base.clone();
+    invalid_base.bonds.last_mut().context("bond")?.display = "plain".into();
+    assert!(for_drawing(&molecule, &invalid_base).is_err());
+    assert_eq!(
+        base.bonds.last().context("original bond")?.display,
+        "dotted"
+    );
+    Ok(())
+}

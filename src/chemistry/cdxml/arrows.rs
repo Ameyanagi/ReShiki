@@ -168,7 +168,7 @@ pub struct ArrowReader {
 }
 impl ArrowReader {
     pub fn new(xml: &str) -> Result<Self> {
-        let tree = Tree::parse(xml)?;
+        let tree = Tree::parse_import(xml)?;
         let order = tree.descendants(0)?;
         Ok(Self { tree, order })
     }
@@ -402,7 +402,7 @@ fn on_segment(p: ImportPoint, a: ImportPoint, b: ImportPoint) -> bool {
 /// Two-coordinate CPython 3.12.12 vector_norm (Modules/mathmodule.c), including
 /// infinity/NaN precedence and subnormal scaling. Copyright Python Software
 /// Foundation, PSF license; see licenses/cpython. Multiplication error uses FMA.
-fn native_hypot(x: f64, y: f64) -> f64 {
+pub(super) fn native_hypot(x: f64, y: f64) -> f64 {
     let (mut x, mut y) = (x.abs(), y.abs());
     let mut maximum = x.max(y);
     if maximum.is_infinite() {

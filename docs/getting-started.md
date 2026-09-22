@@ -60,13 +60,4 @@ Use SVG or PDF for vector figures and PNG for an image. Editable copy and CDXML 
 
 ## Run from source
 
-Install Rust 1.95 or later and [uv](https://docs.astral.sh/uv/), then:
-
-```sh
-git clone https://github.com/Ameyanagi/ReShiki.git reshiki
-cd reshiki
-uv sync --locked --python 3.12
-cargo run --locked
-```
-
-For development checks, hooks, and documentation previews, see [development](development.md).
+Follow the [development guide](development.md) to build the app and its native helper, run checks, or preview the documentation.

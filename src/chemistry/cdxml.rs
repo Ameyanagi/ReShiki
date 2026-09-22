@@ -26,6 +26,7 @@ mod parse;
 mod preparation;
 pub mod presentation;
 mod read_abbreviations;
+mod scene;
 mod stereo;
 mod tree;
 mod xml_guard;
@@ -44,6 +45,10 @@ pub use preparation::{
     PreparationCause, PreparationError, PreparationStage, PreparedCdxml, prepare_cdxml,
 };
 pub use read_abbreviations::read_abbreviations;
+pub use scene::{
+    CdxmlScene, ImportedCdxml, NativeCaption, NativeScene, SceneAtom, SceneBond, SceneError,
+    assemble_cdxml, import_cdxml,
+};
 
 use super::{graph::Graph, kekulize::Direction, ranking::Metadata, stereo::Point3};
 use serde::Serialize;

@@ -6,6 +6,7 @@ use tokio::{
     process::{Child, ChildStdin, ChildStdout, Command},
     sync::Mutex,
 };
+pub mod native_import;
 pub mod native_response;
 mod reaction;
 
@@ -159,11 +160,13 @@ pub trait ChemistryEngine: Send + Sync {
 #[derive(Clone)]
 pub struct LocalEngine<B = PythonEngine> {
     chemistry: B,
+    native_responses: bool,
 }
 
 impl Default for LocalEngine<PythonEngine> {
     fn default() -> Self {
         Self {
+            native_responses: true,
             chemistry: PythonEngine {
                 local_properties: true,
                 local_pictures: true,
@@ -176,7 +179,10 @@ impl Default for LocalEngine<PythonEngine> {
 
 impl<B: ChemistryEngine> LocalEngine<B> {
     pub fn with_backend(chemistry: B) -> Self {
-        Self { chemistry }
+        Self {
+            chemistry,
+            native_responses: false,
+        }
     }
 
     pub async fn request(&self, request: Request) -> Result<Response, String> {
@@ -215,9 +221,23 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
                 .await
                 .map_err(|e| format!("Abbreviation edit failed: {e}"))??,
             );
-            // Reuse Rust drawing reconstruction and the remaining identifier bridge.
+            // Reuse drawing reconstruction and analysis for the edited snapshot.
             // Unlike Analyze, the original abbreviation operation accepts an empty drawing.
             request.operation = "finish_abbreviation".into();
+        }
+        if self.native_responses
+            && (matches!(
+                request.operation.as_str(),
+                "analyze" | "finish_abbreviation"
+            ) || request.operation == "export"
+                && matches!(
+                    request.format.as_deref(),
+                    Some("smiles" | "mol" | "inchi" | "cdxml" | "cdx")
+                ))
+        {
+            return native_response::execute(request)
+                .await
+                .map_err(|e| e.to_string());
         }
         if request.operation == "export"
             && let Some(format @ ("rxn" | "rsmi")) = request.format.as_deref()
@@ -246,6 +266,32 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
                     });
                 }
                 Err(error) => return Err(error.to_string()),
+            }
+        }
+        if self.native_responses && request.operation == "import" {
+            let source = Arc::new(request);
+            match native_import::execute(Arc::clone(&source), None)
+                .await
+                .map_err(|e| e.to_string())?
+            {
+                native_import::Outcome::Complete(response) => return Ok(*response),
+                native_import::Outcome::Deferred(
+                    native_import::Deferred::MolecularLayout
+                    | native_import::Deferred::DrawingLayout
+                    | native_import::Deferred::ReactionLayout,
+                ) => {
+                    // Continue the existing layout path with the exact source
+                    // bytes. No import error can select this continuation.
+                    request = match Arc::try_unwrap(source) {
+                        Ok(request) => request,
+                        Err(source) => tokio::task::spawn_blocking(move || (*source).clone())
+                            .await
+                            .map_err(|e| format!("Import snapshot task failed: {e}"))?,
+                    };
+                }
+                native_import::Outcome::Deferred(native_import::Deferred::OtherOperation) => {
+                    return Err("Native import unexpectedly deferred an import operation".into());
+                }
             }
         }
         let binary = request.format.as_deref() == Some("cdx");

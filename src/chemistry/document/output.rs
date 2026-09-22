@@ -89,7 +89,23 @@ impl Drawing {
         }
         self.finish(labels)
     }
-    pub fn finish(mut self, labels: Labels) -> Result<Document, Error> {
+    pub fn finish(self, labels: Labels) -> Result<Document, Error> {
+        self.finish_with(labels, |_| Ok(()))
+    }
+    /// Restore import-owned appearance after CIP labels and before final
+    /// validation. The callback only receives a detached draft; an error
+    /// publishes no partial drawing and leaves the caller's source unchanged.
+    pub(crate) fn finish_with<E: From<Error>>(
+        self,
+        labels: Labels,
+        restore: impl FnOnce(&mut Document) -> Result<(), E>,
+    ) -> Result<Document, E> {
+        let mut document = self.labeled(labels)?;
+        restore(&mut document)?;
+        document.validate().map_err(Error::Drawing)?;
+        Ok(document)
+    }
+    fn labeled(mut self, labels: Labels) -> Result<Document, Error> {
         if labels.rdkit_version != RDKIT_VERSION
             || labels.atoms.len() != self.document.atoms.len()
             || labels.bonds.len() != self.document.bonds.len()
@@ -127,7 +143,6 @@ impl Drawing {
                 bond.stereo_atoms.reverse();
             }
         }
-        self.document.validate().map_err(Error::Drawing)?;
         Ok(self.document)
     }
 }
@@ -160,7 +175,9 @@ pub fn for_drawing(molecule: &Molecule, base: &Document) -> Result<Drawing, Erro
         return Err(invalid("Drawing molecule dimensions or identities changed"));
     }
     let work = wedge(molecule, false, vec![false; n])?;
-    reconstruct(work, molecule, Some(base), &previous, None)
+    let drawing = reconstruct(work, molecule, Some(base), &previous, None)?;
+    drawing.document.validate().map_err(Error::Drawing)?;
+    Ok(drawing)
 }
 
 /// Construct a new drawing from an imported molecular state. File coordinates
@@ -191,7 +208,18 @@ pub(crate) fn for_import_with_attachments(
         return Err(invalid("Imported label dimensions changed"));
     }
     let work = wedge(molecule, is_3d, attachments)?;
-    reconstruct(work, molecule, None, &HashMap::new(), Some(dummy_labels))
+    let drawing = reconstruct(work, molecule, None, &HashMap::new(), Some(dummy_labels))?;
+    drawing.document.validate().map_err(Error::Drawing)?;
+    Ok(drawing)
+}
+
+/// CDXML restores the native bond appearance after full CIP reconstruction.
+/// Temporary order-zero bonds have plain appearance and cannot be validated as
+/// editable bonds yet. Only finish/finish_with may publish this detached draft.
+pub(crate) fn for_import_scene(molecule: &Molecule, is_3d: bool) -> Result<Drawing, Error> {
+    validate_molecule(molecule)?;
+    let work = wedge(molecule, is_3d, vec![false; molecule.ids.len()])?;
+    reconstruct(work, molecule, None, &HashMap::new(), None)
 }
 
 pub(crate) fn validate_molecule(molecule: &Molecule) -> Result<(), Error> {
@@ -470,7 +498,6 @@ fn reconstruct(
         bonds,
         ..base.cloned().unwrap_or_default()
     };
-    document.validate().map_err(Error::Drawing)?;
     Ok(Drawing {
         molecule: work,
         document,

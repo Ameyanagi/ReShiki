@@ -8,7 +8,7 @@ use super::{Analysis, Request, Response};
 use crate::{
     chemistry::{
         self, document as molecular,
-        inchi::{generator, input, key},
+        inchi::{generator, helper, input, key},
         molfile, rings, smiles,
     },
     document::Document,
@@ -73,6 +73,8 @@ pub enum Error {
     InchiInput(#[from] input::Error),
     #[error(transparent)]
     Helper(#[from] generator::Error),
+    #[error(transparent)]
+    Discovery(#[from] helper::Error),
     #[error("Invalid molecular InChI: {0}")]
     Key(#[from] key::Error),
     #[error(transparent)]
@@ -108,20 +110,80 @@ pub async fn build(
     prepared: Option<Arc<Prepared>>,
     config: Config,
 ) -> Result<Response, Error> {
+    build_with_config(request, prepared, Some(config)).await
+}
+
+/// Analyze an original prepared molecule without constructing another drawing
+/// or narrowing its conformer coordinates. Imports may call this after their
+/// own drawing finish. `None` discovers the installed helper only if needed.
+/// Empty molecules receive an empty analysis; an import's `analysis: None`
+/// policy belongs to its caller. All chemistry remains on blocking tasks.
+pub async fn analyze_prepared(
+    molecule: Arc<molecular::Molecule>,
+    config: Option<Config>,
+) -> Result<Analysis, Error> {
+    let source = Arc::clone(&molecule);
+    let (smiles, input) = tokio::task::spawn_blocking(move || {
+        molecular::validate_molecule(&source)?;
+        prepare_identifiers(&source)
+    })
+    .await??;
+    let inchi = generate_inchi(input.as_ref(), config).await?;
+    tokio::task::spawn_blocking(move || complete_analysis(&molecule, smiles, inchi)).await?
+}
+
+/// Default-engine route. Preparation matches the retained bridge: only empty
+/// non-abbreviation requests omit preparation. Discovery remains lazy so a
+/// figure, exotic bond analysis or native early-empty result needs no helper.
+pub(crate) async fn execute(request: Request) -> Result<Response, Error> {
+    let request = Arc::new(request);
+    let source = Arc::clone(&request);
+    let prepared = tokio::task::spawn_blocking(move || {
+        let Some(document) = source.document.as_ref().filter(|document| {
+            !document.atoms.is_empty() || source.operation == "finish_abbreviation"
+        }) else {
+            return Ok::<_, Error>(None);
+        };
+        let molecule = molecular::prepare(document)?;
+        let drawing = molecular::for_drawing(&molecule, document)?;
+        Ok(Some(Arc::new(Prepared { molecule, drawing })))
+    })
+    .await??;
+    build_with_config(request, prepared, None).await
+}
+
+async fn build_with_config(
+    request: Arc<Request>,
+    prepared: Option<Arc<Prepared>>,
+    config: Option<Config>,
+) -> Result<Response, Error> {
     let source = Arc::clone(&request);
     let state = prepared.clone();
     let draft = tokio::task::spawn_blocking(move || begin(&source, state.as_deref())).await??;
-    let inchi = if let Some(input) = &draft.inchi {
+    let inchi = generate_inchi(draft.inchi.as_ref(), config).await?;
+    tokio::task::spawn_blocking(move || finish(&request, prepared.as_deref(), draft, inchi)).await?
+}
+
+async fn generate_inchi(
+    input: Option<&input::Input>,
+    config: Option<Config>,
+) -> Result<String, Error> {
+    if let Some(input) = input {
+        let config = match config {
+            Some(config) => config,
+            None => Config::new(tokio::task::spawn_blocking(helper::discover).await??),
+        };
         // Native warning/error statuses are not transport failures. Like the
         // original MolToInchi wrapper, retain the returned identifier (possibly
         // empty); neither native log nor message becomes an application warning.
-        generator::generate_with_limits(&config.helper, input, config.limits)
-            .await?
-            .inchi
+        Ok(
+            generator::generate_with_limits(&config.helper, input, config.limits)
+                .await?
+                .inchi,
+        )
     } else {
-        String::new()
-    };
-    tokio::task::spawn_blocking(move || finish(&request, prepared.as_deref(), draft, inchi)).await?
+        Ok(String::new())
+    }
 }
 
 fn begin(request: &Request, prepared: Option<&Prepared>) -> Result<Draft, Error> {
@@ -168,7 +230,18 @@ fn begin(request: &Request, prepared: Option<&Prepared>) -> Result<Draft, Error>
         .drawing
         .clone()
         .finish(prepared.drawing.labels()?)?;
-    let molecule = &prepared.molecule;
+    let (smiles, inchi) = prepare_identifiers(&prepared.molecule)?;
+    Ok(Draft {
+        document,
+        smiles,
+        inchi,
+        figure_only: false,
+    })
+}
+
+fn prepare_identifiers(
+    molecule: &molecular::Molecule,
+) -> Result<(String, Option<input::Input>), Error> {
     let bonds = &molecule.state.graph.bonds;
     let identifiers = !bonds.iter().any(|b| matches!(b.order, 0 | 7));
     let smiles = if identifiers {
@@ -187,11 +260,39 @@ fn begin(request: &Request, prepared: Option<&Prepared>) -> Result<Draft, Error>
     } else {
         None
     };
-    Ok(Draft {
-        document,
+    Ok((smiles, inchi))
+}
+
+fn complete_analysis(
+    molecule: &molecular::Molecule,
+    smiles: String,
+    inchi: String,
+) -> Result<Analysis, Error> {
+    let graph = &molecule.state.graph;
+    let inchikey = if inchi.is_empty() {
+        String::new()
+    } else {
+        key::from_inchi(&inchi)?
+    };
+    let ring_atoms = rings::perceive(graph, rings::Options::default())?.atoms;
+    let descriptors =
+        chemistry::descriptors::calculate(graph, &ring_atoms).map_err(Error::Chemistry)?;
+    let properties = chemistry::properties(&graph.atom_facts().map_err(Error::Chemistry)?)
+        .map_err(Error::Chemistry)?;
+    Ok(Analysis {
         smiles,
+        formula: properties.formula,
+        mass: properties.mass,
+        exact_mass: properties.exact_mass,
+        logp: descriptors.logp,
+        tpsa: descriptors.tpsa,
+        donors: descriptors.donors,
+        acceptors: descriptors.acceptors,
+        rings: u32::try_from(ring_atoms.len())
+            .map_err(|_| Error::Chemistry("Ring count exceeds supported range".into()))?,
+        unpaired_electrons: properties.unpaired_electrons,
         inchi,
-        figure_only: false,
+        inchikey,
     })
 }
 
@@ -204,33 +305,11 @@ fn finish(
     let analysis = if draft.figure_only {
         None
     } else {
-        let molecule = &prepared.ok_or(Error::MissingPrepared)?.molecule;
-        let graph = &molecule.state.graph;
-        let inchikey = if inchi.is_empty() {
-            String::new()
-        } else {
-            key::from_inchi(&inchi)?
-        };
-        let ring_atoms = rings::perceive(graph, rings::Options::default())?.atoms;
-        let descriptors =
-            chemistry::descriptors::calculate(graph, &ring_atoms).map_err(Error::Chemistry)?;
-        let properties = chemistry::properties(&graph.atom_facts().map_err(Error::Chemistry)?)
-            .map_err(Error::Chemistry)?;
-        Some(Analysis {
-            smiles: draft.smiles,
-            formula: properties.formula,
-            mass: properties.mass,
-            exact_mass: properties.exact_mass,
-            logp: descriptors.logp,
-            tpsa: descriptors.tpsa,
-            donors: descriptors.donors,
-            acceptors: descriptors.acceptors,
-            rings: u32::try_from(ring_atoms.len())
-                .map_err(|_| Error::Chemistry("Ring count exceeds supported range".into()))?,
-            unpaired_electrons: properties.unpaired_electrons,
+        Some(complete_analysis(
+            &prepared.ok_or(Error::MissingPrepared)?.molecule,
+            draft.smiles,
             inchi,
-            inchikey,
-        })
+        )?)
     };
     let mut response = Response {
         document: Some(draft.document),

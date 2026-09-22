@@ -13,10 +13,14 @@ const INSTALL_UV: &str = "ReShiki needs uv to set up local chemistry packages. I
 fn python_request(os: &str, arch: &str) -> &'static str {
     // RDKit's Windows wheels are x64. The ARM UI uses a separate x64 worker
     // through Windows 11's built-in emulation; the drawing process stays native.
-    if os == "windows" && arch == "aarch64" {
-        "cpython-3.12-windows-x86_64-none"
-    } else {
-        "3.12"
+    // A version alone can select an already installed interpreter for another
+    // architecture, even when uv itself runs natively on Apple Silicon.
+    match (os, arch) {
+        ("windows", "aarch64" | "x86_64") => "cpython-3.12-windows-x86_64-none",
+        ("macos", "aarch64") => "cpython-3.12-macos-aarch64-none",
+        ("linux", "aarch64") => "cpython-3.12-linux-aarch64-gnu",
+        ("linux", "x86_64") => "cpython-3.12-linux-x86_64-gnu",
+        _ => "3.12",
     }
 }
 
@@ -155,18 +159,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn windows_arm_requests_an_x64_worker_and_other_platforms_remain_native() {
-        assert_eq!(
-            python_request("windows", "aarch64"),
-            "cpython-3.12-windows-x86_64-none"
-        );
-        for (os, arch) in [
-            ("windows", "x86_64"),
-            ("linux", "aarch64"),
-            ("linux", "x86_64"),
-            ("macos", "aarch64"),
+    fn supported_packages_request_the_exact_worker_architecture() {
+        for (os, arch, request) in [
+            ("windows", "aarch64", "cpython-3.12-windows-x86_64-none"),
+            ("windows", "x86_64", "cpython-3.12-windows-x86_64-none"),
+            ("macos", "aarch64", "cpython-3.12-macos-aarch64-none"),
+            ("linux", "aarch64", "cpython-3.12-linux-aarch64-gnu"),
+            ("linux", "x86_64", "cpython-3.12-linux-x86_64-gnu"),
         ] {
-            assert_eq!(python_request(os, arch), "3.12");
+            assert_eq!(python_request(os, arch), request);
         }
     }
 

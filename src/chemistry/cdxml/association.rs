@@ -14,7 +14,7 @@ pub struct ImportPoint {
 }
 
 /// An element's identity is its zero-based ordinal among XML elements in
-/// document order, including the CDXML root. IDs may be absent or duplicated.
+/// document order, including the root. IDs may be absent or duplicated.
 /// Apply updates only to the same, unchanged XML document used by the reader.
 #[derive(Clone, Debug, Serialize)]
 pub struct ObjectMapEntry {
@@ -99,6 +99,19 @@ impl<'a> PreparedAtoms<'a> {
         point: ImportPoint,
         failure: &str,
     ) -> Result<u64> {
+        self.identify_with_tolerance(tree, node, point, TOLERANCE, failure)
+    }
+    pub(super) fn identify_with_tolerance(
+        &self,
+        tree: &Tree,
+        node: usize,
+        point: ImportPoint,
+        tolerance: f64,
+        failure: &str,
+    ) -> Result<u64> {
+        if !(0.0..=TOLERANCE).contains(&tolerance) || tolerance == 0.0 {
+            return Err(invalid("Invalid atom association tolerance"));
+        }
         // Native loops do not parse Element when the molecule has no atoms.
         if self.atoms.is_empty() {
             return Err(invalid(failure));
@@ -114,8 +127,8 @@ impl<'a> PreparedAtoms<'a> {
                 tree.spend(1)?;
                 for candidate in self.index.get(&(element, cx, cy)).into_iter().flatten() {
                     tree.spend(1)?;
-                    if (candidate.x - point.x).abs() < TOLERANCE
-                        && (candidate.y - point.y).abs() < TOLERANCE
+                    if (candidate.x - point.x).abs() < tolerance
+                        && (candidate.y - point.y).abs() < tolerance
                         && matched.replace(candidate.index).is_some()
                     {
                         return Err(invalid(failure));

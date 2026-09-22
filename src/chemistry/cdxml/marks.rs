@@ -33,7 +33,7 @@ pub struct Marks {
 /// not. Object-map updates retain source element identity, including absent IDs.
 pub fn read_marks(xml: &str, prepared: &PreparedAtoms<'_>, source_scale: f64) -> Result<Marks> {
     association::scale(source_scale)?;
-    let tree = Tree::parse(xml)?;
+    let tree = Tree::parse_import(xml)?;
     let order = tree.descendants(0)?;
     let mut nodes = HashMap::new();
     for &index in &order {

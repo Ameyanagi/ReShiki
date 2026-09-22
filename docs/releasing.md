@@ -85,7 +85,7 @@ Windows ARM uses a native ARM64 application and an x64 Python/RDKit worker throu
 
 Build runners are macOS 14, Windows Server 2022 x64, Windows 11 ARM, Ubuntu 22.04 x64, and Ubuntu 24.04 ARM. Pass `--target` to `scripts/build_release.py` to select the explicit Rust target; package names derive from that target, including when packaging Python uses a different architecture.
 
-Build on the target operating system. Python and RDKit are installed by the user’s uv at runtime. Archives are written to `dist/releases/`. On macOS, `scripts/build_macos_app.py` still builds the development app, and `--portable --release` builds an optimized app with the worker source and lockfile included.
+Build on the target operating system. Python and RDKit are installed by the user’s uv at runtime. Archives are written to `dist/releases/`. On macOS, build the native helper first, then use `scripts/build_macos_app.py` for a development app. `--portable --release` includes the remaining worker source and lockfile. Both forms bundle the verified native helper; `--inchi-helper` selects a different prebuilt copy.
 
 Install Inno Setup 6.7.3 for local Windows installer builds, or set `RESHIKI_ISCC` to its `ISCC.exe`. Installer verification installs and uninstalls the app, so run it in a disposable Windows account or CI runner. Omit `--installer` to build only a portable archive.
 

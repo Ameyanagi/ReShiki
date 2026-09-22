@@ -150,7 +150,7 @@ where
     if bond_endpoints.len() > 200_000 {
         return Err(Error::Limit.into());
     }
-    let tree = Tree::parse(xml)?;
+    let tree = Tree::parse_import(xml)?;
     let order = tree.descendants(0)?;
     let ordinals: HashMap<_, _> = order
         .iter()

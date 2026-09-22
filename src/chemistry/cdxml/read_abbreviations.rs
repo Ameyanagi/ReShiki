@@ -63,7 +63,7 @@ pub fn read_abbreviations(
     positions: &[Point3],
     source_scale: f64,
 ) -> Result<Vec<DrawingAbbreviation>> {
-    let tree = Tree::parse(expanded_xml)?;
+    let tree = Tree::parse_import(expanded_xml)?;
     if records.len() > 100_000 || fragments.len() > 100_000 {
         return Err(Error::Limit);
     }
