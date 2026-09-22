@@ -40,6 +40,7 @@ class LocalPropertyTests(unittest.TestCase):
                 patch("engine.worker.rdMolDescriptors.CalcNumHBD", side_effect=AssertionError),
                 patch("engine.worker.rdMolDescriptors.CalcNumHBA", side_effect=AssertionError),
                 patch("engine.worker.rdMolDescriptors.CalcNumRings", side_effect=AssertionError),
+                patch("engine.worker.Chem.MolToInchiKey", side_effect=AssertionError),
             ):
                 result = handle(dict(protocol=1, local_properties=True, **copy.deepcopy(request)))
                 analysis = result["analysis"]
@@ -53,6 +54,7 @@ class LocalPropertyTests(unittest.TestCase):
                     "tpsa",
                     "donors",
                     "acceptors",
+                    "inchikey",
                 ):
                     self.assertNotIn(key, analysis)
                 facts = analysis["property_input"]
@@ -61,6 +63,7 @@ class LocalPropertyTests(unittest.TestCase):
                 self.assertEqual(len(facts["graph"]["atoms"]), len(result["document"]["atoms"]))
                 self.assertTrue(all("hydrogens" not in a for a in facts["graph"]["atoms"]))
                 self.assertIn("smiles", analysis)
+                self.assertIn("inchi", analysis)
 
     def test_hydrogens_come_from_current_graph_not_cached_labels(self):
         doc = imported("CC")["document"]

@@ -354,7 +354,6 @@ def analyze(mol, *, local_properties=False, local_smiles=False):
     result = {
         "smiles": Chem.MolToSmiles(mol) if identifiers and not local_smiles else "",
         "inchi": Chem.MolToInchi(mol) if inchi_ok else "",
-        "inchikey": Chem.MolToInchiKey(mol) if inchi_ok else "",
     }
     if local_properties:
         # Supply the sanitized graph, not toolkit-computed H counts. Rust owns
@@ -388,7 +387,11 @@ def analyze(mol, *, local_properties=False, local_smiles=False):
             },
         }
     else:
+        # The independent reference retains its original native key call.
+        # Migrated analysis derives the key from the InChI already generated,
+        # avoiding a second molecular canonicalization in the native library.
         result.update(
+            inchikey=Chem.MolToInchiKey(mol) if inchi_ok else "",
             logp=rdMolDescriptors.CalcCrippenDescriptors(mol)[0],
             tpsa=rdMolDescriptors.CalcTPSA(mol),
             donors=rdMolDescriptors.CalcNumHBD(mol),
@@ -1252,7 +1255,9 @@ def handle(request):
             elif fmt == "smiles":
                 response["output"] = None if local_smiles else Chem.MolToSmiles(mol)
             elif fmt == "inchi":
-                response["output"] = Chem.MolToInchi(mol)
+                response["output"] = (
+                    response["analysis"]["inchi"] if local_properties else Chem.MolToInchi(mol)
+                )
             elif fmt in ("cdxml", "cdx"):
                 if local_drawing_output:
                     response["output"] = None

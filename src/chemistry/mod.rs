@@ -167,6 +167,20 @@ pub(crate) fn complete_analysis(result: &mut serde_json::Value) -> Result<(), St
             input.rdkit_version
         ));
     }
+    if analysis.get("inchikey").is_some() {
+        return Err("Unexpected native InChIKey".into());
+    }
+    let inchi = analysis
+        .get("inchi")
+        .and_then(serde_json::Value::as_str)
+        .ok_or("Missing molecular InChI input")?;
+    // Empty molecules and unsupported identifier chemistry keep empty keys.
+    // Every nonempty identifier must pass the bounded Rust key parser.
+    let inchikey = if inchi.is_empty() {
+        String::new()
+    } else {
+        inchi::key::from_inchi(inchi).map_err(|e| format!("Invalid molecular InChI: {e}"))?
+    };
     let ring_atoms = rings::perceive(&input.graph, rings::Options::default())
         .map_err(|e| e.to_string())?
         .atoms;
@@ -183,6 +197,7 @@ pub(crate) fn complete_analysis(result: &mut serde_json::Value) -> Result<(), St
     fields.insert("tpsa".into(), descriptors.tpsa.into());
     fields.insert("donors".into(), descriptors.donors.into());
     fields.insert("acceptors".into(), descriptors.acceptors.into());
+    fields.insert("inchikey".into(), inchikey.into());
     let fields = derived.as_object().ok_or("Invalid molecular properties")?;
     let analysis = analysis
         .as_object_mut()
@@ -204,13 +219,19 @@ mod tests {
             "explicit_hydrogens": 0, "radical_electrons": 0,
             "no_implicit": false, "aromatic": false,
         }], "bonds": []}});
-        let mut response = json!({"analysis": {"smiles": "C", "property_input": input}});
+        let mut response = json!({"analysis": {
+            "smiles": "C", "inchi": "InChI=1S/CH4/h1H4", "property_input": input,
+        }});
         complete_analysis(&mut response)?;
         assert_eq!(response["analysis"]["formula"], "CH4");
         assert_eq!(response["analysis"]["mass"], 16.043);
         // Ring counts are calculated from the graph.
         assert_eq!(response["analysis"]["rings"], 0);
         assert_eq!(response["analysis"]["smiles"], "C");
+        assert_eq!(
+            response["analysis"]["inchikey"],
+            "VNWKTOKETHGBQD-UHFFFAOYSA-N"
+        );
         assert!(response["analysis"].get("property_input").is_none());
         for bad_input in [
             json!(null),
@@ -228,7 +249,9 @@ mod tests {
                 "radical_electrons": 0, "no_implicit": false, "aromatic": false,
             }], "bonds": []}}),
         ] {
-            let mut bad = json!({"analysis": {"smiles": "C", "property_input": bad_input}});
+            let mut bad = json!({"analysis": {
+                "smiles": "C", "inchi": "InChI=1S/CH4/h1H4", "property_input": bad_input,
+            }});
             let original = bad.clone();
             assert!(complete_analysis(&mut bad).is_err());
             assert_eq!(bad, original);
@@ -241,12 +264,59 @@ mod tests {
     }
 
     #[test]
+    fn worker_identifiers_are_checked_before_any_response_changes() -> anyhow::Result<()> {
+        let original = json!({"analysis": {
+            "smiles": "C", "inchi": "InChI=1S/CH4/h1H4",
+            "property_input": {"rdkit_version": RDKIT_VERSION, "graph": {
+                "atoms": [], "bonds": [],
+            }},
+        }});
+        for malformed in [
+            json!(null),
+            json!(42),
+            json!([]),
+            json!("bad"),
+            json!("InChI=1S/é"),
+            json!("C".repeat(inchi::key::MAX_INPUT_BYTES + 1)),
+        ] {
+            let mut response = original.clone();
+            response["analysis"]["inchi"] = malformed;
+            let before = response.clone();
+            assert!(complete_analysis(&mut response).is_err());
+            assert_eq!(response, before);
+        }
+        let mut missing = original.clone();
+        missing["analysis"]
+            .as_object_mut()
+            .ok_or_else(|| anyhow::anyhow!("No analysis"))?
+            .remove("inchi");
+        let before = missing.clone();
+        assert!(complete_analysis(&mut missing).is_err());
+        assert_eq!(missing, before);
+        for unexpected in [json!(null), json!(""), json!("VNWKTOKETHGBQD-UHFFFAOYSA-N")] {
+            let mut response = original.clone();
+            response["analysis"]["inchikey"] = unexpected;
+            let before = response.clone();
+            assert_eq!(
+                complete_analysis(&mut response).err().as_deref(),
+                Some("Unexpected native InChIKey")
+            );
+            assert_eq!(response, before);
+        }
+        let mut empty = original;
+        empty["analysis"]["inchi"] = "".into();
+        complete_analysis(&mut empty).map_err(anyhow::Error::msg)?;
+        assert_eq!(empty["analysis"]["inchikey"], "");
+        Ok(())
+    }
+
+    #[test]
     fn dense_ring_analysis_needs_no_reference_override() -> anyhow::Result<()> {
         let graph: serde_json::Value = serde_json::from_str(include_str!(
             "../../tests/fixtures/ring-order-dependent.json"
         ))?;
         let input = json!({"rdkit_version": RDKIT_VERSION, "graph": graph});
-        let mut response = json!({"analysis": {"property_input": input}});
+        let mut response = json!({"analysis": {"inchi": "", "property_input": input}});
         complete_analysis(&mut response).map_err(anyhow::Error::msg)?;
         assert!(
             response["analysis"]["rings"]
