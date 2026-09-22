@@ -104,6 +104,9 @@ jobs:
       - run: cargo test --workspace --locked --no-default-features
       - name: Install the optional reference dependencies after native checks
         run: uv sync --locked
+      - name: Build live Linux depiction observers for the installed reference wheel
+        if: runner.os == 'Linux'
+        run: uv run --locked python scripts/setup_linux_depict_reference.py
       - name: Check the optional independent reference suite
         run: cargo clippy --workspace --all-targets --locked --features rdkit-reference -- -D warnings
       - run: cargo check --workspace --all-targets --locked --features rdkit-reference
