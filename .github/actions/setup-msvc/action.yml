@@ -1,0 +1,13 @@
+name: Set up MSVC
+description: Select installed Visual Studio tools without a JavaScript runtime
+inputs:
+  arch:
+    description: Target architecture (x86, x64, or arm64)
+    required: true
+runs:
+  using: composite
+  steps:
+    - shell: pwsh
+      env:
+        RESHIKI_MSVC_TARGET: ${{ inputs.arch }}
+      run: '& "${{ github.action_path }}/setup.ps1" -Arch $env:RESHIKI_MSVC_TARGET'

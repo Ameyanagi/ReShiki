@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - ".github/workflows/depiction-windows.yml"
+      - ".github/actions/setup-msvc/**"
       - "scripts/setup_windows_depict_reference.py"
       - "scripts/setup_linux_depict_reference.py"
       - "tests/depict*"
@@ -40,13 +41,13 @@ jobs:
           python-version: cpython-3.12-windows-x86_64-none
       - run: uv sync --locked
       - name: Select x64 MSVC for the original reference wheel
-        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        uses: ./.github/actions/setup-msvc
         with:
           arch: x64
       - name: Build and record original native observers
         run: uv run --locked python scripts/setup_windows_depict_reference.py
       - name: Restore the native compiler for the Rust tests
-        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        uses: ./.github/actions/setup-msvc
         with:
           arch: ${{ matrix.msvc_arch }}
       - name: Compare every depiction stage and the complete public pipeline

@@ -87,7 +87,7 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Select the native Windows compiler
         if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        uses: ./.github/actions/setup-msvc
         with:
           arch: ${{ matrix.msvc_arch }}
       - name: Build the audited native helper and test executables
@@ -108,7 +108,7 @@ jobs:
         run: uv run --locked python scripts/setup_linux_depict_reference.py
       - name: Select x64 MSVC for the original Windows reference wheel
         if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        uses: ./.github/actions/setup-msvc
         with:
           arch: x64
       - name: Build live Windows depiction observers for the installed reference wheel
@@ -116,7 +116,7 @@ jobs:
         run: uv run --locked python scripts/setup_windows_depict_reference.py
       - name: Restore the native Windows compiler for Rust tests
         if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        uses: ./.github/actions/setup-msvc
         with:
           arch: ${{ matrix.msvc_arch }}
       - name: Check the optional independent reference suite
