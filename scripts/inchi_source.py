@@ -16,21 +16,36 @@ MAX_EXTRACTED_BYTES = 64 * 1024 * 1024
 MAX_ENTRIES = 1024
 
 
+class MissingSourceError(ValueError):
+    """An audited source tree is incomplete, rather than modified."""
+
+
 def manifest():
     return json.loads(MANIFEST.read_text(encoding="utf-8"))
 
 
 def verify_source(source, reference=None):
     reference = reference or manifest()
-    source = Path(source).resolve(strict=True)
+    try:
+        source = Path(source).resolve(strict=True)
+    except FileNotFoundError as error:
+        raise MissingSourceError(f"Missing official InChI source directory: {source}") from error
+    missing = None
     for relative, expected in reference["files"].items():
         file = source / relative
         if not file.is_file():
-            raise ValueError(f"Missing official InChI source: {relative}")
+            if file.exists():
+                raise ValueError(f"Invalid official InChI source file: {relative}")
+            missing = missing or relative
+            continue
         with file.open("rb") as stream:
             actual = hashlib.file_digest(stream, "sha256").hexdigest()
         if actual != expected:
             raise ValueError(f"Official InChI source changed: {relative}")
+    # Check every remaining file before classifying an incomplete cache as
+    # recoverable. A missing file must not hide another file's checksum failure.
+    if missing is not None:
+        raise MissingSourceError(f"Missing official InChI source: {missing}")
     return source
 
 
@@ -122,8 +137,16 @@ def prepare_source(cache, *, source=None, archive=None, fetch=False):
     cache = Path(cache)
     cache.mkdir(parents=True, exist_ok=True)
     destination = cache / reference["archive_sha256"]
+    if destination.is_symlink():
+        raise ValueError("Managed InChI source cache must not be a symbolic link")
     if destination.exists():
-        return verify_source(destination / reference["archive_root"], reference)
+        try:
+            return verify_source(destination / reference["archive_root"], reference)
+        except MissingSourceError:
+            # Build caches can retain directories while pruning their C files.
+            # Only this managed extraction may be replaced; explicit source
+            # trees and modified files still fail validation above.
+            pass
     with tempfile.TemporaryDirectory(prefix="inchi-source-", dir=cache) as temporary:
         stage = Path(temporary)
         if fetch:
@@ -132,5 +155,16 @@ def prepare_source(cache, *, source=None, archive=None, fetch=False):
         extracted = stage / "extracted"
         extracted.mkdir()
         extract_archive(archive, extracted, reference)
-        extracted.rename(destination)
+        if destination.exists():
+            # Keep the incomplete tree until its replacement passes every
+            # archive and source check, then retain it until the rename succeeds.
+            previous = stage / "incomplete"
+            destination.rename(previous)
+            try:
+                extracted.rename(destination)
+            except OSError:
+                previous.rename(destination)
+                raise
+        else:
+            extracted.rename(destination)
     return verify_source(destination / reference["archive_root"], reference)

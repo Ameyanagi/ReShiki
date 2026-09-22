@@ -75,6 +75,163 @@ class SourceTests(unittest.TestCase):
                 )
             self.assertFalse((root / "unused").exists())
 
+    def test_pruned_managed_cache_is_rebuilt_from_verified_download(self):
+        for damage in ("one file", "all files", "source directory"):
+            with self.subTest(damage=damage), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                entries = {
+                    "INCHI-1-SRC/INCHI_BASE/src/test.c": b"audited source\n",
+                    "INCHI-1-SRC/INCHI_API/libinchi/src/other.c": b"other source\n",
+                }
+                archive, reference = self.archive(root, entries)
+                reference["files"]["INCHI_API/libinchi/src/other.c"] = hashlib.sha256(
+                    b"other source\n"
+                ).hexdigest()
+                with patch("inchi_source.manifest", return_value=reference):
+                    source = inchi_source.prepare_source(root / "cache", archive=archive)
+                    if damage == "source directory":
+                        shutil.rmtree(source)
+                    else:
+                        (source / "INCHI_BASE/src/test.c").unlink()
+                        if damage == "all files":
+                            # rust-cache prunes non-Cargo files while leaving
+                            # their directory tree and CACHEDIR.TAG behind.
+                            for file in source.rglob("*"):
+                                if file.is_file():
+                                    file.unlink()
+                            (source.parent / "CACHEDIR.TAG").write_text("retained cache tag")
+                    response = io.BytesIO(archive.read_bytes())
+                    response.url = "https://release-assets.githubusercontent.com/official-object"
+                    with patch(
+                        "inchi_source.urllib.request.urlopen", return_value=response
+                    ) as request:
+                        repaired = inchi_source.prepare_source(root / "cache", fetch=True)
+                        self.assertEqual(repaired, source)
+                        for name, expected in entries.items():
+                            self.assertEqual((source.parent / name).read_bytes(), expected)
+                        # A valid restored cache needs no second download.
+                        self.assertEqual(
+                            repaired, inchi_source.prepare_source(root / "cache", fetch=True)
+                        )
+                        request.assert_called_once_with(reference["archive_url"], timeout=60)
+                self.assertEqual([p.resolve() for p in (root / "cache").iterdir()], [source.parent])
+
+    def test_missing_managed_file_can_be_restored_from_local_archive(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive, reference = self.archive(root)
+            with (
+                patch("inchi_source.manifest", return_value=reference),
+                patch("inchi_source.download_archive", side_effect=AssertionError("Network")),
+            ):
+                source = inchi_source.prepare_source(root / "cache", archive=archive)
+                (source / "INCHI_BASE/src/test.c").unlink()
+                restored = inchi_source.prepare_source(root / "cache", archive=archive)
+                self.assertEqual(restored, source)
+                self.assertEqual(
+                    (source / "INCHI_BASE/src/test.c").read_bytes(), b"audited source\n"
+                )
+
+    def test_missing_file_does_not_hide_corrupt_managed_file(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive, reference = self.archive(root)
+            with (
+                patch("inchi_source.manifest", return_value=reference),
+                patch("inchi_source.download_archive") as download,
+            ):
+                source = inchi_source.prepare_source(root / "cache", archive=archive)
+                reference["files"] = {"missing.c": "0" * 64, **reference["files"]}
+                changed = source / "INCHI_BASE/src/test.c"
+                changed.write_bytes(b"modified source")
+                with self.assertRaisesRegex(ValueError, "source changed"):
+                    inchi_source.prepare_source(root / "cache", fetch=True)
+                self.assertEqual(changed.read_bytes(), b"modified source")
+                self.assertFalse((source / "missing.c").exists())
+                download.assert_not_called()
+
+    def test_incomplete_explicit_source_fails_without_repair_or_cache_creation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive, reference = self.archive(root)
+            source = inchi_source.extract_archive(archive, root / "stage", reference)
+            file = source / "INCHI_BASE/src/test.c"
+            with (
+                patch("inchi_source.manifest", return_value=reference),
+                patch("inchi_source.download_archive") as download,
+            ):
+                file.write_bytes(b"modified source")
+                with self.assertRaisesRegex(ValueError, "source changed"):
+                    inchi_source.prepare_source(root / "unused", source=source)
+                self.assertEqual(file.read_bytes(), b"modified source")
+                file.unlink()
+                with self.assertRaisesRegex(inchi_source.MissingSourceError, "Missing official"):
+                    inchi_source.prepare_source(root / "unused", source=source)
+                self.assertFalse(file.exists())
+                download.assert_not_called()
+            self.assertFalse((root / "unused").exists())
+
+    def test_failed_recovery_retains_incomplete_tree_and_archive_guards(self):
+        for failure in ("download checksum", "source checksum", "local archive checksum"):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                archive, reference = self.archive(root)
+                with patch("inchi_source.manifest", return_value=reference):
+                    source = inchi_source.prepare_source(root / "cache", archive=archive)
+                    (source / "INCHI_BASE/src/test.c").unlink()
+                    sentinel = source / "CACHEDIR.TAG"
+                    sentinel.write_bytes(b"existing incomplete tree")
+                    if failure == "source checksum":
+                        reference["files"]["INCHI_BASE/src/test.c"] = "0" * 64
+                    data = archive.read_bytes() if failure == "source checksum" else b"changed"
+                    response = io.BytesIO(data)
+                    response.url = "https://release-assets.githubusercontent.com/official-object"
+                    if failure == "local archive checksum":
+                        archive.write_bytes(data)
+                        choice = {"archive": archive}
+                    else:
+                        choice = {"fetch": True}
+                    with (
+                        patch("inchi_source.urllib.request.urlopen", return_value=response),
+                        self.assertRaisesRegex(ValueError, "checksum mismatch|source changed"),
+                    ):
+                        inchi_source.prepare_source(root / "cache", **choice)
+                    self.assertEqual(sentinel.read_bytes(), b"existing incomplete tree")
+                    self.assertFalse((source / "INCHI_BASE/src/test.c").exists())
+                    self.assertEqual(
+                        [p.resolve() for p in (root / "cache").iterdir()], [source.parent]
+                    )
+
+    def test_failed_replacement_rename_restores_incomplete_cache(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive, reference = self.archive(root)
+            with patch("inchi_source.manifest", return_value=reference):
+                source = inchi_source.prepare_source(root / "cache", archive=archive)
+                (source / "INCHI_BASE/src/test.c").unlink()
+                sentinel = source / "CACHEDIR.TAG"
+                sentinel.write_bytes(b"previous incomplete tree")
+                rename = Path.rename
+                failure = PermissionError("Replacement directory is locked")
+
+                def locked(path, destination):
+                    if path.name == "extracted":
+                        raise failure
+                    return rename(path, destination)
+
+                with (
+                    patch.object(Path, "rename", locked),
+                    self.assertRaises(PermissionError) as ctx,
+                ):
+                    inchi_source.prepare_source(root / "cache", archive=archive)
+                self.assertIs(ctx.exception, failure)
+                self.assertEqual(sentinel.read_bytes(), b"previous incomplete tree")
+                self.assertFalse((source / "INCHI_BASE/src/test.c").exists())
+                self.assertEqual([p.resolve() for p in (root / "cache").iterdir()], [source.parent])
+                self.assertEqual(
+                    inchi_source.prepare_source(root / "cache", archive=archive), source
+                )
+
     def test_checksum_and_source_mismatch_leave_no_reusable_cache(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

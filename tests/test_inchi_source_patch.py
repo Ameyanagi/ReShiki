@@ -41,6 +41,14 @@ class SourcePatchTests(unittest.TestCase):
             staged = inchi_source_patch.stage_source(source, root / "build", reference, patch)
             self.assertEqual((staged / relative).read_bytes(), changed)
             self.assertEqual((source / relative).read_bytes(), original)
+            # Restored build caches can contain hollow patched-source trees.
+            # Each build must regenerate patches from verified original input.
+            (staged / relative).unlink()
+            fresh = inchi_source_patch.stage_source(source, root / "build", reference, patch)
+            self.assertNotEqual(fresh, staged)
+            self.assertEqual((fresh / relative).read_bytes(), changed)
+            self.assertFalse((staged / relative).exists())
+            self.assertEqual((source / relative).read_bytes(), original)
             for field, value in [("source_sha256", "bad"), ("patched_sha256", "bad")]:
                 wrong = copy.deepcopy(patch)
                 wrong["files"][relative][field] = value
