@@ -30,11 +30,18 @@ trusted state adapters have SHA-256 provenance. Native replay records the actual
 host and Python version. A capture from one ABI does not establish another ABI's
 parity. Reference tools remain development dependencies.
 
-Native runs on macOS ARM64, Linux x64 and Windows x64 each completed all 2,750
-inputs: 2,654 successes, 96 defined exceptions, no nonfinite outputs and 134,346
+Native runs on macOS ARM64, Linux x64 and Windows x64 each completed all 2,854
+inputs: 2,758 successes, 96 defined exceptions, no nonfinite outputs and 135,744
 coordinate scalars including preserved pre-error conformers. Original chemical
 state, atom data and noncomputed properties were unchanged in every case. These
-are reference-harness results; Rust solver parity remains to be established.
+counts describe the native reference, independently of Rust replay.
+
+The Rust solver matches all 2,758 successes and 96 typed failures on these three
+hosts, including 130,722 exact output coordinate values. Forward and reversed
+coordination requests also match. The default-options path is checked against
+native import defaults: canonical orientation enabled, ring templates disabled.
+The separate atomicity test covers invalid lengths, missing ranks, out-of-range
+anchors and exhausted work budgets. Application routing remains separate.
 
 ## Rust comparison interface
 
@@ -69,7 +76,7 @@ No tolerance, alignment, rescaling or post-layout cleanup is part of comparison.
 
 ## Coverage and boundaries
 
-The 2,750 inputs include every 578 built-in template graph, 116 corresponding
+The 2,854 inputs include every 578 built-in template graph, 116 corresponding
 layouts with templates disabled, 833 molecules spread across the bundled NCI
 file, 42 NCI cleanup constraints, 492 curated fixed-map cases, 208 scale cases,
 CX coordinates/labels/properties, tetrahedral/enhanced/double-bond stereo,
@@ -78,6 +85,37 @@ rings, disconnected graphs, long chains, and many components. Empty molecules,
 absent/empty/single/multiple/all fixed maps, atom permutations and missing
 original ring caches are included. Built-in skeletons retain the native reference
 preparation even if a current Rust stage does not accept them.
+
+The final 104 cases add 72 hydrogen, quadruple and partial-bond layouts, 16
+native unsigned-string rank conversions, and 16 branch/ring rank controls.
+Bond cases cover isolated pairs, chains, branches, rings, templates on/off,
+canonical orientation and cleanup anchors. Rank controls exercise
+`_chiralAtomRank` without `_CIPRank`, then conflicting ranks to verify CIP
+precedence. Invalid properties that native layout never reads belong to the
+separate raw import-property tests; this harness uses a typed chemical snapshot.
+The original 2,750 input records are unchanged.
+All eight paired rank controls also verify the intended observable difference:
+reversing fallback ranks changes geometry, while reversing them under fixed CIP
+ranks preserves it.
+
+## Rejection categories
+
+`expected.rejection_kind` is null on success. Native exceptions retain their
+original type and message, with a stable category for comparison:
+
+| Category                        | Original 2,750 cases | Native cause                                                                                                         | Required Rust rejection                                     |
+| ------------------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `zero_length_vector`            | 83                   | Coincident fixed coordinates fail normalization while preparing the coordinate seed                                  | `Initial(Seeds(Geometry(Numeric)))`                         |
+| `missing_fragment_neighbor`     | 13                   | Cleanup anchors leave a single-anchor fragment merge without a neighbor; native `-1` becomes atom index `4294967295` | `Initial(Invalid("missing single-anchor merge neighbors"))` |
+| `unclassified_native_exception` | 0                    | A new exception requiring investigation                                                                              | Fail the comparison until its cause is checked              |
+
+These stages are supported by the original coordinate-map constructor and
+attachment preparation (`EmbeddedFrag.cpp:74–101,313–352`), single-anchor merge
+(`EmbeddedFrag.cpp:715–748,1142–1195`), and `Point2D::normalize` (`point.h:365–371`). The
+Rust error census agrees on all 96 cases. Compare the typed variants above;
+resource limits, malformed input, nonfinite input and unrelated invariant
+failures must not count as matching native rejections. The classifier excludes
+platform-specific file paths, source lines and Boost-version text.
 
 Requests are limited to 1,024 atoms, 4,096 bonds, finite coordinates within 1e8,
 and positive explicit lengths from 1e-12 to 1e6. Invalid indices, duplicate fixed
@@ -111,6 +149,7 @@ Ordinary live replay therefore starts each SP/TBP/OH-bearing request in a fresh
 worker. It does not prewarm or reset the caches. Other requests may share a worker
 until the next coordination seed or native exception. Expected output means
 fresh-process semantics; it is not an assertion that native output is stateless.
-The proposed Rust policy is per-request ideal lengths matching the requested
-style, verified against fresh native calls and independent of request order.
-This policy must be explicit when the top-level solver is integrated.
+The Rust solver uses per-request ideal lengths matching the requested style,
+verified against fresh native calls and independent of request order. It borrows
+the original chemical state and returns a detached conformer, leaving original
+properties and coordinates with the caller on failure.

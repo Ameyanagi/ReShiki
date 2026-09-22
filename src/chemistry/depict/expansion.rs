@@ -3,6 +3,8 @@
 //! RDKit 2026.03.6 RDDepictor.cpp and EmbeddedFrag.cpp, BSD-3-Clause;
 //! see licenses/rdkit/NOTICE. Collision correction and final coordinate output
 //! are subsequent stages and are deliberately not approximated here.
+#[cfg(test)]
+mod budget_tests;
 mod initial;
 mod merging;
 mod traversal;
@@ -30,7 +32,7 @@ pub const MAX_STORAGE: usize = 2_000_000;
 pub enum Error {
     #[error("Invalid depiction expansion input: {0}")]
     Invalid(&'static str),
-    #[error("Depiction expansion storage limit exceeded")]
+    #[error("Depiction expansion work or storage limit exceeded")]
     Limit,
     #[error("Depiction chemical preparation failed: {0}")]
     Chemistry(String),
@@ -250,8 +252,46 @@ pub fn compute_initial(
     coordinates: Option<&Coordinates>,
     options: Options,
 ) -> Result<Initial> {
+    compute_initial_with_work(input, chiral_ranks, coordinates, options, &mut { MAX_WORK })
+}
+
+/// One allowance covers chemical preparation, all seeds, and expansion.
+/// The caller's excess allowance above the stage cap is retained; failures
+/// consume completed work while leaving the source state untouched.
+pub(crate) fn compute_initial_with_work(
+    input: &State,
+    chiral_ranks: &[Option<u32>],
+    coordinates: Option<&Coordinates>,
+    options: Options,
+    remaining: &mut usize,
+) -> Result<Initial> {
+    let initial = (*remaining).min(MAX_WORK);
+    let mut work = Budget::new(initial);
+    let result = compute_initial_inner(input, chiral_ranks, coordinates, options, &mut work);
+    let used = initial.checked_sub(work.0).ok_or(Error::Limit)?;
+    *remaining = remaining.checked_sub(used).ok_or(Error::Limit)?;
+    result
+}
+
+fn compute_initial_inner(
+    input: &State,
+    chiral_ranks: &[Option<u32>],
+    coordinates: Option<&Coordinates>,
+    options: Options,
+    work: &mut Budget,
+) -> Result<Initial> {
     if chiral_ranks.len() != input.graph.atoms.len() {
         return Err(Error::Invalid("chiral rank count"));
+    }
+    if input.graph.atoms.len() > geometry::MAX_POINTS || input.graph.bonds.len() > 300_000 {
+        return Err(Error::Limit);
+    }
+    work.spend(input.graph.atoms.len())?;
+    work.spend(input.graph.bonds.len())?;
+    for group in &input.metadata.groups {
+        work.spend(1)?;
+        work.spend(group.atoms.len())?;
+        work.spend(group.bonds.len())?;
     }
     let ranks = depict_ranks(&input.graph)?;
     input.graph.validate().map_err(Error::Chemistry)?;
@@ -271,6 +311,7 @@ pub fn compute_initial(
     }
     let mut members = 0usize;
     for properties in &input.properties.atoms {
+        work.spend(1)?;
         if properties.cip_code.as_ref().is_some_and(|s| s.len() > 1024) {
             return Err(Error::Limit);
         }
@@ -280,6 +321,8 @@ pub fn compute_initial(
         if members > MAX_STORAGE {
             return Err(Error::Limit);
         }
+        work.spend(properties.ring_members.as_ref().map_or(0, Vec::len))?;
+        work.spend(properties.cip_code.as_ref().map_or(0, String::len))?;
     }
     if input
         .properties
@@ -290,12 +333,17 @@ pub fn compute_initial(
     {
         return Err(Error::Limit);
     }
-    let rings = crate::chemistry::rings::perceive(
+    for code in &input.properties.bond_codes {
+        work.spend(1)?;
+        work.spend(code.as_ref().map_or(0, String::len))?;
+    }
+    let rings = crate::chemistry::rings::perceive_with_work(
         &input.graph,
         crate::chemistry::rings::Options {
             include_dative: true,
             include_hydrogen: false,
         },
+        &mut work.0,
     )?;
     // Original cached rings are replaced before stereo assignment. Do not clone
     // an arbitrarily large discarded cache merely to overwrite it afterwards.
@@ -312,15 +360,23 @@ pub fn compute_initial(
             atoms: rings.atoms,
         },
     };
-    state = crate::chemistry::stereo::perception::perceive(
+    state = crate::chemistry::stereo::perception::perceive_prepared_with_work(
         &state,
         crate::chemistry::stereo::perception::Options {
             clean: false,
             force: false,
             flag_possible: false,
         },
+        &mut work.0,
     )
     .map_err(Error::Chemistry)?;
+    // Account for data collection and the bounded constructor index passes.
+    work.spend(state.graph.atoms.len())?;
+    work.spend(state.graph.bonds.len())?;
+    for ring in &state.rings.atoms {
+        work.spend(1)?;
+        work.spend(ring.len())?;
+    }
     let data = state
         .hybridizations
         .iter()
@@ -335,7 +391,7 @@ pub fn compute_initial(
         .collect::<Result<Vec<_>>>()?;
     let mut prepared = Input::new(&state.graph, &state.metadata, &state.rings, &data)?;
     prepared.ranks = ranks;
-    let fragments = prepared.initial(coordinates, options)?;
+    let fragments = prepared.initial_with_budget(coordinates, options, work)?;
     Ok(Initial {
         depict_ranks: prepared.ranks,
         state,

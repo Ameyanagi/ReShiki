@@ -110,9 +110,11 @@ impl<'a> Input<'a> {
         bond_length: f64,
         remaining: &mut usize,
     ) -> Result<TemplateEmbedding> {
-        let mut work = Work((*remaining).min(self.work_limit));
+        let initial = (*remaining).min(self.work_limit);
+        let mut work = Work(initial);
         let result = self.embed_work(selected, bond_length, &mut work);
-        *remaining = work.0;
+        let used = initial.checked_sub(work.0).ok_or(Error::Limit)?;
+        *remaining = remaining.checked_sub(used).ok_or(Error::Limit)?;
         result
     }
     fn embed_work(

@@ -1,8 +1,9 @@
-//! Bounded geometry primitives for native-compatible two-dimensional depiction.
-//!
-//! These do not perform molecular layout or change application dispatch.
+//! Detached, bounded two-dimensional depiction using the pinned native order.
 
 mod arithmetic;
+mod compute;
+
+pub use compute::{Error, Options, compute};
 
 pub mod attachment;
 pub mod collision;

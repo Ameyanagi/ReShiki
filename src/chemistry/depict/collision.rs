@@ -118,7 +118,44 @@ pub struct Input<'a> {
     work_limit: usize,
 }
 impl<'a> Input<'a> {
+    /// Charge index construction once to the solver's cumulative allowance.
+    pub(super) fn new_with_work(
+        graph: &'a Graph,
+        metadata: &'a Metadata,
+        rings: &'a RingCache,
+        remaining: &mut usize,
+    ) -> Result<Self, Error> {
+        let initial = (*remaining).min(MAX_WORK);
+        let mut session = Session {
+            remaining: initial,
+            distances: BTreeMap::new(),
+        };
+        let result = (|| {
+            session.spend(graph.atoms.len())?;
+            session.spend(graph.bonds.len())?;
+            for group in &metadata.groups {
+                session.spend(1)?;
+                session.spend(group.atoms.len())?;
+                session.spend(group.bonds.len())?;
+            }
+            for ring in &rings.atoms {
+                session.spend(1)?;
+                session.spend(ring.len())?;
+            }
+            Self::new_inner(graph, metadata, rings)
+        })();
+        let used = initial.checked_sub(session.remaining).ok_or(Error::Limit)?;
+        *remaining = remaining.checked_sub(used).ok_or(Error::Limit)?;
+        result
+    }
     pub fn new(
+        graph: &'a Graph,
+        metadata: &'a Metadata,
+        rings: &'a RingCache,
+    ) -> Result<Self, Error> {
+        Self::new_with_work(graph, metadata, rings, &mut { MAX_WORK })
+    }
+    fn new_inner(
         graph: &'a Graph,
         metadata: &'a Metadata,
         rings: &'a RingCache,
@@ -315,6 +352,7 @@ impl<'a> Input<'a> {
     ) -> Result<Fragment, Error> {
         let mut session = self.session();
         session.remaining = session.remaining.min(*remaining);
+        let initial = session.remaining;
         let result = (|| {
             self.validate(fragment, &mut session)?;
             self.complete(fragment, &mut session)?;
@@ -322,7 +360,8 @@ impl<'a> Input<'a> {
             operation(&mut value, &mut session)?;
             Ok(value)
         })();
-        *remaining = session.remaining;
+        let used = initial.checked_sub(session.remaining).ok_or(Error::Limit)?;
+        *remaining = remaining.checked_sub(used).ok_or(Error::Limit)?;
         result
     }
     fn complete(&self, value: &Fragment, session: &mut Session) -> Result<(), Error> {

@@ -146,6 +146,20 @@ def check_request(case):
     return count
 
 
+def rejection_kind(exception_type, message):
+    """Classify native causes without platform paths, source lines or Boost text."""
+    if exception_type == "RuntimeError" and message == "Cannot normalize a zero length vector":
+        return "zero_length_vector"
+    if (
+        exception_type == "RuntimeError"
+        and message.startswith("Range Error\n")
+        and "ROMol.cpp" in message
+        and "Failed Expression: 4294967295 < " in message
+    ):
+        return "missing_fragment_neighbor"
+    return "unclassified_native_exception"
+
+
 def observe(case):
     from perception_reference import snapshot
     from rdkit import Chem, rdBase
@@ -180,11 +194,18 @@ def observe(case):
         kwargs["coordMap"] = {
             index: Point2D(number(x), number(y)) for index, x, y in options["coordinates"]
         }
-    result = {"success": True, "conformer_id": None, "exception_type": None, "message": None}
+    result = {
+        "success": True,
+        "conformer_id": None,
+        "exception_type": None,
+        "message": None,
+        "rejection_kind": None,
+    }
     try:
         result["conformer_id"] = rdDepictor.Compute2DCoords(molecule, **kwargs)
     except (ValueError, RuntimeError, OverflowError) as error:
         result.update(success=False, exception_type=type(error).__name__, message=str(error)[:4096])
+        result["rejection_kind"] = rejection_kind(result["exception_type"], result["message"])
     result["conformers"] = conformers(molecule)
     result["state"] = snapshot(molecule, case["ring_kind"])
     result["properties"] = properties(molecule)
@@ -555,6 +576,79 @@ def requests(source):
             False,
             True,
         )
+
+    # Drawing-supported bond styles are distinct native graph orders, not
+    # approximated single bonds. Keep ordinary molecular caches on the source.
+    styles = (
+        ("hydrogen", Chem.BondType.HYDROGEN),
+        ("quadruple", Chem.BondType.QUADRUPLE),
+        ("partial", Chem.BondType.ONEANDAHALF),
+    )
+    graphs = (
+        ("pair", "CC", 0),
+        ("chain", "C[Cr][Cr]C", 1),
+        ("branch", "C[Cr](C)[Cr]C", 2),
+        ("ring", "[Cr]1[Cr]CCCC1", 0),
+    )
+    for style, bond_type in styles:
+        for graph_name, smiles, bond_index in graphs:
+            mol = Chem.MolFromSmiles(smiles)
+            mol.GetBondWithIdx(bond_index).SetBondType(bond_type)
+            mol.UpdatePropertyCache(strict=False)
+            for templates in (False, True):
+                for canonical in (False, True):
+                    yield emit(
+                        mol,
+                        f"bond-style/{style}/{graph_name}/{templates}/{canonical}",
+                        canonical,
+                        templates,
+                        old=True,
+                    )
+                yield emit(
+                    mol,
+                    f"bond-style/{style}/{graph_name}/{templates}/cleanup",
+                    False,
+                    templates,
+                    14.4 / 28.0,
+                    [(0, 0.1, -0.2), (1, 0.85, 0.2)],
+                    old=True,
+                )
+
+    # The fallback property is independent of the legacy CIP cache. All these
+    # strings are accepted by native unsigned conversion, including wrapping
+    # negative values and trailing whitespace; invalid lazy values are covered
+    # by the raw import-property contract instead of this typed-state adapter.
+    for ordinal, text in enumerate(
+        ("0", "+1", "-1", "4294967295", "-4294967295", "01", "1 ", "1\t")
+    ):
+        mol = Chem.MolFromSmiles("CC")
+        for atom in mol.GetAtoms():
+            if atom.HasProp("_CIPRank"):
+                atom.ClearProp("_CIPRank")
+        mol.GetAtomWithIdx(1).SetProp("_chiralAtomRank", text)
+        for canonical in (False, True):
+            yield emit(mol, f"rank-property/string/{ordinal}/{canonical}", canonical, old=True)
+    for graph_name, smiles in (("branch", "CC(C)CC"), ("ring", "c1ccc(C(C)C)cc1CC")):
+        for precedence in (False, True):
+            for reverse in (False, True):
+                mol = Chem.MolFromSmiles(smiles)
+                count = mol.GetNumAtoms()
+                for atom in mol.GetAtoms():
+                    index = atom.GetIdx()
+                    atom.SetUnsignedProp(
+                        "_chiralAtomRank", (count - index if reverse else index) * 100_000
+                    )
+                    if precedence:
+                        atom.SetUnsignedProp("_CIPRank", 3 * index + 7)
+                    elif atom.HasProp("_CIPRank"):
+                        atom.ClearProp("_CIPRank")
+                for canonical in (False, True):
+                    yield emit(
+                        mol,
+                        f"rank-property/{graph_name}/cip-{precedence}/reverse-{reverse}/{canonical}",
+                        canonical,
+                        old=True,
+                    )
 
 
 def provenance(source=None):

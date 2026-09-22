@@ -31,7 +31,15 @@ invalid unsigned key 4294967295; the safe API returns a typed error instead.
 
 Every public operation returns detached data. Internal mutation avoids cloning
 the growing fragment once per atom. One 50-million-unit work allowance is shared
-through ring/template/seed/attachment calls during expansion. A two-million-slot
+through chemical ring/stereo preparation and ring/template/seed/attachment calls
+during expansion. The private `compute_initial_with_work` entry accepts the
+solver's remaining allowance; collision index construction, collision passes and
+finalization accept that same counter. Wrappers debit completed work on both
+success and failure, preserve caller allowance above a local cap, and never
+replenish it between stages. The stereo adapter requires the freshly computed
+symmetric cache, so its independent fallback ring searches are unreachable.
+Ordinary public ring and stereo perception keep their original budgets.
+A two-million-slot
 allocation allowance counts new atom records, neighbor entries and attachment
 entries before persistent insertion/copy; it is monotonic, so dropping a fragment
 does not replenish it. Primitive constructors retain their own graph and temporary
@@ -42,7 +50,10 @@ Tests include a 20,000-atom chain, cumulative seed work, repeated high-degree
 fragments exceeding aggregate storage before cloning, bad coordinate IDs,
 nonfinite coordinates, repeated common/pending IDs, invalid master fragments and
 failed partial expansion with unchanged source data. Existing public primitive
-wrappers keep detached behavior and their normal numeric results.
+wrappers keep detached behavior and their normal numeric results. Six focused
+unit tests additionally verify exact-total versus total-minus-one pipeline work,
+preparation early returns, failure debits, excess allowance, and ring constructor
+continuations with intervening work.
 
 ## Independent original-native capture
 

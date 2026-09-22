@@ -113,11 +113,14 @@ impl Input<'_> {
         bond_length: f64,
         remaining: &mut usize,
     ) -> Result<Construction<'_, '_>, Error> {
-        let result = self.begin_work(bond_length, Work((*remaining).min(self.work_limit)));
-        *remaining = result.as_ref().map_or(0, |stage| stage.work.0);
+        let initial = (*remaining).min(self.work_limit);
+        let mut work = Work(initial);
+        let result = self.begin_work(bond_length, &mut work);
+        let used = initial.checked_sub(work.0).ok_or(Error::Limit)?;
+        *remaining = remaining.checked_sub(used).ok_or(Error::Limit)?;
         result
     }
-    fn begin_work(&self, bond_length: f64, mut work: Work) -> Result<Construction<'_, '_>, Error> {
+    fn begin_work(&self, bond_length: f64, work: &mut Work) -> Result<Construction<'_, '_>, Error> {
         if self.selected.is_empty() {
             return Err(Error::Invalid("empty ring system"));
         }
@@ -127,7 +130,7 @@ impl Input<'_> {
             let ring = self.ring(index)?;
             work.spend(ring.len())?;
             let mut positions = geometry::embed_ring(ring, bond_length)?;
-            self.mirror_trans(ring, &mut positions, &mut work)?;
+            self.mirror_trans(ring, &mut positions, work)?;
             coordinates.push(positions);
             for &id in ring {
                 if !work.contains(&union, id)? {
@@ -137,7 +140,7 @@ impl Input<'_> {
         }
         Ok(Construction {
             input: self,
-            work,
+            allowance: work.0,
             coordinates,
             union,
         })
@@ -211,25 +214,31 @@ impl Input<'_> {
 /// Detached continuation shared by ordinary and template-seeded ring assembly.
 pub(in crate::chemistry::depict) struct Construction<'a, 'g> {
     input: &'a Input<'g>,
-    work: Work,
+    allowance: usize,
     coordinates: Vec<Coordinates>,
     union: Vec<usize>,
 }
 impl Construction<'_, '_> {
     pub(in crate::chemistry::depict) fn finish_with_budget(
-        mut self,
+        self,
         seed: Option<(Fragment, Vec<usize>)>,
         remaining: &mut usize,
     ) -> Result<Fragment, Error> {
-        self.work.0 = self.work.0.min(*remaining);
-        let result = self.finish_work(seed);
-        *remaining = result.as_ref().map_or(0, |(_, left)| *left);
-        result.map(|(fragment, _)| fragment)
+        let initial = self.allowance.min(*remaining);
+        let mut work = Work(initial);
+        let result = self.finish_work(seed, &mut work);
+        let used = initial.checked_sub(work.0).ok_or(Error::Limit)?;
+        *remaining = remaining.checked_sub(used).ok_or(Error::Limit)?;
+        result
     }
-    fn finish_work(self, seed: Option<(Fragment, Vec<usize>)>) -> Result<(Fragment, usize), Error> {
+    fn finish_work(
+        self,
+        seed: Option<(Fragment, Vec<usize>)>,
+        work: &mut Work,
+    ) -> Result<Fragment, Error> {
         let Self {
             input,
-            mut work,
+            allowance: _,
             coordinates,
             union,
         } = self;
@@ -240,7 +249,7 @@ impl Construction<'_, '_> {
             (fragment.atoms, done, fragment.attachment_points)
         } else {
             let first = input
-                .first(&mut work)?
+                .first(work)?
                 .ok_or(Error::Invalid("empty ring system"))?;
             (
                 from_ring(input.ring(first)?, at(&coordinates, first)?)?,
@@ -250,7 +259,7 @@ impl Construction<'_, '_> {
         };
         while atoms.len() < union.len() {
             work.spend(1)?;
-            let next = input.next_with_work(&done, &mut work)?;
+            let next = input.next_with_work(&done, work)?;
             if work.contains(&done, next.ring)? {
                 return Err(Error::Invalid("ring selection made no progress"));
             }
@@ -278,28 +287,25 @@ impl Construction<'_, '_> {
                 other_atom.transform(transform)?;
             }
             if common.len() > 1 {
-                reflect_density(&atoms, &mut other, &pins, &mut work)?;
+                reflect_density(&atoms, &mut other, &pins, work)?;
             }
-            merge(&mut atoms, other, common.len(), &pins, &mut work)?;
+            merge(&mut atoms, other, common.len(), &pins, work)?;
             done.push(next.ring);
             if done.len() > input.selected.len() {
                 return Err(Error::Invalid("ring selection made no progress"));
             }
         }
-        Ok((
-            Fragment {
-                atoms,
-                done: false,
-                bounds: Bounds {
-                    positive_x: 0.0,
-                    negative_x: 0.0,
-                    positive_y: 0.0,
-                    negative_y: 0.0,
-                },
-                attachment_points,
+        Ok(Fragment {
+            atoms,
+            done: false,
+            bounds: Bounds {
+                positive_x: 0.0,
+                negative_x: 0.0,
+                positive_y: 0.0,
+                negative_y: 0.0,
             },
-            work.0,
-        ))
+            attachment_points,
+        })
     }
 }
 

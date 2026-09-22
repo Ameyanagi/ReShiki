@@ -113,6 +113,52 @@ pub fn perceive(input: &State, options: Options) -> Result<State, String> {
     with_work(input, options, None, &mut Work(50_000_000))
 }
 
+/// Depiction supplies freshly perceived symmetric rings. Requiring that cache
+/// excludes the independent fallback ring searches used by the public API.
+pub(crate) fn perceive_prepared_with_work(
+    input: &State,
+    options: Options,
+    remaining: &mut usize,
+) -> Result<State, String> {
+    if input.rings.kind != RingKind::Symmetric {
+        return Err("Shared stereo work requires a symmetric ring cache".into());
+    }
+    let initial = (*remaining).min(50_000_000);
+    let mut work = Work(initial);
+    let result = (|| {
+        work.spend(input.graph.atoms.len())?;
+        work.spend(input.graph.bonds.len())?;
+        // Charge before the detached copy, even when an existing done property
+        // permits the native early return. Callers validated annotation sizes.
+        for ring in &input.rings.atoms {
+            work.spend(1)?;
+            work.spend(ring.len())?;
+        }
+        for group in &input.metadata.groups {
+            work.spend(1)?;
+            work.spend(group.atoms.len())?;
+            work.spend(group.bonds.len())?;
+        }
+        for properties in &input.properties.atoms {
+            work.spend(1)?;
+            work.spend(properties.ring_members.as_ref().map_or(0, Vec::len))?;
+            work.spend(properties.cip_code.as_ref().map_or(0, String::len))?;
+        }
+        for label in &input.properties.bond_codes {
+            work.spend(1)?;
+            work.spend(label.as_ref().map_or(0, String::len))?;
+        }
+        with_work(input, options, None, &mut work)
+    })();
+    let used = initial
+        .checked_sub(work.0)
+        .ok_or("Stereo work accounting overflow")?;
+    *remaining = remaining
+        .checked_sub(used)
+        .ok_or("Stereo work accounting overflow")?;
+    result
+}
+
 /// FindStereo's center predicate differs from legacy perception for low-degree
 /// phosphorus/arsenic. SMILES winding uses this predicate after perception.
 pub(crate) fn potential_tetrahedral_centers(input: &State) -> Result<Vec<bool>, String> {

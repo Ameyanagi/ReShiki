@@ -594,6 +594,45 @@ pub fn fast(graph: &Graph) -> Result<Rings, String> {
 }
 
 pub fn perceive(graph: &Graph, options: Options) -> Result<Rings, RingError> {
+    perceive_with_budget(graph, options, &mut Budget::default())
+}
+
+/// Share a depiction session's work allowance, including topology preparation.
+/// Ordinary ring perception retains its independent default budget above.
+pub(crate) fn perceive_with_work(
+    graph: &Graph,
+    options: Options,
+    remaining: &mut usize,
+) -> Result<Rings, RingError> {
+    let initial = (*remaining).min(50_000_000);
+    let mut budget = Budget {
+        work: initial,
+        ..Budget::default()
+    };
+    let result = (|| {
+        budget.spend(
+            graph
+                .atoms
+                .len()
+                .checked_add(graph.bonds.len())
+                .ok_or_else(|| "Ring input work overflow".to_owned())?,
+        )?;
+        perceive_with_budget(graph, options, &mut budget)
+    })();
+    let used = initial
+        .checked_sub(budget.work)
+        .ok_or_else(|| "Ring work accounting overflow".to_owned())?;
+    *remaining = remaining
+        .checked_sub(used)
+        .ok_or_else(|| "Ring work accounting overflow".to_owned())?;
+    result
+}
+
+fn perceive_with_budget(
+    graph: &Graph,
+    options: Options,
+    budget: &mut Budget,
+) -> Result<Rings, RingError> {
     let top = Topology::new(graph)?;
     let active = graph
         .bonds
@@ -621,6 +660,11 @@ pub fn perceive(graph: &Graph, options: Options) -> Result<Rings, RingError> {
         extras: Vec::new(),
         budget: Budget::default(),
     };
-    let (basis, approximate) = state.basis(&top)?;
-    Ok(state.symmetric(&top, basis, approximate)?)
+    std::mem::swap(&mut state.budget, budget);
+    let result = (|| {
+        let (basis, approximate) = state.basis(&top)?;
+        state.symmetric(&top, basis, approximate)
+    })();
+    std::mem::swap(&mut state.budget, budget);
+    Ok(result?)
 }

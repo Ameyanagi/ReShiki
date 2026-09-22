@@ -207,9 +207,11 @@ impl<'a> Input<'a> {
         self.core_with_budget(&mut { self.work_limit })
     }
     pub(super) fn core_with_budget(&self, remaining: &mut usize) -> Result<Vec<usize>, Error> {
-        let mut work = Work((*remaining).min(self.work_limit));
+        let initial = (*remaining).min(self.work_limit);
+        let mut work = Work(initial);
         let result = self.core_work(&mut work);
-        *remaining = work.0;
+        let used = initial.checked_sub(work.0).ok_or(Error::Limit)?;
+        *remaining = remaining.checked_sub(used).ok_or(Error::Limit)?;
         result
     }
     fn core_work(&self, work: &mut Work) -> Result<Vec<usize>, Error> {

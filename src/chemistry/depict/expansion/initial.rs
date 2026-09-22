@@ -185,7 +185,15 @@ impl Input<'_> {
         options: Options,
     ) -> Result<Vec<Fragment>> {
         let mut work = Budget::new(self.work_limit);
-        let seed = self.seed_with_work(coordinates, options, &mut work)?;
-        self.complete(seed, options.bond_length, &mut work)
+        self.initial_with_budget(coordinates, options, &mut work)
+    }
+    pub(super) fn initial_with_budget(
+        &self,
+        coordinates: Option<&Coordinates>,
+        options: Options,
+        work: &mut Budget,
+    ) -> Result<Vec<Fragment>> {
+        let seed = self.seed_with_work(coordinates, options, work)?;
+        self.complete(seed, options.bond_length, work)
     }
 }
