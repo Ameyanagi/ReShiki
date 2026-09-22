@@ -22,7 +22,11 @@ pub enum Action {
     Model(Option<String>),
     Menu(Option<Menu>),
     Search(String),
-    ChatScrolled(bool),
+    ChatScrolled {
+        follow: bool,
+        offset: f32,
+    },
+    JumpToResult,
     Effort(String),
     Tier(String),
     PreferencesSaved(Result<(), String>),
@@ -73,6 +77,7 @@ pub struct State {
     pub(super) menu: Option<Menu>,
     search: String,
     follow_chat: bool,
+    chat_offset: f32,
     completed: Option<(Document, assistant::review::Report)>,
     reply: String,
     plan: String,
@@ -148,7 +153,7 @@ impl App {
     pub(super) fn assistant_action(&mut self, action: Action) -> Task<Message> {
         let mut scroll = matches!(
             &action,
-            Action::Send | Action::Improve | Action::Done { .. } | Action::Apply | Action::Reject
+            Action::Send | Action::Improve | Action::JumpToResult | Action::Reject
         );
         match action {
             Action::Open => {
@@ -158,6 +163,17 @@ impl App {
                 if self.assistant.account.is_none() && !self.assistant.busy {
                     return self.assistant_action(Action::Connect);
                 }
+                return if self.assistant.follow_chat {
+                    iced::widget::operation::snap_to_end("assistant-chat")
+                } else {
+                    iced::widget::operation::scroll_to(
+                        "assistant-chat",
+                        iced::widget::operation::AbsoluteOffset {
+                            x: Some(0.),
+                            y: Some(self.assistant.chat_offset),
+                        },
+                    )
+                };
             }
             Action::Input(action) => {
                 self.assistant.input.perform(action);
@@ -198,7 +214,11 @@ impl App {
                 self.assistant.search.clear();
             }
             Action::Search(value) => self.assistant.search = value,
-            Action::ChatScrolled(follow) => self.assistant.follow_chat = follow,
+            Action::ChatScrolled { follow, offset } => {
+                self.assistant.follow_chat = follow;
+                self.assistant.chat_offset = offset;
+            }
+            Action::JumpToResult => self.assistant.follow_chat = true,
             Action::Effort(value) => {
                 if let Some(id) = self.assistant.model().map(|m| m.id.clone()) {
                     self.assistant.preferences.efforts.insert(id, value);
@@ -237,6 +257,8 @@ impl App {
                 self.assistant.progress = None;
                 self.assistant.reply.clear();
                 self.assistant.started = None;
+                self.assistant.chat_offset = 0.;
+                self.assistant.follow_chat = true;
             }
             Action::Stop => {
                 self.assistant.waiting_for_canvas_edit = false;
@@ -400,6 +422,7 @@ impl App {
                 self.assistant.status = "Rejected · Your drawing is unchanged".into();
             }
             Action::Apply => {
+                scroll = self.assistant.follow_chat;
                 if self.assistant.busy || self.cleanup.is_some() {
                     return Task::none();
                 }
@@ -673,6 +696,7 @@ impl App {
                 if serial != self.assistant.serial {
                     return Task::none();
                 }
+                scroll = self.assistant.follow_chat;
                 self.assistant.busy = false;
                 self.assistant.progress = None;
                 self.assistant.reply.clear();
@@ -1079,13 +1103,15 @@ impl App {
             );
         }
         let model_label = match state.model() {
-            Some(model) if state.preferences.model.is_none() => format!("{} · Latest", model.label),
+            Some(model) if state.preferences.model.is_none() => {
+                format!("{} · Default", model.label)
+            }
             Some(model) => model.label.clone(),
             None => state
                 .preferences
                 .model
                 .clone()
-                .unwrap_or_else(|| "Latest model".into()),
+                .unwrap_or_else(|| "Default model".into()),
         };
         let effort = state
             .model()
@@ -1186,16 +1212,34 @@ impl App {
             .color(super::workspace::muted())
         ]
         .spacing(8);
+        let result_navigation: Element<'_, Message> = if !state.follow_chat
+            && (state.draft.is_some() || state.completed.is_some() || state.busy)
+        {
+            action(
+                if state.busy {
+                    "↓ Jump to activity"
+                } else {
+                    "↓ Jump to result"
+                },
+                Action::JumpToResult,
+            )
+            .width(Length::Fill)
+            .into()
+        } else {
+            Space::new().height(0).into()
+        };
         let base: Element<'_, Message> = container(
             column![
                 header,
                 scrollable(chat)
                     .id("assistant-chat")
                     .height(Length::Fill)
-                    .on_scroll(|v| Message::Assistant(Action::ChatScrolled(
-                        v.content_bounds().height <= v.bounds().height
-                            || v.relative_offset().y >= 0.97
-                    ))),
+                    .on_scroll(|v| Message::Assistant(Action::ChatScrolled {
+                        follow: v.content_bounds().height <= v.bounds().height
+                            || v.relative_offset().y >= 0.97,
+                        offset: v.absolute_offset().y,
+                    })),
+                result_navigation,
                 footer
             ]
             .spacing(14),
@@ -1203,8 +1247,10 @@ impl App {
         .padding(14)
         .height(Length::Fill)
         .into();
+        // Always keep the chat at the same location in the widget tree.
+        let layers = stack![base];
         let Some(menu) = state.menu else {
-            return base;
+            return layers.into();
         };
         let popup = container(self.assistant_menu(menu))
             .padding(10)
@@ -1218,25 +1264,27 @@ impl App {
                 };
                 style
             });
-        stack![
-            base,
-            mouse_area(
-                container(Space::new())
-                    .width(Length::Fill)
-                    .height(Length::Fill)
+        layers
+            .push(
+                mouse_area(
+                    container(Space::new())
+                        .width(Length::Fill)
+                        .height(Length::Fill),
+                )
+                .on_press(Message::Assistant(Action::Menu(None))),
             )
-            .on_press(Message::Assistant(Action::Menu(None))),
-            container(opaque(popup))
-                .height(Length::Fill)
-                .align_y(Alignment::End)
-                .padding(iced::Padding {
-                    top: 8.,
-                    right: 14.,
-                    bottom: 110.,
-                    left: 14.
-                })
-        ]
-        .into()
+            .push(
+                container(opaque(popup))
+                    .height(Length::Fill)
+                    .align_y(Alignment::End)
+                    .padding(iced::Padding {
+                        top: 8.,
+                        right: 14.,
+                        bottom: 110.,
+                        left: 14.,
+                    }),
+            )
+            .into()
     }
     fn assistant_menu(&self, menu: Menu) -> Element<'_, Message> {
         let state = &self.assistant;
@@ -1285,12 +1333,12 @@ impl App {
                         .padding(9),
                 );
                 options = options.push(
-                    action("Latest available model", Action::Model(None))
+                    action("Default · GPT-6 Sol", Action::Model(None))
                         .width(Length::Fill)
                         .style(super::workspace::control(state.preferences.model.is_none())),
                 );
                 options = options.push(
-                    text("Automatically follows the newest GPT generation")
+                    text("Uses GPT-6 Sol when available; otherwise your account default")
                         .size(10)
                         .color(super::workspace::muted()),
                 );
@@ -1416,6 +1464,32 @@ fn card() -> container::Style {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn menus_and_completion_preserve_history_scroll_until_jump_is_requested() {
+        let (mut app, _) = App::new();
+        app.busy = false;
+        let _ = app.assistant_action(Action::ChatScrolled {
+            follow: false,
+            offset: 240.,
+        });
+        for menu in [Menu::Models, Menu::Effort, Menu::Edits] {
+            let task = app.assistant_action(Action::Menu(Some(menu)));
+            assert_eq!(task.units(), 0);
+            assert!(!app.assistant.follow_chat);
+            assert_eq!(app.assistant.chat_offset, 240.);
+            let _ = app.assistant_action(Action::Menu(None));
+        }
+        ready(&mut app);
+        assert!(!app.assistant.follow_chat);
+        assert_eq!(app.assistant.chat_offset, 240.);
+        assert!(app.assistant.draft.is_some());
+        let task = app.assistant_action(Action::JumpToResult);
+        assert!(task.units() > 0);
+        assert!(app.assistant.follow_chat);
+        let _ = app.assistant_action(Action::Reset);
+        assert_eq!(app.assistant.chat_offset, 0.);
+    }
+
     #[test]
     fn selecting_and_styling_a_scheme_keeps_the_assistant_open_for_replacement() {
         use crate::canvas::Edit;

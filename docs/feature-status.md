@@ -181,7 +181,7 @@ The assistant shows immediate activity, elapsed time, cancellation, public plans
 
 - Japanese interface typography uses an installed Japanese sans-serif face; glyph fallback is measured consistently in drawing exports.
 - Tool-family palettes show readable previews and names. Direct tools select immediately; other families expose a remembered choice and corner indicator.
-- Assistant model search, per-model reasoning/service settings and saved explicit choices are available. Automatic model selection follows the newest available GPT generation. Initial settings are Low reasoning and Standard service.
+- Assistant model search, per-model reasoning/service settings and saved explicit choices are available. The default is GPT-6 Sol when available, falling back to the connected account default. Initial settings are Low reasoning and Standard service.
 - Review edits and Accept all edits support asynchronous generation and one-step Undo. Automatic acceptance requires a reviewed final draft with no unresolved findings.
 - Canvas inspection supplies live document data and a rendered image; proposal preview supplies a validated scheme image. Existing scheme objects can be replaced by ID while unrelated content is retained.
 - Scheme layout supports stoichiometric coefficients, readable R groups, disconnected component spacing, participant rotation and aligned captions.

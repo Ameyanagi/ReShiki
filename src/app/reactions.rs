@@ -300,7 +300,9 @@ impl App {
                 .spacing(8)
             )
             .padding([12, 16]),
-            scrollable(container(self.reactions_panel()).padding([0, 16])).height(Length::Fill),
+            scrollable(container(self.reactions_panel()).padding([0, 16]))
+                .id("inspector-content")
+                .height(Length::Fill),
             container(
                 column![
                     text(if ready {

@@ -17,6 +17,7 @@ mod clipboard;
 mod context_menu;
 mod document_styles;
 mod file_shortcuts;
+mod files;
 mod graphics;
 mod help;
 mod icons;
@@ -785,6 +786,24 @@ impl App {
             .unwrap_or(&self.doc)
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        let previous = self.inspector_tab;
+        let task = self.update_inner(message);
+        // Include inspector changes made by tool-specific handlers, which can
+        // return early. Ordinary updates within a panel retain its scroll state.
+        if previous != self.inspector_tab && self.inspector_tab != InspectorTab::Assistant {
+            Task::batch([
+                task,
+                iced::widget::operation::snap_to(
+                    "inspector-content",
+                    iced::widget::operation::RelativeOffset::START,
+                ),
+            ])
+        } else {
+            task
+        }
+    }
+
+    fn update_inner(&mut self, message: Message) -> Task<Message> {
         if self.help_open && matches!(message, Message::Escape | Message::ToggleHelp) {
             self.help_open = false;
             return Task::none();
@@ -1342,7 +1361,12 @@ impl App {
                 }
                 self.changed(before);
             }
-            Message::ToggleInspector => self.inspector_open = !self.inspector_open,
+            Message::ToggleInspector => {
+                self.inspector_open = !self.inspector_open;
+                if self.inspector_open && self.inspector_tab == InspectorTab::Assistant {
+                    return self.assistant_action(assistant::Action::Open);
+                }
+            }
             Message::Inspector(tab) => {
                 if tab != InspectorTab::DrawingStyle {
                     self.styles.editor = None;
@@ -2151,14 +2175,13 @@ impl App {
                         let path = if let Some(p) = path {
                             p
                         } else {
-                            let Some(file) = rfd::AsyncFileDialog::new()
-                                .set_file_name("Untitled.reshiki")
-                                .save_file()
-                                .await
+                            let Some(path) =
+                                files::save_path("Save drawing", "Untitled.reshiki", "reshiki")
+                                    .await
                             else {
                                 return Ok(None);
                             };
-                            file.path().to_path_buf()
+                            path
                         };
                         let save_path = path.clone();
                         tokio::task::spawn_blocking(move || {
@@ -2889,14 +2912,11 @@ fn export_file(contents: String, format: &'static str) -> Task<Message> {
     )
 }
 async fn save_export(bytes: Vec<u8>, format: &'static str) -> Result<Option<PathBuf>, String> {
-    let Some(file) = rfd::AsyncFileDialog::new()
-        .set_file_name(format!("Molecule.{format}"))
-        .save_file()
-        .await
+    let Some(path) =
+        files::save_path("Export drawing", &format!("Molecule.{format}"), format).await
     else {
         return Ok(None);
     };
-    let path = file.path().to_path_buf();
     reshiki::storage::write_atomic(&path, &bytes)?;
     Ok(Some(path))
 }
@@ -2915,6 +2935,23 @@ fn platform_shortcut(macos: &'static str, other: &'static str) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn inspector_changes_reset_scrolling_but_normal_updates_keep_the_position() {
+        let (mut app, _) = App::new();
+        app.busy = false;
+        assert_eq!(app.inspector_tab, InspectorTab::Properties);
+        // Reaction handlers previously bypassed the normal tab navigation task.
+        let task = app.update(Message::Reaction(reactions::Action::Open));
+        assert_eq!(app.inspector_tab, InspectorTab::Reactions);
+        assert!(task.units() > 0);
+        assert_eq!(app.update(Message::InspectorScroll(180.)).units(), 0);
+        assert_eq!(
+            app.update(Message::Reaction(reactions::Action::Open))
+                .units(),
+            0
+        );
+    }
 
     fn subscriptions(app: &App) -> usize {
         iced::advanced::subscription::into_recipes(app.subscription()).len()

@@ -70,7 +70,7 @@ pub fn schema() -> Value {
         "issues":{"type":"array","items":{"type":"string"},"description":"Unresolved visual or chemistry problems in this exact image. Empty only when ready. Do not claim chemistry correctness solely from visual appearance."},
         "edits":{"type":"array","items":{"anyOf":[
             {"type":"object","additionalProperties":false,"properties":{"action":{"const":"move","type":"string"},"target":target,"dx_pt":number,"dy_pt":number},"required":["action","target","dx_pt","dy_pt"]},
-            {"type":"object","additionalProperties":false,"properties":{"action":{"const":"rotate","type":"string"},"target":target,"degrees":{"type":"number","enum":[-360,-270,-180,-90,0,90,180,270,360]}},"required":["action","target","degrees"]},
+            {"type":"object","additionalProperties":false,"properties":{"action":{"const":"rotate","type":"string"},"target":target,"degrees":{"type":"number","enum":[-360,-330,-300,-270,-240,-210,-180,-150,-120,-90,-60,-30,0,30,60,90,120,150,180,210,240,270,300,330,360]}},"required":["action","target","degrees"]},
             {"type":"object","additionalProperties":false,"properties":{"action":{"const":"arrow_length","type":"string"},"target":target,"length_pt":{"type":"number","minimum":12,"maximum":400}},"required":["action","target","length_pt"]},
             {"type":"object","additionalProperties":false,"properties":{"action":{"const":"compact","type":"string"},"target":target},"required":["action","target"]},
             {"type":"object","additionalProperties":false,"properties":{"action":{"const":"arrange","type":"string"},"composition":composition::schema(),"main_reaction":{"type":"integer","minimum":0,"maximum":7}},"required":["action","composition","main_reaction"]}
@@ -273,7 +273,8 @@ pub fn apply(doc: &Document, edits: &[Edit], compact_allowed: bool) -> Result<Do
                 ),
             Edit::Rotate { degrees, .. }
                 if bounded(*degrees)
-                    && (*degrees / 90. - (*degrees / 90.).round()).abs() < 0.001
+                    && degrees.abs() <= 360.
+                    && (*degrees / 30. - (*degrees / 30.).round()).abs() < 0.001
                     && target.kind == "molecule" =>
             {
                 editing::transform(

@@ -399,16 +399,15 @@ impl App {
                     Ok(bytes) => {
                         return Task::perform(
                             async move {
-                                let Some(file) = rfd::AsyncFileDialog::new()
-                                    .set_title("Save drawing style")
-                                    .set_file_name("Drawing.reshiki-style")
-                                    .add_filter("ReShiki drawing style", &["reshiki-style"])
-                                    .save_file()
-                                    .await
+                                let Some(path) = super::files::save_path(
+                                    "Save drawing style",
+                                    "Drawing.reshiki-style",
+                                    "reshiki-style",
+                                )
+                                .await
                                 else {
                                     return Ok(false);
                                 };
-                                let path = file.path().to_path_buf();
                                 tokio::task::spawn_blocking(move || {
                                     reshiki::storage::write_atomic(&path, &bytes)
                                 })
@@ -626,6 +625,7 @@ impl App {
                     right: 12.,
                     ..Default::default()
                 }))
+                .id("inspector-content")
                 .height(Length::Fill),
                 footer
             ]

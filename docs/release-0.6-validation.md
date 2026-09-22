@@ -28,15 +28,20 @@ A 166-atom, 144-bond hydrolysis drawing with 30 other objects was moved twice, r
 
 The corrected esterification example preserves every atom property except position, all bonds and other document data. The maximum bond-length difference is below 0.0001 drawing units. Its SVG, PDF and PNG exports were generated successfully; the PNG was imported through the native picture workflow.
 
-## Findings
+## Follow-up fixes and validation
 
-- [#6: Assistant upright-carbonyl correction limits](https://github.com/Ameyanagi/ReShiki/issues/6). Quarter-turn-only corrections cannot satisfy every requested orientation; the draft correctly remains for manual review.
-- [#7: Assistant conversation scroll position](https://github.com/Ameyanagi/ReShiki/issues/7). Opening a composer menu can jump back to the start of the conversation.
-- [#8: Caption baseline alignment](https://github.com/Ameyanagi/ReShiki/issues/8). Compound captions in one reaction row can appear at different heights.
-- [#5: Save should append .reshiki when the user enters a filename without an extension](https://github.com/Ameyanagi/ReShiki/issues/5). Reproduced with the native macOS Save dialog. The manual advises keeping the extension until this is fixed.
+The release-workflow follow-up addresses all five findings from the screenshot walkthrough:
 
-- [#9: Inspector scroll position](https://github.com/Ameyanagi/ReShiki/issues/9). Opening Reaction roles from a scrolled Properties panel can hide its initial controls above the viewport.
+- [#5: Filename extensions](https://github.com/Ameyanagi/ReShiki/issues/5). Save, Save as, figure/data export, template export and drawing-style export share extension completion. Explicit suffixes are preserved. If completing a suffix changes the destination to an existing file, ReShiki asks before replacing it. Native macOS Save, Save as and PDF export were verified with extensionless names, then their actual files were inspected.
+- [#6: Upright carbonyls](https://github.com/Ameyanagi/ReShiki/issues/6). Proposals and visual corrections support 30-degree increments. Tests cover aldehydes, ketones, esters, stereochemistry and branching, including graph and bond-length preservation. A live branching request produced carbonyl angles of −90° and arrow angles of 0° and −90° (within 0.0001°). Unbalanced transformation warnings remained visible for manual review.
+- [#7: Conversation scrolling](https://github.com/Ameyanagi/ReShiki/issues/7). Composer menus retain the chat widget and its scroll state. Reopening restores the previous position; **Jump to result** returns to the completed preview. Native checks covered model, effort and edit-mode menus, scrolling into history, closing/reopening, and jumping back to the result. Generation also completed while another inspector was open.
+- [#8: Caption baselines](https://github.com/Ameyanagi/ReShiki/issues/8). Compound captions share a measured baseline across each horizontal reaction row. Branches retain independent participant groups. Regression tests cover different structure heights, multiline captions and coefficients. All four compound captions in the live esterification result have exactly the same vertical position.
+- [#9: Inspector scrolling](https://github.com/Ameyanagi/ReShiki/issues/9). Changing inspectors resets the destination scroll position, including transitions from tool-specific handlers. Normal updates within a panel retain the position. The native check opened Reaction roles from a scrolled Properties panel and confirmed that the arrow selector and first reactant were visible.
+
+GPT-6 Sol (`gpt-6-sol`) is now the assistant default when available in the connected account catalog; explicit saved choices are retained. The installed Codex catalog advertised text and image input for this model. Live generation and mandatory image review succeeded for esterification and branching. The esterification draft completed in 35 seconds, passed review, applied through Accept all edits, and was removed and restored with one Undo/Redo pair.
+
+Follow-up validation: 405 default Rust tests passed, none failed, two existing manual GPU snapshot tests ignored. The optimized macOS application was rebuilt, its ad-hoc signature verified, and the affected workflows checked through native computer use. Seven manual images were refreshed again: assistant progress, review, edit modes, model, effort, accepted scheme, and reaction roles. The seven Windows/Office images remain unchanged.
 
 ## Publication sequence
 
-Review the documented findings and merge the prepared PRs in dependency order: toolbar, assistant, then documentation. Retarget each dependent PR after its base merges and require passing checks on the resulting main commit. Run the signed macOS packaging check from `main` after merging, then publish a matching `v0.6.0` tag when ready. The unsigned documentation build is not a substitute for notarization or the release workflow's signing gates.
+Review the documented findings and merge the prepared PRs in dependency order: toolbar, assistant, documentation, then the release-workflow fixes. Retarget each dependent PR after its base merges and require passing checks on the resulting main commit. Run the signed macOS packaging check from `main` after merging, then publish a matching `v0.6.0` tag when ready. The unsigned documentation build is not a substitute for notarization or the release workflow's signing gates.
