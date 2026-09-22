@@ -104,8 +104,9 @@ fn geometry_json() -> &'static str {
         ("macos", "aarch64") => include_str!("geometry-macos-aarch64.json"),
         ("linux", "x86_64") => include_str!("geometry-linux-x86_64.json"),
         ("linux", "aarch64") => include_str!("geometry-linux-aarch64.json"),
-        // Both Windows app ABIs use the pinned x64 RDKit worker.
-        ("windows", "x86_64" | "aarch64") => include_str!("geometry-windows-x86_64.json"),
+        ("windows", "x86_64") => include_str!("geometry-windows-x86_64.json"),
+        // The x64 reference worker produces different low bits under ARM emulation.
+        ("windows", "aarch64") => include_str!("geometry-windows-aarch64.json"),
         _ => "",
     }
 }

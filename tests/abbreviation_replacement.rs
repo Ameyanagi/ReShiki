@@ -79,8 +79,11 @@ fn replacement_documents_and_final_chemistry_match_original_worker() -> anyhow::
         ("linux", "aarch64") => {
             include_str!("../src/chemistry/abbreviations/geometry-linux-aarch64.json")
         }
-        ("windows", "x86_64" | "aarch64") => {
+        ("windows", "x86_64") => {
             include_str!("../src/chemistry/abbreviations/geometry-windows-x86_64.json")
+        }
+        ("windows", "aarch64") => {
+            include_str!("../src/chemistry/abbreviations/geometry-windows-aarch64.json")
         }
         target => anyhow::bail!("Unsupported reference ABI: {target:?}"),
     };

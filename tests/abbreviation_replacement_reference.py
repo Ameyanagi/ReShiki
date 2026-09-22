@@ -1,5 +1,6 @@
 """Original replace() oracle, independent native geometry, and final chemistry checks."""
 
+import argparse
 import copy
 import json
 import platform
@@ -106,11 +107,20 @@ def decorated():
 
 
 def main():
-    if "--geometry" in sys.argv:
+    parser = argparse.ArgumentParser(description=__doc__)
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--geometry", action="store_true")
+    modes.add_argument("--wire", action="store_true")
+    modes.add_argument("--write-geometry", action="store_true")
+    parser.add_argument("--target-arch", choices=("x86_64", "aarch64"))
+    args = parser.parse_args()
+    if args.target_arch and not args.write_geometry:
+        parser.error("--target-arch requires --write-geometry")
+    if args.geometry:
         print(json.dumps(geometry()))
         return
     RDLogger.DisableLog("rdApp.*")
-    if "--wire" in sys.argv:
+    if args.wire:
         for line in sys.stdin:
             request = json.loads(line)
             before = copy.deepcopy(request)
@@ -121,11 +131,19 @@ def main():
             assert before == request
             print(json.dumps(dict(request=request, edit=edit, response=response)), flush=True)
         return
-    if "--write-geometry" in sys.argv:
+    if args.write_geometry:
+        system = platform.system().lower().replace("darwin", "macos")
+        if system == "windows" and not args.target_arch:
+            parser.error(
+                "Choose --target-arch for the Windows host, not the emulated Python process"
+            )
+        arch = args.target_arch or (
+            platform.machine().lower().replace("amd64", "x86_64").replace("arm64", "aarch64")
+        )
         path = (
             Path(__file__).resolve().parents[1]
             / "src/chemistry/abbreviations"
-            / f"geometry-{platform.system().lower().replace('darwin', 'macos')}-{platform.machine().lower().replace('amd64', 'x86_64').replace('arm64', 'aarch64')}.json"
+            / f"geometry-{system}-{arch}.json"
         )
         path.write_text(json.dumps(geometry(), indent=2) + "\n")
         return
