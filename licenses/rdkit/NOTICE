@@ -38,6 +38,12 @@ Copyright (C) 2020 Greg Landrum and T5 Informatics GmbH.
 Code/GraphMol/CIPLabeler/CIPMol.cpp and Mancude.cpp (CIP bond orders, ring membership and resonance-averaged atomic numbers)
 Copyright (C) 2020 Schrödinger, LLC.
 
+Code/GraphMol/CIPLabeler/Digraph.cpp, Node.cpp, Edge.cpp and Descriptor.h (lazy CIP graph expansion, duplicate nodes, re-rooting and auxiliary descriptors)
+Copyright (C) 2020 Schrödinger, LLC.
+
+Code/GraphMol/CIPLabeler/catch_tests.cpp (VS040 graph expansion regression example)
+Copyright (C) 2020-2025 Schrödinger, LLC and other RDKit contributors.
+
 Code/GraphMol/FileParsers/MolFileWriter.cpp (V2000/V3000 molecular output)
 Copyright (C) 2003-2023 Greg Landrum and other RDKit contributors.
 

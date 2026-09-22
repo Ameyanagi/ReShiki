@@ -1,4 +1,4 @@
-"""Build the optional native CIPMol fixture generator on macOS.
+"""Build optional native CIP fixture generators on macOS.
 
 Requires the pinned RDKit checkout, its locked Python wheel, Apple clang and
 Boost headers. The resulting executable is development-only.
@@ -22,6 +22,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--rdkit-source", required=True, type=Path)
     parser.add_argument("--boost-include", type=Path, default=Path("/opt/homebrew/include"))
+    parser.add_argument("--component", choices=("molecule", "digraph"), default="molecule")
     args = parser.parse_args()
     assert rdBase.rdkitVersion == "2026.03.6"
     assert (
@@ -31,7 +32,7 @@ def main():
         == PIN
     )
     root = Path(__file__).resolve().parents[1]
-    output = root / "artifacts/cip-molecule-oracle"
+    output = root / f"artifacts/cip-{args.component}-oracle"
     include = root / "artifacts/cip-oracle-include/RDGeneral"
     include.mkdir(parents=True, exist_ok=True)
     source = args.rdkit_source / "Code"
@@ -53,7 +54,7 @@ def main():
             "-I" + str(include.parent),
             "-I" + str(source),
             "-I" + str(args.boost_include),
-            str(root / "tests/cip_molecule_reference.cpp"),
+            str(root / f"tests/cip_{args.component}_reference.cpp"),
             *[str(libs / f"libRDKit{n}.1.dylib") for n in ("CIPLabeler", "GraphMol", "RDGeneral")],
             str(python),
             "-Wl,-rpath," + str(python.parent),
@@ -66,7 +67,7 @@ def main():
     subprocess.run(
         [
             sys.executable,
-            str(root / "tests/cip_molecule_reference.py"),
+            str(root / f"tests/cip_{args.component}_reference.py"),
             "--oracle",
             str(output),
             "--write-fixture",

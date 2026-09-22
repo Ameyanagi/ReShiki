@@ -1,6 +1,7 @@
 //! Full CIP molecular preparation adapted from RDKit CIPMol.cpp/Mancude.cpp.
 //! Copyright (C) 2020 Schrödinger, LLC. BSD-3-Clause; see licenses/rdkit/.
 //! The labeling pass is separate; this adapter never edits the input state.
+pub mod digraph;
 mod mancude;
 use super::perception::{RingCache, RingKind, State};
 use crate::chemistry::{graph::Graph, kekulize, ranking, rings};
@@ -14,8 +15,10 @@ mod tests;
 pub enum Error {
     #[error("Invalid CIP molecule: {0}")]
     Invalid(String),
-    #[error("CIP molecule resource limit exceeded")]
+    #[error("CIP resource limit exceeded")]
     Limit,
+    #[error("CIP graph expansion reached the 100,000-node limit")]
+    Nodes,
     #[error("CIP bond {index} has unsupported noninteger order {order}")]
     BondOrder { index: usize, order: u8 },
     #[error(transparent)]
