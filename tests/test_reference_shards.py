@@ -84,6 +84,9 @@ class ReferenceShardTests(unittest.TestCase):
         changed = copy.deepcopy(valid)
         changed["packages"].append(copy.deepcopy(changed["packages"][0]))
         malformed.append(changed)
+        changed = copy.deepcopy(valid)
+        changed["packages"][1]["targets"] = [{"name": "new_helper_integration", "kind": ["test"]}]
+        malformed.append(changed)
         for data in malformed:
             with self.subTest(data=data), self.assertRaises(ValueError):
                 runner.integration_targets(data)
