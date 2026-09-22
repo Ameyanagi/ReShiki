@@ -23,3 +23,8 @@ The adaptation in src/chemistry/cdxml/scene/circles.rs follows the compensated
 float summation in Python/bltinmodule.c, builtin_sum_impl, from the same pinned
 CPython release. Together with the arrow norm specialization, it preserves the
 original aromatic-circle ownership thresholds without invoking Python.
+
+The adaptation in src/chemistry/cleanup/numeric.rs uses the same compensated
+float summation from Python/bltinmodule.c, builtin_sum_impl, to preserve
+selection cleanup orientation. Its norm calculations reuse the audited arrow
+specialization; neither operation includes or invokes the Python interpreter.

@@ -14,6 +14,7 @@
 //! separate. Unsupported queries and malformed fragments fail atomically.
 mod abbreviations;
 mod arrows;
+pub(crate) use arrows::native_hypot;
 mod association;
 pub mod bonds;
 pub mod graphics;

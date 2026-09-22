@@ -4,6 +4,19 @@
 use super::{Assignment, Candidates, Direction, Failure, Topology, Work, at, set};
 use std::collections::{HashMap, HashSet, VecDeque};
 
+// Kekulize.cpp's diagnostic uses the original global candidate bitset, not
+// the mutated copy consumed by each search or dummy-atom permutation.
+fn failed(candidates: &[bool]) -> Failure {
+    let mut message = String::from("Can't kekulize mol.  Unkekulized atoms:");
+    for (index, &eligible) in candidates.iter().enumerate() {
+        if eligible {
+            message.push(' ');
+            message.push_str(&index.to_string());
+        }
+    }
+    Failure::Chemical(message)
+}
+
 pub(super) fn fused(
     result: &mut Assignment,
     atoms: &[usize],
@@ -25,7 +38,7 @@ pub(super) fn fused(
     }
     let mut switches = vec![false; candidates.questions.len()];
     if switches.is_empty() {
-        return Err(Failure::Chemical("Could not assign Kekulé bonds".into()));
+        return Err(failed(&candidates.eligible));
     }
     set(&mut switches, 0, true)?;
     let atom_set = atoms.iter().copied().collect::<HashSet<_>>();
@@ -62,9 +75,7 @@ pub(super) fn fused(
             }
         }
         if carry {
-            return Err(Failure::Chemical(
-                "Could not assign Kekulé bonds after dummy permutations".into(),
-            ));
+            return Err(failed(&candidates.eligible));
         }
     }
 }

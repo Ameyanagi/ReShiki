@@ -236,6 +236,25 @@ fn build(document: &Document) -> Result<Input, Error> {
 /// Errors retain their stage/cause; the original document is never changed.
 pub fn prepare(document: &Document) -> Result<Molecule, Error> {
     let input = build(document)?;
+    prepare_input(document, input)
+}
+
+/// Cleanup retains native f64 drawing coordinates between reconstruction and
+/// its chemical/visible stereo checks. Do not narrow them through the canvas.
+pub(crate) fn prepare_at(document: &Document, positions: &[Point3]) -> Result<Molecule, Error> {
+    let mut input = build(document)?;
+    if positions.len() != input.positions.len()
+        || positions
+            .iter()
+            .any(|p| !p.x.is_finite() || !p.y.is_finite() || p.z != 0.0)
+    {
+        return Err(invalid("Invalid full-precision drawing coordinates"));
+    }
+    input.positions = positions.to_vec();
+    prepare_input(document, input)
+}
+
+fn prepare_input(document: &Document, input: Input) -> Result<Molecule, Error> {
     let sanitized = sanitize::sanitize(&input.graph, &input.metadata, &input.directions)?;
     for (requested, actual) in document.atoms.iter().zip(&sanitized.graph.atoms) {
         if requested.radical_electrons != 0
