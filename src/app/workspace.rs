@@ -829,7 +829,14 @@ impl App {
             (Tool::Bond(3), "Triple bond · 3"),
             (self.toolbar.bond, "Other bonds"),
             (self.toolbar.ring, "Rings · R / Aromatic · Shift+R"),
-            (self.toolbar.chain, "Chains · X / Shift+X"),
+            (
+                Tool::Chain(reshiki::chains::ChainMode::Straight),
+                "Straight chain · X",
+            ),
+            (
+                Tool::Chain(reshiki::chains::ChainMode::Snaking),
+                "Snaking chain · Shift+X",
+            ),
             (Tool::Arrow, "Reaction & electron-flow arrows · A"),
             (Tool::Text, "Text label · T"),
             (Tool::Erase, "Eraser · E · Drag to erase"),

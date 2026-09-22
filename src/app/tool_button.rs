@@ -179,8 +179,14 @@ mod tests {
         action.and_then(|a| a.into_inner().0)
     }
     #[test]
-    fn basic_bond_clicks_select_directly_even_at_the_corner() {
-        for tool in [Tool::Bond(1), Tool::Bond(2), Tool::Bond(3)] {
+    fn basic_bonds_and_chains_select_directly_even_at_the_corner() {
+        for tool in [
+            Tool::Bond(1),
+            Tool::Bond(2),
+            Tool::Bond(3),
+            Tool::Chain(reshiki::chains::ChainMode::Straight),
+            Tool::Chain(reshiki::chains::ChainMode::Snaking),
+        ] {
             let button = button(tool);
             let mut state = State::default();
             let cursor = mouse::Cursor::Available(Point::new(32., 32.));

@@ -258,16 +258,23 @@ impl Glyph {
                 }
             }
             Icon::Tool(Tool::Wavy) => {
-                let points: Vec<_> = (0..=32)
-                    .map(|i| {
-                        let t = i as f32 / 32.;
-                        (
-                            3. + 18. * t,
-                            12. + 3. * (t * std::f32::consts::TAU * 3.).sin(),
-                        )
-                    })
-                    .collect();
-                line(f, &points);
+                use reshiki::{document::Point as World, graphics::PathCommand};
+                let path = Path::new(|p| {
+                    for command in
+                        reshiki::bonds::wavy_path(World::new(3., 12.), World::new(21., 12.), 6., 3.)
+                    {
+                        match command {
+                            PathCommand::Move(a) => p.move_to(Point::new(a.x, a.y)),
+                            PathCommand::Cubic(a, b, c) => p.bezier_curve_to(
+                                Point::new(a.x, a.y),
+                                Point::new(b.x, b.y),
+                                Point::new(c.x, c.y),
+                            ),
+                            _ => {}
+                        }
+                    }
+                });
+                f.stroke(&path, Stroke::default().with_width(1.6).with_color(ink));
             }
             Icon::Tool(Tool::RingPreset(preset)) => {
                 let doc = preset.document(7., false);

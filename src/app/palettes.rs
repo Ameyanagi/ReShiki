@@ -23,7 +23,6 @@ pub enum Family {
     Rectangles,
     Ellipses,
     Brackets,
-    Chains,
     Symbols,
     Orbitals,
 }
@@ -73,7 +72,6 @@ impl GraphicOption {
 pub(super) struct Memory {
     pub bond: Tool,
     pub ring: Tool,
-    pub chain: Tool,
     pub rectangle: GraphicOption,
     pub ellipse: GraphicOption,
     pub bracket: GraphicOption,
@@ -85,7 +83,6 @@ impl Default for Memory {
         Self {
             bond: Tool::Wedge,
             ring: Tool::Ring,
-            chain: Tool::Chain(reshiki::chains::ChainMode::Straight),
             rectangle: GraphicOption::new(GraphicKind::Rectangle),
             ellipse: GraphicOption::new(GraphicKind::Ellipse),
             bracket: GraphicOption::new(GraphicKind::Brackets),
@@ -109,7 +106,6 @@ impl Memory {
         match family(tool) {
             Some(Family::Bonds) => self.bond = tool,
             Some(Family::Rings) => self.ring = tool,
-            Some(Family::Chains) => self.chain = tool,
             Some(Family::Symbols) => self.symbol = tool,
             Some(Family::Orbitals) => self.orbital = tool,
             Some(Family::Rectangles | Family::Ellipses | Family::Brackets) => {
@@ -132,7 +128,6 @@ pub fn family(tool: Tool) -> Option<Family> {
         Tool::Atom => Some(Family::Atoms),
         Tool::Ring | Tool::RingPreset(_) => Some(Family::Rings),
         Tool::Arrow => Some(Family::Arrows),
-        Tool::Chain(_) => Some(Family::Chains),
         Tool::Graphic(GraphicKind::Rectangle | GraphicKind::RoundedRectangle) => {
             Some(Family::Rectangles)
         }
@@ -274,7 +269,6 @@ impl App {
             Family::Rectangles => "Rectangles",
             Family::Ellipses => "Ellipses & circles",
             Family::Brackets => "Brackets",
-            Family::Chains => "Chains",
             Family::Symbols => "Chemical symbols",
             Family::Orbitals => "Orbitals",
         };
@@ -557,15 +551,8 @@ impl App {
                     .size(11),
                 );
             }
-            Family::Chains | Family::Symbols | Family::Orbitals => {
+            Family::Symbols | Family::Orbitals => {
                 let tools: Vec<Tool> = match family {
-                    Family::Chains => [
-                        reshiki::chains::ChainMode::Straight,
-                        reshiki::chains::ChainMode::Snaking,
-                    ]
-                    .into_iter()
-                    .map(Tool::Chain)
-                    .collect(),
                     Family::Symbols => reshiki::scientific::SymbolKind::ALL
                         .iter()
                         .map(|k| Tool::Graphic(GraphicKind::Symbol(*k)))
@@ -579,7 +566,6 @@ impl App {
                     let mut line = row![].spacing(8);
                     for &tool in choices {
                         let label = match tool {
-                            Tool::Chain(mode) => mode.to_string(),
                             Tool::Graphic(kind) => kind.to_string(),
                             _ => String::new(),
                         };
@@ -686,7 +672,6 @@ mod tests {
             Family::Ellipses,
             Family::Brackets,
             Family::Arrows,
-            Family::Chains,
             Family::Symbols,
             Family::Orbitals,
         ] {

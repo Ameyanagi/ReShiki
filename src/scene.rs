@@ -497,17 +497,19 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
                 }
             }
             "wavy" => {
-                let mut prev = start;
-                for i in 1..=32 {
-                    let t = i as f32 / 32.0;
-                    let offset = (t * std::f32::consts::TAU * 4.0).sin() * 2.0;
-                    let p = Point::new(
-                        start.x + (end.x - start.x) * t + nx * offset,
-                        start.y + (end.y - start.y) * t + ny * offset,
-                    );
-                    out.push(Primitive::Line(prev, p, style.line_width()));
-                    prev = p;
-                }
+                out.push(Primitive::Path {
+                    commands: crate::bonds::wavy_path(
+                        start,
+                        end,
+                        style.bond_length_world / 4.,
+                        style.line_width() * 1.25,
+                    ),
+                    style: crate::graphics::GraphicStyle {
+                        width_pt: style.line_width_pt,
+                        ..Default::default()
+                    },
+                    filled: false,
+                });
             }
             _ => {
                 let spacing = style.bond_length_world * style.bond_spacing_ratio;

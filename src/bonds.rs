@@ -2,6 +2,50 @@
 use crate::document::Bond;
 use serde::{Deserialize, Serialize};
 
+/// A continuous wave with smooth tangents, shared by the canvas, icons and exports.
+pub fn wavy_path(
+    start: crate::document::Point,
+    end: crate::document::Point,
+    wavelength: f32,
+    amplitude: f32,
+) -> Vec<crate::graphics::PathCommand> {
+    use crate::{document::Point, graphics::PathCommand};
+    let length = start.distance(end);
+    if length < 0.001 {
+        return vec![];
+    }
+    let cycles = (length / wavelength.max(0.001)).round().clamp(1., 64.) as u32;
+    let quarters = cycles * 4;
+    let step = length / quarters as f32;
+    let amplitude = amplitude.min(length / 6.);
+    let tangent = amplitude * std::f32::consts::FRAC_PI_2 / 3.;
+    let ux = (end.x - start.x) / length;
+    let uy = (end.y - start.y) / length;
+    let point = |x: f32, y: f32| Point::new(start.x + ux * x - uy * y, start.y + uy * x + ux * y);
+    let phase = |i: u32| match i % 4 {
+        0 => (0., tangent),
+        1 => (amplitude, 0.),
+        2 => (0., -tangent),
+        _ => (-amplitude, 0.),
+    };
+    let mut commands = vec![PathCommand::Move(start)];
+    for i in 0..quarters {
+        let (y0, d0) = phase(i);
+        let (y1, d1) = phase(i + 1);
+        let x = i as f32 * step;
+        commands.push(PathCommand::Cubic(
+            point(x + step / 3., y0 + d0),
+            point(x + step * 2. / 3., y1 - d1),
+            if i + 1 == quarters {
+                end
+            } else {
+                point(x + step, y1)
+            },
+        ));
+    }
+    commands
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DoublePosition {

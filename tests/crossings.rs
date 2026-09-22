@@ -66,3 +66,44 @@ fn connected_or_parallel_bonds_never_get_crossing_gaps() {
     doc.atoms[3].position = Point::new(30., 5.);
     assert!(crossings::gaps(&doc).iter().all(Vec::is_empty));
 }
+
+#[test]
+fn crossing_gaps_split_waves_without_flattening_or_changing_their_style() {
+    use reshiki::graphics::{PathCommand, flattened};
+    for reverse in [false, true] {
+        let mut doc = crossed();
+        doc.bonds[0].display = "wavy".into();
+        doc.bonds[0].color = [32, 80, 145];
+        if reverse {
+            doc.bonds[0].reverse();
+        }
+        let primitives = scene::primitives(&doc);
+        let paths: Vec<_> = primitives
+            .iter()
+            .filter_map(|p| {
+                if let Primitive::Path {
+                    commands, style, ..
+                } = p
+                {
+                    Some((commands, style))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        assert_eq!(paths.len(), 2);
+        for (commands, style) in paths {
+            assert_eq!(style.stroke, [32, 80, 145]);
+            assert!(commands.iter().any(|c| matches!(c, PathCommand::Cubic(..))));
+            assert!(flattened(commands).iter().flatten().all(|p| p.x.abs() > 3.));
+        }
+        doc.bonds[0].z_order = 1;
+        assert_eq!(
+            scene::primitives(&doc)
+                .iter()
+                .filter(|p| matches!(p, Primitive::Path { .. }))
+                .count(),
+            1
+        );
+    }
+}
