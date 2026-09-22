@@ -1,7 +1,9 @@
 //! Full CIP molecular preparation adapted from RDKit CIPMol.cpp/Mancude.cpp.
 //! Copyright (C) 2020 Schrödinger, LLC. BSD-3-Clause; see licenses/rdkit/.
 //! The labeling pass is separate; this adapter never edits the input state.
+pub mod configuration;
 pub mod digraph;
+pub mod label;
 mod mancude;
 pub mod rules;
 use super::perception::{RingCache, RingKind, State};

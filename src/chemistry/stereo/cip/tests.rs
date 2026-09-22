@@ -105,3 +105,42 @@ fn partial_bond_returns_a_typed_error_without_changing_the_input() -> anyhow::Re
     assert_eq!(serde_json::to_value(&input)?, before);
     Ok(())
 }
+
+#[test]
+fn complete_labeling_bounds_retained_graphs_and_selection_without_partial_edits()
+-> anyhow::Result<()> {
+    let mut state = chain(20_000)?;
+    let inner_count = state.metadata.atoms.len().saturating_sub(2);
+    for atom in state.metadata.atoms.iter_mut().skip(1).take(inner_count) {
+        atom.chiral_tag = 1;
+    }
+    for atom in &mut state.properties.atoms {
+        atom.cip_code = Some("old".into());
+    }
+    let before = serde_json::to_value(&state)?;
+    assert!(matches!(
+        label::assign(&state, &Default::default()),
+        Err(Error::Limit)
+    ));
+    assert_eq!(serde_json::to_value(&state)?, before);
+
+    let options = label::Options {
+        atoms: Some(vec![1; 300_001]),
+        ..Default::default()
+    };
+    assert!(matches!(label::assign(&state, &options), Err(Error::Limit)));
+    assert_eq!(serde_json::to_value(&state)?, before);
+    Ok(())
+}
+
+#[test]
+fn complete_labeling_without_centers_preserves_large_graph_and_uninitialized_rings()
+-> anyhow::Result<()> {
+    let state = chain(100_000)?;
+    let before = serde_json::to_value(&state)?;
+    let result = label::assign(&state, &Default::default())?;
+    assert!(result.labels.is_empty());
+    assert_eq!(serde_json::to_value(&result.state)?, before);
+    assert_eq!(serde_json::to_value(&state)?, before);
+    Ok(())
+}

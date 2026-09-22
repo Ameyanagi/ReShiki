@@ -34,6 +34,8 @@ pub enum Error {
     WedgeAssignment(String),
     #[error(transparent)]
     Smiles(#[from] super::smiles::write::Error),
+    #[error(transparent)]
+    Cip(#[from] stereo::cip::Error),
     #[error("Ring display would change the molecular identity")]
     IdentityChanged,
 }

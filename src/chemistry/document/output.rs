@@ -4,7 +4,7 @@ use super::{Error, Molecule, at, invalid};
 use crate::{
     chemistry::{
         ELEMENTS, RDKIT_VERSION, kekulize, ranking,
-        stereo::{perception::RingKind, wedging},
+        stereo::{cip::label, perception::RingKind, wedging},
     },
     document::{Atom, AtomStereo, Bond, Document, Point},
 };
@@ -42,6 +42,36 @@ pub struct Drawing {
 impl Drawing {
     pub fn molecule(&self) -> &Molecule {
         &self.molecule
+    }
+    /// Compute display labels from the prepared drawing. Clear legacy or stale
+    /// codes first; only the complete CIP pass may supply drawing labels.
+    pub fn labels(&self) -> Result<Labels, Error> {
+        let mut state = self.molecule.state.clone();
+        for atom in &mut state.properties.atoms {
+            atom.cip_code = None;
+        }
+        state.properties.bond_codes.fill(None);
+        let state = label::assign(&state, &Default::default())?.state;
+        Ok(Labels {
+            rdkit_version: RDKIT_VERSION.into(),
+            atoms: state
+                .properties
+                .atoms
+                .into_iter()
+                .map(|atom| atom.cip_code)
+                .collect(),
+            bonds: state
+                .metadata
+                .bonds
+                .into_iter()
+                .zip(state.properties.bond_codes)
+                .map(|(bond, code)| BondLabel {
+                    code,
+                    stereo: bond.stereo,
+                    stereo_atoms: bond.stereo_atoms,
+                })
+                .collect(),
+        })
     }
     /// Reaction layout uses full-precision file coordinates until every row is
     /// placed. Replace canvas positions before validating the finished drawing;

@@ -147,6 +147,31 @@ impl<'a> Digraph<'a> {
     pub fn edge_count(&self) -> usize {
         self.edges.len()
     }
+    /// Allocated graph storage in machine words, including spare capacity and
+    /// per-node edge vectors. Used to bound a labeling pass retaining many graphs.
+    pub(super) fn storage_units(&self) -> usize {
+        let bytes = self
+            .nodes
+            .capacity()
+            .saturating_mul(std::mem::size_of::<Node>())
+            .saturating_add(
+                self.edges
+                    .capacity()
+                    .saturating_mul(std::mem::size_of::<Edge>()),
+            )
+            .saturating_add(self.seen.capacity())
+            .saturating_add(self.visits.storage_bytes());
+        self.nodes
+            .iter()
+            .fold(bytes, |total, node| {
+                total.saturating_add(
+                    node.edges
+                        .capacity()
+                        .saturating_mul(std::mem::size_of::<usize>()),
+                )
+            })
+            .div_ceil(std::mem::size_of::<usize>())
+    }
     pub fn node(&self, id: usize) -> Result<&Node, Error> {
         at(&self.nodes, id)
     }

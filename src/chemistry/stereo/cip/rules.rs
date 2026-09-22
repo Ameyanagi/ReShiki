@@ -139,6 +139,10 @@ impl Rules {
             reference,
         })
     }
+    /// Native composite subrule count (standalone sequence rules have none).
+    pub fn num_subrules(&self) -> usize {
+        if self.combined { self.rules.len() } else { 0 }
+    }
     fn spec(&self, index: usize) -> Spec {
         Spec {
             index,

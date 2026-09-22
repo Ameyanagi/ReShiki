@@ -84,14 +84,21 @@ fn drawing_state_and_editable_document_match_native_reference() -> anyhow::Resul
                     expected,
                     "state",
                 );
-                let actual =
-                    draft.finish(case.labels.take().context("Missing native CIP labels")?)?;
+                let labels = draft.labels()?;
+                let label_difference = difference(
+                    &serde_json::to_value(&labels)?,
+                    &serde_json::to_value(
+                        case.labels.take().context("Missing native CIP labels")?,
+                    )?,
+                    "labels",
+                );
+                let actual = draft.finish(labels)?;
                 let doc = difference(
                     &serde_json::to_value(actual)?,
                     &serde_json::to_value(&case.document)?,
                     "document",
                 );
-                state.or(doc)
+                state.or(label_difference).or(doc)
             }
             (Err(_), None) => None,
             (Err(error), Some(_)) => Some(format!("Unexpected error: {error}")),

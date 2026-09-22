@@ -15,6 +15,11 @@ pub(super) struct Visits {
     levels: u32,
 }
 impl Visits {
+    pub(super) fn storage_bytes(&self) -> usize {
+        self.cells
+            .capacity()
+            .saturating_mul(std::mem::size_of::<Cell>())
+    }
     #[cfg(test)]
     pub(super) fn cells_len(&self) -> usize {
         self.cells.len()
