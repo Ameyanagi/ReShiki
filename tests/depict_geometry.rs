@@ -1,3 +1,6 @@
+#[path = "common/depict_linux.rs"]
+mod depict_linux;
+
 use anyhow::Context;
 use reshiki::chemistry::depict::geometry::{self, Coordinates, Error, MAX_POINTS, Point};
 use serde::Deserialize;
@@ -103,7 +106,8 @@ fn direct_native_geometry() -> anyhow::Result<()> {
     compare("depict-geometry-linux-native.json.gz", true)?;
     compare("depict-geometry-native.json.gz", false)?;
     compare("depict-geometry-windows-native.json.gz", false)?;
-    compare("depict-geometry-windows-no-fma3-native.json.gz", false)
+    compare("depict-geometry-windows-no-fma3-native.json.gz", false)?;
+    compare("depict-geometry-windows-server2022-native.json.gz", false)
 }
 
 fn compare(fixture: &str, source_order: bool) -> anyhow::Result<()> {
@@ -115,9 +119,10 @@ fn compare(fixture: &str, source_order: bool) -> anyhow::Result<()> {
     };
     let mut command = Command::new(python);
     command.arg(root.join("tests/depict_geometry_reference.py"));
-    command
-        .arg("--fixture")
-        .arg(root.join("tests/fixtures").join(fixture));
+    command.arg("--fixture").arg(
+        root.join("tests/fixtures")
+            .join(depict_linux::fixture(fixture)?),
+    );
     let live = source_order && std::env::var_os("RESHIKI_DEPICT_ORACLE").is_some();
     if live {
         command

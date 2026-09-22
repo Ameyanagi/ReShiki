@@ -1,0 +1,673 @@
+{
+  "run_url": "https://github.com/Ameyanagi/ReShiki/actions/runs/35709949046",
+  "job_id": 106687852231,
+  "revision": "8f1d8ff",
+  "result": {
+    "tests_passed": 28,
+    "stage_exact_scalars": 2382229,
+    "public_pipeline_cases": 2854,
+    "public_pipeline_exact_scalars": 130722
+  },
+  "capture": {
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "machine": "AMD64",
+    "processor": "AMD64 Family 25 Model 17 Stepping 1, AuthenticAMD",
+    "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+    "python_platform": "win-amd64",
+    "rdkit": "2026.03.6",
+    "source_commit": "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
+    "boost_archive_sha256": "7009fe1faa1697476bdc7027703a2badb84e849b7b0baad5086b087b971f8617",
+    "crt": {
+      "python": {
+        "profile": "uncaptured",
+        "module": "C:\\Windows\\System32\\ucrtbase.dll",
+        "module_sha256": "5e5ae0f8e4325ceb3ee767065dda6e03e980d401f00a2bdb8ca81ed90813920f",
+        "ring_bits": [
+          "3febb67ae8584cab",
+          "bfdffffffffffffc",
+          "bfebb67ae8584ca9",
+          "bfe0000000000004"
+        ],
+        "primitive_bits": [
+          "3ff29f25c111e686",
+          "3fed63011ebd161d",
+          "3fd954d5989f7ab7"
+        ],
+        "python_platform": "win-amd64",
+        "reference_version": "2026.03.6",
+        "forced_fma3": null,
+        "module_version": "10.0.20348.5622"
+      },
+      "native": {
+        "module": "C:\\Windows\\System32\\ucrtbase.dll",
+        "primitive_bits": [
+          "3ff29f25c111e686",
+          "3fed63011ebd161d",
+          "3fd954d5989f7ab7"
+        ],
+        "ring_bits": [
+          "3febb67ae8584cab",
+          "bfdffffffffffffc",
+          "bfebb67ae8584ca9",
+          "bfe0000000000004"
+        ],
+        "module_sha256": "5e5ae0f8e4325ceb3ee767065dda6e03e980d401f00a2bdb8ca81ed90813920f",
+        "module_version": "10.0.20348.5622",
+        "observer_sha256": "dc89ef37e74dd3c9b7acc6a9ef9992b5ac6dc48d64bca512090f816dbec71aaf",
+        "binary_sha256": "8195e19086cc20cfd5e1f3a5b73b0a4eb2e0335f1c44d13c4fe2e2cefebd3f5c",
+        "compiler_command": [
+          "cl",
+          "/nologo",
+          "/std:c++20",
+          "/O2",
+          "/MD",
+          "/EHsc",
+          "D:\\a\\ReShiki\\ReShiki\\tests\\depict_windows_crt_reference.cpp",
+          "/Fe:D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-live-windows\\crt-reference.exe",
+          "/FoD:\\a\\ReShiki\\ReShiki\\artifacts\\depict-live-windows\\"
+        ],
+        "compiler_log_sha256": "5afd82d0a83b4ba35c7ff5e340540f14e878c90000d2dbf787aa3f8dc27471cd"
+      }
+    },
+    "oracles": {
+      "geometry": "8c3c52d4dc3e72cd6cc231fa240c556d70b909ed91aa2afca4948bb58d8e9281",
+      "rings": "b7954fb5551f9b7379042d8c79942ebfcd0489f79dca2d78e20e30dbb63a8608",
+      "attachment": "684703029d097a5aa72d3d995ec97f275d5808dd3f07748658b2ac0cd9bea6cc",
+      "seeds": "9451fcc1ff54a4d044b6d7ec4cede67c93beb39fe8beded1874b5440ebb3b218",
+      "templates": "f4e1210b4621f31a7d10c2577e8d2a39e3d281b83183d6ead3feb5a329d32d48",
+      "collision": "b12a361f50662e52f6ddc243548a86df8d241637e75a302cbda06f23d6459599",
+      "expansion": "e42940b1036c22d468411d81ae6a0cbf75a2ba04ac36e8cd80828896002454bd",
+      "finalize": "af4af2e025455fde0689efa5d1d2e01e40aceaf9fe56d248900a3c98ea3ddb60"
+    },
+    "libraries": {
+      "boost_iostreams-51a65fc2f12e189e84bb5f48af6a1524.dll": "1a275c79a4cc11e77b10b75ddb1e7f5a4a7271a0d9c3c2365c4c34672ce57765",
+      "boost_numpy312-44688f1a7cbcc2b2fe7092096157f1f8.dll": "84fad226de5bb20bb698053dcadda2db50137d940297cf493adebd9b8e414750",
+      "boost_python312-c9fa49cbe30b61fbf9c32c9fa410641f.dll": "8ccb9fb10fe337aa1193ab489271cea7d0204ac9a7b6df320b045e1fd6a9d39a",
+      "boost_serialization-5c1879b18eef8d086e0cb0714df6f8c5.dll": "0d77d0a21a551f3bbf9d6e28a6239d72b7efe150e618e407c73157f16698f56d",
+      "brotlicommon-ded27a146033c551c39fad579219571d.dll": "ded27a146033c551c39fad579219571d304b2f3ecdce3cb1d17ea3db478eafa0",
+      "brotlidec-eaa92ebf4bc99605534fcc79a34b4ed6.dll": "dad0b09e24fb38de05d26903c3533d631a04a325204384b86bf58a15b5178b05",
+      "bz2-970e6c3564ce934524c8ecb884ae4060.dll": "970e6c3564ce934524c8ecb884ae4060c2e31293255eb4435889d87e8cdc78c7",
+      "cairo-2-f18b354434a9014ba865961f28627ab9.dll": "0fddce99445a083b5175efdd7d1ce96d576623df6b1378df195416a9ba36e746",
+      "fontconfig-1-32e2ddad879e5e40c0bf17764624afe1.dll": "38cbffdbc78370e8a334c1b5fbcbeec97acf2ec9eb905f308323a02fc523a3ab",
+      "freetype-a11770c84ea00b33ab8982a4930252cd.dll": "72a0bebd8ca070b961064661d907f434a3e1c715cc8baa8992b637115e0540e4",
+      "libexpat-f780183253d12513d3a818e26ec77d72.dll": "f780183253d12513d3a818e26ec77d728371d3bc0c9d46cc9ed0a9a25c8a2997",
+      "libpng16-73ac210347201793d4c445381c8089b2.dll": "1b2d95fd756a4bf2a3a87a744c280c58a0c2053281de3f240bfe9063a8fb000b",
+      "msvcp140-a4c2229bdc2a2a630acdc095b4d86008.dll": "a4c2229bdc2a2a630acdc095b4d86008e5c3e3bc7773174354f3da4f5beb9cde",
+      "pixman-1-0-65212304e6297f8735760b6e3f8dd4b1.dll": "65212304e6297f8735760b6e3f8dd4b13274d3323cc8e4ebca1e13cbc8daf552",
+      "RDKitAbbreviations-df3f4cb9d66c5d30b28f4861124af1d1.dll": "49cd07632525e018fcb31addab2ea14d7bac5284e406ec3f98947dd908b48f28",
+      "RDKitAlignment-7c8706b8a702293b6faa81c07ad9f2a4.dll": "8dd8d8c8653fe9e044a2456c4708d8b672261244105a29b8b86e71dff484cd48",
+      "RDKitavalon_clib-bbb7f163372e9b3aae8d07aa1544c5a8.dll": "bbb7f163372e9b3aae8d07aa1544c5a89c2d53e46b400153926e23efcd3a8d45",
+      "RDKitAvalonLib-36253048454d7d4ac6d820d6de3846e0.dll": "a91330bf38945c2544209ae351d016ccdae8c9bd6278cd3a786cebbe1e6d4133",
+      "RDKitCatalogs-78652edf4058d2932775e07b4cda5b09.dll": "d3ce9058c3766e66ce5fe68530778ad048d412e16e7040f287e06f723371f2fe",
+      "RDKitChemDraw-d2a85b089bafcaac86cfc03ff2962adc.dll": "efad21b98cac87fa97ea1ae9cdb7c82d142c3a0da2985c2a78fdfe40c818c05e",
+      "RDKitChemicalFeatures-862b90dc7d98605aa564a613665da310.dll": "11547f03c14b3fb03b4f31ed3b268a58af21a1d7c8d7f3a7de46b62cda21d78f",
+      "RDKitChemReactions-e4472f58560b824d3fa97dc94d464780.dll": "5924f2ae67ed27c7d9b15e5bb0bb7a5ef2c9e9ad1b9556eb5c5f009770b99e79",
+      "RDKitChemTransforms-bc3ab065bcf4a2556880e2722e8cb2ce.dll": "2867bcd3c28256cc4b5f991e9835fcfb4be792d29061d1b8f0ef35062484bb47",
+      "RDKitCIPLabeler-320968aced2fc0edb6d80fc428df195e.dll": "d2f9ff7381a472b704ba95ee5b244dc880e9da6dad7b2cae38098aafd2820678",
+      "RDKitcoordgen-113d07702ec73094bbc41c604b7379ae.dll": "19dd278b7cf88aacdd55617e715fe56022b51efb39a34bf8daa7ed7ddc613748",
+      "RDKitDataStructs-fa2a27125399b086c683a53efc0bb825.dll": "c7a991e4a35a9226e945e1a9fd8ae943f9fd4d749bc8a452771e1275da32034c",
+      "RDKitDepictor-19426461995069227f5ab91609668dc8.dll": "5da046343d199d646c95c776d7097137e836a44d9c1b6fad359ff9bb1ffd2d73",
+      "RDKitDeprotect-323db76bb4fc3ea7aaadb1f6160cd1c7.dll": "c6e4fc01e15be9308a10ce145f8c6f524a96fd1f86ad8e6f1ccb2d9d4dd12056",
+      "RDKitDescriptors-d340d145b4d30b08cbdfc3ef88e07c76.dll": "8987d4a49ba8a6a95daff6da8cf46db8482eebbcc4855604c9220e80e4a3cadd",
+      "RDKitDetermineBonds-ca671e9a0d015f58bb74caf87b3f9e87.dll": "927076e05ddbe8a0069ff0b5b272a6806225b53fd96b0aaaecf2a492d277bc7d",
+      "RDKitDistGeometry-467cb5b595e4a795d99f5d561c6f9de1.dll": "12972465beabb512821a0e157320dde1012f6bdbf7948bea51d2ab2f475774f3",
+      "RDKitDistGeomHelpers-b9f2f6cb30b36f504876da871aff03bb.dll": "075bdd8be01c22cdd8be6f286e44a422014d6cc5d1f95dc70542efb1152a572b",
+      "RDKitEHTLib-0c74a75dbd6ca1613329e93c7cd6af4a.dll": "51a055cddf5d758feba964efc52f040b4556b21c6c477fada934f0a6cc396e5b",
+      "RDKitEigenSolvers-903049090b91beaa091dbd0c9323ab43.dll": "0205fde326715c0ccf4ca2056da6b43ad746e1988e0a1c157272b5b7c9061890",
+      "RDKitEnumerateStereoisomers-af5b1d3650fc556e3cd1919e381b1532.dll": "42297d6faf57c8bb8834bb1cac557303e0daee2fc045f236f1f986b941b24365",
+      "RDKitFileParsers-1a1b4bf45de89ed5c3f56be8b2a86afb.dll": "1ae3e5d10877b132a539178ec9f9edf83c4089a3f7430c4d4e35307c1d9e2f80",
+      "RDKitFilterCatalog-a2aae65550ce9a6078d54cbb6fa2b420.dll": "7f128f4e03d8c1ca8c848e6110d2b793abab134f6cf3184de76f10c0512a805a",
+      "RDKitFingerprints-53cc082cfdbf75056362656ff4ba3ba4.dll": "e4d4b6e317bd12a0d2e3b949c20d8c944fd910dbe27e356948287336754228c6",
+      "RDKitFMCS-fad6e0ef0878c4599ff20fa757f8443e.dll": "636c56ed776c4d88fef539afb1ea6a5493c0e753bf07bf3a07773f624b61ed02",
+      "RDKitForceField-8d41480b497ca0eba1a02d31b1782138.dll": "4ab1d89d100bbe8bf78aed6727faf4fb66614f458735aff81ab48226985eb8a9",
+      "RDKitForceFieldHelpers-c79bb65a1e1e37df82710bdf892902b1.dll": "c156cffcabc897731b872b2d140c51aa7df1b3534f62029482ee44f9fb8b10ca",
+      "RDKitFragCatalog-984dd72ff2fbd01fe12f4d122f8df781.dll": "37d15810a5557ac36bd7d4ecb6845fb8acf67c52e1f339a4d5259304bbd4be49",
+      "RDKitfreesasa_clib-796edcf5d0e0423d8372188fe50a84f5.dll": "796edcf5d0e0423d8372188fe50a84f5aca48f8a02f8d2c714b33db9a85fe86b",
+      "RDKitFreeSASALib-dcdd0b52e56861be3e1178d6c67e4ef7.dll": "15d101ef1776cca8de59db90c7903820631f709431692f666e7442e72a183e8a",
+      "RDKitga-ad913f371a05270de6e8016e5f9def6f.dll": "a78dc36ae87df862308512c401498a9971108c22a4248c018be79ec8a30915bf",
+      "RDKitGaussianShape-e8ae59a969f49a22af1908e708c9e606.dll": "305f7fb3fad513c4eeea4378e75c645ef4760f95cc8a79b332d9d3d986acad6c",
+      "RDKitGeneralizedSubstruct-4990b28477f46f83d25dd41701846710.dll": "edabdac5f2e0d8915458fd57e81e5c4cb3bd4c23c0d6ef6e249fc43bce4380fb",
+      "RDKitGenericGroups-8468bd0db6cb7cd839cb81745b67fce7.dll": "b52fb9071627a5029124cf7ec45bdbd6729bb1d66ea669c1e9a6c7f2ff9d2cc7",
+      "RDKitGraphMol-7597846ebcec6406eb0f7996bcfc42fd.dll": "615b1e6e36ef6f7c6c05a562e86bfcdfd18b150cba7e3c2281a8e588d82b2ed1",
+      "RDKithc-0038583fa905a4439ea292ea7aff47bb.dll": "0038583fa905a4439ea292ea7aff47bb3370fa32b69bad3b94f431e40410aa2f",
+      "RDKitInchi-05f31cedf77aa9981bd10234637b0661.dll": "05f31cedf77aa9981bd10234637b0661edea5882cf3f0f67b0cdd2d16298c95e",
+      "RDKitInfoTheory-a303b3ba82452aac807540aa4020de18.dll": "184b7837992641118c70c7e8ba4868567f4fbf7da24f6bd3e7980ff1afbad863",
+      "RDKitmaeparser-528b4b1ee1504c86405e916f8bbb5fb8.dll": "eb99df0d6cff3e6a511a89456283485e0fb0233c9ec780e032f30bdf4b54a742",
+      "RDKitMarvinParser-2f480dea35e2927ea12448e82c0e7c93.dll": "cbacde5825aa934228426a25986671008cdf505984f6b1290c9cc7ee95295bc3",
+      "RDKitMMPA-3a536499cf7cc40373e6e4fa9edb31e2.dll": "7ebff8e6c9aa42e4d2a51a06201b01f88ec4c7a0e3151d539753a9fd85392c3a",
+      "RDKitMolAlign-ea3d534aa7f4a9ede9c20a90c3264ddb.dll": "3326f6ad84d7f5e21f1c98dda035d2a7f4e6fcaf23710412e6225d4cb32a50f1",
+      "RDKitMolCatalog-becfa356b7671703df0b4b1253dd6962.dll": "880c20c0a4f8a64ce6a6a6674f9c0ef85c021f7a4f57126c0d2759ea031290a9",
+      "RDKitMolChemicalFeatures-877fece5e56c1584630ae3d5aeac9b79.dll": "0536d5de745810aaaab49d19baa4eaf31c20e007d7390af51c143755334639e5",
+      "RDKitMolDraw2D-247b6d5142012018d12498a484e1216a.dll": "e9d2c4b57fe98f57827526ae4b376b01a5a3dd3455394a211892fd1c775006dc",
+      "RDKitMolEnumerator-f71574e412871b8ad9a9328dd9c2867f.dll": "13588ca4b1a81a8b1880c94dbfc99d189a9dc8391b69301c68e2efd88c39cdae",
+      "RDKitMolHash-c9d5b587d5b7141bf2d7ea6e1db46892.dll": "f76d0aae1a2654e8a0b42f50f4eb0dc472e0d07d740f01804660b6f88d4b910e",
+      "RDKitMolInteractionFields-817df655ca7bfa6137caaa0b5eb5db6d.dll": "49502eeb04df935b074da7caf2e32fa3ab6acd01f8f8c7b927100fac15ff51d8",
+      "RDKitMolInterchange-37f4d0d8a80bb67a276e394b7d00b777.dll": "4a3e4048fce8c66685827215d485567c79f2f9f05fa0190fcdda9700a7579845",
+      "RDKitMolProcessing-d43e7061a317b2e4bec34aa6e7b8e3d7.dll": "d5dc7683a6dc9ac5ce2032f173f16ea960a78c4d644683c2c08e9b34bc038555",
+      "RDKitMolStandardize-ed9a53c590950466ad6ae0a3cd0ed960.dll": "d0446f3d7bd9e0d7640323be13ace16496b476c1a3ed1bf919283c87c9548014",
+      "RDKitMolTransforms-2159643048d2e3545967bb8714f6645b.dll": "6b34c5a4e4ebfe02d5fcc6c976fe911b9071ec9cb76bf1c1a2319d42415969ef",
+      "RDKitO3AAlign-f5b2dc17abf66683213e5de2bd95fbe4.dll": "a743c971af4a8c7fff0ede17a83c6b7a664e2107e3e63c0b4827e7f8dfd6399b",
+      "RDKitPartialCharges-152609a5c493c345cb66c3862dc03178.dll": "b81fb264ac6f5d9c28a3da50dc0c57b251b0e2d314b9d1bd3d71030871f20b78",
+      "RDKitpubchem_align3d-272fa2caa3cf04c4083fa910983d360c.dll": "8eb4de848b9f443f5336f5c22354b1380935c58ae5ce624b0c7b13de66ffb13b",
+      "RDKitPubChemShape-4e74ba2d2b374849b6f22bbd3b3df8ac.dll": "a65026a620667c36b4c38fe6d96872f2ff2bfa98a9717987c5d26087f1ab49e8",
+      "RDKitRascalMCES-3259e4b3a27c61efbb3d471d91127418.dll": "827eb7942e5e767d2165063c0d205a438551411f02b3af0045c096c095fa6dab",
+      "RDKitRDBoost-b2832d69c373e7422fa12048fa609e94.dll": "75b3069c68e01f1c6eb88af4ed2f7b2e50bb774ff15aa6d76c83835d43fe213f",
+      "RDKitRDChemDrawLib-3b95b9de1bb94f117bd40aaa758a8f19.dll": "1a04a07937437fd05ed807550835b66a55d4c6bec79b2faebb29c7650fdae730",
+      "RDKitRDChemDrawReactionLib-740ded5d8117cf70b66eba57a1f3b2f9.dll": "2dd2ecde037d25f332ea3090e849e9d943fe40fa812612ade7a9f56d756638e8",
+      "RDKitRDGeneral-f732472631d75f08a1bb4f30a0eda7cd.dll": "2838baa523739c392f7b829f5ad53730f8b927d8a94079d6ed288424781d3054",
+      "RDKitRDGeometryLib-fd70de113a7b47f5663e758fe1c7b393.dll": "73580fa74e7642e2a5963f5a2010490c6e4d04793ae2ebfe79ca4ca694729eb5",
+      "RDKitRDInchiLib-bebffe6a6298d11fee5ee112feaf8893.dll": "6ed35a9a8378f5cb807e489172e1912bb3045a4607d26902129706b1017e9da3",
+      "RDKitRDStreams-ada499c4494f09ef0cd671b6086e9120.dll": "7f2fa287f40f152bb58064c94f77e98abdead9fa3a66bea78b7aff717e015717",
+      "RDKitReducedGraphs-66921a4ce85a2acd618b9c9015e4c47b.dll": "cb48d86553626f0c4f98157d316eb27dd60f78c45d4819fc75527c0042f44256",
+      "RDKitRGroupDecomposition-2249c35ac4a02f434aa0dbd1551ed9be.dll": "f65fe3e5ae32a9110b7ad1752309113e6695dfd1ad11e8a43bb6d42e29408f82",
+      "RDKitRingDecomposerLib-cfd5941d38400c8fa19e7ca6f161b392.dll": "cfd5941d38400c8fa19e7ca6f161b39266b1b23d35f8d282f6a525be01eaf8a2",
+      "RDKitScaffoldNetwork-37c022321ecfe797f0ab5eed015e9f42.dll": "0c91c88e716c6fd1291b0eb2f46db8d75427927a94e7d27252b4d3ba12daf38d",
+      "RDKitShapeHelpers-9c6cc46ac7999f0308df2c10b2bd0103.dll": "aacadea3d10786365d203e88222cc8d1fd3ef9368c9b55088991eedfc48cb723",
+      "RDKitSimDivPickers-faaa16ca765b15e0efd9ba580972845b.dll": "a8c45f650e2504a3c588f958c9415a62f217e9711a3123d1494e73d0f6cb5c47",
+      "RDKitSLNParse-a804f665b3a5de743213e69e5b78d1ad.dll": "eb6e26031b37b643b52259907b55a6cfe3068612145b7f8ba269e4d6a61b1395",
+      "RDKitSmilesParse-bb8b529fb2b39fa0a31c009e8729c497.dll": "ed26367edf6c65cdd68a076b8d83e38a47b3c0bf3e533667c7d05e7ac2c9a5e9",
+      "RDKitSubgraphs-c17faca0dcbfbbb3ab07eb7d611ade63.dll": "8ff14128374b931aa2cbbd2f2d77b62caee95e5af7cd2bc27d1ec1a02336ca92",
+      "RDKitSubstructLibrary-5dfea5a7209e851a01688b81ed6df9b4.dll": "e6ce8894b529529b88a4c6063fcc3eb84ba303a6047ebdfccad12491b459c5e7",
+      "RDKitSubstructMatch-56c586da006c8d641fad05c7638011f5.dll": "5cc6d5c516113e36ecdc10f711ea0aa133b70771aeefb9b1bdef38c3eb33f457",
+      "RDKitSynthonSpaceSearch-627ca4812c9605d980837644f721947f.dll": "3a21c9294663a35c3a0117109f8a2002326fc92f1c4ce6dcca8c918e3afe1c23",
+      "RDKitTautomerQuery-f12fee95f8320d166583cd90c3869cc4.dll": "a9469f2bd5f061137507870bef73f2aae4817b72f3ec194a342854f61202e31d",
+      "RDKitTrajectory-405121e6f8514bb4166d2659474ad7b0.dll": "68a8f19110303c151f8178962139723d1defffad543764e3242e0ed552d15881",
+      "z-3f01f29ee9efad3bbec93ca402550644.dll": "3f01f29ee9efad3bbec93ca4025506443bb71e5fd62f8a0834a1509a17386fe5"
+    },
+    "environment": {
+      "RESHIKI_RDKIT_SOURCE": "D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-live-windows\\rdkit",
+      "DEPICT_EXPANSION_SOURCE": "D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-live-windows\\rdkit",
+      "PATH": "D:\\a\\ReShiki\\ReShiki\\.venv\\Lib\\site-packages\\rdkit.libs;D:\\a\\ReShiki\\ReShiki\\.venv\\Scripts;C:\\Program Files\\PowerShell\\7;D:\\a\\_temp\\uv-python-dir;C:\\hostedtoolcache\\windows\\uv\\0.12.3\\x86_64;D:\\a\\_temp\\uv-tool-bin-dir;C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64;C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\Common7\\IDE\\VC\\VCPackages;C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\Common7\\IDE\\CommonExtensions\\Microsoft\\TestWindow;C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\Common7\\IDE\\CommonExtensions\\Microsoft\\TeamFoundation\\Team Explorer;C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\MSBuild\\Current\\bin\\Roslyn;C:\\Program Files (x86)\\Microsoft SDKs\\Windows\\v10.0A\\bin\\NETFX 4.8 Tools\\x64\\;C:\\Program Files (x86)\\HTML Help Workshop;C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\Common7\\IDE\\CommonExtensions\\Microsoft\\FSharp\\Tools;C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\Team Tools\\DiagnosticsHub\\Collector;C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\Common7\\IDE\\Extensions\\Microsoft\\CodeCoverage.Console;C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Tools\\Llvm\\x64\\bin;C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.26100.0\\\\x64;C:\\Program Files (x86)\\Windows Kits\\10\\bin\\\\x64;C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\\\MSBuild\\Current\\Bin\\amd64;C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319;C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\Common7\\IDE\\;C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\Common7\\Tools\\;D:\\a\\_temp\\uv-python-dir;C:\\hostedtoolcache\\windows\\uv\\0.12.3\\x86_64;D:\\a\\_temp\\uv-tool-bin-dir;C:\\Program Files\\MongoDB\\Server\\7.0\\bin;C:\\aliyun-cli;C:\\vcpkg;C:\\Program Files (x86)\\NSIS\\;C:\\tools\\zstd;C:\\Program Files\\Mercurial\\;C:\\hostedtoolcache\\windows\\stack\\3.11.1\\x64;C:\\cabal\\bin;C:\\\\ghcup\\bin;C:\\mingw64\\bin;C:\\Program Files\\dotnet;C:\\Program Files\\MySQL\\MySQL Server 8.0\\bin;C:\\Program Files\\R\\R-4.6.1\\bin\\x64;C:\\SeleniumWebDrivers\\GeckoDriver;C:\\SeleniumWebDrivers\\EdgeDriver\\;C:\\SeleniumWebDrivers\\ChromeDriver;C:\\Program Files (x86)\\sbt\\bin;C:\\Program Files (x86)\\GitHub CLI;C:\\Program Files\\Git\\bin;C:\\Program Files (x86)\\pipx_bin;C:\\npm\\prefix;C:\\hostedtoolcache\\windows\\go\\1.24.13\\x64\\bin;C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64\\Scripts;C:\\hostedtoolcache\\windows\\Python\\3.12.10\\x64;C:\\hostedtoolcache\\windows\\Ruby\\3.3.12\\x64\\bin;C:\\Program Files\\OpenSSL\\bin;C:\\tools\\kotlinc\\bin;C:\\hostedtoolcache\\windows\\Java_Temurin-Hotspot_jdk\\8.0.504-1\\x64\\bin;C:\\Program Files\\ImageMagick-7.1.2-Q16-HDRI;C:\\Program Files\\Microsoft SDKs\\Azure\\CLI2\\wbin;C:\\ProgramData\\kind;C:\\ProgramData\\Chocolatey\\bin;C:\\Windows\\system32;C:\\Windows;C:\\Windows\\System32\\Wbem;C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\;C:\\Windows\\System32\\OpenSSH\\;C:\\Program Files\\dotnet\\;C:\\Program Files\\PowerShell\\7\\;C:\\Program Files\\Microsoft\\Web Platform Installer\\;C:\\Program Files\\TortoiseSVN\\bin;C:\\Program Files\\Microsoft SQL Server\\Client SDK\\ODBC\\170\\Tools\\Binn\\;C:\\Program Files\\Microsoft SQL Server\\150\\Tools\\Binn\\;C:\\Program Files (x86)\\Windows Kits\\10\\Windows Performance Toolkit\\;C:\\Program Files (x86)\\WiX Toolset v3.14\\bin;C:\\Program Files\\Microsoft SQL Server\\130\\DTS\\Binn\\;C:\\Program Files\\Microsoft SQL Server\\140\\DTS\\Binn\\;C:\\Program Files\\Microsoft SQL Server\\150\\DTS\\Binn\\;C:\\Program Files\\Microsoft SQL Server\\160\\DTS\\Binn\\;C:\\Program Files\\Microsoft SQL Server\\170\\DTS\\Binn\\;C:\\Strawberry\\c\\bin;C:\\Strawberry\\perl\\site\\bin;C:\\Strawberry\\perl\\bin;C:\\ProgramData\\chocolatey\\lib\\pulumi\\tools\\Pulumi\\bin;C:\\Program Files\\CMake\\bin;C:\\ProgramData\\chocolatey\\lib\\maven\\apache-maven-3.9.16\\bin;C:\\Program Files\\Microsoft Service Fabric\\bin\\Fabric\\Fabric.Code;C:\\Program Files\\Microsoft SDKs\\Service Fabric\\Tools\\ServiceFabricLocalClusterManager;C:\\Program Files\\nodejs\\;C:\\Program Files\\Git\\cmd;C:\\Program Files\\Git\\mingw64\\bin;C:\\Program Files\\Git\\usr\\bin;C:\\Program Files\\GitHub CLI\\;c:\\tools\\php;C:\\Program Files\\Amazon\\AWSCLIV2\\;C:\\Program Files\\Amazon\\SessionManagerPlugin\\bin\\;C:\\Program Files\\Amazon\\AWSSAMCLI\\bin\\;C:\\Program Files\\Microsoft SQL Server\\130\\Tools\\Binn\\;C:\\Program Files\\mongosh\\;C:\\Program Files\\LLVM\\bin;C:\\Program Files (x86)\\LLVM\\bin;C:\\Users\\runneradmin\\.dotnet\\tools;C:\\Users\\runneradmin\\.cargo\\bin;C:\\Users\\runneradmin\\AppData\\Local\\Microsoft\\WindowsApps;C:\\Program Files (x86)\\Microsoft Visual Studio\\Installer;C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\Common7\\IDE\\CommonExtensions\\Microsoft\\CMake\\CMake\\bin;C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\Common7\\IDE\\CommonExtensions\\Microsoft\\CMake\\Ninja;C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\Common7\\IDE\\VC\\Linux\\bin\\ConnectionManagerExe;C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\vcpkg",
+      "RESHIKI_DEPICT_ORACLE": "D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-windows-geometry\\oracle.exe",
+      "RESHIKI_DEPICT_RINGS_ORACLE": "D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-windows-rings\\oracle.exe",
+      "RESHIKI_DEPICT_ATTACHMENT_ORACLE": "D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-windows-attachment\\oracle.exe",
+      "RESHIKI_DEPICT_SEEDS_ORACLE": "D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-windows-seeds\\oracle.exe",
+      "RESHIKI_DEPICT_TEMPLATES_ORACLE": "D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-windows-templates\\oracle.exe",
+      "RESHIKI_DEPICT_COLLISION_ORACLE": "D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-collision-oracle.exe",
+      "DEPICT_EXPANSION_ORACLE": "D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-windows-expansion\\oracle.exe",
+      "RESHIKI_DEPICT_FINALIZE_ORACLE": "D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-finalize-oracle\\oracle.exe"
+    }
+  },
+  "stages": {
+    "geometry": {
+      "fixture": "depict-geometry-windows-server2022-native.json.gz",
+      "reuses_existing_rows": false,
+      "cases": 5310,
+      "captured_sha256": "be28426bf91b2ca4baf9452a8eca36ff5cd7e8ad503cb8908ec857c4c901ffa2",
+      "captured_jsonl_sha256": "abd59f98dda5f8ea44c724db2494f3b7e048d667096fdaed9e9ec8d7f0036f2f",
+      "captured_rows_sha256": "7eb2b6aa0438d8a48d7826dcaf5d34d0098d7c5f9c80eaa521dbfd88f1edf9ca",
+      "fixture_sha256": "be28426bf91b2ca4baf9452a8eca36ff5cd7e8ad503cb8908ec857c4c901ffa2"
+    },
+    "rings": {
+      "fixture": "depict-rings-windows-server2022-native.json.gz",
+      "reuses_existing_rows": false,
+      "cases": 1338,
+      "captured_sha256": "24e2ad9e6e82fd437252d283849c820368ac915414e54ad25108e2f02b387b09",
+      "captured_jsonl_sha256": "0e6295ed3066d9038a09b3a6c59814c1ad6f9ec78f9396a87ef2c7a4de8dab50",
+      "captured_rows_sha256": "6c1683baba7271d8da21eafef2e99d0a00a7467366947cebdccd13d630fa681a",
+      "fixture_sha256": "24e2ad9e6e82fd437252d283849c820368ac915414e54ad25108e2f02b387b09"
+    },
+    "attachment": {
+      "fixture": "depict-attachment-windows-native.json.gz",
+      "reuses_existing_rows": true,
+      "cases": 970,
+      "captured_sha256": "e4a7435c90c1b0d2a51c4da7a38cb6e8454f2a03debdd7ebab1a7a578fa81df6",
+      "captured_jsonl_sha256": "aba55fa6dc2bc52bb20364925741057df5a2794644217bc1e444c9d354bcffce",
+      "captured_rows_sha256": "d9ccee2c728948931b1d6781ae72f2a32cb957123f421b4ca93aadca5af09571",
+      "fixture_sha256": "6b859b518551339ea0902c874b3397395a40ad60961048e6bc24f0dea2d52ca7",
+      "capture_provenance": {
+        "version": "2026.03.6",
+        "commit": "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
+        "source_sha256": {
+          "Code/GraphMol/Depictor/DepictUtils.cpp": "ba3868f339635889b1533fc6a706a5a1d8f6739846e1e25e66e7efa0617eddd5",
+          "Code/GraphMol/Depictor/DepictUtils.h": "0e29dd5bcb355ef24c0d2b442ab4af0fc78b435cca1acdde795352bf4273ec45",
+          "Code/GraphMol/Depictor/EmbeddedFrag.cpp": "a3c55426a09deb23443e53cb2b59b4056e9d312b8fdb1c749da5033bc5a1eb33",
+          "Code/GraphMol/Depictor/EmbeddedFrag.h": "a45692bbffd2dff60aa608565dc98d366a2aae7cfb75eeb372f1cf35a8f3f0f4",
+          "Code/RDGeneral/types.cpp": "401941b91e556787e671febb3a99e1b43e43b1674235e0acccb91306f469e1b9",
+          "Code/RDGeneral/types.h": "9a5715aa09ec01b989082ef6d7305191ee344a8a3960c81625ffe6e9d00ef4f1",
+          "Code/Numerics/SquareMatrix.h": "188f0a833400b055fa14cb399def70134459e5c1084765d210825f4ee86c2133",
+          "Code/Geometry/Transform2D.cpp": "c8cf18d72544c276836d74a17312b7d425ed2cbeed67409ca09fe9b5c80d1a4f",
+          "Code/Geometry/point.h": "aa985364528748f3c94b0e0f969fe63cbeb2b830e93df26c5b22f8cee8bfb393"
+        },
+        "library_sha256": {
+          "RDKitDepictor-19426461995069227f5ab91609668dc8.dll": "5da046343d199d646c95c776d7097137e836a44d9c1b6fad359ff9bb1ffd2d73",
+          "RDKitGraphMol-7597846ebcec6406eb0f7996bcfc42fd.dll": "615b1e6e36ef6f7c6c05a562e86bfcdfd18b150cba7e3c2281a8e588d82b2ed1",
+          "RDKitRDGeometryLib-fd70de113a7b47f5663e758fe1c7b393.dll": "73580fa74e7642e2a5963f5a2010490c6e4d04793ae2ebfe79ca4ca694729eb5",
+          "RDKitRDGeneral-f732472631d75f08a1bb4f30a0eda7cd.dll": "2838baa523739c392f7b829f5ad53730f8b927d8a94079d6ed288424781d3054"
+        },
+        "platform": "Windows-2022Server-10.0.20348-SP0",
+        "oracle_sha256": "684703029d097a5aa72d3d995ec97f275d5808dd3f07748658b2ac0cd9bea6cc",
+        "cases": 970,
+        "templates": false,
+        "observation_patch": "EmbeddedFrag.h: replace the single private: line with public:",
+        "observation_header_sha256": "bf49eb06e2296abcf79f215ebb147930344171b565386835fc6dc3ec701dc7a2",
+        "native_build": {
+          "compiler_command": [
+            "cl",
+            "/nologo",
+            "/Bv",
+            "/std:c++20",
+            "/O2",
+            "/MD",
+            "/EHsc",
+            "/DWIN32",
+            "/DBOOST_ALL_NO_LIB",
+            "/utf-8",
+            "/ID:\\a\\ReShiki\\ReShiki\\artifacts\\depict-windows-attachment\\observation",
+            "/ID:\\a\\ReShiki\\ReShiki\\artifacts\\depict-windows-attachment\\generated",
+            "/ID:\\a\\ReShiki\\ReShiki\\artifacts\\depict-live-windows\\rdkit\\Code",
+            "/ID:\\a\\ReShiki\\ReShiki\\artifacts\\depict-live-windows\\rdkit\\Code\\GraphMol\\Depictor",
+            "/ID:\\a\\ReShiki\\ReShiki\\artifacts\\depict-live-windows\\boost185-_u6r_r6x",
+            "D:\\a\\ReShiki\\ReShiki\\tests\\depict_attachment_reference.cpp",
+            "D:\\a\\ReShiki\\ReShiki\\tests\\depict_windows_runtime.cpp",
+            "D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-windows-attachment\\Depictor.lib",
+            "D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-windows-attachment\\GraphMol.lib",
+            "D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-windows-attachment\\RDGeometryLib.lib",
+            "D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-windows-attachment\\RDGeneral.lib",
+            "/Fe:D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-windows-attachment\\oracle.exe",
+            "/FoD:\\a\\ReShiki\\ReShiki\\artifacts\\depict-windows-attachment\\"
+          ],
+          "compiler_log_sha256": "04ff2a045b5cb5bd039fbfc6cede3df6e93a7e7ef1454936e659e3c14e0fbae1",
+          "boost_version": "1_85",
+          "boost_version_header_sha256": "063ed28eceb611d52f58e57aca61edb1e086ed902fbded81ac61936009c52cf0",
+          "reference_sha256": "8621eb1999a97623e02136ebb4d057a3ad68b8da1addabfd869b36ca392fcca9",
+          "export_header_sha256": "cd92c47fa237576fdce827e0a599cda181f641af693ab736b2201bfbcf94cf45",
+          "source_adapter": null,
+          "observation_sha256": {
+            "GraphMol/Depictor/EmbeddedFrag.h": "bf49eb06e2296abcf79f215ebb147930344171b565386835fc6dc3ec701dc7a2"
+          },
+          "runtime": "/MD, x64 MSVC and the pinned x64 wheel",
+          "geometry_fma3": null,
+          "fma3": null,
+          "runtime_initializer_sha256": "01a514ab81ac36ab498fe71a1e812e49e66735e43d444c6430f7bc215920b3cd",
+          "ucrt_sha256": "5e5ae0f8e4325ceb3ee767065dda6e03e980d401f00a2bdb8ca81ed90813920f"
+        }
+      }
+    },
+    "seeds": {
+      "fixture": "depict-seeds-windows-native.json.gz",
+      "reuses_existing_rows": true,
+      "cases": 991,
+      "captured_sha256": "7b4ad3bcd7962a1ec97985e6e4698677c18ffa759461f23a778f49c536f89ce2",
+      "captured_jsonl_sha256": "a84c55172fe54052f56806cd0f4699767ca1f2160ca950ec14a9cfc4c858f2af",
+      "captured_rows_sha256": "b8e4404ed33564bc8bab1e33f845a5a550aa47115f6c5edd507c94f6d1be68d4",
+      "fixture_sha256": "c9d05d51f96af38d6bdf5bc5dd058012a4e5aec4eb956e699c11792e13539b93",
+      "capture_provenance": {
+        "version": "2026.03.6",
+        "commit": "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
+        "source_sha256": {
+          "Code/GraphMol/Depictor/DepictUtils.cpp": "ba3868f339635889b1533fc6a706a5a1d8f6739846e1e25e66e7efa0617eddd5",
+          "Code/GraphMol/Depictor/RDDepictor.cpp": "f1ae9e705405d5254575c595c09c5d2ee240d4d2abf05209dd42dad5ae99b31f",
+          "Code/GraphMol/NontetrahedralStereo.cpp": "cbc6e41125c88e0fc532d167a03bc2850f00cd60ea3c3cfa20321ca26f89f86a",
+          "Code/GraphMol/Depictor/DepictUtils.h": "0e29dd5bcb355ef24c0d2b442ab4af0fc78b435cca1acdde795352bf4273ec45",
+          "Code/GraphMol/Depictor/EmbeddedFrag.cpp": "a3c55426a09deb23443e53cb2b59b4056e9d312b8fdb1c749da5033bc5a1eb33",
+          "Code/GraphMol/Depictor/EmbeddedFrag.h": "a45692bbffd2dff60aa608565dc98d366a2aae7cfb75eeb372f1cf35a8f3f0f4",
+          "Code/RDGeneral/types.cpp": "401941b91e556787e671febb3a99e1b43e43b1674235e0acccb91306f469e1b9",
+          "Code/RDGeneral/types.h": "9a5715aa09ec01b989082ef6d7305191ee344a8a3960c81625ffe6e9d00ef4f1",
+          "Code/Numerics/SquareMatrix.h": "188f0a833400b055fa14cb399def70134459e5c1084765d210825f4ee86c2133",
+          "Code/Geometry/Transform2D.cpp": "c8cf18d72544c276836d74a17312b7d425ed2cbeed67409ca09fe9b5c80d1a4f",
+          "Code/Geometry/point.h": "aa985364528748f3c94b0e0f969fe63cbeb2b830e93df26c5b22f8cee8bfb393"
+        },
+        "library_sha256": {
+          "RDKitDepictor-19426461995069227f5ab91609668dc8.dll": "5da046343d199d646c95c776d7097137e836a44d9c1b6fad359ff9bb1ffd2d73",
+          "RDKitGraphMol-7597846ebcec6406eb0f7996bcfc42fd.dll": "615b1e6e36ef6f7c6c05a562e86bfcdfd18b150cba7e3c2281a8e588d82b2ed1",
+          "RDKitRDGeometryLib-fd70de113a7b47f5663e758fe1c7b393.dll": "73580fa74e7642e2a5963f5a2010490c6e4d04793ae2ebfe79ca4ca694729eb5",
+          "RDKitRDGeneral-f732472631d75f08a1bb4f30a0eda7cd.dll": "2838baa523739c392f7b829f5ad53730f8b927d8a94079d6ed288424781d3054"
+        },
+        "platform": "Windows-2022Server-10.0.20348-SP0",
+        "oracle_sha256": "9451fcc1ff54a4d044b6d7ec4cede67c93beb39fe8beded1874b5440ebb3b218",
+        "cases": 991,
+        "templates": false,
+        "observation_patch": "EmbeddedFrag.h: replace the single private: line with public:",
+        "observation_header_sha256": "bf49eb06e2296abcf79f215ebb147930344171b565386835fc6dc3ec701dc7a2",
+        "native_build": {
+          "compiler_command": [
+            "cl",
+            "/nologo",
+            "/Bv",
+            "/std:c++20",
+            "/O2",
+            "/MD",
+            "/EHsc",
+            "/DWIN32",
+            "/DBOOST_ALL_NO_LIB",
+            "/utf-8",
+            "/ID:\\a\\ReShiki\\ReShiki\\artifacts\\depict-windows-seeds\\observation",
+            "/ID:\\a\\ReShiki\\ReShiki\\artifacts\\depict-windows-seeds\\generated",
+            "/ID:\\a\\ReShiki\\ReShiki\\artifacts\\depict-live-windows\\rdkit\\Code",
+            "/ID:\\a\\ReShiki\\ReShiki\\artifacts\\depict-live-windows\\rdkit\\Code\\GraphMol\\Depictor",
+            "/ID:\\a\\ReShiki\\ReShiki\\artifacts\\depict-live-windows\\boost185-_u6r_r6x",
+            "D:\\a\\ReShiki\\ReShiki\\tests\\depict_seeds_reference.cpp",
+            "D:\\a\\ReShiki\\ReShiki\\tests\\depict_windows_runtime.cpp",
+            "D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-windows-seeds\\seed_source.cpp",
+            "D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-windows-seeds\\Depictor.lib",
+            "D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-windows-seeds\\GraphMol.lib",
+            "D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-windows-seeds\\RDGeometryLib.lib",
+            "D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-windows-seeds\\RDGeneral.lib",
+            "/Fe:D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-windows-seeds\\oracle.exe",
+            "/FoD:\\a\\ReShiki\\ReShiki\\artifacts\\depict-windows-seeds\\"
+          ],
+          "compiler_log_sha256": "42ce43c8c7cc697df5a2831094ff8db909e7272402607ed1e632438660c45354",
+          "boost_version": "1_85",
+          "boost_version_header_sha256": "063ed28eceb611d52f58e57aca61edb1e086ed902fbded81ac61936009c52cf0",
+          "reference_sha256": "c0c4564b5776fba615698de96cf6b394e057d0a3c64eba98e254567f3657e4e7",
+          "export_header_sha256": "cd92c47fa237576fdce827e0a599cda181f641af693ab736b2201bfbcf94cf45",
+          "source_adapter": {
+            "source": "Code/GraphMol/Depictor/RDDepictor.cpp",
+            "source_sha256": "f1ae9e705405d5254575c595c09c5d2ee240d4d2abf05209dd42dad5ae99b31f",
+            "byte_range": [
+              1068,
+              7003
+            ],
+            "verbatim_body_sha256": "0be8a251293bea662453dbd671d7dc1ca39b5b0b2fc12f2cced897821b5e3f39",
+            "generated_sha256": "37dab5b6ea2a26e86b3e054c580979135ed282bc50e001288f67143a7fcca9c3",
+            "functions": [
+              "getRankedAtomNeighbors",
+              "embedSquarePlanar",
+              "embedTBP",
+              "embedOctahedral"
+            ]
+          },
+          "observation_sha256": {
+            "GraphMol/Depictor/EmbeddedFrag.h": "bf49eb06e2296abcf79f215ebb147930344171b565386835fc6dc3ec701dc7a2"
+          },
+          "runtime": "/MD, x64 MSVC and the pinned x64 wheel",
+          "geometry_fma3": null,
+          "fma3": null,
+          "runtime_initializer_sha256": "01a514ab81ac36ab498fe71a1e812e49e66735e43d444c6430f7bc215920b3cd",
+          "ucrt_sha256": "5e5ae0f8e4325ceb3ee767065dda6e03e980d401f00a2bdb8ca81ed90813920f"
+        }
+      }
+    },
+    "templates": {
+      "fixture": "depict-templates-windows-server2022-native.json.gz",
+      "reuses_existing_rows": false,
+      "cases": 1921,
+      "captured_sha256": "c68e2a807a8731499c210b3a8786e2dd0642b987b3e651a26de673b7d84ed5ba",
+      "captured_jsonl_sha256": "3a2c96e78b98d1550a89ae926c58ec5eb6f61e2d16c8b0adabf70b21088d422b",
+      "captured_rows_sha256": "664b80bb73a62556b151a0148182d5a835f587cd94df4d7d100e0fe787b4b73e",
+      "fixture_sha256": "c68e2a807a8731499c210b3a8786e2dd0642b987b3e651a26de673b7d84ed5ba"
+    },
+    "collision": {
+      "fixture": "depict-collision-windows-native.json.gz",
+      "reuses_existing_rows": true,
+      "cases": 1634,
+      "captured_sha256": "8da9fc63bc682059624a44109e9f390208e7cfbecd7f59fae64c5c39c3657658",
+      "captured_jsonl_sha256": "4804af13cae54c45fca684f7ad5fa2dc265fef3bc6812c6045707c0bb5bea88a",
+      "captured_rows_sha256": "dc6672c69408a99c7f437a4966841ecbc42daa24c64d4ea15b98754c5b15aff8",
+      "fixture_sha256": "ac73fc2a1d43149d35a33faddc31710f9e0544ab45c237a4f5296970e9d02ffc",
+      "capture_provenance": {
+        "version": "2026.03.6",
+        "commit": "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
+        "source_sha256": {
+          "Code/GraphMol/Depictor/EmbeddedFrag.cpp": "a3c55426a09deb23443e53cb2b59b4056e9d312b8fdb1c749da5033bc5a1eb33",
+          "Code/GraphMol/Depictor/EmbeddedFrag.h": "a45692bbffd2dff60aa608565dc98d366a2aae7cfb75eeb372f1cf35a8f3f0f4",
+          "Code/GraphMol/Depictor/DepictUtils.cpp": "ba3868f339635889b1533fc6a706a5a1d8f6739846e1e25e66e7efa0617eddd5",
+          "Code/GraphMol/Depictor/DepictUtils.h": "0e29dd5bcb355ef24c0d2b442ab4af0fc78b435cca1acdde795352bf4273ec45",
+          "Code/GraphMol/Matrices.cpp": "fd69c704c084f7e9fd8c2279024f94e9421338bcf556ca45a55aba63937bb8ed",
+          "Code/Geometry/point.h": "aa985364528748f3c94b0e0f969fe63cbeb2b830e93df26c5b22f8cee8bfb393",
+          "Code/Geometry/Transform2D.cpp": "c8cf18d72544c276836d74a17312b7d425ed2cbeed67409ca09fe9b5c80d1a4f"
+        },
+        "platform": "Windows-2022Server-10.0.20348-SP0",
+        "library_sha256": {
+          "RDKitDepictor-19426461995069227f5ab91609668dc8.dll": "5da046343d199d646c95c776d7097137e836a44d9c1b6fad359ff9bb1ffd2d73",
+          "RDKitGraphMol-7597846ebcec6406eb0f7996bcfc42fd.dll": "615b1e6e36ef6f7c6c05a562e86bfcdfd18b150cba7e3c2281a8e588d82b2ed1",
+          "RDKitRDGeneral-f732472631d75f08a1bb4f30a0eda7cd.dll": "2838baa523739c392f7b829f5ad53730f8b927d8a94079d6ed288424781d3054",
+          "RDKitRDGeometryLib-fd70de113a7b47f5663e758fe1c7b393.dll": "73580fa74e7642e2a5963f5a2010490c6e4d04793ae2ebfe79ca4ca694729eb5"
+        },
+        "observer_source_sha256": "1bf831a292053939a1bc70ca714e2a82f74749abdf8bbff6ea87e4826c75eaad",
+        "fragment_observer_sha256": "8621eb1999a97623e02136ebb4d057a3ad68b8da1addabfd869b36ca392fcca9",
+        "oracle_sha256": "b12a361f50662e52f6ddc243548a86df8d241637e75a302cbda06f23d6459599",
+        "cases": 1634,
+        "observation": "Single private: access changed to public: in EmbeddedFrag.h; original wheel functions unchanged; totalDensity source fold used on Windows because symbol is not exported, checked against native on Linux/macOS",
+        "native_build": {
+          "compiler_command": [
+            "cl",
+            "/nologo",
+            "/Bv",
+            "/std:c++20",
+            "/O2",
+            "/MD",
+            "/EHsc",
+            "/DWIN32",
+            "/DBOOST_ALL_NO_LIB",
+            "/utf-8",
+            "/ID:\\a\\ReShiki\\ReShiki\\artifacts\\depict-collision-observation",
+            "/ID:\\a\\ReShiki\\ReShiki\\artifacts\\depict-live-windows\\rdkit\\Code",
+            "/ID:\\a\\ReShiki\\ReShiki\\artifacts\\depict-live-windows\\rdkit\\Code\\GraphMol\\Depictor",
+            "/ID:\\a\\ReShiki\\ReShiki\\artifacts\\depict-live-windows\\boost185-_u6r_r6x",
+            "D:\\a\\ReShiki\\ReShiki\\tests\\depict_collision_reference.cpp",
+            "D:\\a\\ReShiki\\ReShiki\\tests\\depict_windows_runtime.cpp",
+            "D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-collision-observation\\Depictor.lib",
+            "D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-collision-observation\\GraphMol.lib",
+            "D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-collision-observation\\RDGeometryLib.lib",
+            "D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-collision-observation\\RDGeneral.lib",
+            "D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-collision-observation\\SubstructMatch.lib",
+            "D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-collision-observation\\SmilesParse.lib",
+            "/Fe:D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-collision-oracle.exe",
+            "/FoD:\\a\\ReShiki\\ReShiki\\artifacts\\depict-collision-observation\\"
+          ],
+          "compiler_log_sha256": "4e9d59d15f0ac6c27336764ccf508a8231d4d7dffbccc61eca51c2701e33a280",
+          "runtime_initializer_sha256": "01a514ab81ac36ab498fe71a1e812e49e66735e43d444c6430f7bc215920b3cd",
+          "boost_version": "1_85",
+          "boost_header_sha256": "063ed28eceb611d52f58e57aca61edb1e086ed902fbded81ac61936009c52cf0",
+          "fma3": null,
+          "ucrt_sha256": "5e5ae0f8e4325ceb3ee767065dda6e03e980d401f00a2bdb8ca81ed90813920f"
+        }
+      }
+    },
+    "expansion": {
+      "fixture": "depict-expansion-windows-server2022-native.json.gz",
+      "reuses_existing_rows": false,
+      "cases": 1877,
+      "captured_sha256": "fb997be0c0f69f3fcebeb19d10f3502145a79ca93ad2342d27bec4fc98a019a9",
+      "captured_jsonl_sha256": "83f76bcd57c1ebccfb1ab916961d03bcd0565f9b136bf789b3cc7ed8a93de898",
+      "captured_rows_sha256": "02347c33df0b0eaf715291c0b3fc731b59e7d20c23bb4823f4c0a089d3f00e93",
+      "fixture_sha256": "fb997be0c0f69f3fcebeb19d10f3502145a79ca93ad2342d27bec4fc98a019a9"
+    },
+    "finalize": {
+      "fixture": "depict-finalize-windows-native.json.gz",
+      "reuses_existing_rows": true,
+      "cases": 2312,
+      "captured_sha256": "6bcbd05612478c8063437df12deb4c91e5c783659b4db366a93bd99a91036412",
+      "captured_jsonl_sha256": "34ac0c86e80dec573a3d9b2258051fcd26979d9ae95a39037c4a60b275f284a4",
+      "captured_rows_sha256": "67fc12a704a64e301a7d967996610e9034617cb147b28d1386132a7b0cfc9191",
+      "fixture_sha256": "c91b1dad3e165857943f0fa65dcacbf1647d78ea012b89ad7b6aece3ebb39540",
+      "capture_provenance": {
+        "version": "2026.03.6",
+        "commit": "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
+        "platform": "Windows-2022Server-10.0.20348-SP0",
+        "source_sha256": {
+          "Code/GraphMol/Depictor/RDDepictor.cpp": "f1ae9e705405d5254575c595c09c5d2ee240d4d2abf05209dd42dad5ae99b31f",
+          "Code/GraphMol/Depictor/EmbeddedFrag.cpp": "a3c55426a09deb23443e53cb2b59b4056e9d312b8fdb1c749da5033bc5a1eb33",
+          "Code/GraphMol/Depictor/EmbeddedFrag.h": "a45692bbffd2dff60aa608565dc98d366a2aae7cfb75eeb372f1cf35a8f3f0f4",
+          "Code/GraphMol/Conformer.h": "0b320f84bbe9fed1e414a290780e466a59d792a1111460a17297685614102e2c",
+          "Code/GraphMol/ROMol.cpp": "e1ee1e69c33712673dd80f2220982074e85926864f6a25881755e6a690016b84",
+          "Code/Geometry/Transform2D.cpp": "c8cf18d72544c276836d74a17312b7d425ed2cbeed67409ca09fe9b5c80d1a4f",
+          "Code/Geometry/point.h": "aa985364528748f3c94b0e0f969fe63cbeb2b830e93df26c5b22f8cee8bfb393"
+        },
+        "library_sha256": {
+          "RDKitDepictor-19426461995069227f5ab91609668dc8.dll": "5da046343d199d646c95c776d7097137e836a44d9c1b6fad359ff9bb1ffd2d73",
+          "RDKitGraphMol-7597846ebcec6406eb0f7996bcfc42fd.dll": "615b1e6e36ef6f7c6c05a562e86bfcdfd18b150cba7e3c2281a8e588d82b2ed1",
+          "RDKitRDGeneral-f732472631d75f08a1bb4f30a0eda7cd.dll": "2838baa523739c392f7b829f5ad53730f8b927d8a94079d6ed288424781d3054",
+          "RDKitRDGeometryLib-fd70de113a7b47f5663e758fe1c7b393.dll": "73580fa74e7642e2a5963f5a2010490c6e4d04793ae2ebfe79ca4ca694729eb5"
+        },
+        "oracle_sha256": "af4af2e025455fde0689efa5d1d2e01e40aceaf9fe56d248900a3c98ea3ddb60",
+        "cases": 2312,
+        "native_build": {
+          "compiler_command": [
+            "cl",
+            "/nologo",
+            "/Bv",
+            "/std:c++20",
+            "/O2",
+            "/MD",
+            "/EHsc",
+            "/DWIN32",
+            "/DBOOST_ALL_NO_LIB",
+            "/utf-8",
+            "/ID:\\a\\ReShiki\\ReShiki\\artifacts\\depict-finalize-oracle\\observation",
+            "/ID:\\a\\ReShiki\\ReShiki\\artifacts\\depict-finalize-oracle\\generated",
+            "/ID:\\a\\ReShiki\\ReShiki\\artifacts\\depict-live-windows\\rdkit\\Code",
+            "/ID:\\a\\ReShiki\\ReShiki\\artifacts\\depict-live-windows\\rdkit\\Code\\GraphMol\\Depictor",
+            "/ID:\\a\\ReShiki\\ReShiki\\artifacts\\depict-live-windows\\boost185-_u6r_r6x",
+            "D:\\a\\ReShiki\\ReShiki\\tests\\depict_finalize_reference.cpp",
+            "D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-finalize-oracle\\source_adapter.cpp",
+            "D:\\a\\ReShiki\\ReShiki\\tests\\depict_windows_runtime.cpp",
+            "D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-finalize-oracle\\Depictor.lib",
+            "D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-finalize-oracle\\GraphMol.lib",
+            "D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-finalize-oracle\\RDGeometryLib.lib",
+            "D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-finalize-oracle\\RDGeneral.lib",
+            "/Fe:D:\\a\\ReShiki\\ReShiki\\artifacts\\depict-finalize-oracle\\oracle.exe",
+            "/FoD:\\a\\ReShiki\\ReShiki\\artifacts\\depict-finalize-oracle\\"
+          ],
+          "compiler_log_sha256": "0acfed56ec77ee66c0015fd906486462f1609879082979a436c193f9f5f2eb7e",
+          "source_adapter_sha256": "d806cba28b5e73f610282fcae7e4ef10751a398e604d67434582d0052beabf62",
+          "verbatim_ranges": [
+            {
+              "byte_range": [
+                11495,
+                12454
+              ],
+              "sha256": "66b0c210af235d3c6e03c5dbc2c1cf6fa26061dd47d4ed24b9118aa2e65bcd27"
+            },
+            {
+              "byte_range": [
+                15699,
+                16729
+              ],
+              "sha256": "518e6b4134c503c841fd2c0e5d7c4d83e9c48d2c4e0a64d7283694736aa1c571"
+            },
+            {
+              "byte_range": [
+                20846,
+                21383
+              ],
+              "sha256": "0ae2bb59b3bb0e51836b530a06ab048a9efd0ce8dc10de946fd94cc95e78cfec"
+            }
+          ],
+          "observation_header_sha256": "bf49eb06e2296abcf79f215ebb147930344171b565386835fc6dc3ec701dc7a2",
+          "boost_version": "1_85",
+          "boost_header_sha256": "063ed28eceb611d52f58e57aca61edb1e086ed902fbded81ac61936009c52cf0",
+          "reference_sha256": "d663b14e5b3063d8410e3d075c658d470442a9e5aa6672b11167561ff9f2b5f1",
+          "fma3": null,
+          "runtime_initializer_sha256": "01a514ab81ac36ab498fe71a1e812e49e66735e43d444c6430f7bc215920b3cd",
+          "ucrt_sha256": "5e5ae0f8e4325ceb3ee767065dda6e03e980d401f00a2bdb8ca81ed90813920f"
+        }
+      }
+    }
+  },
+  "emulated_no_fma3": {
+    "crt": {
+      "python": {
+        "profile": "no-fma3",
+        "module": "C:\\Windows\\System32\\ucrtbase.dll",
+        "module_sha256": "529e795875178b906ea8758abc8de5c28339f336b3e7a121d7778ae040908de9",
+        "ring_bits": [
+          "3febb67ae8584cab",
+          "bfdffffffffffffc",
+          "bfebb67ae8584ca8",
+          "bfe0000000000004"
+        ],
+        "primitive_bits": [
+          "3ff29f25c111e686",
+          "3fed63011ebd161d",
+          "3fd954d5989f7ab7"
+        ],
+        "python_platform": "win-amd64",
+        "reference_version": "2026.03.6",
+        "forced_fma3": null,
+        "module_version": "10.0.26100.9444"
+      },
+      "native": {
+        "module": "C:\\Windows\\System32\\ucrtbase.dll",
+        "primitive_bits": [
+          "3ff29f25c111e686",
+          "3fed63011ebd161d",
+          "3fd954d5989f7ab7"
+        ],
+        "ring_bits": [
+          "3febb67ae8584cab",
+          "bfdffffffffffffc",
+          "bfebb67ae8584ca8",
+          "bfe0000000000004"
+        ],
+        "module_sha256": "529e795875178b906ea8758abc8de5c28339f336b3e7a121d7778ae040908de9",
+        "module_version": "10.0.26100.9444",
+        "observer_sha256": "dc89ef37e74dd3c9b7acc6a9ef9992b5ac6dc48d64bca512090f816dbec71aaf",
+        "binary_sha256": "d124ba57cdd511c5a080f53138add84819c1e3466b96eca86cd66c4dcda5613d",
+        "compiler_command": [
+          "cl",
+          "/nologo",
+          "/std:c++20",
+          "/O2",
+          "/MD",
+          "/EHsc",
+          "C:\\a\\ReShiki\\ReShiki\\tests\\depict_windows_crt_reference.cpp",
+          "/Fe:C:\\a\\ReShiki\\ReShiki\\artifacts\\depict-live-windows\\crt-reference.exe",
+          "/FoC:\\a\\ReShiki\\ReShiki\\artifacts\\depict-live-windows\\"
+        ],
+        "compiler_log_sha256": "5afd82d0a83b4ba35c7ff5e340540f14e878c90000d2dbf787aa3f8dc27471cd"
+      }
+    },
+    "note": "Finite results and all input/topology/order/error data match the physical disabled profile. Recorded NaN sign differences enter existing explicit numeric-rejection checks. This does not certify native ARM Rust output.",
+    "stages": {
+      "geometry": {
+        "cases": 5310,
+        "captured_sha256": "2fd4f19296255f82d6c5af9747fd601c258a533b6712af762357d0f15f98c3e3",
+        "captured_jsonl_sha256": "a165e5e42e4e0b1886d50ffc5495d735671e22761892abef9c82f3be65b9d4a0",
+        "reference_fixture": "depict-geometry-windows-no-fma3-native.json.gz",
+        "nan_sign_differences": 30
+      },
+      "rings": {
+        "cases": 1338,
+        "captured_sha256": "cf076f64f093fe7c15fd80792368802b694f6f60eecc1abb8e927c27457ab4f7",
+        "captured_jsonl_sha256": "72102da3b7c7a2ca5e4e7f1e559ace7b5240af9d2675d3e522512839f6185a63",
+        "reference_fixture": "depict-rings-windows-no-fma3-native.json.gz",
+        "nan_sign_differences": 0
+      },
+      "attachment": {
+        "cases": 970,
+        "captured_sha256": "c15b295e6de3973fede5a970ea94b2967bed85836655ee3f7bf9021590683c8f",
+        "captured_jsonl_sha256": "7e32cedca4b4d1768e122a5b2d3abafa352134654269769a9ccc50b82896354b",
+        "reference_fixture": "depict-attachment-windows-no-fma3-native.json.gz",
+        "nan_sign_differences": 0
+      },
+      "seeds": {
+        "cases": 991,
+        "captured_sha256": "7f99cbe2e7269ac5000c4f2ee699b148eb65ad0cdcfa73e93be2e7b37c9ab045",
+        "captured_jsonl_sha256": "980e5683895079347d854b2aa73c2d76fc4b6637e82812c356d7e519b8733211",
+        "reference_fixture": "depict-seeds-windows-native.json.gz",
+        "nan_sign_differences": 0
+      },
+      "templates": {
+        "cases": 1921,
+        "captured_sha256": "f3300e2a26de3b25afcee7db22d5235351129e5ed5b1a8f045ccc726e65e6094",
+        "captured_jsonl_sha256": "924bcdd2af3a06b076474b9aea6b69c75c0d45d42a3ad6b70ecefd8fd2ed44df",
+        "reference_fixture": "depict-templates-windows-no-fma3-native.json.gz",
+        "nan_sign_differences": 2
+      },
+      "collision": {
+        "cases": 1634,
+        "captured_sha256": "4c8fbd2b4e4411b6bb2d9b21661073520b3e3ae38ddfe560c855a5972cd33e48",
+        "captured_jsonl_sha256": "203667f81f873a8ba5015fdc447ec590c02a8e5842becbbbd9abec1a56e3f21d",
+        "reference_fixture": "depict-collision-windows-no-fma3-native.json.gz",
+        "nan_sign_differences": 0
+      },
+      "expansion": {
+        "cases": 1877,
+        "captured_sha256": "b001ed8a1aa95255674fce496599fa83b415bfb2fe407f5e2d110f2afd3dc37c",
+        "captured_jsonl_sha256": "e0f80c8c8f6ca4de24c8395be75420f7763ac9a7184e47e4855cd4c375283e3d",
+        "reference_fixture": "depict-expansion-windows-no-fma3-native.json.gz",
+        "nan_sign_differences": 8
+      },
+      "finalize": {
+        "cases": 2312,
+        "captured_sha256": "a50db2f1ce8c36c56a55040afe1b70a1e104891cfa326f7c03770950105db078",
+        "captured_jsonl_sha256": "20821ce0f6173fb32be4ea33d44041177508a484f08ef96dfc926b85a6d5798a",
+        "reference_fixture": "depict-finalize-windows-native.json.gz",
+        "nan_sign_differences": 20
+      }
+    }
+  }
+}

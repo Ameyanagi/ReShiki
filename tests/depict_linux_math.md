@@ -38,9 +38,10 @@ cases provide the regression coverage.
 OS and architecture alone do not identify the numerical ABI. After the fix,
 Ubuntu's geometry, ring, attachment and template suites differ from static
 Arch captures while agreeing with the host's original public native pipeline.
-CI must replay these inputs through the original wheel on the tested host,
-with exact comparisons. Collision, expansion, finalization and seed captures
-also passed unchanged on this Ubuntu host.
+Live validation replays these inputs through the original wheel on the tested
+host, with exact comparisons. Routine Ubuntu 22.04 x64 tests can use the
+[saved independent captures](depict_ubuntu_goldens.md). Collision, expansion,
+finalization and seed captures also passed unchanged on this Ubuntu host.
 
 Fresh direct-native observers pass geometry (5,310 cases), rings (1,338 cases),
 attachment (970 cases) and templates (695,876 compared fragment scalars), with

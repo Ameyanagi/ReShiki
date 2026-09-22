@@ -10,11 +10,12 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 METADATA_COMMAND = ["cargo", "metadata", "--no-deps", "--format-version", "1", "--locked"]
-# Approximate seconds from the Linux x64 Checks run, before native_aromatic
-# concurrency. These affect assignment only; new/unmeasured targets cost 20 s.
+# Approximate seconds from the Windows x64 Checks run. The aromatic estimate
+# allows headroom over the measured four-worker live + golden replay (~380 s).
+# These affect assignment only; new/unmeasured targets cost 20 s.
 # Longest-first scheduling avoids putting all expensive oracle suites together.
 TARGET_SECONDS = {
-    "native_aromatic": 1044,
+    "native_aromatic": 500,
     "inchi_generator": 231,
     "engine_migration": 230,
     "reaction_smiles": 167,
@@ -43,6 +44,14 @@ def integration_targets(metadata: object) -> list[str]:
     matches = [p for p in packages if isinstance(p, dict) and p.get("name") == "reshiki"]
     if len(matches) != 1 or matches[0].get("id") not in members:
         raise ValueError("Cargo metadata must contain one reshiki workspace package")
+    for package in packages:
+        if (
+            isinstance(package, dict)
+            and package.get("id") in members
+            and package.get("name") != "reshiki"
+            and any("test" in target.get("kind", []) for target in package.get("targets", []))
+        ):
+            raise ValueError("New workspace integration tests need an explicit shard assignment")
     targets = matches[0].get("targets")
     if not isinstance(targets, list):
         raise ValueError("Cargo metadata is missing reshiki targets")

@@ -1,4 +1,7 @@
 //! Independent captures from the exact pinned native import adapter.
+#[path = "common/fixture.rs"]
+mod fixture;
+
 use anyhow::Context;
 use reshiki::chemistry::{RDKIT_VERSION, inchi::output};
 use serde::Deserialize;
@@ -6,9 +9,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet},
-    io::{BufRead, BufReader},
-    path::Path,
-    process::{Command, Stdio},
+    io::BufRead,
 };
 
 #[derive(Deserialize)]
@@ -28,18 +29,7 @@ struct Case {
 
 #[test]
 fn native_import_assembly() -> anyhow::Result<()> {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let python = if cfg!(windows) {
-        ".venv/Scripts/python.exe"
-    } else {
-        ".venv/bin/python"
-    };
-    let mut child = Command::new(root.join(python))
-        .arg(root.join("tests/inchi_output_reference.py"))
-        .stdout(Stdio::piped())
-        .spawn()?;
-    let stdout = child.stdout.take().context("Missing fixture output")?;
-    let mut lines = BufReader::new(stdout).lines();
+    let mut lines = fixture::open("inchi-output.jsonl.gz")?.lines();
     let header: Value = serde_json::from_str(&lines.next().context("Missing fixture version")??)?;
     assert_eq!(header["rdkit_version"], RDKIT_VERSION);
     assert_eq!(
@@ -62,7 +52,9 @@ fn native_import_assembly() -> anyhow::Result<()> {
         mut complete,
         mut duplicate_boundaries,
     ) = (0, 0, 0, 0, 0, 0);
+    let mut rows = 0;
     for line in lines {
+        rows += 1;
         let case: Case = serde_json::from_str(&line?)?;
         rules.extend(case.cleanup_rules.iter().cloned());
         if case.operation == "cleanup" {
@@ -217,8 +209,18 @@ fn native_import_assembly() -> anyhow::Result<()> {
             case.name
         );
     }
-    anyhow::ensure!(child.wait()?.success(), "Fixture reader failed");
-    anyhow::ensure!(topology > 5000 && assembly > 5000 && native_failures > 10);
+    assert_eq!(rows, 6_793, "Native output corpus changed");
+    assert_eq!(
+        (
+            topology,
+            assembly,
+            cleanup,
+            complete,
+            native_failures,
+            duplicate_boundaries
+        ),
+        (5_892, 5_892, 6_661, 5_880, 248, 8)
+    );
     let expected_rules = [
         "_Valence3ClCleanUp1",
         "_Valence4NCleanUp1",

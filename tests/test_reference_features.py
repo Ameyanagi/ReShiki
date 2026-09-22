@@ -16,7 +16,9 @@ class ReferenceFeatures(unittest.TestCase):
         observed = set()
         for path in (ROOT / "tests").glob("*.rs"):
             source = path.read_text(encoding="utf-8")
-            if any(marker in source for marker in (".venv", "PythonEngine", "mod cip_rule_case")):
+            # Golden readers remain reference tests after removing their Python bridge.
+            markers = (".venv", "PythonEngine", "mod cip_rule_case", "common/fixture.rs")
+            if any(marker in source for marker in markers):
                 observed.add(path.stem)
                 with self.subTest(target=path.stem):
                     self.assertIn(path.stem, configured)

@@ -3286,6 +3286,7 @@ dependencies = [
  "anyhow",
  "base64 0.22.1",
  "directories-next",
+ "flate2",
  "iced",
  "image",
  "open",

@@ -1,4 +1,7 @@
 //! Native import records captured independently from the original InchiToMol.
+#[path = "common/fixture.rs"]
+mod fixture;
+
 use anyhow::Context;
 use reshiki::chemistry::inchi::{
     generator::{self, Error, Limits, Resource},
@@ -7,10 +10,11 @@ use reshiki::chemistry::inchi::{
 use serde::Deserialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
+#[cfg(unix)]
+use std::process::{Command, Stdio};
 use std::{
-    io::{BufRead, BufReader},
+    io::BufRead,
     path::{Path, PathBuf},
-    process::{Command, Stdio},
     time::Duration,
 };
 
@@ -39,8 +43,6 @@ struct Case {
     inchi: String,
     raw: output::Output,
     #[serde(default)]
-    reconstruct: bool,
-    #[serde(default)]
     sanitize: bool,
     #[serde(default)]
     remove: bool,
@@ -54,20 +56,12 @@ async fn compare_original_captures(boundary: bool) -> anyhow::Result<()> {
     let Some(helper) = helper("reshiki-inchi-helper")? else {
         return Ok(());
     };
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let python = if cfg!(windows) {
-        ".venv/Scripts/python.exe"
+    let mut lines = fixture::open(if boundary {
+        "inchi-reader-text.json.gz"
     } else {
-        ".venv/bin/python"
-    };
-    let mut command = Command::new(root.join(python));
-    command.arg(root.join("tests/inchi_reader_reference.py"));
-    if boundary {
-        command.arg("--boundaries");
-    }
-    let mut process = command.stdout(Stdio::piped()).spawn()?;
-    let mut lines =
-        BufReader::new(process.stdout.take().context("Missing import fixtures")?).lines();
+        "inchi-output.jsonl.gz"
+    })?
+    .lines();
     let header: Value = serde_json::from_str(&lines.next().context("Missing fixture version")??)?;
     assert_eq!(header["rdkit_version"], reshiki::chemistry::RDKIT_VERSION);
     assert_eq!(
@@ -94,7 +88,19 @@ async fn compare_original_captures(boundary: bool) -> anyhow::Result<()> {
     let (mut records, mut warnings, mut failed, mut reconstructed, mut boundaries) =
         (0, 0, 0, 0, 0);
     for line in lines {
-        let case: Case = serde_json::from_str(&line?)?;
+        let line = line?;
+        if !boundary {
+            #[derive(Deserialize)]
+            struct Kind<'a> {
+                operation: &'a str,
+            }
+            // Match inchi_reader_reference.py's selection from the independent
+            // output corpus. Synthetic reconstruction records are tested there.
+            if serde_json::from_str::<Kind<'_>>(&line)?.operation != "import" {
+                continue;
+            }
+        }
+        let case: Case = serde_json::from_str(&line)?;
         let before = case.inchi.clone();
         let result = generator::read(&helper, &case.inchi, Duration::from_secs(30)).await;
         assert_eq!(case.inchi, before, "{} changed input", case.name);
@@ -112,7 +118,7 @@ async fn compare_original_captures(boundary: bool) -> anyhow::Result<()> {
         records += 1;
         warnings += usize::from(actual.status == 1);
         failed += usize::from(!matches!(actual.status, 0 | 1));
-        if case.reconstruct {
+        if !boundary {
             let input_before = actual.clone();
             let assembled = output::reconstruct(
                 &actual,
@@ -138,7 +144,6 @@ async fn compare_original_captures(boundary: bool) -> anyhow::Result<()> {
             reconstructed += 1;
         }
     }
-    assert!(process.wait()?.success());
     if boundary {
         assert_eq!(records, 24);
         assert_eq!(reconstructed, 0);

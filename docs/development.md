@@ -43,7 +43,7 @@ Archive and installer checks run the installed app twice with Python, uv and the
 
 Install [uv 0.12.3 or later](https://docs.astral.sh/uv/getting-started/installation/) and run `uv sync --locked --python 3.12`. On Windows, use `--python cpython-3.12-windows-x86_64-none`, including on ARM.
 
-Linux and Windows need fresh layout references for their installed math libraries. Setup downloads the pinned RDKit source and verified Boost headers; it only builds test tools.
+Live layout comparisons on Linux and Windows need fresh references for their installed math libraries. Setup downloads the pinned RDKit source and verified Boost headers; it only builds test tools.
 
 On Linux:
 
@@ -73,6 +73,18 @@ uv run --locked python scripts/check_reference_dependencies.py
 ```
 
 The `rdkit-reference` feature enables `PythonEngine` and independent differential tests. It is disabled in normal builds. Tests use the checkout's `.venv`; `RESHIKI_REFERENCE_PYTHON` selects another prepared interpreter. Windows ARM uses x64 reference tools under emulation while the app and Rust tests remain native ARM64.
+
+## CI
+
+Pull requests run native tests and saved InChI, depiction, and aromatic-response fixtures on macOS ARM64, Linux x64, and Windows x64. Documentation-only changes skip native checks. Expected results come from pinned RDKit captures; fixture updates retain their source hashes and platform provenance.
+
+The complete live RDKit suite runs weekly, before publishing a tagged release, or on demand. Four parallel shards per platform retain every integration target, plus workspace unit and documentation tests:
+
+```sh
+gh workflow run checks.yml --ref main -f live_reference=true
+```
+
+Windows ARM64 and Linux ARM64 remain release targets with package and installer checks.
 
 ## Pre-commit checks
 

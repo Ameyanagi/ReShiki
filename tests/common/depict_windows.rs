@@ -37,7 +37,7 @@ pub fn fixture(stage: &str) -> anyhow::Result<Option<String>> {
     anyhow::ensure!(result["reference_version"] == "2026.03.6");
     anyhow::ensure!(result["python_platform"] == "win-amd64");
     let profile = result["profile"].as_str().context("Missing CRT profile")?;
-    anyhow::ensure!(matches!(profile, "fma3" | "no-fma3"));
+    anyhow::ensure!(matches!(profile, "fma3" | "no-fma3" | "server2022"));
     if let Some(required) = required {
         anyhow::ensure!(
             profile == required,
@@ -47,10 +47,12 @@ pub fn fixture(stage: &str) -> anyhow::Result<Option<String>> {
     eprintln!("Original x64 reference CRT profile: {profile}");
     // Independent native captures show identical rows in these two stages.
     let invariant = matches!(stage, "seeds" | "finalize");
-    let suffix = if profile == "no-fma3" && !invariant {
-        "-no-fma3"
-    } else {
-        ""
+    let suffix = match profile {
+        "no-fma3" if !invariant => "-no-fma3",
+        "server2022" if matches!(stage, "geometry" | "rings" | "templates" | "expansion") => {
+            "-server2022"
+        }
+        _ => "",
     };
     Ok(Some(format!(
         "depict-{stage}-windows{suffix}-native.json.gz"
