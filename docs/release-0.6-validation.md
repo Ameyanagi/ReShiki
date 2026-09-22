@@ -1,12 +1,12 @@
-# ReShiki 0.6 release preparation
+# ReShiki 0.6 release validation
 
-This record accompanies the 0.6 documentation refresh. The application source is commit `9302fd7`, with the toolbar changes in [PR #3](https://github.com/Ameyanagi/ReShiki/pull/3) and assistant changes in [PR #4](https://github.com/Ameyanagi/ReShiki/pull/4). Release publication has not been triggered.
+This record covers the 0.6 documentation refresh, native desktop walkthrough, and release checks. The initial screenshots used application commit `9302fd7`; the final fixes and `.rsk` support are in `107f543`. [PR #3](https://github.com/Ameyanagi/ReShiki/pull/3), [PR #4](https://github.com/Ameyanagi/ReShiki/pull/4), [PR #10](https://github.com/Ameyanagi/ReShiki/pull/10), and [PR #11](https://github.com/Ameyanagi/ReShiki/pull/11) were merged into `main` in dependency order. The merged tree at `26f58ae` matches the tested final branch. All five walkthrough issues are closed.
 
-Prepared on 2026-09-23.
+Updated on 2026-09-23.
 
 ## Checks
 
-- The default Rust suite passes: 399 tests passed, none failed, two ignored.
+- The default Rust suite passes: 407 tests passed, none failed, two ignored.
 - Commit checks pass: Cargo check, Clippy, formatting, and the configured web/Python checks.
 - The optimized macOS application builds and its ad-hoc signature verifies.
 - Documentation checks and JavaScript lint/formatting pass. The static build verifies 3,819 local links and assets.
@@ -40,10 +40,14 @@ The release-workflow follow-up addresses all five findings from the screenshot w
 
 GPT-6 Sol (`gpt-6-sol`) is now the assistant default when available in the connected account catalog; explicit saved choices are retained. The installed Codex catalog advertised text and image input for this model. Live generation and mandatory image review succeeded for esterification and branching. The esterification draft completed in 35 seconds, passed review, applied through Accept all edits, and was removed and restored with one Undo/Redo pair.
 
-Follow-up validation: 406 default Rust tests passed, none failed, two existing manual GPU snapshot tests ignored. The optimized macOS application was rebuilt, its ad-hoc signature verified, and the affected workflows checked through native computer use. Eight manual images were refreshed again: assistant progress, review, edit modes, model, effort, accepted scheme, reaction roles, and Export. The seven Windows/Office images remain unchanged.
+Follow-up validation: 407 default Rust tests passed, none failed, two existing manual GPU snapshot tests ignored. The optimized macOS application was rebuilt, its ad-hoc signature verified, and the affected workflows checked through native computer use. Eight manual images were refreshed again: assistant progress, review, edit modes, model, effort, accepted scheme, reaction roles, and Export. The seven Windows/Office images remain unchanged.
 
 New documents now default to `.rsk`, using the same readable JSON format. Native macOS checks saved an extensionless name as `.rsk`, reopened a 14-atom reaction, and confirmed that the complete document matched its `.reshiki` original. Saving an existing legacy file retained its filename; Save as also accepted an explicitly typed `.reshiki` suffix. Regression coverage opens `.rsk`, uppercase `.RSK`, `.reshiki`, and `.moruno` documents. Windows installer associations include all three extensions. The three downloadable examples now use `.rsk`; their old URLs remain available with identical contents. Eight native packaging tests and the documentation checks/build passed.
 
-## Publication sequence
+The final template adjustment enables **Keep placing** by default. Regression tests build three fused rings through successive bond placements, retain the chosen anchor and connection mode, reject invalid clicks without changing the drawing, undo/redo each placement, and stop on Escape. One-off insertion remains available through the checkbox. Native release-build verification placed three cyclohexane rings without reselecting the template, used Undo/Redo and Escape, and saved 14 atoms and 16 bonds as `.rsk`. The guide includes a new direct window capture of this workflow.
 
-Review the documented findings and merge the prepared PRs in dependency order: toolbar, assistant, documentation, then the release-workflow fixes. Retarget each dependent PR after its base merges and require passing checks on the resulting main commit. Run the signed macOS packaging check from `main` after merging, then publish a matching `v0.6.0` tag when ready. The unsigned documentation build is not a substitute for notarization or the release workflow's signing gates.
+## Release gates
+
+The first signed release rehearsal was stopped before publication to include the final template-placement change. A new rehearsal will verify the final merged application. It checks all five platform packages, Windows installation and upgrades, and native chemistry with Python and uv unavailable. The macOS app and disk image must pass Developer ID signing, notarization, stapling, and Gatekeeper assessment.
+
+Publishing `v0.6.0` repeats the package and signing checks and requires the full live chemistry reference suite on macOS ARM64, Linux x64, and Windows x64. The release workflow publishes only after those gates pass, with eight downloads and their SHA-256 checksums. A successful manual rehearsal does not publish a release.

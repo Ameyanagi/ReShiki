@@ -12,7 +12,7 @@ The chosen source is never silently replaced. Drag from the target to choose the
 
 In empty space, the chosen source anchor lands at the pointer; Auto centers the template. A drag rotates the template around that placement point. Captions stay upright while their positions, arrows and graphic geometry move with the template. Attachment matches the target bond length; text sizes and stroke widths retain their saved publication values.
 
-The live molecular/graphic preview is tinted green and a preview strip distinguishes it from committed objects. An invalid target reports its reason before release. Placement commits the saved colors, including black JACS defaults. Each placement is one Undo step. **Keep placing** enables repeated insertion; Escape returns to Select. A drag also cancels on focus loss or release outside the canvas.
+The live molecular/graphic preview is tinted green and a preview strip distinguishes it from committed objects. An invalid target reports its reason before release. Placement commits the saved colors, including black JACS defaults. Each placement is one Undo step. **Keep placing** is enabled by default, so successive clicks reuse the chosen template, anchor and connection mode. Turn it off for a single insertion; Escape returns to Select. A drag also cancels on focus loss or release outside the canvas.
 
 ## Author and maintain
 

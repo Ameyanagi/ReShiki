@@ -13,6 +13,8 @@ Draw molecules, build reaction schemes, and prepare figures on an editable canva
 
 Start with JACS / ACS styling. Attach templates, refine selected structures, or ask the assistant to propose a drawing. Review edits and undo changes. Copy editable structures or export SVG, PDF, and PNG.
 
+Version 0.6 adds direct toolbar selection, sweep erasing, alignment, and assistant draft previews with visual review. The assistant defaults to GPT-6 Sol when available. New drawings use `.rsk`; existing `.reshiki` and `.moruno` drawings remain supported. [Read the 0.6 release notes](https://reshiki.com/developer/changes-0.6/).
+
 ## Install
 
 Download ReShiki for Apple Silicon macOS, Windows (x64 / ARM64), or Linux (x64 / ARM64). Version 0.6 includes the drawing and chemistry tools: no Python, RDKit, or uv installation is needed. Drawing, imports, cleanup, and molecular properties work offline from the first launch.
