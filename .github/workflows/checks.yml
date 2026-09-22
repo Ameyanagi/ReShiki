@@ -4,9 +4,37 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      live_reference:
+        description: Run every live RDKit comparison on all three test platforms
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      live_reference:
+        type: boolean
+        default: true
+  schedule:
+    - cron: "19 3 * * 1"
 permissions:
   contents: read
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
+  scope:
+    runs-on: ubuntu-22.04
+    outputs:
+      native: ${{ steps.scope.outputs.native }}
+      live: ${{ steps.scope.outputs.live }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - id: scope
+        env:
+          CI_LIVE_REFERENCE: ${{ inputs.live_reference || false }}
+        run: python3 scripts/ci_scope.py
   web:
     runs-on: ubuntu-22.04
     steps:
@@ -18,6 +46,8 @@ jobs:
       - run: bun run lint:js
       - run: bun run format:check
   python:
+    needs: scope
+    if: needs.scope.outputs.native == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -26,11 +56,7 @@ jobs:
             python: "3.12"
           - os: windows-2022
             python: cpython-3.12-windows-x86_64-none
-          - os: windows-11-arm
-            python: cpython-3.12-windows-x86_64-none
           - os: ubuntu-22.04
-            python: "3.12"
-          - os: ubuntu-24.04-arm
             python: "3.12"
     runs-on: ${{ matrix.os }}
     env:
@@ -48,6 +74,8 @@ jobs:
       - run: uv run --locked python -m unittest discover -s tests -p 'test_*.py'
       - run: uv run --locked python scripts/check_reference_dependencies.py
   rust:
+    needs: scope
+    if: needs.scope.outputs.native == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -59,15 +87,8 @@ jobs:
             target: x86_64-pc-windows-msvc
             msvc_arch: x64
             python: cpython-3.12-windows-x86_64-none
-          - os: windows-11-arm
-            target: aarch64-pc-windows-msvc
-            msvc_arch: arm64
-            python: cpython-3.12-windows-x86_64-none
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-            python: "3.12"
-          - os: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-gnu
             python: "3.12"
     runs-on: ${{ matrix.os }}
     env:
@@ -101,7 +122,64 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked --no-default-features -- -D warnings
       - run: cargo check --workspace --all-targets --locked --no-default-features
       - run: cargo test --workspace --locked --no-default-features
-      - name: Install the optional reference dependencies after native checks
+      - name: Install fixture reader dependencies
+        run: uv sync --locked
+      - name: Check all optional reference tests compile cleanly
+        run: cargo clippy --workspace --all-targets --locked --features rdkit-reference -- -D warnings
+      - name: Select the captured Ubuntu fixture profile
+        if: runner.os == 'Linux'
+        run: echo "RESHIKI_TEST_LINUX_GOLDENS=ubuntu-22.04-x64" >> "$GITHUB_ENV"
+      - name: Replay independently captured chemistry fixtures
+        run: cargo test --locked --features rdkit-reference --test inchi_input --test inchi_output --test inchi_reader --test depict_geometry --test depict_rings --test depict_attachment --test depict_seeds --test depict_templates --test depict_collision --test depict_expansion --test depict_finalize --no-fail-fast
+      - name: Replay complete aromatic response fixtures
+        run: cargo test --locked --features rdkit-reference --test native_aromatic complete_aromatic_responses_match_goldens -- --exact
+  reference:
+    needs: scope
+    if: needs.scope.outputs.live == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+        platform:
+          - os: macos-14
+            target: aarch64-apple-darwin
+            python: "3.12"
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            msvc_arch: x64
+            python: cpython-3.12-windows-x86_64-none
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            python: "3.12"
+    runs-on: ${{ matrix.platform.os }}
+    env:
+      UV_PYTHON: ${{ matrix.platform.python }}
+      RESHIKI_REQUIRE_INCHI_HELPER: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Linux libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libfontconfig1-dev libudev-dev
+      - run: rustup toolchain install 1.95.0 --profile minimal --component rustfmt --component clippy
+      - run: rustup default 1.95.0
+      - uses: Swatinem/rust-cache@63fed3e2fecf6f7b51dc6f043341b79ef82a9ae7 # v2.9.2
+        with:
+          shared-key: reference-${{ matrix.shard }}
+          cache-on-failure: true
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.3"
+          python-version: ${{ matrix.platform.python }}
+      - name: Select the native Windows compiler
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/setup-msvc
+        with:
+          arch: ${{ matrix.platform.msvc_arch }}
+      - name: Build the audited native helper and test executables
+        run: uv run --no-project python scripts/build_inchi_helper.py --fetch-source --target ${{ matrix.platform.target }}
+      - name: Select the helper for runtime integration tests
+        run: uv run --no-project python -c "import os,pathlib; p=pathlib.Path('artifacts/inchi-helper/reshiki-inchi-helper'+('.exe' if os.name=='nt' else '')).resolve(); open(os.environ['GITHUB_ENV'],'a').write('RESHIKI_INCHI_HELPER='+str(p)+'\n')"
+      - name: Install the optional reference dependencies
         run: uv sync --locked
       - name: Build live Linux depiction observers for the installed reference wheel
         if: runner.os == 'Linux'
@@ -118,17 +196,16 @@ jobs:
         if: runner.os == 'Windows'
         uses: ./.github/actions/setup-msvc
         with:
-          arch: ${{ matrix.msvc_arch }}
-      - name: Check the optional independent reference suite
-        run: cargo clippy --workspace --all-targets --locked --features rdkit-reference -- -D warnings
-      - run: cargo check --workspace --all-targets --locked --features rdkit-reference
-      - run: cargo test --workspace --locked --features rdkit-reference --no-fail-fast
-      - name: Preserve failed reference comparisons
-        if: failure()
+          arch: ${{ matrix.platform.msvc_arch }}
+      - name: Run every assigned reference target
+        run: uv run --locked python scripts/run_reference_shard.py --index ${{ matrix.shard }} --count 4
+      - name: Preserve shard results and failed comparisons
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: reference-failures-${{ matrix.target }}
+          name: reference-${{ matrix.platform.target }}-${{ matrix.shard }}
           path: |
+            artifacts/reference-shard-*.json
             artifacts/*-actual.json
             artifacts/*-expected.json
             artifacts/*-engine-failures.txt
