@@ -1,5 +1,6 @@
-//! InChI string operations, independent of molecular InChI generation.
+//! InChI strings and checked molecular input preparation.
 
+pub mod input;
 pub mod key;
 
 /// Version of the reference implementation used for these operations.

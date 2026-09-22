@@ -125,6 +125,21 @@ Copyright (C) 2001-2021 Greg Landrum and Rational Discovery LLC.
 Code/Geometry/point.h and point.cpp (stereo vector and dihedral arithmetic)
 Copyright (C) 2003-2025 Greg Landrum and other RDKit contributors.
 
+Code/GraphMol/Depictor/DepictUtils.cpp (regular-ring embedding, point bisectors, point reflection and ordered first/core/next ring selection)
+Copyright (C) 2003-2025 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/Depictor/EmbeddedFrag.cpp (ordered fragment centering, canonical orientation, signed box extents and no-template fused-ring construction, trans-ring mirroring, density reflection and ring metadata merging)
+Copyright (C) 2004-2025 Greg Landrum and other RDKit contributors.
+
+Code/GraphMol/Depictor/DepictUtils.h and EmbeddedFrag.h (geometry API declarations)
+Copyright (C) 2003-2022 Greg Landrum and other RDKit contributors.
+
+Code/Geometry/Transform2D.cpp and Transform2D.h (point transformations and two-point alignment)
+Copyright (C) 2003-2006 Rational Discovery LLC.
+
+Code/RDGeneral/types.cpp (ordered ring union and intersection)
+Copyright (C) 2001-2021 Greg Landrum and other RDKit contributors.
+
 Code/Numerics/Vector.h (normalization tolerance)
 Copyright (C) 2004-2025 Greg Landrum and other RDKit contributors.
 
@@ -160,6 +175,10 @@ Copyright (C) 2007-2023 Greg Landrum.
 
 Code/GraphMol/QueryOps.h and QueryOps.cpp (query predicates, metal classification and bridgehead detection)
 Copyright (C) 2003-2021 Greg Landrum and other RDKit contributors.
+
+External/INCHI-API/inchi.cpp (molecular input for InChI, including reverse cleanup)
+Copyright (C) 2011-2025 Novartis Institutes for BioMedical Research Inc.
+and other RDKit contributors. The full source notice is in INCHI-ADAPTER.
 
 Adaptations are in src/chemistry/, engine/prepared.py, scripts/regenerate_atomic_data.py,
 scripts/regenerate_descriptor_data.py and the *_reference.py fixtures in tests/.

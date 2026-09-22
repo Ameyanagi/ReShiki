@@ -11,6 +11,7 @@ pub mod aromaticity;
 mod atomic_data;
 pub mod cdxml;
 pub mod cx;
+pub mod depict;
 pub mod descriptors;
 pub mod document;
 pub mod electronic;
