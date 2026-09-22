@@ -1,3 +1,6 @@
+#[path = "common/depict_linux.rs"]
+mod depict_linux;
+
 #[path = "common/depict_windows.rs"]
 mod depict_windows;
 
@@ -201,7 +204,10 @@ fn compare(fixture: &str, baseline: bool) -> anyhow::Result<()> {
     command
         .arg(root.join("tests/depict_rings_reference.py"))
         .arg("--fixture")
-        .arg(root.join("tests/fixtures").join(fixture));
+        .arg(
+            root.join("tests/fixtures")
+                .join(depict_linux::fixture(fixture)?),
+        );
     let live = baseline && std::env::var_os("RESHIKI_DEPICT_RINGS_ORACLE").is_some();
     if live {
         command
