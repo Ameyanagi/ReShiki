@@ -30,13 +30,13 @@ Choose one arrow in the reaction inspector to export it. Export controls remain 
 
 | Format                    | Retained data                                                                                             | Limits                                                                                                                     |
 | ------------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `.reshiki`                | Complete drawing, reaction roles, coefficients, captions, styles and groups                               | Use this for continued editing.                                                                                            |
+| `.rsk`                    | Complete drawing, reaction roles, coefficients, captions, styles and groups                               | Use this for continued editing.                                                                                            |
 | RXN V3000                 | Reactants, products, separate agents, atom maps, supported molecular stereochemistry and atom coordinates | Arrow appearance, captions and page layout are not stored.                                                                 |
 | Reaction SMILES (`.rsmi`) | Reactants, products, agents, atom maps and supported molecular stereochemistry                            | Coordinates and drawing appearance are not stored. Disconnected components can become separate participants when reopened. |
 
 Coefficients greater than one export as repeated chemical participants. Repeated mapped participants need distinct atom maps; the exporter rejects duplicate map numbers on one side. Query atoms, enhanced stereo groups, hydrogen interactions, partial and quadruple bonds are not supported by this reaction-exchange workflow and produce an error rather than a flattened structure. The expanded export is limited to 10,000 atoms.
 
-Molecular MOL/SMILES/InChI and current CDXML/CDX drawing exchange do not retain these reaction roles. The native clipboard representation preserves them when pasting a complete reaction into ReShiki. Save `.reshiki` alongside an exchange file to retain the full scheme.
+Molecular MOL/SMILES/InChI and current CDXML/CDX drawing exchange do not retain these reaction roles. The native clipboard representation preserves them when pasting a complete reaction into ReShiki. Save `.rsk` alongside an exchange file to retain the full scheme.
 
 ## Current limits and verification
 

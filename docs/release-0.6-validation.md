@@ -40,7 +40,9 @@ The release-workflow follow-up addresses all five findings from the screenshot w
 
 GPT-6 Sol (`gpt-6-sol`) is now the assistant default when available in the connected account catalog; explicit saved choices are retained. The installed Codex catalog advertised text and image input for this model. Live generation and mandatory image review succeeded for esterification and branching. The esterification draft completed in 35 seconds, passed review, applied through Accept all edits, and was removed and restored with one Undo/Redo pair.
 
-Follow-up validation: 405 default Rust tests passed, none failed, two existing manual GPU snapshot tests ignored. The optimized macOS application was rebuilt, its ad-hoc signature verified, and the affected workflows checked through native computer use. Seven manual images were refreshed again: assistant progress, review, edit modes, model, effort, accepted scheme, and reaction roles. The seven Windows/Office images remain unchanged.
+Follow-up validation: 406 default Rust tests passed, none failed, two existing manual GPU snapshot tests ignored. The optimized macOS application was rebuilt, its ad-hoc signature verified, and the affected workflows checked through native computer use. Eight manual images were refreshed again: assistant progress, review, edit modes, model, effort, accepted scheme, reaction roles, and Export. The seven Windows/Office images remain unchanged.
+
+New documents now default to `.rsk`, using the same readable JSON format. Native macOS checks saved an extensionless name as `.rsk`, reopened a 14-atom reaction, and confirmed that the complete document matched its `.reshiki` original. Saving an existing legacy file retained its filename; Save as also accepted an explicitly typed `.reshiki` suffix. Regression coverage opens `.rsk`, uppercase `.RSK`, `.reshiki`, and `.moruno` documents. Windows installer associations include all three extensions. The three downloadable examples now use `.rsk`; their old URLs remain available with identical contents. Eight native packaging tests and the documentation checks/build passed.
 
 ## Publication sequence
 

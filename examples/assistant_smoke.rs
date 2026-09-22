@@ -115,7 +115,7 @@ async fn main() -> anyhow::Result<()> {
         serde_json::to_string_pretty(&proposal)?,
     )?;
     std::fs::write(
-        output.join("proposal.reshiki"),
+        output.join("proposal.rsk"),
         serde_json::to_string_pretty(&document)?,
     )?;
     std::fs::write(output.join("proposal.svg"), reshiki::scene::svg(&document))?;

@@ -31,10 +31,12 @@ mod tests {
     #[test]
     fn save_names_keep_explicit_suffixes_and_gain_missing_format_extensions() {
         for (name, extension, expected) in [
-            ("Ethanol", "reshiki", "Ethanol.reshiki"),
-            ("Ethanol.", "reshiki", "Ethanol.reshiki"),
-            ("Ethanol.RESHIKI", "reshiki", "Ethanol.RESHIKI"),
-            ("drawing.custom", "reshiki", "drawing.custom"),
+            ("Ethanol", "rsk", "Ethanol.rsk"),
+            ("Ethanol.", "rsk", "Ethanol.rsk"),
+            ("Ethanol.RSK", "rsk", "Ethanol.RSK"),
+            ("Ethanol.RESHIKI", "rsk", "Ethanol.RESHIKI"),
+            ("Ethanol.moruno", "rsk", "Ethanol.moruno"),
+            ("drawing.custom", "rsk", "drawing.custom"),
             ("反応 図", "svg", "反応 図.svg"),
             ("figure", "pdf", "figure.pdf"),
             ("picture", "png", "picture.png"),

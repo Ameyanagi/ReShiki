@@ -10,7 +10,7 @@ Ctrl+Z to undo, Ctrl+Y or Ctrl+Shift+Z to redo, and Ctrl+A/C/X/V to select,
 copy, cut and paste. Ctrl+Shift+G ungroups; Ctrl+G groups. Alt allows free bond
 drawing. Escape leaves the current tool or cancels a draft.
 
-Use `.reshiki` for an editable original, including pages, pictures and styles.
+Use `.rsk` for an editable original, including pages, pictures and styles.
 SVG/PDF/PNG export figures; chemical interchange formats retain their supported
 subset. Windows file dialogs support paths containing spaces and Unicode.
 
@@ -39,7 +39,7 @@ Imported external formats remain subject to the [clipboard limits](clipboard.md)
 5. Close the ReShiki editing window and save the Office document.
 
 The Office file contains the drawing; it does not depend on an external
-`.reshiki` file. ReShiki must be installed to edit it. The installer registers
+`.rsk` file. ReShiki must be installed to edit it. The installer registers
 the editor, and the portable version registers its current location when you
 copy. After moving a portable installation, copy once from its new location.
 If Office closes or rejects an update, ReShiki reports the error and retains
@@ -58,7 +58,7 @@ controlled by Excel. ReShiki's preview itself contains no background fill.
 
 ### Share with a Mac
 
-The `.reshiki` file format works on both platforms. For a document that needs
+The `.rsk` file format works on both platforms. For a document that needs
 editing on a Mac, keep that original alongside the Office document and replace
 the figure after editing it. The Windows OLE double-click workflow is not
 available in Mac Office. ReShiki's macOS clipboard, native printing and renderer

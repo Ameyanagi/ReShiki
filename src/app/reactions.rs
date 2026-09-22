@@ -85,7 +85,7 @@ mod tests {
         let directory = std::path::Path::new("artifacts/reaction-qa");
         std::fs::create_dir_all(directory).unwrap();
         std::fs::write(
-            directory.join("esterification.reshiki"),
+            directory.join("esterification.rsk"),
             serde_json::to_vec_pretty(&app.doc).unwrap(),
         )
         .unwrap();
@@ -312,7 +312,7 @@ impl App {
                     })
                     .size(12),
                     exports,
-                    text("Save .reshiki to retain the complete scheme and captions.")
+                    text("Save .rsk to retain the complete scheme and captions.")
                         .size(11)
                         .color(muted())
                 ]

@@ -8,13 +8,15 @@ import Screenshot from "../../../components/Screenshot.astro";
 
 ## Keep an editable original
 
-**Save** writes a `.reshiki` file with the complete drawing. If you enter a name without an extension, ReShiki adds `.reshiki`, for example `Esterification.reshiki`. Use **Save as** for a separate version. Reopen it with **Open**.
+**Save** writes a `.rsk` file with the complete drawing. If you enter a name without an extension, ReShiki adds `.rsk`, for example `Esterification.rsk`. Use **Save as** for a separate version. Reopen it with **Open**.
+
+The file contains readable JSON text. Existing `.reshiki` and `.moruno` drawings also open normally; **Save** keeps their current filenames. Use **Save as** to save a copy with the shorter `.rsk` extension.
 
 If ReShiki offers a recovery draft after an interrupted session, choose **Restore latest** to inspect it, then save it to a file.
 
 ## Choose an export
 
-Open **Export → Figure**, choose PDF, SVG, or PNG, then click **Export**. Expand **Structure & exchange** for molecular formats and CDXML, or **Pages & printing** for page setup and printing. **Editable document** saves the complete `.reshiki` original.
+Open **Export → Figure**, choose PDF, SVG, or PNG, then click **Export**. Expand **Structure & exchange** for molecular formats and CDXML, or **Pages & printing** for page setup and printing. **Editable document** saves the complete `.rsk` original.
 
 File exports use the full drawing. **Copy image** uses the current selection when objects are selected.
 
@@ -29,7 +31,7 @@ File exports use the full drawing. **Copy image** uses the current selection whe
 
 Export dialogs also add the selected format’s extension when you omit it.
 
-Molecular and reaction data formats do not retain the full figure layout. Keep the `.reshiki` original.
+Molecular and reaction data formats do not retain the full figure layout. Keep the `.rsk` original.
 
 <Screenshot
   src="/manual/export.png"
@@ -46,7 +48,7 @@ In Windows desktop Office, normal Copy embeds a ReShiki drawing. Double-click it
 edit in ReShiki and use **Ctrl+S** to update the open Office document. Then save
 the Office document. **Copy Image** pastes a static figure. See the
 [Windows workflow](/guide/windows/). For editing across Windows and Mac, retain
-the `.reshiki` original: Mac Office does not support this Windows OLE workflow.
+the `.rsk` original: Mac Office does not support this Windows OLE workflow.
 
 ## Print
 

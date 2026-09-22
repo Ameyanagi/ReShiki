@@ -2175,9 +2175,13 @@ impl App {
                         let path = if let Some(p) = path {
                             p
                         } else {
-                            let Some(path) =
-                                files::save_path("Save drawing", "Untitled.reshiki", "reshiki")
-                                    .await
+                            let extension = reshiki::compatibility::NATIVE_EXTENSION;
+                            let Some(path) = files::save_path(
+                                "Save drawing",
+                                &format!("Untitled.{extension}"),
+                                extension,
+                            )
+                            .await
                             else {
                                 return Ok(None);
                             };
@@ -4267,6 +4271,25 @@ mod tests {
             reshiki::export::drawing(&app.doc, "svg").expect("SVG after view change"),
             export
         );
+    }
+
+    #[test]
+    fn native_extensions_open_the_same_editable_document_and_keep_the_path() {
+        let mut document: Document =
+            serde_json::from_str(include_str!("../tests/fixtures/ui-drawn-ethanol.reshiki"))
+                .unwrap();
+        document.version = 15;
+        reshiki::atom_labels::clear_computed(&mut document);
+        let contents = serde_json::to_string_pretty(&document).unwrap();
+        for extension in ["rsk", "RSK", "reshiki", "moruno"] {
+            let (mut app, _) = App::new();
+            let path = PathBuf::from(format!("Ethanol.{extension}"));
+            let _ = app.update(Message::Opened(Some((path.clone(), Ok(contents.clone())))));
+            assert!(!app.error && !app.dirty(), "{extension}: {}", app.status);
+            assert_eq!(app.doc, document);
+            assert_eq!(app.path, Some(path));
+            assert_eq!(app.status, "Document opened");
+        }
     }
 
     #[test]

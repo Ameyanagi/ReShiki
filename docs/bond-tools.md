@@ -24,7 +24,7 @@ Added 2026-09-20. The bond palette and contextual menu now offer **17 presets**.
 - Double and partial bonds offer Automatic, Centered, Left and Right second-line placement. Reversing an edge or reflecting the drawing adjusts its relative side.
 - Enter a hex color and press Enter or Color. Colors and line placement do not change molecular identity. Style/order changes invalidate chemistry so Check recomputes it.
 - Hydrogen bonds must start at an existing explicit H with a covalent bond to another atom, and end at N, O, F or S with nonpositive formal charge. Unsupported endpoints leave the drawing unchanged. The interaction does not increase the hydrogen atom's valence.
-- Drawing, restyling and direction changes are undoable. Save `.reshiki` to retain the complete state.
+- Drawing, restyling and direction changes are undoable. Save `.rsk` to retain the complete state.
 
 ## Native and chemical representation
 

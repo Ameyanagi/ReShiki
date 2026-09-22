@@ -31,7 +31,7 @@ New documents open on a blank canvas.
 3. Hover an atom and press **O** or **N** to change its element.
 4. Use **Templates** to preview and attach a ring or another fragment.
 5. Select a molecule before using **Clean up**. Review the preview and apply it when ready.
-6. Save as `.reshiki` to retain the complete editable drawing.
+6. Save as `.rsk` to retain the complete editable drawing.
 
 New documents use JACS / ACS defaults: 10 pt Arial labels, 14.4 pt bonds, and 0.6 pt lines. Use Undo to reverse drawing edits. See [bond tools](bond-tools.md), [templates](template-library.md), and [keyboard shortcuts](contextual-shortcuts.md).
 

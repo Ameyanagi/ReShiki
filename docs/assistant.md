@@ -51,7 +51,7 @@ The request, conversation, prior proposal and drawing context are shared with Co
 
 Proposals support up to 32 molecules, eight reaction steps, 300 atoms per molecule and 1,500 atoms overall. Generation supports forward, equilibrium and retrosynthesis arrows. Explicit reaction roles remain available through **Properties → Reaction roles…** and reaction exchange; see [reaction workflow and exchange limits](reactions.md).
 
-The integration follows the official [Codex app-server protocol](https://learn.chatgpt.com/docs/app-server), using structured output, public progress summaries, bounded drawing tools and local image inputs. `cargo run --example assistant_smoke -- --generate --prompt '…' --output artifacts/assistant-qa` exercises generation and mandatory review with the local sign-in. `--render drawing.reshiki --output artifacts/assistant-qa/render` renders an existing drawing and its close-ups without a model request.
+The integration follows the official [Codex app-server protocol](https://learn.chatgpt.com/docs/app-server), using structured output, public progress summaries, bounded drawing tools and local image inputs. `cargo run --example assistant_smoke -- --generate --prompt '…' --output artifacts/assistant-qa` exercises generation and mandatory review with the local sign-in. `--render drawing.rsk --output artifacts/assistant-qa/render` renders an existing drawing and its close-ups without a model request.
 
 ## Model and navigation defaults
 

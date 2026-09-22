@@ -999,7 +999,7 @@ impl App {
         body.push(self.inspector_section(
             Section::ExportNative,
             "Editable document",
-            ".reshiki · retains the complete drawing",
+            ".rsk · retains the complete drawing",
             true,
             command("Save native document…", Message::SaveAs).width(Length::Fill),
         ))

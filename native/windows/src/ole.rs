@@ -118,7 +118,7 @@ impl State {
             .prefix("ReShiki Office ")
             .tempdir()
             .map_err(error)?;
-        let path = directory.path().join("Office drawing.reshiki");
+        let path = directory.path().join("Office drawing.rsk");
         let document = self.drawing.borrow().document.clone();
         if document.is_empty() {
             return Err(error("The embedded drawing is empty"));
@@ -150,7 +150,7 @@ impl State {
         {
             let mut session = self.session.borrow_mut();
             if let Some(session) = session.as_mut() {
-                let path = session.directory.join("Office drawing.reshiki");
+                let path = session.directory.join("Office drawing.rsk");
                 if !path.with_extension("office-saved").exists() {
                     self.pending_ack.set(true);
                 }
@@ -237,7 +237,7 @@ impl State {
             .ok_or_else(|| error("Office has closed this drawing"))
             .and_then(|site| unsafe { site.SaveObject() });
         if let Some(session) = self.session.borrow().as_ref() {
-            let path = session.directory.join("Office drawing.reshiki");
+            let path = session.directory.join("Office drawing.rsk");
             match &result {
                 Ok(()) => {
                     write_ack(&path, &self.drawing.borrow().document)?;

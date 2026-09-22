@@ -2,7 +2,7 @@
 
 The Release builds workflow produces a signed macOS disk image, Windows x64/ARM64 setup programs, and portable packages for all five platforms. Linux supports x64 and ARM64; macOS supports Apple Silicon only. Packages include the Rust application and native InChI helper. Drawing and chemistry work offline without Python, RDKit or uv.
 
-Windows setup uses Inno Setup 6.7.3, downloaded with a pinned SHA-256 checksum. It installs per user, adds a Start menu shortcut, and offers a desktop shortcut and `.reshiki` file association. Setup and uninstall preserve user data. CI installs twice to check upgrades, runs native chemistry, and checks uninstallation. Upgrades remove the old app-owned worker while preserving user drawings and caches.
+Windows setup uses Inno Setup 6.7.3, downloaded with a pinned SHA-256 checksum. It installs per user, adds a Start menu shortcut, and offers a desktop shortcut and `.rsk` file association. Setup and uninstall preserve user data. CI installs twice to check upgrades, runs native chemistry, and checks uninstallation. Upgrades remove the old app-owned worker while preserving user drawings and caches.
 
 The macOS disk image contains the signed app and an Applications shortcut. Both the app and disk image are notarized and stapled. CI mounts the image, copies the app out, and verifies chemistry, its signature and Gatekeeper status. The release has eight downloads plus `SHA256SUMS`.
 
