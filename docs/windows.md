@@ -1,8 +1,7 @@
 # Windows
 
-Use the Windows x64 setup or portable ZIP. Windows ARM requires Windows 11 and
-uses x64 emulation for the local RDKit chemistry worker. Install uv before first
-use; ReShiki prepares Python and chemistry packages automatically.
+Use the Windows x64 or ARM64 setup or portable ZIP. Windows ARM requires
+Windows 11. The app and chemistry tools run natively and work offline.
 
 ## Keyboard and files
 
@@ -21,7 +20,7 @@ Normal Copy/Paste within ReShiki retains editable atoms, bonds, captions, arrows
 graphics, pictures and groups. Cut removes the selection only after the clipboard write
 succeeds. Ctrl+Shift+C copies an image; Ctrl+Shift+V explicitly pastes a picture.
 
-Windows Copy provides native ReShiki data, supported ChemDraw interchange data
+Windows Copy provides native ReShiki data, supported editable interchange data
 and an editable Office object containing the complete drawing and a preview.
 The editable preview uses vector paths for bonds and outlined text, preserving
 smooth edges when resized and transparency over colored pages and slides.
@@ -81,9 +80,8 @@ printing leaves the drawing, selection and undo history intact.
 ## Release performance and debugging
 
 Use `cargo run --release --locked` to measure performance. Debug builds perform
-substantially more work in drawing and layout. First chemistry setup may also
-download dependencies. Measure idle CPU after the drawing and chemistry finish
-loading, separately from that initial setup.
+substantially more work in drawing and layout. Measure idle CPU after the
+drawing and chemistry finish loading.
 
 The idle timer correction is included in v0.4.0. Windows additionally uses
 Iced's Tiny Skia renderer, avoiding GPU emulation on virtual machines and remote
@@ -113,8 +111,8 @@ documents retain the native drawing and a transparent vector preview. Enlarged
 figures were inspected in all three applications; Excel's separate object fill
 was set to No fill for the transparency check.
 
-The Windows x64 package was extracted outside the checkout and checked for
-missing-uv guidance, first-use chemistry setup and offline reuse. Its installer
+The earlier worker-based Windows x64 package was extracted outside the checkout
+and checked for missing-uv guidance, first-use setup and offline reuse. Its installer
 was checked for installation, in-place upgrade, chemistry and uninstallation
 without removing user data. The live assistant connected and produced a
 validated ethanol drawing through the user's installed Codex executable.

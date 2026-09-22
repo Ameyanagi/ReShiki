@@ -1,6 +1,6 @@
 # Capability report
 
-Current release packages require uv and create a local chemistry environment on first use; see [installation](getting-started.md) and [release signing](releasing.md). Earlier desktop verification records below include self-contained QA builds.
+This page retains earlier desktop verification records. For current packages and setup, see [installation](getting-started.md) and [release signing](releasing.md).
 
 [Document drawing styles](drawing-styles.md) now provide previewed font and bond settings, reusable style files and Undo. JACS / ACS remains the default for every new document.
 

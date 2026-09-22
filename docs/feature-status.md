@@ -1,6 +1,6 @@
 # ReShiki feature status and remaining work
 
-Current release packages require uv and create a local chemistry environment on first use; see [installation](getting-started.md) and [release signing](releasing.md). Earlier desktop verification records below include self-contained QA builds.
+This inventory retains earlier workflow checks. For current packages and setup, see [installation](getting-started.md) and [release signing](releasing.md).
 
 Updated 2026-09-20 for version 0.2.0. This inventory records supported workflows,
 explicit limitations and planned work. A supported subset is not a claim of
