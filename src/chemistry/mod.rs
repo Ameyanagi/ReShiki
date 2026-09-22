@@ -16,6 +16,7 @@ pub mod document;
 pub mod electronic;
 pub mod graph;
 pub mod hydrogens;
+pub mod inchi;
 pub mod kekulize;
 pub mod molfile;
 mod native_order;

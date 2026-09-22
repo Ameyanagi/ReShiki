@@ -58,6 +58,7 @@ open = "5"
 roxmltree = "0.20"
 tiff = "0.11.3"
 thiserror = "2"
+sha2 = { version = "0.10.9", default-features = false, features = ["force-soft"] }
 
 [profile.dev]
 debug = 1
