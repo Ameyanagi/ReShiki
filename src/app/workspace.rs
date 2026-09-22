@@ -9,12 +9,11 @@ use iced::widget::{
     text, text_editor, text_input, tooltip,
 };
 use iced::{Alignment, Border, Color, Element, Length, Theme};
-use reshiki::bonds::{BondPreset, DoublePosition};
-use reshiki::editing::{Arrange, Transform};
+use reshiki::bonds::BondPreset;
 use reshiki::typography::{Script, StyleChange, TextAlign};
 
 impl App {
-    fn selection_summary(&self) -> String {
+    pub(super) fn selection_summary(&self) -> String {
         let groups = self.doc.outer_selected_groups(&self.selected);
         let covered: std::collections::HashSet<_> = self
             .doc
@@ -59,14 +58,14 @@ impl App {
         }
     }
 
-    fn can_group(&self) -> bool {
+    pub(super) fn can_group(&self) -> bool {
         self.selected.len() > 1
             && !self.doc.groups.iter().any(|g| {
                 g.members.len() == self.selected.len()
                     && g.members.iter().all(|id| self.selected.contains(id))
             })
     }
-    fn graphic_panel(&self) -> Element<'_, Message> {
+    pub(super) fn graphic_panel(&self) -> Element<'_, Message> {
         use reshiki::graphics::{BracketSides, GraphicChange, GraphicKind, LinePattern};
         let selected: Vec<_> = self
             .doc
@@ -413,7 +412,7 @@ impl App {
             .into()
     }
 
-    fn text_panel(&self) -> Element<'_, Message> {
+    pub(super) fn text_panel(&self) -> Element<'_, Message> {
         if self.inline_text.is_some() {
             return column![
                 section("EDITING ON CANVAS"),
@@ -1331,6 +1330,11 @@ impl App {
                 InspectorTab::DrawingStyle | InspectorTab::Reactions
             ) {
                 320
+            } else if matches!(
+                self.inspector_tab,
+                InspectorTab::Properties | InspectorTab::Export
+            ) {
+                300
             } else {
                 256
             },
@@ -1338,424 +1342,6 @@ impl App {
         .height(Length::Fill)
         .style(panel)
         .into()
-    }
-
-    fn properties_panel(&self) -> Element<'_, Message> {
-        let mut body = column![
-            section("STRUCTURE"),
-            text(format!(
-                "{} atoms · {} bonds",
-                self.doc.atoms.len(),
-                self.doc.bonds.len()
-            ))
-            .size(12)
-            .color(muted())
-        ]
-        .spacing(10);
-        if self
-            .selected
-            .iter()
-            .filter(|id| self.doc.atom(**id).is_some())
-            .count()
-            >= 3
-        {
-            body = body.push(
-                button(text("Toggle aromatic circle  ·  A").size(12))
-                    .on_press_maybe((!self.busy).then_some(Message::AromaticDisplay))
-                    .style(button::text),
-            );
-        }
-        if let Tool::RingPreset(preset) = self.tool {
-            body=column![section("RING PREVIEW"),text(preset.to_string()).size(14),canvas(crate::canvas::DrawingThumbnail(preset.document(self.bond_drawing.length,false))).width(Length::Fill).height(98),
-                text("Click to place. Drag to rotate a free ring or choose an attachment side. Click an existing atom to share it, or a bond to fuse.").size(12),
-                text("Hold Alt/Option on an atom to connect the complete ring with a new bond. Each placement is one Undo step.").size(11).color(muted()),
-                text(if preset==reshiki::rings::Preset::Cyclopentadiene {"Hold Shift to move the double bonds."} else {"Chair A/B are drawing projections; they do not assign stereochemistry. Cleanup may redraw the ring as a regular hexagon."}).size(11).color(muted()),
-                horizontal_line(),body].spacing(10);
-        }
-        if matches!(self.tool, Tool::Graphic(_))
-            || self
-                .doc
-                .graphics
-                .iter()
-                .any(|g| self.selected.contains(&g.id) && g.picture.is_none())
-        {
-            body = column![self.graphic_panel(), horizontal_line(), body].spacing(12);
-        }
-        if self
-            .doc
-            .graphics
-            .iter()
-            .any(|g| self.selected.contains(&g.id) && g.picture.is_some())
-        {
-            body = column![self.picture_panel(), horizontal_line(), body].spacing(12);
-        }
-        if self.tool == Tool::Arrow
-            || self
-                .doc
-                .arrows
-                .iter()
-                .any(|a| self.selected.contains(&a.id))
-        {
-            body = column![self.arrow_panel(), horizontal_line(), body].spacing(12);
-        }
-        if self.tool == Tool::Text
-            || (self.selected.len() == 1
-                && self
-                    .caption_target
-                    .is_some_and(|id| self.selected.contains(&id)))
-        {
-            body = column![self.text_panel(), horizontal_line(), body].spacing(12);
-        }
-        body = body.push(command(
-            "Reaction roles…",
-            Message::Reaction(super::reactions::Action::Open),
-        ));
-        body = body.push(command(
-            "Atom labels & numbering…",
-            Message::Inspector(InspectorTab::Labels),
-        ));
-        body = body.push(command(
-            "Chemical abbreviations…",
-            Message::Inspector(InspectorTab::Abbreviations),
-        ));
-        if let Some(error) = &self.chemistry_notice {
-            body = body.push(text(error).size(11).color(Color::from_rgb8(182, 66, 61)));
-        }
-        if let Some(a) = &self.analysis {
-            body = body
-                .push(
-                    text(&a.formula)
-                        .size(if a.formula.chars().count() > 15 {
-                            19
-                        } else {
-                            25
-                        })
-                        .width(Length::Fill)
-                        .wrapping(text::Wrapping::Glyph),
-                )
-                .push(horizontal_line());
-            for (label, value) in [
-                ("Weight (g/mol)", format!("{:.3}", a.mass)),
-                ("Exact mass (Da)", format!("{:.5}", a.exact_mass)),
-                ("cLogP", format!("{:.2}", a.logp)),
-                ("TPSA (Å²)", format!("{:.2}", a.tpsa)),
-                ("H-bond donors", a.donors.to_string()),
-                ("H-bond acceptors", a.acceptors.to_string()),
-                ("Rings", a.rings.to_string()),
-                ("Unpaired electrons", a.unpaired_electrons.to_string()),
-            ] {
-                body = body.push(
-                    row![
-                        text(label).size(11).color(muted()),
-                        Space::new().width(Length::Fill),
-                        text(value).size(12)
-                    ]
-                    .align_y(Alignment::Center),
-                );
-            }
-            body = body
-                .push(Space::new().height(4))
-                .push(section("CANONICAL SMILES"))
-                .push(
-                    text(if a.smiles.is_empty() {
-                        "SMILES cannot represent these hydrogen or partial bonds."
-                    } else {
-                        &a.smiles
-                    })
-                    .size(11),
-                )
-                .push(
-                    command("Copy SMILES", Message::CopySmiles)
-                        .on_press_maybe((!a.smiles.is_empty()).then_some(Message::CopySmiles)),
-                );
-        } else {
-            body = body
-                .push(
-                    text("Check the structure to refresh its formula and properties.")
-                        .size(12)
-                        .color(muted()),
-                )
-                .push(
-                    command("Check structure", Message::Analyze)
-                        .on_press_maybe((!self.busy).then_some(Message::Analyze)),
-                );
-        }
-        if !self.selected.is_empty() {
-            body = if self.selected.len() > 1
-                || self
-                    .doc
-                    .atoms
-                    .iter()
-                    .any(|a| self.selected.contains(&a.id) && !a.marks.is_empty())
-            {
-                column![
-                    section("SELECTION"),
-                    self.selection_panel(),
-                    horizontal_line(),
-                    body
-                ]
-                .spacing(10)
-            } else {
-                body.push(horizontal_line())
-                    .push(section("SELECTION"))
-                    .push(self.selection_panel())
-            };
-        }
-        body.push(horizontal_line())
-            .push(section("PUBLICATION STYLE"))
-            .push(text(&self.doc.drawing_style.name).size(13))
-            .push(
-                text(format!(
-                    "{} {} pt\nBonds {} pt · Lines {} pt\nPNG 1200 dpi",
-                    self.doc.drawing_style.font_family,
-                    self.doc.drawing_style.font_size_pt,
-                    self.doc.drawing_style.bond_length_pt,
-                    self.doc.drawing_style.line_width_pt
-                ))
-                .size(11)
-                .color(muted()),
-            )
-            .push(command(
-                "Edit drawing style…",
-                Message::DrawingStyle(super::document_styles::Action::Open),
-            ))
-            .into()
-    }
-
-    fn selection_panel(&self) -> Element<'_, Message> {
-        let has_atoms = self.doc.atoms.iter().any(|a| self.selected.contains(&a.id));
-        let mut body = column![
-            row![
-                command("Group", Message::Group)
-                    .on_press_maybe(self.can_group().then_some(Message::Group)),
-                command("Ungroup", Message::Ungroup).on_press_maybe(
-                    (!self.doc.outer_selected_groups(&self.selected).is_empty())
-                        .then_some(Message::Ungroup)
-                )
-            ]
-            .spacing(6),
-            command("Invert selection", Message::InvertSelection),
-            pick_list(
-                [
-                    reshiki::graphics::GraphicKind::Brackets,
-                    reshiki::graphics::GraphicKind::Parentheses,
-                    reshiki::graphics::GraphicKind::Braces,
-                    reshiki::graphics::GraphicKind::Rectangle,
-                    reshiki::graphics::GraphicKind::RoundedRectangle
-                ],
-                None::<reshiki::graphics::GraphicKind>,
-                Message::AddFrame
-            )
-            .placeholder("Add frame…")
-            .text_size(12)
-            .padding(6),
-            text("Drag a box corner to resize. Drag the top handle to rotate; Shift snaps to 15°.")
-                .size(11)
-                .color(muted()),
-            row![
-                command("↶ 30°", Message::Transform(Transform::Rotate(-30.0))).width(Length::Fill),
-                command("↷ 30°", Message::Transform(Transform::Rotate(30.0))).width(Length::Fill)
-            ]
-            .spacing(6),
-            row![
-                command("Flip H", Message::Transform(Transform::FlipHorizontal))
-                    .width(Length::Fill),
-                command("Flip V", Message::Transform(Transform::FlipVertical)).width(Length::Fill)
-            ]
-            .spacing(6),
-            row![
-                command("Left", Message::Arrange(Arrange::AlignLeft)).width(Length::Fill),
-                command("Center X", Message::Arrange(Arrange::AlignHorizontal)).width(Length::Fill),
-                command("Right", Message::Arrange(Arrange::AlignRight)).width(Length::Fill)
-            ]
-            .spacing(6),
-            row![
-                command("Top", Message::Arrange(Arrange::AlignTop)).width(Length::Fill),
-                command("Center Y", Message::Arrange(Arrange::AlignVertical)).width(Length::Fill),
-                command("Bottom", Message::Arrange(Arrange::AlignBottom)).width(Length::Fill)
-            ]
-            .spacing(6),
-            row![
-                command(
-                    "Distribute X",
-                    Message::Arrange(Arrange::DistributeHorizontal)
-                )
-                .width(Length::Fill),
-                command(
-                    "Distribute Y",
-                    Message::Arrange(Arrange::DistributeVertical)
-                )
-                .width(Length::Fill)
-            ]
-            .spacing(6),
-        ]
-        .spacing(6);
-        let groups = self.doc.outer_selected_groups(&self.selected);
-        if !groups.is_empty() {
-            let integral = self
-                .doc
-                .groups
-                .iter()
-                .filter(|g| groups.contains(&g.id))
-                .all(|g| g.integral);
-            body = body
-                .push(
-                    checkbox(integral)
-                        .label("Integral group")
-                        .size(14)
-                        .text_size(12)
-                        .on_toggle(Message::IntegralGroup),
-                )
-                .push(
-                    text(
-                        "Integral groups stay whole with Option/Alt-click. Ungroup releases them.",
-                    )
-                    .size(11)
-                    .color(muted()),
-                );
-        }
-        let bonds: Vec<_> = self
-            .doc
-            .bonds
-            .iter()
-            .filter(|b| self.selected.contains(&b.a) && self.selected.contains(&b.b))
-            .collect();
-        if let Some(first) = bonds.first() {
-            let preset = BondPreset::of(first)
-                .filter(|p| bonds.iter().all(|b| BondPreset::of(b) == Some(*p)));
-            let mut bond_controls = column![section("BONDS")].spacing(6).push(
-                pick_list(BondPreset::ALL, preset, Message::ApplyBondPreset)
-                    .placeholder("Mixed bond styles")
-                    .text_size(12)
-                    .padding(6),
-            );
-            if bonds.iter().any(|b| [2, 7].contains(&b.order)) {
-                let position = bonds
-                    .iter()
-                    .find(|b| [2, 7].contains(&b.order))
-                    .map(|b| b.double_position)
-                    .filter(|p| {
-                        bonds
-                            .iter()
-                            .filter(|b| [2, 7].contains(&b.order))
-                            .all(|b| b.double_position == *p)
-                    });
-                bond_controls = bond_controls
-                    .push(text("Second line placement").size(11).color(muted()))
-                    .push(
-                        pick_list(DoublePosition::ALL, position, Message::BondPosition)
-                            .placeholder("Mixed positions")
-                            .text_size(12)
-                            .padding(6),
-                    );
-            }
-            bond_controls = bond_controls.push(
-                row![
-                    text_input("#000000", &self.bond_color_input)
-                        .on_input(Message::BondColor)
-                        .on_submit(Message::ApplyBondColor)
-                        .size(12)
-                        .padding(6),
-                    command("Color", Message::ApplyBondColor)
-                ]
-                .spacing(6),
-            );
-            bond_controls = bond_controls
-                .push(text("Crossing bonds").size(11).color(muted()))
-                .push(
-                    row![
-                        command("Bond in front", Message::BondDepth(true)),
-                        command("Bond behind", Message::BondDepth(false))
-                    ]
-                    .spacing(4),
-                );
-            body = column![bond_controls, horizontal_line(), body].spacing(8);
-        }
-        if has_atoms {
-            let count = self
-                .doc
-                .atoms
-                .iter()
-                .find(|a| self.selected.contains(&a.id))
-                .map_or(0, |a| a.radical_electrons);
-            let mut atom_controls = column![section("ATOM MARKS")].spacing(7).push(
-                row![
-                    text("Unpaired electrons").size(11),
-                    pick_list([0u8, 1, 2], Some(count), Message::AtomRadical)
-                        .text_size(12)
-                        .padding(5)
-                ]
-                .spacing(6)
-                .align_y(Alignment::Center),
-            );
-            for a in self
-                .doc
-                .atoms
-                .iter()
-                .filter(|a| self.selected.contains(&a.id) && !a.marks.is_empty())
-            {
-                atom_controls =
-                    atom_controls.push(text(format!("{} · positioned marks", a.element)).size(12));
-                for (index, mark) in a.marks.iter().enumerate() {
-                    atom_controls = atom_controls.push(
-                        row![
-                            text(match mark.kind {
-                                reshiki::scientific::MarkKind::Charge => "Charge",
-                                reshiki::scientific::MarkKind::CircledCharge => "Circled charge",
-                                reshiki::scientific::MarkKind::Radical => "Radical",
-                                reshiki::scientific::MarkKind::RadicalIon => "Radical ion",
-                                reshiki::scientific::MarkKind::LonePair => "Lone pair",
-                                reshiki::scientific::MarkKind::LonePairBar => "Lone pair bar",
-                            })
-                            .size(11)
-                            .width(Length::Fill),
-                            command("Rotate", Message::RotateMark(a.id, index)),
-                            command("Remove", Message::RemoveMark(a.id, index))
-                        ]
-                        .spacing(5),
-                    );
-                }
-                atom_controls = atom_controls.push(command(
-                    if self.tool == Tool::EditPoints {
-                        "Finish positioning marks"
-                    } else {
-                        "Position atom marks"
-                    },
-                    Message::Tool(if self.tool == Tool::EditPoints {
-                        Tool::Select
-                    } else {
-                        Tool::EditPoints
-                    }),
-                ));
-            }
-            body = column![atom_controls, horizontal_line(), body].spacing(8);
-        }
-        if has_atoms {
-            body = body
-                .push(
-                    row![
-                        text("Charge").size(12).width(Length::Fill),
-                        command("−", Message::Charge(-1)),
-                        command("+", Message::Charge(1))
-                    ]
-                    .spacing(6)
-                    .align_y(Alignment::Center),
-                )
-                .push(
-                    row![
-                        text_input("Isotope mass", &self.isotope)
-                            .on_input(Message::Isotope)
-                            .on_submit(Message::ApplyIsotope)
-                            .size(12)
-                            .padding(7),
-                        command("Set", Message::ApplyIsotope)
-                    ]
-                    .spacing(6),
-                )
-                .push(command("Reverse bonds", Message::ReverseBonds));
-        }
-        body.push(command("Delete selection", Message::Delete).style(button::danger))
-            .into()
     }
 
     fn templates_panel(&self) -> Element<'_, Message> {
@@ -2218,115 +1804,6 @@ impl App {
                 Message::Labels(A::ResetOverrides),
             ))
             .into()
-    }
-
-    fn export_panel(&self) -> Element<'_, Message> {
-        let mut body = column![
-            command(
-                "Reaction roles & export…",
-                Message::Reaction(super::reactions::Action::Open)
-            ),
-            section("DRAWING"),
-            text(format!(
-                "{} · physical publication size",
-                self.doc.drawing_style.name
-            ))
-            .size(11)
-            .color(muted())
-        ]
-        .spacing(10);
-        for (label, format) in [
-            ("PDF · vector", "pdf"),
-            ("SVG · editable vector", "svg"),
-            ("PNG · 1200 dpi", "png"),
-        ] {
-            body = body.push(
-                command(label, Message::Export(format))
-                    .on_press_maybe((!self.busy).then_some(Message::Export(format)))
-                    .width(Length::Fill),
-            );
-        }
-        if reshiki::clipboard::available() {
-            body = body
-                .push(
-                    command(
-                        super::platform_shortcut("Copy image · ⇧⌘C", "Copy image · Ctrl+Shift+C"),
-                        Message::CopyImage,
-                    )
-                    .on_press_maybe((!self.clipboard_busy).then_some(Message::CopyImage))
-                    .width(Length::Fill),
-                )
-                .push(
-                    text(if self.selected.is_empty() {
-                        "Copies the full drawing."
-                    } else {
-                        "Copies the selected objects."
-                    })
-                    .size(11)
-                    .color(muted()),
-                );
-        }
-        body = body
-            .push(horizontal_line())
-            .push(section("PUBLICATION PAGES"))
-            .push(command(
-                "Page setup…",
-                Message::Pages(super::pages::Action::Show),
-            ));
-        if self.doc.page_layout.is_some() {
-            body = body.push(command(
-                "PDF · all pages",
-                Message::Pages(super::pages::Action::Export),
-            ));
-        }
-        if reshiki::printing::available() {
-            body = body.push(
-                command(
-                    super::platform_shortcut("Print… · ⌘P", "Print… · Ctrl+P"),
-                    Message::Printing(super::printing::Action::Start(
-                        reshiki::printing::Scope::Document,
-                    )),
-                )
-                .on_press_maybe(self.printing.active.is_none().then_some(Message::Printing(
-                    super::printing::Action::Start(reshiki::printing::Scope::Document),
-                )))
-                .width(Length::Fill),
-            );
-            if !self.selected.is_empty() {
-                body = body.push(
-                    command(
-                        "Print selection…",
-                        Message::Printing(super::printing::Action::Start(
-                            reshiki::printing::Scope::Selection,
-                        )),
-                    )
-                    .on_press_maybe(self.printing.active.is_none().then_some(Message::Printing(
-                        super::printing::Action::Start(reshiki::printing::Scope::Selection),
-                    )))
-                    .width(Length::Fill),
-                );
-            }
-        }
-        body = body.push(horizontal_line()).push(section("CHEMICAL DATA"));
-        for (label, format) in [
-            ("MOL structure", "mol"),
-            ("SMILES text", "smiles"),
-            ("InChI identifier", "inchi"),
-            ("CDXML · basic drawing", "cdxml"),
-        ] {
-            body = body.push(
-                command(label, Message::Export(format))
-                    .on_press_maybe((!self.busy).then_some(Message::Export(format)))
-                    .width(Length::Fill),
-            );
-        }
-        body.push(
-            text("Save as .reshiki to retain the complete editable drawing.")
-                .size(11)
-                .color(muted()),
-        )
-        .push(command("Save native document", Message::SaveAs))
-        .into()
     }
 
     fn import_drawer(&self) -> Element<'_, Message> {

@@ -19,6 +19,7 @@ mod file_shortcuts;
 mod graphics;
 mod icons;
 mod inline_text;
+mod inspector;
 mod joining;
 mod pages;
 mod palettes;
@@ -47,6 +48,7 @@ pub enum InspectorTab {
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    InspectorAction(inspector::Action),
     Updates(updates::Action),
     Reaction(reactions::Action),
     DrawingStyle(document_styles::Action),
@@ -298,6 +300,7 @@ pub struct App {
     autosaved_revision: Option<u64>,
     autosave_status: String,
     inspector_open: bool,
+    inspector_ui: inspector::State,
     inspector_tab: InspectorTab,
     import_open: bool,
     help_open: bool,
@@ -400,6 +403,7 @@ impl App {
             autosaved_revision: None,
             autosave_status: String::new(),
             inspector_open: true,
+            inspector_ui: inspector::State::default(),
             inspector_tab: InspectorTab::Properties,
             import_open: false,
             help_open: false,
@@ -773,6 +777,10 @@ impl App {
             .unwrap_or(&self.doc)
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        if let Message::InspectorAction(action) = message {
+            self.inspector_ui.update(action);
+            return Task::none();
+        }
         if let Message::Updates(action) = message {
             return self.update_action(action);
         }
@@ -1354,6 +1362,7 @@ impl App {
                     self.fit();
                 }
             }
+            Message::InspectorAction(_) => {}
             Message::Tool(tool) => {
                 self.erase_stroke = false;
                 self.palette = None;
