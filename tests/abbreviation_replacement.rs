@@ -52,6 +52,78 @@ fn difference(actual: &Value, expected: &Value, path: &str) -> Option<String> {
     Some(format!("{path}: {actual} != {expected}"))
 }
 
+fn math_diagnostic(case: &Case, geometry: &Value) -> anyhow::Result<String> {
+    use reshiki::chemistry::stereo::Point3;
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let python = root.join(if cfg!(windows) {
+        ".venv/Scripts/python.exe"
+    } else {
+        ".venv/bin/python"
+    });
+    let mut child = Command::new(python)
+        .arg(root.join("tests/abbreviation_replacement_reference.py"))
+        .arg("--math")
+        .env("PYTHONUTF8", "1")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()?;
+    let request = serde_json::json!({
+        "document": case.document, "selection": case.selection, "label": case.label
+    });
+    child
+        .stdin
+        .take()
+        .context("Missing diagnostic input")?
+        .write_all(&serde_json::to_vec(&request)?)?;
+    let output = child.wait_with_output()?;
+    anyhow::ensure!(output.status.success(), "Native math diagnostic failed");
+    let native: Value = serde_json::from_slice(&output.stdout)?;
+    let template = geometry["templates"]
+        .as_array()
+        .context("Missing geometry templates")?
+        .iter()
+        .find(|v| v["label"].as_str() == Some(case.label.as_str()))
+        .context("Missing template")?;
+    let points: Vec<Point3> = serde_json::from_value(template["positions"].clone())?;
+    let dummy = points.first().context("Missing template dummy")?;
+    let anchor = points.get(1).context("Missing template anchor")?;
+    let source_id = case.selection.first().context("Missing selected atom")?;
+    let source = case
+        .document
+        .atom(*source_id)
+        .context("Missing source atom")?;
+    let bond = case
+        .document
+        .bonds
+        .iter()
+        .find(|b| b.a == *source_id || b.b == *source_id)
+        .context("Missing attachment bond")?;
+    let outside = case
+        .document
+        .atom(if bond.a == *source_id { bond.b } else { bond.a })
+        .context("Missing outside atom")?;
+    let dx = f64::from(outside.position.x) - f64::from(source.position.x);
+    let dy = f64::from(outside.position.y) - f64::from(source.position.y);
+    let original = (-(dummy.y - anchor.y)).atan2(dummy.x - anchor.x);
+    let desired = dy.atan2(dx);
+    let angle = desired - original;
+    let rust = [
+        ("original_angle", original),
+        ("desired_angle", desired),
+        ("angle", angle),
+        ("c", angle.cos()),
+        ("s", angle.sin()),
+        // Diagnostic only: production uses the compensated CPython norm.
+        ("system_hypot_scale", dx.hypot(dy) / 1.5),
+    ]
+    .map(|(name, value)| format!("{name}={value:.17e} bits={:016x}", value.to_bits()));
+    Ok(format!(
+        "native math: {}; Rust math: {rust:?}",
+        native["math"]
+    ))
+}
+
 #[test]
 fn replacement_documents_and_final_chemistry_match_original_worker() -> anyhow::Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -139,7 +211,9 @@ fn replacement_documents_and_final_chemistry_match_original_worker() -> anyhow::
         if let Some(failure) = failure
             && failures.len() < 40
         {
-            failures.push(format!("{}: {failure}", case.name));
+            let diagnostic = math_diagnostic(&case, &geometry)
+                .unwrap_or_else(|error| format!("Math diagnostic unavailable: {error}"));
+            failures.push(format!("{}: {failure}\n{diagnostic}", case.name));
         }
     }
     assert!(

@@ -35,6 +35,28 @@ def f32(value):
     return struct.unpack("f", struct.pack("f", value))[0]
 
 
+def trace_math(request):
+    """Observe the unchanged reference function's local math on a failing input."""
+    captured = {}
+
+    def observe(frame, event, _argument):
+        if event == "return" and frame.f_code is abbreviations.replace.__code__:
+            for name in ["original_angle", "desired_angle", "angle", "c", "s", "scale"]:
+                value = frame.f_locals.get(name)
+                if isinstance(value, float):
+                    captured[name] = dict(value=value, bits=value.hex())
+
+    previous = sys.getprofile()
+    try:
+        sys.setprofile(observe)
+        expected = abbreviations.replace(
+            request["document"], request["selection"], request["label"], worker.to_document
+        )
+    finally:
+        sys.setprofile(previous)
+    print(json.dumps(dict(math=captured, document=expected)))
+
+
 def emit(name, doc, selection, label, check_chemistry=False):
     doc = copy.deepcopy(doc)
     for atom in doc["atoms"]:
@@ -111,11 +133,15 @@ def main():
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--geometry", action="store_true")
     modes.add_argument("--wire", action="store_true")
+    modes.add_argument("--math", action="store_true")
     modes.add_argument("--write-geometry", action="store_true")
     parser.add_argument("--target-arch", choices=("x86_64", "aarch64"))
     args = parser.parse_args()
     if args.target_arch and not args.write_geometry:
         parser.error("--target-arch requires --write-geometry")
+    if args.math:
+        trace_math(json.load(sys.stdin))
+        return
     if args.geometry:
         print(json.dumps(geometry()))
         return
