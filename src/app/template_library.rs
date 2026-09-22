@@ -113,7 +113,7 @@ impl Default for State {
             anchor: Anchor::Auto,
             connection: Connection::Connect,
             active: false,
-            repeat: false,
+            repeat: true,
             name: String::new(),
             category: "My templates".into(),
             draft: None,

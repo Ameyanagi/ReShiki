@@ -4008,7 +4008,7 @@ mod tests {
     }
 
     #[test]
-    fn template_choice_is_nonmutating_and_attachment_is_one_undo_step() {
+    fn one_off_template_choice_is_nonmutating_and_attachment_is_one_undo_step() {
         let (mut app, _) = App::new();
         app.busy = false;
         let a = app.doc.add_atom("C", Point::new(-30.0, 0.0));
@@ -4024,6 +4024,7 @@ mod tests {
         assert_eq!(app.doc, before);
         assert!(!app.dirty());
         assert_eq!(app.tool, Tool::Template);
+        let _ = app.update(Message::Templates(template_library::Action::Repeat(false)));
         app.templates.connection = reshiki::templates::Connection::FuseBond;
         app.edit(Edit::Template(Point::default(), None));
         assert_eq!(app.tool, Tool::Select);
@@ -4037,6 +4038,66 @@ mod tests {
         let _ = app.update(Message::Tool(Tool::Select));
         app.edit(Edit::Template(Point::new(500.0, 500.0), None));
         assert_eq!(app.doc, placed);
+    }
+
+    #[test]
+    fn templates_repeat_bond_fusion_by_default_until_cancelled() {
+        use reshiki::templates::{Anchor, Connection};
+        use template_library::Action as A;
+        let (mut app, _) = App::new();
+        app.busy = false;
+        let a = app.doc.add_atom("C", Point::new(0., -21.));
+        let b = app.doc.add_atom("C", Point::new(0., 21.));
+        app.doc.add_bond(a, b, 1, "plain");
+        let index = reshiki::templates::LIBRARY
+            .iter()
+            .position(|t| t.name == "Cyclohexane")
+            .unwrap();
+        let source = &reshiki::templates::LIBRARY[index].document.bonds[0];
+        let anchor = Anchor::Bond(source.a, source.b);
+        let _ = app.update(Message::InsertTemplate(index));
+        let _ = app.update(Message::Templates(A::Anchor(anchor)));
+        assert!(app.templates.repeat);
+        let mut snapshots = vec![app.doc.clone()];
+        for (atoms, bonds) in [(6, 6), (10, 11), (14, 16)] {
+            let point = app
+                .doc
+                .bonds
+                .iter()
+                .map(|bond| {
+                    let p = app.doc.atom(bond.a).unwrap().position;
+                    let q = app.doc.atom(bond.b).unwrap().position;
+                    Point::new((p.x + q.x) / 2., (p.y + q.y) / 2.)
+                })
+                .max_by(|p, q| p.x.total_cmp(&q.x))
+                .unwrap();
+            app.edit(Edit::Template(point, None));
+            assert!(!app.error, "{}", app.status);
+            assert_eq!((app.doc.atoms.len(), app.doc.bonds.len()), (atoms, bonds));
+            assert_eq!(app.tool, Tool::Template);
+            assert_eq!(app.templates.anchor, anchor);
+            assert_eq!(app.templates.connection, Connection::FuseBond);
+            app.doc.validate().unwrap();
+            snapshots.push(app.doc.clone());
+        }
+        // A misplaced click must preserve both the drawing and placement mode.
+        app.edit(Edit::Template(app.doc.atoms[0].position, None));
+        assert!(app.error);
+        assert_eq!(app.doc, snapshots[3]);
+        assert_eq!(app.tool, Tool::Template);
+        for document in snapshots[..3].iter().rev() {
+            let _ = app.update(Message::Undo);
+            assert_eq!(&app.doc, document);
+            assert_eq!(app.tool, Tool::Template);
+        }
+        for document in &snapshots[1..] {
+            let _ = app.update(Message::Redo);
+            assert_eq!(&app.doc, document);
+        }
+        let _ = app.update(Message::Escape);
+        assert_eq!(app.tool, Tool::Select);
+        app.edit(Edit::Template(Point::new(500., 500.), None));
+        assert_eq!(app.doc, snapshots[3]);
     }
 
     #[test]

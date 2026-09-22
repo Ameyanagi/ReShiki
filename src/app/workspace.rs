@@ -1495,6 +1495,15 @@ impl App {
                         .text_size(12)
                         .size(14)
                         .on_toggle(|v| Message::Templates(A::Repeat(v))),
+                )
+                .push(
+                    text(if state.repeat {
+                        "Click again to add another copy. Escape finishes placement."
+                    } else {
+                        "Returns to Select after one placement."
+                    })
+                    .size(11)
+                    .color(muted()),
                 );
             if !t.note.is_empty() {
                 body = body.push(text(&t.note).size(11).color(muted()));
