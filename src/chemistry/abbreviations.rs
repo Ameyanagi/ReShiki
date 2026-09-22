@@ -4,8 +4,10 @@
 //! Copyright (C) 2020 Greg Landrum and T5 Informatics GmbH; RDKit contributors.
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
 mod matcher;
+mod replacement;
 use super::{RDKIT_VERSION, document::Molecule};
 use crate::{abbreviations::Abbreviation, document::Document};
+pub use replacement::{Error as ReplacementError, replace};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},

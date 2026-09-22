@@ -703,6 +703,11 @@ class PreparedMoleculeTests(unittest.TestCase):
                             side_effect=AssertionError("Native abbreviation matching called"),
                         ),
                         patch.object(
+                            worker.abbreviations,
+                            "replace",
+                            side_effect=AssertionError("Native abbreviation replacement called"),
+                        ),
+                        patch.object(
                             worker,
                             "from_document",
                             side_effect=AssertionError("Native document preparation called"),

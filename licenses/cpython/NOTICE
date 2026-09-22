@@ -1,0 +1,11 @@
+ReShiki adapts the compensated vector_norm algorithm from CPython 3.12.12,
+Modules/mathmodule.c, commit 4a5632fbf9bf59477c540e3f53fa7cdbeea3e3f5:
+https://github.com/python/cpython/tree/v3.12.12
+
+Copyright (c) 2001-2025 Python Software Foundation. All rights reserved.
+See the accompanying LICENSE for the complete Python license and history.
+
+The adaptation in src/chemistry/abbreviations/replacement.rs specializes the
+algorithm to two finite coordinate differences, preserving math.hypot rounding
+when placing fixed abbreviation templates. It uses safe Rust and does not
+include or invoke the Python interpreter.
