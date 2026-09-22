@@ -1,0 +1,11 @@
+ReShiki distributes a modified zune-jpeg 0.5.15.
+Original source: https://github.com/etemesi254/zune-image
+Source commit: 31d81fed7551c8ccea456d9d8e2b1fd8bebb6995
+
+ReShiki changes (2026): chroma sampling at component edges and integer IDCT
+precision. These follow libjpeg-turbo 3.1.4.1 jdsample.c and jidctint.c.
+The original entropy decoder, color conversion and CPU dispatch are retained.
+See RESHIKI-PATCH.md in the source distribution for the patch details.
+
+Original zune-jpeg licenses: LICENSE-APACHE, LICENSE-MIT and LICENSE-ZLIB.
+The referenced Independent JPEG Group distribution terms are in LICENSE-IJG.

@@ -38,7 +38,6 @@ struct Case {
     layer_boundary: bool,
     id_boundary: bool,
     images: bool,
-    pixel_reference: bool,
     image_error: Option<String>,
     image_pixels: Vec<Pixels>,
 }
@@ -221,28 +220,6 @@ fn direct_original_graphics_and_actual_deferred_picture_wire_match() -> anyhow::
                         );
                         let pixels = image::load_from_memory(picture.png())?.to_rgba8();
                         let expected = STANDARD.decode(&expected.pixels)?;
-                        if !case.pixel_reference {
-                            let delta = pixels
-                                .as_raw()
-                                .iter()
-                                .zip(&expected)
-                                .map(|(a, b)| a.abs_diff(*b))
-                                .max()
-                                .unwrap_or(0);
-                            eprintln!(
-                                "{}: existing decoder/Pillow maximum channel difference {delta}; wire normalization compared separately",
-                                case.name
-                            );
-                            if let Ok(path) = std::env::var("RESHIKI_GRAPHICS_REPRO") {
-                                std::fs::write(
-                                    path,
-                                    serde_json::to_vec_pretty(
-                                        &serde_json::json!({"xml":case.xml,"width":pixels.width(),"height":pixels.height(),"native_pillow_rgba":expected,"rust_rgba":pixels.as_raw(),"maximum_channel_difference":delta}),
-                                    )?,
-                                )?;
-                            }
-                            continue;
-                        }
                         let tolerance = if case.name.contains("/JPEG/") { 2 } else { 0 };
                         for (i, (a, e)) in pixels.as_raw().iter().zip(&expected).enumerate() {
                             assert!(

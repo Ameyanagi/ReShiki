@@ -65,6 +65,13 @@ debug = 1
 
 [dev-dependencies]
 anyhow = "1"
+# Exercise both CPU dispatch paths of the patched JPEG dependency.
+zune-jpeg = "0.5.15"
+zune-core = "0.5.3"
 
 [build-dependencies]
 anyhow = "1"
+
+[patch.crates-io]
+# Preserve libjpeg's small-component and edge chroma sampling semantics.
+zune-jpeg = { path = "vendor/zune-jpeg" }

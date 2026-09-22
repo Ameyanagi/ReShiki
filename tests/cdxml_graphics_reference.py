@@ -60,7 +60,6 @@ def emit(
     claimed=(),
     source=None,
     images=False,
-    pixel_reference=True,
 ):
     root = copy.deepcopy(root)
     before = ET.tostring(root, encoding="unicode")
@@ -126,7 +125,6 @@ def emit(
                 layer_boundary=layer_boundary,
                 id_boundary=id_boundary,
                 images=images,
-                pixel_reference=pixel_reference,
                 image_error=image_error,
                 image_pixels=image_pixels,
             )
@@ -471,14 +469,11 @@ def main():
             ),
             images=True,
         )
-    # Existing JPEG chroma upsampling differs from Pillow for this tiny image.
-    # Keep the exact current deferred-image bridge contract without claiming
-    # Pillow pixel parity; the standalone image/array reproducer tracks it.
+    # This retained tiny subsampled image exposed incorrect chroma interpolation.
     emit(
-        "picture/JPEG-subsampled-existing-decoder",
+        "picture/JPEG-subsampled-regression",
         xml("embeddedobject", {"JPEG": raster("JPEG", 2), "BoundingBox": "0 0 10 20"}),
         images=True,
-        pixel_reference=False,
     )
     for key, values in {
         "PNG": [
