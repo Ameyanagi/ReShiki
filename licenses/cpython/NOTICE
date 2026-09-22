@@ -9,3 +9,12 @@ The adaptation in src/chemistry/abbreviations/replacement.rs specializes the
 algorithm to two finite coordinate differences, preserving math.hypot rounding
 when placing fixed abbreviation templates. It uses safe Rust and does not
 include or invoke the Python interpreter.
+
+The adaptations in src/chemistry/cdxml/marks.rs and
+src/chemistry/cdxml/arrows.rs preserve native chemical-symbol sizes and arrow
+geometry acceptance thresholds. The arrow specialization also retains
+subnormal scaling and infinity/NaN handling. Both use safe Rust without
+including or invoking the Python interpreter.
+
+The specialization in src/chemistry/cdxml/graphics/shapes.rs preserves
+chemical-symbol size thresholds using the same compensated norm in safe Rust.

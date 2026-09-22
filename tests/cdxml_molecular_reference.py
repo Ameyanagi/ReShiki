@@ -165,6 +165,12 @@ def main():
     )
     emit("empty drawing", "<CDXML><page/></CDXML>")
     emit("empty fragment", '<CDXML><page><fragment id="1"/></page></CDXML>')
+    for name, marker in (
+        ("comment", "<!-- <!ENTITY inert 'C'> -->"),
+        ("processing-instruction", "<?inert <!ENTITY unused 'C'> ?>"),
+        ("cdata", "<![CDATA[<!ENTITY inert 'C'>]]>"),
+    ):
+        emit(f"inert-entity-text/{name}", xml([{}]).replace("<page>", f"<page>{marker}", 1))
     for number, charge, hydrogens in itertools.product(range(119), (-2, 0, 2), (None, "0", "2")):
         attrs = dict(
             Element=str(number), Charge=str(charge), Isotope="13" if number % 3 == 0 else "0"

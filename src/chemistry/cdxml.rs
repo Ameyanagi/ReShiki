@@ -5,12 +5,40 @@
 //! licenses/cdxml-native/ for original licenses and attribution. Coordinate conversion follows
 //! ChemDraw 1.0.14's signed 16.16 representation.
 //!
-//! This boundary accepts chemical XML after abbreviation expansion and bond
-//! display normalization. It does not sanitize, remove hydrogen atoms, assemble
-//! drawings, assign final CIP labels, or calculate identifiers. Unsupported
-//! queries and malformed fragments fail atomically instead of losing chemistry.
+//! The molecular reader accepts chemical XML after abbreviation expansion and
+//! bond display normalization. Detached preprocessing expands explicit
+//! abbreviation definitions and normalizes bond depictions. These boundaries
+//! do not sanitize, remove hydrogen atoms, assemble drawings, assign final CIP
+//! labels, or calculate identifiers. Unsupported queries and malformed fragments
+//! fail atomically instead of losing chemistry.
+mod abbreviations;
+mod arrows;
+mod association;
+pub mod bonds;
+pub mod graphics;
+mod groups;
+mod labels;
+mod marks;
+mod normalize;
+mod numeric;
 mod parse;
+pub mod presentation;
+mod read_abbreviations;
 mod stereo;
+mod tree;
+mod xml_guard;
+
+pub use abbreviations::{Abbreviation, Flattened, flatten_abbreviations};
+pub use arrows::{ArrowError, ArrowReader, NativeArrow, NativeArrowStyle};
+pub use association::{ImportPoint, ObjectMapEntry, PreparedAtoms};
+pub use groups::read_groups;
+pub use labels::{
+    AtomLabel, BondIndicator, Labels, LabelsError, NativeAtomDisplay, NativeNumber, NativeStereo,
+    read_labels,
+};
+pub use marks::{AtomMarks, Marks, NativeMark, read_marks};
+pub use normalize::chemistry_xml;
+pub use read_abbreviations::read_abbreviations;
 
 use super::{graph::Graph, kekulize::Direction, ranking::Metadata, stereo::Point3};
 use serde::Serialize;
