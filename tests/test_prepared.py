@@ -566,7 +566,7 @@ class PreparedMoleculeTests(unittest.TestCase):
                 "document"
             ]
             payload = json.loads(json.dumps(prepare(doc)))
-            for operation in ("analyze", "export"):
+            for operation in ("analyze", "export", "finish_abbreviation"):
                 request = dict(protocol=1, operation=operation, document=doc, format="smiles")
                 expected = worker.handle(request)
                 expected["analysis"]["smiles"] = ""
@@ -687,6 +687,7 @@ class PreparedMoleculeTests(unittest.TestCase):
             payload = json.loads(json.dumps(prepare(doc)))
             for operation, format in (
                 ("analyze", None),
+                ("finish_abbreviation", None),
                 ("export", "mol"),
                 ("export", "smiles"),
                 ("export", "inchi"),
@@ -696,6 +697,11 @@ class PreparedMoleculeTests(unittest.TestCase):
                     expected = worker.handle(request)
                     request["prepared_molecule"] = payload
                     with (
+                        patch.object(
+                            worker.abbreviations,
+                            "find",
+                            side_effect=AssertionError("Native abbreviation matching called"),
+                        ),
                         patch.object(
                             worker,
                             "from_document",
@@ -795,6 +801,7 @@ class PreparedMoleculeTests(unittest.TestCase):
             for operation, format in (
                 ("analyze", None),
                 ("export", "smiles"),
+                ("finish_abbreviation", None),
                 ("export", "mol"),
                 ("export", "inchi"),
             ):

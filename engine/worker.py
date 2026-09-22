@@ -1018,7 +1018,7 @@ def handle(request):
         raise ValueError("local_smiles must be a boolean")
     if local_smiles and (
         not (
-            request.get("operation") in ("import", "analyze", "export")
+            request.get("operation") in ("import", "analyze", "export", "finish_abbreviation")
             and request.get("prepared_molecule") is not None
             or request.get("operation") == "aromatic"
             and request.get("prepared_aromatic") is not None
@@ -1155,9 +1155,9 @@ def handle(request):
         response.update(
             document=to_document(mol, base), analysis=analyzer(mol) if mol.GetNumAtoms() else None
         )
-    elif operation in ("analyze", "clean", "export"):
+    elif operation in ("analyze", "clean", "export", "finish_abbreviation"):
         doc = request["document"]
-        if not doc["atoms"]:
+        if not doc["atoms"] and operation != "finish_abbreviation":
             if operation == "export" and request.get("format") in ("cdxml", "cdx"):
                 if local_drawing_output:
                     response.update(document=doc, analysis=None, output=None)
@@ -1192,7 +1192,7 @@ def handle(request):
         prepared_molecule = request.get("prepared_molecule")
         if prepared_molecule is not None:
             if (
-                operation != "analyze"
+                operation not in ("analyze", "finish_abbreviation")
                 and request.get("format") not in ("mol", "smiles", "inchi")
                 and not local_drawing_output
             ):

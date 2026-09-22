@@ -6,6 +6,7 @@
 //! Mass/formula semantics adapted from RDKit MolProps.cpp and Atom::getMass.
 //! Copyright (C) 2001-2024 Greg Landrum and other RDKit contributors.
 //! BSD-3-Clause; see licenses/rdkit/LICENSE and NOTICE.
+pub mod abbreviations;
 pub mod aromaticity;
 mod atomic_data;
 pub mod cx;

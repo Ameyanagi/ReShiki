@@ -189,6 +189,29 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
         if request.protocol != 1 {
             return Err("Unsupported protocol version".into());
         }
+        if request.operation == "abbreviate" && request.format.as_deref() != Some("replace") {
+            let document = request
+                .document
+                .take()
+                .ok_or("Missing abbreviation drawing")?;
+            let selected = request.selected_ids.clone().unwrap_or_default();
+            let label = request.text.clone();
+            request.document = Some(
+                tokio::task::spawn_blocking(move || {
+                    use crate::chemistry::{abbreviations, document as chemistry};
+                    document.validate()?;
+                    abbreviations::validate(&document).map_err(|e| e.to_string())?;
+                    let molecule = chemistry::prepare(&document).map_err(|e| e.to_string())?;
+                    abbreviations::find(&document, &molecule, &selected, label.as_deref())
+                        .map_err(|e| e.to_string())
+                })
+                .await
+                .map_err(|e| format!("Abbreviation detection failed: {e}"))??,
+            );
+            // Reuse drawing reconstruction and the remaining identifier/CIP bridge.
+            // Unlike Analyze, the original abbreviation operation accepts an empty drawing.
+            request.operation = "finish_abbreviation".into();
+        }
         if request.operation == "export"
             && let Some(format @ ("rxn" | "rsmi")) = request.format.as_deref()
         {
@@ -386,13 +409,18 @@ impl PythonEngine {
                     .await?,
             )
         } else if self.local_documents
-            && (request.operation == "analyze"
-                || request.operation == "export"
-                    && matches!(
-                        request.format.as_deref(),
-                        Some("smiles" | "mol" | "inchi" | "cdxml" | "cdx")
-                    ))
-            && let Some(document) = request.document.clone().filter(|d| !d.atoms.is_empty())
+            && (matches!(
+                request.operation.as_str(),
+                "analyze" | "finish_abbreviation"
+            ) || request.operation == "export"
+                && matches!(
+                    request.format.as_deref(),
+                    Some("smiles" | "mol" | "inchi" | "cdxml" | "cdx")
+                ))
+            && let Some(document) = request
+                .document
+                .clone()
+                .filter(|d| !d.atoms.is_empty() || request.operation == "finish_abbreviation")
         {
             tokio::task::spawn_blocking(move || {
                 use crate::chemistry::document;
