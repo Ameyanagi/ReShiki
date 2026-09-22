@@ -106,6 +106,9 @@ def decorated():
 
 
 def main():
+    if "--geometry" in sys.argv:
+        print(json.dumps(geometry()))
+        return
     RDLogger.DisableLog("rdApp.*")
     if "--wire" in sys.argv:
         for line in sys.stdin:

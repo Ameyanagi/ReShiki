@@ -7,6 +7,22 @@ use reshiki::{
 };
 use std::sync::{Arc, Mutex};
 
+fn native_geometry_diagnostic() -> anyhow::Result<String> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let python = root.join(if cfg!(windows) {
+        ".venv/Scripts/python.exe"
+    } else {
+        ".venv/bin/python"
+    });
+    let output = std::process::Command::new(python)
+        .arg(root.join("tests/abbreviation_replacement_reference.py"))
+        .arg("--geometry")
+        .env("PYTHONUTF8", "1")
+        .output()?;
+    anyhow::ensure!(output.status.success(), "Native geometry probe failed");
+    Ok(String::from_utf8(output.stdout)?)
+}
+
 fn matches(actual: Response, expected: Response) -> anyhow::Result<()> {
     let mut actual = serde_json::to_value(actual)?;
     let mut expected = serde_json::to_value(expected)?;
@@ -201,9 +217,19 @@ async fn replacement_preserves_full_responses_geometry_selection_and_undo() -> a
             let neighbor = doc.add_atom("C", Point::new(outside.0, outside.1));
             doc.add_bond(selected, neighbor, 1, "plain");
             let request = replacement(doc, vec![selected], &preset.label);
-            compare(&local, &reference, request)
-                .await
-                .with_context(|| format!("{} / {origin:?}/{outside:?}", preset.label))?;
+            if let Err(error) = compare(&local, &reference, request).await {
+                // Native template math may depend on the physical CPU even
+                // when the Python executable ABI matches the stored fixture.
+                // Preserve strict comparisons and capture fresh source data.
+                let diagnostic = native_geometry_diagnostic()
+                    .unwrap_or_else(|error| format!("Geometry diagnostic failed: {error}"));
+                return Err(error).with_context(|| {
+                    format!(
+                        "{} / {origin:?}/{outside:?}\nNative template geometry: {diagnostic}",
+                        preset.label,
+                    )
+                });
+            }
             cases += 1;
         }
         let mut doc = Document::default();
