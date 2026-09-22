@@ -9,6 +9,7 @@
 pub mod abbreviations;
 pub mod aromaticity;
 mod atomic_data;
+pub mod cdxml;
 pub mod cx;
 pub mod descriptors;
 pub mod document;
