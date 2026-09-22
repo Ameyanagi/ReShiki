@@ -4,7 +4,7 @@ ReShiki is a desktop workspace for editable chemical drawings. Molecule processi
 
 ## Install
 
-The offline setup below applies to 0.6.0 builds. For version 0.5.0, follow its [release notes](changes-0.5.md), including the first-launch uv requirement.
+ReShiki 0.6 includes its native chemistry tools. No Python, RDKit, or uv installation is needed, and the app does not download a chemistry environment on first launch.
 
 Download a package for your computer from [GitHub Releases](https://github.com/Ameyanagi/ReShiki/releases). The release workflow builds these packages:
 
@@ -24,7 +24,9 @@ Tagged macOS releases are signed and notarized. Windows and Linux packages are u
 
 ## Draw your first molecule
 
-1. Choose the single-bond tool, then click the canvas to begin a carbon chain.
+New documents open on a blank canvas.
+
+1. Choose the single-bond tool, then drag on the canvas to begin a carbon chain.
 2. Click an endpoint to extend it, or drag to choose a direction.
 3. Hover an atom and press **O** or **N** to change its element.
 4. Use **Templates** to preview and attach a ring or another fragment.

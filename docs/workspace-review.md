@@ -1,6 +1,6 @@
 # Workspace review and redesign
 
-Reviewed ReShiki's desktop workspace on 2026-09-16 using a controlled aspirin drawing. No existing research document was edited.
+This record describes the 2026-09-16 workspace redesign and its later checks. For current controls and release screenshots, see the [0.6 changes](changes-0.6.md) and [release walkthrough](release-0.6-validation.md). The original review used a controlled aspirin drawing; current new documents open on a blank canvas.
 
 ## Observations
 

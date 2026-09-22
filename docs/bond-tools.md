@@ -1,6 +1,6 @@
 # Bond tools and exchange
 
-Added 2026-09-20. The bond palette and contextual menu now offer **17 presets**. Select a bond to change its preset, RGB color and double-line position in Properties. The drawing canvas, SVG, PDF and PNG use the same geometry.
+Added 2026-09-20. The bond palette and contextual menu now offer **17 presets**. Single, double and triple bonds have direct toolbar buttons. Other styles open from the separate bond palette. Select a bond to change its preset, RGB color and double-line position in Properties. The drawing canvas, SVG, PDF and PNG use the same geometry.
 
 | Preset                                            | Meaning in ReShiki                                                             |
 | ------------------------------------------------- | ------------------------------------------------------------------------------ |

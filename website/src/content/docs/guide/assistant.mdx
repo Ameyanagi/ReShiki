@@ -1,42 +1,78 @@
 ---
 title: Draw with the assistant
-description: Describe a structure or scheme, review its drawing, and apply or undo changes.
+description: Follow generation progress, refine an editable preview, and apply a visually reviewed scheme.
 ---
 
 import Screenshot from "../../../components/Screenshot.astro";
 
 ## Describe the drawing
 
-Open **Assistant**, describe what to draw, then **Send**. Try:
+Open **Assistant**, describe the structures and their arrangement, then **Send**. For example:
 
-> Draw the esterification of acetic acid and ethanol. Put the reactants on the left, ethyl acetate and water on the right, and acid catalyst above the arrow.
+> Draw the esterification of acetic acid and ethanol. Put the reactants on the left, ethyl acetate and water on the right, and acid catalyst above the arrow. Keep carbonyl groups upright and align the reaction horizontally.
 
-The assistant receives the current drawing and can inspect its canvas image. Its proposals use your document's drawing style. You can keep working while it responds.
+The assistant receives your request and drawing context and uses the document's drawing style. It needs a Codex connection and internet access. Ordinary drawing and local chemistry work without the assistant.
+
+## Follow its progress
+
+**Preparing your scheme…**, an elapsed timer, and **Stop** appear immediately. The activity card then shows a composition outline, completed structure counts, an editable draft preview, and the quality-check stage. During a quiet model response, the timer remains visible; the app does not invent a completion percentage.
+
+<Screenshot
+  src="/manual/assistant-progress.png"
+  alt="The assistant activity card shows generation progress, an elapsed timer, and Stop while the drawing remains available."
+/>
+
+Keep drawing, dragging, zooming, or typing while generation runs. Closing the panel keeps the job running; **Assistant · Working** in the toolbar lets you return to it. Intermediate drafts stay in the conversation. They do not repeatedly change your canvas.
+
+**Stop** ends the request and retains any completed preview. You can inspect or discard it, edit its layout, or ask the assistant to improve it.
+
+## Choose an arrangement
+
+Describe the roles of the parts as well as the chemistry:
+
+| Arrangement                   | Example request                                                                              |
+| ----------------------------- | -------------------------------------------------------------------------------------------- |
+| Aligned rows                  | “Put these three reactions in rows with aligned arrows.”                                     |
+| General reaction and examples | “Put the general reaction in the center, with Triolein and Tributyrin as separate examples.” |
+| Labeled grid                  | “Arrange these related reactions in two columns, with a caption for each.”                   |
+| Branching reactions           | “Put acetaldehyde in the center, reduction to the right, and oxidation above it.”            |
+
+ReShiki measures the actual structures and captions to place the panels. Bond lengths remain consistent. Branching currently supports one shared reactant with several outgoing reactions.
+
+Ask for compact long chains when they would overwhelm the figure. The underlying atoms and bonds remain editable and can be expanded again. Ask to **preserve full structural detail** when the complete chain should stay visible.
+
+## Inspect and adjust the preview
+
+Use **Overview** to see the composition, or select a reaction or molecule to inspect it more closely. Draft controls let you move parts and adjust arrow lengths. Editing an intermediate draft stops generation so the assistant cannot replace your adjustments.
 
 <Screenshot
   src="/manual/assistant-review.png"
-  alt="The assistant produces a drawing preview with Apply and Discard controls."
+  alt="A completed assistant draft with its visual-review result, editable preview controls, and Apply and Discard."
 />
 
-## Review or apply automatically
+Before a draft can be accepted automatically, the assistant reviews an overview and reaction close-ups alongside your request and the editable object data. It can correct spacing, alignment, captions, arrow length, and compact representations. Each changed version is rendered again. Local checks also look for layout problems and applicable chemistry constraints.
 
-| Mode                 | What happens                                           |
-| -------------------- | ------------------------------------------------------ |
-| **Review edits**     | Inspect the proposal, then **Apply** or **Discard** it |
-| **Accept all edits** | Applies each validated proposal automatically          |
+Corrections are bounded. If review fails or problems remain, the preview keeps the findings visible for your decision. Inspect the chemistry before using a generated figure.
+
+## Apply or improve
+
+| Mode                 | What happens                                                                                    |
+| -------------------- | ----------------------------------------------------------------------------------------------- |
+| **Review edits**     | Inspect the draft, then **Apply** or **Discard** it.                                            |
+| **Accept all edits** | Apply automatically only after the exact final draft passes review with no unresolved findings. |
 
 <Screenshot
   src="/manual/assistant-modes.png"
   alt="Review edits and Accept all edits are available beside the composer."
 />
 
-Use **Replace selection** when replacing part of a drawing. **Undo** restores the previous drawing after an applied edit, in either mode.
+Use **Replace selection** to replace the selected part. Changes made while generation runs are protected from being overwritten by an older proposal. Applying a draft is one **Undo** step in either mode.
 
-Ask for a follow-up such as “Move the conditions above the arrow” or “Keep the existing molecule and add its product.” Use **Stop** to end a running request.
+Ask for a follow-up, such as “Move the conditions above the arrow,” or use **Improve** on a draft, selection, or existing drawing. The assistant reviews the rendered result and proposes editable layout changes.
 
 <Screenshot
   src="/manual/assistant-auto.png"
-  alt="An automatically applied scheme, including a requested Water caption, remains editable."
+  alt="A reviewed assistant scheme applied to the canvas remains editable and can be undone."
 />
 
 ## Choose a model
@@ -52,5 +88,3 @@ The model menu follows the latest available model until you choose one explicitl
   src="/manual/assistant-effort.png"
   alt="Reasoning effort and service tier are separate choices."
 />
-
-The assistant needs a Codex login and internet connection. Check the chemistry and layout before using a generated figure.
