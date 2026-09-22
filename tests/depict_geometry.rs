@@ -99,7 +99,41 @@ struct Differences {
 fn direct_native_geometry() -> anyhow::Result<()> {
     compare("depict-geometry-linux-native.json.gz", true)?;
     compare("depict-geometry-native.json.gz", false)?;
-    compare("depict-geometry-windows-native.json.gz", false)
+    compare("depict-geometry-windows-native.json.gz", false)?;
+    compare("depict-geometry-windows-no-fma3-native.json.gz", false)
+}
+
+// The Windows CRT dispatches transcendental functions by processor capability.
+// Classify only independently observed primitive results; unknown CRT profiles
+// fail closed. The complete native corpus is then compared bit for bit.
+fn windows_fixture() -> anyhow::Result<Option<&'static str>> {
+    if !cfg!(windows) {
+        return Ok(None);
+    }
+    let ratio = std::hint::black_box(f64::from_bits(0x3fd9_54d5_989f_7ab5));
+    let angle = std::hint::black_box(ratio.acos());
+    let observed = (
+        angle.to_bits(),
+        angle.sin().to_bits(),
+        angle.cos().to_bits(),
+    );
+    let (profile, fixture) = match observed {
+        (0x3ff2_9f25_c111_e687, 0x3fed_6301_1ebd_161e, 0x3fd9_54d5_989f_7ab4) => {
+            ("fma3", "depict-geometry-windows-native.json.gz")
+        }
+        (0x3ff2_9f25_c111_e686, 0x3fed_6301_1ebd_161d, 0x3fd9_54d5_989f_7ab7) => {
+            ("no-fma3", "depict-geometry-windows-no-fma3-native.json.gz")
+        }
+        _ => anyhow::bail!("Uncaptured Windows CRT geometry profile: {observed:x?}"),
+    };
+    if let Ok(required) = std::env::var("RESHIKI_TEST_WINDOWS_MATH_PROFILE") {
+        anyhow::ensure!(
+            profile == required,
+            "Windows CRT profile {profile} != {required}"
+        );
+    }
+    eprintln!("Strict Windows CRT geometry profile: {profile}");
+    Ok(Some(fixture))
 }
 
 fn compare(fixture: &str, source_order: bool) -> anyhow::Result<()> {
@@ -138,6 +172,17 @@ fn compare(fixture: &str, source_order: bool) -> anyhow::Result<()> {
         header["provenance"]["commit"] == "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
         "Wrong native source"
     );
+    if fixture == "depict-geometry-windows-no-fma3-native.json.gz" {
+        anyhow::ensure!(
+            header["provenance"]["native_build"]["geometry_fma3"] == "0",
+            "Disabled CRT fixture lacks its explicit native profile"
+        );
+    }
+    let exact = live
+        || (source_order && cfg!(all(target_os = "linux", target_arch = "x86_64")))
+        || (fixture == "depict-geometry-native.json.gz"
+            && cfg!(all(target_os = "macos", target_arch = "aarch64")))
+        || windows_fixture()? == Some(fixture);
     let mut stats: BTreeMap<String, Differences> = BTreeMap::new();
     let mut numeric = 0;
     let mut count = 0;
@@ -171,11 +216,6 @@ fn compare(fixture: &str, source_order: bool) -> anyhow::Result<()> {
         for (index, (a, b)) in values.into_iter().zip(expected).enumerate() {
             // Native replay and the fixture for this ABI require exact bits.
             // Cross-platform results remain an explicit descriptive audit.
-            let exact = live
-                || (source_order && cfg!(all(target_os = "linux", target_arch = "x86_64")))
-                || (fixture == "depict-geometry-native.json.gz"
-                    && cfg!(all(target_os = "macos", target_arch = "aarch64")))
-                || (fixture == "depict-geometry-windows-native.json.gz" && cfg!(windows));
             if exact {
                 anyhow::ensure!(
                     a.to_bits() == b.to_bits(),

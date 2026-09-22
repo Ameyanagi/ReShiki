@@ -5,6 +5,10 @@
 #include <GraphMol/Depictor/DepictUtils.h>
 #include <GraphMol/Depictor/EmbeddedFrag.h>
 #include <bit>
+#include <cstdlib>
+#ifdef _WIN32
+#include <math.h>
+#endif
 #include <cstdint>
 #include <iomanip>
 #include <iostream>
@@ -53,6 +57,15 @@ void writePoints(const RDGeom::INT_POINT2D_MAP &points) {
 }
 int main() {
   try {
+#ifdef _WIN32
+    if (const auto* requested = std::getenv("RESHIKI_REFERENCE_FMA3")) {
+      const std::string mode(requested);
+      if (mode != "0" && mode != "1") throw std::runtime_error("Invalid reference FMA3 profile");
+      const auto enabled = mode == "1" ? 1 : 0;
+      if (_set_FMA3_enable(enabled) != enabled)
+        throw std::runtime_error("Requested reference FMA3 profile is unavailable");
+    }
+#endif
     std::string line;
     while (std::getline(std::cin, line)) {
       std::istringstream input(line);

@@ -36,9 +36,16 @@ pub(super) fn cross(ax: f64, ay: f64, bx: f64, by: f64) -> f64 {
     multiply_subtract(ax, by, ay, bx)
 }
 
-/// The pinned Mac native functions request sin and cos together.
+/// The pinned Mac ARM64 and Linux native functions request sin and cos
+/// together. glibc 2.35 can round its paired call differently from sin alone.
 pub(super) fn sin_cos(angle: f64) -> (f64, f64) {
-    if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+    if cfg!(any(
+        all(target_os = "macos", target_arch = "aarch64"),
+        all(
+            target_os = "linux",
+            any(target_arch = "x86_64", target_arch = "aarch64")
+        )
+    )) {
         reshiki_depict_math::sin_cos(angle)
     } else {
         (angle.sin(), angle.cos())

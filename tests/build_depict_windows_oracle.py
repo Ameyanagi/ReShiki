@@ -61,7 +61,10 @@ def main():
     parser.add_argument("--boost-include", required=True, type=Path)
     parser.add_argument("--component", choices=COMPONENTS, required=True)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--geometry-fma3", choices=("0", "1"))
     args = parser.parse_args()
+    if args.geometry_fma3 is not None and args.component != "geometry":
+        parser.error("--geometry-fma3 applies only to the geometry observer")
     if sys.platform != "win32" or platform.machine().upper() != "AMD64":
         raise SystemExit("Use the pinned x64 Windows RDKit Python and x64 MSVC compiler")
     assert rdBase.rdkitVersion == "2026.03.6"
@@ -185,13 +188,17 @@ def main():
     if args.component == "geometry":
         generate.append("--write-fixture")
     previous = ctypes.windll.kernel32.SetErrorMode(0x0001 | 0x0002 | 0x8000)
+    environment = {**os.environ, "PATH": str(library_dir) + os.pathsep + os.environ["PATH"]}
+    environment.pop("RESHIKI_REFERENCE_FMA3", None)
+    if args.geometry_fma3 is not None:
+        environment["RESHIKI_REFERENCE_FMA3"] = args.geometry_fma3
     try:
         subprocess.run(
             generate,
             check=True,
             cwd=root,
             timeout=180,
-            env={**os.environ, "PATH": str(library_dir) + os.pathsep + os.environ["PATH"]},
+            env=environment,
         )
     finally:
         ctypes.windll.kernel32.SetErrorMode(previous)
@@ -212,6 +219,8 @@ def main():
             if p.is_file()
         },
         "runtime": "/MD, x64 MSVC and the pinned x64 wheel",
+        "geometry_fma3": args.geometry_fma3,
+        "ucrt_sha256": digest(Path(os.environ["SYSTEMROOT"]) / "System32/ucrtbase.dll"),
     }
     data = json.dumps(metadata, separators=(",", ":")).encode() + b"\n" + body
     output.write_bytes(gzip.compress(data, mtime=0))
