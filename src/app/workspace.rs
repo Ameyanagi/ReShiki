@@ -781,7 +781,11 @@ impl App {
             .spacing(2)
             .width(Length::Fill),
             command(
-                "Assistant",
+                if self.assistant.busy {
+                    "● Assistant · Working"
+                } else {
+                    "Assistant"
+                },
                 Message::Assistant(super::assistant::Action::Open)
             ),
             action(
