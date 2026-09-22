@@ -41,16 +41,38 @@ Archive and installer checks run the installed app twice with Python, uv and the
 
 ## Optional RDKit reference tests
 
-Install [uv 0.12.3 or later](https://docs.astral.sh/uv/getting-started/installation/), then:
+Install [uv 0.12.3 or later](https://docs.astral.sh/uv/getting-started/installation/) and run `uv sync --locked --python 3.12`. On Windows, use `--python cpython-3.12-windows-x86_64-none`, including on ARM.
+
+Linux and Windows need fresh layout references for their installed math libraries. Setup downloads the pinned RDKit source and verified Boost headers; it only builds test tools.
+
+On Linux:
 
 ```sh
-uv sync --locked --python 3.12
-cargo test --workspace --locked --features rdkit-reference
+uv run --locked python scripts/setup_linux_depict_reference.py
+source artifacts/depict-live/environment.sh
+```
+
+On Windows, run setup from an **x64** Visual Studio tools shell:
+
+```powershell
+uv run --locked python scripts/setup_windows_depict_reference.py
+```
+
+Then, in the tools shell matching your Rust target, load the reference paths:
+
+```powershell
+. ./artifacts/depict-live-windows/environment.ps1
+```
+
+Run the comparisons on any platform:
+
+```sh
+cargo test --workspace --locked --features rdkit-reference --no-fail-fast
 uv run --locked python -m unittest discover -s tests -p 'test_*.py'
 uv run --locked python scripts/check_reference_dependencies.py
 ```
 
-The `rdkit-reference` feature enables `PythonEngine` and independent differential tests. It is disabled in normal builds. Tests use the checkout's `.venv`; `RESHIKI_REFERENCE_PYTHON` selects another prepared interpreter. Windows ARM reference tests use `uv sync --locked --python cpython-3.12-windows-x86_64-none`. This affects the test oracle, not the packaged app.
+The `rdkit-reference` feature enables `PythonEngine` and independent differential tests. It is disabled in normal builds. Tests use the checkout's `.venv`; `RESHIKI_REFERENCE_PYTHON` selects another prepared interpreter. Windows ARM uses x64 reference tools under emulation while the app and Rust tests remain native ARM64.
 
 ## Pre-commit checks
 
