@@ -54,18 +54,26 @@ jobs:
       matrix:
         include:
           - os: macos-14
+            target: aarch64-apple-darwin
             python: "3.12"
           - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            msvc_arch: x64
             python: cpython-3.12-windows-x86_64-none
           - os: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            msvc_arch: arm64
             python: cpython-3.12-windows-x86_64-none
           - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
             python: "3.12"
           - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
             python: "3.12"
     runs-on: ${{ matrix.os }}
     env:
       UV_PYTHON: ${{ matrix.python }}
+      RESHIKI_REQUIRE_INCHI_HELPER: "1"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Linux libraries
@@ -78,7 +86,18 @@ jobs:
         with:
           version: "0.12.3"
           python-version: ${{ matrix.python }}
+      - name: Select the native Windows compiler
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        with:
+          arch: ${{ matrix.msvc_arch }}
       - run: uv sync --locked
+      - name: Build the audited native helper and test executables
+        run: uv run --locked python scripts/build_inchi_helper.py --fetch-source --target ${{ matrix.target }}
+      - name: Select the helper for runtime integration tests
+        run: uv run --locked python -c "import os,pathlib; p=pathlib.Path('artifacts/inchi-helper/reshiki-inchi-helper'+('.exe' if os.name=='nt' else '')).resolve(); open(os.environ['GITHUB_ENV'],'a').write('RESHIKI_INCHI_HELPER='+str(p)+'\n')"
+      - name: Check native allocation and byte protocol boundaries
+        run: uv run --locked python -m unittest tests.test_inchi_arena tests.test_inchi_helper_protocol tests.test_inchi_source_patch
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo check --workspace --all-targets --locked

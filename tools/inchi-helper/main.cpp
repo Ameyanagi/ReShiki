@@ -61,6 +61,11 @@ struct Writer {
   }
   void u16(uint16_t value) { byte(value&255); byte(value>>8); }
   void u32(uint32_t value) { for(unsigned i=0;i<4;++i) byte((value>>(8*i))&255); }
+  void u64(uint64_t value) { for(unsigned i=0;i<8;++i) byte((value>>(8*i))&255); }
+  void number(double value) {
+    if(!std::isfinite(value)) throw std::runtime_error("Nonfinite output coordinate");
+    uint64_t bits=0; std::memcpy(&bits,&value,sizeof(bits)); u64(bits);
+  }
   void text(const char *value) {
     size_t length=0;
     if(value) { while(length<=max_string && value[length]) ++length; }
@@ -91,12 +96,90 @@ bool direction(int code) { return code==-6 || code==-4 || code==-1 || code==0 ||
   }
   std::_Exit(0);
 }
+struct ArenaGuard {
+  explicit ArenaGuard(size_t budget) { rsh_heap_initialize(budget,resource_failure); }
+  ~ArenaGuard() { rsh_heap_destroy(); }
+};
+bool valid_utf8(const std::vector<char> &text, size_t length) {
+  size_t i=0;
+  while(i<length) {
+    const auto first=static_cast<unsigned char>(text.at(i++));
+    if(first<128) continue;
+    unsigned following=0; uint32_t scalar=0, minimum=0;
+    if(first>=0xc2 && first<=0xdf) { following=1;scalar=first&31;minimum=0x80; }
+    else if(first>=0xe0 && first<=0xef) { following=2;scalar=first&15;minimum=0x800; }
+    else if(first>=0xf0 && first<=0xf4) { following=3;scalar=first&7;minimum=0x10000; }
+    else return false;
+    if(following>length-i) return false;
+    while(following--) {
+      const auto next=static_cast<unsigned char>(text.at(i++));
+      if((next&0xc0)!=0x80) return false;
+      scalar=(scalar<<6)|(next&63);
+    }
+    if(scalar<minimum || scalar>0x10ffff || (scalar>=0xd800 && scalar<=0xdfff)) return false;
+  }
+  return true;
+}
+Writer import_structure(Reader &reader, size_t heap_budget) {
+  const size_t length=reader.u32();
+  if(length>max_string || length>reader.bytes.size()-reader.position) throw std::runtime_error("Invalid InChI text length");
+  std::vector<char> text(length+1,0);
+  for(size_t i=0;i<length;++i) text.at(i)=char(reader.byte());
+  if(reader.position!=reader.bytes.size()) throw std::runtime_error("Trailing import data");
+  if(!valid_utf8(text,length)) throw std::runtime_error("InChI text is not UTF-8");
+  char options[1]={0};
+  inchi_InputINCHI input{text.data(),options};
+  ArenaGuard arena_guard(heap_budget);
+  struct NativeImport {
+    inchi_OutputStruct value{};
+    ~NativeImport() { FreeStructFromINCHI(&value); }
+  } output;
+  const int status=GetStructFromINCHI(&input,&output.value);
+  const auto &native=output.value;
+  if(native.num_atoms<0 || native.num_stereo0D<0 || (native.num_atoms && !native.atom) || (native.num_stereo0D && !native.stereo0D)) throw std::runtime_error("Invalid native import arrays");
+  Writer writer;
+  writer.u16(3); writer.u32(uint32_t(status));
+  writer.text(native.szMessage); writer.text(native.szLog);
+  static_assert(sizeof(unsigned long)<=sizeof(uint64_t));
+  for(const auto &row:native.WarningFlags) for(auto flags:row) writer.u64(uint64_t(flags));
+  writer.u16(uint16_t(native.num_atoms)); writer.u16(uint16_t(native.num_stereo0D));
+  for(int i=0;i<native.num_atoms;++i) {
+    const auto &atom=native.atom[i];
+    writer.number(atom.x); writer.number(atom.y); writer.number(atom.z);
+    size_t length=0;
+    while(length<6 && atom.elname[length]) ++length;
+    if(length==0 || length>=6) throw std::runtime_error("Invalid native element length");
+    for(size_t n=0;n<6;++n) writer.byte(n<length ? static_cast<unsigned char>(atom.elname[n]) : 0);
+    writer.u16(uint16_t(atom.isotopic_mass)); writer.byte(static_cast<unsigned char>(atom.charge));
+    for(auto value:atom.num_iso_H) writer.byte(static_cast<unsigned char>(value));
+    writer.byte(static_cast<unsigned char>(atom.radical));
+    if(atom.num_bonds<0 || atom.num_bonds>MAXVAL) throw std::runtime_error("Invalid native adjacency length");
+    writer.byte(static_cast<unsigned char>(atom.num_bonds));
+    for(int b=0;b<atom.num_bonds;++b) {
+      if(!index(atom.neighbor[b],size_t(native.num_atoms))) throw std::runtime_error("Invalid native bond neighbor");
+      writer.u16(uint16_t(atom.neighbor[b])); writer.byte(static_cast<unsigned char>(atom.bond_type[b])); writer.byte(static_cast<unsigned char>(atom.bond_stereo[b]));
+    }
+  }
+  for(int i=0;i<native.num_stereo0D;++i) {
+    const auto &stereo=native.stereo0D[i];
+    if(stereo.central_atom!=NO_ATOM && !index(stereo.central_atom,size_t(native.num_atoms))) throw std::runtime_error("Invalid native stereo center");
+    writer.u16(uint16_t(stereo.central_atom));
+    for(auto neighbor:stereo.neighbor) {
+      if(!index(neighbor,size_t(native.num_atoms))) throw std::runtime_error("Invalid native stereo neighbor");
+      writer.u16(uint16_t(neighbor));
+    }
+    writer.byte(static_cast<unsigned char>(stereo.type)); writer.byte(static_cast<unsigned char>(stereo.parity));
+  }
+  return writer;
+}
 Writer response() {
   std::vector<unsigned char> header(16);
   if(!std::cin.read(reinterpret_cast<char *>(header.data()),16)) throw std::runtime_error("Truncated request header");
   Reader h{header};
   for(auto byte:magic) if(h.byte()!=byte) throw std::runtime_error("Invalid request magic");
-  if(h.u16()!=2 || h.byte()!=1 || h.byte()>1) throw std::runtime_error("Invalid request protocol or operation");
+  if(h.u16()!=2) throw std::runtime_error("Invalid request protocol");
+  const auto operation=h.byte(), flags=h.byte();
+  if((operation!=1 && operation!=2) || flags>1 || (operation==2 && flags!=0)) throw std::runtime_error("Invalid request operation or flags");
   const size_t size=h.u32();
   if(size>max_frame-header.size() || size<8) throw std::runtime_error("Invalid request frame length");
   std::vector<unsigned char> body(size);
@@ -105,6 +188,7 @@ Writer response() {
   Reader reader{body};
   const size_t heap_budget=reader.u32();
   if(heap_budget==0 || heap_budget>512*1024*1024) throw std::runtime_error("Invalid kernel heap budget");
+  if(operation==2) return import_structure(reader,heap_budget);
   const size_t atom_count=reader.u16(), stereo_count=reader.u16();
   if(atom_count>32767 || stereo_count>32767 || atom_count*39+stereo_count*12+8>body.size()) throw std::runtime_error("Invalid native counts");
   std::vector<inchi_Atom> atoms(atom_count);
@@ -143,8 +227,7 @@ Writer response() {
   input.atom=atoms.data(); input.stereo0D=stereo.data();
   input.num_atoms=AT_NUM(atom_count); input.num_stereo0D=AT_NUM(stereo_count);
   input.szOptions=nullptr;
-  struct ArenaGuard { ~ArenaGuard() { rsh_heap_destroy(); } } arena_guard;
-  rsh_heap_initialize(heap_budget,resource_failure);
+  ArenaGuard arena_guard(heap_budget);
   struct NativeOutput {
     inchi_Output value{};
     ~NativeOutput() { FreeINCHI(&value); }

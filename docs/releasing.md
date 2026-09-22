@@ -70,8 +70,16 @@ Setup references: [Apple notarization](https://developer.apple.com/documentation
 
 ```sh
 uv sync --locked --python 3.12
-uv run --locked python scripts/build_release.py --installer
+uv run --locked python scripts/build_release.py --fetch-inchi-source --installer
 ```
+
+The native InChI helper is built for the application’s architecture and bundled beside it.
+`--fetch-inchi-source` downloads only the pinned official archive and verifies its checksum
+and source hashes. For offline builds, use `--inchi-source /path/to/INCHI-1-SRC` or
+`--inchi-archive /path/to/INCHI-1-SRC.zip`; `--inchi-helper /path/to/reshiki-inchi-helper`
+reuses a matching build with its adjacent `build.json`. The installed app never builds
+or downloads this helper. Developers can select an existing helper with an absolute
+`RESHIKI_INCHI_HELPER` path.
 
 Windows ARM uses a native ARM64 application and an x64 Python/RDKit worker through Windows 11's built-in emulation, because RDKit does not publish Windows ARM wheels. Linux ARM uses native aarch64 chemistry packages. The lock resolver checks the supported chemistry environments. Packaging checks the CPU architecture of both the application and its installed worker, and every build runs the Python regression suite before packaging.
 

@@ -1,5 +1,5 @@
 use super::{Error, MAX_REQUEST_BYTES, Output, Resource, Status};
-use crate::chemistry::inchi::{INCHI_VERSION, input::Input};
+use crate::chemistry::inchi::{INCHI_VERSION, input::Input, output};
 use std::collections::BTreeSet;
 
 const MAGIC: &[u8; 8] = b"RSHINCHI";
@@ -127,7 +127,7 @@ impl<'a> Reader<'a> {
     }
 }
 
-pub(super) fn decode(bytes: &[u8]) -> Result<Output, Error> {
+fn response(bytes: &[u8], expected_kind: u16) -> Result<Reader<'_>, Error> {
     let mut reader = Reader { bytes, position: 0 };
     if reader.take(8)? != MAGIC || u16::from_le_bytes(reader.number()?) != PROTOCOL {
         return Err(Error::Protocol("Incompatible response protocol"));
@@ -172,9 +172,14 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Output, Error> {
             _ => Error::Protocol("Unknown resource failure"),
         });
     }
-    if result_kind != 0 {
-        return Err(Error::Protocol("Unknown response kind"));
+    if result_kind != expected_kind {
+        return Err(Error::Protocol("Unexpected response operation"));
     }
+    Ok(reader)
+}
+
+pub(super) fn decode(bytes: &[u8]) -> Result<Output, Error> {
+    let mut reader = response(bytes, 0)?;
     let status = Status::from_code(i16::from_le_bytes(reader.number()?))?;
     let output = Output {
         status,
@@ -195,4 +200,147 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Output, Error> {
         ));
     }
     Ok(output)
+}
+
+pub(super) fn encode_import(inchi: &str, kernel_heap_bytes: usize) -> Result<Vec<u8>, Error> {
+    if inchi.len() > super::MAX_INCHI_BYTES {
+        return Err(Error::Limit("InChI text"));
+    }
+    let mut request = Vec::new();
+    request
+        .try_reserve(inchi.len() + 24)
+        .map_err(|_| Error::Limit("request"))?;
+    request.extend_from_slice(MAGIC);
+    request.extend_from_slice(&PROTOCOL.to_le_bytes());
+    request.extend_from_slice(&[2, 0]);
+    request.extend_from_slice(&((inchi.len() + 8) as u32).to_le_bytes());
+    request.extend_from_slice(&(kernel_heap_bytes as u32).to_le_bytes());
+    request.extend_from_slice(&(inchi.len() as u32).to_le_bytes());
+    request.extend_from_slice(inchi.as_bytes());
+    Ok(request)
+}
+
+fn native_index(value: i16, count: usize) -> Result<i16, Error> {
+    if value < 0 || value as usize >= count {
+        return Err(Error::Protocol("Invalid native atom index"));
+    }
+    Ok(value)
+}
+
+pub(super) fn decode_import(bytes: &[u8]) -> Result<output::Output, Error> {
+    let mut reader = response(bytes, 3)?;
+    let status = i32::from_le_bytes(reader.number()?);
+    Status::from_code(
+        i16::try_from(status).map_err(|_| Error::Protocol("Invalid import status"))?,
+    )?;
+    let message = reader.string()?;
+    let log = reader.string()?;
+    let mut warning_flags = [[0_u64; 2]; 2];
+    for row in &mut warning_flags {
+        for value in row {
+            *value = u64::from_le_bytes(reader.number()?);
+        }
+    }
+    let count = usize::from(u16::from_le_bytes(reader.number()?));
+    let stereo_count = usize::from(u16::from_le_bytes(reader.number()?));
+    if count > i16::MAX as usize
+        || stereo_count > i16::MAX as usize
+        || count * 39 + stereo_count * 12 > bytes.len().saturating_sub(reader.position)
+    {
+        return Err(Error::Protocol("Invalid native record counts"));
+    }
+    let mut atoms = Vec::new();
+    atoms
+        .try_reserve(count)
+        .map_err(|_| Error::Limit("import atoms"))?;
+    for _ in 0..count {
+        let mut position = [0.0; 3];
+        for value in &mut position {
+            *value = f64::from_le_bytes(reader.number()?);
+        }
+        if position.iter().any(|v| !v.is_finite()) {
+            return Err(Error::Protocol("Nonfinite native coordinate"));
+        }
+        let name = reader.take(6)?;
+        let length = name
+            .iter()
+            .position(|&b| b == 0)
+            .ok_or(Error::Protocol("Unterminated native element"))?;
+        let prefix = name
+            .get(..length)
+            .ok_or(Error::Protocol("Invalid native element length"))?;
+        if prefix.is_empty()
+            || !prefix.iter().all(|b| b.is_ascii_alphabetic() || *b == b'*')
+            || name
+                .get(length..)
+                .is_none_or(|tail| tail.iter().any(|&b| b != 0))
+        {
+            return Err(Error::Protocol("Invalid native element"));
+        }
+        let element = std::str::from_utf8(prefix)
+            .map_err(|_| Error::Protocol("Native element is not UTF-8"))?
+            .to_owned();
+        let isotopic_mass = i16::from_le_bytes(reader.number()?);
+        let charge = i8::from_le_bytes(reader.number()?);
+        let mut hydrogens = [0_i8; 4];
+        for value in &mut hydrogens {
+            *value = i8::from_le_bytes(reader.number()?);
+        }
+        let radical = i8::from_le_bytes(reader.number()?);
+        let bond_count = usize::from(u8::from_le_bytes(reader.number()?));
+        if bond_count > 20 {
+            return Err(Error::Protocol("Invalid native adjacency count"));
+        }
+        let mut bonds = Vec::new();
+        bonds
+            .try_reserve(bond_count)
+            .map_err(|_| Error::Limit("import bonds"))?;
+        for _ in 0..bond_count {
+            bonds.push(output::Bond {
+                neighbor: native_index(i16::from_le_bytes(reader.number()?), count)?,
+                kind: i8::from_le_bytes(reader.number()?),
+                stereo: i8::from_le_bytes(reader.number()?),
+            });
+        }
+        atoms.push(output::Atom {
+            position,
+            element,
+            isotopic_mass,
+            charge,
+            hydrogens,
+            radical,
+            bonds,
+        });
+    }
+    let mut stereo = Vec::new();
+    stereo
+        .try_reserve(stereo_count)
+        .map_err(|_| Error::Limit("import stereo"))?;
+    for _ in 0..stereo_count {
+        let central_atom = match i16::from_le_bytes(reader.number()?) {
+            -1 => None,
+            value => Some(native_index(value, count)?),
+        };
+        let mut neighbors = [0_i16; 4];
+        for value in &mut neighbors {
+            *value = native_index(i16::from_le_bytes(reader.number()?), count)?;
+        }
+        stereo.push(output::Stereo {
+            central_atom,
+            neighbors,
+            kind: i8::from_le_bytes(reader.number()?),
+            parity: i8::from_le_bytes(reader.number()?),
+        });
+    }
+    if reader.position != bytes.len() {
+        return Err(Error::Protocol("Trailing import data"));
+    }
+    Ok(output::Output {
+        status,
+        message,
+        log,
+        warning_flags,
+        atoms,
+        stereo,
+    })
 }

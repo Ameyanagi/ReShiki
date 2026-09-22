@@ -6,6 +6,7 @@ use tokio::{
     process::{Child, ChildStdin, ChildStdout, Command},
     sync::Mutex,
 };
+pub mod native_response;
 mod reaction;
 
 #[derive(Debug, Clone, Serialize)]

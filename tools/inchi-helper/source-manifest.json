@@ -1,5 +1,7 @@
 {
   "inchi_version": "1.07.3",
+  "archive_url": "https://github.com/IUPAC-InChI/InChI/releases/download/v1.07.3/INCHI-1-SRC.zip",
+  "archive_root": "INCHI-1-SRC",
   "archive_sha256": "b42d828b5d645bd60bc43df7e0516215808d92e5a46c28e12b1f4f75dfaae333",
   "translation_units": [
     "INCHI_BASE/src/ichican2.c",

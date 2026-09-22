@@ -78,6 +78,41 @@ class ProtocolTests(unittest.TestCase):
         kind, _ = self.run_frame(frame(struct.pack("<HH", 1, 0) + carbon()))
         self.assertEqual(kind, 0)
 
+    def test_import_request_shares_protocol_and_keeps_native_status(self):
+        for text in (b"", b"invalid", b"InChI=1S/CH4/h1H4", b"InChI=1S/CH4/h1H4\0ignored"):
+            kind, result = self.run_frame(frame(struct.pack("<I", len(text)) + text, operation=2))
+            self.assertEqual(kind, 3)
+            status = struct.unpack_from("<i", result)[0]
+            if text.startswith(b"InChI=1S/CH4"):
+                self.assertEqual(status, 0)
+            else:
+                self.assertNotIn(status, (0, 1))
+
+    def test_import_text_and_frame_validation(self):
+        valid = b"InChI=1S/CH4/h1H4"
+        body = struct.pack("<I", len(valid)) + valid
+        for payload in (
+            frame(body, operation=2, flags=1),
+            frame(body + b"x", operation=2),
+            frame(body, operation=2) + b"x",
+            frame(struct.pack("<I", 2 * 1024 * 1024 + 1), operation=2),
+            frame(struct.pack("<I", 0xFFFFFFFF), operation=2),
+        ):
+            self.assert_rejected(payload)
+        request = frame(body, operation=2)
+        for length in range(len(request)):
+            self.assert_rejected(request[:length])
+        for invalid in (
+            b"\xff",
+            b"\xc0\x80",
+            b"\xe0\x80\x80",
+            b"\xed\xa0\x80",
+            b"\xf0\x80\x80\x80",
+            b"\xf4\x90\x80\x80",
+            b"\xe2\x82",
+        ):
+            self.assert_rejected(frame(struct.pack("<I", len(invalid)) + invalid, operation=2))
+
     def test_truncation_and_trailing_bytes(self):
         payload = frame(struct.pack("<HH", 1, 0) + carbon())
         for length in range(len(payload)):
@@ -90,7 +125,7 @@ class ProtocolTests(unittest.TestCase):
         valid = struct.pack("<HH", 1, 0) + carbon()
         cases = [
             frame(valid, version=1),
-            frame(valid, operation=2),
+            frame(valid, operation=3),
             frame(valid, flags=2),
             frame(valid, budget=0),
             frame(valid, budget=512 * 1024 * 1024 + 1),

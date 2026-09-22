@@ -157,6 +157,16 @@ fn methane() -> input::Input {
     }
 }
 
+fn prepare_stub(source: &Path, destination: &Path) -> anyhow::Result<()> {
+    // Reuse the completed native executable's inode on Unix. Copying and then
+    // immediately executing can race filesystem writeback with ETXTBSY.
+    #[cfg(unix)]
+    std::fs::hard_link(source, destination)?;
+    #[cfg(not(unix))]
+    std::fs::copy(source, destination)?;
+    Ok(())
+}
+
 #[tokio::test]
 async fn helper_failures_are_bounded_and_typed() -> anyhow::Result<()> {
     let Some(stub) = helper("inchi-helper-stub")? else {
@@ -185,13 +195,13 @@ async fn helper_failures_are_bounded_and_typed() -> anyhow::Result<()> {
         "stderr",
         "hang",
     ] {
-        let dir = tempfile::tempdir()?;
+        let dir = tempfile::tempdir_in(stub.parent().context("Missing stub directory")?)?;
         let executable = dir.path().join(if cfg!(windows) {
             format!("{mode}.exe")
         } else {
             mode.into()
         });
-        std::fs::copy(&stub, &executable)?;
+        prepare_stub(&stub, &executable)?;
         let result = generator::generate(
             &executable,
             &methane(),
@@ -280,9 +290,9 @@ async fn dropping_generation_kills_the_child_and_bad_input_never_spawns() -> any
     let Some(stub) = helper("inchi-helper-stub")? else {
         return Ok(());
     };
-    let dir = tempfile::tempdir()?;
+    let dir = tempfile::tempdir_in(stub.parent().context("Missing stub directory")?)?;
     let executable = dir.path().join("hang");
-    std::fs::copy(&stub, &executable)?;
+    prepare_stub(&stub, &executable)?;
     let mut invalid = methane();
     invalid.atoms.first_mut().context("Missing atom")?.position[0] = f64::NAN;
     assert!(matches!(
@@ -318,7 +328,7 @@ async fn dropping_generation_kills_the_child_and_bad_input_never_spawns() -> any
     // A helper which never drains stdin must not bypass the deadline.
     std::fs::remove_file(dir.path().join("pid"))?;
     let executable = dir.path().join("no-read");
-    std::fs::copy(&stub, &executable)?;
+    prepare_stub(&stub, &executable)?;
     let mut large = methane();
     let atom = large.atoms.first().context("Missing atom")?.clone();
     large.atoms.resize(32767, atom);

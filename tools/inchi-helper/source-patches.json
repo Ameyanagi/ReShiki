@@ -1,0 +1,47 @@
+{
+  "inchi_version": "1.07.3",
+  "files": {
+    "INCHI_BASE/src/ichi_io.c": {
+      "source_sha256": "3c34e1fda7212d97211e85d1193ee6bd5a6c9378e3bc6424e1ab95f765d678bc",
+      "patched_sha256": "aeb85e824b3db67c667634a2e389247bb68369b738ed96810f8038f19a42548a",
+      "replacements": [
+        {
+          "before": "#include <string.h>",
+          "after": "#include <limits.h>\n#include <string.h>",
+          "count": 1
+        },
+        {
+          "before": "if (max_len >= 0)",
+          "after": "if (max_len >= 0 && max_len < INT_MAX)",
+          "count": 3
+        },
+        {
+          "before": "inchi_max(INCHI_ADD_STR_LEN, max_len);",
+          "after": "inchi_max(INCHI_ADD_STR_LEN, max_len + 1);",
+          "count": 3
+        },
+        {
+          "before": "long long new_str_len = (long long)ios->s.nAllocatedLength + (long long)nAddLength;",
+          "after": "long long new_str_len = (long long)ios->s.nAllocatedLength + (long long)nAddLength;\n            /* ReShiki: include the terminating NUL and keep the stored length representable. */\n            if (new_str_len > INT_MAX)\n            {\n                return -1;\n            }",
+          "count": 2
+        },
+        {
+          "before": "                nAddLength = inchi_max(INCHI_ADD_STR_LEN, max_len + 1);\n                new_str =",
+          "after": "                nAddLength = inchi_max(INCHI_ADD_STR_LEN, max_len + 1);\n                if ((long long)ios->s.nAllocatedLength + (long long)nAddLength > INT_MAX)\n                {\n                    return -1;\n                }\n                new_str =",
+          "count": 1
+        }
+      ]
+    },
+    "INCHI_API/libinchi/src/inchi_dll.c": {
+      "source_sha256": "a6508b82bdf3240ce4a161a728af251ad8a77998b6ec803383fd46cfeae773f0",
+      "patched_sha256": "fe68f4ea33720d6aa3e70f0d3eeaa82b132bcb2f38d5348c65f2fd1bebd0cb93",
+      "replacements": [
+        {
+          "before": "inchi_ios_print_nodisplay( input_file, inpInChI->szInChI );",
+          "after": "inchi_ios_print_nodisplay( input_file, \"%s\", inpInChI->szInChI );",
+          "count": 1
+        }
+      ]
+    }
+  }
+}

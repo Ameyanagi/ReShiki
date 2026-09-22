@@ -1,6 +1,7 @@
 //! InChI strings and checked molecular input preparation.
 
 pub mod generator;
+pub mod helper;
 pub mod input;
 pub mod key;
 pub mod output;

@@ -1,4 +1,4 @@
-//! Standard InChI generation through an isolated, versioned native helper.
+//! InChI generation and import through an isolated, versioned native helper.
 //! The application never loads the C kernel or calls FFI. One process handles
 //! one immutable request; dropping the future kills the child.
 mod transport;
@@ -9,6 +9,7 @@ use tokio::{
     process::Command,
 };
 
+pub const MAX_INCHI_BYTES: usize = 2 * 1024 * 1024;
 pub const MAX_REQUEST_BYTES: usize = 8 * 1024 * 1024;
 pub const MAX_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
 const MAX_STDERR_BYTES: usize = 64 * 1024;
@@ -111,7 +112,7 @@ pub enum Error {
     },
     #[error("InChI helper could not allocate its {budget} byte {resource:?} arena")]
     ResourceUnavailable { resource: Resource, budget: u64 },
-    #[error("InChI generation exceeded its time limit")]
+    #[error("InChI operation exceeded its time limit")]
     Timeout,
 }
 
@@ -159,6 +160,42 @@ pub async fn generate_with_limits(
     input: &Input,
     limits: Limits,
 ) -> Result<Output, Error> {
+    validate_limits(limits)?;
+    let request = transport::encode(input, limits.kernel_heap_bytes)?;
+    transport::decode(&exchange(helper, &request, limits.timeout).await?)
+}
+
+/// Read native structure records without changing or normalizing the input text.
+/// Chemical error statuses remain in Output; process/resource failures are errors.
+/// Text is bounded UTF-8. Embedded NUL and trailing bytes retain the native API
+/// semantics, and the first NUL terminates the kernel's view of the identifier.
+pub async fn read(
+    helper: &Path,
+    inchi: &str,
+    timeout: Duration,
+) -> Result<super::output::Output, Error> {
+    read_with_limits(
+        helper,
+        inchi,
+        Limits {
+            timeout,
+            kernel_heap_bytes: DEFAULT_KERNEL_HEAP_BYTES,
+        },
+    )
+    .await
+}
+
+pub async fn read_with_limits(
+    helper: &Path,
+    inchi: &str,
+    limits: Limits,
+) -> Result<super::output::Output, Error> {
+    validate_limits(limits)?;
+    let request = transport::encode_import(inchi, limits.kernel_heap_bytes)?;
+    transport::decode_import(&exchange(helper, &request, limits.timeout).await?)
+}
+
+fn validate_limits(limits: Limits) -> Result<(), Error> {
     if limits.timeout.is_zero() || limits.timeout > MAX_TIMEOUT {
         return Err(Error::Input(
             "Timeout must be greater than zero and at most 120 seconds",
@@ -169,14 +206,24 @@ pub async fn generate_with_limits(
             "Kernel heap budget must be between 1 byte and 512 MiB",
         ));
     }
-    let request = transport::encode(input, limits.kernel_heap_bytes)?;
+    Ok(())
+}
+
+fn helper_command(helper: &Path) -> Command {
+    let mut command = Command::new(helper);
+    command
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    #[cfg(windows)]
+    command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW for the desktop app.
+    command
+}
+
+async fn exchange(helper: &Path, request: &[u8], timeout: Duration) -> Result<Vec<u8>, Error> {
     let operation = async {
-        let mut child = Command::new(helper)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .kill_on_drop(true)
-            .spawn()?;
+        let mut child = helper_command(helper).spawn()?;
         let mut stdin = child
             .stdin
             .take()
@@ -190,7 +237,7 @@ pub async fn generate_with_limits(
             .take()
             .ok_or(Error::Protocol("Missing diagnostic pipe"))?;
         let writer = async {
-            stdin.write_all(&request).await?;
+            stdin.write_all(request).await?;
             stdin.shutdown().await?;
             drop(stdin);
             Ok::<_, Error>(())
@@ -208,9 +255,9 @@ pub async fn generate_with_limits(
                 diagnostic: String::from_utf8_lossy(&diagnostic).into_owned(),
             });
         }
-        transport::decode(&response)
+        Ok(response)
     };
-    tokio::time::timeout(limits.timeout, operation)
+    tokio::time::timeout(timeout, operation)
         .await
         .map_err(|_| Error::Timeout)?
 }

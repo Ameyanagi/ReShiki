@@ -33,7 +33,7 @@ pub struct BondLabel {
 
 /// Detached drawing plus the exact molecular state that needs full CIP labels.
 /// Finishing consumes the draft; a partial result never changes the input.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Drawing {
     molecule: Molecule,
     document: Document,

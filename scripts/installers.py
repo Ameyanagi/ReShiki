@@ -9,7 +9,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from build_release import ROOT, run, verify_binary
+from build_release import ROOT, run, verify_binary, verify_inchi_helper
+from inchi_source import manifest
 
 
 def checksum(output):
@@ -67,7 +68,7 @@ def verify_windows_installer(installer, source):
         root = Path(temporary)
         destination = root / "Installed ReShiki"
         environment = dict(os.environ)
-        for key in ("RESHIKI_PYTHON", "MORUNO_PYTHON"):
+        for key in ("RESHIKI_PYTHON", "MORUNO_PYTHON", "RESHIKI_INCHI_HELPER"):
             environment.pop(key, None)
         environment.update(
             RESHIKI_DATA_DIR=str(root / "User data"),
@@ -103,6 +104,10 @@ def verify_windows_installer(installer, source):
                             or installed.read_bytes() != original.read_bytes()
                         ):
                             raise ValueError(f"Installed file mismatch: {original.name}")
+            metadata = json.loads((source / "build.json").read_text(encoding="utf-8"))
+            helper = destination / "reshiki-inchi-helper.exe"
+            verify_binary(helper, "windows", metadata["architecture"])
+            verify_inchi_helper(helper, manifest()["inchi_version"])
             response = run(
                 [destination / "reshiki.exe", "--engine-check"],
                 cwd=root,
@@ -178,6 +183,9 @@ def verify_mac_disk_image(output, signed):
         finally:
             run(["hdiutil", "detach", mount])
         verify_binary(installed / "Contents/MacOS/reshiki", "macos", "arm64")
+        helper = installed / "Contents/MacOS/reshiki-inchi-helper"
+        verify_binary(helper, "macos", "arm64")
+        verify_inchi_helper(helper, manifest()["inchi_version"])
         run(["codesign", "--verify", "--deep", "--strict", installed])
         if signed:
             from sign_macos import verify_app

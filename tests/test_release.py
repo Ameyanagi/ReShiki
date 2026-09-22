@@ -57,6 +57,8 @@ class ReleaseTests(unittest.TestCase):
             binary = root / "target" / target / "release/reshiki.exe"
             binary.parent.mkdir(parents=True)
             binary.write_bytes(self.pe_image(0xAA64))
+            helper = binary.with_name("reshiki-inchi-helper.exe")
+            helper.write_bytes(self.pe_image(0xAA64))
             worker = root / "worker"
             worker.mkdir()
             (worker / "pyproject.toml").write_text("fixture")
@@ -68,6 +70,10 @@ class ReleaseTests(unittest.TestCase):
                 patch("build_release.runtime_project", return_value=worker),
                 patch("build_release.target_directory", return_value=root / "target"),
                 patch("build_release.notices"),
+                patch(
+                    "build_release.prepare_inchi_helper",
+                    return_value=(helper, {"version": "1.07.3"}),
+                ),
                 patch("build_release.verify_archive"),
                 patch("build_release.run") as run,
                 patch("sys.argv", ["build_release.py", "--target", target]),
@@ -87,6 +93,11 @@ class ReleaseTests(unittest.TestCase):
                 self.assertEqual(metadata["architecture"], "arm64")
                 self.assertEqual(metadata["rust_target"], target)
                 self.assertEqual(metadata["chemistry_architecture"], "x64")
+                self.assertEqual(metadata["inchi_helper"]["version"], "1.07.3")
+                self.assertEqual(
+                    stream.read("reshiki-1.2.3-windows-arm64/reshiki-inchi-helper.exe"),
+                    self.pe_image(0xAA64),
+                )
                 self.assertFalse(metadata["signed"])
                 self.assertIn(
                     b"Windows 11 on ARM is required",
