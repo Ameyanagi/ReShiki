@@ -1,14 +1,14 @@
 # Roadmap
 
-The goal is a complete molecular drawing workspace. These are implementation stages, not release commitments. Version 0.2 delivered clipboard editing, configurable/fused rings, transforms, multiline labels, arrow styles, templates, five-second recovery, standalone local packaging and PDF/PNG export. The remaining work below is broader than that iteration.
+ReShiki 0.6 includes native offline chemistry, direct drawing tools, selection-aware properties, reaction roles, templates, and an asynchronous assistant with editable previews and visual review. This roadmap describes remaining work, not release commitments. See [feature status](feature-status.md) for supported workflows and limitations.
 
-JACS / ACS is the required default for future drawing and export features. Build on the shared preset in `engine/drawing_style.json`; preserve physical sizes independently of screen zoom. Atom scripts and basic font measurements are now implemented, while rich user-editable labels and general collision avoidance remain work below.
+JACS / ACS remains the default. Preserve physical drawing sizes, complete molecular graphs, and editable originals when adding features.
 
-1. **Editor completeness:** rich chemical labels, brackets, customizable templates, abbreviation expansion, attachment-aware fragment insertion, drawing styles and more precise label layout.
-2. **Reliable documents:** native file association, open-file OS events, notarized release packaging, accessibility, full document-format validation and a larger interoperability corpus. Add exact text metrics and collision handling before claiming publication-quality rendering.
-3. **Reaction workflows:** explicit reactant/product/reagent groups, reaction coordinates, atom mapping, stoichiometry, balancing and reaction file formats. Preserve semantics separately from arrow appearance.
-4. **Advanced chemistry:** query atoms/bonds, R-groups, polymers/repeating units, enhanced stereo, multicenter attachments and advanced aromaticity cases. Add fixtures before enabling each new class.
-5. **Publication and analysis:** build on physical page layouts, multipage PDF and native macOS printing with journal styles, configurable export styles, printing on other platforms, calculated properties and spectra integration. Chemical naming and NMR prediction need dedicated engines and separate correctness/licensing evaluation; RDKit alone does not deliver the whole scope.
-6. **Native chemistry:** extend the Rust engine while preserving independent RDKit comparisons. ReShiki 0.6.0 builds use Rust chemistry and the bundled official InChI kernel; Python and uv remain development tools. Add differential fixtures before expanding supported chemistry.
+1. **Drawing quality:** improve exact label metrics and collision handling, rich-text caret layout, complex attachments, and orientation controls. Assistant corrections should be able to satisfy upright functional-group requests while preserving conventional bond angles.
+2. **Document workflows:** improve native filename handling, recent files, OS open-document events, multiple documents, accessibility, and keyboard-only operation. Expand interchange checks across applications and Office versions.
+3. **Reaction composition:** extend outward branches into general reaction networks, improve caption and condition placement, and add richer mapping, quantities, balancing and yield workflows. Keep reaction semantics separate from arrow appearance.
+4. **Advanced chemistry:** add supported query atoms/bonds, R-group logic, polymer repeat units, enhanced stereo, multicenter attachments and wider aromatic cases only with independent fixtures and validation.
+5. **Publication and analysis:** add reusable page/object stationery, calibrated actual-size view, broader printing controls and dedicated naming or spectra engines. Validate scientific correctness and licensing before exposing predictions.
+6. **Native engine coverage:** extend Rust chemistry and the bundled official InChI kernel with independent differential comparisons. Python and uv remain development tools; installed applications must continue to work without them.
 
-Acceptance should use real desktop workflows as well as backend tests. A menu entry, successful build, or one molecule round trip is insufficient evidence of complete capability.
+Acceptance includes real desktop workflows, saved and reopened drawings, Undo/Redo, and appropriate export checks. Follow the issues from the [0.6 release walkthrough](release-0.6-validation.md) for concrete UI, UX and performance findings.

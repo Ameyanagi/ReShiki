@@ -15,7 +15,7 @@ Start with JACS / ACS styling. Attach templates, refine selected structures, or 
 
 ## Install
 
-Download ReShiki for Apple Silicon macOS, Windows (x64 / ARM64), or Linux (x64 / ARM64). Drawing and chemistry tools are included and work offline.
+Download ReShiki for Apple Silicon macOS, Windows (x64 / ARM64), or Linux (x64 / ARM64). Version 0.6 includes the drawing and chemistry tools: no Python, RDKit, or uv installation is needed. Drawing, imports, cleanup, and molecular properties work offline from the first launch.
 
 On Mac, open the disk image and drag ReShiki to Applications. On Windows, run setup. Click **ReShiki** in the app to check for updates.
 

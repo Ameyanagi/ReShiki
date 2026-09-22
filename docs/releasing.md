@@ -20,15 +20,17 @@ Each archive is extracted into a temporary directory with spaces outside the che
 
 Before the native-runtime cutover, the [2026-09-20 release validation](https://github.com/Ameyanagi/ReShiki/actions/runs/35510386732) passed all five package checks, including native ARM Windows/Linux applications, fresh chemistry setup, and offline reuse. Apple Silicon also passed Developer ID signing, notarization, stapling, and Gatekeeper assessment. This manual run did not publish a release.
 
+The current [0.6 preparation record](release-0.6-validation.md) tracks the documentation walkthrough, issues, package checks and remaining publication steps.
+
 ## Publish a version
 
 1. Update the package version in `Cargo.toml`, update `Cargo.lock`, and record release changes.
 2. Run the checks and a manual release build. Review the resulting packages.
-3. Commit and push, then create and push a matching tag, for example `v0.3.0` for version `0.3.0`.
+3. Commit and push, then create and push a matching tag, for example `v0.6.0` for version `0.6.0`.
 
 ```sh
-git tag -a v0.3.0 -m "ReShiki 0.3.0"
-git push origin v0.3.0
+git tag -a v0.6.0 -m "ReShiki 0.6.0"
+git push origin v0.6.0
 ```
 
 A `v*` tag triggers builds. A mismatched version fails before packaging. The macOS archive must be signed, notarized, stapled and verified before the release publishes; missing credentials fail the job instead of silently publishing an unsigned macOS download. All five packages and the complete live reference tests on macOS ARM64, Linux x64, and Windows x64 must pass before publication. Windows and Linux packages remain unsigned. Tags containing a prerelease suffix create a GitHub prerelease. Manual builds never publish a release.
