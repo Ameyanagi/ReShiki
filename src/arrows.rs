@@ -81,10 +81,10 @@ impl ArrowStyle {
         color: [0; 3],
         width_pt: 0.6,
         pattern: LinePattern::Solid,
-        head_length_pt: 3.0,
-        head_width_pt: 1.2,
+        head_length_pt: 6.0,
+        head_width_pt: 1.5,
         equilibrium_ratio: 1.0,
-        head_notch: 0.,
+        head_notch: 0.125,
         gap_pt: 2.0,
         no_go: NoGo::None,
         dipole: false,
@@ -398,16 +398,28 @@ impl Arrow {
         } else if self.kind == "retro" {
             // Keep the double shaft inside the angled arrowhead.
             let length = self.start.distance(self.end).max(0.001);
-            let inset = (DEFAULT.world(s.head_length_pt) * 0.4 / length).min(0.3);
+            let head_length = DEFAULT.world(s.head_length_pt).min(length * 0.4);
+            let head_width = DEFAULT.world(s.head_width_pt).max(0.001);
+            let inset = (head_length * gap / head_width / length).min(0.4);
             path(body(0., 1. - inset, -gap), false, false);
             path(body(0., 1. - inset, gap), false, false);
             head(self.end, tangent(1., false), s.head, &mut path);
             head(self.start, tangent(0., true), s.tail, &mut path);
         } else {
             let trim = |head: Head, from: bool| {
-                if s.shape != HeadShape::Hollow || head != Head::Full {
+                if head == Head::None || s.shape == HeadShape::Open {
                     return 0.;
                 }
+                let head_length = DEFAULT
+                    .world(s.head_length_pt)
+                    .min(self.start.distance(self.end) * 0.4);
+                let inset = if s.shape == HeadShape::Hollow && head == Head::Full {
+                    head_length * (1. - s.head_notch)
+                } else {
+                    // Keep the rounded shaft cap inside the filled head silhouette.
+                    (DEFAULT.world(s.width_pt) * 0.5 * (s.head_length_pt / s.head_width_pt + 1.))
+                        .min(head_length * 0.7)
+                };
                 let c = self
                     .control_point()
                     .unwrap_or_else(|| lerp(self.start, self.end, 0.5));
@@ -417,12 +429,7 @@ impl Arrow {
                     } else {
                         self.end.distance(c)
                     };
-                (DEFAULT
-                    .world(s.head_length_pt)
-                    .min(self.start.distance(self.end) * 0.4)
-                    * (1. - s.head_notch)
-                    / speed.max(0.001))
-                .min(0.35)
+                (inset / speed.max(0.001)).min(0.35)
             };
             path(
                 body(trim(s.tail, true), 1. - trim(s.head, false), 0.),

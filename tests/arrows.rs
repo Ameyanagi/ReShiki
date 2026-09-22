@@ -204,3 +204,34 @@ fn elbow_has_two_straight_segments_and_editable_corner() {
     a.straighten();
     near(a.handles()[2], p(60., 0.));
 }
+
+#[test]
+fn filled_arrowheads_cover_the_shaft_cap_and_keep_a_visible_notch() {
+    let a = arrow(Preset::Forward);
+    let paths = a.paths();
+    let PathCommand::Line(end) = paths[0].commands.last().unwrap() else {
+        panic!("straight shaft")
+    };
+    let half_stroke = reshiki::style::DEFAULT.world(a.appearance().width_pt) / 2.;
+    assert!(end.x + half_stroke < a.end.x);
+    let style = a.appearance();
+    assert!(style.head_notch > 0.);
+    assert!(style.head_length_pt / style.head_width_pt >= 3.);
+    assert!(paths[1].filled);
+}
+
+#[test]
+fn double_shafts_join_the_retrosynthesis_head_at_its_actual_width() {
+    let a = arrow(Preset::Retro);
+    let paths = a.paths();
+    let style = a.appearance();
+    let length = reshiki::style::DEFAULT.world(style.head_length_pt);
+    let width = reshiki::style::DEFAULT.world(style.head_width_pt);
+    for shaft in &paths[..2] {
+        let PathCommand::Line(end) = shaft.commands.last().unwrap() else {
+            panic!("straight shaft")
+        };
+        let expected_inset = length * end.y.abs() / width;
+        assert!((a.end.x - end.x - expected_inset).abs() < 0.001);
+    }
+}

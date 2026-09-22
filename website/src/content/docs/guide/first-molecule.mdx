@@ -7,7 +7,9 @@ import Screenshot from "../../../components/Screenshot.astro";
 
 ## Draw ethanol
 
-1. Choose **New**, then press **B** for a single bond.
+ReShiki opens with a blank canvas.
+
+1. Press **B** for a single bond. Choose **New** first if a drawing is already open.
 2. Drag a bond. Drag from its endpoint to add a second bond.
 3. Select the last atom and press **O**. Its label becomes **OH**.
 4. Click **Check**. Ethanol should read **C2H6O**.
@@ -21,7 +23,7 @@ Press **⌘S** on Mac or **Ctrl+S** elsewhere to save an editable `.reshiki` fil
 
 ## Choose an element
 
-Click **C** in the toolbar, choose an element, then click an atom to replace it or empty space to place it.
+Click **C** in the toolbar to reuse the current element. Hold the button or click its lower-right triangle to choose another element, then click an atom to replace it or empty space to place it.
 
 <Screenshot src="/manual/periodic-table.png" alt="The periodic table opens beside the atom tool." />
 
@@ -29,18 +31,18 @@ For common labels, hover an atom and press **C, N, O, S, P, F, or H**. ReShiki a
 
 ## Change a bond
 
-Click a bond tool to open its visual palette. Choose a style, then draw or click an existing bond.
+Click **Single**, **Double**, or **Triple** to select a bond immediately. Click **Other bonds** for wedges, dashed bonds, and the remaining styles. Choose a style, then draw or click an existing bond.
 
 <Screenshot
   src="/manual/bond-palette.png"
-  alt="The floating bond palette shows single, multiple, wedge, dashed and other bond styles."
+  alt="The floating bond palette shows wedge, dashed, coordination and other bond styles."
 />
 
-| With a bond selected or hovered  | Press             |
-| -------------------------------- | ----------------- |
-| Single / double / triple         | **S / D / T**     |
-| Move a double bond's second line | **D** again       |
-| Erase an object                  | **E**, then click |
+| With a bond selected or hovered  | Press                     |
+| -------------------------------- | ------------------------- |
+| Single / double / triple         | **S / D / T**             |
+| Move a double bond's second line | **D** again               |
+| Erase an object                  | **E**, then click or drag |
 
 <Screenshot
   src="/manual/double-bond.png"
@@ -49,9 +51,11 @@ Click a bond tool to open its visual palette. Choose a style, then draw or click
 
 The controls above the canvas set **Length** and **Angles**. Hold **Alt/Option** while dragging to draw freely.
 
+The eraser deletes atoms, bonds, labels, arrows, and artwork along the full drag path. One undo restores the entire stroke.
+
 ## Add a ring or chain
 
-Click the ring tool, choose a shape, then click empty space or an existing atom/bond.
+Click the ring tool to use the last chosen ring; it starts with a six-membered ring. Hold the button briefly or click its lower-right triangle to choose a ring, benzene, or a chair projection. Click empty space or an existing atom/bond to place it.
 
 <Screenshot
   src="/manual/ring-palette.png"

@@ -75,10 +75,12 @@ impl Tool {
                 "Preview, then click an atom or bond to attach · Drag to choose the side · Escape cancels"
             }
             Self::Arrow => {
-                "Drag to draw · Drag an endpoint to resize or the middle handle to bend · Alt frees angles"
+                "Click to place a rightward arrow · Drag to set length and direction · Middle handle bends"
             }
             Self::Text => "Click to type a label · Double-click a label to edit · Escape cancels",
-            Self::Erase => "Click an atom, bond, label, or arrow to erase",
+            Self::Erase => {
+                "Drag to erase atoms, bonds and objects along the stroke · Undo restores the whole stroke"
+            }
             Self::Graphic(GraphicKind::Symbol(_)) => {
                 "Click an atom to attach · Drag from an atom to position · Click empty space for a free symbol"
             }
@@ -94,6 +96,9 @@ impl Tool {
 }
 #[derive(Debug, Clone)]
 pub enum Edit {
+    EraseStart(World),
+    EraseTo(World, World),
+    EraseEnd,
     BeginText(u64),
     Hover(Option<World>),
     Chain {
@@ -158,6 +163,9 @@ pub struct State {
 }
 #[derive(Debug)]
 enum Gesture {
+    Erase {
+        last: World,
+    },
     Chain {
         start: World,
         pressed: World,
@@ -228,6 +236,7 @@ pub struct MoleculeCanvas<'a> {
     pub orbital_phase: reshiki::scientific::Phase,
     pub phase_flipped: bool,
     pub attach_symbols: bool,
+    pub graphic_constrain: bool,
     pub graphic_style: &'a GraphicStyle,
     pub bracket_sides: BracketSides,
 }
@@ -393,17 +402,27 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                 key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
                 ..
             }) => {
-                state.gesture = None;
+                if matches!(state.gesture.take(), Some(Gesture::Erase { .. })) {
+                    return Some(Action::publish(Edit::EraseEnd));
+                }
                 Some(Action::request_redraw())
             }
             Event::Window(iced::window::Event::Unfocused) => {
-                state.gesture = None;
+                let erasing = matches!(state.gesture.take(), Some(Gesture::Erase { .. }));
                 state.last_click = None;
                 state.cursor = None;
-                Some(Action::publish(Edit::Hover(None)))
+                Some(Action::publish(if erasing {
+                    Edit::EraseEnd
+                } else {
+                    Edit::Hover(None)
+                }))
             }
             Event::Mouse(mouse::Event::CursorLeft) => {
                 state.cursor = None;
+                if matches!(state.gesture, Some(Gesture::Erase { .. })) {
+                    state.gesture = None;
+                    return Some(Action::publish(Edit::EraseEnd));
+                }
                 Some(Action::publish(Edit::Hover(None)))
             }
             Event::Mouse(mouse::Event::WheelScrolled { delta })
@@ -436,6 +455,10 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
             }
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) if inside => {
                 let p = self.camera.world(point?, bounds);
+                if self.tool == Tool::Erase {
+                    state.gesture = Some(Gesture::Erase { last: p });
+                    return Some(Action::publish(Edit::EraseStart(p)).and_capture());
+                }
                 if (self.tool.selects() || matches!(self.tool, Tool::Arrow | Tool::EditPoints))
                     && self.selected.len() == 1
                 {
@@ -587,6 +610,16 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                 Some(Action::request_redraw().and_capture())
             }
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
+                if let Some(Gesture::Erase { last }) = &mut state.gesture {
+                    if self.tool != Tool::Erase {
+                        state.gesture = None;
+                        return Some(Action::publish(Edit::EraseEnd));
+                    }
+                    let p = self.camera.world(point?, bounds);
+                    let from = *last;
+                    *last = p;
+                    return Some(Action::publish(Edit::EraseTo(from, p)).and_capture());
+                }
                 if let Some(Gesture::Chain {
                     start,
                     source,
@@ -654,6 +687,9 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
             }
             Event::Mouse(mouse::Event::ButtonReleased(_)) => {
                 let gesture = state.gesture.take()?;
+                if matches!(gesture, Gesture::Erase { .. }) {
+                    return Some(Action::publish(Edit::EraseEnd).and_capture());
+                }
                 let p = self.camera.world(point?, bounds);
                 let edit = match gesture {
                     Gesture::Chain {
@@ -694,7 +730,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                         {
                             return Some(Action::request_redraw().and_capture());
                         }
-                        Edit::Graphic(start, p, state.modifiers.shift())
+                        Edit::Graphic(start, p, state.modifiers.shift() || self.graphic_constrain)
                     }
                     Gesture::ArrowHandle { id, index } => {
                         if !inside {
@@ -868,7 +904,9 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                             state.modifiers,
                         ))
                     }
-                    Gesture::Pan { .. } => return Some(Action::request_redraw()),
+                    Gesture::Pan { .. } | Gesture::Erase { .. } => {
+                        return Some(Action::request_redraw());
+                    }
                 };
                 Some(Action::publish(edit).and_capture())
             }
@@ -921,6 +959,9 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
         }
         if matches!(state.gesture, Some(Gesture::ArrowHandle { .. })) {
             return mouse::Interaction::Grabbing;
+        }
+        if self.tool == Tool::Erase && cursor.is_over(bounds) {
+            return mouse::Interaction::Crosshair;
         }
         if self.selected.len() == 1
             && let Some(p) = cursor.position_in(bounds)
@@ -1106,7 +1147,7 @@ impl MoleculeCanvas<'_> {
                         end,
                         self.graphic_style.clone(),
                         self.bracket_sides,
-                        state.modifiers.shift(),
+                        state.modifiers.shift() || self.graphic_constrain,
                     ));
                     ring_selection = Some(vec![id]);
                 }
@@ -1635,7 +1676,7 @@ impl MoleculeCanvas<'_> {
                         Stroke::default().with_color(rgb([19, 135, 116])),
                     );
                 }
-                None if cursor.is_over(bounds) => {
+                None if cursor.is_over(bounds) && self.tool != Tool::Erase => {
                     let point = self.camera.world(p, bounds);
                     let mut hit = hit_selection(self.doc, point, 10.0 / self.camera.zoom);
                     if self.tool.selects() && hit.is_empty() {
@@ -1648,6 +1689,17 @@ impl MoleculeCanvas<'_> {
                 }
                 _ => {}
             }
+        }
+        if self.tool == Tool::Erase
+            && cursor.is_over(bounds)
+            && let Some(p) = state.cursor
+        {
+            frame.stroke(
+                &Path::circle(Point::new(p.x - bounds.x, p.y - bounds.y), 7.),
+                Stroke::default()
+                    .with_width(1.)
+                    .with_color(rgb([180, 66, 66])),
+            );
         }
         if self.tool.selects() {
             if let (Some(Gesture::Transform(drag)), Some(p)) = (&state.gesture, state.cursor)
@@ -1854,6 +1906,16 @@ fn draw_document(
     camera: Camera,
     bounds: Rectangle,
 ) {
+    draw_document_with_minimum_stroke(frame, doc, camera, bounds, 0.);
+}
+
+fn draw_document_with_minimum_stroke(
+    frame: &mut layered::Frame<'_>,
+    doc: &Document,
+    camera: Camera,
+    bounds: Rectangle,
+    minimum: f32,
+) {
     for primitive in primitives(doc) {
         match primitive {
             Primitive::Picture(g) => {
@@ -1914,7 +1976,11 @@ fn draw_document(
                     ..Stroke::default()
                 }
                 .with_color(rgb(style.stroke))
-                .with_width(style.width() * camera.zoom)
+                .with_width(if style.width_pt > 0. {
+                    (style.width() * camera.zoom).max(minimum)
+                } else {
+                    0.
+                })
                 .with_line_cap(canvas::LineCap::Round)
                 .with_line_join(canvas::LineJoin::Round);
                 frame.stroke(&path, stroke);
@@ -1922,7 +1988,7 @@ fn draw_document(
             Primitive::Line(a, b, width) => frame.stroke(
                 &Path::line(camera.screen(a, bounds), camera.screen(b, bounds)),
                 Stroke::default()
-                    .with_width(width * camera.zoom)
+                    .with_width((width * camera.zoom).max(minimum))
                     .with_color(Color::BLACK),
             ),
             Primitive::Polygon(points) => {
@@ -2249,6 +2315,32 @@ impl canvas::Program<crate::app::Message> for DrawingPreview<'_> {
     }
 }
 
+/// Palette strokes remain legible even when a large structure is fitted into a tile.
+pub struct PalettePreview(pub Document);
+impl canvas::Program<crate::app::Message> for PalettePreview {
+    type State = ();
+    fn draw(
+        &self,
+        _: &(),
+        renderer: &Renderer,
+        _: &Theme,
+        bounds: Rectangle,
+        _: mouse::Cursor,
+    ) -> Vec<Geometry> {
+        let mut frame = layered::Frame::new(renderer, bounds.size());
+        let (lo, hi) =
+            reshiki::scene::selection_bounds(&self.0, &self.0.all_ids()).unwrap_or_default();
+        let camera = Camera {
+            center: World::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.),
+            zoom: ((bounds.width - 14.) / (hi.x - lo.x).max(1.))
+                .min((bounds.height - 14.) / (hi.y - lo.y).max(1.))
+                .clamp(0.001, 1.4),
+        };
+        draw_document_with_minimum_stroke(&mut frame, &self.0, camera, bounds, 1.5);
+        frame.finish()
+    }
+}
+
 pub struct OwnedDrawingPreview(pub Document);
 impl canvas::Program<crate::app::Message> for OwnedDrawingPreview {
     type State = ();
@@ -2484,6 +2576,7 @@ mod tests {
             orbital_phase: Default::default(),
             phase_flipped: false,
             attach_symbols: true,
+            graphic_constrain: false,
             graphic_style: &STYLE,
             bracket_sides: BracketSides::Both,
             bond_drawing: Default::default(),
@@ -2710,6 +2803,7 @@ mod tests {
             orbital_phase: Default::default(),
             phase_flipped: false,
             attach_symbols: true,
+            graphic_constrain: false,
             graphic_style: &style,
             bracket_sides: BracketSides::Both,
         };
@@ -2821,6 +2915,7 @@ mod tests {
             orbital_phase: Default::default(),
             phase_flipped: false,
             attach_symbols: true,
+            graphic_constrain: false,
             graphic_style: &style,
             bracket_sides: BracketSides::Both,
         };
@@ -2943,6 +3038,7 @@ mod tests {
             orbital_phase: Default::default(),
             phase_flipped: false,
             attach_symbols: true,
+            graphic_constrain: false,
             graphic_style: &style,
             bracket_sides: BracketSides::Both,
         };
@@ -3008,6 +3104,7 @@ mod tests {
             orbital_phase: Default::default(),
             phase_flipped: false,
             attach_symbols: true,
+            graphic_constrain: false,
             graphic_style: &style,
             bracket_sides: BracketSides::Both,
         };
@@ -3102,6 +3199,7 @@ mod tests {
             orbital_phase: Default::default(),
             phase_flipped: false,
             attach_symbols: true,
+            graphic_constrain: false,
             graphic_style: &GraphicStyle::default(),
             bracket_sides: BracketSides::Both,
         };
@@ -3239,6 +3337,7 @@ mod tests {
             orbital_phase: Default::default(),
             phase_flipped: false,
             attach_symbols: true,
+            graphic_constrain: false,
             graphic_style: &GraphicStyle::default(),
             bracket_sides: BracketSides::Both,
         };
@@ -3336,6 +3435,7 @@ mod tests {
             orbital_phase: Default::default(),
             phase_flipped: false,
             attach_symbols: true,
+            graphic_constrain: false,
             graphic_style: &GraphicStyle::default(),
             bracket_sides: BracketSides::Both,
         };
@@ -3391,6 +3491,7 @@ mod tests {
             orbital_phase: Default::default(),
             phase_flipped: false,
             attach_symbols: true,
+            graphic_constrain: false,
             graphic_style: &GraphicStyle::default(),
             bracket_sides: BracketSides::Both,
         };
@@ -3425,6 +3526,7 @@ mod tests {
             orbital_phase: Default::default(),
             phase_flipped: false,
             attach_symbols: true,
+            graphic_constrain: false,
             graphic_style: &GraphicStyle::default(),
             bracket_sides: BracketSides::Both,
         };
@@ -3481,6 +3583,7 @@ mod tests {
             orbital_phase: Default::default(),
             phase_flipped: false,
             attach_symbols: true,
+            graphic_constrain: false,
             graphic_style: &GraphicStyle::default(),
             bracket_sides: BracketSides::Both,
         };
@@ -3551,6 +3654,7 @@ mod tests {
             orbital_phase: Default::default(),
             phase_flipped: false,
             attach_symbols: true,
+            graphic_constrain: false,
             graphic_style: &GraphicStyle::default(),
             bracket_sides: BracketSides::Both,
         };

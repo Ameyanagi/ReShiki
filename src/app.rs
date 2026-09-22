@@ -27,6 +27,7 @@ mod printing;
 mod reactions;
 mod shortcuts;
 mod template_library;
+mod tool_button;
 mod typography;
 mod updates;
 mod workspace;
@@ -197,7 +198,6 @@ pub enum Job {
     Import,
     ImportFile,
     Insert,
-    Startup,
     Analyze,
     RefreshLabels,
     Clean(cleanup::CleanupJob),
@@ -224,6 +224,9 @@ pub struct App {
     updates: updates::State,
     styles: document_styles::State,
     palette: Option<palettes::Family>,
+    toolbar: palettes::Memory,
+    erase_stroke: bool,
+    erase_committed: bool,
     assistant: assistant::State,
     hover: Option<(Point, u64)>,
     cleanup: Option<CleanupPreview>,
@@ -319,6 +322,9 @@ impl App {
             styles: Default::default(),
             reactions: Default::default(),
             palette: None,
+            toolbar: palettes::Memory::default(),
+            erase_stroke: false,
+            erase_committed: false,
             assistant: assistant::State::new(),
             hover: None,
             cleanup: None,
@@ -366,7 +372,7 @@ impl App {
             color_scope: Default::default(),
             bond_color_input: "#000000".into(),
             text_width_input: String::new(),
-            smiles: "CC(=O)Oc1ccccc1C(=O)O".into(),
+            smiles: String::new(),
             isotope: String::new(),
             grid: false,
             guides: Default::default(),
@@ -376,7 +382,7 @@ impl App {
             revision: 0,
             busy: false,
             clipboard_busy: false,
-            status: "Starting chemistry…".into(),
+            status: "Ready · Choose a tool to start drawing".into(),
             error: false,
             path: None,
             #[cfg(windows)]
@@ -429,7 +435,7 @@ impl App {
                 Message::Opened,
             )
         } else {
-            app.run(Request::import_smiles(&app.smiles), Job::Startup)
+            Task::none()
         };
         let update_check = app.update_action(updates::Action::Check(false));
         (app, Task::batch([task, update_check]))
@@ -467,7 +473,11 @@ impl App {
             } else {
                 Subscription::none()
             },
-            if self.refresh_due.is_some() && !self.busy && self.cleanup.is_none() {
+            if self.refresh_due.is_some()
+                && !self.busy
+                && self.cleanup.is_none()
+                && !self.erase_stroke
+            {
                 iced::time::every(std::time::Duration::from_millis(250))
                     .map(|_| Message::RefreshLabels)
             } else {
@@ -617,6 +627,12 @@ impl App {
         )
     }
     fn changed(&mut self, before: Document) {
+        if self.doc != before {
+            self.erase_stroke = false;
+        }
+        self.changed_continuing(before, false);
+    }
+    fn changed_continuing(&mut self, before: Document, continuing: bool) {
         self.cleanup = None;
         self.doc.reconcile_abbreviations(&before);
         if let Err(error) = reshiki::reactions::reconcile(&mut self.doc) {
@@ -642,7 +658,10 @@ impl App {
                 Some(std::time::Instant::now() + std::time::Duration::from_millis(350));
             self.chemistry_notice = None;
         }
-        if self.history.commit(before, &self.doc) {
+        if self
+            .history
+            .commit_continuing(before, &self.doc, continuing)
+        {
             self.revision = self.revision.wrapping_add(1);
             if chemistry_changed {
                 self.analysis = None;
@@ -1151,6 +1170,7 @@ impl App {
                 }
             }
             Message::ScientificKind(kind) => {
+                self.toolbar.remember(Tool::Graphic(kind));
                 let before = self.doc.clone();
                 for g in self
                     .doc
@@ -1335,6 +1355,14 @@ impl App {
                 }
             }
             Message::Tool(tool) => {
+                self.erase_stroke = false;
+                self.palette = None;
+                self.toolbar.remember(tool);
+                if let Some(option) = self.toolbar.graphic(tool) {
+                    self.graphic_style = option.style.clone();
+                    self.bracket_sides = option.sides;
+                    self.graphic_width_input = self.graphic_style.width_pt.to_string();
+                }
                 self.tool = tool;
                 self.error = false;
                 if matches!(tool, Tool::Graphic(_) | Tool::RingPreset(_)) {
@@ -1346,6 +1374,9 @@ impl App {
                 ) {
                     self.inspector_open = true;
                     self.inspector_tab = InspectorTab::Properties;
+                }
+                if matches!(tool, Tool::Graphic(_)) {
+                    self.sync_graphics();
                 }
             }
             Message::Element(e) => {
@@ -1405,10 +1436,12 @@ impl App {
             Message::Smiles(s) => self.smiles = s,
             Message::Isotope(s) => self.isotope = s,
             Message::RingSize(n) => {
+                self.toolbar.ring = Tool::Ring;
                 self.ring_size = n;
                 self.tool = Tool::Ring;
             }
             Message::AromaticRing(value) => {
+                self.toolbar.ring = Tool::Ring;
                 self.aromatic_ring = value;
                 if value {
                     self.ring_size = 6;
@@ -1847,7 +1880,7 @@ impl App {
                             self.refresh_due = None;
                             self.chemistry_notice = None;
                             self.selected.clear();
-                            if matches!(kind, Job::Startup | Job::Import | Job::ImportFile) {
+                            if matches!(kind, Job::Import | Job::ImportFile) {
                                 self.fit();
                             }
                             if matches!(kind, Job::ImportFile) {
@@ -1855,18 +1888,11 @@ impl App {
                                 self.saved = Document::default();
                                 self.file_epoch = self.file_epoch.wrapping_add(1);
                             }
-                            if matches!(kind, Job::Startup) {
-                                self.saved = self.doc.clone();
-                                self.history = History::default();
-                            }
                         }
                         self.analysis = response.analysis;
                         self.status = match kind {
                             Job::Clean(_) => "Structure cleaned",
                             Job::Analyze | Job::RefreshLabels => "No chemistry errors found",
-                            Job::Startup => {
-                                "Ready · Try editing the example or start a new drawing"
-                            }
                             _ => "Structure imported · Undo restores the previous drawing",
                         }
                         .into();
@@ -1875,6 +1901,7 @@ impl App {
                 }
             }
             Message::Undo | Message::Redo => {
+                self.erase_stroke = false;
                 self.cleanup = None;
                 let before = self.doc.clone();
                 let selected_group = !before.outer_selected_groups(&self.selected).is_empty();
@@ -2181,6 +2208,29 @@ impl App {
         }
     }
     fn edit(&mut self, edit: Edit) {
+        match edit {
+            Edit::EraseStart(p) => {
+                self.erase_stroke = self.tool == Tool::Erase && self.cleanup.is_none();
+                self.erase_committed = false;
+                if self.erase_stroke {
+                    self.erase_segment(p, p);
+                }
+                return;
+            }
+            Edit::EraseTo(from, to) => {
+                if self.erase_stroke && self.tool == Tool::Erase {
+                    self.erase_segment(from, to);
+                }
+                return;
+            }
+            Edit::EraseEnd => {
+                self.erase_stroke = false;
+                self.hover = None;
+                return;
+            }
+            Edit::Hover(_) => {}
+            _ => self.erase_stroke = false,
+        }
         if matches!(edit, Edit::Pan(..) | Edit::Zoom(..)) {
             self.pages.fit = None;
         }
@@ -2210,7 +2260,11 @@ impl App {
         }
         let before = self.doc.clone();
         match edit {
-            Edit::Hover(_) | Edit::BeginText(_) => return,
+            Edit::Hover(_)
+            | Edit::BeginText(_)
+            | Edit::EraseStart(_)
+            | Edit::EraseTo(..)
+            | Edit::EraseEnd => return,
             Edit::Chain {
                 points,
                 source,
@@ -2448,15 +2502,7 @@ impl App {
                     return;
                 }
                 if self.tool == Tool::Arrow {
-                    let id = self.doc.next_id();
-                    self.doc.arrows.push(Arrow::new(
-                        id,
-                        start,
-                        end,
-                        self.arrow_style,
-                        self.arrows.style.clone(),
-                    ));
-                    self.selected = vec![id];
+                    self.place_arrow(start, end);
                 } else {
                     let a = a.unwrap_or_else(|| self.doc.add_atom("C", start));
                     let b = b.unwrap_or_else(|| self.doc.add_atom("C", end));
@@ -2622,36 +2668,45 @@ impl App {
                         }
                     }
                     Tool::Arrow => {
-                        self.selected = hit
-                            .filter(|id| self.doc.arrows.iter().any(|a| a.id == *id))
-                            .into_iter()
-                            .collect();
-                        self.sync_arrows();
+                        if let Some(id) =
+                            hit.filter(|id| self.doc.arrows.iter().any(|a| a.id == *id))
+                        {
+                            self.selected = vec![id];
+                            self.sync_arrows();
+                        } else {
+                            let length = self.doc.drawing_style.bond_length_world * 2.;
+                            self.place_arrow(p, p.offset(length, 0.));
+                        }
                     }
                     Tool::Erase => {
-                        if let Some(id) = hit {
-                            self.doc.delete(&[id]);
-                        } else {
-                            let index = self.doc.bonds.iter().position(|b| {
-                                self.doc
-                                    .atom(b.a)
-                                    .zip(self.doc.atom(b.b))
-                                    .is_some_and(|(a, z)| {
-                                        canvas::distance_to_segment(p, a.position, z.position)
-                                            < 7.0 / self.camera.zoom
-                                    })
-                            });
-                            if let Some(i) = index {
-                                let b = self.doc.bonds.remove(i);
-                                self.doc.invalidate_chemistry(&[b.a, b.b]);
-                            }
-                        }
+                        reshiki::erasing::stroke(&mut self.doc, p, p, 7. / self.camera.zoom)
                     }
                     _ => self.selected = hit.into_iter().collect(),
                 }
             }
         }
         self.changed(before);
+    }
+    fn place_arrow(&mut self, start: Point, end: Point) {
+        let id = self.doc.next_id();
+        self.doc.arrows.push(Arrow::new(
+            id,
+            start,
+            end,
+            self.arrow_style,
+            self.arrows.style.clone(),
+        ));
+        self.selected = vec![id];
+    }
+    fn erase_segment(&mut self, from: Point, to: Point) {
+        let before = self.doc.clone();
+        reshiki::erasing::stroke(&mut self.doc, from, to, 7. / self.camera.zoom);
+        if self.doc != before {
+            self.selected.clear();
+            let revision = self.revision;
+            self.changed_continuing(before, self.erase_committed);
+            self.erase_committed |= self.revision != revision;
+        }
     }
     fn sync_bonds(&mut self) {
         if let Some(b) = self
@@ -3238,6 +3293,47 @@ mod tests {
         ));
         assert_eq!(app.doc, before);
         assert!(app.error);
+    }
+
+    #[test]
+    fn arrow_click_places_a_fixed_rightward_arrow_and_existing_arrows_are_selected() {
+        use reshiki::arrows::{ArrowStyle, Preset};
+        use reshiki::graphics::LinePattern;
+        for zoom in [0.5, 2.5] {
+            let (mut app, _) = App::new();
+            app.camera.zoom = zoom;
+            let style = ArrowStyle {
+                pattern: LinePattern::Dashed,
+                ..ArrowStyle::preset(Preset::Forward)
+            };
+            let _ = app.update(Message::Palette(palettes::Action::ArrowVariant(
+                Preset::Forward,
+                style.clone(),
+            )));
+            let blank = app.doc.clone();
+            let start = Point::new(-100., 30.);
+            app.edit(Edit::Click(start));
+            assert_eq!(app.doc.arrows.len(), 1);
+            let arrow = app.doc.arrows[0].clone();
+            assert_eq!(arrow.start, start);
+            assert_eq!(
+                arrow.end,
+                start.offset(blank.drawing_style.bond_length_world * 2., 0.)
+            );
+            assert_eq!(arrow.appearance(), style);
+            assert_eq!(app.selected, [arrow.id]);
+            let placed = app.doc.clone();
+            let revision = app.revision;
+            app.selected.clear();
+            app.edit(Edit::Click(arrow.point(0.5)));
+            assert_eq!(app.doc, placed);
+            assert_eq!(app.selected, [arrow.id]);
+            assert_eq!(app.revision, revision);
+            let _ = app.update(Message::Undo);
+            assert_eq!(app.doc, blank);
+            let _ = app.update(Message::Redo);
+            assert_eq!(app.doc, placed);
+        }
     }
 
     #[test]
@@ -4037,7 +4133,17 @@ mod tests {
     }
 
     #[test]
-    fn new_document_invalidates_inflight_startup_even_when_empty() {
+    fn startup_is_a_blank_saved_canvas_without_an_import_job() {
+        let (app, _) = App::new();
+        assert_eq!(app.doc, Document::default());
+        assert!(app.doc.all_ids().is_empty());
+        assert!(!app.busy && !app.dirty() && !app.history.can_undo());
+        assert!(app.analysis.is_none() && app.path.is_none());
+        assert!(app.smiles.is_empty());
+    }
+
+    #[test]
+    fn new_document_invalidates_inflight_import_even_when_empty() {
         let (mut app, _) = App::new();
         let revision = app.revision;
         let _ = app.perform(Pending::New);
@@ -4045,7 +4151,7 @@ mod tests {
         old.add_atom("O", Point::default());
         let _ = app.update(Message::EngineDone {
             revision,
-            kind: Job::Startup,
+            kind: Job::Import,
             result: Box::new(Ok(Response {
                 document: Some(old),
                 analysis: None,

@@ -592,6 +592,7 @@ impl App {
             hidden_annotation: self.inline_label_id(),
             bond_drawing: self.bond_drawing,
             chain_drawing: self.chain_drawing,
+            graphic_constrain: self.toolbar.graphic(self.tool).is_some_and(|p| p.constrain),
             graphic_style: &self.graphic_style,
             orbital_phase: self.orbital_phase,
             phase_flipped: self.phase_flipped,
@@ -818,6 +819,7 @@ impl App {
     }
 
     fn tool_palette(&self) -> Element<'_, Message> {
+        use reshiki::graphics::GraphicKind as G;
         let tools = [
             (Tool::Select, "Select / move · V"),
             (Tool::Lasso, "Lasso select · L"),
@@ -825,77 +827,26 @@ impl App {
             (Tool::Bond(1), "Single bond · B / 1"),
             (Tool::Bond(2), "Double bond · 2"),
             (Tool::Bond(3), "Triple bond · 3"),
-            (Tool::Wavy, "Wavy bond"),
-            (Tool::Wedge, "Solid wedge"),
-            (Tool::Hash, "Hashed wedge"),
-            (Tool::StyledBond(BondPreset::HollowWedge), "Hollow wedge"),
-            (Tool::StyledBond(BondPreset::Bold), "Bold bond"),
-            (
-                Tool::StyledBond(BondPreset::Dashed),
-                "Dashed coordination bond",
-            ),
-            (
-                Tool::StyledBond(BondPreset::Dotted),
-                "Hydrogen bond · Drag from an explicit H to an acceptor",
-            ),
-            (Tool::StyledBond(BondPreset::Hashed), "Hashed bond"),
-            (
-                Tool::Chain(reshiki::chains::ChainMode::Straight),
-                "Straight chain · X",
-            ),
-            (
-                Tool::Chain(reshiki::chains::ChainMode::Snaking),
-                "Snaking chain · Shift+X",
-            ),
-            (Tool::Ring, "Ring · R / Aromatic · Shift+R"),
-            (
-                Tool::RingPreset(reshiki::rings::Preset::Cyclopentadiene),
-                "Cyclopentadiene · Shift moves double bonds",
-            ),
-            (
-                Tool::RingPreset(reshiki::rings::Preset::ChairUp),
-                "Cyclohexane chair A · Alt connects by a bond",
-            ),
-            (
-                Tool::RingPreset(reshiki::rings::Preset::ChairDown),
-                "Cyclohexane chair B · Alt connects by a bond",
-            ),
-            (Tool::Arrow, "Reaction arrow · A"),
+            (self.toolbar.bond, "Other bonds"),
+            (self.toolbar.ring, "Rings · R / Aromatic · Shift+R"),
+            (self.toolbar.chain, "Chains · X / Shift+X"),
+            (Tool::Arrow, "Reaction & electron-flow arrows · A"),
             (Tool::Text, "Text label · T"),
-            (Tool::Erase, "Eraser · E"),
+            (Tool::Erase, "Eraser · E · Drag to erase"),
+            (Tool::Graphic(self.toolbar.rectangle.kind), "Rectangles"),
             (
-                Tool::Graphic(reshiki::graphics::GraphicKind::Rectangle),
-                "Rectangle / rounded rectangle",
+                Tool::Graphic(self.toolbar.ellipse.kind),
+                "Ellipses / circles",
             ),
             (
-                Tool::Graphic(reshiki::graphics::GraphicKind::Ellipse),
-                "Ellipse / circle · Shift constrains",
-            ),
-            (
-                Tool::Graphic(reshiki::graphics::GraphicKind::Brackets),
+                Tool::Graphic(self.toolbar.bracket.kind),
                 "Brackets / parentheses / braces",
             ),
-            (
-                Tool::Graphic(reshiki::graphics::GraphicKind::Line),
-                "Graphic line",
-            ),
-            (
-                Tool::Graphic(reshiki::graphics::GraphicKind::Curve),
-                "Bézier curve",
-            ),
-            (Tool::Graphic(reshiki::graphics::GraphicKind::Arc), "Arc"),
-            (
-                Tool::Graphic(reshiki::graphics::GraphicKind::Symbol(
-                    reshiki::scientific::SymbolKind::CirclePlus,
-                )),
-                "Chemical symbols",
-            ),
-            (
-                Tool::Graphic(reshiki::graphics::GraphicKind::Orbital(
-                    reshiki::scientific::OrbitalKind::P,
-                )),
-                "Orbitals",
-            ),
+            (Tool::Graphic(G::Line), "Graphic line"),
+            (Tool::Graphic(G::Curve), "Bézier curve"),
+            (Tool::Graphic(G::Arc), "Arc"),
+            (self.toolbar.symbol, "Chemical symbols"),
+            (self.toolbar.orbital, "Orbitals"),
         ];
         let mut palette = column![section("TOOLS")]
             .spacing(6)
@@ -903,27 +854,33 @@ impl App {
         for pair in tools.chunks(2) {
             let mut line = row![].spacing(4);
             for (tool, hint) in pair {
-                let message = if super::palettes::family(*tool).is_some() {
-                    Message::Palette(super::palettes::Action::Open(*tool))
+                let family = super::palettes::family(*tool);
+                let icon = if *tool == Tool::Ring {
+                    Icon::Ring(self.ring_size, self.aromatic_ring)
+                } else if *tool == Tool::Arrow {
+                    Icon::Arrow(self.arrow_style)
                 } else {
-                    Message::Tool(*tool)
+                    Icon::Tool(*tool)
+                };
+                let item = canvas(super::tool_button::ToolButton {
+                    tool: *tool,
+                    icon,
+                    active: self.tool == *tool,
+                    opens_on_click: family == Some(super::palettes::Family::Bonds),
+                })
+                .width(36)
+                .height(36);
+                let hint = if family == Some(super::palettes::Family::Bonds) {
+                    format!("{hint} · Click for styles")
+                } else if family.is_some() {
+                    format!("{hint} · Hold or click the corner for options")
+                } else {
+                    (*hint).to_owned()
                 };
                 let item: Element<'_, Message> = if self.palette.is_some() {
-                    button(canvas(Glyph(Icon::Tool(*tool), true)).width(24).height(24))
-                        .width(36)
-                        .height(36)
-                        .padding(6)
-                        .style(control(self.tool == *tool))
-                        .on_press(message)
-                        .into()
+                    item.into()
                 } else {
-                    icon_button_at(
-                        Icon::Tool(*tool),
-                        hint,
-                        Some(message),
-                        self.tool == *tool,
-                        tooltip::Position::Right,
-                    )
+                    hover_hint(item, hint, tooltip::Position::Right).into()
                 };
                 line = line.push(item);
             }
@@ -1185,7 +1142,7 @@ impl App {
                         .padding(5),
                     )
                     .push(
-                        text("Drag to draw · Middle handle bends · Alt frees angles")
+                        text("Click to place · Drag to draw · Middle handle bends")
                             .size(11)
                             .color(muted()),
                     );
