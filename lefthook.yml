@@ -6,6 +6,7 @@ pre-commit:
       run: bun run lint:js
     oxfmt:
       glob: "*.{js,mjs,cjs,ts,tsx,jsx,json,css,md,mdx,yml,yaml,toml}"
+      exclude: "assets/**"
       run: bun run --bun oxfmt --check {staged_files}
     ruff:
       glob: "*.{py,toml,lock}"

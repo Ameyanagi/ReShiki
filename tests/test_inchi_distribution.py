@@ -472,6 +472,9 @@ class HelperTests(unittest.TestCase):
             binary.write_bytes(b"\xcf\xfa\xed\xfe")
             helper = root / "reshiki-inchi-helper"
             helper.write_bytes(b"\xcf\xfa\xed\xfe" + b"native helper")
+            icon = root / "assets/branding/reshiki.icns"
+            icon.parent.mkdir(parents=True)
+            icon.write_bytes(b"icns fixture")
             app = root / "ReShiki.app"
             legacy = app / "Contents/Resources/chemistry/engine"
             legacy.mkdir(parents=True)
@@ -483,6 +486,9 @@ class HelperTests(unittest.TestCase):
                     Path(command[command.index("-o") + 1]).write_bytes(b"\xcf\xfa\xed\xfe")
                 elif command[0] == "codesign":
                     self.assertEqual(copied.read_bytes(), helper.read_bytes())
+                    self.assertEqual(
+                        (app / "Contents/Resources/ReShiki.icns").read_bytes(), icon.read_bytes()
+                    )
                     self.assertFalse(legacy.parent.exists())
                     self.assertTrue((app / "Contents/Resources/Licenses/NOTICE").is_file())
 

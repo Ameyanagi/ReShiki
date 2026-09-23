@@ -11,7 +11,8 @@ Open `index.html` for a side-by-side preview of all variants.
 | `mark-light.png`, `mark-dark.png` | Standalone symbol; transparent PNGs for light and dark surfaces |
 | `wordmark-light.png` | Horizontal logo on a transparent background |
 | `wordmark-dark.png` | Horizontal logo on an opaque charcoal background |
-| `app-icon-light.png`, `app-icon-dark.png` | Square app/profile icons; transparent outside the rounded tile |
+| `app-icon-light.png` | App/profile icon; transparent outside the rounded ivory tile |
+| `app-icon-dark.png` | Fully opaque square dark app/profile icon; charcoal fills the entire canvas |
 | `promotion-light.png`, `promotion-dark.png` | Opaque promotional banners with a wordmark, tagline, and website |
 | `exports/light/`, `exports/dark/` | App PNGs at 16, 24, 32, 48, 64, 128, 256, 512, and 1024 pixels; social banners at 1200 × 630 |
 | `reshiki.icns`, `reshiki-dark.icns` | Multi-resolution macOS icons |
@@ -32,6 +33,8 @@ These are the exact CSS palette values. Generated raster artwork may vary slight
 Keep the symbol upright and preserve its proportions, open right side, internal bond, and arrowhead. Leave clear space around it; do not crop into the ring. Use the standalone symbol for small placements and the full wordmark when the name needs to be readable. Avoid golden or metallic copper treatments.
 
 The light icon is the default packaged application icon. The dark icon is supplied as an alternate; the desktop application does not switch its installed icon automatically.
+
+The dark app icon has a solid background at every size, with no transparent patches. Platforms can apply their own corner mask. Symbol-only PNGs retain transparency for use over other backgrounds.
 
 ## Rebuild exports
 

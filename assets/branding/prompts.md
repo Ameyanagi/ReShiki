@@ -1,5 +1,11 @@
 # ReShiki Reaction Cycle — rust variants
 
+## Final dark app icon
+
+The final dark app icon uses an entirely opaque square charcoal background. This replaces the rounded transparent version, which had unwanted transparency holes in its tile. Every exported dark app icon must remain fully opaque.
+
+Use case: precise-object-edit. Fix this ReShiki dark app icon. Preserve the approved warm rust open hexagonal Reaction Cycle mark, its internal bond and lower-right arrowhead, proportions and centered position. Replace ALL background with one perfectly uniform, fully OPAQUE charcoal color #202623, filling the entire square canvas edge to edge including all four corners. Every pixel in this square must be opaque. The rust mark is #E98C68, flat, crisp and solid. Remove all cloudy marks, worn patches, holes, shine, grain, texture, shadows and gradients. This is a flat app icon with a full-bleed square charcoal background. No rounded outer boundary, no margin of another color, no text, no inset tile. 100% solid background coverage throughout the full image. Exact same familiar ring-arrow logo in the center.
+
 ## Final tagline
 
 The final promotional images use “Chemical drawing, reinvented.”, matching the promo project. These edits supersede the original tagline below.
