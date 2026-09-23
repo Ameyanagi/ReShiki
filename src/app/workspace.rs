@@ -343,12 +343,22 @@ impl App {
         ]
         .spacing(4)
         .align_y(Alignment::Center);
+        let group_alignment = self.selected_group_alignment();
+        let active_alignment = self.toolbar_alignment();
+        let has_captions = self
+            .doc
+            .annotations
+            .iter()
+            .any(|a| self.selected.contains(&a.id));
         for (label, align) in [
             ("Left", TextAlign::Left),
             ("Center", TextAlign::Center),
             ("Right", TextAlign::Right),
             ("Justify", TextAlign::Justified),
         ] {
+            if align == TextAlign::Justified && group_alignment.is_some() && !has_captions {
+                continue;
+            }
             tools = tools.push(hover_hint(
                 button(
                     iced::widget::canvas(Glyph(Icon::TextAlign(align), true))
@@ -356,9 +366,25 @@ impl App {
                         .height(24),
                 )
                 .padding(6)
-                .style(control(self.caption_format.alignment == align))
+                .style(control(active_alignment == Some(align)))
                 .on_press(Message::TextAlign(align)),
                 label,
+                tooltip::Position::Bottom,
+            ));
+        }
+        if let Some(alignment) = group_alignment {
+            use reshiki::abbreviations::LabelAlignment;
+            tools = tools.push(hover_hint(
+                pick_list(
+                    [LabelAlignment::Auto, LabelAlignment::Above],
+                    alignment.filter(|a| matches!(a, LabelAlignment::Auto | LabelAlignment::Above)),
+                    Message::GroupLabelAlign,
+                )
+                .placeholder(if alignment.is_none() { "Mixed" } else { "Auto / above" })
+                .width(112)
+                .text_size(11)
+                .padding(6),
+                "Group labels: Automatic follows bonds; Stacked above places the nickname above its attachment. Left, Center and Right use the adjacent buttons.",
                 tooltip::Position::Bottom,
             ));
         }

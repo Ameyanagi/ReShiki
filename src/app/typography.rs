@@ -1,4 +1,5 @@
 use super::*;
+use reshiki::abbreviations::LabelAlignment;
 use reshiki::typography::{Script, StyleChange, TextAlign, TextFormat, TextStyle};
 use std::ops::Range;
 
@@ -23,6 +24,57 @@ impl std::fmt::Display for ColorScope {
 }
 
 impl App {
+    fn selected_label_groups(&self) -> impl Iterator<Item = &reshiki::abbreviations::Abbreviation> {
+        self.doc.abbreviations.iter().filter(|group| {
+            self.inline_text.is_none() && group.members.iter().any(|id| self.selected.contains(id))
+        })
+    }
+
+    /// Outer None: no group labels. Inner None: selected groups have mixed placement.
+    pub(super) fn selected_group_alignment(&self) -> Option<Option<LabelAlignment>> {
+        let mut groups = self.selected_label_groups();
+        let first = groups.next()?.alignment;
+        Some(groups.all(|g| g.alignment == first).then_some(first))
+    }
+
+    pub(super) fn toolbar_alignment(&self) -> Option<TextAlign> {
+        if self.inline_text.is_some() {
+            return Some(self.caption_format.alignment);
+        }
+        let mut values = self
+            .selected_label_groups()
+            .map(|g| match g.alignment {
+                LabelAlignment::Left => Some(TextAlign::Left),
+                LabelAlignment::Center => Some(TextAlign::Center),
+                LabelAlignment::Right => Some(TextAlign::Right),
+                LabelAlignment::Auto | LabelAlignment::Above => None,
+            })
+            .chain(
+                self.doc
+                    .annotations
+                    .iter()
+                    .filter(|a| self.selected.contains(&a.id))
+                    .map(|a| Some(a.format.alignment)),
+            );
+        let Some(first) = values.next() else {
+            return Some(self.caption_format.alignment);
+        };
+        first.filter(|_| values.all(|value| value == first))
+    }
+
+    pub(super) fn apply_group_alignment(&mut self, alignment: LabelAlignment) {
+        if self.inline_text.is_some() {
+            return;
+        }
+        let before = self.doc.clone();
+        for group in &mut self.doc.abbreviations {
+            if group.members.iter().any(|id| self.selected.contains(id)) {
+                group.alignment = alignment;
+            }
+        }
+        self.changed(before);
+    }
+
     pub(super) fn text_range(&self) -> Option<Range<usize>> {
         let cursor = self.caption_editor.cursor();
         let offset = |p: iced::widget::text_editor::Position| {
@@ -420,12 +472,33 @@ impl App {
                 format.width_pt = value;
             }
         };
-        update(&mut self.caption_format);
+        if self.inline_text.is_some()
+            || self.selected_group_alignment().is_none()
+            || self
+                .doc
+                .annotations
+                .iter()
+                .any(|a| self.selected.contains(&a.id))
+        {
+            update(&mut self.caption_format);
+        }
         if self.inline_text.is_some() {
             self.sync_style_inputs();
             return;
         }
         let before = self.doc.clone();
+        if let Some(group_alignment) = alignment.and_then(|value| match value {
+            TextAlign::Left => Some(LabelAlignment::Left),
+            TextAlign::Center => Some(LabelAlignment::Center),
+            TextAlign::Right => Some(LabelAlignment::Right),
+            TextAlign::Justified => None,
+        }) {
+            for group in &mut self.doc.abbreviations {
+                if group.members.iter().any(|id| self.selected.contains(id)) {
+                    group.alignment = group_alignment;
+                }
+            }
+        }
         for label in &mut self.doc.annotations {
             if self.selected.contains(&label.id) {
                 update(&mut label.format);
@@ -433,5 +506,171 @@ impl App {
         }
         self.changed(before);
         self.sync_style_inputs();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn group(app: &mut App, label: &str, x: f32) -> Result<u64, String> {
+        let id = app.doc.add_atom("C", Point::new(x, 0.));
+        app.doc = reshiki::atom_text::apply(&app.doc, id, label, reshiki::atom_text::Mode::Group)?;
+        Ok(id)
+    }
+
+    #[test]
+    fn toolbar_aligns_selected_groups_and_captions_in_one_undo_without_changing_chemistry()
+    -> Result<(), String> {
+        let (mut app, _) = App::new();
+        app.doc = Document::default();
+        let boc = group(&mut app, "Boc", 0.)?;
+        let cp = group(&mut app, "Cp*", 150.)?;
+        let other = group(&mut app, "OMe", 300.)?;
+        let caption = app.doc.next_id();
+        app.doc.annotations.push(Annotation {
+            id: caption,
+            position: Point::new(0., 200.),
+            text: "Caption".into(),
+            format: Default::default(),
+        });
+        app.selected = vec![boc];
+        assert_eq!(
+            app.selected_group_alignment(),
+            Some(Some(LabelAlignment::Auto))
+        );
+        assert_eq!(
+            app.toolbar_alignment(),
+            None,
+            "Automatic must not highlight Left"
+        );
+        let _ = app.update(Message::TextAlign(TextAlign::Right));
+        assert_eq!(app.toolbar_alignment(), Some(TextAlign::Right));
+        app.selected = vec![boc, cp, caption];
+        assert_eq!(app.selected_group_alignment(), Some(None));
+        assert_eq!(app.toolbar_alignment(), None);
+        let before = app.doc.clone();
+        let _ = app.update(Message::TextAlign(TextAlign::Center));
+        assert_eq!(app.toolbar_alignment(), Some(TextAlign::Center));
+        for id in [boc, cp] {
+            assert_eq!(
+                app.doc.abbreviation(id).ok_or("group")?.alignment,
+                LabelAlignment::Center
+            );
+        }
+        assert_eq!(
+            app.doc.abbreviation(other).ok_or("other group")?.alignment,
+            LabelAlignment::Auto
+        );
+        assert_eq!(app.doc.atoms, before.atoms);
+        assert_eq!(app.doc.bonds, before.bonds);
+        let after = app.doc.clone();
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, before);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc, after);
+
+        let _ = app.update(Message::TextAlign(TextAlign::Justified));
+        assert_eq!(
+            app.doc.abbreviation(boc).ok_or("group")?.alignment,
+            LabelAlignment::Center
+        );
+        assert_eq!(
+            app.doc
+                .annotations
+                .first()
+                .ok_or("caption")?
+                .format
+                .alignment,
+            TextAlign::Justified
+        );
+        assert_eq!(
+            app.toolbar_alignment(),
+            None,
+            "Mixed caption/group alignment"
+        );
+        let _ = app.update(Message::GroupLabelAlign(LabelAlignment::Auto));
+        assert_eq!(
+            app.selected_group_alignment(),
+            Some(Some(LabelAlignment::Auto))
+        );
+        assert_eq!(
+            app.doc
+                .annotations
+                .first()
+                .ok_or("caption")?
+                .format
+                .alignment,
+            TextAlign::Justified
+        );
+        let _ = app.update(Message::GroupLabelAlign(LabelAlignment::Above));
+        assert_eq!(
+            app.selected_group_alignment(),
+            Some(Some(LabelAlignment::Above))
+        );
+        assert_eq!(app.doc.atoms, before.atoms);
+        assert_eq!(app.doc.bonds, before.bonds);
+        Ok(())
+    }
+
+    #[test]
+    fn group_only_alignment_does_not_change_paragraph_defaults_or_unselected_groups()
+    -> Result<(), String> {
+        let (mut app, _) = App::new();
+        app.doc = Document::default();
+        let id = group(&mut app, "Boc", 0.)?;
+        app.selected = app.doc.abbreviation(id).ok_or("group")?.members.clone();
+        let format = app.caption_format.clone();
+        for alignment in [TextAlign::Left, TextAlign::Center, TextAlign::Right] {
+            let _ = app.update(Message::TextAlign(alignment));
+            assert_eq!(app.toolbar_alignment(), Some(alignment));
+            assert_eq!(app.caption_format, format);
+        }
+        let before = app.doc.clone();
+        let _ = app.update(Message::TextAlign(TextAlign::Justified));
+        assert_eq!(app.doc, before);
+        let second = group(&mut app, "Cp", 200.)?;
+        assert_eq!(
+            app.doc.abbreviation(second).ok_or("new group")?.alignment,
+            LabelAlignment::Auto
+        );
+        app.selected.clear();
+        let _ = app.update(Message::TextAlign(TextAlign::Justified));
+        assert_eq!(app.caption_format.alignment, TextAlign::Justified);
+        assert_eq!(
+            app.doc.abbreviation(id).ok_or("group")?.alignment,
+            LabelAlignment::Right
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn inline_caption_alignment_never_moves_group_labels_and_can_be_cancelled() -> Result<(), String>
+    {
+        let (mut app, _) = App::new();
+        app.doc = Document::default();
+        let id = group(&mut app, "Boc", 0.)?;
+        let caption = app.doc.next_id();
+        app.doc.annotations.push(Annotation {
+            id: caption,
+            position: Point::new(0., 100.),
+            text: "Caption".into(),
+            format: Default::default(),
+        });
+        let before = app.doc.clone();
+        let _ = app.update(Message::InlineText(
+            super::super::inline_text::Action::Begin(Some(caption), Point::default()),
+        ));
+        app.selected = vec![id, caption];
+        assert_eq!(app.selected_group_alignment(), None);
+        let _ = app.update(Message::GroupLabelAlign(LabelAlignment::Above));
+        let _ = app.update(Message::TextAlign(TextAlign::Right));
+        assert_eq!(app.toolbar_alignment(), Some(TextAlign::Right));
+        assert_eq!(app.doc, before, "Inline formatting only changes the draft");
+        let _ = app.update(Message::InlineText(
+            super::super::inline_text::Action::Finish(false),
+        ));
+        assert_eq!(app.doc, before);
+        Ok(())
     }
 }

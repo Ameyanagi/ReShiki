@@ -20,7 +20,7 @@ The original Fixed Lengths preference was restored after the test.
 ReShiki uses its existing 15° bond-angle grid and configured length for bonded
 selection movement. Option/Alt releases both constraints; whole molecules
 translate freely. Preview and committed movement use one constraint function.
-Group label alignment is separately stored, defaults to Automatic, and does
+Group label alignment uses the shared top toolbar, defaults to Automatic, and does
 not change a defined fragment's chemistry. Above currently positions a single
 nickname above its anchor, not general multiline formula-token stacking.
 

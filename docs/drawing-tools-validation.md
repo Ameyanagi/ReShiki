@@ -2,6 +2,25 @@
 
 Checked on macOS arm64, 2026-09-23, using an optimized app bundle with an isolated settings directory.
 
+## Shared alignment toolbar and full review
+
+The top Left/Center/Right controls now align selected chemical group labels and
+captions, including mixed selections in one undoable edit. Group-only selections
+show Automatic/Above beside those buttons instead of paragraph Justify. The atom
+label dialog retains name, chemical/text mode and Apply/Cancel without a duplicate
+alignment picker. Mixed values do not highlight a misleading alignment.
+
+The updated app suite passed 152 tests (2 ignored). Coverage includes multiple
+selected groups, untouched unselected groups, unchanged atoms/bonds, mixed
+caption/group edits, paragraph defaults, inline text drafts and Undo/Redo.
+All-target/all-feature Clippy passed with warnings denied. A native release-build
+GUI save after Center retained every atom and bond; Automatic was restored through
+the adjacent menu. The smaller dialog, ten-N batch coloring, history image after
+composer removal, and enlarged image viewer were captured in the
+[illustrated changelog](changes-pr17.md). The image-history check stopped generation
+without applying a proposal. The changelog now indexes all 36 feature updates and
+fixes audited against the PR diff.
+
 ## Atom text, sent-image history and timeouts
 
 - Select an atom and press Enter, use Edit atom label in Properties/the context menu, or click an atom with the Text tool. M/L/X become named dummy atoms with existing connections; recognized groups such as Boc retain an expandable molecular fragment. Automatic mode prioritizes element symbols; Chemical abbreviation explicitly selects a conflicting nickname such as Ac. Text label explicitly keeps literal text on a dummy atom.

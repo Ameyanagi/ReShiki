@@ -14,7 +14,6 @@ pub enum Action {
     Begin(Option<u64>),
     Input(String),
     Mode(Mode),
-    Alignment(LabelAlignment),
     Apply,
     Cancel,
 }
@@ -100,11 +99,6 @@ impl App {
                 }
             }
             Action::Cancel => self.atom_text = None,
-            Action::Alignment(alignment) => {
-                if let Some(state) = &mut self.atom_text {
-                    state.alignment = alignment;
-                }
-            }
             Action::Apply => {
                 let Some(state) = &self.atom_text else {
                     return Task::none();
@@ -158,17 +152,6 @@ impl App {
                 .color(muted()),
         ]
         .spacing(12);
-        if state.mode == Mode::Group
-            || state.mode == Mode::Auto
-                && (reshiki::abbreviations::PRESETS.contains(&state.input.trim())
-                    || reshiki::ligands::LABELS.contains(&state.input.trim()))
-        {
-            content = content.push(column![
-                text("Group label alignment").size(12),
-                pick_list(LabelAlignment::ALL, Some(state.alignment), |a| Message::AtomText(Action::Alignment(a))).width(Length::Fill),
-                text("Automatic follows the bond. An override fixes the label placement; its atoms stay unchanged.").size(12).color(muted()),
-            ].spacing(6));
-        }
         if let Some(error) = &state.error {
             content = content.push(
                 text(error)
@@ -254,7 +237,7 @@ mod tests {
     use reshiki::document::Point;
 
     #[test]
-    fn group_alignment_defaults_to_auto_and_undo_keeps_the_chemical_graph() -> Result<(), String> {
+    fn label_dialog_preserves_toolbar_alignment_and_chemical_graph() -> Result<(), String> {
         for label in ["Boc", "Cp*"] {
             let (mut app, _) = App::new();
             let id = app.doc.add_atom("C", Point::default());
@@ -262,8 +245,8 @@ mod tests {
             app.selected = vec![id];
             let before = app.doc.clone();
             for alignment in LabelAlignment::ALL {
+                let _ = app.update(Message::GroupLabelAlign(alignment));
                 let _ = app.update(Message::AtomText(Action::Begin(None)));
-                let _ = app.update(Message::AtomText(Action::Alignment(alignment)));
                 let _ = app.update(Message::AtomText(Action::Apply));
                 assert_eq!(
                     app.doc.abbreviation(id).ok_or("group")?.alignment,

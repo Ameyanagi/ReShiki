@@ -1,8 +1,10 @@
 # Chemical abbreviations
 
-Select a collapsed group and press **Enter** to edit its label and alignment.
-**Automatic** follows the bond direction. Flush left, Centered, Flush right
-and Stacked above provide explicit overrides without changing the atoms.
+Select a collapsed group and use the top **Left / Center / Right** buttons to
+align its label. **Automatic** (the default) follows the bond direction; restore
+it or choose Stacked above from the adjacent **Auto / above** menu. Multiple
+groups and captions can use the same toolbar in one Undo step. Press **Enter**
+to edit the label or its chemical/text meaning; the dialog does not repeat alignment.
 Above places a single nickname above the attachment; general multiline
 formula-token stacking is not implemented. Native/CDXML/CDX preserve the
 override, and Undo/Redo restores it. See the [illustrated PR review](changes-pr17.md).

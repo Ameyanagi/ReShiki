@@ -117,6 +117,7 @@ pub enum Message {
     TextColor(String),
     ApplyTextColor,
     TextAlign(reshiki::typography::TextAlign),
+    GroupLabelAlign(reshiki::abbreviations::LabelAlignment),
     TextSpacing(f32),
     TextWidth(String),
     ApplyTextWidth,
@@ -1509,6 +1510,7 @@ impl App {
                 }
             }
             Message::TextAlign(alignment) => self.apply_paragraph(Some(alignment), None, None),
+            Message::GroupLabelAlign(alignment) => self.apply_group_alignment(alignment),
             Message::TextSpacing(spacing) => self.apply_paragraph(None, Some(spacing), None),
             Message::TextWidth(value) => self.text_width_input = value,
             Message::ApplyTextWidth => {
