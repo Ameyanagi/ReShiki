@@ -6,7 +6,7 @@ const current = Astro.url.pathname;
 ---
 
 <div class="docs-header">
-  <a class="wordmark" href="/" aria-label="ReShiki home">ReShiki<span> / guide</span></a>
+  <a class="wordmark" href="/" aria-label="ReShiki home"><span class="brand-mark" aria-hidden="true"></span>ReShiki<span class="guide-label"> / guide</span></a>
   <nav aria-label="Main navigation">
     <a href="/guide/first-molecule/" aria-current={current.startsWith("/guide/") && !current.includes("assistant") ? "true" : undefined}>User guide</a>
     <a href="/guide/assistant/" aria-current={current.includes("/assistant/") ? "true" : undefined}>Assistant</a>
@@ -18,14 +18,15 @@ const current = Astro.url.pathname;
 
 <style>
   .docs-header { display: flex; align-items: center; gap: 2rem; height: 100%; }
-  .wordmark { font-size: 1.45rem; font-weight: 750; letter-spacing: -.055em; color: var(--sl-color-white); text-decoration: none; white-space: nowrap; }
-  .wordmark span { font-size: .8rem; font-weight: 450; letter-spacing: 0; color: var(--sl-color-gray-2); margin-left: .45rem; }
+  .wordmark { display: inline-flex; align-items: center; font-size: 1.45rem; font-weight: 750; letter-spacing: -.055em; color: var(--sl-color-white); text-decoration: none; white-space: nowrap; }
+  .brand-mark { width: 2rem; height: 2rem; margin-right: .4rem; flex: none; background: var(--sl-color-accent); mask: url('/brand/mark-light.png') center / contain no-repeat; }
+  .guide-label { font-size: .8rem; font-weight: 450; letter-spacing: 0; color: var(--sl-color-gray-2); margin-left: .45rem; }
   nav, .tools, .social { display: flex; align-items: center; gap: 1.2rem; }
   nav a { color: var(--sl-color-text); text-decoration: none; font-size: .85rem; font-weight: 600; white-space: nowrap; }
   nav a:hover, nav a[aria-current] { color: var(--sl-color-text-accent); }
   .tools { margin-left: auto; gap: 1rem; }
   .social { gap: .75rem; padding-left: .5rem; }
-  @media (max-width: 74rem) { nav .wide, .wordmark span { display: none; } }
+  @media (max-width: 74rem) { nav .wide, .guide-label { display: none; } }
   @media (max-width: 50rem) { .docs-header { gap: .8rem; } .tools { gap: .3rem; } .social { display: none; } nav { gap: .8rem; } }
   @media (max-width: 36rem) { nav { display: none; } .wordmark { font-size: 1.3rem; } }
 </style>

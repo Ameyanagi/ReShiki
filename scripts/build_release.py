@@ -262,6 +262,11 @@ def mac_bundle(destination, profile, *, target=None, inchi_helper=None):
         )
         if bundle == print_app:
             info["LSUIElement"] = True
+        else:
+            resources = bundle / "Contents/Resources"
+            resources.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(ROOT / "assets/branding/reshiki.icns", resources / "ReShiki.icns")
+            info["CFBundleIconFile"] = "ReShiki.icns"
         with (bundle / "Contents/Info.plist").open("wb") as stream:
             plistlib.dump(info, stream)
     # Reusing a development bundle must not retain the previous worker payload.

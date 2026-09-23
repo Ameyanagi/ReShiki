@@ -46,6 +46,21 @@ export default defineConfig({
   integrations: [
     starlight({
       title: "ReShiki",
+      favicon: "/favicon.png",
+      head: [
+        { tag: "link", attrs: { rel: "apple-touch-icon", href: "/apple-touch-icon.png" } },
+        {
+          tag: "meta",
+          attrs: { property: "og:image", content: "https://reshiki.com/brand/promotion-light.png" },
+        },
+        {
+          tag: "meta",
+          attrs: {
+            property: "og:image:alt",
+            content: "ReShiki — Chemical drawing, reinvented.",
+          },
+        },
+      ],
       description: "Draw molecules, build reaction schemes, and prepare publication figures.",
       social: [
         { icon: "github", label: "Star on GitHub", href: "https://github.com/Ameyanagi/ReShiki" },
@@ -84,6 +99,7 @@ export default defineConfig({
             { label: "ReShiki 0.4.0", slug: "developer/changes-0.4" },
             { label: "ReShiki 0.5.0", slug: "developer/changes-0.5" },
             { label: "ReShiki 0.6.0", slug: "developer/changes-0.6" },
+            { label: "ReShiki 0.6.1", slug: "developer/changes-0.6.1" },
             { label: "Runtime safety", slug: "developer/runtime-safety" },
             { label: "Feature status", slug: "developer/feature-status" },
             {

@@ -1,7 +1,7 @@
 :root {
-  --sl-color-accent-low: #38291b;
-  --sl-color-accent: #d4935f;
-  --sl-color-accent-high: #f4d6ba;
+  --sl-color-accent-low: #3d241c;
+  --sl-color-accent: #e98c68;
+  --sl-color-accent-high: #f6d5c8;
   --sl-font:
     -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif;
   --sl-content-width: 48rem;
@@ -10,9 +10,9 @@
 }
 
 :root[data-theme="light"] {
-  --sl-color-accent-low: #fff1e4;
-  --sl-color-accent: #97521e;
-  --sl-color-accent-high: #713811;
+  --sl-color-accent-low: #fff0e9;
+  --sl-color-accent: #b5472b;
+  --sl-color-accent-high: #7f301d;
   --sl-color-bg: #f7f7f2;
   --sl-color-bg-nav: #f7f7f2;
   --sl-color-bg-sidebar: #f7f7f2;
@@ -171,6 +171,7 @@
 
 .home-workspace {
   margin: 0;
+  scroll-margin-top: 6rem;
 }
 
 .home-support {
@@ -202,19 +203,14 @@
   color: var(--sl-color-text-accent);
 }
 
-.home-workspace > a {
-  display: block;
-  padding: clamp(0.5rem, 1.4vw, 1rem);
-  border: 1px solid var(--sl-color-hairline);
-  border-radius: 1rem;
-  background: var(--reshiki-surface);
-}
-
-.home-workspace img {
+.home-workspace video {
   display: block;
   width: 100%;
   height: auto;
-  border-radius: 0.4rem;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 1rem;
+  background: #202623;
 }
 
 .home-workspace figcaption {
@@ -222,6 +218,12 @@
   color: var(--sl-color-gray-2);
   font-size: 0.75rem;
   text-align: center;
+}
+
+.home-workspace figcaption a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
 }
 
 .home-manual {

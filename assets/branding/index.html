@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ReShiki — Reaction Cycle brand kit</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; background: #e9e9e2; color: #202623; font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      main { max-width: 1200px; margin: 0 auto; padding: 48px 32px; }
+      header { margin-bottom: 30px; }
+      .eyebrow { color: #b5472b; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; font-size: 12px; }
+      h1 { margin: 8px 0 10px; font-size: clamp(30px, 5vw, 48px); line-height: 1.1; letter-spacing: -.045em; }
+      p { margin: 0; max-width: 700px; color: #61665f; }
+      .palette { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 24px; font-size: 12px; }
+      .palette span { display: flex; align-items: center; gap: 8px; }
+      .swatch { width: 20px; height: 20px; border-radius: 50%; display: inline-block; border: 1px solid #0001; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; border-radius: 18px; box-shadow: 0 8px 30px #2026230b; }
+      article { padding: 26px; min-width: 0; }
+      .light { background: #f7f7f2; }
+      .dark { background: #202623; color: #f7f7f2; }
+      h2 { margin: 0 0 20px; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; font-weight: 650; }
+      figure { margin: 0; }
+      figure + figure { margin-top: 26px; }
+      img { display: block; max-width: 100%; object-fit: contain; }
+      .wordmark { width: 100%; height: 170px; }
+      .pair { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 24px; margin: 18px 0 28px; }
+      .pair img { width: 100%; aspect-ratio: 1; }
+      figcaption { margin-top: 10px; font-size: 12px; opacity: .7; }
+      .promotion { border-radius: 8px; }
+      a { color: inherit; text-underline-offset: 3px; }
+      footer { display: flex; justify-content: space-between; gap: 20px; margin-top: 24px; font-size: 13px; color: #61665f; }
+      @media (max-width: 640px) { main { padding: 28px 16px; } .grid { grid-template-columns: 1fr; } article { padding: 20px; } footer { flex-direction: column; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="eyebrow">ReShiki · Brand assets</div>
+        <h1>03 · Reaction Cycle</h1>
+        <p>An open molecular ring ends in a reaction arrow. A rust identity for iteration, transformation, and the next idea.</p>
+        <div class="palette">
+          <span><i class="swatch" style="background:#b5472b"></i>Rust · #B5472B</span>
+          <span><i class="swatch" style="background:#e98c68"></i>Warm rust · #E98C68</span>
+          <span><i class="swatch" style="background:#202623"></i>Charcoal · #202623</span>
+          <span><i class="swatch" style="background:#f7f7f2"></i>Ivory · #F7F7F2</span>
+        </div>
+      </header>
+      <div class="grid">
+        <article class="light">
+          <h2>Light mode</h2>
+          <figure><a href="wordmark-light.png"><img class="wordmark" src="wordmark-light.png" alt="Rust ReShiki wordmark for light backgrounds" /></a><figcaption>Wordmark · Website, documents, presentations</figcaption></figure>
+          <div class="pair">
+            <figure><a href="mark-light.png"><img src="mark-light.png" alt="Rust Reaction Cycle symbol" /></a><figcaption>Symbol · Transparent PNG</figcaption></figure>
+            <figure><a href="app-icon-light.png"><img src="app-icon-light.png" alt="Rust symbol on an ivory app tile" /></a><figcaption>App icon · Default</figcaption></figure>
+          </div>
+          <figure><a href="promotion-light.png"><img class="promotion" src="promotion-light.png" alt="Light promotional card: ReShiki. Chemical drawing, reinvented." /></a><figcaption>Promotion · Social cards, announcements</figcaption></figure>
+        </article>
+        <article class="dark">
+          <h2>Dark mode</h2>
+          <figure><a href="wordmark-dark.png"><img class="wordmark" src="wordmark-dark.png" alt="Warm rust and ivory ReShiki wordmark on charcoal" /></a><figcaption>Wordmark · Charcoal background</figcaption></figure>
+          <div class="pair">
+            <figure><a href="mark-dark.png"><img src="mark-dark.png" alt="Warm rust Reaction Cycle symbol" /></a><figcaption>Symbol · Transparent PNG</figcaption></figure>
+            <figure><a href="app-icon-dark.png"><img src="app-icon-dark.png" alt="Warm rust symbol on a solid charcoal square" /></a><figcaption>App icon · Solid dark alternate</figcaption></figure>
+          </div>
+          <figure><a href="promotion-dark.png"><img class="promotion" src="promotion-dark.png" alt="Dark promotional card: ReShiki. Chemical drawing, reinvented." /></a><figcaption>Promotion · Social cards, announcements</figcaption></figure>
+        </article>
+      </div>
+      <footer><span>Click any asset to open its full-resolution PNG.</span><span><a href="README.md">Usage guide</a> · <a href="reshiki.icns">macOS icon</a> · <a href="reshiki.ico">Windows icon</a></span></footer>
+    </main>
+  </body>
+</html>

@@ -14,6 +14,7 @@
 )]
 
 mod app;
+mod branding;
 mod canvas;
 
 fn main() -> iced::Result {
@@ -82,6 +83,7 @@ fn main() -> iced::Result {
         .window(iced::window::Settings {
             size: iced::Size::new(1280.0, 820.0),
             min_size: Some(iced::Size::new(1040.0, 680.0)),
+            icon: branding::window_icon(),
             ..Default::default()
         })
         .exit_on_close_request(false)

@@ -3,6 +3,7 @@
     "target/**",
     "dist/**",
     "artifacts/**",
+    "output/**",
     "assets/**",
     "tests/fixtures/**",
     "engine/cdx_schema.py",

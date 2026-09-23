@@ -717,7 +717,7 @@ impl App {
             .unwrap_or_else(|| "Untitled".into());
         let bar = row![
             hover_hint(
-                button(text("ReShiki").size(21).color(Color::from_rgb8(22, 91, 81)))
+                button(crate::branding::wordmark(21.0))
                     .padding(0)
                     .style(button::text)
                     .on_press(Message::Updates(super::updates::Action::Show(true))),
