@@ -10,8 +10,12 @@ The local combined run passed **401 Rust tests, with 3 ignored**. Cargo check, C
 
 The website passed diagnostics, production build, formatting, and local link/asset validation. Safari inspection covered the new Codex setup guide and illustrated change log. Seven new native screenshots show the actual macOS app; the [capture record](images/assistant-updates/README.md) identifies their source build and operations. Existing user drafts were preserved.
 
-## Publication gates
+## Published release and package verification
 
-Version 0.7.1 is being prepared; this record does not yet claim that public downloads are available. Tagged publication requires all five platform packages, Windows installer checks, twelve live chemistry-reference shards across macOS/Windows/Linux, and macOS Developer ID signing, notarization, stapling, and Gatekeeper verification. The release workflow verifies all eight package checksums before publishing.
+[ReShiki 0.7.1](https://github.com/Ameyanagi/ReShiki/releases/tag/v0.7.1) was published as a stable release on September 23, 2026 (UTC), from commit `b25f0a4dd0fcce6aa99fe59a7f07a2552faa7470`. All **28 jobs** in the [tagged release workflow](https://github.com/Ameyanagi/ReShiki/actions/runs/35897429706) passed, including five platform builds, twelve live chemistry-reference shards across macOS/Windows/Linux, Windows installer checks, and macOS Developer ID signing, notarization, stapling, and Gatekeeper verification. The [release commit's main checks](https://github.com/Ameyanagi/ReShiki/actions/runs/35896645076) and [documentation deployment](https://github.com/Ameyanagi/ReShiki/actions/runs/35896645262) also passed.
 
-After publication, the public downloads will be checked against `SHA256SUMS` and each portable archive's version, architecture, and source commit. Public macOS packages will also be checked locally. The [illustrated release notes](changes-0.7.1.md) retain the coordination-chemistry and editable-exchange limits; packaging does not establish chemical validity.
+After publication, all eight public packages were downloaded and verified against the published `SHA256SUMS`. Each of the five portable archives contains the expected version, platform, architecture, and release commit. The macOS metadata also confirms signing and notarization.
+
+The public macOS ZIP and DMG are byte-identical to the signed artifacts tested locally. Those checks verified the Developer ID signature, stapled notarization ticket, Gatekeeper acceptance, DMG mounting and drag-to-install copying, and native chemistry with Python, uv, and the checkout unavailable. Computer Use inspection of the signed app confirmed version 0.7.1 and both aromatic Cp* ellipses in the wedge regression drawing. Existing user drafts were left open. Windows and Linux verification ran in CI; this record does not claim a local GUI inspection on those platforms.
+
+The [illustrated release notes](changes-0.7.1.md) retain the coordination-chemistry and editable-exchange limits; packaging does not establish chemical validity.
