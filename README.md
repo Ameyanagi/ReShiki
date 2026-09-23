@@ -1,5 +1,12 @@
 # ReShiki
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/branding/wordmark-dark.png">
+  <img src="assets/branding/wordmark-light.png" alt="ReShiki Reaction Cycle logo" width="440">
+</picture>
+
+**Chemical drawing, reinvented.**
+
 Draw molecules, build reaction schemes, and prepare figures on an editable canvas.
 
 **ReShiki (リシキ)** means “REinvention of the wheel for drawing chemical structure.” _Shiki_ is 式, as in chemical equation; **R** also stands for Rust, and **RE** for reaction.
@@ -11,9 +18,11 @@ Draw molecules, build reaction schemes, and prepare figures on an editable canva
 
 [![ReShiki's molecular drawing workspace](website/public/manual/workspace.png)](https://reshiki.com/)
 
+[Watch the 83-second introduction](https://reshiki.com/#promo-video) · [Download the promo video](website/public/media/reshiki-promo.mp4) · [Logo assets and usage guide](assets/branding/README.md)
+
 Start with JACS / ACS styling. Attach templates, refine selected structures, or ask the assistant to propose a drawing. Review edits and undo changes. Copy editable structures or export SVG, PDF, and PNG.
 
-Version 0.6 adds direct toolbar selection, sweep erasing, alignment, and assistant draft previews with visual review. The assistant defaults to GPT-6 Sol when available. New drawings use `.rsk`; existing `.reshiki` and `.moruno` drawings remain supported. [Read the 0.6 release notes](https://reshiki.com/developer/changes-0.6/).
+Version 0.6 adds direct toolbar selection, sweep erasing, alignment, and assistant draft previews with visual review. Version 0.6.1 introduces the rust Reaction Cycle identity. The assistant defaults to GPT-6 Sol when available. New drawings use `.rsk`; existing `.reshiki` and `.moruno` drawings remain supported. [Read the 0.6.1 release notes](https://reshiki.com/developer/changes-0.6.1/).
 
 ## Install
 

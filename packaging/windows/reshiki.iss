@@ -14,6 +14,7 @@ PrivilegesRequired=lowest
 OutputDir={#OutputDir}
 OutputBaseFilename={#OutputName}
 UninstallDisplayIcon={app}\reshiki.exe
+SetupIconFile=..\..\assets\branding\reshiki.ico
 WizardStyle=modern
 Compression=lzma2
 SolidCompression=yes

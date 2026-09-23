@@ -134,7 +134,7 @@ impl App {
         let msg = |action| Message::Updates(action);
         let panel = column![
             row![
-                text("ReShiki").size(24),
+                crate::branding::wordmark(24.0),
                 Space::new().width(Length::Fill),
                 button("Close")
                     .on_press(msg(Action::Show(false)))

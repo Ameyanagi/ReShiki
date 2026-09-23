@@ -4,6 +4,7 @@ __pycache__/
 *.pyc
 .DS_Store
 /artifacts/
+/output/
 /dist/
 /build/
 *.spec

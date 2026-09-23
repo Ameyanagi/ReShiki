@@ -3,6 +3,7 @@
 import contextlib
 import json
 import os
+import plistlib
 import shutil
 import subprocess
 import sys
@@ -247,6 +248,13 @@ class NativeRuntimeTests(unittest.TestCase):
                 patch("build_release.notices"),
             ):
                 build_release.mac_bundle(app, "debug")
+            with (app / "Contents/Info.plist").open("rb") as stream:
+                info = plistlib.load(stream)
+            self.assertEqual(info["CFBundleIconFile"], "ReShiki.icns")
+            self.assertEqual(
+                (app / "Contents/Resources/ReShiki.icns").read_bytes(),
+                (build_release.ROOT / "assets/branding/reshiki.icns").read_bytes(),
+            )
             self.assertFalse(chemistry.exists())
             self.assertEqual(sentinel.read_text(), "Keep external development files")
 
