@@ -32,7 +32,9 @@ On Mac, open the disk image and drag ReShiki to Applications. On Windows, run se
 
 [Installation guide](https://reshiki.com/guide/install/)
 
-The AI assistant is optional and uses your local Codex sign-in. [Install Codex and connect the assistant](docs/assistant-setup.md) for text and image requests; ordinary drawing and chemistry work offline without it. See the [illustrated 0.7.1 changes](docs/changes-0.7.1.md).
+Version 0.7.1 fixes transparent image input, Cp/Cp* projections, aromatic wedge editing, partial ring curves, and Windows popup shadows. See the [illustrated changes](docs/changes-0.7.1.md).
+
+The AI assistant is optional and uses your local Codex sign-in. [Install Codex and connect the assistant](docs/assistant-setup.md) for text and image requests; ordinary drawing and chemistry work offline without it.
 
 ## Contribute
 

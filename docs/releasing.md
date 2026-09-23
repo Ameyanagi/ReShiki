@@ -20,17 +20,17 @@ Each archive is extracted into a temporary directory with spaces outside the che
 
 Before the native-runtime cutover, the [2026-09-20 release validation](https://github.com/Ameyanagi/ReShiki/actions/runs/35510386732) passed all five package checks, including native ARM Windows/Linux applications, fresh chemistry setup, and offline reuse. Apple Silicon also passed Developer ID signing, notarization, stapling, and Gatekeeper assessment. This manual run did not publish a release.
 
-The current [0.7 validation record](release-0.7-validation.md) tracks the documentation walkthrough, resolved issues, and package and publication checks.
+The current [0.7.1 validation record](release-0.7.1-validation.md) tracks the documentation walkthrough, review, and package and publication checks. The [0.7.0 record](release-0.7-validation.md) retains the previous release's evidence.
 
 ## Publish a version
 
 1. Update the package version in `Cargo.toml`, update `Cargo.lock`, and record release changes.
 2. Run the checks and a manual release build. Review the resulting packages.
-3. Commit and push, then create and push a matching tag, for example `v0.7.0` for version `0.7.0`.
+3. Commit and push, then create and push a matching tag, for example `v0.7.1` for version `0.7.1`.
 
 ```sh
-git tag -a v0.7.0 -m "ReShiki 0.7.0"
-git push origin v0.7.0
+git tag -a v0.7.1 -m "ReShiki 0.7.1"
+git push origin v0.7.1
 ```
 
 A `v*` tag triggers builds. A mismatched version fails before packaging. The macOS archive must be signed, notarized, stapled and verified before the release publishes; missing credentials fail the job instead of silently publishing an unsigned macOS download. All five packages and the complete live reference tests on macOS ARM64, Linux x64, and Windows x64 must pass before publication. Windows and Linux packages remain unsigned. Tags containing a prerelease suffix create a GitHub prerelease. Manual builds never publish a release.
@@ -94,4 +94,4 @@ Install Inno Setup 6.7.3 for local Windows installer builds, or set `RESHIKI_ISC
 
 ## In-app version checks
 
-ReShiki queries this repository’s latest stable GitHub release asynchronously. Successful checks are cached for 24 hours; failures for one hour. Manual checks bypass the cache. Semantic version comparisons prevent downgrade prompts, and prereleases are excluded. The download button opens the release page; it does not replace a running app. No signing credentials or drawing data are used by this check.
+ReShiki queries this repository’s latest stable GitHub release asynchronously. Successful checks are cached for 24 hours; failures for one hour. Manual checks bypass the cache. Semantic version comparisons prevent downgrade prompts, and prereleases are excluded. **Release notes** opens the release page. **Update and restart** downloads and verifies a matching package, waits for unsaved work and pending assistant/input state to be resolved, then installs and restarts. Automatic checks never install without a click. No signing credentials or drawing data are used by the update check. See the [installation and update guide](https://reshiki.com/guide/install/).
