@@ -1579,11 +1579,11 @@ impl App {
             .width(340)
             .style(|_| {
                 let mut style = card();
-                style.shadow = iced::Shadow {
+                style.shadow = super::workspace::surface_shadow(iced::Shadow {
                     color: Color::from_rgba8(25, 40, 36, 0.16),
                     offset: iced::Vector::new(0., 4.),
                     blur_radius: 18.,
-                };
+                });
                 style
             });
         layers
