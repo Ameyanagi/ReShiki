@@ -12,7 +12,7 @@ fn pair(a: u64, b: u64) -> (u64, u64) {
 }
 fn eligible(b: &Bond) -> bool {
     matches!(b.order, 1 | 2 | 4)
-        && b.display == "plain"
+        && (b.display == "plain" || b.order == 4 && b.projection)
         && b.stereo.is_none()
         && b.secondary_display.is_none()
 }

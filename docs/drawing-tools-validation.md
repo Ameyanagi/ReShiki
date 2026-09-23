@@ -81,6 +81,20 @@ fixes audited against the PR diff.
 
 `cargo clippy --all-targets -- -D warnings`, formatting, optimized compilation, website diagnostics and the website build/link checks passed. Initial desktop checks used macOS automation. The Computer Use connection was subsequently restored and used for ChemDraw inspection and the new ReShiki controls.
 
+## Aromatic wedge follow-up (2026-09-24)
+
+Changing a Cp* ring edge to a wedge previously replaced its aromatic order with single order, removing the inner ellipse. Wedge and line appearance changes now preserve aromatic order, charge, hydrogens, attachment targets and partial inner curves. A repeated wedge click reverses the drawing direction; Single restores a plain aromatic edge. Explicit bond-order tools still change chemistry. Stable ring traversal also keeps the projected ellipse unchanged when bond endpoints reverse.
+
+The following native figure exports show the reported drawing before and after restoring the four affected Cp* edges. The wedge choices and other drawing objects are retained. This checks aromatic drawing behavior; the complex's metal/halide charge assignments remain outside this visual regression.
+
+| Before: ring order overwritten                                              | After: aromatic order retained                                                             |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| ![Cp* ellipses missing after wedge edits](images/aromatic-wedge-before.png) | ![Both Cp* ellipses retained with the same wedge choices](images/aromatic-wedge-after.png) |
+
+Validation: 375 Rust tests passed (3 ignored), including aromatic styles on flat and tilted five-/six-member rings, chemical identity and stereo protection, partial curves, Cp* contacts, native round trips, figure/clipboard exports, click/drag/Properties editing and Undo/Redo. CDXML/CDX explicitly reject projection-only wedge appearances until they can preserve that distinction; plain aromatic exchange remains supported. No production unsafe blocks or panicking unwrap/expect calls were added.
+
+Computer Use checked the optimized macOS build on a separate repaired copy of the reported drawing. Clicking its existing solid wedge reversed exactly one edge; the saved recovery state retained all ten aromatic ring orders and every atom/attachment record. Both ellipses remained visible, and Undo restored the saved drawing.
+
 ## Context menu and interactive tilt follow-up (2026-09-23)
 
 The right-click menu groups object-specific commands before clipboard actions, omits inapplicable commands, and retains its origin when moving to a smaller submenu. A dedicated left-toolbar 3D tilt tool previews screen-space drags, supports Shift snapping to 15°, and commits once on release. X/Y step buttons and front-bond emphasis remain available in its context bar.
