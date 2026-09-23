@@ -1,6 +1,6 @@
 # Drawing with the assistant
 
-Open **Assistant** in the toolbar and describe a molecule or chemical scheme. ReShiki uses your existing local Codex sign-in. The model menu lists the models available to your account; model, reasoning, service tier and Review/Accept-all preferences are saved. If needed, run `codex login` and reconnect. `RESHIKI_CODEX` can point to a specific executable.
+Open **Assistant** in the toolbar and describe a molecule or chemical scheme. ReShiki uses your existing local Codex sign-in. Start with [Set up Codex for the assistant](assistant-setup.md) for installation, sign-in, costs, and how the connection works. The model menu lists the models available to your account; model, reasoning, service tier and Review/Accept-all preferences are saved. `RESHIKI_CODEX` can point to a specific executable. See the [illustrated 0.7.1 changes](changes-0.7.1.md) for screenshots of the latest image, ligand, and aromatic-bond improvements.
 
 ## Draw from an image
 
@@ -87,7 +87,7 @@ For **Cp** and **Cp\***, the assistant builds the defined aromatic ligand first,
 
 The visual reviewer can adjust each independently attached Cp/Cp* ligand using bounded 3D rotations. It can also set whether the metal contact passes in front of or behind crossed ring edges; a foreground contact remains continuous. The other ligand, metal atoms, contact styles, internal 3D bond lengths and chemical data remain intact. Shared attachment targets and explicit stereo bonds are excluded from these edits. Each corrected draft is rendered and inspected again within the existing three-pass review limit.
 
-Charge symbols can be hidden to match a reference without removing the stored charge or changing formula calculations. **Atoms… → Show charge labels** controls their visibility for the selected scope; the assistant's defined ligands have the same control. Native files and SVG/PNG/PDF retain it. Editable CDXML/CDX export currently asks you to show charges first, because hidden-charge appearance has not been verified through ChemDraw round trips. Hiding a label does not resolve an uncertain overall charge assignment.
+Charge symbols can be hidden to match a reference without removing the stored charge or changing formula calculations. **Properties → Labels & chemistry → Atom labels & numbering… → Show charge labels** controls their visibility for the selected scope; the assistant's defined ligands have the same control. Native files and SVG/PNG/PDF retain it. Editable CDXML/CDX export currently asks you to show charges first, because hidden-charge appearance has not been verified through ChemDraw round trips. Hiding a label does not resolve an uncertain overall charge assignment.
 
 ![Reviewed Cp* dimer draft with thin methyl bonds, hidden ligand charge symbols, and the solid left contact in front of the ring](images/assistant-cp-star-review.png)
 

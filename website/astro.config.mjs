@@ -83,6 +83,7 @@ export default defineConfig({
             { label: "Select and edit", slug: "guide/editing" },
             { label: "Labels and abbreviations", slug: "guide/labels" },
             { label: "Draw a reaction", slug: "guide/reactions" },
+            { label: "Set up Codex", slug: "guide/assistant-setup" },
             { label: "Draw with the assistant", slug: "guide/assistant" },
             { label: "Prepare a figure", slug: "guide/figures" },
             { label: "Save and share", slug: "guide/sharing" },
@@ -101,6 +102,7 @@ export default defineConfig({
             { label: "ReShiki 0.6.0", slug: "developer/changes-0.6" },
             { label: "ReShiki 0.6.1", slug: "developer/changes-0.6.1" },
             { label: "ReShiki 0.7.0", slug: "developer/changes-0.7" },
+            { label: "ReShiki 0.7.1", slug: "developer/changes-0.7.1" },
             { label: "Runtime safety", slug: "developer/runtime-safety" },
             { label: "Feature status", slug: "developer/feature-status" },
             {

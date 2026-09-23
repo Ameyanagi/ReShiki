@@ -5,6 +5,8 @@ description: Follow generation progress, refine an editable preview, and apply a
 
 import Screenshot from "../../../components/Screenshot.astro";
 
+First time using the assistant? [Install Codex and connect your account](/guide/assistant-setup/). Codex is optional for ordinary drawing. See the [illustrated 0.7.1 changes](/developer/changes-0.7.1/) for the latest image and aromatic-ring fixes.
+
 ## Describe the drawing
 
 Open **Assistant**, describe the structures and their arrangement, then **Send**. For example:
@@ -29,6 +31,13 @@ Ordinary molecules use the local chemistry engine. Projected organometallic stru
 Source images are sent to Codex for reconstruction and review. Supported inputs are up to 16 MB and 16 million pixels, with at most 8192 pixels on either side.
 
 Sent images stay with their user messages during the current conversation, even after the composer attachment is removed. Click a thumbnail to enlarge and inspect it. History is session-local and does not survive an app restart.
+
+Transparent source images are composited onto white in the copy sent to the model, so black bond lines remain readable. The original remains unchanged.
+
+<Screenshot
+  src="/doc-images/assistant-updates/source-and-result.png"
+  alt="The sent reference image remains in the chat beside its editable rhodium complex reconstruction."
+/>
 
 A five-minute inactivity timeout renews with relevant progress; each model turn has a twenty-minute hard limit. Connection setup has a sixty-second limit. Completed previews remain available after interruption.
 
@@ -119,6 +128,15 @@ Select ring atoms and choose the left **3D tilt** tool. Drag vertically for X or
 Typed **multi-center** and **variable attachment** points are available separately; they retain all-target or alternative-target meaning through supported exchange. A legacy drawing centroid is never silently promoted to either type. See [attachment comparison](/developer/chemdraw-attachment-comparison/). The assistant can use these operations while reconstructing an image, keeping flat drawings flat unless perspective is visible or requested. Such diagrams always require manual review before applying.
 
 Native/figure output retains front-bond emphasis. CDXML/CDX rejects that emphasis until it can be preserved without being interpreted as stereochemistry; turn off **Front bonds** for supported editable export.
+
+For **Cp/Cp\***, the assistant builds the defined aromatic ligand before applying 3D tilt: Cp retains C₅H₅⁻ and Cp\* retains C₁₀H₁₅⁻ with five methyl groups. The inner circle follows the ring plane; front-edge emphasis leaves methyl bonds thin. Review can adjust one attached ligand and its contact overlap without moving the metal or other ligands. Zero tilt leaves the ligand planar. These operations preserve the encoded ligand data; they do not validate the complete complex.
+
+<Screenshot
+  src="/doc-images/assistant-updates/cp-star-projection.png"
+  alt="Planar and tilted Cp-star ligands retain their atoms and combined formula in Properties."
+/>
+
+Changing or reversing an aromatic ring wedge now preserves its aromatic order and inner curve. **Single** restores the plain appearance. Partial inner curves no longer show extra dashed aromatic edges. To hide a charge symbol while retaining its stored formal charge, use **Properties → Labels & chemistry → Atom labels & numbering… → Show charge labels** for the desired scope. Native and figure exports retain this appearance; CDXML/CDX currently requires visible charges and rejects unsupported aromatic projection wedges.
 
 The compact composer keeps the image thumbnail beside the prompt. Use **＋** for attachments, the model menu to change models, and **Review** for replacement and automatic-application settings.
 
