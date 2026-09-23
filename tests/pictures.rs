@@ -25,6 +25,102 @@ fn picture() -> Picture {
 }
 
 #[test]
+fn opaque_copy_preserves_black_line_art_and_original_transparency() -> anyhow::Result<()> {
+    // A typical transparent chemical drawing: every RGB sample is black;
+    // alpha alone distinguishes the strokes from the background.
+    let rgba = RgbaImage::from_fn(9, 7, |x, y| {
+        Rgba([0, 0, 0, if x == y || x == 4 { 255 } else { 0 }])
+    });
+    let mut bytes = Cursor::new(Vec::new());
+    rgba.write_to(&mut bytes, ImageFormat::Png)?;
+    let picture = Picture::import(bytes.get_ref()).map_err(anyhow::Error::msg)?;
+    let stored = picture.png().to_vec();
+    // Regression: simply removing alpha makes the entire image black.
+    assert!(
+        image::load_from_memory(&stored)?
+            .to_rgb8()
+            .pixels()
+            .all(|p| p.0 == [0; 3])
+    );
+
+    let opaque = image::load_from_memory(&picture.png_on_white().map_err(anyhow::Error::msg)?)?;
+    assert_eq!(opaque.color(), image::ColorType::Rgb8);
+    assert_eq!((opaque.width(), opaque.height()), (9, 7));
+    for (x, y, pixel) in opaque.to_rgb8().enumerate_pixels() {
+        assert_eq!(pixel.0, if x == y || x == 4 { [0; 3] } else { [255; 3] });
+    }
+    assert_eq!(picture.png(), stored);
+    assert_eq!(image::load_from_memory(picture.png())?.to_rgba8(), rgba);
+    Ok(())
+}
+
+#[test]
+fn wikipedia_rhodium_dimer_remains_visible_to_alpha_ignorant_consumers() -> anyhow::Result<()> {
+    let bytes = include_bytes!("fixtures/assistant-images/rhodium-dimer-transparent.png");
+    let picture = Picture::import(bytes).map_err(anyhow::Error::msg)?;
+    let original = image::load_from_memory(picture.png())?;
+    assert!(original.color().has_alpha());
+    assert!(original.to_rgba8().pixels().any(|p| p.0[3] == 0));
+    // This is exactly the failure mode: removing alpha loses the whole drawing.
+    assert!(original.to_rgb8().pixels().all(|p| p.0 == [0; 3]));
+    let opaque = image::load_from_memory(&picture.png_on_white().map_err(anyhow::Error::msg)?)?;
+    assert_eq!(opaque.color(), image::ColorType::Rgb8);
+    assert_eq!(
+        (opaque.width(), opaque.height()),
+        (picture.width(), picture.height())
+    );
+    let pixels = opaque.to_rgb8();
+    assert!(pixels.pixels().filter(|p| p.0 == [255; 3]).count() > 100_000);
+    assert!(pixels.pixels().filter(|p| p.0 == [0; 3]).count() > 1_000);
+    for (before, after) in original.to_rgba8().pixels().zip(pixels.pixels()) {
+        assert_eq!(after.0, [255 - before.0[3]; 3]);
+    }
+    Ok(())
+}
+
+#[test]
+fn opaque_copy_composites_colored_antialiasing_at_every_alpha() -> anyhow::Result<()> {
+    let colors = [[0, 0, 0], [21, 106, 225], [196, 43, 58], [255, 255, 255]];
+    let rgba = RgbaImage::from_fn(256, colors.len() as u32, |alpha, row| {
+        let [r, g, b] = colors[row as usize];
+        Rgba([r, g, b, alpha as u8])
+    });
+    let mut bytes = Cursor::new(Vec::new());
+    rgba.write_to(&mut bytes, ImageFormat::Png)?;
+    let picture = Picture::import(bytes.get_ref()).map_err(anyhow::Error::msg)?;
+    let pixels =
+        image::load_from_memory(&picture.png_on_white().map_err(anyhow::Error::msg)?)?.to_rgb8();
+    for (alpha, row, pixel) in pixels.enumerate_pixels() {
+        let opacity = f64::from(alpha) / 255.;
+        let expected = colors[row as usize]
+            .map(|c| (f64::from(c) * opacity + 255. * (1. - opacity)).round() as u8);
+        assert_eq!(pixel.0, expected, "alpha={alpha}, color={row}");
+    }
+    Ok(())
+}
+
+#[test]
+fn opaque_picture_formats_keep_their_decoded_colors() -> anyhow::Result<()> {
+    let original =
+        image::RgbImage::from_fn(13, 7, |x, y| image::Rgb([x as u8 * 19, y as u8 * 37, 127]));
+    for format in [
+        ImageFormat::Png,
+        ImageFormat::Jpeg,
+        ImageFormat::Tiff,
+        ImageFormat::WebP,
+    ] {
+        let mut bytes = Cursor::new(Vec::new());
+        original.write_to(&mut bytes, format)?;
+        let picture = Picture::import(bytes.get_ref()).map_err(anyhow::Error::msg)?;
+        let before = image::load_from_memory(picture.png())?.to_rgb8();
+        let after = image::load_from_memory(&picture.png_on_white().map_err(anyhow::Error::msg)?)?;
+        assert_eq!(after.color(), image::ColorType::Rgb8);
+        assert_eq!(after.to_rgb8(), before, "{format:?}");
+    }
+    Ok(())
+}
+
+#[test]
 fn formats_normalize_to_portable_png_and_small_images_keep_aspect_ratio() {
     let rgb = DynamicImage::ImageRgb8(image::RgbImage::from_pixel(3, 2, image::Rgb([250, 30, 40])));
     for format in [

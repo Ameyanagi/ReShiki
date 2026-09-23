@@ -1571,15 +1571,7 @@ impl MoleculeCanvas<'_> {
                 {
                     let a = id.unwrap_or_else(|| preview.add_atom("C", origin));
                     let z = target.unwrap_or_else(|| preview.add_atom("C", end));
-                    let (order, display, _) = preset.parts();
-                    preview.add_bond(a, z, order, display);
-                    if let Some(b) = preview
-                        .bonds
-                        .iter_mut()
-                        .find(|b| (b.a == a && b.b == z) || (b.a == z && b.b == a))
-                    {
-                        preset.apply(b);
-                    }
+                    preset.place(&mut preview, a, z);
                     ring_selection = Some(vec![a, z]);
                 } else {
                     frame.stroke(

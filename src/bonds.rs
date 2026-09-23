@@ -1,5 +1,5 @@
 //! Bond appearance is independent of chemical order and absolute stereochemistry.
-use crate::document::Bond;
+use crate::document::{Bond, Document};
 use serde::{Deserialize, Serialize};
 
 /// A continuous wave with smooth tangents, shared by the canvas, icons and exports.
@@ -147,18 +147,48 @@ impl BondPreset {
     pub fn of(bond: &Bond) -> Option<Self> {
         Self::ALL.into_iter().find(|p| {
             let (order, display, secondary) = p.parts();
-            order == bond.order
+            (order == bond.order
+                || bond.projection && display != "plain" && p.preserves_aromatic_order(bond))
                 && display == bond.display
                 && secondary.unwrap_or(display)
                     == bond.secondary_display.as_deref().unwrap_or(&bond.display)
         })
     }
+    /// Wedge/line appearance on an aromatic edge depicts its ring projection,
+    /// not a change to the chemical order or tetrahedral stereochemistry.
+    pub fn preserves_aromatic_order(self, bond: &Bond) -> bool {
+        bond.order == 4 && self.parts().0 == 1
+    }
     pub fn apply(self, bond: &mut Bond) {
-        bond.ring_arc = false;
         let (order, display, secondary) = self.parts();
-        bond.order = order;
+        if self.preserves_aromatic_order(bond) {
+            bond.projection = display != "plain";
+        } else {
+            bond.ring_arc = false;
+            bond.projection = false;
+            bond.order = order;
+        }
         bond.display = display.into();
         bond.secondary_display = secondary.map(str::to_string);
+    }
+    /// Shared by committed bond gestures and their live canvas preview. Avoid
+    /// replacing an aromatic edge before deciding whether this is only styling.
+    pub fn place(self, doc: &mut Document, a: u64, b: u64) {
+        if let Some(bond) = doc.bonds.iter_mut().find(|bond| {
+            ((bond.a == a && bond.b == b) || (bond.a == b && bond.b == a))
+                && self.preserves_aromatic_order(bond)
+        }) {
+            if bond.a != a {
+                bond.reverse();
+            }
+            self.apply(bond);
+            return;
+        }
+        let (order, display, _) = self.parts();
+        doc.add_bond(a, b, order, display);
+        if let Some(bond) = doc.bonds.iter_mut().find(|bond| bond.a == a && bond.b == b) {
+            self.apply(bond);
+        }
     }
     pub fn name(self) -> &'static str {
         match self {
@@ -202,6 +232,16 @@ impl Bond {
             ]
             .as_slice(),
             2 => ["plain", "wavy", "bold", "dashed"].as_slice(),
+            4 if self.projection => [
+                "plain",
+                "wedge",
+                "hash",
+                "wavy",
+                "bold",
+                "hashed",
+                "hollow_wedge",
+            ]
+            .as_slice(),
             0 => ["dotted"].as_slice(),
             5 => ["plain", "dashed"].as_slice(),
             7 => ["plain", "dashed"].as_slice(),

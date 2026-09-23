@@ -65,7 +65,8 @@ fixes audited against the PR diff.
 
 ## Ring curves, element colors, and coordination diagrams
 
-- Select consecutive ring atoms, open Properties → Bond appearance, and choose **Toggle inner ring curve**. Selecting the entire ring produces a circle. The stroke follows native atom positions and retained projection depth; the original bond orders are preserved. Changing a bond preset clears its curve override. Breaking the ring restores the ordinary bond depiction.
+- Select consecutive ring atoms, open Properties → Bond appearance, and choose **Toggle inner ring curve**. Selecting the entire ring produces a circle. The stroke follows native atom positions and retained projection depth; the original bond orders are preserved. Aromatic projection styles retain the curve override; chemical order changes clear it. Breaking the ring restores the ordinary bond depiction.
+- A partial curve replaces an aromatic ring's full circle without adding dashed inner lines on its remaining edges. Regression coverage includes 5–8-member rings, tilted and wraparound segments, fused and separate rings, open aromatic bonds, native round trips, and figure exports. Unselected explicit double bonds retain their second stroke.
 - Choose **Atoms…** beside the color controls, pick an element and a hex color, then Apply. The default scope is the selection when one exists; **Whole drawing** applies to every matching atom. Bonds, other elements, captions and font settings are retained. Applying color and adding a curve are each one undoable edit.
 - Tests cover partial and closed curves, mixed-color continuity, reversible tilt, persistence, broken rings, protection of stereochemical bonds, selected/whole-document coloring, and undo/redo.
 - Source-image reconstruction can now build complete schemes from explicit coordinates, including reaction arrows, captions, atom colors, real-graph abbreviations, wildcard variable labels such as E, and inner ring curves. Instructions preserve ligand geometry around the metal and keep planar source drawings in 2D. Tilt is reserved for visible perspective or an explicit request.
@@ -79,6 +80,20 @@ fixes audited against the PR diff.
 `cargo test --tests --no-fail-fast`: 441 passed, 3 ignored; two additional library regressions added afterward also pass. The ignored signed macOS staging test was also run separately and passed. The `rdkit-reference` complete aromatic response replay also passes after omitting zero projection depths from legacy serialized requests. Other reference-oracle suites were not rerun locally.
 
 `cargo clippy --all-targets -- -D warnings`, formatting, optimized compilation, website diagnostics and the website build/link checks passed. Initial desktop checks used macOS automation. The Computer Use connection was subsequently restored and used for ChemDraw inspection and the new ReShiki controls.
+
+## Aromatic wedge follow-up (2026-09-24)
+
+Changing a Cp* ring edge to a wedge previously replaced its aromatic order with single order, removing the inner ellipse. Wedge and line appearance changes now preserve aromatic order, charge, hydrogens, attachment targets and partial inner curves. A repeated wedge click reverses the drawing direction; Single restores a plain aromatic edge. Explicit bond-order tools still change chemistry. Stable ring traversal also keeps the projected ellipse unchanged when bond endpoints reverse.
+
+The following native figure exports show the reported drawing before and after restoring the four affected Cp* edges. The wedge choices and other drawing objects are retained. This checks aromatic drawing behavior; the complex's metal/halide charge assignments remain outside this visual regression.
+
+| Before: ring order overwritten                                              | After: aromatic order retained                                                             |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| ![Cp* ellipses missing after wedge edits](images/aromatic-wedge-before.png) | ![Both Cp* ellipses retained with the same wedge choices](images/aromatic-wedge-after.png) |
+
+Validation: 375 Rust tests passed (3 ignored), including aromatic styles on flat and tilted five-/six-member rings, chemical identity and stereo protection, partial curves, Cp* contacts, native round trips, figure/clipboard exports, click/drag/Properties editing and Undo/Redo. CDXML/CDX explicitly reject projection-only wedge appearances until they can preserve that distinction; plain aromatic exchange remains supported. No production unsafe blocks or panicking unwrap/expect calls were added.
+
+Computer Use checked the optimized macOS build on a separate repaired copy of the reported drawing. Clicking its existing solid wedge reversed exactly one edge; the saved recovery state retained all ten aromatic ring orders and every atom/attachment record. Both ellipses remained visible, and Undo restored the saved drawing.
 
 ## Context menu and interactive tilt follow-up (2026-09-23)
 

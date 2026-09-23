@@ -109,12 +109,21 @@ struct Writer<'a> {
 pub fn write(document: &Document, options: Options<'_>) -> Result<String> {
     document.validate().map_err(invalid)?;
     if document
-        .bonds
+        .atoms
         .iter()
-        .any(|bond| bond.projection && bond.display == "bold")
+        .any(|a| a.charge != 0 && a.display.hide_charge)
     {
         return Err(invalid(
-            "CDXML cannot yet preserve non-stereochemical front-bond emphasis. Turn off Front bonds before editable export, or use ReShiki (.rsk), SVG, PNG or PDF to retain the appearance.",
+            "CDXML cannot yet preserve hidden charge labels. Show charges before editable export, or use ReShiki (.rsk), SVG, PNG or PDF. The chemical charges are retained.",
+        ));
+    }
+    if document
+        .bonds
+        .iter()
+        .any(|bond| bond.projection && bond.display != "plain")
+    {
+        return Err(invalid(
+            "CDXML cannot yet preserve non-stereochemical front-bond emphasis or projected wedge styles. Restore plain bond appearance before editable export, or use ReShiki (.rsk), SVG, PNG or PDF to retain the appearance.",
         ));
     }
     // ChemDraw 26 discards nested MultiAttachment definitions when saving a

@@ -19,12 +19,18 @@ Added 2026-09-20. The bond palette and contextual menu now offer **17 presets**.
 ## Workflow
 
 - Choose a palette tool, then use its contextual preset menu for the full set. Drag to see the actual bond style before release. Existing carbon-chain growth and attachment still work.
-- Click an existing bond to apply a style. Repeated clicks with a matching solid/hashed/hollow wedge, parallel hash, bold, dative or coordination tool reverse its endpoints. Single/double/triple tools retain their order cycle.
+- Click an existing bond to apply a style. Repeated clicks with a matching solid/hashed/hollow wedge, parallel hash, bold, dative or coordination tool reverse its endpoints. Ordinary single/double/triple bonds retain their order cycle; aromatic edges follow the appearance rules below.
 - With Select (`V`), click a bond's middle to select both endpoint atoms. Properties applies bond edits to edges whose two endpoints are selected. A larger selection can style multiple bonds together; mixed presets are indicated.
 - Double and partial bonds offer Automatic, Centered, Left and Right second-line placement. Reversing an edge or reflecting the drawing adjusts its relative side.
-- Enter a hex color and press Enter or Color. Colors and line placement do not change molecular identity. Style/order changes invalidate chemistry so Check recomputes it.
+- Enter a hex color and press Enter or Color. Colors, line placement and aromatic projection styles do not change molecular identity. Chemical order/stereochemical changes invalidate chemistry so Check recomputes it.
 - Hydrogen bonds must start at an existing explicit H with a covalent bond to another atom, and end at N, O, F or S with nonpositive formal charge. Unsupported endpoints leave the drawing unchanged. The interaction does not increase the hydrogen atom's valence.
 - Drawing, restyling and direction changes are undoable. Save `.rsk` to retain the complete state.
+
+### Aromatic ring appearance
+
+On an aromatic edge, solid/hashed/hollow wedges, bold, parallel hashes and wavy styles preserve the aromatic bond order. They depict the ring's projection without assigning tetrahedral stereochemistry. The aromatic circle or partial inner curve remains visible, including after a 3D tilt. Clicking the same wedge again reverses its direction; Single restores a plain edge while keeping the ring aromatic. Explicit Double/Triple and coordination presets still change the bond order.
+
+This behavior is shared by bond clicks, drag previews, committed drags and Properties, with Undo/Redo. Native files and SVG/PNG/PDF retain the appearance. CDXML/CDX currently reject these projection styles explicitly; restore plain edges before editable exchange. Ordinary single-bond wedges retain their stereochemical meaning.
 
 ## Native and chemical representation
 

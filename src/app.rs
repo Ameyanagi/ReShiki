@@ -1121,7 +1121,18 @@ impl App {
                     return Task::none();
                 }
                 let before = self.doc.clone();
-                self.doc.invalidate_chemistry(&self.selected);
+                let affected: Vec<_> = self
+                    .doc
+                    .bonds
+                    .iter()
+                    .filter(|bond| {
+                        self.selected.contains(&bond.a)
+                            && self.selected.contains(&bond.b)
+                            && !preset.preserves_aromatic_order(bond)
+                    })
+                    .flat_map(|bond| [bond.a, bond.b])
+                    .collect();
+                self.doc.invalidate_chemistry(&affected);
                 for bond in &mut self.doc.bonds {
                     if self.selected.contains(&bond.a) && self.selected.contains(&bond.b) {
                         preset.apply(bond);
@@ -2650,9 +2661,12 @@ impl App {
                 } else {
                     let a = a.unwrap_or_else(|| self.doc.add_atom("C", start));
                     let b = b.unwrap_or_else(|| self.doc.add_atom("C", end));
-                    let (order, display) = self.bond_style();
-                    self.doc.add_bond(a, b, order, display);
-                    self.apply_current_bond_preset(a, b);
+                    if let Some(preset) = self.tool.bond_preset() {
+                        preset.place(&mut self.doc, a, b);
+                    } else {
+                        let (order, display) = self.bond_style();
+                        self.doc.add_bond(a, b, order, display);
+                    }
                     self.selected = vec![b];
                 }
             }
@@ -2751,8 +2765,16 @@ impl App {
                             } else {
                                 self.bond_style()
                             };
-                            self.doc.add_bond(b.a, b.b, order, display);
-                            self.apply_current_bond_preset(b.a, b.b);
+                            if let Some(preset) = self
+                                .tool
+                                .bond_preset()
+                                .filter(|p| p.preserves_aromatic_order(&b))
+                            {
+                                preset.place(&mut self.doc, b.a, b.b);
+                            } else {
+                                self.doc.add_bond(b.a, b.b, order, display);
+                                self.apply_current_bond_preset(b.a, b.b);
+                            }
                             if reverse
                                 && let Some(bond) = self
                                     .doc
@@ -2948,6 +2970,18 @@ fn chemistry_changed(before: &Document, after: &Document) -> bool {
             b.indicator = Default::default();
             a.cip_label = None;
             b.cip_label = None;
+            if a.order == 4 && b.order == 4 {
+                a.display = "plain".into();
+                b.display = "plain".into();
+                a.projection = false;
+                b.projection = false;
+                if a.a > a.b {
+                    a.reverse();
+                }
+                if b.a > b.b {
+                    b.reverse();
+                }
+            }
             a != b
         })
         || before.atoms.len() != after.atoms.len()
@@ -3959,6 +3993,102 @@ mod tests {
         ));
         assert!(app.error);
         assert_eq!(app.doc, before);
+    }
+
+    #[test]
+    fn aromatic_bond_tools_preserve_circles_and_undo_direction_changes() -> anyhow::Result<()> {
+        use anyhow::Context;
+        use reshiki::bonds::BondPreset as P;
+        for preset in [P::Wedge, P::HashedWedge, P::HollowWedge, P::Bold, P::Hashed] {
+            let (mut app, _) = App::new();
+            let ids = editing::ring(&mut app.doc, Point::default(), 6, true, 0.);
+            reshiki::projection::tilt(&mut app.doc, &ids, 35., true);
+            app.doc.reconcile_molecule_groups();
+            let source = app.doc.clone();
+            let bond = source.bonds.first().context("Missing ring edge")?;
+            let a = source.atom(bond.a).context("Missing ring atom")?.position;
+            let b = source.atom(bond.b).context("Missing ring atom")?.position;
+            let midpoint = Point::new((a.x + b.x) / 2., (a.y + b.y) / 2.);
+            app.camera.zoom = 2.;
+            app.tool = match preset {
+                P::Wedge => Tool::Wedge,
+                P::HashedWedge => Tool::Hash,
+                p => Tool::StyledBond(p),
+            };
+            app.edit(Edit::Click(midpoint));
+            assert!(!app.error, "{}", app.status);
+            assert_eq!(app.doc.bonds[0].display, preset.parts().1);
+            assert!(app.doc.bonds.iter().all(|b| b.order == 4));
+            assert_eq!(reshiki::aromatic::circles(&app.doc).len(), 1);
+            assert!(!chemistry_changed(&source, &app.doc));
+            assert_eq!(app.doc.atoms, source.atoms);
+            let styled = app.doc.clone();
+            app.edit(Edit::Click(midpoint));
+            assert_eq!((app.doc.bonds[0].a, app.doc.bonds[0].b), (bond.b, bond.a));
+            assert_eq!(reshiki::aromatic::circles(&app.doc).len(), 1);
+            assert!(!chemistry_changed(&source, &app.doc));
+            let _ = app.update(Message::Undo);
+            assert_eq!(app.doc, styled);
+            let _ = app.update(Message::Undo);
+            assert_eq!(app.doc, source);
+            let _ = app.update(Message::Redo);
+            assert_eq!(app.doc, styled);
+            app.tool = Tool::Bond(1);
+            app.edit(Edit::Click(midpoint));
+            assert_eq!(app.doc, source, "Plain appearance retains aromatic order");
+            app.tool = Tool::Bond(2);
+            app.edit(Edit::Click(midpoint));
+            assert_eq!(
+                app.doc.bonds[0].order, 2,
+                "Explicit double order still works"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn aromatic_bond_properties_and_dragging_keep_ring_chemistry() -> anyhow::Result<()> {
+        use anyhow::Context;
+        use reshiki::bonds::BondPreset as P;
+        for preset in [
+            P::Wedge,
+            P::HashedWedge,
+            P::HollowWedge,
+            P::Bold,
+            P::Hashed,
+            P::Wavy,
+            P::Single,
+        ] {
+            let (mut app, _) = App::new();
+            app.selected = editing::ring(&mut app.doc, Point::default(), 6, true, 0.);
+            reshiki::projection::tilt(&mut app.doc, &app.selected, 65., true);
+            app.doc.reconcile_molecule_groups();
+            let source = app.doc.clone();
+            let _ = app.update(Message::ApplyBondPreset(preset));
+            assert!(!app.error, "{}", app.status);
+            assert!(app.doc.bonds.iter().all(|b| b.order == 4));
+            assert!(app.doc.bonds.iter().all(|b| b.display == preset.parts().1));
+            assert_eq!(reshiki::aromatic::circles(&app.doc).len(), 1);
+            assert!(!chemistry_changed(&source, &app.doc));
+            assert_eq!(app.doc.atoms, source.atoms);
+            if preset != P::Single {
+                let _ = app.update(Message::Undo);
+                assert_eq!(app.doc, source);
+            }
+            let bond = source.bonds.first().context("Missing ring bond")?;
+            let a = source.atom(bond.a).context("Missing ring atom")?.position;
+            let b = source.atom(bond.b).context("Missing ring atom")?.position;
+            app.tool = Tool::StyledBond(preset);
+            app.edit(Edit::Bond(b, a, Some(bond.b), Some(bond.a)));
+            assert!(!app.error, "{}", app.status);
+            assert_eq!((app.doc.bonds[0].a, app.doc.bonds[0].b), (bond.b, bond.a));
+            assert!(app.doc.bonds.iter().all(|b| b.order == 4));
+            assert_eq!(reshiki::aromatic::circles(&app.doc).len(), 1);
+            assert!(!chemistry_changed(&source, &app.doc));
+            let _ = app.update(Message::Undo);
+            assert_eq!(app.doc, source);
+        }
+        Ok(())
     }
 
     #[test]

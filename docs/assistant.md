@@ -1,12 +1,12 @@
 # Drawing with the assistant
 
-Open **Assistant** in the toolbar and describe a molecule or chemical scheme. ReShiki uses your existing local Codex sign-in. The model menu lists the models available to your account; model, reasoning, service tier and Review/Accept-all preferences are saved. If needed, run `codex login` and reconnect. `RESHIKI_CODEX` can point to a specific executable.
+Open **Assistant** in the toolbar and describe a molecule or chemical scheme. ReShiki uses your existing local Codex sign-in. Start with [Set up Codex for the assistant](assistant-setup.md) for installation, sign-in, costs, and how the connection works. The model menu lists the models available to your account; model, reasoning, service tier and Review/Accept-all preferences are saved. `RESHIKI_CODEX` can point to a specific executable. See the [illustrated 0.7.1 changes](changes-0.7.1.md) for screenshots of the latest image, ligand, and aromatic-bond improvements.
 
 ## Draw from an image
 
 Copy a chemical drawing, focus the assistant prompt and press **Cmd/Ctrl+V**, or choose **＋ → Paste image**. Image paste is supported on macOS and Windows. **＋ → Choose image…** accepts PNG, JPEG, TIFF and WebP files on every platform. A source thumbnail appears in the prompt. Add any instructions, then choose **Send**. With an image and no text, Send asks the AI agent to draw the structures shown. You can send follow-up instructions afterward. Text-only paste still inserts text into the prompt.
 
-The image is passed to the AI agent with your request. The agent identifies the structures and proposes editable molecules; the local chemistry engine renders its proposal. Review compares the rendered result with the original image. The source stays available for follow-ups until **＋ → Remove attached image** or **New conversation**. Images are shared with Codex only for the requested assistant operation and are held in temporary files during generation/review. Inputs are limited to 16 MB, 16 million pixels and 8192 pixels per side.
+The image is passed to the AI agent with your request. Transparent images are composited onto white for generation and review, so black chemical linework remains visible when the receiving service discards transparency. The original image retains its transparency in the conversation and drawing. The agent identifies the structures and proposes editable molecules; the local chemistry engine renders its proposal. Review compares the rendered result with the source image. The source stays available for follow-ups until **＋ → Remove attached image** or **New conversation**. Images are shared with Codex only for the requested assistant operation and are held in temporary files during generation/review. Inputs are limited to 16 MB, 16 million pixels and 8192 pixels per side.
 
 Projected organometallic drawings, such as the ferrocene sandwich illustration on [Organometallic chemistry](https://en.wikipedia.org/wiki/Organometallic_chemistry), can use an editable diagram with atoms, bonds, ring circles and contact lines. These objects stay grouped during layout review. Ring-centre contacts use editable centroid anchors and dashed drawing bonds, not validated multicentre chemical bonds; these diagrams always require explicit review before application and should not be treated as validated molecular data for chemistry export. Unreadable structures should produce a clarification rather than a guessed drawing.
 
@@ -65,6 +65,8 @@ The integration follows the official [Codex app-server protocol](https://learn.c
 
 Sent images stay with their user messages during the current conversation, even after the composer attachment is removed. Click a thumbnail to enlarge and inspect it. History is session-local and does not survive an app restart.
 
+For an offline check of the image handoff, run `cargo run --example assistant_smoke -- --prepare-image source.png --output artifacts/image-handoff`. Open the resulting `source.png` to inspect the opaque copy used by the assistant. This check makes no model request.
+
 A five-minute inactivity timeout renews with relevant progress; each model turn has a twenty-minute hard limit. Connection setup has a sixty-second limit. Completed previews remain available after interruption.
 
 ## Model and navigation defaults
@@ -75,13 +77,29 @@ Opening model, effort or edit-mode menus preserves the conversation position. Cl
 
 ## Projected structures and attachment points
 
-Select ring atoms and choose the left **3D tilt** tool. Drag vertically for X or horizontally for Y; hold **Shift** for 15° snapping. Right-click → **3D tilt…**, the top controls and **Properties → Arrange & transform** also offer X/Y steps. The opposite step restores the geometry; labels remain upright. Aromatic circles follow the ring automatically. Select a separately drawn ellipse with the ring to tilt them together. **Emphasize front bonds** uses depth to bold foreground single bonds without assigning wedge stereochemistry.
+Select ring atoms and choose the left **3D tilt** tool. Drag vertically for X or horizontally for Y; hold **Shift** for 15° snapping. Right-click → **3D tilt…**, the top controls and **Properties → Arrange & transform** also offer X/Y steps. The opposite step restores the geometry; labels remain upright. Aromatic circles follow the ring automatically. Changing an aromatic ring edge to a wedge or bold style preserves its aromaticity and inner curve; Single restores its plain appearance. Select a separately drawn ellipse with the ring to tilt them together. **Emphasize front bonds** uses depth to bold foreground single bonds without assigning wedge stereochemistry.
 
 **Add centroid** creates a selectable ring-centre anchor with an editor-only marker that follows the selected atoms. A dashed contact can connect that anchor to a metal. **Dummy atom (\*)** places an explicit wildcard attachment point; it is not a carbon atom. Native ReShiki files preserve centroids and projection depth. Figures preserve their appearance. Molecular export of centroid diagrams is blocked because these drawing contacts do not encode validated multicentre chemical bonds.
 
 Typed **multi-center** and **variable attachment** points are available separately; they retain all-target or alternative-target meaning through supported exchange. A legacy drawing centroid is never silently promoted to either type. See [attachment comparison](chemdraw-attachment-comparison.md). The assistant can use these operations while reconstructing an image, keeping flat drawings flat unless perspective is visible or requested. Such diagrams always require manual review before applying.
 
-Native/figure output retains front-bond emphasis. CDXML/CDX rejects that emphasis until it can be preserved without being interpreted as stereochemistry; turn off **Front bonds** for supported editable export.
+For **Cp** and **Cp\***, the assistant builds the defined aromatic ligand first, rotates the flat ring to set its vertex/methyl directions, then applies X/Y tilts and a screen rotation. Cp* retains all five methyl groups (C₁₀H₁₅⁻), and Cp retains C₅H₅⁻. Their aromatic circles follow the stored 3D ring plane. Foreground emphasis applies to ring edges and preserves aromatic bond orders; it does not thicken the methyl bonds or assign stereochemical wedges. The metal connects through a five-center attachment with a solid, dashed or dative contact chosen to match the source. A zero tilt leaves the ligand planar. Reconstructing an image is still subject to chemical review.
+
+The visual reviewer can adjust each independently attached Cp/Cp* ligand using bounded 3D rotations. It can also set whether the metal contact passes in front of or behind crossed ring edges; a foreground contact remains continuous. The other ligand, metal atoms, contact styles, internal 3D bond lengths and chemical data remain intact. Shared attachment targets and explicit stereo bonds are excluded from these edits. Each corrected draft is rendered and inspected again within the existing three-pass review limit.
+
+Charge symbols can be hidden to match a reference without removing the stored charge or changing formula calculations. **Properties → Labels & chemistry → Atom labels & numbering… → Show charge labels** controls their visibility for the selected scope; the assistant's defined ligands have the same control. Native files and SVG/PNG/PDF retain it. Editable CDXML/CDX export currently asks you to show charges first, because hidden-charge appearance has not been verified through ChemDraw round trips. Hiding a label does not resolve an uncertain overall charge assignment.
+
+![Reviewed Cp* dimer draft with thin methyl bonds, hidden ligand charge symbols, and the solid left contact in front of the ring](images/assistant-cp-star-review.png)
+
+This retained review example demonstrates presentation corrections. Ligand proportions still differ from the reference, and the metal/halide charge and coordination assignments remain unresolved; it is not a validated chemical structure.
+
+![The same defined aromatic Cp* ligand before and after a 65-degree X tilt and 40-degree screen rotation](images/assistant-cp-star-tilt.png)
+
+The AI supplies the ligand name and placement parameters; local code creates the atoms and projection. This avoids generating each ring/methyl coordinate separately. Images, instructions and visual review still consume model tokens; review can run for up to three passes. The reduced coordinate output is not a measured guarantee of lower total usage. Developers can render a saved proposal offline with `cargo run --example assistant_smoke -- --render-proposal proposal.json --output artifacts/proposal-preview`.
+
+Attachment-containing drafts check their defined atoms and ligand bonds separately. The inability to produce an ordinary molecular identifier is reported as a coordination-analysis limitation, not an invalid drawing. Real ligand-valence errors still appear, and **Auto apply** continues to wait for manual review of these reconstructions.
+
+Native/figure output retains front-bond emphasis. CDXML/CDX rejects projection-only emphasis until it can be preserved without being interpreted as stereochemistry; restore plain bond appearance for supported editable export.
 
 The compact composer keeps the image thumbnail beside the prompt. Use **＋** for attachments, the model menu to change models, and **Review** for replacement and automatic-application settings.
 

@@ -118,13 +118,13 @@ impl Writer<'_> {
             .iter()
             .map(|g| g.members.iter().copied().collect())
             .collect();
+        // Attachment targets share a drawing fragment with their point even
+        // though the target membership is not a chemical bond.
+        let edge_count = crate::attachments::edges(doc).count();
+        self.spend(edge_count)?;
         for set in &sets {
-            self.spend(doc.bonds.len())?;
-            if doc
-                .bonds
-                .iter()
-                .any(|b| set.contains(&b.a) != set.contains(&b.b))
-            {
+            self.spend(edge_count)?;
+            if crate::attachments::edges(doc).any(|(a, b)| set.contains(&a) != set.contains(&b)) {
                 return Err(invalid(
                     "A group cuts through a molecule; group the whole molecule before editable export",
                 ));
@@ -132,9 +132,9 @@ impl Writer<'_> {
         }
         let mut remaining: BTreeSet<_> = doc.atoms.iter().map(|a| a.id).collect();
         let mut neighbors: HashMap<u64, Vec<u64>> = HashMap::new();
-        for b in &doc.bonds {
-            neighbors.entry(b.a).or_default().push(b.b);
-            neighbors.entry(b.b).or_default().push(b.a);
+        for (a, b) in crate::attachments::edges(doc) {
+            neighbors.entry(a).or_default().push(b);
+            neighbors.entry(b).or_default().push(a);
         }
         let mut components = Vec::new();
         while let Some(&first) = remaining.first() {

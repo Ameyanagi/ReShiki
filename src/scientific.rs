@@ -315,16 +315,28 @@ pub fn styled_mark_parts(atom: &Atom, drawing_style: &crate::style::DrawingStyle
         let size = DEFAULT.world(mark.size_pt.unwrap_or(default_size));
         let angle = mark.angle.to_radians();
         let (kind, amount) = match mark.kind {
-            MarkKind::Charge | MarkKind::CircledCharge if atom.charge != 0 => (
-                match (mark.kind == MarkKind::CircledCharge, atom.charge > 0) {
-                    (true, true) => SymbolKind::CirclePlus,
-                    (true, false) => SymbolKind::CircleMinus,
-                    (false, true) => SymbolKind::Plus,
-                    _ => SymbolKind::Minus,
-                },
-                atom.charge.unsigned_abs().min(255) as u8,
-            ),
+            MarkKind::Charge | MarkKind::CircledCharge
+                if atom.charge != 0 && !atom.display.hide_charge =>
+            {
+                (
+                    match (mark.kind == MarkKind::CircledCharge, atom.charge > 0) {
+                        (true, true) => SymbolKind::CirclePlus,
+                        (true, false) => SymbolKind::CircleMinus,
+                        (false, true) => SymbolKind::Plus,
+                        _ => SymbolKind::Minus,
+                    },
+                    atom.charge.unsigned_abs().min(255) as u8,
+                )
+            }
             MarkKind::Radical if atom.radical_electrons > 0 => (
+                if atom.radical_electrons == 1 {
+                    SymbolKind::Radical
+                } else {
+                    SymbolKind::Diradical
+                },
+                1,
+            ),
+            MarkKind::RadicalIon if atom.display.hide_charge && atom.radical_electrons > 0 => (
                 if atom.radical_electrons == 1 {
                     SymbolKind::Radical
                 } else {
@@ -346,6 +358,7 @@ pub fn styled_mark_parts(atom: &Atom, drawing_style: &crate::style::DrawingStyle
         };
         let mut parts = symbol_parts(kind, amount, &style);
         if mark.kind == MarkKind::RadicalIon
+            && !atom.display.hide_charge
             && atom.radical_electrons == 2
             && let Some(first) = parts.get_mut(1)
         {

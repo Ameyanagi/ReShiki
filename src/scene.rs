@@ -183,6 +183,7 @@ fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
         ));
     }
     if a.charge != 0
+        && !a.display.hide_charge
         && !a.marks.iter().any(|m| {
             m.kind.charge()
                 && (m.kind != crate::scientific::MarkKind::RadicalIon || a.radical_electrons > 0)
@@ -407,17 +408,21 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             .flat_map(graphic_primitive),
     );
     let arcs = crate::ring_arcs::render(doc);
-    let circles: Vec<_> = crate::aromatic::circles(doc)
-        .into_iter()
-        .filter(|c| !arcs.intersects(c))
-        .collect();
-    out.extend(circles.iter().flat_map(|c| {
-        c.graphic().parts().into_iter().map(|p| Primitive::Path {
-            commands: p.commands,
-            style: p.style,
-            filled: p.filled,
-        })
-    }));
+    // A partial curve replaces the ring's circle, not its aromatic membership.
+    // Retain every ring here so its other edges do not gain fallback dashes.
+    let circles = crate::aromatic::circles(doc);
+    out.extend(
+        circles
+            .iter()
+            .filter(|c| !arcs.intersects(c))
+            .flat_map(|c| {
+                c.graphic().parts().into_iter().map(|p| Primitive::Path {
+                    commands: p.commands,
+                    style: p.style,
+                    filled: p.filled,
+                })
+            }),
+    );
     out.extend(arcs.primitives.iter().cloned());
     let labels: std::collections::HashMap<_, _> = doc
         .atoms

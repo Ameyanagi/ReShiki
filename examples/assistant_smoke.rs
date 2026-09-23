@@ -9,14 +9,45 @@ async fn main() -> anyhow::Result<()> {
             .position(|a| a == key)
             .and_then(|i| args.get(i + 1))
     };
-    if let Some(path) = option("--render") {
-        let doc = serde_json::from_slice(&std::fs::read(path)?)?;
+    if let Some(path) = option("--prepare-image") {
+        let output = std::path::PathBuf::from(
+            option("--output")
+                .map(String::as_str)
+                .unwrap_or("artifacts/image-handoff"),
+        );
+        let picture = reshiki::pictures::Picture::open(std::path::Path::new(path))
+            .map_err(anyhow::Error::msg)?;
+        let png = picture.png_on_white().map_err(anyhow::Error::msg)?;
+        std::fs::create_dir_all(&output)?;
+        std::fs::write(output.join("source.png"), png)?;
+        writeln!(
+            std::io::stdout(),
+            "Prepared opaque source: {} × {} pixels",
+            picture.width(),
+            picture.height()
+        )?;
+        return Ok(());
+    }
+    if let Some(path) = option("--render").or_else(|| option("--render-proposal")) {
+        let doc = if option("--render-proposal").is_some() {
+            let proposal: assistant::Proposal = serde_json::from_slice(&std::fs::read(path)?)?;
+            proposal.validate().map_err(anyhow::Error::msg)?;
+            assistant::render(&Default::default(), &proposal, &Default::default())
+                .await
+                .map_err(anyhow::Error::msg)?
+        } else {
+            serde_json::from_slice(&std::fs::read(path)?)?
+        };
         let output = std::path::PathBuf::from(
             option("--output")
                 .map(String::as_str)
                 .unwrap_or("artifacts/assistant-qa/render"),
         );
         std::fs::create_dir_all(&output)?;
+        std::fs::write(
+            output.join("drawing.rsk"),
+            serde_json::to_string_pretty(&doc)?,
+        )?;
         for (index, (_, png)) in assistant::review::images(&doc)
             .map_err(anyhow::Error::msg)?
             .into_iter()
@@ -73,7 +104,11 @@ async fn main() -> anyhow::Result<()> {
             explanation: "Layout review".into(),
             ..Default::default()
         };
-        codex::improve(
+        let source = option("--image")
+            .map(|path| reshiki::pictures::Picture::open(std::path::Path::new(path)))
+            .transpose()
+            .map_err(anyhow::Error::msg)?;
+        codex::improve_with_image(
             prompt,
             Default::default(),
             Default::default(),
@@ -84,6 +119,7 @@ async fn main() -> anyhow::Result<()> {
                 document,
                 review: Default::default(),
             },
+            source,
         )
         .await
     } else if let Some(path) = option("--image") {

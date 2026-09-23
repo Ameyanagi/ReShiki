@@ -32,6 +32,8 @@ On Mac, open the disk image and drag ReShiki to Applications. On Windows, run se
 
 [Installation guide](https://reshiki.com/guide/install/)
 
+The AI assistant is optional and uses your local Codex sign-in. [Install Codex and connect the assistant](docs/assistant-setup.md) for text and image requests; ordinary drawing and chemistry work offline without it. See the [illustrated 0.7.1 changes](docs/changes-0.7.1.md).
+
 ## Contribute
 
 ReShiki uses Rust, Iced, and a bundled native InChI helper. See the [developer guide](https://reshiki.com/developer/development/) for setup, checks, and contribution instructions.

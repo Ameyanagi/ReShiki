@@ -113,6 +113,16 @@ pub(crate) fn ring_circles(doc: &Document, aromatic_only: bool) -> Vec<Circle> {
             id = parent;
             atoms.push(id);
         }
+        // A wedge reversal must not rotate the ellipse's drawing basis or
+        // change a partial curve's traversal. Use one stable cycle ordering.
+        if let Some((first, _)) = atoms.iter().enumerate().min_by_key(|(_, id)| *id) {
+            atoms.rotate_left(first);
+            if atoms.get(1).zip(atoms.last()).is_some_and(|(a, b)| a > b)
+                && let Some(tail) = atoms.get_mut(1..)
+            {
+                tail.reverse();
+            }
+        }
         let key: BTreeSet<_> = atoms.iter().copied().collect();
         if !seen.insert(key) {
             continue;

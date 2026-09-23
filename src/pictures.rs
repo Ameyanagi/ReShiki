@@ -156,6 +156,28 @@ impl Picture {
     pub fn png(&self) -> &[u8] {
         &self.0.png
     }
+    /// An opaque copy for consumers that may discard alpha. Composite before
+    /// encoding RGB so transparent black backgrounds cannot swallow line art.
+    /// The stored picture (including its transparency) stays unchanged.
+    pub fn png_on_white(&self) -> Result<Vec<u8>, String> {
+        let (decoded, _) = decode(self.png())?;
+        let rgba = decoded.into_rgba8();
+        let rgb = image::RgbImage::from_fn(rgba.width(), rgba.height(), |x, y| {
+            let [r, g, b, a] = rgba.get_pixel(x, y).0;
+            let alpha = u32::from(a);
+            image::Rgb([r, g, b].map(|channel| {
+                ((u32::from(channel) * alpha + 255 * (255 - alpha) + 127) / 255) as u8
+            }))
+        });
+        let mut png = Cursor::new(Vec::new());
+        rgb.write_to(&mut png, ImageFormat::Png)
+            .map_err(|e| e.to_string())?;
+        let bytes = png.into_inner();
+        if bytes.len() > MAX_BYTES {
+            return Err("Opaque picture exceeds the 16 MB storage limit".into());
+        }
+        Ok(bytes)
+    }
     pub fn handle(&self, flip: bool) -> Option<Handle> {
         if !flip {
             return Some(self.0.handle.clone());

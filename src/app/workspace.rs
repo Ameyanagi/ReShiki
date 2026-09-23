@@ -1840,6 +1840,10 @@ impl App {
                 .label("Show implied hydrogens")
                 .text_size(12)
                 .on_toggle(|v| Message::Labels(A::Hydrogens(v))),
+            checkbox(atoms.iter().all(|a| !a.display.hide_charge))
+                .label("Show charge labels")
+                .text_size(12)
+                .on_toggle(|v| Message::Labels(A::Charges(v))),
             text("Hydrogen position").size(12),
             pick_list(HydrogenPosition::ALL, position, |v| Message::Labels(
                 A::Position(v)

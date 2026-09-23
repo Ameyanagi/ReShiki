@@ -74,7 +74,7 @@ pub struct Bond {
     /// Draw the inner component along its ring; chemical order stays unchanged.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub ring_arc: bool,
-    /// Boldness describes projection depth, never a tetrahedral wedge.
+    /// Bond appearance describes projection depth, not tetrahedral stereochemistry.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub projection: bool,
     #[serde(default)]
