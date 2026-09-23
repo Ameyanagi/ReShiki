@@ -245,6 +245,13 @@ impl App {
                         ));
                 }
                 if atoms {
+                    if self.atom_text_target().is_some() {
+                        entries = entries.push(command(
+                            "Edit atom label…  Enter",
+                            Message::AtomText(super::atom_text::Action::Begin(None)),
+                            true,
+                        ));
+                    }
                     let connected: Vec<_> =
                         reshiki::editing::groups(&self.doc, &self.doc.all_ids())
                             .into_iter()

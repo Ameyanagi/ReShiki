@@ -851,6 +851,15 @@ impl App {
             .filter(|b| self.selected.contains(&b.a) && self.selected.contains(&b.b))
             .collect();
         let mut body = column![].spacing(10);
+        if self.atom_text_target().is_some() {
+            body = body.push(
+                command(
+                    "Edit atom label… · Enter",
+                    Message::AtomText(super::atom_text::Action::Begin(None)),
+                )
+                .width(Length::Fill),
+            );
+        }
         if let Some(first) = bonds.first() {
             let preset = BondPreset::of(first)
                 .filter(|p| bonds.iter().all(|b| BondPreset::of(b) == Some(*p)));

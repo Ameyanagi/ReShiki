@@ -120,7 +120,63 @@ struct Server {
     directory: tempfile::TempDir,
     next_id: u64,
     cancel: Cancel,
-    deadline: tokio::time::Instant,
+    timeout: Timeout,
+}
+
+const IDLE_LIMIT: Duration = Duration::from_secs(300);
+const TURN_LIMIT: Duration = Duration::from_secs(1200);
+struct Timeout {
+    hard: tokio::time::Instant,
+    idle: tokio::time::Instant,
+    phase: &'static str,
+    activity: &'static str,
+}
+impl Timeout {
+    fn new(now: tokio::time::Instant, phase: &'static str, limit: Duration) -> Self {
+        Self {
+            hard: now + limit,
+            idle: now + IDLE_LIMIT,
+            phase,
+            activity: "waiting for a response",
+        }
+    }
+    fn progress(&mut self, now: tokio::time::Instant, activity: &'static str) {
+        self.idle = now + IDLE_LIMIT;
+        self.activity = activity;
+    }
+    fn error(&self, now: tokio::time::Instant) -> Option<String> {
+        if now >= self.hard {
+            Some(format!(
+                "{} reached ReShiki’s time limit. Last activity: {}. Any completed preview is retained.",
+                self.phase, self.activity
+            ))
+        } else if now >= self.idle {
+            Some(format!(
+                "No progress received for 5 minutes during {}. Last activity: {}. Any completed preview is retained; retry when ready.",
+                self.phase.to_lowercase(),
+                self.activity
+            ))
+        } else {
+            None
+        }
+    }
+    fn observe(&mut self, event: &Value) {
+        let activity = match event.get("method").and_then(Value::as_str) {
+            Some("turn/started") => "request started",
+            Some("item/tool/call") => "preparing the drawing preview",
+            Some("item/agentMessage/delta") => "receiving the drawing response",
+            Some(
+                "item/reasoning/textDelta"
+                | "item/reasoning/summaryTextDelta"
+                | "item/reasoning/summaryPartAdded",
+            ) => "model working",
+            Some("item/started" | "item/completed") => "model step completed or started",
+            Some("turn/completed") => "response completed",
+            None if event.get("id").is_some() => "request acknowledged",
+            _ => return,
+        };
+        self.progress(tokio::time::Instant::now(), activity);
+    }
 }
 impl Server {
     async fn start(cancel: Cancel) -> Result<Self, String> {
@@ -164,7 +220,11 @@ impl Server {
             directory,
             next_id: 1,
             cancel,
-            deadline: tokio::time::Instant::now() + Duration::from_secs(240),
+            timeout: Timeout::new(
+                tokio::time::Instant::now(),
+                "Connecting to Codex",
+                Duration::from_secs(60),
+            ),
         };
         server.request("initialize", json!({"clientInfo":{"name":"reshiki","title":"ReShiki","version":env!("CARGO_PKG_VERSION")},"capabilities":{"experimentalApi":true}})).await?;
         server
@@ -189,8 +249,8 @@ impl Server {
             if self.cancel.stopped() {
                 return Err("Stopped".into());
             }
-            if tokio::time::Instant::now() >= self.deadline {
-                return Err("Codex timed out. Try a smaller request or reconnect.".into());
+            if let Some(error) = self.timeout.error(tokio::time::Instant::now()) {
+                return Err(error);
             }
             let buffer = match tokio::time::timeout(
                 Duration::from_millis(200),
@@ -216,8 +276,10 @@ impl Server {
             let complete = bytes.last() == Some(&b'\n');
             self.output.consume(count);
             if complete {
-                return serde_json::from_slice(&bytes)
-                    .map_err(|e| format!("Invalid Codex response: {e}"));
+                let event = serde_json::from_slice(&bytes)
+                    .map_err(|e| format!("Invalid Codex response: {e}"))?;
+                self.timeout.observe(&event);
+                return Ok(event);
             }
         }
     }
@@ -446,9 +508,20 @@ async fn run_turn(
 ) -> Result<Value, String> {
     let progress = turn.progress;
     let canvas = turn.canvas;
-    server.deadline = tokio::time::Instant::now() + Duration::from_secs(240);
+    server.timeout = Timeout::new(
+        tokio::time::Instant::now(),
+        if allow_planning {
+            "Drawing generation"
+        } else {
+            "Visual review"
+        },
+        TURN_LIMIT,
+    );
     let request_id = server.next_id;
-    server.next_id += 1;
+    server.next_id = server
+        .next_id
+        .checked_add(1)
+        .ok_or("Codex request limit reached")?;
     server.send(json!({"id":request_id,"method":"turn/start","params":{"threadId":turn.thread,"input":input,"outputSchema":schema,"effort":turn.effort,"serviceTierForTurn":turn.tier}})).await?;
     let mut output = String::new();
     let mut streamed = String::new();
@@ -510,6 +583,7 @@ async fn run_turn(
                     tokio::select! {
                         result = canvas.call_progress(name, arguments, &tool_engine, Some(progress)) => result,
                         _ = server.cancel.cancelled() => return Err("Stopped".into()),
+                        _ = tokio::time::sleep_until(server.timeout.hard.min(tokio::time::Instant::now() + IDLE_LIMIT)) => return Err("Drawing preview exceeded its time limit. Any completed preview is retained.".into()),
                     }
                 } else {
                     Err("Canvas tools are unavailable for this request".into())
@@ -518,6 +592,10 @@ async fn run_turn(
                 server
                     .send(json!({"id":request_id,"result":response}))
                     .await?;
+                server.timeout.progress(
+                    tokio::time::Instant::now(),
+                    "drawing preview returned to the model",
+                );
                 continue;
             }
             Some("item/agentMessage/delta") => {
@@ -713,6 +791,47 @@ fn explanation_prefix(source: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn active_turns_survive_four_minutes_but_stalls_and_total_runtime_are_bounded() {
+        let start = tokio::time::Instant::now();
+        let mut timeout = Timeout::new(start, "Visual review", TURN_LIMIT);
+        assert!(timeout.error(start + Duration::from_secs(240)).is_none());
+        for minute in [4, 8, 12, 16] {
+            let now = start + Duration::from_secs(minute * 60);
+            assert!(timeout.error(now).is_none());
+            timeout.progress(now, "model working");
+        }
+        assert!(
+            timeout
+                .error(start + TURN_LIMIT)
+                .is_some_and(|e| e.contains("Visual review") && e.contains("time limit"))
+        );
+        let idle = Timeout::new(start, "Drawing generation", TURN_LIMIT);
+        assert!(
+            idle.error(start + IDLE_LIMIT)
+                .is_some_and(|e| e.contains("No progress") && e.contains("drawing generation"))
+        );
+    }
+
+    #[test]
+    fn progress_notifications_refresh_idle_deadline_without_exposing_reasoning() {
+        let start = tokio::time::Instant::now();
+        let mut timeout = Timeout::new(
+            start - Duration::from_secs(240),
+            "Visual review",
+            TURN_LIMIT,
+        );
+        let old_idle = timeout.idle;
+        timeout.observe(&json!({"method":"account/rateLimits/updated"}));
+        assert_eq!(timeout.idle, old_idle);
+        timeout.observe(
+            &json!({"method":"item/reasoning/textDelta","params":{"delta":"private text"}}),
+        );
+        assert!(timeout.idle > old_idle);
+        assert_eq!(timeout.activity, "model working");
+        assert_eq!(timeout.hard, start - Duration::from_secs(240) + TURN_LIMIT);
+    }
     #[test]
     fn streaming_explanations_are_unicode_safe_and_never_show_json() {
         assert_eq!(
@@ -778,7 +897,11 @@ for line in sys.stdin:
                 directory,
                 next_id: 1,
                 cancel: Cancel::default(),
-                deadline: tokio::time::Instant::now() + Duration::from_secs(30),
+                timeout: Timeout::new(
+                    tokio::time::Instant::now(),
+                    "Test connection",
+                    Duration::from_secs(30),
+                ),
             },
             evidence,
         )

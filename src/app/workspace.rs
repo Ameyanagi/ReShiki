@@ -1198,7 +1198,7 @@ impl App {
             }
             Tool::Text => {
                 options = options.push(
-                    text("Click to type · Double-click a label to edit · Escape cancels")
+                    text("Click an atom to name it · Click empty space for a caption · Escape cancels")
                         .size(11)
                         .color(muted()),
                 );

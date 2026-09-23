@@ -34,6 +34,7 @@ pub enum Action {
         text: Option<String>,
     },
     ClearImage,
+    ViewImage(Option<reshiki::pictures::Picture>),
     Example(&'static str),
     Model(Option<String>),
     Menu(Option<Menu>),
@@ -81,15 +82,22 @@ pub enum Menu {
     Attachments,
 }
 
+struct ChatMessage {
+    role: String,
+    text: String,
+    image: Option<reshiki::pictures::Picture>,
+}
+
 #[derive(Default)]
 pub struct State {
     waiting_for_canvas_edit: bool,
     input: text_editor::Content,
     source_image: Option<reshiki::pictures::Picture>,
+    pub(super) viewed_image: Option<reshiki::pictures::Picture>,
     image_serial: u64,
     reading_image: bool,
     pub draft: Option<Draft>,
-    messages: Vec<(String, String)>,
+    messages: Vec<ChatMessage>,
     account: Option<codex::Account>,
     preferences: Preferences,
     preferences_dirty: bool,
@@ -163,19 +171,89 @@ impl State {
             .and_then(|a| self.preferences.resolve(&a.models).ok())
     }
     fn record(&mut self, role: &str, text: String) {
-        self.messages.push((role.into(), text));
-        if self.messages.len() > 24 {
-            self.messages.remove(0);
-        }
+        self.messages.push(ChatMessage {
+            role: role.into(),
+            text,
+            image: (role == "You").then(|| self.source_image.clone()).flatten(),
+        });
+    }
+    // Bound model context without removing older messages or their images from
+    // the visible conversation. Image bytes travel through the image input only.
+    fn conversation(&self) -> Vec<(&str, &str)> {
+        self.messages
+            .iter()
+            .rev()
+            .take(24)
+            .rev()
+            .map(|m| (m.role.as_str(), m.text.as_str()))
+            .collect()
     }
 }
 impl App {
+    pub(super) fn with_assistant_image<'a>(
+        &'a self,
+        base: Element<'a, Message>,
+    ) -> Element<'a, Message> {
+        let Some(source) = &self.assistant.viewed_image else {
+            return base;
+        };
+        let Some(handle) = source.handle(false) else {
+            return base;
+        };
+        let close = Message::Assistant(Action::ViewImage(None));
+        let popup = container(
+            column![
+                row![
+                    text("Sent image").size(18),
+                    Space::new().width(Length::Fill),
+                    button("Close · Esc")
+                        .on_press(close.clone())
+                        .style(super::workspace::control(false))
+                ]
+                .align_y(Alignment::Center),
+                iced::widget::image::viewer(handle)
+                    .width(Length::Fill)
+                    .height(Length::Fill)
+                    .content_fit(iced::ContentFit::Contain),
+                text(format!(
+                    "{} × {} · Scroll to zoom · Drag to pan",
+                    source.width(),
+                    source.height()
+                ))
+                .size(12)
+                .color(super::workspace::muted())
+            ]
+            .spacing(12),
+        )
+        .padding(18)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(|_| card());
+        stack![
+            base,
+            opaque(
+                mouse_area(
+                    container(Space::new())
+                        .width(Length::Fill)
+                        .height(Length::Fill)
+                        .style(|_| surface(Color::from_rgba8(20, 30, 30, 0.45), 0.))
+                )
+                .on_press(close)
+            ),
+            container(opaque(popup))
+                .padding(28)
+                .width(Length::Fill)
+                .height(Length::Fill)
+        ]
+        .into()
+    }
     pub(super) fn assistant_action(&mut self, action: Action) -> Task<Message> {
         let mut scroll = matches!(
             &action,
             Action::Send | Action::Improve | Action::JumpToResult | Action::Reject
         );
         match action {
+            Action::ViewImage(image) => self.assistant.viewed_image = image,
             Action::Open => {
                 self.inspector_open = true;
                 self.inspector_tab = InspectorTab::Assistant;
@@ -395,6 +473,7 @@ impl App {
                 }
             }
             Action::Reset => {
+                self.assistant.viewed_image = None;
                 self.assistant.source_image = None;
                 self.assistant.image_serial = self.assistant.image_serial.wrapping_add(1);
                 self.assistant.reading_image = false;
@@ -680,7 +759,7 @@ impl App {
                 }
                 let prompt = self.assistant.input.text().trim().to_string();
                 let prompt = if improving && prompt.is_empty() {
-                    self.assistant.messages.iter().rev().find(|(r,_)| r == "You").map(|(_,s)| s.clone()).unwrap_or_else(|| "Improve this scheme’s spacing, alignment and captions while preserving all chemistry and structural detail.".into())
+                    self.assistant.messages.iter().rev().find(|m| m.role == "You").map(|m| m.text.clone()).unwrap_or_else(|| "Improve this scheme’s spacing, alignment and captions while preserving all chemistry and structural detail.".into())
                 } else if prompt.is_empty() && self.assistant.source_image.is_some() {
                     "Draw the molecular structures shown in the attached image as editable objects, preserving the depicted chemistry and arrangement.".into()
                 } else {
@@ -721,7 +800,7 @@ impl App {
                     arrow_style: self.arrows.style.clone(),
                     labels: self.doc.atom_labels.clone(),
                 };
-                let request = json!({"request":prompt,"conversation":self.assistant.messages,"previous_proposal":self.assistant.draft.as_ref().map(|d|&d.proposal),"drawing_summary":{"atoms":context.atoms.len(),"bonds":context.bonds.len(),"arrows":context.arrows.len()},"selected_ids":self.selected,"placement":if self.assistant.replace {"replace selected objects"} else {"add new drawing objects"},"style":{"name":self.doc.drawing_style.name,"bond_length_pt":self.bond_drawing.length * reshiki::style::DEFAULT.points_per_world(),"text":settings.format,"bond_color":settings.bond_color}}).to_string();
+                let request = json!({"request":prompt,"conversation":self.assistant.conversation(),"previous_proposal":self.assistant.draft.as_ref().map(|d|&d.proposal),"drawing_summary":{"atoms":context.atoms.len(),"bonds":context.bonds.len(),"arrows":context.arrows.len()},"selected_ids":self.selected,"placement":if self.assistant.replace {"replace selected objects"} else {"add new drawing objects"},"style":{"name":self.doc.drawing_style.name,"bond_length_pt":self.bond_drawing.length * reshiki::style::DEFAULT.points_per_world(),"text":settings.format,"bond_color":settings.bond_color}}).to_string();
                 let seed = if improving {
                     Some(if let Some(draft) = &self.assistant.draft {
                         if draft.epoch != self.file_epoch
@@ -1040,21 +1119,50 @@ impl App {
                 .push(action("Build a reaction", Action::Example("Draw the esterification of acetic acid with ethanol to ethyl acetate. Put H₂SO₄ and heat above the arrow.")))
                 .push(text("Review each proposal before applying. Changes stay editable and can be undone.").size(11).color(super::workspace::muted()));
         }
-        for (role, message) in &state.messages {
+        for message in &state.messages {
+            let role = &message.role;
             if role == "You" {
+                let mut content =
+                    column![text(&message.text).size(13).width(Length::Fill)].spacing(8);
+                if let Some(source) = &message.image
+                    && let Some(handle) = source.handle(false)
+                {
+                    content = content
+                        .push(
+                            button(
+                                iced::widget::image(handle)
+                                    .width(Length::Fill)
+                                    .height(140)
+                                    .content_fit(iced::ContentFit::Contain),
+                            )
+                            .padding(4)
+                            .width(Length::Fill)
+                            .style(super::workspace::control(false))
+                            .on_press(Message::Assistant(Action::ViewImage(Some(source.clone())))),
+                        )
+                        .push(
+                            text("Sent image · Click to enlarge")
+                                .size(11)
+                                .color(super::workspace::muted()),
+                        );
+                }
                 chat = chat.push(
-                    container(text(message).size(13).width(Length::Fill))
+                    container(content)
                         .padding([10, 12])
                         .width(Length::Fill)
                         .style(|_| surface(Color::from_rgb8(234, 241, 239), 12.)),
                 );
             } else if role == "ReShiki" {
-                chat = chat.push(text(message).size(11).color(super::workspace::muted()));
+                chat = chat.push(
+                    text(&message.text)
+                        .size(11)
+                        .color(super::workspace::muted()),
+                );
             } else {
                 chat = chat.push(
                     column![
                         text("Codex").size(11).color(Color::from_rgb8(17, 126, 108)),
-                        text(message).size(13).width(Length::Fill)
+                        text(&message.text).size(13).width(Length::Fill)
                     ]
                     .spacing(6),
                 );
@@ -1715,6 +1823,55 @@ fn card() -> container::Style {
 mod tests {
     use super::*;
 
+    #[test]
+    fn sent_images_survive_composer_changes_stop_and_long_conversations() -> Result<(), String> {
+        let (mut app, _) = App::new();
+        let source = source_picture();
+        app.assistant.source_image = Some(source.clone());
+        let _ = app.assistant_action(Action::Send);
+        assert_eq!(
+            app.assistant
+                .messages
+                .first()
+                .ok_or("Missing message")?
+                .image,
+            Some(source.clone())
+        );
+        let _ = app.assistant_action(Action::Stop);
+        let _ = app.assistant_action(Action::ClearImage);
+        for n in 0..30 {
+            app.assistant.record("You", format!("Follow-up {n}"));
+        }
+        assert_eq!(
+            app.assistant
+                .messages
+                .first()
+                .ok_or("Missing message")?
+                .image,
+            Some(source.clone())
+        );
+        assert!(
+            app.assistant
+                .messages
+                .last()
+                .ok_or("Missing message")?
+                .image
+                .is_none()
+        );
+        assert_eq!(app.assistant.conversation().len(), 24);
+        app.assistant.chat_offset = 120.;
+        app.assistant.follow_chat = false;
+        let task = app.assistant_action(Action::ViewImage(Some(source.clone())));
+        assert_eq!(task.units(), 0);
+        assert_eq!(app.assistant.viewed_image, Some(source));
+        let _ = app.assistant_action(Action::ViewImage(None));
+        assert_eq!(app.assistant.chat_offset, 120.);
+        let _ = app.assistant_action(Action::Reset);
+        assert!(app.assistant.messages.is_empty());
+        assert!(app.assistant.viewed_image.is_none());
+        Ok(())
+    }
+
     fn source_picture() -> reshiki::pictures::Picture {
         let image = image::RgbaImage::from_pixel(2, 2, image::Rgba([255, 255, 255, 255]));
         let mut png = std::io::Cursor::new(Vec::new());
@@ -1746,7 +1903,7 @@ mod tests {
                 .messages
                 .last()
                 .unwrap()
-                .1
+                .text
                 .contains("attached image")
         );
         let _ = app.assistant_action(Action::Stop);

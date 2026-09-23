@@ -100,7 +100,7 @@ pub struct Number {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AtomDisplay {
-    /// A variable name on a wildcard atom, without assigning an element.
+    /// A free text label on a wildcard atom, without assigning an element.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub variable: Option<String>,
     pub carbons: Option<Carbons>,
@@ -131,9 +131,9 @@ impl AtomDisplay {
     }
     pub fn validate(&self) -> Result<(), String> {
         if self.variable.as_ref().is_some_and(|v| {
-            v.is_empty() || v.chars().count() > 8 || !v.chars().all(|c| c.is_alphanumeric())
+            v.trim().is_empty() || v.chars().count() > 32 || v.chars().any(char::is_control)
         }) {
-            return Err("Variable atom labels must contain 1–8 letters or digits".into());
+            return Err("Atom text labels must contain 1–32 printable characters".into());
         }
         self.stereo.validate()?;
         if let Some(n) = &self.number {

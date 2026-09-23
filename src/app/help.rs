@@ -51,6 +51,7 @@ impl App {
                     "Undo / Redo",
                 ),
                 ("Delete", "Delete selection"),
+                ("Enter", "Edit selected atom label (M, L, X, Boc…)"),
             ],
         );
         let context = column![

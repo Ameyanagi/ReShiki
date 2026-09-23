@@ -17,6 +17,7 @@ pub mod aromatic;
 pub mod arrows;
 pub mod assistant;
 pub mod atom_labels;
+pub mod atom_text;
 mod bond_joins;
 pub mod bonds;
 pub mod chains;

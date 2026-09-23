@@ -2,6 +2,17 @@
 
 Checked on macOS arm64, 2026-09-23, using an optimized app bundle with an isolated settings directory.
 
+## Atom text, sent-image history and timeouts
+
+- Select an atom and press Enter, use Edit atom label in Properties/the context menu, or click an atom with the Text tool. M/L/X become named dummy atoms with existing connections; recognized groups such as Boc retain an expandable molecular fragment. Automatic mode prioritizes element symbols; Chemical abbreviation explicitly selects a conflicting nickname such as Ac. Text label explicitly keeps literal text on a dummy atom.
+- Invalid/blank text, incompatible abbreviation attachment, tracked centroids and stale documents return errors without partial mutation. Apply is one undo step; Escape cancels. Text-tool clicks on empty space still create captions. Tests cover save/reload, copy, connections, element conversion, real Boc expansion, Undo/Redo and blocked shortcuts behind the editor.
+- Each sent user message retains its own shared image. Clearing/replacing the composer attachment does not change old messages. Click the history thumbnail for a window-sized viewer with zoom/pan and Escape. Visible history stays available throughout the current conversation; only the model's textual context is limited to the most recent 24 messages. Conversation history is not yet persisted across app restarts.
+- The previous unconditional 240-second generation/review limit was replaced by a five-minute inactivity limit and a twenty-minute hard limit per model turn. Relevant model events and completed canvas tools renew inactivity, while unrelated notifications cannot keep a turn alive indefinitely. Connection setup has a separate sixty-second limit; canvas tool work is cancellable and bounded. Errors identify generation versus review and the last activity; completed drafts remain available.
+- Deadline tests simulate progress beyond four minutes, stalled responses and the hard cap. The [official app-server event documentation](https://learn.chatgpt.com/docs/app-server#events) was checked. Reasoning payloads are never displayed or retained for timeout tracking.
+- Latest library/app tests: 174 library and 140 app tests passed, three ignored. All-target/all-feature Clippy passed with warnings denied. The new atom-text modules contain no `unsafe`, `unwrap()`, `expect()` or explicit panic; production crate guards forbid unsafe and deny panic/unchecked-indexing lints.
+- Computer Use on `artifacts/atom-labels/ReShiki Labels Review.app` confirmed M/L/Boc entry, Text-tool atom editing, Undo/Redo, saving the actual Boc graph, sent-image thumbnails, enlarged-image view, Escape, blocked New while viewing, and retaining the history image after removing the composer image. Generation was deliberately stopped during this UI check; it is not a new chemistry-validation run.
+- See [ChemDraw/RDKit attachment comparison](chemdraw-attachment-comparison.md) for the reproducible η³/η⁶/ferrocene and variable-attachment experiments and remaining interchange gaps.
+
 ## Bond rendering and connectivity
 
 - The reported eight-atom, ten-bond drawing is retained in `tests/fixtures/bond-join-regression.rsk`. Its shared atoms are connected in the graph; the white gaps were rendering defects.

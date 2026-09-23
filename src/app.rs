@@ -12,6 +12,7 @@ mod abbreviations;
 mod arrows;
 mod assistant;
 mod atom_labels;
+mod atom_text;
 mod cleanup;
 mod clipboard;
 mod context_menu;
@@ -57,6 +58,7 @@ pub enum Message {
     Reaction(reactions::Action),
     DrawingStyle(document_styles::Action),
     InlineText(inline_text::Action),
+    AtomText(atom_text::Action),
     Join(joining::Action),
     Pages(pages::Action),
     Printing(printing::Action),
@@ -267,6 +269,7 @@ pub struct App {
     caption_format: reshiki::typography::TextFormat,
     caption_target: Option<u64>,
     inline_text: Option<inline_text::State>,
+    atom_text: Option<atom_text::State>,
     joining: Option<joining::State>,
     pages: pages::State,
     reactions: reactions::State,
@@ -367,6 +370,7 @@ impl App {
             caption_format: Default::default(),
             caption_target: None,
             inline_text: None,
+            atom_text: None,
             joining: None,
             pages: pages::State::default(),
             printing: printing::State::default(),
@@ -594,6 +598,9 @@ impl App {
                     Key::Named(Named::Enter) if mods.command() => {
                         Some(Message::InlineText(inline_text::Action::Finish(true)))
                     }
+                    Key::Named(Named::Enter) if mods.is_empty() => {
+                        Some(Message::AtomText(atom_text::Action::Begin(None)))
+                    }
                     Key::Named(Named::Escape) => Some(Message::Escape),
                     _ => None,
                 }
@@ -809,6 +816,17 @@ impl App {
         if self.updates.restarting && !matches!(message, Message::Updates(_)) {
             return Task::none();
         }
+        if let Message::AtomText(action) = message {
+            return self.atom_text_action(action);
+        }
+        if self.atom_text.is_some() {
+            if matches!(message, Message::Escape) {
+                return self.atom_text_action(atom_text::Action::Cancel);
+            }
+            if !atom_text::background(&message) {
+                return Task::none();
+            }
+        }
         if self.help_open && matches!(message, Message::Escape | Message::ToggleHelp) {
             self.help_open = false;
             return Task::none();
@@ -879,6 +897,11 @@ impl App {
         if let Message::Canvas(Edit::Click(p)) = message
             && self.tool == Tool::Text
         {
+            if let Some(id) = canvas::hit_object(&self.doc, p, 8. / self.camera.zoom)
+                .filter(|id| self.doc.atom(*id).is_some())
+            {
+                return self.atom_text_action(atom_text::Action::Begin(Some(id)));
+            }
             let id = canvas::hit_object(&self.doc, p, 8. / self.camera.zoom)
                 .filter(|id| self.doc.annotations.iter().any(|a| a.id == *id));
             return self.inline_action(inline_text::Action::Begin(id, p));
@@ -977,6 +1000,7 @@ impl App {
             | Message::Updates(_)
             | Message::Palette(_)
             | Message::InlineText(_)
+            | Message::AtomText(_)
             | Message::Join(_)
             | Message::Escape => {}
             Message::ContextKey(key) => return self.context_key(&key),
@@ -2860,8 +2884,11 @@ impl App {
 
     pub fn view(&self) -> Element<'_, Message> {
         file_shortcuts::wrap(
-            self.with_updates(self.with_help(self.with_palette(self.workspace()))),
+            self.with_assistant_image(self.with_atom_text(
+                self.with_updates(self.with_help(self.with_palette(self.workspace()))),
+            )),
             self.help_open,
+            self.assistant.viewed_image.is_some(),
         )
     }
 }
