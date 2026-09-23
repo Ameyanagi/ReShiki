@@ -104,7 +104,11 @@ async fn main() -> anyhow::Result<()> {
             explanation: "Layout review".into(),
             ..Default::default()
         };
-        codex::improve(
+        let source = option("--image")
+            .map(|path| reshiki::pictures::Picture::open(std::path::Path::new(path)))
+            .transpose()
+            .map_err(anyhow::Error::msg)?;
+        codex::improve_with_image(
             prompt,
             Default::default(),
             Default::default(),
@@ -115,6 +119,7 @@ async fn main() -> anyhow::Result<()> {
                 document,
                 review: Default::default(),
             },
+            source,
         )
         .await
     } else if let Some(path) = option("--image") {

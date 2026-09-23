@@ -183,6 +183,7 @@ fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
         ));
     }
     if a.charge != 0
+        && !a.display.hide_charge
         && !a.marks.iter().any(|m| {
             m.kind.charge()
                 && (m.kind != crate::scientific::MarkKind::RadicalIon || a.radical_electrons > 0)

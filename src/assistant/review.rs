@@ -8,6 +8,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+mod ligands;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Report {
@@ -41,6 +42,18 @@ pub struct Critique {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Edit {
+    ContactLayer {
+        target: String,
+        in_front: bool,
+    },
+    TiltLigand {
+        target: String,
+        x_degrees: f32,
+        y_degrees: f32,
+        rotation_degrees: f32,
+        depth_bonds: bool,
+        show_charge: bool,
+    },
     Move {
         target: String,
         dx_pt: f32,
@@ -69,6 +82,8 @@ pub fn schema() -> Value {
         "summary":{"type":"string","description":"Brief visible explanation of improvements or why the exact image is ready."},
         "issues":{"type":"array","items":{"type":"string"},"description":"Unresolved visual or chemistry problems in this exact image. Empty only when ready. Do not claim chemistry correctness solely from visual appearance."},
         "edits":{"type":"array","items":{"anyOf":[
+            {"type":"object","additionalProperties":false,"properties":{"action":{"const":"contact_layer","type":"string"},"target":target,"in_front":{"type":"boolean"}},"required":["action","target","in_front"]},
+            {"type":"object","additionalProperties":false,"properties":{"action":{"const":"tilt_ligand","type":"string"},"target":target,"x_degrees":{"type":"number","minimum":-85,"maximum":85},"y_degrees":{"type":"number","minimum":-85,"maximum":85},"rotation_degrees":{"type":"number","minimum":-360,"maximum":360},"depth_bonds":{"type":"boolean"},"show_charge":{"type":"boolean"}},"required":["action","target","x_degrees","y_degrees","rotation_degrees","depth_bonds","show_charge"]},
             {"type":"object","additionalProperties":false,"properties":{"action":{"const":"move","type":"string"},"target":target,"dx_pt":number,"dy_pt":number},"required":["action","target","dx_pt","dy_pt"]},
             {"type":"object","additionalProperties":false,"properties":{"action":{"const":"rotate","type":"string"},"target":target,"degrees":{"type":"number","enum":[-360,-330,-300,-270,-240,-210,-180,-150,-120,-90,-60,-30,0,30,60,90,120,150,180,210,240,270,300,330,360]}},"required":["action","target","degrees"]},
             {"type":"object","additionalProperties":false,"properties":{"action":{"const":"arrow_length","type":"string"},"target":target,"length_pt":{"type":"number","minimum":12,"maximum":400}},"required":["action","target","length_pt"]},
@@ -98,6 +113,11 @@ impl Target {
                     + 1
             ),
             "diagram" => "Image diagram".into(),
+            "ligand" => format!(
+                "{} ligand ({})",
+                self.text,
+                self.name.trim_start_matches("ligand:")
+            ),
             "molecule" => format!(
                 "Molecule {}",
                 self.name
@@ -223,6 +243,14 @@ pub fn targets(doc: &Document) -> Vec<Target> {
             add(format!("molecule:{i}"), "molecule", ids, String::new());
         }
     }
+    for ligand in ligands::all(doc) {
+        add(
+            format!("ligand:{}", ligand.anchor),
+            "ligand",
+            ligand.ids,
+            ligand.label.into(),
+        );
+    }
     for a in &doc.arrows {
         add(
             format!("arrow:{}", a.id),
@@ -248,6 +276,9 @@ pub fn apply(doc: &Document, edits: &[Edit], compact_allowed: bool) -> Result<Do
         return Err("Limit visual corrections to 40 operations".into());
     }
     let mut candidate = doc.clone();
+    let mut projected_atoms = std::collections::HashSet::new();
+    let mut projected_bonds = std::collections::HashSet::new();
+    let mut layered_bonds = std::collections::HashSet::new();
     for edit in edits {
         if let Edit::Arrange {
             composition,
@@ -286,6 +317,8 @@ pub fn apply(doc: &Document, edits: &[Edit], compact_allowed: bool) -> Result<Do
             | Edit::Rotate { target, .. }
             | Edit::ArrowLength { target, .. }
             | Edit::Compact { target } => target,
+            Edit::TiltLigand { target, .. } => target,
+            Edit::ContactLayer { target, .. } => target,
             _ => continue,
         };
         let target = targets(&candidate)
@@ -294,6 +327,53 @@ pub fn apply(doc: &Document, edits: &[Edit], compact_allowed: bool) -> Result<Do
             .ok_or_else(|| format!("Unknown review target: {name}"))?;
         let bounded = |v: f32| v.is_finite() && v.abs() <= 1800.;
         match edit {
+            Edit::ContactLayer { in_front, .. } if target.kind == "ligand" => {
+                let anchor = target.ids.first().copied().ok_or("Missing ligand target")?;
+                let ligand =
+                    ligands::find(&candidate, anchor).ok_or("Unsupported ligand target")?;
+                let layers = candidate
+                    .bonds
+                    .iter()
+                    .filter(|b| ligand.ring.contains(&b.a) && ligand.ring.contains(&b.b))
+                    .map(|b| b.z_order);
+                let layer = if *in_front {
+                    layers.max().unwrap_or(0).checked_add(1)
+                } else {
+                    layers.min().unwrap_or(0).checked_sub(1)
+                }
+                .ok_or("Bond layer limit reached")?;
+                for bond in &mut candidate.bonds {
+                    if bond.a == anchor || bond.b == anchor {
+                        layered_bonds.insert((bond.a, bond.b));
+                        bond.z_order = layer;
+                    }
+                }
+            }
+            Edit::TiltLigand {
+                x_degrees,
+                y_degrees,
+                rotation_degrees,
+                depth_bonds,
+                show_charge,
+                ..
+            } if target.kind == "ligand" => {
+                let anchor = target.ids.first().copied().ok_or("Missing ligand target")?;
+                let ligand =
+                    ligands::find(&candidate, anchor).ok_or("Unsupported ligand target")?;
+                projected_atoms.extend(ligand.ids.iter().copied());
+                for bond in &candidate.bonds {
+                    if ligand.ids.contains(&bond.a) && ligand.ids.contains(&bond.b) {
+                        projected_bonds.insert((bond.a, bond.b));
+                    }
+                }
+                ligands::tilt(
+                    &mut candidate,
+                    &ligand,
+                    [*x_degrees, *y_degrees, *rotation_degrees],
+                    *depth_bonds,
+                    *show_charge,
+                )?;
+            }
             Edit::Move { dx_pt, dy_pt, .. } if bounded(*dx_pt) && bounded(*dy_pt) => candidate
                 .translate(
                     &target.ids,
@@ -350,9 +430,24 @@ pub fn apply(doc: &Document, edits: &[Edit], compact_allowed: bool) -> Result<Do
         || candidate.atoms.iter().zip(&doc.atoms).any(|(a, b)| {
             let mut original_position = a.clone();
             original_position.position = b.position;
+            if projected_atoms.contains(&a.id) {
+                original_position.depth = b.depth;
+                original_position.display.hide_charge = b.display.hide_charge;
+            }
             &original_position != b
         })
-        || candidate.bonds != doc.bonds
+        || candidate.bonds.len() != doc.bonds.len()
+        || candidate.bonds.iter().zip(&doc.bonds).any(|(a, b)| {
+            let mut original_style = a.clone();
+            if projected_bonds.contains(&(a.a, a.b)) {
+                original_style.projection = b.projection;
+                original_style.display = b.display.clone();
+            }
+            if layered_bonds.contains(&(a.a, a.b)) {
+                original_style.z_order = b.z_order;
+            }
+            &original_style != b
+        })
         || candidate.reactions != doc.reactions
         || candidate
             .annotations

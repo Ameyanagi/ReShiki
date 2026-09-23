@@ -29,12 +29,22 @@ impl LigandKind {
 pub struct Ligand {
     pub kind: LigandKind,
     pub center: Point,
+    /// Rotate within the flat ring before applying perspective.
+    #[serde(default)]
+    pub phase_degrees: f32,
     pub x_degrees: f32,
     pub y_degrees: f32,
     pub rotation_degrees: f32,
     pub depth_bonds: bool,
+    #[serde(default = "show_charge_default")]
+    pub show_charge: bool,
     pub contact: Option<usize>,
     pub contact_style: Option<ContactStyle>,
+    #[serde(default)]
+    pub contact_in_front: bool,
+}
+fn show_charge_default() -> bool {
+    true
 }
 impl Ligand {
     pub(super) fn validate(&self, atom_count: usize) -> Result<(), String> {
@@ -46,6 +56,8 @@ impl Ligand {
                 .any(|v| !v.is_finite() || v.abs() > 85.)
             || !self.rotation_degrees.is_finite()
             || self.rotation_degrees.abs() > 360.
+            || !self.phase_degrees.is_finite()
+            || self.phase_degrees.abs() > 360.
             || self.contact.is_some_and(|i| i >= atom_count)
             || (self.contact.is_none() && self.contact_style.is_some())
         {
@@ -83,6 +95,9 @@ impl Ligand {
         for atom in doc.atoms.iter_mut().filter(|a| members.contains(&a.id)) {
             atom.aromatic = ring.contains(&atom.id);
             atom.text_style = Some(settings.format.style.clone());
+            if ring.contains(&atom.id) {
+                atom.display.hide_charge = !self.show_charge;
+            }
         }
         for bond in doc
             .bonds
@@ -96,17 +111,18 @@ impl Ligand {
         }
         // The aromatic circle follows the ring's stored XYZ plane. No ellipse
         // or manually squashed 2D ring is substituted for the chemical graph.
+        crate::editing::transform_about(doc, &members, center, 1., self.phase_degrees);
         crate::projection::tilt(doc, &members, self.x_degrees, true);
         crate::projection::tilt(doc, &members, self.y_degrees, false);
         crate::editing::transform_about(doc, &members, center, 1., self.rotation_degrees);
         if self.depth_bonds {
-            crate::projection::depth_bonds(doc, &members);
+            crate::projection::depth_bonds(doc, &ring);
         }
         if let Some(contact) = self.contact {
             let (order, display) = self.contact_style.unwrap_or(ContactStyle::Single).parts();
             doc.add_bond(anchor, contact as u64 + 1, order, display);
             if let Some(bond) = doc.bonds.last_mut() {
-                bond.z_order = -1;
+                bond.z_order = if self.contact_in_front { 1 } else { -1 };
                 bond.color = settings.bond_color;
             }
         }

@@ -109,6 +109,15 @@ struct Writer<'a> {
 pub fn write(document: &Document, options: Options<'_>) -> Result<String> {
     document.validate().map_err(invalid)?;
     if document
+        .atoms
+        .iter()
+        .any(|a| a.charge != 0 && a.display.hide_charge)
+    {
+        return Err(invalid(
+            "CDXML cannot yet preserve hidden charge labels. Show charges before editable export, or use ReShiki (.rsk), SVG, PNG or PDF. The chemical charges are retained.",
+        ));
+    }
+    if document
         .bonds
         .iter()
         .any(|bond| bond.projection && bond.display == "bold")

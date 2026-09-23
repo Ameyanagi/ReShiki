@@ -1,0 +1,142 @@
+{
+  "atoms": [
+    {
+      "color": null,
+      "variable": null,
+      "element": "Rh",
+      "x": 0.0,
+      "y": 0.0,
+      "charge": 0,
+      "isotope": 0,
+      "hydrogens": 0
+    },
+    {
+      "color": null,
+      "variable": null,
+      "element": "Rh",
+      "x": 3.2,
+      "y": 0.0,
+      "charge": 0,
+      "isotope": 0,
+      "hydrogens": 0
+    },
+    {
+      "color": null,
+      "variable": null,
+      "element": "Cl",
+      "x": 1.6,
+      "y": -0.3,
+      "charge": 0,
+      "isotope": 0,
+      "hydrogens": 0
+    },
+    {
+      "color": null,
+      "variable": null,
+      "element": "Cl",
+      "x": 1.6,
+      "y": 0.48,
+      "charge": 0,
+      "isotope": 0,
+      "hydrogens": 0
+    },
+    {
+      "color": null,
+      "variable": null,
+      "element": "Cl",
+      "x": 0.03,
+      "y": -1.28,
+      "charge": 0,
+      "isotope": 0,
+      "hydrogens": 0
+    },
+    {
+      "color": null,
+      "variable": null,
+      "element": "Cl",
+      "x": 3.23,
+      "y": 1.32,
+      "charge": 0,
+      "isotope": 0,
+      "hydrogens": 0
+    }
+  ],
+  "bonds": [
+    {
+      "ring_arc": false,
+      "a": 0,
+      "b": 2,
+      "order": 1,
+      "display": "hash"
+    },
+    {
+      "ring_arc": false,
+      "a": 1,
+      "b": 2,
+      "order": 1,
+      "display": "hash"
+    },
+    {
+      "ring_arc": false,
+      "a": 0,
+      "b": 3,
+      "order": 1,
+      "display": "wedge"
+    },
+    {
+      "ring_arc": false,
+      "a": 1,
+      "b": 3,
+      "order": 1,
+      "display": "wedge"
+    },
+    {
+      "ring_arc": false,
+      "a": 0,
+      "b": 4,
+      "order": 1,
+      "display": "plain"
+    },
+    {
+      "ring_arc": false,
+      "a": 1,
+      "b": 5,
+      "order": 1,
+      "display": "plain"
+    }
+  ],
+  "shapes": [],
+  "tilts": [],
+  "centroids": [],
+  "arrows": [],
+  "captions": [],
+  "abbreviations": [],
+  "ligands": [
+    {
+      "kind": "Cp*",
+      "center": {
+        "x": -1.05,
+        "y": 1.05
+      },
+      "x_degrees": 0.0,
+      "y_degrees": -68.0,
+      "rotation_degrees": 132.0,
+      "depth_bonds": true,
+      "contact": 0,
+      "contact_style": "single"
+    },
+    {
+      "kind": "Cp*",
+      "center": {
+        "x": 4.25,
+        "y": -1.1
+      },
+      "x_degrees": 0.0,
+      "y_degrees": -68.0,
+      "rotation_degrees": 132.0,
+      "depth_bonds": true,
+      "contact": 1,
+      "contact_style": "dashed"
+    }
+  ]
+}

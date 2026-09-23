@@ -30,12 +30,15 @@ fn sketch(kind: LigandKind, tilted: bool) -> Sketch {
         ligands: vec![Ligand {
             kind,
             center: Point::new(0., 0.),
+            phase_degrees: 0.,
             x_degrees: if tilted { 65. } else { 0. },
             y_degrees: 0.,
             rotation_degrees: if tilted { 40. } else { 0. },
             depth_bonds: tilted,
+            show_charge: true,
             contact: Some(0),
             contact_style: Some(ContactStyle::Dashed),
+            contact_in_front: false,
         }],
     }
 }

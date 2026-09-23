@@ -36,6 +36,7 @@ pub enum Action {
     Scope(Scope),
     Carbons(Carbons),
     Hydrogens(bool),
+    Charges(bool),
     Position(HydrogenPosition),
     Stereo(bool),
     Seed(String),
@@ -92,6 +93,11 @@ impl App {
                 }
                 for a in self.doc.atoms.iter_mut().filter(|a| ids.contains(&a.id)) {
                     a.display.hydrogens = (self.labels.scope == Scope::Selection).then_some(value);
+                }
+            }
+            Action::Charges(show) => {
+                for a in self.doc.atoms.iter_mut().filter(|a| ids.contains(&a.id)) {
+                    a.display.hide_charge = !show;
                 }
             }
             Action::Position(value) => {
@@ -219,6 +225,7 @@ impl App {
             Action::ResetOverrides => {
                 for a in self.doc.atoms.iter_mut().filter(|a| ids.contains(&a.id)) {
                     a.display.carbons = None;
+                    a.display.hide_charge = false;
                     a.display.hydrogens = None;
                     a.display.hydrogen_position = HydrogenPosition::Auto;
                     a.display.stereo.show = None;
