@@ -73,3 +73,11 @@ fixes audited against the PR diff.
 `cargo test --tests --no-fail-fast`: 441 passed, 3 ignored; two additional library regressions added afterward also pass. The ignored signed macOS staging test was also run separately and passed. The `rdkit-reference` complete aromatic response replay also passes after omitting zero projection depths from legacy serialized requests. Other reference-oracle suites were not rerun locally.
 
 `cargo clippy --all-targets -- -D warnings`, formatting, optimized compilation, website diagnostics and the website build/link checks passed. Initial desktop checks used macOS automation. The Computer Use connection was subsequently restored and used for ChemDraw inspection and the new ReShiki controls.
+
+## Context menu and interactive tilt follow-up (2026-09-23)
+
+The right-click menu groups object-specific commands before clipboard actions, omits inapplicable commands, and retains its origin when moving to a smaller submenu. A dedicated left-toolbar 3D tilt tool previews screen-space drags, supports Shift snapping to 15°, and commits once on release. X/Y step buttons and front-bond emphasis remain available in its context bar.
+
+Validation: 160 app tests passed (2 ignored), plus all 9 editing tests. New coverage checks contextual visibility, all four menu tilt directions, preserved selection and unselected molecules, Undo/Redo, zoom-independent gestures, dead zones, nonfinite input, canceled/focus-lost/outside drags, tool changes, and aromatic ring interior hits without enabling ring fusion. All-target/all-feature Clippy and formatting passed. New code contains no unsafe blocks, panicking unwrap/expect, or explicit panic calls.
+
+Computer Use operated the optimized macOS build on an isolated two-ring document. Right-clicking the aromatic ring interior opened its contextual menu; Drag to tilt activated the new toolbar tool. A Shift-drag produced 60.000002° of X tilt. Saved bond records and the other ring's f32 coordinates were unchanged; retained XYZ bond-length error was below 0.00001 world units. Undo returned the selected ring to its plane; automated tests also cover Redo. Native screenshots: [menu](images/pr17/context-menu.png), [tilt submenu](images/pr17/context-tilt.png), [toolbar and result](images/pr17/tilt-tool.png). This is drawing-geometry validation, not coordination-chemistry validation.

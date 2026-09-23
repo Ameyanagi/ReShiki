@@ -32,6 +32,24 @@ Clean up no longer splits a Cp/Cp* group at its multi-center attachment and repo
 
 _Current release build: the original Cp_ structure remains intact in the cleanup preview. Apply/Cancel and Undo are available.*
 
+## Right-click commands and the 3D tilt tool
+
+The right-click menu now puts selection-specific editing first, groups Arrange & transform, Bond appearance and Attachment points into submenus, and separates clipboard commands from Delete. Irrelevant actions are omitted. Submenus keep their opening position when possible, and right-clicking an existing selection preserves it. Ring interiors now recognize aromatic and substituted rings as well as saturated ones.
+
+![Selection-aware right-click menu](images/pr17/context-menu.png)
+
+_Current release-build capture: right-click inside a ring to select it and see its applicable commands. Empty canvas offers Undo/Redo, Paste, Select all and Fit drawing._
+
+Choose **3D tilt → Drag to tilt**, or the **tilted-ring tool in the second row of the left toolbar**. Drag vertically for X tilt and horizontally for Y tilt; hold **Shift** to snap each axis to 15°. A click selects the molecule; dragging empty space selects a region. The canvas previews the result, Escape cancels the gesture, and Undo restores the whole drag. Use **Done** or **V** to return to Select.
+
+![3D tilt from the right-click menu](images/pr17/context-tilt.png)
+
+_The submenu offers X/Y ±15° steps and front-bond emphasis. Activating the tool keeps those controls above the canvas for repeated use._
+
+![3D tilt tool with a projected ring and an unchanged reference ring](images/pr17/tilt-tool.png)
+
+_Current release-build GUI check: a Shift-drag tilted only the left ring by 60°. Saving confirmed unchanged bond records and right-ring coordinates, with less than 0.00001 world units of error in retained XYZ bond lengths. Undo restored the planar drawing; automated tests also cover Redo. Labels stay upright; tilt does not assign stereochemistry._
+
 ## Bond junctions, curves and color
 
 Shared bond outlines remove the reported white seams between wedges and ordinary bonds. Wedge tips retain at least the normal bond width. Hollow bonds, crossings and export caps use the corrected geometry. The visual matrix covers 144 combinations of ring size, tilt, width and bond styles.
@@ -98,7 +116,9 @@ The updater verifies downloads, protects unsaved work, installs and restarts wit
 
 Before the latest follow-up, the complete default Rust suite passed 472 tests (3 ignored). After the cleanup/alignment/movement follow-up, the targeted run passed 169 tests (3 ignored): app 149, cleanup 3, native cleanup 4, ligand groups 9, drawing exchange 2 and abbreviation-ID differential tests 2. These overlapping runs are not an additive total. The final context-bar change separately passed the 149 app tests. The subsequent shared-toolbar update passed 152 app tests (2 ignored), including mixed selections, graph preservation, paragraph behavior and inline draft cancellation. Attachment and dummy-export regressions also passed. CI was green on macOS, Windows and Linux at the preceding commit `be1bc4d`; consult the PR for the latest commit's checks.
 
-The new movement/alignment/cleanup code introduces no `unsafe`, panicking `unwrap()`/`expect()` or explicit `panic!`. This is not a claim that the existing repository contains none.
+The latest context-menu/tilt update passed 160 app tests (2 ignored), all 9 editing tests, formatting and all-target/all-feature Clippy. Computer Use checked the menus, tool activation, a 60° Shift-drag, saving and Undo.
+
+The new movement/alignment/cleanup/menu/tilt code introduces no `unsafe`, panicking `unwrap()`/`expect()` or explicit `panic!`. This is not a claim that the existing repository contains none.
 
 - [ ] Open Cp*2Fe; verify C20H30Fe and 21 real atoms.
 - [ ] Select Cp*, use the top alignment buttons, restore Automatic and undo it.
@@ -111,7 +131,8 @@ The new movement/alignment/cleanup code introduces no `unsafe`, panicking `unwra
 
 - [ ] Use Shift+R on a selected ring and compare the separate A display toggle.
 - [ ] Add a partial inner curve, undo it, and check the original bond orders.
-- [ ] Tilt a ring, reverse the step, and inspect foreground emphasis.
+- [ ] Use the 3D tilt tool, Shift-drag a ring, undo it, and inspect foreground emphasis.
+- [ ] Right-click an atom, a ring and empty space; verify the contextual commands.
 - [ ] Recolor one element across the selection and whole drawing.
 - [ ] Create multi-center and variable attachments and compare their exported types.
 - [ ] Enter Boc in Chemical abbreviation mode, expand it and compare composition.
@@ -135,16 +156,17 @@ This index covers all user-facing feature updates and fixes in the current PR di
 
 ### Bonds, rings & projection
 
-| Update                                     | Behavior and how to try it                                                                                                                                                                            | Boundary                                                                                                          |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Continuous bond junctions                  | Normal, bold and tapered bond outlines share bounded corners, removing white seams at three- and four-way joins. Inspect the committed eight-atom regression at high zoom and in a figure export.     | A rendered crossing still does not create a new bonded atom.                                                      |
-| Minimum wedge width                        | Solid/hollow wedge tips and hashed-wedge bars retain at least the configured normal bond width. Compare thin and thick styles, tilted rings and reversed directions.                                  | Bond length and line width remain different settings.                                                             |
-| Crossing and cap fixes                     | Clipped hollow outlines retain their closing edge; canvas line caps now match figure exports. Compare a hollow crossing and hash bars between canvas and SVG/PNG.                                     | Intentional crossing gaps remain visible.                                                                         |
-| Aromatic preset and selected-ring shortcut | Shift+R switches saturated/aromatic presets at the same member count, or converts a selected complete 3–8 member ring. Press Shift+R; use A to change the display of an already aromatic ring.        | The drawing mode does not infer charges or establish chemical aromaticity.                                        |
-| Partial inner ring curves                  | Consecutive selected ring atoms create an inner delocalization curve; a full ring creates a closed stroke. Properties → Bond appearance → Toggle inner ring curve.                                    | Bond orders stay unchanged. Bond-style changes clear the override; breaking the ring restores ordinary depiction. |
-| Reversible 3D projection                   | X/Y controls tilt retained XYZ coordinates in 15° steps. Labels stay upright and aromatic circles become ellipses. Select ring atoms → Arrange & transform → 3D tilt. Reverse the step to restore it. | Perspective does not assign chemical stereochemistry.                                                             |
-| Foreground bond emphasis                   | Depth can bold the front single bonds of a projected drawing. Arrange & transform → Emphasize front bonds.                                                                                            | This is a drawing treatment, not wedge stereochemistry.                                                           |
-| Batch element colors                       | Set a hex color for every matching element in the selection or whole drawing, in one Undo step. Choose Atoms… beside the toolbar colors, then element, scope and Apply.                               | Other elements, bonds, captions and font settings are retained.                                                   |
+| Update                                     | Behavior and how to try it                                                                                                                                                                          | Boundary                                                                                                          |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Continuous bond junctions                  | Normal, bold and tapered bond outlines share bounded corners, removing white seams at three- and four-way joins. Inspect the committed eight-atom regression at high zoom and in a figure export.   | A rendered crossing still does not create a new bonded atom.                                                      |
+| Minimum wedge width                        | Solid/hollow wedge tips and hashed-wedge bars retain at least the configured normal bond width. Compare thin and thick styles, tilted rings and reversed directions.                                | Bond length and line width remain different settings.                                                             |
+| Crossing and cap fixes                     | Clipped hollow outlines retain their closing edge; canvas line caps now match figure exports. Compare a hollow crossing and hash bars between canvas and SVG/PNG.                                   | Intentional crossing gaps remain visible.                                                                         |
+| Aromatic preset and selected-ring shortcut | Shift+R switches saturated/aromatic presets at the same member count, or converts a selected complete 3–8 member ring. Press Shift+R; use A to change the display of an already aromatic ring.      | The drawing mode does not infer charges or establish chemical aromaticity.                                        |
+| Partial inner ring curves                  | Consecutive selected ring atoms create an inner delocalization curve; a full ring creates a closed stroke. Properties → Bond appearance → Toggle inner ring curve.                                  | Bond orders stay unchanged. Bond-style changes clear the override; breaking the ring restores ordinary depiction. |
+| Reversible 3D projection                   | A left-toolbar tool supports drag previews and Shift snapping; right-click → 3D tilt and the top bar offer X/Y ±15° steps. Labels stay upright, circles become ellipses and Undo restores the drag. | Perspective does not assign chemical stereochemistry.                                                             |
+| Contextual right-click menu                | Selection-specific commands lead; transforms, bonds and attachments have submenus. Empty canvas shows document actions. Aromatic/substituted ring interiors are selectable.                         | Fusion remains restricted to eligible saturated rings; selecting a ring does not change its chemistry.            |
+| Foreground bond emphasis                   | Depth can bold the front single bonds of a projected drawing. Arrange & transform → Emphasize front bonds.                                                                                          | This is a drawing treatment, not wedge stereochemistry.                                                           |
+| Batch element colors                       | Set a hex color for every matching element in the selection or whole drawing, in one Undo step. Choose Atoms… beside the toolbar colors, then element, scope and Apply.                             | Other elements, bonds, captions and font settings are retained.                                                   |
 
 ### Attachments, composition & interchange
 

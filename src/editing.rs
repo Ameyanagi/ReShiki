@@ -862,9 +862,13 @@ fn isolated_ring(doc: &Document, ids: &[u64]) -> Option<Vec<u64>> {
     }
 }
 
+/// Hit the interior of a visible ring, including aromatic and substituted rings.
+/// The separate fusion operation still requires an isolated saturated ring.
 pub fn ring_at(doc: &Document, p: Point) -> Option<Vec<u64>> {
-    groups(doc, &doc.all_ids()).into_iter().find_map(|ids| {
-        let ring = isolated_ring(doc, &ids)?;
+    let mut rings = crate::aromatic::ring_circles(doc, false);
+    rings.sort_by(|a, b| a.radius.total_cmp(&b.radius));
+    rings.into_iter().find_map(|ring| {
+        let ring = ring.atoms;
         let mut inside = false;
         for (a, b) in ring
             .iter()
@@ -1065,6 +1069,35 @@ mod tests {
                 doc.validate().unwrap();
             }
         }
+    }
+
+    #[test]
+    fn ring_interior_hit_includes_aromatic_hetero_and_substituted_rings() -> Result<(), String> {
+        let mut doc = Document::default();
+        let ids = ring(&mut doc, Point::default(), 6, true, 5.);
+        let nitrogen = *ids.first().ok_or("ring atom")?;
+        doc.atom_mut(nitrogen).ok_or("nitrogen")?.element = "N".into();
+        let attach = *ids.get(2).ok_or("substituted atom")?;
+        let position = doc.atom(attach).ok_or("atom")?.position;
+        let methyl = doc.add_atom("C", position.offset(60., 0.));
+        doc.add_bond(attach, methyl, 1, "plain");
+        let before = doc.clone();
+        let mut hit = ring_at(&doc, center(&doc, &ids)).ok_or("ring interior")?;
+        let mut expected = ids.clone();
+        hit.sort_unstable();
+        expected.sort_unstable();
+        assert_eq!(hit, expected);
+        assert_eq!(ring_at(&doc, Point::new(500., 500.)), None);
+        assert!(snap_ring(&mut doc, &ids, Point::new(40., 0.), 15.).is_none());
+        assert_eq!(
+            doc, before,
+            "Selecting an aromatic ring must not enable fusion"
+        );
+        crate::projection::tilt(&mut doc, &ids, 60., true);
+        let mut tilted = ring_at(&doc, center(&doc, &ids)).ok_or("tilted interior")?;
+        tilted.sort_unstable();
+        assert_eq!(tilted, expected);
+        Ok(())
     }
 
     #[test]

@@ -2567,6 +2567,10 @@ impl App {
                 editing::transform_about(&mut self.doc, &ids, pivot, scale, rotation);
                 self.selected = ids;
             }
+            Edit::Tilt { ids, x, y } => {
+                crate::canvas::tilt::apply(&mut self.doc, &ids, x, y);
+                self.selected = ids;
+            }
             Edit::RingPreset(preset, anchor, direction, connect, alternate) => {
                 let drawing = reshiki::rings::Drawing {
                     preset,

@@ -863,6 +863,11 @@ impl App {
         let tools = [
             (Tool::Select, "Select / move · V"),
             (Tool::Lasso, "Lasso select · L"),
+            (
+                Tool::Tilt,
+                "3D tilt · Drag a ring or selection · Shift snaps to 15°",
+            ),
+            (Tool::Erase, "Eraser · E · Drag to erase"),
             (Tool::Atom, "Atom label · C, N, O…"),
             (Tool::Bond(1), "Single bond · B / 1"),
             (Tool::Bond(2), "Double bond · 2"),
@@ -879,7 +884,6 @@ impl App {
             ),
             (Tool::Arrow, "Reaction & electron-flow arrows · A"),
             (Tool::Text, "Text label · T"),
-            (Tool::Erase, "Eraser · E · Drag to erase"),
             (Tool::Graphic(self.toolbar.rectangle.kind), "Rectangles"),
             (
                 Tool::Graphic(self.toolbar.ellipse.kind),
@@ -1237,6 +1241,35 @@ impl App {
                         .size(11)
                         .color(muted()),
                 );
+            }
+            Tool::Tilt => {
+                options = options.spacing(4);
+                let enabled = crate::canvas::tilt::available(&self.doc, &self.selected);
+                for (label, transform) in [
+                    ("X −15°", reshiki::editing::Transform::TiltX(-15.)),
+                    ("X +15°", reshiki::editing::Transform::TiltX(15.)),
+                    ("Y −15°", reshiki::editing::Transform::TiltY(-15.)),
+                    ("Y +15°", reshiki::editing::Transform::TiltY(15.)),
+                ] {
+                    options = options.push(
+                        command(label, Message::Transform(transform))
+                            .on_press_maybe(enabled.then_some(Message::Transform(transform))),
+                    );
+                }
+                options = options
+                    .push(hover_hint(
+                        command(
+                            "Front bonds",
+                            Message::InspectorAction(super::inspector::Action::DepthBonds),
+                        )
+                        .on_press_maybe(enabled.then_some(
+                            Message::InspectorAction(super::inspector::Action::DepthBonds),
+                        )),
+                        "Emphasize front bonds using the retained projection depth",
+                        tooltip::Position::Bottom,
+                    ))
+                    .push(text("Drag to tilt · Shift: 15°").size(11).color(muted()))
+                    .push(command("Done", Message::Tool(Tool::Select)));
             }
             Tool::Select | Tool::Lasso if !self.selected.is_empty() => {
                 options = options
@@ -2235,6 +2268,7 @@ fn tool_name(tool: Tool) -> &'static str {
     match tool {
         Tool::Select => "Select / move",
         Tool::Lasso => "Lasso select",
+        Tool::Tilt => "3D tilt",
         Tool::Atom => "Atom label",
         Tool::Bond(1) => "Single bond",
         Tool::Chain(_) => "Chain",
