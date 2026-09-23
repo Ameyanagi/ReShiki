@@ -405,6 +405,10 @@ impl App {
             format!("Custom color · Enter to apply to {}", self.color_scope),
             tooltip::Position::Bottom,
         ));
+        tools = tools.push(command(
+            "Atoms…",
+            Message::InspectorAction(super::inspector::Action::OpenAtomColors),
+        ));
         container(tools)
             .padding([7, 14])
             .width(Length::Fill)

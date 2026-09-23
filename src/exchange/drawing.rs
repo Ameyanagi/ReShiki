@@ -108,6 +108,13 @@ struct Writer<'a> {
 /// appearances and ownership rather than detaching or flattening objects.
 pub fn write(document: &Document, options: Options<'_>) -> Result<String> {
     document.validate().map_err(invalid)?;
+    if document.bonds.iter().any(|b| b.ring_arc)
+        || document.atoms.iter().any(|a| a.display.variable.is_some())
+    {
+        return Err(invalid(
+            "CDXML cannot yet preserve inner ring curves or variable atom labels. Save as ReShiki (.rsk) or export SVG/PDF to keep this appearance.",
+        ));
+    }
     let molecule = crate::chemistry::document::prepare(document)?;
     let mut w = Writer::new(document, options)?;
     w.atoms(&molecule.state.graph)?;

@@ -442,6 +442,7 @@ fn reconstruct(
             let b = at(&work.state.graph.bonds, i)?;
             let meta = at(&work.state.metadata.bonds, i)?;
             let mut bond = Bond {
+                ring_arc: false,
                 projection: false,
                 a: *at(&work.ids, b.a)?,
                 b: *at(&work.ids, b.b)?,

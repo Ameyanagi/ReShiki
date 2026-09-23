@@ -39,7 +39,7 @@ pub struct Atom {
     pub element: String,
     pub position: Point,
     /// Projection depth in drawing units, retained when tilting back.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_zero")]
     pub depth: f32,
     /// A nonchemical attachment point tracking the mean of these atom IDs.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -69,6 +69,9 @@ pub struct Atom {
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Bond {
+    /// Draw the inner component along its ring; chemical order stays unchanged.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub ring_arc: bool,
     /// Boldness describes projection depth, never a tetrahedral wedge.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub projection: bool,
@@ -98,6 +101,9 @@ pub struct Bond {
     pub secondary_display: Option<String>,
     #[serde(default)]
     pub color: [u8; 3],
+}
+fn is_zero(value: &f32) -> bool {
+    *value == 0.
 }
 fn plain() -> String {
     "plain".into()
@@ -243,6 +249,7 @@ impl Document {
             .find(|x| (x.a == a && x.b == b) || (x.a == b && x.b == a))
         {
             *bond = Bond {
+                ring_arc: false,
                 projection: false,
                 z_order: bond.z_order,
                 indicator: bond.indicator.clone(),
@@ -259,6 +266,7 @@ impl Document {
             };
         } else {
             self.bonds.push(Bond {
+                ring_arc: false,
                 projection: false,
                 z_order: 0,
                 indicator: Default::default(),
@@ -388,6 +396,9 @@ impl Document {
         let empty_neighbors = HashSet::new();
         for a in &self.atoms {
             a.display.validate()?;
+            if a.display.variable.is_some() && a.element != "*" {
+                return Err("Variable labels require wildcard atoms".into());
+            }
             if a.cip_label
                 .as_ref()
                 .is_some_and(|s| !["R", "S", "r", "s"].contains(&s.as_str()))
@@ -554,6 +565,7 @@ mod tests {
         let mut doc = Document::default();
         let a = doc.add_atom("C", Point::default());
         doc.bonds.push(Bond {
+            ring_arc: false,
             projection: false,
             z_order: 0,
             indicator: Default::default(),

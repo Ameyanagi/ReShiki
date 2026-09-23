@@ -2634,6 +2634,7 @@ impl App {
                             self.doc.invalidate_chemistry(&[id]);
                             if let Some(a) = self.doc.atom_mut(id) {
                                 a.element = self.element.clone();
+                                a.display.variable = None;
                                 a.explicit_h = 0;
                                 a.no_implicit = false;
                                 a.charge = 0;

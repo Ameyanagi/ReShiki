@@ -93,10 +93,16 @@ fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
     };
     let size = STYLE.world(style.size_pt);
     let small = size * 0.7;
-    let element_width = text_width(&a.element, size);
+    let label = a
+        .display
+        .variable
+        .as_deref()
+        .filter(|_| a.element == "*")
+        .unwrap_or(&a.element);
+    let element_width = text_width(label, size);
     let origin = a.position.offset(-element_width / 2.0, -size * 0.58);
     let mut runs = if show_element {
-        vec![text(origin, a.element.clone(), size)]
+        vec![text(origin, label.to_string(), size)]
     } else {
         vec![]
     };
@@ -390,7 +396,11 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             .filter(|g| g.layer < 0)
             .flat_map(graphic_primitive),
     );
-    let circles = crate::aromatic::circles(doc);
+    let arcs = crate::ring_arcs::render(doc);
+    let circles: Vec<_> = crate::aromatic::circles(doc)
+        .into_iter()
+        .filter(|c| !arcs.intersects(c))
+        .collect();
     out.extend(circles.iter().flat_map(|c| {
         c.graphic().parts().into_iter().map(|p| Primitive::Path {
             commands: p.commands,
@@ -398,6 +408,7 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             filled: p.filled,
         })
     }));
+    out.extend(arcs.primitives.iter().cloned());
     let labels: std::collections::HashMap<_, _> = doc
         .atoms
         .iter()
@@ -550,7 +561,8 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
                     DoublePosition::Right => Some(1.),
                     DoublePosition::Auto | DoublePosition::Center => None,
                 };
-                let offsets: &[f32] = match (b.order, side) {
+                let order = if arcs.contains(b.a, b.b) { 1 } else { b.order };
+                let offsets: &[f32] = match (order, side) {
                     (2 | 7, Some(side)) => &[0.0, spacing * side],
                     (2 | 7, None) => &[-spacing / 2.0, spacing / 2.0],
                     (6, _) => &[-spacing * 1.5, -spacing * 0.5, spacing * 0.5, spacing * 1.5],
@@ -599,7 +611,10 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
                         ));
                     }
                 }
-                if b.order == 4 && !circles.iter().any(|c| c.contains_bond(b.a, b.b)) {
+                if b.order == 4
+                    && !arcs.contains(b.a, b.b)
+                    && !circles.iter().any(|c| c.contains_bond(b.a, b.b))
+                {
                     for i in 0..5 {
                         let t = i as f32 / 5.0;
                         let v = (i as f32 + 0.5) / 5.0;

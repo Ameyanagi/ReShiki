@@ -303,7 +303,11 @@ pub async fn render_progress(
         return Err("Invalid drawing bond length".into());
     }
     if let Some(sketch) = &proposal.sketch {
-        return sketch.render(&settings);
+        let doc = sketch.render(&settings)?;
+        if let Some(progress) = progress {
+            let _ = progress.try_send(super::codex::Progress::Preview(Box::new(doc.clone())));
+        }
+        return Ok(doc);
     }
     let gap = settings.bond_length;
     let mut doc = Document {

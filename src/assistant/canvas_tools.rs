@@ -108,7 +108,7 @@ impl CanvasTools {
                 let (candidate, _) =
                     super::candidate(&snapshot.document, &fragment, &self.replacement(&proposal)?)?;
                 let bounds = crate::scene::selection_bounds(&fragment, &fragment.all_ids());
-                let description = json!({"validated":true,"applied":false,"atoms":fragment.atoms.len(),"bonds":fragment.bonds.len(),"arrows":fragment.arrows.len(),"bounds":bounds,"canvas_atoms_after_apply":candidate.atoms.len(),"replaced_objects":self.replacement(&proposal)?.len(),"note":"This image shows the proposed editable scheme. Inspect spacing, R labels, stoichiometry and condition placement. Refine with another preview if needed, then return this complete proposal as the final answer. Applying follows the user's edit mode and remains undoable."}).to_string();
+                let description = json!({"validated":true,"applied":false,"review_issues":super::review::quality(&fragment,&proposal.composition),"atoms":fragment.atoms.len(),"bonds":fragment.bonds.len(),"arrows":fragment.arrows.len(),"bounds":bounds,"canvas_atoms_after_apply":candidate.atoms.len(),"replaced_objects":self.replacement(&proposal)?.len(),"note":"This image shows the proposed editable scheme. Inspect spacing, R labels, stoichiometry and condition placement. Refine with another preview if needed, then return this complete proposal as the final answer. Applying follows the user's edit mode and remains undoable."}).to_string();
                 (fragment, description)
             }
             _ => return Err("Unknown canvas tool".into()),

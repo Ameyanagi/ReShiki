@@ -46,12 +46,19 @@ impl Circle {
 }
 
 pub fn circles(doc: &Document) -> Vec<Circle> {
+    ring_circles(doc, true)
+}
+
+pub(crate) fn ring_circles(doc: &Document, aromatic_only: bool) -> Vec<Circle> {
+    let eligible = |b: &&crate::document::Bond| {
+        (if aromatic_only {
+            b.order == 4
+        } else {
+            matches!(b.order, 1 | 2 | 4)
+        }) && doc.bond_visible(b.a, b.b)
+    };
     let mut neighbors: BTreeMap<u64, Vec<u64>> = BTreeMap::new();
-    for b in doc
-        .bonds
-        .iter()
-        .filter(|b| b.order == 4 && doc.bond_visible(b.a, b.b))
-    {
+    for b in doc.bonds.iter().filter(eligible) {
         neighbors.entry(b.a).or_default().push(b.b);
         neighbors.entry(b.b).or_default().push(b.a);
     }
@@ -61,7 +68,7 @@ pub fn circles(doc: &Document) -> Vec<Circle> {
     let mut seen = BTreeSet::new();
     let mut result = vec![];
     let mut budget = 200_000_usize;
-    for b in doc.bonds.iter().filter(|b| b.order == 4) {
+    for b in doc.bonds.iter().filter(eligible) {
         if budget == 0 {
             break;
         }
@@ -169,7 +176,7 @@ pub fn circles(doc: &Document) -> Vec<Circle> {
 }
 
 // A rigidly tilted planar ring retains its unprojected circle as an ellipse.
-fn ring_plane(doc: &Document, ids: &[u64]) -> Option<(Vec<Point>, [Point; 2])> {
+pub(crate) fn ring_plane(doc: &Document, ids: &[u64]) -> Option<(Vec<Point>, [Point; 2])> {
     let atoms: Option<Vec<_>> = ids.iter().map(|id| doc.atom(*id)).collect();
     let atoms = atoms?;
     if !atoms.iter().any(|a| a.depth.abs() > 0.001) {

@@ -174,11 +174,15 @@ impl PathCommand {
     }
 }
 
+fn zero_depth(value: &[f32; 3]) -> bool {
+    *value == [0.; 3]
+}
+
 /// An affine frame preserves rotated and reflected shapes without flattening them.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Graphic {
     /// Depth of origin, axis_x and axis_y for reversible 3D projection.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "zero_depth")]
     pub depth: [f32; 3],
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub picture: Option<crate::pictures::Picture>,

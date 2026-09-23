@@ -108,6 +108,7 @@ impl App {
                 if let Some(a) = self.doc.atom_mut(id) {
                     if replace {
                         a.element = key.into();
+                        a.display.variable = None;
                         a.explicit_h = 0;
                         a.no_implicit = false;
                         a.charge = 0;

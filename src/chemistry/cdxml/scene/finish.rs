@@ -17,6 +17,7 @@ fn indicator(value: NativeStereo) -> Result<StereoDisplay> {
 }
 fn display(value: NativeAtomDisplay) -> Result<AtomDisplay> {
     Ok(AtomDisplay {
+        variable: None,
         carbons: Some(value.carbons),
         hydrogens: Some(value.hydrogens),
         hydrogen_position: value.hydrogen_position,

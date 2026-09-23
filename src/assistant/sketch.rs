@@ -8,7 +8,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-pub const REVIEW_NOTE: &str = "Reconstructed as an editable diagram. Check chemical assignments before exporting molecular data; ring-centre contacts use tracked centroids, not validated multicentre chemical bonds.";
+pub const REVIEW_NOTE: &str = "Reconstructed as an editable diagram. Check bond orders, charges and coordination assignments before exporting molecular data.";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -20,6 +20,32 @@ pub struct Sketch {
     pub tilts: Vec<Tilt>,
     #[serde(default)]
     pub centroids: Vec<Centroid>,
+    #[serde(default)]
+    pub arrows: Vec<Arrow>,
+    #[serde(default)]
+    pub captions: Vec<Caption>,
+    #[serde(default)]
+    pub abbreviations: Vec<Abbreviation>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Arrow {
+    pub start: Point,
+    pub end: Point,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Caption {
+    pub text: String,
+    pub position: Point,
+    pub color: Option<[u8; 3]>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Abbreviation {
+    pub label: String,
+    pub anchor: usize,
+    pub atoms: Vec<usize>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -39,6 +65,10 @@ pub struct Centroid {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Atom {
+    #[serde(default)]
+    pub color: Option<[u8; 3]>,
+    #[serde(default)]
+    pub variable: Option<String>,
     pub element: String,
     pub x: f32,
     pub y: f32,
@@ -49,6 +79,8 @@ pub struct Atom {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Bond {
+    #[serde(default)]
+    pub ring_arc: bool,
     pub a: usize,
     pub b: usize,
     pub order: u8,
@@ -80,6 +112,17 @@ impl Sketch {
         }
         let bounded = |x: f32| x.is_finite() && x.abs() <= 50.;
         for a in &self.atoms {
+            if let Some(variable) = &a.variable
+                && (a.element != "*"
+                    || variable.is_empty()
+                    || variable.chars().count() > 8
+                    || !variable.chars().all(|c| c.is_alphanumeric()))
+            {
+                return Err(
+                    "Use a wildcard atom for a variable label such as E; do not guess its element"
+                        .into(),
+                );
+            }
             if !bounded(a.x)
                 || !bounded(a.y)
                 || a.charge.unsigned_abs() > 8
@@ -95,6 +138,11 @@ impl Sketch {
         }
         let mut pairs = std::collections::HashSet::new();
         for b in &self.bonds {
+            if b.ring_arc && (!matches!(b.order, 1 | 2 | 4) || b.display != "plain") {
+                return Err(
+                    "Inner ring curves require plain single, double or aromatic bonds".into(),
+                );
+            }
             if b.a >= self.atoms.len()
                 || b.b >= self.atoms.len()
                 || b.a == b.b
@@ -120,6 +168,39 @@ impl Sketch {
                     && (s.end.x <= s.start.x || s.end.y <= s.start.y)
             {
                 return Err("Invalid diagram shape".into());
+            }
+        }
+        if self.arrows.len() > 16 || self.captions.len() > 64 || self.abbreviations.len() > 32 {
+            return Err("Too many diagram arrows, captions or abbreviations".into());
+        }
+        for a in &self.arrows {
+            if ![a.start.x, a.start.y, a.end.x, a.end.y]
+                .into_iter()
+                .all(bounded)
+                || a.start.distance(a.end) < 0.5
+            {
+                return Err("Invalid diagram reaction arrow".into());
+            }
+        }
+        for c in &self.captions {
+            if c.text.trim().is_empty()
+                || c.text.len() > 500
+                || !bounded(c.position.x)
+                || !bounded(c.position.y)
+                || c.text.chars().any(|c| c.is_control() && c != '\n')
+            {
+                return Err("Invalid diagram caption".into());
+            }
+        }
+        for a in &self.abbreviations {
+            if a.atoms.is_empty()
+                || a.atoms.len() > 100
+                || !a.atoms.contains(&a.anchor)
+                || a.atoms.iter().any(|i| *i >= self.atoms.len())
+                || a.label.is_empty()
+                || a.label.chars().count() > 32
+            {
+                return Err("Invalid diagram abbreviation".into());
             }
         }
         if self.tilts.len() > 32 || self.centroids.len() > 32 {
@@ -177,9 +258,16 @@ impl Sketch {
             atom.label_h = a.hydrogens;
             atom.no_implicit = true;
             atom.text_style = Some(settings.format.style.clone());
+            if let Some(color) = a.color {
+                atom.text_style.as_mut().ok_or("Missing atom style")?.color = color;
+            }
+            atom.display.variable = a.variable.clone();
         }
         for b in &self.bonds {
             doc.add_bond(b.a as u64 + 1, b.b as u64 + 1, b.order, &b.display);
+            if let Some(bond) = doc.bonds.last_mut() {
+                bond.ring_arc = b.ring_arc;
+            }
         }
         for b in &mut doc.bonds {
             b.color = settings.bond_color;
@@ -230,6 +318,36 @@ impl Sketch {
                 }
             }
         }
+        for a in &self.arrows {
+            doc.arrows.push(crate::document::Arrow {
+                id: doc.next_id(),
+                start: point(a.start),
+                end: point(a.end),
+                kind: "forward".into(),
+                control: None,
+                style: None,
+            });
+        }
+        for c in &self.captions {
+            let mut format = settings.format.clone();
+            if let Some(color) = c.color {
+                format.style.color = color;
+            }
+            doc.annotations.push(crate::document::Annotation {
+                id: doc.next_id(),
+                position: point(c.position),
+                text: c.text.clone(),
+                format,
+            });
+        }
+        for a in &self.abbreviations {
+            doc.abbreviations.push(crate::abbreviations::Abbreviation {
+                label: a.label.clone(),
+                reverse_label: a.label.clone(),
+                anchor: a.anchor as u64 + 1,
+                members: a.atoms.iter().map(|i| *i as u64 + 1).collect(),
+            });
+        }
         doc.groups.push(crate::grouping::Group {
             id: doc.next_id(),
             members: doc.all_ids(),
@@ -244,15 +362,19 @@ pub fn schema() -> Value {
     let number = json!({"type":"number","minimum":-50,"maximum":50});
     let point = json!({"type":"object","additionalProperties":false,"properties":{"x":number,"y":number},"required":["x","y"]});
     let indices = json!({"type":"array","maxItems":300,"items":{"type":"integer","minimum":0}});
+    let color = json!({"anyOf":[{"type":"null"},{"type":"array","minItems":3,"maxItems":3,"items":{"type":"integer","minimum":0,"maximum":255}}],"description":"RGB label color from the source; null uses the drawing style."});
     json!({"anyOf":[{"type":"null"},{"type":"object","additionalProperties":false,
-        "description":"Use ONLY when SMILES cannot preserve the source projection (e.g. a metallocene sandwich). Return null for ordinary molecules/reactions. All coordinates are in bond-length units, x right, y down, with a typical bond length of 1. Build regular planar rings and circles, then use tilts to project them together; never hand-squash rings that can be tilted. Use centroids for ring-centre contacts, not loose lines. Atom element * is a dummy wildcard. All indices are zero-based. Keep the original arrangement. This is a diagram requiring manual chemical review, not validated molecular data. Leave molecules and reactions empty.",
+        "description":"Use explicit coordinates for coordination complexes, macrocycles, projected organometallics, and source diagrams whose arrangement SMILES layout cannot preserve. An entire reaction scheme can be one sketch: use arrows and captions and place all participants in the same coordinate system. Keep molecules and reactions empty when using sketch. For corresponding ligand/complex panels, reuse the same ligand coordinates translated horizontally, then add the metal and its contacts; do not fold or rotate the ligand around the metal. Place donor atoms around the metal as in the source. Keep ring sizes, labels and inner delocalization curves. For ordinary simple molecules use SMILES. All coordinates are in bond-length units, x right, y down, with a typical bond length of 1. Default to a flat 2D drawing with tilts empty. Only when the source actually shows perspective, build planar rings and circles and project them together using explicit tilts. Metal coordination alone is not a reason to tilt. Use centroids for ring-centre contacts, not loose lines. Atom element * is a dummy wildcard: set variable to E or another visible generic label instead of inventing an element. For tBu or similar groups include the full atom graph then use abbreviations to collapse it. Use ring_arc on consecutive ring bonds for partial inner curves, preserving their underlying bond orders. Captions use top-left positions. Reaction arrows require empty space of at least one bond length on either side. All indices are zero-based. Keep the original arrangement. This is a diagram requiring manual chemical review, not validated molecular data. Leave molecules and reactions empty.",
         "properties":{
+            "arrows":{"type":"array","maxItems":16,"items":{"type":"object","additionalProperties":false,"properties":{"start":point,"end":point},"required":["start","end"]}},
+            "captions":{"type":"array","maxItems":64,"items":{"type":"object","additionalProperties":false,"properties":{"text":{"type":"string","maxLength":500},"position":point,"color":color},"required":["text","position","color"]}},
+            "abbreviations":{"type":"array","maxItems":32,"items":{"type":"object","additionalProperties":false,"properties":{"label":{"type":"string"},"anchor":{"type":"integer","minimum":0},"atoms":indices},"required":["label","anchor","atoms"]}},
             "tilts":{"type":"array","maxItems":32,"items":{"type":"object","additionalProperties":false,"properties":{"atoms":indices,"shapes":indices,"x_degrees":{"type":"number","minimum":-85,"maximum":85},"y_degrees":{"type":"number","minimum":-85,"maximum":85},"depth_bonds":{"type":"boolean","description":"Bold the foreground single bonds according to their retained depth; preserves stereo wedges."}},"required":["atoms","shapes","x_degrees","y_degrees","depth_bonds"]}},
             "centroids":{"type":"array","maxItems":32,"items":{"type":"object","additionalProperties":false,"properties":{"atoms":indices,"contact":{"anyOf":[{"type":"null"},{"type":"integer","minimum":0}],"description":"Optional metal atom index. Creates a dashed nonchemical contact to the tracked centroid."}},"required":["atoms","contact"]}},
-            "atoms":{"type":"array","maxItems":300,"items":{"type":"object","additionalProperties":false,"properties":{"element":{"type":"string"},"x":number,"y":number,"charge":{"type":"integer","minimum":-8,"maximum":8},"isotope":{"type":"integer","minimum":0,"maximum":300},"hydrogens":{"type":"integer","minimum":0,"maximum":8}},"required":["element","x","y","charge","isotope","hydrogens"]}},
-            "bonds":{"type":"array","maxItems":600,"items":{"type":"object","additionalProperties":false,"properties":{"a":{"type":"integer","minimum":0,"description":"Zero-based index in atoms"},"b":{"type":"integer","minimum":0},"order":{"type":"integer","minimum":1,"maximum":7,"description":"1 single, 2 double, 3 triple, 4 aromatic, 5 dative, 6 quadruple, 7 partial"},"display":{"type":"string","enum":["plain","bold","wedge","hashed","dashed","wavy"]}},"required":["a","b","order","display"]}},
+            "atoms":{"type":"array","maxItems":300,"items":{"type":"object","additionalProperties":false,"properties":{"color":color,"variable":{"anyOf":[{"type":"null"},{"type":"string","maxLength":8}],"description":"Only for element *. Visible variable label such as E; null otherwise."},"element":{"type":"string"},"x":number,"y":number,"charge":{"type":"integer","minimum":-8,"maximum":8},"isotope":{"type":"integer","minimum":0,"maximum":300},"hydrogens":{"type":"integer","minimum":0,"maximum":8}},"required":["element","x","y","charge","isotope","hydrogens","color","variable"]}},
+            "bonds":{"type":"array","maxItems":600,"items":{"type":"object","additionalProperties":false,"properties":{"ring_arc":{"type":"boolean","description":"Replace the inner line along this ring edge by an inner curve; use on consecutive edges for the partial N-C-N delocalization convention. Does not change bond order."},"a":{"type":"integer","minimum":0,"description":"Zero-based index in atoms"},"b":{"type":"integer","minimum":0},"order":{"type":"integer","minimum":1,"maximum":7,"description":"1 single, 2 double, 3 triple, 4 aromatic, 5 dative, 6 quadruple, 7 partial"},"display":{"type":"string","enum":["plain","bold","wedge","hashed","dashed","wavy"]}},"required":["a","b","order","display","ring_arc"]}},
             "shapes":{"type":"array","maxItems":100,"items":{"type":"object","additionalProperties":false,"properties":{"kind":{"type":"string","enum":["line","ellipse"]},"start":point,"end":point,"dashed":{"type":"boolean"}},"required":["kind","start","end","dashed"]}}
-        },"required":["atoms","bonds","shapes","tilts","centroids"]}]})
+        },"required":["atoms","bonds","shapes","tilts","centroids","arrows","captions","abbreviations"]}]})
 }
 
 #[cfg(test)]
@@ -260,6 +382,8 @@ mod tests {
     use super::*;
     fn sandwich() -> Sketch {
         let mut atoms = vec![Atom {
+            color: None,
+            variable: None,
             element: "Fe".into(),
             x: 0.,
             y: 0.,
@@ -274,6 +398,8 @@ mod tests {
             for i in 0..5 {
                 let angle = (-90. + i as f32 * 72.).to_radians();
                 atoms.push(Atom {
+                    color: None,
+                    variable: None,
                     element: "C".into(),
                     x: angle.cos(),
                     y: cy + angle.sin() * 0.65,
@@ -282,6 +408,7 @@ mod tests {
                     hydrogens: 1,
                 });
                 bonds.push(Bond {
+                    ring_arc: false,
                     a: first + i,
                     b: first + (i + 1) % 5,
                     order: 1,
@@ -307,8 +434,49 @@ mod tests {
             shapes,
             tilts: vec![],
             centroids: vec![],
+            arrows: vec![],
+            captions: vec![],
+            abbreviations: vec![],
         }
     }
+    #[test]
+    fn flat_scheme_keeps_variables_colors_arrows_and_ring_curves() {
+        let mut sketch = sandwich();
+        sketch.shapes.clear();
+        sketch.atoms[0].element = "Cu".into();
+        sketch.atoms[0].color = Some([0, 0, 255]);
+        sketch.atoms[1].element = "*".into();
+        sketch.atoms[1].variable = Some("E".into());
+        sketch.atoms[1].color = Some([220, 40, 40]);
+        sketch.bonds[0].ring_arc = true;
+        sketch.bonds[1].ring_arc = true;
+        sketch.arrows.push(Arrow {
+            start: Point::new(2., 0.),
+            end: Point::new(5., 0.),
+        });
+        sketch.captions.push(Caption {
+            text: "Cu(acac)₂".into(),
+            position: Point::new(2., -0.8),
+            color: None,
+        });
+        let doc = sketch.render(&Default::default()).unwrap();
+        assert!(doc.atoms.iter().all(|a| a.depth == 0.));
+        assert_eq!(doc.arrows.len(), 1);
+        assert_eq!(doc.annotations[0].text, "Cu(acac)₂");
+        assert_eq!(doc.atoms[1].element, "*");
+        assert_eq!(doc.atoms[1].display.variable.as_deref(), Some("E"));
+        assert_eq!(crate::ring_arcs::render(&doc).bonds.len(), 2);
+        let svg = crate::scene::svg(&doc);
+        assert!(svg.contains(">E</text>"));
+        assert!(svg.contains("rgb(0,0,255)"));
+        assert_eq!(
+            serde_json::from_str::<Document>(&serde_json::to_string(&doc).unwrap()).unwrap(),
+            doc
+        );
+        sketch.atoms[1].element = "O".into();
+        assert!(sketch.validate().is_err());
+    }
+
     #[test]
     fn native_ring_centroids_and_tilts_render_valid_contacts() {
         let mut sketch = sandwich();

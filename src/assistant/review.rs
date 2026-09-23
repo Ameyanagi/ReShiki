@@ -164,7 +164,9 @@ pub fn diagram_groups(doc: &Document) -> Vec<&crate::grouping::Group> {
         .iter()
         .filter(|g| {
             g.integral
-                && doc.graphics.iter().any(|a| g.members.contains(&a.id))
+                && (doc.graphics.iter().any(|a| g.members.contains(&a.id))
+                    || doc.arrows.iter().any(|a| g.members.contains(&a.id))
+                    || doc.annotations.iter().any(|a| g.members.contains(&a.id)))
                 && doc.atoms.iter().any(|a| g.members.contains(&a.id))
         })
         .collect()
@@ -363,10 +365,48 @@ pub fn apply(doc: &Document, edits: &[Edit], compact_allowed: bool) -> Result<Do
     Ok(candidate)
 }
 
+/// Connected molecules can be internally unreadable even when panel bounds do not overlap.
+pub fn internal_overlaps(doc: &Document) -> Vec<String> {
+    let atoms: Vec<_> = doc
+        .atoms
+        .iter()
+        .filter(|a| a.centroid.is_empty() && doc.atom_visible(a.id))
+        .take(1500)
+        .collect();
+    let labels: Vec<_> = atoms
+        .iter()
+        .map(|a| scene::atom_label_bounds(a, doc))
+        .collect();
+    let mut crowded = Vec::new();
+    for (i, a) in atoms.iter().enumerate() {
+        for (j, b) in atoms.iter().enumerate().skip(i + 1) {
+            let labels_overlap = match (labels.get(i), labels.get(j)) {
+                (Some(Some((lo, hi))), Some(Some((other_lo, other_hi)))) => {
+                    hi.x.min(other_hi.x) - lo.x.max(other_lo.x) > 0.5
+                        && hi.y.min(other_hi.y) - lo.y.max(other_lo.y) > 0.5
+                }
+                _ => false,
+            };
+            if labels_overlap
+                || a.position.distance(b.position) < doc.drawing_style.bond_length_world * 0.25
+            {
+                crowded.push(format!("Atoms {} ({}) and {} ({}) overlap or are too close; preserve the source ligand geometry and separate these positions",a.id,a.element,b.id,b.element));
+                if crowded.len() >= 12 {
+                    return crowded;
+                }
+            }
+        }
+    }
+    crowded
+}
+
 pub fn quality(doc: &Document, composition: &Composition) -> Vec<String> {
-    let mut issues = Vec::new();
+    let mut issues = internal_overlaps(doc);
     if !diagram_groups(doc).is_empty() {
         issues.push(super::sketch::REVIEW_NOTE.into());
+        if let Err(error) = crate::chemistry::document::prepare(doc) {
+            issues.push(format!("Chemical assignments need review: {error}"));
+        }
     }
     let ts = targets(doc);
     for (i, a) in ts.iter().enumerate() {
@@ -374,6 +414,10 @@ pub fn quality(doc: &Document, composition: &Composition) -> Vec<String> {
             continue;
         }
         for b in ts.iter().skip(i + 1).filter(|b| b.kind != "panel") {
+            // A diagram's bounds enclose its own arrows and captions.
+            if a.ids.iter().any(|id| b.ids.contains(id)) {
+                continue;
+            }
             let overlap_x = a.bounds_pt[2].min(b.bounds_pt[2]) - a.bounds_pt[0].max(b.bounds_pt[0]);
             let overlap_y = a.bounds_pt[3].min(b.bounds_pt[3]) - a.bounds_pt[1].max(b.bounds_pt[1]);
             if overlap_x > 0.5 && overlap_y > 0.5 {
@@ -394,7 +438,7 @@ pub fn quality(doc: &Document, composition: &Composition) -> Vec<String> {
     {
         let near = ts
             .iter()
-            .filter(|t| t.kind == "molecule" || t.kind == "arrow")
+            .filter(|t| matches!(t.kind.as_str(), "molecule" | "diagram" | "arrow"))
             .any(|t| {
                 let dx = (t.bounds_pt[0] - caption.bounds_pt[2])
                     .max(caption.bounds_pt[0] - t.bounds_pt[2])
@@ -462,4 +506,53 @@ pub fn images(doc: &Document) -> Result<Vec<(String, Vec<u8>)>, String> {
         }
     }
     Ok(images)
+}
+
+#[cfg(test)]
+mod overlap_tests {
+    use super::*;
+    #[test]
+    fn planar_coordination_scheme_is_readable_and_ownership_is_not_an_overlap() {
+        // A visual regression fixture, not a validated chemical assignment.
+        let doc: Document =
+            serde_json::from_str(include_str!("../../tests/fixtures/coordination-layout.rsk"))
+                .unwrap();
+        assert!(doc.atoms.iter().all(|a| a.depth == 0.));
+        assert!(internal_overlaps(&doc).is_empty());
+        let issues = quality(&doc, &Composition::default());
+        assert!(
+            issues
+                .iter()
+                .any(|s| s.starts_with("Chemical assignments need review:"))
+        );
+        assert!(!issues.iter().any(|s| s.contains(" overlaps ")));
+        assert_eq!(
+            doc.atoms
+                .iter()
+                .filter(|a| a.display.variable.as_deref() == Some("E"))
+                .count(),
+            2
+        );
+        assert_eq!(crate::ring_arcs::render(&doc).primitives.len(), 4);
+        assert_eq!(doc.abbreviations.len(), 4);
+        assert!(
+            crate::exchange::drawing::write(&doc, Default::default())
+                .unwrap_err()
+                .to_string()
+                .contains("CDXML cannot yet preserve")
+        );
+    }
+
+    #[test]
+    fn detects_internal_collapse_even_in_one_connected_complex() {
+        let mut doc = Document::default();
+        let cu = doc.add_atom("Cu", Point::default());
+        let n = doc.add_atom("N", Point::new(1., 1.));
+        doc.add_bond(n, cu, 5, "plain");
+        assert!(!internal_overlaps(&doc).is_empty());
+        doc.atom_mut(n).unwrap().position = Point::new(0., -doc.drawing_style.bond_length_world);
+        assert!(internal_overlaps(&doc).is_empty());
+        crate::projection::add_centroid(&mut doc, &[n, cu]).unwrap();
+        assert!(internal_overlaps(&doc).is_empty());
+    }
 }
