@@ -4,6 +4,42 @@ use reshiki::{
     scene::{self, Primitive},
 };
 
+#[tokio::test]
+async fn tracked_drawing_centroids_can_pass_the_figure_export_preparation() -> anyhow::Result<()> {
+    let mut doc = Document::default();
+    let ring = reshiki::editing::ring(&mut doc, Point::default(), 6, true, 5.);
+    let point = reshiki::projection::add_centroid(&mut doc, &ring).map_err(anyhow::Error::msg)?;
+    let metal = doc.add_atom("Fe", Point::new(0., 100.));
+    doc.add_bond(point, metal, 5, "dashed");
+    let engine = reshiki::engine::LocalEngine::default();
+    let prepared = reshiki::export::checked_document(&engine, doc.clone())
+        .await
+        .map_err(anyhow::Error::msg)?;
+    assert_eq!(prepared, doc);
+    assert!(
+        !reshiki::scene::primitives(&prepared)
+            .iter()
+            .any(|p| matches!(p, Primitive::Text { text, .. } if text == "*"))
+    );
+    for format in ["svg", "png", "pdf"] {
+        assert!(
+            !reshiki::export::drawing(&prepared, format)
+                .map_err(anyhow::Error::msg)?
+                .is_empty()
+        );
+    }
+    doc.atom_mut(point)
+        .ok_or_else(|| anyhow::anyhow!("centroid"))?
+        .centroid
+        .push(u64::MAX);
+    assert!(
+        reshiki::export::checked_document(&engine, doc)
+            .await
+            .is_err()
+    );
+    Ok(())
+}
+
 #[test]
 fn dummy_handles_are_editor_only_and_never_leave_gaps_in_exported_bonds() -> anyhow::Result<()> {
     let mut doc = Document::default();

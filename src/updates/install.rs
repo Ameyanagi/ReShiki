@@ -323,6 +323,17 @@ fn stage(asset: &Path, directory: &Path, version: &str) -> Result<PathBuf, Strin
 pub async fn handoff(prepared: Arc<Prepared>, drawing: Option<PathBuf>) -> Result<(), String> {
     let dir = prepared.directory.path();
     let ready = dir.join("ready");
+    // A retry must receive an acknowledgement from the new helper, not a
+    // marker left behind by an earlier failed handoff.
+    match tokio::fs::remove_file(&ready).await {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => {
+            return Err(format!(
+                "Could not reset installer acknowledgement: {error}"
+            ));
+        }
+    }
     let script = dir.join(if cfg!(windows) {
         "install.ps1"
     } else {
@@ -367,14 +378,14 @@ pub async fn handoff(prepared: Arc<Prepared>, drawing: Option<PathBuf>) -> Resul
         .spawn()
         .map_err(|e| format!("Could not start the installer: {e}"))?;
     for _ in 0..50 {
+        if child.try_wait().map_err(|e| e.to_string())?.is_some() {
+            return Err("The installer could not start. Your app is unchanged.".into());
+        }
         if ready.exists() {
             prepared
                 .handed_off
                 .store(true, std::sync::atomic::Ordering::Release);
             return Ok(());
-        }
-        if child.try_wait().map_err(|e| e.to_string())?.is_some() {
-            return Err("The installer could not start. Your app is unchanged.".into());
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
     }

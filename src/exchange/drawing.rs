@@ -108,6 +108,15 @@ struct Writer<'a> {
 /// appearances and ownership rather than detaching or flattening objects.
 pub fn write(document: &Document, options: Options<'_>) -> Result<String> {
     document.validate().map_err(invalid)?;
+    if document
+        .bonds
+        .iter()
+        .any(|bond| bond.projection && bond.display == "bold")
+    {
+        return Err(invalid(
+            "CDXML cannot yet preserve non-stereochemical front-bond emphasis. Turn off Front bonds before editable export, or use ReShiki (.rsk), SVG, PNG or PDF to retain the appearance.",
+        ));
+    }
     // ChemDraw 26 discards nested MultiAttachment definitions when saving a
     // Fragment label. Expand these groups for editable exchange so every real
     // atom and target survives; native/figure output keeps the compact label.

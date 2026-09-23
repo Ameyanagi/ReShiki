@@ -199,9 +199,13 @@ impl App {
     fn update_restart_blocker(&self) -> Option<&'static str> {
         if self.dirty() {
             Some("Save your drawing, then click Update and restart.")
-        } else if self.assistant.busy || self.assistant.draft.is_some() {
-            Some("Finish or discard the assistant draft before restarting.")
-        } else if self.busy || self.cleanup.is_some() || self.joining.is_some() {
+        } else if self.assistant.has_unfinished_work() {
+            Some("Finish or clear the assistant draft and input before restarting.")
+        } else if self.busy
+            || self.cleanup.is_some()
+            || self.joining.is_some()
+            || self.atom_text.is_some()
+        {
             Some("Finish the current editing operation before restarting.")
         } else {
             None
@@ -318,6 +322,22 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pending_atom_label_prevents_update_restart() {
+        let (mut app, _) = App::new();
+        let atom = app.doc.add_atom("C", reshiki::document::Point::default());
+        app.saved = app.doc.clone();
+        let _ = app.atom_text_action(super::super::atom_text::Action::Begin(Some(atom)));
+        let _ = app.atom_text_action(super::super::atom_text::Action::Input("Boc".into()));
+        assert!(!app.dirty());
+        assert!(app.update_restart_blocker().is_some());
+        let _ = app.restart_for_update();
+        assert!(!app.updates.restarting);
+        assert!(app.atom_text.is_some());
+        let _ = app.atom_text_action(super::super::atom_text::Action::Cancel);
+        assert!(app.update_restart_blocker().is_none());
+    }
 
     #[test]
     fn updates_cannot_discard_unsaved_drawing_or_assistant_work() {

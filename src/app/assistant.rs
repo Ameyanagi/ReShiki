@@ -134,6 +134,14 @@ impl Drop for State {
     }
 }
 impl State {
+    pub(super) fn has_unfinished_work(&self) -> bool {
+        self.busy
+            || self.draft.is_some()
+            || self.reading_image
+            || !self.input.text().trim().is_empty()
+            || self.source_image.is_some()
+    }
+
     pub(super) fn needs_poll(&self) -> bool {
         self.busy
             || self.waiting_for_canvas_edit
@@ -1822,6 +1830,22 @@ fn card() -> container::Style {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unsent_assistant_input_blocks_restart_until_cleared() {
+        let mut state = State::default();
+        assert!(!state.has_unfinished_work());
+        state.input = text_editor::Content::with_text("Draw ferrocene");
+        assert!(state.has_unfinished_work());
+        state.input = text_editor::Content::new();
+        state.source_image = Some(source_picture());
+        assert!(state.has_unfinished_work());
+        state.source_image = None;
+        state.reading_image = true;
+        assert!(state.has_unfinished_work());
+        state.reading_image = false;
+        assert!(!state.has_unfinished_work());
+    }
 
     #[test]
     fn sent_images_survive_composer_changes_stop_and_long_conversations() -> Result<(), String> {

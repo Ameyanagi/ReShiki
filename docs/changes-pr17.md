@@ -86,7 +86,7 @@ ChemDraw 26 was operated with Computer Use and native macOS events on isolated d
 
 _Actual ChemDraw capture from this PR's interoperability checks. The earlier bare-N/NH export bug was corrected before this capture._
 
-ChemDraw discarded nested multi-center definitions when resaving collapsed Cp labels. Editable CDXML/CDX therefore expands Cp/Cp*; native and figure output retain compact labels. Complex identifiers and coordination-valence analysis remain unavailable. Variable attachments do not claim a unique formula. V3000 requires one bond per attachment point and cannot carry distributed charges/radicals; RXN attachments remain unsupported. CDXML/CDX export rejects the new partial curves/free wildcard text until lossless interchange is implemented.
+ChemDraw discarded nested multi-center definitions when resaving collapsed Cp labels. Editable CDXML/CDX therefore expands Cp/Cp*; native and figure output retain compact labels. Complex identifiers and coordination-valence analysis remain unavailable. Variable attachments do not claim a unique formula. V3000 requires one bond per attachment point and cannot carry distributed charges/radicals; RXN attachments remain unsupported. CDXML/CDX export rejects the new partial curves/free wildcard text until lossless interchange is implemented. Front-bond emphasis is also rejected because a bold projection bond can otherwise become a stereochemical wedge on import; turn off Front bonds for editable interchange, or retain the appearance in native/figure output.
 
 ## Image-assisted drawing and updates
 
@@ -110,7 +110,7 @@ GPT-6-Astra is the default when available. Source-image reconstruction favors th
 
 _Actual release-build capture: Check updates, automatic checks and Update and restart. Installation is disabled because there is no newer public release. This is not evidence of a future-version upgrade._
 
-The updater verifies downloads, protects unsaved work, installs and restarts with rollback on failure. A signed/notarized v0.6.1 macOS package was staged without replacing the user's installation; helper replacement/rollback fixtures were exercised on macOS/Linux. Future-version installation and Windows/Linux UI installation still need platform checks.
+The updater verifies downloads, protects unsaved work, installs and restarts with rollback on failure. Pending atom-label edits, assistant text and images also prevent an automatic restart. A signed/notarized v0.6.1 macOS package was staged without replacing the user's installation; helper replacement/rollback fixtures were exercised on macOS/Linux. Future-version installation and Windows/Linux UI installation still need platform checks.
 
 ## Validation and a personal review checklist
 

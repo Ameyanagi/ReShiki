@@ -2,6 +2,12 @@
 
 Checked on macOS arm64, 2026-09-23, using an optimized app bundle with an isolated settings directory.
 
+## Final review regressions
+
+- Figure preparation now accepts validated drawing centroids without treating their contacts as a molecular graph. The regression covers SVG, PNG and PDF, hidden centroid markers and rejection of malformed target IDs.
+- A CDXML round trip reproduced an unintended stereocenter from a projection-only bold bond. Editable CDXML/CDX export now rejects front-bond emphasis with instructions to disable it or use native/figure output. Plain projected bonds remain supported; native storage and figure exports retain emphasis. This restriction prevents a display setting from changing chemical identity.
+- Update restart waits for unfinished atom-label edits, assistant text, attached images and image reads, in addition to unsaved drawings and generated drafts. Retried installer handoff requires a fresh acknowledgement from a running helper.
+
 ## Shared alignment toolbar and full review
 
 The top Left/Center/Right controls now align selected chemical group labels and

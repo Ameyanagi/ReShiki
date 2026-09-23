@@ -29,9 +29,9 @@ pub async fn checked_document(
     mut doc: Document,
 ) -> Result<Document, String> {
     doc.validate()?;
-    // Semantic attachment drawings can be copied/rendered without inventing
-    // a single molecular identity for their ALL/ANY target sets.
-    if doc.atoms.is_empty() || crate::attachments::present(&doc) {
+    // Tracked drawing anchors and semantic attachments can be rendered without
+    // assigning a molecular identity to their contacts or ALL/ANY target sets.
+    if doc.atoms.is_empty() || doc.atoms.iter().any(|atom| !atom.centroid.is_empty()) {
         return Ok(doc);
     }
     let response = engine
