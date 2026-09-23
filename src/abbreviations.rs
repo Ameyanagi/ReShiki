@@ -10,6 +10,61 @@ pub struct Abbreviation {
     pub reverse_label: String,
     pub anchor: u64,
     pub members: Vec<u64>,
+    #[serde(default, skip_serializing_if = "LabelAlignment::is_auto")]
+    pub alignment: LabelAlignment,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LabelAlignment {
+    #[default]
+    Auto,
+    Left,
+    Center,
+    Right,
+    Above,
+}
+impl LabelAlignment {
+    pub const ALL: [Self; 5] = [
+        Self::Auto,
+        Self::Left,
+        Self::Center,
+        Self::Right,
+        Self::Above,
+    ];
+    pub fn is_auto(&self) -> bool {
+        *self == Self::Auto
+    }
+    pub fn cdxml(self) -> &'static str {
+        match self {
+            Self::Auto => "Auto",
+            Self::Left => "Left",
+            Self::Center => "Center",
+            Self::Right => "Right",
+            Self::Above => "Above",
+        }
+    }
+    pub fn from_cdxml(value: &str) -> Result<Self, String> {
+        match value {
+            "Auto" | "Best" => Ok(Self::Auto),
+            "Left" => Ok(Self::Left),
+            "Center" => Ok(Self::Center),
+            "Right" => Ok(Self::Right),
+            "Above" => Ok(Self::Above),
+            _ => Err("Unsupported abbreviation label alignment".into()),
+        }
+    }
+}
+impl std::fmt::Display for LabelAlignment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Auto => "Automatic",
+            Self::Left => "Flush left",
+            Self::Center => "Centered",
+            Self::Right => "Flush right",
+            Self::Above => "Stacked above",
+        })
+    }
 }
 
 pub const PRESETS: &[&str] = &[
@@ -73,6 +128,11 @@ impl Abbreviation {
     }
 
     pub fn faces_left(&self, doc: &Document) -> bool {
+        match self.alignment {
+            LabelAlignment::Left => return false,
+            LabelAlignment::Right => return true,
+            _ => {}
+        }
         let Some(anchor) = doc.atom(self.anchor) else {
             return false;
         };
@@ -169,6 +229,7 @@ impl Document {
             .or_else(|| members.first().copied())
             .ok_or("Select atoms to abbreviate")?;
         let abbreviation = Abbreviation {
+            alignment: Default::default(),
             label: label.trim().into(),
             reverse_label: reverse_label.trim().into(),
             anchor,

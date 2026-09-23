@@ -11,6 +11,12 @@ pub fn replace(doc: &Document, id: u64, label: &str) -> Result<Document, String>
     if !LABELS.contains(&label) {
         return Err("Choose Cp or Cp*".into());
     }
+    if doc
+        .abbreviation(id)
+        .is_some_and(|group| group.label == label)
+    {
+        return Ok(doc.clone());
+    }
     let anchor = doc.atom(id).ok_or("Missing ligand endpoint")?;
     let remove = doc
         .abbreviation(id)
@@ -133,6 +139,10 @@ pub fn replace(doc: &Document, id: u64, label: &str) -> Result<Document, String>
         }
     }
     result.abbreviations.push(Abbreviation {
+        alignment: doc
+            .abbreviation(id)
+            .map(|g| g.alignment)
+            .unwrap_or_default(),
         label: label.into(),
         reverse_label: label.into(),
         anchor: id,

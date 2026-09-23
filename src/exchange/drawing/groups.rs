@@ -408,6 +408,21 @@ impl Writer<'_> {
                 .unwrap_or_default();
             style.formula = true;
             style.script = crate::typography::Script::Normal;
+            let mut attributes = vec![
+                ("p", position),
+                (
+                    "LabelAlignment",
+                    if group.alignment.is_auto() {
+                        if left { "Right" } else { "Left" }
+                    } else {
+                        group.alignment.cdxml()
+                    }
+                    .into(),
+                ),
+            ];
+            if !group.alignment.is_auto() {
+                attributes.push(("LabelJustification", group.alignment.cdxml().into()));
+            }
             self.text(
                 outer,
                 &group.label,
@@ -415,10 +430,7 @@ impl Writer<'_> {
                     style,
                     ..Default::default()
                 },
-                [
-                    ("p", position),
-                    ("LabelAlignment", if left { "Right" } else { "Left" }.into()),
-                ],
+                attributes,
             )?;
         }
         Ok(())

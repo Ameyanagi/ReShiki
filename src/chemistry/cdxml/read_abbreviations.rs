@@ -188,6 +188,18 @@ pub fn read_abbreviations(
             .map(&mut identify)
             .collect::<Result<Vec<_>>>()?;
         result.push(DrawingAbbreviation {
+            alignment: {
+                let source = nodes
+                    .get(&record.anchor)
+                    .ok_or_else(|| Error::Invalid(ASSOCIATION.into()))?;
+                let label = tree.children(*source, "t")?.first().copied();
+                let alignment = label
+                    .and_then(|t| tree.node(t).ok())
+                    .and_then(|t| t.attr("LabelJustification"))
+                    .unwrap_or("Auto");
+                crate::abbreviations::LabelAlignment::from_cdxml(alignment)
+                    .map_err(Error::Invalid)?
+            },
             label: record.label.clone(),
             reverse_label: record.reverse_label.clone(),
             anchor,

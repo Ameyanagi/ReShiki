@@ -269,6 +269,7 @@ pub fn find(
         let anchor = *at(&molecule.ids, *at(&mapping, 1)?)?;
         used.extend(&members);
         result.abbreviations.push(Abbreviation {
+            alignment: Default::default(),
             label: preset.label.clone(),
             reverse_label: preset.reverse_label.clone(),
             anchor,

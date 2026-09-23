@@ -32,7 +32,7 @@ impl App {
                     "Ring / Toggle saturated–aromatic (same size)",
                 ),
                 ("A / T / E", "Arrow / Text / Eraser"),
-                ("Alt drag", "Draw bonds freely"),
+                ("Option / Alt drag", "Draw or move bonded atoms freely"),
                 ("Esc", "Return to selection"),
             ],
         );

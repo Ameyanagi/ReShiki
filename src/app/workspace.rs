@@ -1260,7 +1260,16 @@ impl App {
             "Edit document fonts, bond dimensions and publication style",
             tooltip::Position::Bottom,
         ));
-        if (matches!(self.tool, Tool::Chain(_)) || self.tool.bond_preset().is_some())
+        let moving_bonded_selection = matches!(self.tool, Tool::Select | Tool::Lasso) && {
+            let selected = self.doc.expand_abbreviation_selection(&self.selected);
+            self.doc
+                .bonds
+                .iter()
+                .any(|bond| selected.contains(&bond.a) != selected.contains(&bond.b))
+        };
+        if (matches!(self.tool, Tool::Chain(_))
+            || self.tool.bond_preset().is_some()
+            || moving_bonded_selection)
             && ((self.bond_drawing.length - self.doc.drawing_style.bond_length_world).abs() > 0.001
                 || self.chain_drawing.angle != 120.
                 || !self.bond_drawing.fixed_length
@@ -1272,15 +1281,19 @@ impl App {
                 tooltip::Position::Bottom,
             ));
         }
-        if matches!(self.tool, Tool::Chain(_)) {
+        if matches!(self.tool, Tool::Chain(_)) || moving_bonded_selection {
             return container(
                 column![
                     options,
                     row![
                         self.bond_constraints(),
-                        text("Ctrl bends · Shift flips start · Alt frees · Auto click: 6 atoms")
-                            .size(10)
-                            .color(muted()),
+                        text(if moving_bonded_selection {
+                            "Bonded movement follows Length / Angles · Option/Alt: free movement"
+                        } else {
+                            "Ctrl bends · Shift flips start · Alt frees · Auto click: 6 atoms"
+                        })
+                        .size(10)
+                        .color(muted()),
                     ]
                     .spacing(14)
                     .align_y(Alignment::Center)

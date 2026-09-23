@@ -6,6 +6,7 @@ use iced::widget::{
     Space, button, column, container, mouse_area, opaque, pick_list, row, stack, text, text_input,
 };
 use iced::{Element, Length, Task};
+use reshiki::abbreviations::LabelAlignment;
 use reshiki::atom_text::{self, Mode};
 
 #[derive(Debug, Clone)]
@@ -13,6 +14,7 @@ pub enum Action {
     Begin(Option<u64>),
     Input(String),
     Mode(Mode),
+    Alignment(LabelAlignment),
     Apply,
     Cancel,
 }
@@ -21,6 +23,7 @@ pub struct State {
     epoch: u64,
     input: String,
     mode: Mode,
+    alignment: LabelAlignment,
     error: Option<String>,
 }
 impl App {
@@ -76,6 +79,7 @@ impl App {
                         Mode::Auto
                     },
                     error: None,
+                    alignment: group.map(|g| g.alignment).unwrap_or_default(),
                 });
                 self.context_menu = None;
                 return Task::batch([
@@ -96,6 +100,11 @@ impl App {
                 }
             }
             Action::Cancel => self.atom_text = None,
+            Action::Alignment(alignment) => {
+                if let Some(state) = &mut self.atom_text {
+                    state.alignment = alignment;
+                }
+            }
             Action::Apply => {
                 let Some(state) = &self.atom_text else {
                     return Task::none();
@@ -106,7 +115,12 @@ impl App {
                     atom_text::apply(&self.doc, state.id, &state.input, state.mode)
                 };
                 match result {
-                    Ok(doc) => {
+                    Ok(mut doc) => {
+                        if let Some(group) =
+                            doc.abbreviations.iter_mut().find(|g| g.anchor == state.id)
+                        {
+                            group.alignment = state.alignment;
+                        }
                         let before = std::mem::replace(&mut self.doc, doc);
                         self.atom_text = None;
                         self.changed(before);
@@ -144,6 +158,17 @@ impl App {
                 .color(muted()),
         ]
         .spacing(12);
+        if state.mode == Mode::Group
+            || state.mode == Mode::Auto
+                && (reshiki::abbreviations::PRESETS.contains(&state.input.trim())
+                    || reshiki::ligands::LABELS.contains(&state.input.trim()))
+        {
+            content = content.push(column![
+                text("Group label alignment").size(12),
+                pick_list(LabelAlignment::ALL, Some(state.alignment), |a| Message::AtomText(Action::Alignment(a))).width(Length::Fill),
+                text("Automatic follows the bond. An override fixes the label placement; its atoms stay unchanged.").size(12).color(muted()),
+            ].spacing(6));
+        }
         if let Some(error) = &state.error {
             content = content.push(
                 text(error)
@@ -227,6 +252,40 @@ mod tests {
     use super::*;
     use crate::canvas::{Edit, Tool};
     use reshiki::document::Point;
+
+    #[test]
+    fn group_alignment_defaults_to_auto_and_undo_keeps_the_chemical_graph() -> Result<(), String> {
+        for label in ["Boc", "Cp*"] {
+            let (mut app, _) = App::new();
+            let id = app.doc.add_atom("C", Point::default());
+            app.doc = reshiki::atom_text::apply(&app.doc, id, label, Mode::Group)?;
+            app.selected = vec![id];
+            let before = app.doc.clone();
+            for alignment in LabelAlignment::ALL {
+                let _ = app.update(Message::AtomText(Action::Begin(None)));
+                let _ = app.update(Message::AtomText(Action::Alignment(alignment)));
+                let _ = app.update(Message::AtomText(Action::Apply));
+                assert_eq!(
+                    app.doc.abbreviation(id).ok_or("group")?.alignment,
+                    alignment
+                );
+                assert_eq!(app.doc.atoms, before.atoms);
+                assert_eq!(app.doc.bonds, before.bonds);
+            }
+            let _ = app.update(Message::Undo);
+            assert_eq!(
+                app.doc.abbreviation(id).ok_or("group")?.alignment,
+                LabelAlignment::Right
+            );
+            let _ = app.update(Message::Redo);
+            assert_eq!(
+                app.doc.abbreviation(id).ok_or("group")?.alignment,
+                LabelAlignment::Above
+            );
+            assert_eq!(app.doc.atoms, before.atoms);
+        }
+        Ok(())
+    }
 
     #[test]
     fn collapsed_haptic_groups_can_be_edited_and_undone() -> Result<(), String> {

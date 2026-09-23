@@ -52,6 +52,11 @@ pub async fn execute(
         {
             None
         }
+        None if cleaned.analysis_policy == cleanup::AnalysisPolicy::RetainedAttachments
+            && crate::attachments::present(&cleaned.document) =>
+        {
+            None
+        }
         None => return Err(Error::AnalysisPolicy),
     };
     tokio::task::spawn_blocking(move || {

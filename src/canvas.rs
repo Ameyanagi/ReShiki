@@ -9,6 +9,7 @@ use reshiki::{
 mod dashes;
 pub mod guides;
 pub mod layered;
+mod movement;
 mod pages;
 mod selection;
 use selection::{Handle, SelectionBox, TransformDrag};
@@ -53,7 +54,7 @@ impl Tool {
     pub fn hint(self) -> &'static str {
         match self {
             Self::Select => {
-                "Drag atoms, bonds or ring interiors · Drag a ring edge onto a bond to fuse"
+                "Bonded drags use Length/Angles · Option/Alt frees movement · Drag a ring edge to fuse"
             }
             Self::Lasso => "Draw around objects · Shift adds · Option/Alt drag subtracts",
             Self::Chain(_) => {
@@ -927,7 +928,13 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                             }
                         } else {
                             state.last_click = None;
-                            Edit::Move(ids, p.x - start.x, p.y - start.y)
+                            let delta = movement::delta(
+                                self.doc,
+                                &ids,
+                                World::new(p.x - start.x, p.y - start.y),
+                                self.bond_drawing.unconstrained(state.modifiers.alt()),
+                            );
+                            Edit::Move(ids, delta.x, delta.y)
                         }
                     }
                     Gesture::Select { start } => {
@@ -1414,17 +1421,20 @@ impl MoleculeCanvas<'_> {
             let p = self
                 .camera
                 .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
-            if start.distance(p) < 1.0 / self.camera.zoom {
-                ring_selection = Some(ids.clone());
-            } else if let Some(snapped) = reshiki::editing::snap_ring(
-                &mut preview,
+            let delta = movement::delta(
+                self.doc,
                 ids,
                 World::new(p.x - start.x, p.y - start.y),
-                14.0 / self.camera.zoom,
-            ) {
+                self.bond_drawing.unconstrained(state.modifiers.alt()),
+            );
+            if start.distance(p) < 1.0 / self.camera.zoom {
+                ring_selection = Some(ids.clone());
+            } else if let Some(snapped) =
+                reshiki::editing::snap_ring(&mut preview, ids, delta, 14.0 / self.camera.zoom)
+            {
                 ring_selection = Some(snapped);
             } else {
-                preview.translate(ids, p.x - start.x, p.y - start.y);
+                preview.translate(ids, delta.x, delta.y);
                 ring_selection = Some(ids.clone());
             }
         }
@@ -2731,6 +2741,66 @@ mod tests {
             matches!(action.into_inner().0, Some(Edit::Move(ids, 60., 30.)) if ids == vec![atom])
         );
         assert_eq!(doc.atom(atom).unwrap().position, World::default());
+    }
+
+    #[test]
+    fn bonded_move_release_uses_constraints_and_live_option_override() -> Result<(), String> {
+        let mut doc = Document::default();
+        let a = doc.add_atom("C", World::default());
+        let b = doc.add_atom("O", World::new(42., 0.));
+        doc.add_bond(a, b, 1, "plain");
+        let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+        canvas.tool = Tool::Select;
+        let bounds = Rectangle::with_size(iced::Size::new(400., 300.));
+        for free in [false, true] {
+            let mut state = State {
+                gesture: Some(Gesture::Move {
+                    start: World::new(44., 1.),
+                    ids: vec![b],
+                    clicked: vec![b],
+                }),
+                ..Default::default()
+            };
+            let end = Point::new(279., 183.);
+            if free {
+                canvas.update(
+                    &mut state,
+                    &Event::Keyboard(iced::keyboard::Event::ModifiersChanged(
+                        iced::keyboard::Modifiers::ALT,
+                    )),
+                    bounds,
+                    mouse::Cursor::Available(end),
+                );
+            }
+            let result = canvas
+                .update(
+                    &mut state,
+                    &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                    bounds,
+                    mouse::Cursor::Available(end),
+                )
+                .and_then(|action| action.into_inner().0)
+                .ok_or("Missing release edit")?;
+            let Edit::Move(ids, dx, dy) = result else {
+                return Err("Expected movement".into());
+            };
+            let requested = World::new(35., 32.);
+            let preview = movement::delta(
+                &doc,
+                &[b],
+                requested,
+                canvas.bond_drawing.unconstrained(free),
+            );
+            assert_eq!(ids, vec![b]);
+            assert_eq!(World::new(dx, dy), preview);
+            if free {
+                assert_eq!(preview, requested);
+            } else {
+                assert!((World::new(42. + dx, dy).distance(World::default()) - 42.).abs() < 0.001);
+            }
+        }
+        assert_eq!(doc.atom(b).ok_or("atom")?.position, World::new(42., 0.));
+        Ok(())
     }
 
     #[test]

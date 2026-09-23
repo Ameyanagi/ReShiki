@@ -87,6 +87,7 @@ pub struct Prepared {
     parts: Vec<Part>,
     deferred_error: Option<Error>,
     bond_length: f64,
+    preserved_attachments: usize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -95,6 +96,9 @@ pub enum AnalysisPolicy {
     /// Only original chemistry failures may become warnings. Helper discovery,
     /// transport, cancellation, resource failures and invariant errors propagate.
     SelectedChemistry,
+    /// Semantic attachment components retain their original geometry and graph.
+    /// Ordinary molecular identifiers cannot represent their target lists.
+    RetainedAttachments,
 }
 
 /// A complete atomic edit. `molecule` retains f64 positions from the original
@@ -153,9 +157,14 @@ pub fn prepare(source: &Document, options: Options, selection: &[u64]) -> Result
         }
     }
     let mut adjacent = vec![Vec::new(); source.atoms.len()];
-    for bond in &source.bonds {
-        let a = *indices.get(&bond.a).ok_or(Error::Layout)?;
-        let b = *indices.get(&bond.b).ok_or(Error::Layout)?;
+    // Haptic groups connect through target membership, not covalent bonds.
+    // Keep that component intact without inventing metal–carbon bonds.
+    for (count, (a, b)) in crate::attachments::edges(source).enumerate() {
+        if count >= 600_000 {
+            return Err(Error::Limit);
+        }
+        let a = *indices.get(&a).ok_or(Error::Layout)?;
+        let b = *indices.get(&b).ok_or(Error::Layout)?;
         adjacent.get_mut(a).ok_or(Error::Layout)?.push(b);
         adjacent.get_mut(b).ok_or(Error::Layout)?.push(a);
     }
@@ -218,8 +227,16 @@ pub fn prepare(source: &Document, options: Options, selection: &[u64]) -> Result
     }
     let mut parts = Vec::new();
     let mut deferred_error = None;
+    let mut preserved_attachments = 0;
     for base in bases {
         if options.scope != Scope::Drawing && !base.atoms.iter().any(|a| selected.contains(&a.id)) {
+            continue;
+        }
+        // The ordinary solver and its identity check cannot represent ALL/ANY
+        // attachment semantics. Preserve the entire connected structure while
+        // allowing independent ordinary molecules to be cleaned normally.
+        if crate::attachments::present(&base) {
+            preserved_attachments += 1;
             continue;
         }
         let moving: HashSet<_> = base
@@ -259,7 +276,7 @@ pub fn prepare(source: &Document, options: Options, selection: &[u64]) -> Result
             fixed,
         });
     }
-    if parts.is_empty() && deferred_error.is_none() {
+    if parts.is_empty() && deferred_error.is_none() && preserved_attachments == 0 {
         return Err(Error::Empty);
     }
     Ok(Prepared {
@@ -268,6 +285,7 @@ pub fn prepare(source: &Document, options: Options, selection: &[u64]) -> Result
         parts,
         deferred_error,
         bond_length: f64::from(source.drawing_style.bond_length_world) / 28.,
+        preserved_attachments,
     })
 }
 
@@ -455,6 +473,22 @@ impl Prepared {
         } else {
             vec![]
         };
+        if self.preserved_attachments != 0 {
+            warnings.push(format!(
+                "{} attachment-containing structure(s) kept unchanged. Automatic cleanup of multi-center and variable attachments is not yet supported.",
+                self.preserved_attachments
+            ));
+        }
+        if crate::attachments::present(&result) {
+            warnings.push("Attachment targets and charges retained; molecular identifiers and coordination-valence analysis are unavailable for this drawing.".into());
+            return Ok(Cleaned {
+                document: result,
+                molecule: None,
+                warnings,
+                analysis_policy: AnalysisPolicy::RetainedAttachments,
+                analysis_failure: None,
+            });
+        }
         let analysis_policy = if self.options.scope == Scope::Drawing {
             AnalysisPolicy::Required
         } else {

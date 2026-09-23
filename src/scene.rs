@@ -56,12 +56,22 @@ fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
             .map(|c| crate::style::styled_text_width(&c.to_string(), size, &style) * 0.5)
             .unwrap_or(0.0);
         let origin = a.position.offset(
-            if group.faces_left(doc) {
+            if matches!(
+                group.alignment,
+                crate::abbreviations::LabelAlignment::Center
+                    | crate::abbreviations::LabelAlignment::Above
+            ) {
+                -layout.width / 2.
+            } else if group.faces_left(doc) {
                 half - layout.width
             } else {
                 -half
             },
-            -size * 0.58,
+            if group.alignment == crate::abbreviations::LabelAlignment::Above {
+                -layout.height - size * 0.35
+            } else {
+                -size * 0.58
+            },
         );
         return layout
             .fragments

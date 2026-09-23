@@ -1,5 +1,44 @@
 # ChemDraw attachment comparison
 
+## Label alignment and constrained movement follow-up
+
+On 2026-09-23, ChemDraw 26 was also checked directly for group alignment and
+atom dragging. Text offers Automatic, Flush Left, Centered, Flush Right and
+Stacked Above. A Boc group saved after Flush Right retained
+`LabelJustification="Right"` independently of `LabelAlignment="Left"`.
+The real saved file is committed as
+`tests/fixtures/chemdraw-attachments/group-alignment-right.cdxml`.
+Automatic can resolve to a concrete justification on save, so an imported
+explicit value is retained rather than guessed back to Auto.
+
+With Object → Fixed Lengths and Fixed Angles both enabled, dragging the endpoint
+of a 30 pt bond produced 29.99934 pt at 30.00073°. Holding Option during the
+same drag produced 73.79024 pt at 26.56505°. The scratch documents and measured
+coordinates, rather than screenshot pixels, were used for this comparison.
+The original Fixed Lengths preference was restored after the test.
+
+ReShiki uses its existing 15° bond-angle grid and configured length for bonded
+selection movement. Option/Alt releases both constraints; whole molecules
+translate freely. Preview and committed movement use one constraint function.
+Group label alignment is separately stored, defaults to Automatic, and does
+not change a defined fragment's chemistry. Above currently positions a single
+nickname above its anchor, not general multiline formula-token stacking.
+
+The vendor's [ChemDraw 21 guide](https://chem.beloit.edu/classes/programs/ChemDraw_21_manual.pdf#page=46)
+describes label justification and formula-token placement; defined nicknames
+act as single tokens. ReShiki's named-fragment graph remains fixed when its
+label is aligned. This should not be confused with reinterpreting an arbitrary
+typed chemical formula's attachment atom.
+
+The ReShiki GUI follow-up saved a centered Cp* label and verified unchanged
+atom/bond records. A normal drag produced 42.0000 world units at −135°;
+Option produced 108.3621 units at −129.8362° for the same gesture. Cleanup now
+preserves typed-attachment components, including their collapsed groups,
+and reports the unsupported geometry optimization explicitly. It can still
+clean independent ordinary components. See the [illustrated PR changelog](changes-pr17.md).
+
+## Attachment reference checks
+
 Checked ChemDraw 26.0.0.6599 on macOS on 2026-09-23. Computer Use successfully read the window and operated the Structure menu after its initial authentication error. Native macOS events were used for the floating bond palette and dragging, which Computer Use did not deliver reliably to this app. Only isolated test documents were edited.
 
 | Operation                                                          | Observed result                                                                           | Meaning                                                                     |
