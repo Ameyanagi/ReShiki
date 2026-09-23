@@ -6,7 +6,8 @@
     -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif;
   --sl-content-width: 48rem;
   --reshiki-surface: #202623;
-  --reshiki-button: #315143;
+  --reshiki-button: #e98c68;
+  --reshiki-button-text: #202623;
 }
 
 :root[data-theme="light"] {
@@ -19,6 +20,8 @@
   --sl-color-hairline-light: #dfe1d9;
   --sl-color-hairline: #dfe1d9;
   --reshiki-surface: #fff;
+  --reshiki-button: #b5472b;
+  --reshiki-button-text: #fff;
 }
 
 .sl-markdown-content table {
@@ -55,9 +58,21 @@
 }
 
 /* Keep the landing page separate from the manual's reading layout. */
+[data-has-hero] {
+  --sl-color-bg: #191f1c;
+  --sl-color-bg-nav: #191f1c;
+  --sl-color-hairline: #38413a;
+}
+
+[data-has-hero][data-theme="light"] {
+  --sl-color-bg: #f7f7f2;
+  --sl-color-bg-nav: #f7f7f2;
+  --sl-color-hairline: #dedfd6;
+}
+
 [data-has-hero] .hero {
   display: block;
-  padding: clamp(2rem, 5vw, 4.5rem) 0 0;
+  padding: clamp(1rem, 2.2vw, 2rem) 0 0;
 }
 
 [data-has-hero] .sl-container {
@@ -67,47 +82,69 @@
 [data-has-hero] .hero .stack {
   align-items: flex-start;
   text-align: left;
-  gap: 1.75rem;
+  gap: 1.4rem;
 }
 
 [data-has-hero] .hero .copy {
   align-items: flex-start;
-  gap: 1.4rem;
+  gap: 1.15rem;
 }
 
 [data-has-hero] .hero h1 {
-  font-size: clamp(2.5rem, 5vw, 4.25rem);
-  font-weight: 560;
-  letter-spacing: -0.055em;
-  line-height: 1.06;
+  font-size: clamp(2.5rem, 5vw, 4.125rem);
+  font-weight: 650;
+  letter-spacing: -0.045em;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+
+[data-has-hero] .hero-accent {
+  color: var(--sl-color-accent);
 }
 
 [data-has-hero] .hero .tagline {
-  max-width: 34rem;
-  font-size: clamp(1.05rem, 1.7vw, 1.2rem);
+  max-width: 38rem;
+  font-size: clamp(1rem, 1.5vw, 1.125rem);
   line-height: 1.6;
+  color: var(--sl-color-gray-2);
 }
 
 [data-has-hero] .hero .actions {
   justify-content: flex-start;
-  gap: 0.8rem;
+  gap: 0.75rem;
 }
 
 [data-has-hero] .hero .sl-link-button.primary {
   background: var(--reshiki-button);
   border-color: var(--reshiki-button);
-  color: #fff;
+  color: var(--reshiki-button-text);
+  box-shadow: 0 2px 4px #00000008;
+}
+
+[data-has-hero] .hero .sl-link-button.primary:hover {
+  background: color-mix(in srgb, var(--reshiki-button), var(--reshiki-button-text) 8%);
+  border-color: transparent;
 }
 
 [data-has-hero] .hero .sl-link-button {
-  padding: 0.9rem 1.2rem;
-  border-radius: 0.35rem;
+  padding: 0.8rem 1.15rem;
+  min-height: 3rem;
+  border-radius: 0.6rem;
   font-size: 0.95rem;
-  font-weight: 550;
+  font-weight: 600;
+  transition:
+    background-color 150ms,
+    border-color 150ms;
 }
 
 [data-has-hero] .hero .sl-link-button.secondary {
   border-color: var(--sl-color-hairline);
+  color: var(--sl-color-white);
+}
+
+[data-has-hero] .hero .sl-link-button.secondary:hover {
+  background: var(--reshiki-surface);
+  border-color: var(--sl-color-gray-3);
 }
 
 .reshiki-home {
@@ -124,19 +161,20 @@
 }
 
 .home-release {
-  margin: 0 0 0.9rem;
+  margin: 0 0 0.65rem;
 }
 
 .home-release a {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  padding: 0.4rem 0.7rem;
+  gap: 0.25rem;
+  padding: 0.35rem 0.7rem;
   border: 1px solid var(--sl-color-hairline);
-  border-radius: 0.4rem;
+  border-radius: 0.5rem;
   color: var(--sl-color-text-accent);
-  font-size: 0.8rem;
-  font-weight: 600;
+  font-size: 0.75rem;
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
 }
 
 .home-release a:hover {
@@ -153,7 +191,7 @@
   justify-content: flex-start;
   flex-wrap: wrap;
   gap: 0.55rem;
-  margin: 0 0 2.5rem;
+  margin: 0 0 1.35rem;
   color: var(--sl-color-gray-2);
   font-size: 0.8rem;
 }
@@ -178,29 +216,28 @@
   display: flex;
   justify-content: flex-start;
   flex-wrap: wrap;
-  gap: 0.75rem;
-  margin: -1.25rem 0 2.5rem;
+  gap: 1.25rem;
+  margin: -0.5rem 0 1.35rem;
 }
 
 .home-support a {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.6rem 0.85rem;
-  border: 1px solid var(--sl-color-hairline);
-  border-radius: 0.5rem;
-  color: var(--sl-color-text);
+  min-height: 2.75rem;
+  color: var(--sl-color-gray-2);
   font-size: 0.8rem;
   line-height: 1.3;
 }
 
 .home-support a:hover {
-  border-color: var(--sl-color-text-accent);
-  background: var(--reshiki-surface);
+  color: var(--sl-color-text-accent);
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
 }
 
 .home-support svg {
-  color: var(--sl-color-text-accent);
+  color: currentColor;
 }
 
 .home-workspace video {
@@ -211,23 +248,27 @@
   border: 1px solid var(--sl-color-hairline);
   border-radius: 1rem;
   background: #202623;
+  box-shadow: 0 8px 28px #0000000c;
 }
 
 .home-workspace figcaption {
-  margin-top: 0.9rem;
+  margin-top: 0.8rem;
   color: var(--sl-color-gray-2);
   font-size: 0.75rem;
   text-align: center;
 }
 
 .home-workspace figcaption a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
   color: inherit;
   text-decoration: underline;
   text-underline-offset: 0.2em;
 }
 
 .home-manual {
-  margin-top: clamp(3.5rem, 7vw, 6rem);
+  margin-top: clamp(2.5rem, 5vw, 4rem);
 }
 
 .home-section-heading {
@@ -236,13 +277,13 @@
   justify-content: space-between;
   gap: 0.75rem 2rem;
   flex-wrap: wrap;
-  margin-bottom: 1.75rem;
+  margin-bottom: 1.3rem;
 }
 
 .home-section-heading h2 {
   margin: 0;
   font-size: clamp(1.5rem, 3vw, 2rem);
-  font-weight: 550;
+  font-weight: 650;
   letter-spacing: -0.035em;
 }
 
@@ -255,14 +296,19 @@
 .home-workflows {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1.5rem;
+  gap: 1rem;
 }
 
 .home-workflow {
   display: block;
-  padding: 1.25rem 0;
-  border-top: 1px solid var(--sl-color-hairline);
+  padding: 1.4rem;
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 0.8rem;
+  background: var(--reshiki-surface);
   color: var(--sl-color-text);
+  transition:
+    border-color 150ms,
+    background-color 150ms;
 }
 
 .home-workflow:hover {
@@ -271,7 +317,7 @@
 
 .home-step {
   display: block;
-  margin-bottom: 1.25rem;
+  margin-bottom: 1rem;
   font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
   color: var(--sl-color-text-accent);
@@ -283,7 +329,7 @@
   gap: 0.5rem;
   margin: 0 0 0.65rem;
   font-size: 1.12rem;
-  font-weight: 550;
+  font-weight: 600;
   letter-spacing: -0.02em;
 }
 
@@ -302,8 +348,8 @@
 .home-guide-links {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.8rem 2rem;
-  padding: 1.5rem 0 2rem;
+  gap: 0.4rem 2rem;
+  padding: 1rem 0 1.35rem;
   border-bottom: 1px solid var(--sl-color-hairline);
 }
 
@@ -311,6 +357,7 @@
   display: inline-flex;
   gap: 1rem;
   align-items: center;
+  min-height: 2.75rem;
   color: var(--sl-color-text);
   font-size: 0.9rem;
 }
@@ -336,33 +383,59 @@
 }
 
 .home-developers a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
   color: var(--sl-color-text-accent);
 }
 
 @media (max-width: 40rem) {
   .home-workflows {
     grid-template-columns: 1fr;
-    gap: 0.5rem;
+    gap: 0.75rem;
   }
 
   .home-workflow {
     position: relative;
-    padding-left: 2.5rem;
+    padding-left: 3rem;
   }
 
   .home-step {
     position: absolute;
-    left: 0;
+    left: 1rem;
     top: 1.45rem;
   }
 
   .home-guide-links {
-    gap: 0.9rem 1.5rem;
+    gap: 0.25rem 1.5rem;
   }
 
   .home-platforms {
     font-size: 0.75rem;
     gap: 0.4rem;
+  }
+
+  [data-has-hero] .hero {
+    padding-top: 0.75rem;
+  }
+
+  [data-has-hero] .hero .actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .home-support {
+    column-gap: 1.25rem;
+    row-gap: 0;
+  }
+
+  .home-workspace video {
+    border-radius: 0.65rem;
+  }
+
+  .home-workspace figcaption {
+    line-height: 1.8;
   }
 }
 
@@ -380,7 +453,7 @@
 .home-tour-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1.5rem;
+  gap: 1.25rem;
 }
 .home-tour figure {
   margin: 0;
@@ -390,7 +463,7 @@
   display: block;
   overflow: hidden;
   border: 1px solid var(--sl-color-hairline);
-  border-radius: 0.5rem;
+  border-radius: 0.8rem;
   background: var(--reshiki-surface);
 }
 .home-tour a:hover {
@@ -404,8 +477,8 @@
 .home-tour figcaption {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  padding: 0.85rem 0.15rem;
+  gap: 0.35rem;
+  padding: 1rem 0.15rem;
 }
 .home-tour strong {
   font-weight: 600;
@@ -418,5 +491,12 @@
 @media (max-width: 40rem) {
   .home-tour-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-has-hero] .hero .sl-link-button,
+  .home-workflow {
+    transition: none;
   }
 }
