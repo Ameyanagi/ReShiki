@@ -142,8 +142,12 @@ fn encode_value(p: &Property, value: &str, element: &str) -> Result<Vec<u8>> {
             }
             Ok(data)
         }
-        "CDXObjectIDArray" => {
-            let mut data = Vec::new();
+        "CDXObjectIDArray" | "CDXObjectIDArrayWithCounts" => {
+            let mut data = if p.kind == "CDXObjectIDArrayWithCounts" {
+                word(value.split_whitespace().count())?.to_vec()
+            } else {
+                Vec::new()
+            };
             for v in value.split_whitespace() {
                 append(&mut data, &integer::<u32>(v)?.to_le_bytes())?;
             }

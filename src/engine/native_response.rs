@@ -136,6 +136,36 @@ pub async fn analyze_prepared(
 /// non-abbreviation requests omit preparation. Discovery remains lazy so a
 /// figure, exotic bond analysis or native early-empty result needs no helper.
 pub(crate) async fn execute(request: Request) -> Result<Response, Error> {
+    if request.protocol == 1
+        && request.operation == "export"
+        && matches!(request.format.as_deref(), Some("cdxml" | "cdx" | "mol"))
+        && request
+            .document
+            .as_ref()
+            .is_some_and(crate::attachments::present)
+    {
+        return tokio::task::spawn_blocking(move || {
+            let document = request.document.as_ref().ok_or(Error::MissingDocument)?;
+            let output = if request.format.as_deref() == Some("mol") {
+                molfile::write_document(document)?
+            } else {
+                let xml = exchange::drawing::write(document, (&request).into())?;
+                if request.format.as_deref() == Some("cdx") {
+                    STANDARD.encode(exchange::to_cdx(&xml).map_err(Error::Chemistry)?)
+                } else {
+                    xml
+                }
+            };
+            Ok(Response {
+                document: Some(document.clone()),
+                analysis: None,
+                output: Some(output),
+                engine_version: chemistry::RDKIT_VERSION.into(),
+                warnings: vec![crate::attachments::ANALYSIS_NOTICE.into()],
+            })
+        })
+        .await?;
+    }
     let request = Arc::new(request);
     let source = Arc::clone(&request);
     let prepared = tokio::task::spawn_blocking(move || {

@@ -154,6 +154,7 @@ impl BondPreset {
         })
     }
     pub fn apply(self, bond: &mut Bond) {
+        bond.ring_arc = false;
         let (order, display, secondary) = self.parts();
         bond.order = order;
         bond.display = display.into();

@@ -44,15 +44,75 @@ fn at<T>(items: &[T], index: usize) -> Result<&T, Error> {
 /// conventions. V3000 is automatic for dative bonds, large graphs/coordinates.
 /// Queries, enhanced stereo groups and non-tetrahedral tags are not drawing data.
 pub fn write(molecule: &Molecule, options: Options) -> Result<String, Error> {
-    write_part(molecule, options, false)
+    write_part(molecule, options, false, &[])
+}
+
+/// Write semantic ALL/ANY endpoints as V3000 properties. Distributed charges
+/// and unbonded attachment points require CDXML/native storage instead.
+pub fn write_document(doc: &crate::document::Document) -> Result<String, Error> {
+    let mut proxy = crate::attachments::interchange_graph(doc).map_err(invalid)?;
+    let mut endpoints = Vec::new();
+    for a in doc.atoms.iter().filter(|a| a.attachment.is_some()) {
+        let kind = a
+            .attachment
+            .ok_or_else(|| invalid("Missing attachment kind"))?;
+        if a.charge != 0 || a.radical_electrons != 0 {
+            return Err(invalid(
+                "Distributed attachment charges/radicals require CDXML or native ReShiki",
+            ));
+        }
+        let bonds: Vec<_> = proxy
+            .bonds
+            .iter_mut()
+            .filter(|b| b.a == a.id || b.b == a.id)
+            .collect();
+        let [bond] = bonds.as_slice() else {
+            return Err(invalid(
+                "V3000 requires exactly one bond per attachment point; use CDXML",
+            ));
+        };
+        if !matches!(bond.order, 1 | 5)
+            || bond.stereo.is_some()
+            || !matches!(bond.display.as_str(), "plain" | "dashed" | "dotted")
+        {
+            return Err(invalid("Unsupported V3000 attachment bond; use CDXML"));
+        }
+        for bond in bonds {
+            if kind == crate::attachments::Kind::MultiCenter {
+                if bond.b == a.id {
+                    std::mem::swap(&mut bond.a, &mut bond.b);
+                }
+                bond.order = 5; // RDKit haptic convention: dummy donor → metal.
+            }
+        }
+        endpoints.push(crate::attachments::Attachment {
+            id: a.id,
+            kind,
+            members: a.centroid.clone(),
+        });
+    }
+    let molecule = document::prepare(&proxy)?;
+    write_part(
+        &molecule,
+        Options {
+            force_v3000: !endpoints.is_empty(),
+        },
+        false,
+        &endpoints,
+    )
 }
 
 /// Reaction CTABs retain aromatic bond types instead of assigning Kekulé bonds.
 pub(crate) fn reaction_ctab(molecule: &Molecule) -> Result<String, Error> {
-    write_part(molecule, Options { force_v3000: true }, true)
+    write_part(molecule, Options { force_v3000: true }, true, &[])
 }
 
-fn write_part(molecule: &Molecule, options: Options, reaction: bool) -> Result<String, Error> {
+fn write_part(
+    molecule: &Molecule,
+    options: Options,
+    reaction: bool,
+    attachments: &[crate::attachments::Attachment],
+) -> Result<String, Error> {
     let source = &molecule.state;
     source.graph.validate().map_err(invalid)?;
     source.metadata.validate(&source.graph).map_err(invalid)?;
@@ -211,6 +271,47 @@ fn write_part(molecule: &Molecule, options: Options, reaction: bool) -> Result<S
         let order = if bond.order == 5 { 9 } else { bond.order };
         let (a, b) = (stereo.a + 1, stereo.b + 1);
         if v3000 {
+            if let Some(attachment) = attachments.iter().find(|n| {
+                molecule.ids.get(bond.a) == Some(&n.id) || molecule.ids.get(bond.b) == Some(&n.id)
+            }) {
+                let mut line = format!(
+                    "{} {order} {a} {b} ENDPTS=({}",
+                    i + 1,
+                    attachment.members.len()
+                );
+                for id in &attachment.members {
+                    let index = molecule
+                        .ids
+                        .iter()
+                        .position(|n| n == id)
+                        .ok_or_else(|| invalid("Missing MOL attachment target"))?;
+                    write!(line, " {}", index + 1)?;
+                }
+                write!(
+                    line,
+                    ") ATTACH={}",
+                    if attachment.kind == crate::attachments::Kind::MultiCenter {
+                        "ALL"
+                    } else {
+                        "ANY"
+                    }
+                )?;
+                // V3000 continuation records concatenate without adding spaces.
+                for (index, chunk) in line.as_bytes().chunks(70).enumerate() {
+                    let text = std::str::from_utf8(chunk)
+                        .map_err(|_| invalid("Invalid attachment record"))?;
+                    writeln!(
+                        output,
+                        "M  V30 {text}{}",
+                        if (index + 1) * 70 < line.len() {
+                            "-"
+                        } else {
+                            ""
+                        }
+                    )?;
+                }
+                continue;
+            }
             write!(output, "M  V30 {} {order} {a} {b}", i + 1)?;
             if stereo.code != 0 {
                 let cfg = match stereo.code {

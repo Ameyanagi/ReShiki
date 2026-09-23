@@ -524,6 +524,9 @@ pub fn place_anchored(
             }
             // The templates contain no stereo at attachment sites. Retain remote stereo.
             for a in &mut result.atoms {
+                for member in &mut a.centroid {
+                    *member = mapped(*member);
+                }
                 if let Some(stereo) = &mut a.stereo {
                     for id in &mut stereo.neighbors {
                         *id = mapped(*id);

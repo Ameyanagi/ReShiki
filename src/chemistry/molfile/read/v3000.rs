@@ -215,7 +215,7 @@ pub(super) fn read(r: &mut Reader<'_>, p: &mut Parsed, expect_end: bool) -> Resu
             {
                 return Err(r.invalid("Duplicate bond ID"));
             }
-            let (kind, props) = order(bookmark(r.token(&tokens, 1)?), true);
+            let (kind, mut props) = order(bookmark(r.token(&tokens, 1)?), true);
             let endpoint = |i| -> Result<usize> {
                 indices
                     .get(&bookmark(r.token(&tokens, i)?))
@@ -224,6 +224,8 @@ pub(super) fn read(r: &mut Reader<'_>, p: &mut Parsed, expect_end: bool) -> Resu
             };
             let (a, b) = (endpoint(2)?, endpoint(3)?);
             let mut dir = Direction::None;
+            let mut endpts = None;
+            let mut attach = None;
             for &token in tokens.iter().skip(4) {
                 let (key, value) = r.assignment(token)?;
                 match key.as_str() {
@@ -252,10 +254,76 @@ pub(super) fn read(r: &mut Reader<'_>, p: &mut Parsed, expect_end: bool) -> Resu
                     "RXCTR" => {
                         r.integer(value)?;
                     }
-                    // These properties do not modify connectivity in the native MOL reader.
-                    "STBOX" | "ENDPTS" | "ATTACH" => (),
+                    "ENDPTS" => {
+                        if endpts.is_some() {
+                            return Err(r.invalid("Duplicate ENDPTS"));
+                        }
+                        let text = value
+                            .strip_prefix('(')
+                            .and_then(|v| v.strip_suffix(')'))
+                            .ok_or_else(|| r.invalid("Invalid ENDPTS list"))?;
+                        let mut values = text.split_whitespace();
+                        let count = values
+                            .next()
+                            .and_then(|v| v.parse::<usize>().ok())
+                            .filter(|n| (2..=300).contains(n))
+                            .ok_or_else(|| r.invalid("Invalid ENDPTS count"))?;
+                        let mut members = Vec::new();
+                        let mut unique = HashSet::new();
+                        for value in values {
+                            if members.len() >= count {
+                                return Err(r.invalid("ENDPTS count mismatch"));
+                            }
+                            let id = value
+                                .parse::<i32>()
+                                .map_err(|_| r.invalid("Invalid ENDPTS atom ID"))?;
+                            let index = *indices
+                                .get(&id)
+                                .ok_or_else(|| r.invalid("Missing ENDPTS atom"))?;
+                            if index == a || index == b || !unique.insert(index) {
+                                return Err(r.invalid("Invalid or duplicate ENDPTS atom"));
+                            }
+                            members.push(index as u64 + 1);
+                        }
+                        if members.len() != count {
+                            return Err(r.invalid("ENDPTS count mismatch"));
+                        }
+                        endpts = Some(members);
+                    }
+                    "ATTACH" => {
+                        if attach.is_some() {
+                            return Err(r.invalid("Duplicate ATTACH"));
+                        }
+                        attach = Some(match value {
+                            "ALL" => crate::attachments::Kind::MultiCenter,
+                            "ANY" => crate::attachments::Kind::Variable,
+                            _ => return Err(r.invalid("Unknown ATTACH mode")),
+                        });
+                    }
                     _ => (),
                 }
+            }
+            match (attach, endpts) {
+                (Some(attachment_kind), Some(members)) => {
+                    let dummy =
+                        |i: usize| p.graph.atoms.get(i).is_some_and(|a| a.atomic_number == 0);
+                    let id = match (dummy(a), dummy(b)) {
+                        (true, false) => a,
+                        (false, true) => b,
+                        _ => {
+                            return Err(
+                                r.invalid("Attachment bond needs exactly one dummy endpoint")
+                            );
+                        }
+                    };
+                    props.attachment = Some(crate::attachments::Attachment {
+                        id: id as u64 + 1,
+                        kind: attachment_kind,
+                        members,
+                    });
+                }
+                (None, None) => (),
+                _ => return Err(r.invalid("ENDPTS and ATTACH must occur together")),
             }
             p.bond(a, b, kind, dir, props);
         }

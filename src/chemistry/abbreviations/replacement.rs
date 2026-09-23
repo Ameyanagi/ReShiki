@@ -410,6 +410,7 @@ pub fn replace(document: &Document, selection: &[u64], label: &str) -> Result<Do
         }
     }
     result.abbreviations.push(Abbreviation {
+        alignment: Default::default(),
         label: label.into(),
         reverse_label: preset.reverse_label.clone(),
         anchor: target,

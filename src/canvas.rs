@@ -9,14 +9,17 @@ use reshiki::{
 mod dashes;
 pub mod guides;
 pub mod layered;
+mod movement;
 mod pages;
 mod selection;
+pub(crate) mod tilt;
 use selection::{Handle, SelectionBox, TransformDrag};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Tool {
     Select,
     Lasso,
+    Tilt,
     Chain(ChainMode),
     Bond(u8),
     StyledBond(reshiki::bonds::BondPreset),
@@ -53,9 +56,10 @@ impl Tool {
     pub fn hint(self) -> &'static str {
         match self {
             Self::Select => {
-                "Drag atoms, bonds or ring interiors · Drag a ring edge onto a bond to fuse"
+                "Bonded drags use Length/Angles · Option/Alt frees movement · Drag a ring edge to fuse"
             }
             Self::Lasso => "Draw around objects · Shift adds · Option/Alt drag subtracts",
+            Self::Tilt => "Drag a ring or selection to tilt · Shift snaps to 15° · Escape cancels",
             Self::Chain(_) => {
                 "Drag a chain · Ctrl bends · Shift flips · Click places the chosen number of carbons"
             }
@@ -119,6 +123,11 @@ pub enum Edit {
     ArrowClick(u64),
     Select(Vec<u64>),
     Move(Vec<u64>, f32, f32),
+    Tilt {
+        ids: Vec<u64>,
+        x: f32,
+        y: f32,
+    },
     Transform {
         ids: Vec<u64>,
         pivot: World,
@@ -199,6 +208,7 @@ enum Gesture {
         index: usize,
     },
     Transform(Box<TransformDrag>),
+    Tilt(tilt::TiltDrag),
     Draw {
         start: World,
         id: Option<u64>,
@@ -487,6 +497,42 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                 if self.tool == Tool::Erase {
                     state.gesture = Some(Gesture::Erase { last: p });
                     return Some(Action::publish(Edit::EraseStart(p)).and_capture());
+                }
+                if self.tool == Tool::Tilt {
+                    let mut hit = hit_selection(self.doc, p, 10. / self.camera.zoom);
+                    if hit.is_empty() {
+                        hit = reshiki::editing::ring_at(self.doc, p).unwrap_or_default();
+                    }
+                    let in_selection = reshiki::scene::selection_bounds(self.doc, self.selected)
+                        .is_some_and(|(lo, hi)| {
+                            p.x >= lo.x && p.x <= hi.x && p.y >= lo.y && p.y <= hi.y
+                        });
+                    let ids = if tilt::available(self.doc, self.selected)
+                        && ((hit.is_empty() && in_selection)
+                            || (!hit.is_empty() && hit.iter().all(|id| self.selected.contains(id))))
+                    {
+                        self.selected.to_vec()
+                    } else {
+                        let mut ids = self.doc.expand_groups(&hit);
+                        if !tilt::available(self.doc, &ids) {
+                            ids = reshiki::editing::groups(self.doc, &self.doc.all_ids())
+                                .into_iter()
+                                .filter(|g| {
+                                    g.iter()
+                                        .any(|id| hit.contains(id) && self.doc.atom(*id).is_some())
+                                })
+                                .flatten()
+                                .collect();
+                        }
+                        ids
+                    };
+                    state.last_click = None;
+                    state.gesture = Some(if tilt::available(self.doc, &ids) {
+                        Gesture::Tilt(tilt::TiltDrag { ids, start: point? })
+                    } else {
+                        Gesture::Select { start: p }
+                    });
+                    return Some(Action::publish(Edit::Hover(None)).and_capture());
                 }
                 if (self.tool.selects() || matches!(self.tool, Tool::Arrow | Tool::EditPoints))
                     && self.selected.len() == 1
@@ -816,6 +862,21 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                             rotation,
                         }
                     }
+                    Gesture::Tilt(drag) => {
+                        if !inside || self.tool != Tool::Tilt {
+                            return Some(Action::request_redraw().and_capture());
+                        }
+                        let (x, y) = drag.angles(point?, state.modifiers.shift());
+                        if x == 0. && y == 0. {
+                            Edit::Select(drag.ids)
+                        } else {
+                            Edit::Tilt {
+                                ids: drag.ids,
+                                x,
+                                y,
+                            }
+                        }
+                    }
                     Gesture::Ring { start, attached } => {
                         if !inside {
                             return Some(Action::request_redraw().and_capture());
@@ -927,7 +988,13 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                             }
                         } else {
                             state.last_click = None;
-                            Edit::Move(ids, p.x - start.x, p.y - start.y)
+                            let delta = movement::delta(
+                                self.doc,
+                                &ids,
+                                World::new(p.x - start.x, p.y - start.y),
+                                self.bond_drawing.unconstrained(state.modifiers.alt()),
+                            );
+                            Edit::Move(ids, delta.x, delta.y)
                         }
                     }
                     Gesture::Select { start } => {
@@ -1004,6 +1071,13 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
         }
         if matches!(state.gesture, Some(Gesture::ArrowHandle { .. })) {
             return mouse::Interaction::Grabbing;
+        }
+        if self.tool == Tool::Tilt && cursor.is_over(bounds) {
+            return if matches!(state.gesture, Some(Gesture::Tilt(_))) {
+                mouse::Interaction::Grabbing
+            } else {
+                mouse::Interaction::Grab
+            };
         }
         if self.tool == Tool::Erase && cursor.is_over(bounds) {
             return mouse::Interaction::Crosshair;
@@ -1091,6 +1165,20 @@ impl MoleculeCanvas<'_> {
         let mut ring_selection = None;
         let mut chain_badge = None;
         let mut template_notice = None;
+        if let (Some(Gesture::Tilt(drag)), Some(p)) = (&state.gesture, state.cursor)
+            && self.tool == Tool::Tilt
+        {
+            let (x, y) = drag.angles(
+                Point::new(p.x - bounds.x, p.y - bounds.y),
+                state.modifiers.shift(),
+            );
+            tilt::apply(&mut preview, &drag.ids, x, y);
+            ring_selection = Some(drag.ids.clone());
+            template_notice = Some((
+                format!("3D tilt · X {x:+.0}° · Y {y:+.0}° · Shift snaps · Escape cancels"),
+                true,
+            ));
+        }
         if let (
             Some(Gesture::Chain {
                 start,
@@ -1414,17 +1502,20 @@ impl MoleculeCanvas<'_> {
             let p = self
                 .camera
                 .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
-            if start.distance(p) < 1.0 / self.camera.zoom {
-                ring_selection = Some(ids.clone());
-            } else if let Some(snapped) = reshiki::editing::snap_ring(
-                &mut preview,
+            let delta = movement::delta(
+                self.doc,
                 ids,
                 World::new(p.x - start.x, p.y - start.y),
-                14.0 / self.camera.zoom,
-            ) {
+                self.bond_drawing.unconstrained(state.modifiers.alt()),
+            );
+            if start.distance(p) < 1.0 / self.camera.zoom {
+                ring_selection = Some(ids.clone());
+            } else if let Some(snapped) =
+                reshiki::editing::snap_ring(&mut preview, ids, delta, 14.0 / self.camera.zoom)
+            {
                 ring_selection = Some(snapped);
             } else {
-                preview.translate(ids, p.x - start.x, p.y - start.y);
+                preview.translate(ids, delta.x, delta.y);
                 ring_selection = Some(ids.clone());
             }
         }
@@ -1520,6 +1611,17 @@ impl MoleculeCanvas<'_> {
             }
         }
         draw_document(frame, &preview, self.camera, bounds);
+        // Editing aids stay out of the shared scene used by figure/Office export.
+        for atom in reshiki::attachments::editor_markers(&preview) {
+            let center = self.camera.screen(atom.position, bounds);
+            let stroke = Stroke::default()
+                .with_width(1.2)
+                .with_color(rgb([19, 135, 116]));
+            frame.stroke(&Path::circle(center, 4.), stroke);
+            for delta in [Vector::new(6., 0.), Vector::new(0., 6.)] {
+                frame.stroke(&Path::line(center - delta, center + delta), stroke);
+            }
+        }
         if selected.len() == 1
             && (self.tool.selects() || matches!(self.tool, Tool::Arrow | Tool::EditPoints))
         {
@@ -1761,6 +1863,21 @@ impl MoleculeCanvas<'_> {
                 selection.draw(frame, 0.0);
             }
         }
+        if self.tool == Tool::Tilt
+            && let Some((lo, hi)) = reshiki::scene::selection_bounds(&preview, selected)
+        {
+            let lo = self.camera.screen(lo, bounds);
+            let hi = self.camera.screen(hi, bounds);
+            frame.stroke(
+                &Path::rectangle(
+                    Point::new(lo.x - 7., lo.y - 7.),
+                    iced::Size::new(hi.x - lo.x + 14., hi.y - lo.y + 14.),
+                ),
+                Stroke::default()
+                    .with_width(1.)
+                    .with_color(rgb([65, 136, 119])),
+            );
+        }
     }
 }
 
@@ -1866,13 +1983,27 @@ fn bond_target_with(
     end: World,
     source: Option<u64>,
     radius: f32,
-    drawing: BondDrawing,
+    mut drawing: BondDrawing,
 ) -> (World, Option<u64>) {
+    let origin = source.and_then(|id| doc.atom(id));
+    if origin.is_some_and(|a| !a.centroid.is_empty()) {
+        // A centre-to-metal contact often extends beyond the ring radius.
+        // A normal fixed length can land exactly on a member atom instead.
+        drawing.fixed_length = false;
+    }
     let nearest = |p: World| {
         doc.atoms
             .iter()
             .filter(|a| {
-                doc.atom_visible(a.id) && Some(a.id) != source && a.position.distance(p) < radius
+                doc.atom_visible(a.id)
+                    && Some(a.id) != source
+                    && a.position.distance(p) < radius
+                    && !origin.is_some_and(|o| {
+                        o.attachment.is_some()
+                            && (o.centroid.contains(&a.id) || !a.centroid.is_empty())
+                    })
+                    && !(a.attachment.is_some()
+                        && source.is_some_and(|id| a.centroid.contains(&id)))
             })
             .min_by(|a, b| a.position.distance(p).total_cmp(&b.position.distance(p)))
     };
@@ -2032,6 +2163,7 @@ fn draw_document_with_minimum_stroke(
                 &Path::line(camera.screen(a, bounds), camera.screen(b, bounds)),
                 Stroke::default()
                     .with_width((width * camera.zoom).max(minimum))
+                    .with_line_cap(canvas::LineCap::Round)
                     .with_color(Color::BLACK),
             ),
             Primitive::Polygon(points) => {
@@ -2657,6 +2789,223 @@ mod tests {
         }
     }
 
+    fn tilt_pointer(
+        canvas: &MoleculeCanvas<'_>,
+        state: &mut State,
+        event: mouse::Event,
+    ) -> Option<Edit> {
+        let bounds = Rectangle::new(Point::new(20., 30.), iced::Size::new(400., 300.));
+        canvas
+            .update(
+                state,
+                &Event::Mouse(event),
+                bounds,
+                mouse::Cursor::Unavailable,
+            )
+            .and_then(|action| action.into_inner().0)
+    }
+
+    #[test]
+    fn tilt_drag_preserves_partial_selection_and_has_zoom_independent_snapping()
+    -> Result<(), String> {
+        let mut doc = Document::default();
+        let ring = reshiki::editing::ring(&mut doc, World::default(), 6, true, 5.);
+        let selected: Vec<_> = ring.iter().take(3).copied().collect();
+        let atom = doc
+            .atom(*selected.first().ok_or("selected atom")?)
+            .ok_or("atom")?;
+        let before = doc.clone();
+        for zoom in [0.5, 1., 2.] {
+            let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+            canvas.tool = Tool::Tilt;
+            canvas.selected = &selected;
+            canvas.camera.zoom = zoom;
+            let mut state = State {
+                modifiers: iced::keyboard::Modifiers::SHIFT,
+                ..Default::default()
+            };
+            let start = Point::new(220. + atom.position.x * zoom, 180. + atom.position.y * zoom);
+            tilt_pointer(
+                &canvas,
+                &mut state,
+                mouse::Event::CursorMoved { position: start },
+            );
+            tilt_pointer(
+                &canvas,
+                &mut state,
+                mouse::Event::ButtonPressed(mouse::Button::Left),
+            );
+            assert!(matches!(&state.gesture, Some(Gesture::Tilt(drag)) if drag.ids == selected));
+            let end = Point::new(start.x + 36., start.y - 26.);
+            let motion = tilt_pointer(
+                &canvas,
+                &mut state,
+                mouse::Event::CursorMoved { position: end },
+            );
+            assert!(motion.is_none(), "Motion must only redraw the preview");
+            assert_eq!(doc, before);
+            let edit = tilt_pointer(
+                &canvas,
+                &mut state,
+                mouse::Event::ButtonReleased(mouse::Button::Left),
+            );
+            assert!(matches!(edit, Some(Edit::Tilt { ids, x: 15., y: 15. }) if ids == selected));
+            assert!(state.gesture.is_none());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn tilt_click_selects_a_molecule_without_rotating_and_blank_drag_selects() -> Result<(), String>
+    {
+        let mut doc = Document::default();
+        let a = doc.add_atom("N", World::new(-30., 0.));
+        let b = doc.add_atom("C", World::new(30., 0.));
+        doc.add_bond(a, b, 1, "plain");
+        let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+        canvas.tool = Tool::Tilt;
+        let mut state = State::default();
+        for (start, end, expected) in [
+            (Point::new(190., 180.), Point::new(191., 180.), vec![a, b]),
+            (Point::new(170., 145.), Point::new(270., 210.), vec![a, b]),
+            (Point::new(350., 300.), Point::new(350., 300.), vec![]),
+        ] {
+            tilt_pointer(
+                &canvas,
+                &mut state,
+                mouse::Event::CursorMoved { position: start },
+            );
+            tilt_pointer(
+                &canvas,
+                &mut state,
+                mouse::Event::ButtonPressed(mouse::Button::Left),
+            );
+            tilt_pointer(
+                &canvas,
+                &mut state,
+                mouse::Event::CursorMoved { position: end },
+            );
+            let edit = tilt_pointer(
+                &canvas,
+                &mut state,
+                mouse::Event::ButtonReleased(mouse::Button::Left),
+            )
+            .ok_or("selection edit")?;
+            let Edit::Select(mut ids) = edit else {
+                return Err("A click must not rotate".into());
+            };
+            ids.sort_unstable();
+            assert_eq!(ids, expected);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn aromatic_ring_interior_opens_its_menu_and_starts_tilt_without_prior_selection()
+    -> Result<(), String> {
+        let mut doc = Document::default();
+        let mut ids = reshiki::editing::ring(&mut doc, World::default(), 6, true, 5.);
+        ids.sort_unstable();
+        let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+        canvas.tool = Tool::Tilt;
+        let mut state = State::default();
+        let center = Point::new(220., 180.);
+        tilt_pointer(
+            &canvas,
+            &mut state,
+            mouse::Event::CursorMoved { position: center },
+        );
+        let edit = tilt_pointer(
+            &canvas,
+            &mut state,
+            mouse::Event::ButtonPressed(mouse::Button::Right),
+        )
+        .ok_or("context menu")?;
+        let Edit::ContextMenu { mut selected, .. } = edit else {
+            return Err("Expected context menu".into());
+        };
+        selected.sort_unstable();
+        assert_eq!(selected, ids);
+        tilt_pointer(
+            &canvas,
+            &mut state,
+            mouse::Event::ButtonPressed(mouse::Button::Left),
+        );
+        let Some(Gesture::Tilt(drag)) = &state.gesture else {
+            return Err("Expected tilt from ring interior".into());
+        };
+        let mut selected = drag.ids.clone();
+        selected.sort_unstable();
+        assert_eq!(selected, ids);
+        Ok(())
+    }
+
+    #[test]
+    fn tilt_cancel_focus_loss_outside_release_and_tool_switch_do_not_commit() {
+        let doc = reshiki::rings::Preset::Regular.document(42., false);
+        let selected = doc.all_ids();
+        let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+        canvas.tool = Tool::Tilt;
+        canvas.selected = &selected;
+        let bounds = Rectangle::new(Point::new(20., 30.), iced::Size::new(400., 300.));
+        for cancel in [
+            Event::Keyboard(iced::keyboard::Event::KeyPressed {
+                key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
+                modified_key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
+                physical_key: iced::keyboard::key::Physical::Code(
+                    iced::keyboard::key::Code::Escape,
+                ),
+                location: iced::keyboard::Location::Standard,
+                modifiers: iced::keyboard::Modifiers::empty(),
+                text: None,
+                repeat: false,
+            }),
+            Event::Window(iced::window::Event::Unfocused),
+        ] {
+            let mut state = State {
+                gesture: Some(Gesture::Tilt(tilt::TiltDrag {
+                    ids: selected.clone(),
+                    start: Point::new(200., 150.),
+                })),
+                cursor: Some(Point::new(250., 160.)),
+                ..Default::default()
+            };
+            canvas.update(&mut state, &cancel, bounds, mouse::Cursor::Unavailable);
+            assert!(state.gesture.is_none());
+            assert!(
+                tilt_pointer(
+                    &canvas,
+                    &mut state,
+                    mouse::Event::ButtonReleased(mouse::Button::Left)
+                )
+                .is_none()
+            );
+        }
+        for (tool, position) in [
+            (Tool::Tilt, Point::new(500., 150.)),
+            (Tool::Select, Point::new(250., 160.)),
+        ] {
+            canvas.tool = tool;
+            let mut state = State {
+                gesture: Some(Gesture::Tilt(tilt::TiltDrag {
+                    ids: selected.clone(),
+                    start: Point::new(200., 150.),
+                })),
+                cursor: Some(position),
+                ..Default::default()
+            };
+            assert!(
+                tilt_pointer(
+                    &canvas,
+                    &mut state,
+                    mouse::Event::ButtonReleased(mouse::Button::Left)
+                )
+                .is_none()
+            );
+            assert!(state.gesture.is_none());
+        }
+    }
+
     #[test]
     fn dragging_redraws_the_canvas_without_publishing_intermediate_application_updates() {
         let mut doc = Document::default();
@@ -2705,6 +3054,66 @@ mod tests {
             matches!(action.into_inner().0, Some(Edit::Move(ids, 60., 30.)) if ids == vec![atom])
         );
         assert_eq!(doc.atom(atom).unwrap().position, World::default());
+    }
+
+    #[test]
+    fn bonded_move_release_uses_constraints_and_live_option_override() -> Result<(), String> {
+        let mut doc = Document::default();
+        let a = doc.add_atom("C", World::default());
+        let b = doc.add_atom("O", World::new(42., 0.));
+        doc.add_bond(a, b, 1, "plain");
+        let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+        canvas.tool = Tool::Select;
+        let bounds = Rectangle::with_size(iced::Size::new(400., 300.));
+        for free in [false, true] {
+            let mut state = State {
+                gesture: Some(Gesture::Move {
+                    start: World::new(44., 1.),
+                    ids: vec![b],
+                    clicked: vec![b],
+                }),
+                ..Default::default()
+            };
+            let end = Point::new(279., 183.);
+            if free {
+                canvas.update(
+                    &mut state,
+                    &Event::Keyboard(iced::keyboard::Event::ModifiersChanged(
+                        iced::keyboard::Modifiers::ALT,
+                    )),
+                    bounds,
+                    mouse::Cursor::Available(end),
+                );
+            }
+            let result = canvas
+                .update(
+                    &mut state,
+                    &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                    bounds,
+                    mouse::Cursor::Available(end),
+                )
+                .and_then(|action| action.into_inner().0)
+                .ok_or("Missing release edit")?;
+            let Edit::Move(ids, dx, dy) = result else {
+                return Err("Expected movement".into());
+            };
+            let requested = World::new(35., 32.);
+            let preview = movement::delta(
+                &doc,
+                &[b],
+                requested,
+                canvas.bond_drawing.unconstrained(free),
+            );
+            assert_eq!(ids, vec![b]);
+            assert_eq!(World::new(dx, dy), preview);
+            if free {
+                assert_eq!(preview, requested);
+            } else {
+                assert!((World::new(42. + dx, dy).distance(World::default()) - 42.).abs() < 0.001);
+            }
+        }
+        assert_eq!(doc.atom(b).ok_or("atom")?.position, World::new(42., 0.));
+        Ok(())
     }
 
     #[test]
@@ -2888,6 +3297,35 @@ mod tests {
                 .is_none()
         );
         assert!(doc.atoms.is_empty());
+    }
+
+    #[test]
+    fn attachment_bond_drag_reaches_beyond_the_ring_and_snaps_to_metal() -> Result<(), String> {
+        let mut doc = Document::default();
+        let members = reshiki::editing::ring(&mut doc, World::new(0., 0.), 6, true, 5.);
+        let point =
+            reshiki::attachments::add(&mut doc, &members, reshiki::attachments::Kind::MultiCenter)?;
+        let start = doc.atom(point).ok_or("Missing attachment")?.position;
+        let settings = BondDrawing::default();
+        for degrees in (0..360).step_by(30) {
+            let angle = (degrees as f32).to_radians();
+            let cursor = start.offset(126. * angle.cos(), 126. * angle.sin());
+            let (end, target) = bond_target_with(&doc, start, cursor, Some(point), 8., settings);
+            assert!(target.is_none());
+            assert!((end.distance(start) - 126.).abs() < 0.01);
+        }
+        let metal = doc.add_atom("Fe", start.offset(110., 91.));
+        let target = doc.atom(metal).ok_or("Missing metal")?.position;
+        assert_eq!(
+            bond_target_with(&doc, start, target, Some(point), 8., settings),
+            (target, Some(metal))
+        );
+        assert_eq!(
+            bond_target_with(&doc, target, start, Some(metal), 8., settings),
+            (start, Some(point))
+        );
+        assert!(settings.fixed_length);
+        Ok(())
     }
 
     #[test]

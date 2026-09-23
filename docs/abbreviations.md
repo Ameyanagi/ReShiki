@@ -1,5 +1,14 @@
 # Chemical abbreviations
 
+Select a collapsed group and use the top **Left / Center / Right** buttons to
+align its label. **Automatic** (the default) follows the bond direction; restore
+it or choose Stacked above from the adjacent **Auto / above** menu. Multiple
+groups and captions can use the same toolbar in one Undo step. Press **Enter**
+to edit the label or its chemical/text meaning; the dialog does not repeat alignment.
+Above places a single nickname above the attachment; general multiline
+formula-token stacking is not implemented. Native/CDXML/CDX preserve the
+override, and Undo/Redo restores it. See the [illustrated PR review](changes-pr17.md).
+
 Properties → Chemical abbreviations provides compact labels while retaining the complete atom/bond graph. Formula, mass, SMILES and molecular identity use the full structure.
 
 - Select one terminal atom and choose a common group such as OMe, Boc, Ph or TBS, then **Replace selected endpoint**. This changes the chemistry and preserves the outside connecting bond.

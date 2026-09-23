@@ -58,6 +58,7 @@ impl SmilesReaction {
                         state: part.prepared.state,
                     },
                     annotations: molfile::FileAnnotations {
+                        attachments: Vec::new(),
                         is_3d,
                         attachment_points: vec![None; n],
                         dummy_labels: part.prepared.dummy_labels,

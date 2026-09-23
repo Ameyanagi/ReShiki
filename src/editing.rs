@@ -21,6 +21,8 @@ pub const ELEMENTS: &[&str] = &[
 #[derive(Debug, Clone, Copy)]
 pub enum Transform {
     Rotate(f32),
+    TiltX(f32),
+    TiltY(f32),
     FlipHorizontal,
     FlipVertical,
 }
@@ -37,7 +39,8 @@ pub enum Arrange {
 }
 
 pub fn selection(doc: &Document, ids: &[u64]) -> Document {
-    let ids = doc.expand_abbreviation_selection(ids);
+    let ids = crate::attachments::selection(doc, ids);
+    let ids = doc.expand_abbreviation_selection(&ids);
     let ids = ids.as_slice();
     let mut part = doc.clone();
     part.reactions
@@ -96,6 +99,12 @@ pub fn append(doc: &mut Document, source: &Document, offset: Point) -> Vec<u64> 
             return vec![];
         };
         a.id = mapped;
+        for id in &mut a.centroid {
+            let Some(mapped) = mapping.get(id).copied() else {
+                return vec![];
+            };
+            *id = mapped;
+        }
         a.position = a.position.offset(offset.x, offset.y);
         if let Some(s) = &mut a.stereo {
             for id in &mut s.neighbors {
@@ -237,6 +246,10 @@ pub fn center(doc: &Document, ids: &[u64]) -> Point {
 }
 
 pub fn transform(doc: &mut Document, ids: &[u64], transform: Transform) {
+    if let Transform::TiltX(degrees) | Transform::TiltY(degrees) = transform {
+        crate::projection::tilt(doc, ids, degrees, matches!(transform, Transform::TiltX(_)));
+        return;
+    }
     let center = center(doc, ids);
     let convert = |p: Point| {
         let x = p.x - center.x;
@@ -248,15 +261,23 @@ pub fn transform(doc: &mut Document, ids: &[u64], transform: Transform) {
             }
             Transform::FlipHorizontal => (-x, y),
             Transform::FlipVertical => (x, -y),
+            Transform::TiltX(_) | Transform::TiltY(_) => (x, y),
         };
         center.offset(x, y)
     };
     map_positions(doc, ids, convert);
-    if !matches!(transform, Transform::Rotate(_)) {
+    crate::projection::sync_centroids(doc);
+    if matches!(
+        transform,
+        Transform::FlipHorizontal | Transform::FlipVertical
+    ) {
         // Reflect the projection while preserving the molecule's stereochemistry.
         for b in &mut doc.bonds {
             if ids.contains(&b.a) && ids.contains(&b.b) {
                 b.double_position = b.double_position.reversed();
+                if b.projection {
+                    continue;
+                }
                 b.display = match (b.order, b.display.as_str()) {
                     (1, "wedge") => "hash",
                     (1, "hash") => "wedge",
@@ -278,6 +299,16 @@ pub fn transform_about(doc: &mut Document, ids: &[u64], pivot: Point, scale: f32
         || (scale == 1.0 && degrees == 0.0)
     {
         return;
+    }
+    for atom in &mut doc.atoms {
+        if ids.contains(&atom.id) {
+            atom.depth *= scale;
+        }
+    }
+    for graphic in &mut doc.graphics {
+        if ids.contains(&graphic.id) {
+            graphic.depth = graphic.depth.map(|z| z * scale);
+        }
     }
     let (s, c) = degrees.to_radians().sin_cos();
     map_positions(doc, ids, |p| {
@@ -357,6 +388,15 @@ pub fn groups(doc: &Document, ids: &[u64]) -> Vec<Vec<u64>> {
         let mut group = vec![*id];
         let mut i = 0;
         while let Some(current) = group.get(i).copied() {
+            for atom in doc.atoms.iter().filter(|a| a.attachment.is_some()) {
+                if atom.id == current || atom.centroid.contains(&current) {
+                    for id in std::iter::once(&atom.id).chain(&atom.centroid) {
+                        if remaining.remove(id) {
+                            group.push(*id);
+                        }
+                    }
+                }
+            }
             for persistent in &doc.groups {
                 if persistent.members.contains(&current) {
                     for id in &persistent.members {
@@ -822,9 +862,13 @@ fn isolated_ring(doc: &Document, ids: &[u64]) -> Option<Vec<u64>> {
     }
 }
 
+/// Hit the interior of a visible ring, including aromatic and substituted rings.
+/// The separate fusion operation still requires an isolated saturated ring.
 pub fn ring_at(doc: &Document, p: Point) -> Option<Vec<u64>> {
-    groups(doc, &doc.all_ids()).into_iter().find_map(|ids| {
-        let ring = isolated_ring(doc, &ids)?;
+    let mut rings = crate::aromatic::ring_circles(doc, false);
+    rings.sort_by(|a, b| a.radius.total_cmp(&b.radius));
+    rings.into_iter().find_map(|ring| {
+        let ring = ring.atoms;
         let mut inside = false;
         for (a, b) in ring
             .iter()
@@ -1025,6 +1069,35 @@ mod tests {
                 doc.validate().unwrap();
             }
         }
+    }
+
+    #[test]
+    fn ring_interior_hit_includes_aromatic_hetero_and_substituted_rings() -> Result<(), String> {
+        let mut doc = Document::default();
+        let ids = ring(&mut doc, Point::default(), 6, true, 5.);
+        let nitrogen = *ids.first().ok_or("ring atom")?;
+        doc.atom_mut(nitrogen).ok_or("nitrogen")?.element = "N".into();
+        let attach = *ids.get(2).ok_or("substituted atom")?;
+        let position = doc.atom(attach).ok_or("atom")?.position;
+        let methyl = doc.add_atom("C", position.offset(60., 0.));
+        doc.add_bond(attach, methyl, 1, "plain");
+        let before = doc.clone();
+        let mut hit = ring_at(&doc, center(&doc, &ids)).ok_or("ring interior")?;
+        let mut expected = ids.clone();
+        hit.sort_unstable();
+        expected.sort_unstable();
+        assert_eq!(hit, expected);
+        assert_eq!(ring_at(&doc, Point::new(500., 500.)), None);
+        assert!(snap_ring(&mut doc, &ids, Point::new(40., 0.), 15.).is_none());
+        assert_eq!(
+            doc, before,
+            "Selecting an aromatic ring must not enable fusion"
+        );
+        crate::projection::tilt(&mut doc, &ids, 60., true);
+        let mut tilted = ring_at(&doc, center(&doc, &ids)).ok_or("tilted interior")?;
+        tilted.sort_unstable();
+        assert_eq!(tilted, expected);
+        Ok(())
     }
 
     #[test]

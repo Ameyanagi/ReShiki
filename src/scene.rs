@@ -28,7 +28,7 @@ pub(crate) fn atom_label_bounds(a: &Atom, doc: &Document) -> Option<(Point, Poin
 }
 
 fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
-    if !doc.atom_visible(a.id) {
+    if !doc.atom_visible(a.id) || crate::attachments::hidden(a, doc) {
         return vec![];
     }
     if let Some(group) = doc.abbreviation(a.id) {
@@ -56,12 +56,22 @@ fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
             .map(|c| crate::style::styled_text_width(&c.to_string(), size, &style) * 0.5)
             .unwrap_or(0.0);
         let origin = a.position.offset(
-            if group.faces_left(doc) {
+            if matches!(
+                group.alignment,
+                crate::abbreviations::LabelAlignment::Center
+                    | crate::abbreviations::LabelAlignment::Above
+            ) {
+                -layout.width / 2.
+            } else if group.faces_left(doc) {
                 half - layout.width
             } else {
                 -half
             },
-            -size * 0.58,
+            if group.alignment == crate::abbreviations::LabelAlignment::Above {
+                -layout.height - size * 0.35
+            } else {
+                -size * 0.58
+            },
         );
         return layout
             .fragments
@@ -93,10 +103,16 @@ fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
     };
     let size = STYLE.world(style.size_pt);
     let small = size * 0.7;
-    let element_width = text_width(&a.element, size);
+    let label = a
+        .display
+        .variable
+        .as_deref()
+        .filter(|_| a.element == "*")
+        .unwrap_or(&a.element);
+    let element_width = text_width(label, size);
     let origin = a.position.offset(-element_width / 2.0, -size * 0.58);
     let mut runs = if show_element {
-        vec![text(origin, a.element.clone(), size)]
+        vec![text(origin, label.to_string(), size)]
     } else {
         vec![]
     };
@@ -390,7 +406,11 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             .filter(|g| g.layer < 0)
             .flat_map(graphic_primitive),
     );
-    let circles = crate::aromatic::circles(doc);
+    let arcs = crate::ring_arcs::render(doc);
+    let circles: Vec<_> = crate::aromatic::circles(doc)
+        .into_iter()
+        .filter(|c| !arcs.intersects(c))
+        .collect();
     out.extend(circles.iter().flat_map(|c| {
         c.graphic().parts().into_iter().map(|p| Primitive::Path {
             commands: p.commands,
@@ -398,6 +418,7 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             filled: p.filled,
         })
     }));
+    out.extend(arcs.primitives.iter().cloned());
     let labels: std::collections::HashMap<_, _> = doc
         .atoms
         .iter()
@@ -415,6 +436,10 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
         })
         .collect();
     let crossing_gaps = crate::crossings::gaps(doc);
+    // Fill joined bond outlines together. Separate antialiased polygons leave
+    // translucent seams even when their mathematical corners agree exactly.
+    let mut joined: std::collections::BTreeMap<[u8; 3], Vec<crate::graphics::PathCommand>> =
+        Default::default();
     for (bond_index, b) in doc
         .bonds
         .iter()
@@ -450,29 +475,26 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
         let ny = ux;
         let bond_start = out.len();
         match b.display.as_str() {
-            "wedge" => out.push(Primitive::Polygon(vec![
-                start,
-                end.offset(
-                    nx * style.world(style.bold_width_pt) / 2.0,
-                    ny * style.world(style.bold_width_pt) / 2.0,
-                ),
-                end.offset(
-                    -nx * style.world(style.bold_width_pt) / 2.0,
-                    -ny * style.world(style.bold_width_pt) / 2.0,
-                ),
-            ])),
+            "plain" | "bold" | "wedge" if crate::bond_joins::needed(doc, b) => {
+                out.push(Primitive::Polygon(crate::bond_joins::polygon(
+                    doc, b, start, end,
+                )));
+            }
             "hollow_wedge" => {
-                let width = style.world(style.bold_width_pt) / 2.0;
-                let points = [
-                    start,
-                    end.offset(nx * width, ny * width),
-                    end.offset(-nx * width, -ny * width),
-                    start,
-                ];
-                for pair in points.windows(2) {
-                    if let [a, b] = pair {
-                        out.push(Primitive::Line(*a, *b, style.line_width()));
-                    }
+                use crate::graphics::PathCommand;
+                let points = crate::bond_joins::polygon(doc, b, start, end);
+                if let Some(first) = points.first() {
+                    let mut commands = vec![PathCommand::Move(*first)];
+                    commands.extend(points.iter().skip(1).copied().map(PathCommand::Line));
+                    commands.push(PathCommand::Close);
+                    out.push(Primitive::Path {
+                        commands,
+                        style: crate::graphics::GraphicStyle {
+                            width_pt: style.line_width_pt,
+                            ..Default::default()
+                        },
+                        filled: false,
+                    });
                 }
             }
             "hash" | "hashed" => {
@@ -487,12 +509,20 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
                     let t = if b.display == "hashed" { 1.0 } else { t };
                     out.push(Primitive::Line(
                         p.offset(
-                            nx * t * style.world(style.bold_width_pt) / 2.0,
-                            ny * t * style.world(style.bold_width_pt) / 2.0,
+                            nx * (style.line_width()
+                                + t * (style.world(style.bold_width_pt) - style.line_width()))
+                                / 2.0,
+                            ny * (style.line_width()
+                                + t * (style.world(style.bold_width_pt) - style.line_width()))
+                                / 2.0,
                         ),
                         p.offset(
-                            -nx * t * style.world(style.bold_width_pt) / 2.0,
-                            -ny * t * style.world(style.bold_width_pt) / 2.0,
+                            -nx * (style.line_width()
+                                + t * (style.world(style.bold_width_pt) - style.line_width()))
+                                / 2.0,
+                            -ny * (style.line_width()
+                                + t * (style.world(style.bold_width_pt) - style.line_width()))
+                                / 2.0,
                         ),
                         style.line_width(),
                     ));
@@ -541,7 +571,8 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
                     DoublePosition::Right => Some(1.),
                     DoublePosition::Auto | DoublePosition::Center => None,
                 };
-                let offsets: &[f32] = match (b.order, side) {
+                let order = if arcs.contains(b.a, b.b) { 1 } else { b.order };
+                let offsets: &[f32] = match (order, side) {
                     (2 | 7, Some(side)) => &[0.0, spacing * side],
                     (2 | 7, None) => &[-spacing / 2.0, spacing / 2.0],
                     (6, _) => &[-spacing * 1.5, -spacing * 0.5, spacing * 0.5, spacing * 1.5],
@@ -590,7 +621,10 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
                         ));
                     }
                 }
-                if b.order == 4 && !circles.iter().any(|c| c.contains_bond(b.a, b.b)) {
+                if b.order == 4
+                    && !arcs.contains(b.a, b.b)
+                    && !circles.iter().any(|c| c.contains_bond(b.a, b.b))
+                {
                     for i in 0..5 {
                         let t = i as f32 / 5.0;
                         let v = (i as f32 + 0.5) / 5.0;
@@ -615,6 +649,20 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
         if let Some(gaps) = crossing_gaps.get(bond_index).filter(|g| !g.is_empty()) {
             let bond_primitives = out.drain(bond_start..).collect();
             out.extend(crate::crossings::cut(bond_primitives, gaps));
+        }
+        if crate::bond_joins::needed(doc, b) && b.display != "hollow_wedge" {
+            use crate::graphics::PathCommand;
+            let commands = joined.entry(b.color).or_default();
+            for primitive in out.drain(bond_start..) {
+                if let Primitive::Polygon(points) = primitive
+                    && let Some(first) = points.first()
+                {
+                    commands.push(PathCommand::Move(*first));
+                    commands.extend(points.iter().skip(1).copied().map(PathCommand::Line));
+                    commands.push(PathCommand::Close);
+                }
+            }
+            continue;
         }
         if b.color != [0, 0, 0] {
             for primitive in out.iter_mut().skip(bond_start) {
@@ -660,6 +708,25 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             }
         }
     }
+    for (color, points) in crate::bond_joins::junctions(doc) {
+        use crate::graphics::PathCommand;
+        if let Some(first) = points.first() {
+            let commands = joined.entry(color).or_default();
+            commands.push(PathCommand::Move(*first));
+            commands.extend(points.iter().skip(1).copied().map(PathCommand::Line));
+            commands.push(PathCommand::Close);
+        }
+    }
+    out.extend(joined.into_iter().map(|(color, commands)| Primitive::Path {
+        commands,
+        style: crate::graphics::GraphicStyle {
+            stroke: color,
+            fill: Some(color),
+            width_pt: 0.,
+            ..Default::default()
+        },
+        filled: true,
+    }));
     for a in doc.atoms.iter().filter(|a| doc.atom_visible(a.id)) {
         out.extend(labels.get(&a.id).into_iter().flatten().cloned());
         out.extend(

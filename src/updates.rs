@@ -1,4 +1,5 @@
-//! Background release checks. Downloads always stay on the project's release page.
+//! Stable release checks and verified, staged native updates.
+pub mod install;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};

@@ -112,6 +112,15 @@ pub fn molecules(doc: &Document, selected: &[u64]) -> Vec<Vec<u64>> {
         let mut component = HashSet::from([atom.id]);
         let mut pending = vec![atom.id];
         while let Some(id) = pending.pop() {
+            for attachment in doc.atoms.iter().filter(|a| a.attachment.is_some()) {
+                if attachment.id == id || attachment.centroid.contains(&id) {
+                    for other in std::iter::once(&attachment.id).chain(&attachment.centroid) {
+                        if component.insert(*other) {
+                            pending.push(*other);
+                        }
+                    }
+                }
+            }
             for bond in &doc.bonds {
                 // A hydrogen interaction does not combine two chemical participants.
                 if bond.order == 0 {

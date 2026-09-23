@@ -25,6 +25,10 @@ impl Prepared {
         let mut moving: HashSet<_> = doc.expand_integral_groups(selected).into_iter().collect();
         loop {
             let previous = moving.len();
+            moving.extend(crate::attachments::selection(
+                doc,
+                &moving.iter().copied().collect::<Vec<_>>(),
+            ));
             for bond in &doc.bonds {
                 if moving.contains(&bond.a) || moving.contains(&bond.b) {
                     moving.insert(bond.a);
@@ -157,6 +161,9 @@ impl Prepared {
         // destination IDs, labels, remote stereo and unrelated objects retain identity.
         for a in &mut placed.atoms {
             a.id = original_id(a.id);
+            for member in &mut a.centroid {
+                *member = original_id(*member);
+            }
             if let Some(stereo) = &mut a.stereo {
                 for neighbor in &mut stereo.neighbors {
                     *neighbor = original_id(*neighbor);

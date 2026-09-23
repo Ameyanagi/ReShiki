@@ -27,9 +27,12 @@ impl App {
                 ("2 / 3 / 4", "Double / Triple / Quadruple"),
                 ("X", "Straight chain"),
                 ("Shift X", "Snaking chain"),
-                ("R / Shift R", "Ring / Aromatic ring"),
+                (
+                    "R / Shift R",
+                    "Ring / Toggle saturated–aromatic (same size)",
+                ),
                 ("A / T / E", "Arrow / Text / Eraser"),
-                ("Alt drag", "Draw bonds freely"),
+                ("Option / Alt drag", "Draw or move bonded atoms freely"),
                 ("Esc", "Return to selection"),
             ],
         );
@@ -48,6 +51,7 @@ impl App {
                     "Undo / Redo",
                 ),
                 ("Delete", "Delete selection"),
+                ("Enter", "Edit selected atom label (M, L, X, Boc…)"),
             ],
         );
         let context = column![

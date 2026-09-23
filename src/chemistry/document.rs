@@ -102,6 +102,16 @@ fn winding(current: &[u64], given: &[u64], clockwise: bool) -> Result<u8, Error>
 }
 
 fn build(document: &Document) -> Result<Input, Error> {
+    if crate::attachments::present(document) {
+        return Err(invalid(
+            "Multi-center/variable attachment targets require CDXML, CDX, V3000 MOL or native ReShiki export; ordinary molecular identifiers cannot retain them.",
+        ));
+    }
+    if document.atoms.iter().any(|a| !a.centroid.is_empty()) {
+        return Err(invalid(
+            "Ring-centre contacts are drawing anchors, not molecular bonds. Save as ReShiki or export a figure; molecular export requires an explicit chemical graph.",
+        ));
+    }
     if document.atoms.len() > 100_000 || document.bonds.len() > 300_000 {
         return Err(invalid("Molecular graph exceeds the atom or bond limit"));
     }
@@ -201,7 +211,7 @@ fn build(document: &Document) -> Result<Input, Error> {
         .bonds
         .iter()
         .map(|b| {
-            if b.order == 1 || b.order == 2 && b.display == "wavy" {
+            if !b.projection && (b.order == 1 || b.order == 2 && b.display == "wavy") {
                 match b.display.as_str() {
                     "wedge" | "hollow_wedge" | "bold" => Direction::Wedge,
                     "hash" | "hashed" => Direction::Hash,

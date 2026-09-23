@@ -6,6 +6,7 @@ pub mod composition;
 mod layout;
 pub mod review;
 pub mod settings;
+pub mod sketch;
 use crate::{
     document::{Document, Point},
     engine::LocalEngine,
@@ -64,10 +65,19 @@ pub struct Proposal {
     pub reactions: Vec<Step>,
     #[serde(default)]
     pub composition: composition::Composition,
+    /// A bounded editable diagram for drawings that SMILES cannot depict faithfully.
+    #[serde(default)]
+    pub sketch: Option<sketch::Sketch>,
 }
 impl Proposal {
     pub fn validate(&self) -> Result<(), String> {
         self.composition.validate()?;
+        if let Some(sketch) = &self.sketch {
+            if !self.molecules.is_empty() || !self.reactions.is_empty() {
+                return Err("Use either a diagram or SMILES molecules/reactions, not both".into());
+            }
+            sketch.validate()?;
+        }
         if self.explanation.len() > 12_000
             || self.reactions.len() > 8
             || self.replace_ids.len() > 5000
@@ -138,7 +148,7 @@ impl Proposal {
         Ok(())
     }
     pub fn has_drawing(&self) -> bool {
-        !self.molecules.is_empty() || !self.reactions.is_empty()
+        self.sketch.is_some() || !self.molecules.is_empty() || !self.reactions.is_empty()
     }
 }
 pub fn schema() -> Value {
@@ -149,10 +159,11 @@ pub fn schema() -> Value {
         "replace_ids":{"type":"array","items":{"type":"integer","minimum":1},"description":"Existing object IDs from canvas_inspect to replace when the user asks to revise existing content. Empty for additions. Preserve unrelated objects."},
         "molecules":molecules,
         "composition":composition::schema(),
+        "sketch":sketch::schema(),
         "reactions":{"type":"array","items":{"type":"object","additionalProperties":false,"properties":{
             "reactants":molecules,"products":molecules,"conditions":{"type":"string"},"arrow":{"type":"string","enum":["forward","equilibrium","retro"]},"title":{"type":"string"},"direction":{"type":["number","null"],"description":"Branch arrow direction in degrees: 0 right, 90 down, 180 left, -90 up. Null distributes branches automatically. Used for branching arrangements."},"role":{"type":"string","enum":["main","example","reaction"]}
         },"required":["reactants","products","conditions","arrow","title","role","direction"]}}
-    },"required":["explanation","replace_ids","molecules","reactions","composition"]})
+    },"required":["explanation","replace_ids","molecules","reactions","composition","sketch"]})
 }
 
 #[derive(Debug, Clone)]

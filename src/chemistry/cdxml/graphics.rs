@@ -121,6 +121,7 @@ impl NativeGraphic {
             GraphicStyle::default()
         };
         let graphic = Graphic {
+            depth: [0.; 3],
             id: self.id,
             kind: self.kind,
             origin: self.origin.into_document(),

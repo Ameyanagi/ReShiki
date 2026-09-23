@@ -197,6 +197,27 @@ impl Glyph {
                 });
                 f.stroke(&path, Stroke::default().with_width(1.6).with_color(ink));
             }
+            Icon::Tool(Tool::Tilt) => {
+                // A foreshortened ring and curved rotation arrow.
+                line(
+                    f,
+                    &[
+                        (3., 13.),
+                        (8., 8.),
+                        (18., 8.),
+                        (22., 13.),
+                        (17., 18.),
+                        (7., 18.),
+                        (3., 13.),
+                    ],
+                );
+                let arc = Path::new(|p| {
+                    p.move_to(Point::new(5., 6.));
+                    p.bezier_curve_to(Point::new(8., 0.), Point::new(19., 0.), Point::new(22., 6.));
+                });
+                f.stroke(&arc, Stroke::default().with_width(1.6).with_color(ink));
+                line(f, &[(17., 4.), (22., 6.), (22., 1.)]);
+            }
             Icon::Tool(Tool::Bond(order)) => {
                 let offsets: &[f32] = match order {
                     2 => &[-2., 2.],

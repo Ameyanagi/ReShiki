@@ -28,6 +28,14 @@ impl App {
             .iter()
             .filter(|a| self.selected.contains(&a.id))
             .count();
+        let points = self
+            .doc
+            .atoms
+            .iter()
+            .filter(|a| {
+                self.selected.contains(&a.id) && a.element == "*" && a.display.variable.is_none()
+            })
+            .count();
         let bonds = self
             .doc
             .bonds
@@ -47,7 +55,8 @@ impl App {
         if !groups.is_empty() && self.selected.iter().all(|id| covered.contains(id)) {
             add(groups.len(), "group");
         } else {
-            add(atoms, "atom");
+            add(atoms.saturating_sub(points), "atom");
+            add(points, "point");
             add(objects, "object");
         }
         add(bonds, "bond");
@@ -334,12 +343,22 @@ impl App {
         ]
         .spacing(4)
         .align_y(Alignment::Center);
+        let group_alignment = self.selected_group_alignment();
+        let active_alignment = self.toolbar_alignment();
+        let has_captions = self
+            .doc
+            .annotations
+            .iter()
+            .any(|a| self.selected.contains(&a.id));
         for (label, align) in [
             ("Left", TextAlign::Left),
             ("Center", TextAlign::Center),
             ("Right", TextAlign::Right),
             ("Justify", TextAlign::Justified),
         ] {
+            if align == TextAlign::Justified && group_alignment.is_some() && !has_captions {
+                continue;
+            }
             tools = tools.push(hover_hint(
                 button(
                     iced::widget::canvas(Glyph(Icon::TextAlign(align), true))
@@ -347,9 +366,25 @@ impl App {
                         .height(24),
                 )
                 .padding(6)
-                .style(control(self.caption_format.alignment == align))
+                .style(control(active_alignment == Some(align)))
                 .on_press(Message::TextAlign(align)),
                 label,
+                tooltip::Position::Bottom,
+            ));
+        }
+        if let Some(alignment) = group_alignment {
+            use reshiki::abbreviations::LabelAlignment;
+            tools = tools.push(hover_hint(
+                pick_list(
+                    [LabelAlignment::Auto, LabelAlignment::Above],
+                    alignment.filter(|a| matches!(a, LabelAlignment::Auto | LabelAlignment::Above)),
+                    Message::GroupLabelAlign,
+                )
+                .placeholder(if alignment.is_none() { "Mixed" } else { "Auto / above" })
+                .width(112)
+                .text_size(11)
+                .padding(6),
+                "Group labels: Automatic follows bonds; Stacked above places the nickname above its attachment. Left, Center and Right use the adjacent buttons.",
                 tooltip::Position::Bottom,
             ));
         }
@@ -404,6 +439,10 @@ impl App {
                 .padding(6),
             format!("Custom color · Enter to apply to {}", self.color_scope),
             tooltip::Position::Bottom,
+        ));
+        tools = tools.push(command(
+            "Atoms…",
+            Message::InspectorAction(super::inspector::Action::OpenAtomColors),
         ));
         container(tools)
             .padding([7, 14])
@@ -824,6 +863,11 @@ impl App {
         let tools = [
             (Tool::Select, "Select / move · V"),
             (Tool::Lasso, "Lasso select · L"),
+            (
+                Tool::Tilt,
+                "3D tilt · Drag a ring or selection · Shift snaps to 15°",
+            ),
+            (Tool::Erase, "Eraser · E · Drag to erase"),
             (Tool::Atom, "Atom label · C, N, O…"),
             (Tool::Bond(1), "Single bond · B / 1"),
             (Tool::Bond(2), "Double bond · 2"),
@@ -840,7 +884,6 @@ impl App {
             ),
             (Tool::Arrow, "Reaction & electron-flow arrows · A"),
             (Tool::Text, "Text label · T"),
-            (Tool::Erase, "Eraser · E · Drag to erase"),
             (Tool::Graphic(self.toolbar.rectangle.kind), "Rectangles"),
             (
                 Tool::Graphic(self.toolbar.ellipse.kind),
@@ -897,7 +940,13 @@ impl App {
             palette = palette.push(line);
         }
         palette = palette.push(Space::new().height(10)).push(section("ATOMS"));
-        for pair in [["C", "N"], ["O", "S"], ["P", "F"], ["Cl", "Br"]] {
+        for pair in [
+            ["C", "N"],
+            ["O", "S"],
+            ["P", "F"],
+            ["Cl", "Br"],
+            ["Fe", "*"],
+        ] {
             let mut line = row![].spacing(4);
             for symbol in pair {
                 line = line.push(
@@ -1139,7 +1188,11 @@ impl App {
                                 .size(14)
                                 .text_size(12),
                         )
-                        .push(text("Click / drag to attach").size(11).color(muted()));
+                        .push(
+                            text("Click / drag to attach · Shift+R keeps ring size")
+                                .size(11)
+                                .color(muted()),
+                        );
                 } else {
                     options = options.push(
                         text(if preset == reshiki::rings::Preset::Cyclopentadiene {
@@ -1184,10 +1237,39 @@ impl App {
             }
             Tool::Text => {
                 options = options.push(
-                    text("Click to type · Double-click a label to edit · Escape cancels")
+                    text("Click an atom to name it · Click empty space for a caption · Escape cancels")
                         .size(11)
                         .color(muted()),
                 );
+            }
+            Tool::Tilt => {
+                options = options.spacing(4);
+                let enabled = crate::canvas::tilt::available(&self.doc, &self.selected);
+                for (label, transform) in [
+                    ("X −15°", reshiki::editing::Transform::TiltX(-15.)),
+                    ("X +15°", reshiki::editing::Transform::TiltX(15.)),
+                    ("Y −15°", reshiki::editing::Transform::TiltY(-15.)),
+                    ("Y +15°", reshiki::editing::Transform::TiltY(15.)),
+                ] {
+                    options = options.push(
+                        command(label, Message::Transform(transform))
+                            .on_press_maybe(enabled.then_some(Message::Transform(transform))),
+                    );
+                }
+                options = options
+                    .push(hover_hint(
+                        command(
+                            "Front bonds",
+                            Message::InspectorAction(super::inspector::Action::DepthBonds),
+                        )
+                        .on_press_maybe(enabled.then_some(
+                            Message::InspectorAction(super::inspector::Action::DepthBonds),
+                        )),
+                        "Emphasize front bonds using the retained projection depth",
+                        tooltip::Position::Bottom,
+                    ))
+                    .push(text("Drag to tilt · Shift: 15°").size(11).color(muted()))
+                    .push(command("Done", Message::Tool(Tool::Select)));
             }
             Tool::Select | Tool::Lasso if !self.selected.is_empty() => {
                 options = options
@@ -1237,7 +1319,16 @@ impl App {
             "Edit document fonts, bond dimensions and publication style",
             tooltip::Position::Bottom,
         ));
-        if (matches!(self.tool, Tool::Chain(_)) || self.tool.bond_preset().is_some())
+        let moving_bonded_selection = matches!(self.tool, Tool::Select | Tool::Lasso) && {
+            let selected = self.doc.expand_abbreviation_selection(&self.selected);
+            self.doc
+                .bonds
+                .iter()
+                .any(|bond| selected.contains(&bond.a) != selected.contains(&bond.b))
+        };
+        if (matches!(self.tool, Tool::Chain(_))
+            || self.tool.bond_preset().is_some()
+            || moving_bonded_selection)
             && ((self.bond_drawing.length - self.doc.drawing_style.bond_length_world).abs() > 0.001
                 || self.chain_drawing.angle != 120.
                 || !self.bond_drawing.fixed_length
@@ -1249,15 +1340,19 @@ impl App {
                 tooltip::Position::Bottom,
             ));
         }
-        if matches!(self.tool, Tool::Chain(_)) {
+        if matches!(self.tool, Tool::Chain(_)) || moving_bonded_selection {
             return container(
                 column![
                     options,
                     row![
                         self.bond_constraints(),
-                        text("Ctrl bends · Shift flips start · Alt frees · Auto click: 6 atoms")
-                            .size(10)
-                            .color(muted()),
+                        text(if moving_bonded_selection {
+                            "Bonded movement follows Length / Angles · Option/Alt: free movement"
+                        } else {
+                            "Ctrl bends · Shift flips start · Alt frees · Auto click: 6 atoms"
+                        })
+                        .size(10)
+                        .color(muted()),
                     ]
                     .spacing(14)
                     .align_y(Alignment::Center)
@@ -1636,6 +1731,7 @@ impl App {
             .collect();
         let choices: Vec<String> = reshiki::abbreviations::PRESETS
             .iter()
+            .chain(reshiki::ligands::LABELS)
             .map(|s| (*s).into())
             .collect();
         let mut body = column![
@@ -1660,12 +1756,17 @@ impl App {
             horizontal_line(),
         ].spacing(10);
         for group in selected {
+            let atoms = group
+                .members
+                .iter()
+                .filter(|id| self.doc.atom(**id).is_some_and(|a| a.element != "*"))
+                .count();
             body = body.push(
                 text(format!(
                     "{} · {} atom{}",
                     group.label,
-                    group.members.len(),
-                    if group.members.len() == 1 { "" } else { "s" }
+                    atoms,
+                    if atoms == 1 { "" } else { "s" }
                 ))
                 .size(12)
                 .color(Color::from_rgb8(17, 126, 108)),
@@ -2167,6 +2268,7 @@ fn tool_name(tool: Tool) -> &'static str {
     match tool {
         Tool::Select => "Select / move",
         Tool::Lasso => "Lasso select",
+        Tool::Tilt => "3D tilt",
         Tool::Atom => "Atom label",
         Tool::Bond(1) => "Single bond",
         Tool::Chain(_) => "Chain",

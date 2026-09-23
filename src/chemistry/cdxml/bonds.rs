@@ -82,6 +82,8 @@ pub struct NativeBond {
 impl NativeBond {
     pub fn into_document(self) -> Result<Bond> {
         Ok(Bond {
+            ring_arc: false,
+            projection: false,
             a: self.a,
             b: self.b,
             order: self.order,

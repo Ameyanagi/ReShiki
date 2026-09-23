@@ -9,3 +9,11 @@ The arrow palette includes **Curved / electron pair**, **Single electron**, and 
 At a crossing between unconnected bonds, ReShiki cuts a small gap in the lower bond. Shared atom junctions and parallel bonds stay continuous. To choose which bond passes over the other, click the middle of that bond with Select, open **Properties → Crossing bonds**, and choose **Bond in front** or **Bond behind**. These are display changes and are undoable. They do not add atoms or change molecular connectivity.
 
 Canvas, SVG, PDF and PNG share the crossing geometry. Native document version 11 stores per-bond depth; versions 1–10 remain readable. Editable exchange records standard bond Z order and crossing references. Automated round trips cover the elbow and crossing depth; interactive verification in external drawing windows is still pending.
+
+## 3D tilt and right-click commands
+
+Choose the tilted-ring icon in the second row of the left tool palette. Click a molecule to select it, or select a region by dragging empty space, then drag the selection to tilt. Vertical motion rotates around X; horizontal motion rotates around Y. Hold Shift for 15° snapping. Each gesture previews without changing the document until release and creates one Undo step. Escape cancels; Done or V returns to Select. X/Y ±15° and Front bonds remain available above the canvas.
+
+Right-click a ring or selected objects for 3D tilt, Arrange & transform, Bond appearance and Attachment points when applicable. Clipboard commands form a separate section; Delete stays at the bottom. Empty canvas offers Undo/Redo, Paste, Select all and Fit drawing. Right-clicking an existing selection retains it. Aromatic and substituted ring interiors are recognized, while ring fusion keeps its original stricter requirements.
+
+Tilt retains XYZ drawing geometry and keeps labels upright. It does not infer or assign chemical stereochemistry.

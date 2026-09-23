@@ -84,7 +84,7 @@ pub fn latest(models: &[Model]) -> Option<&Model> {
         .max_by_key(|(i, m)| (generation(&m.id), m.is_default, std::cmp::Reverse(*i)))
         .map(|(_, m)| m)
 }
-pub const DEFAULT_MODEL: &str = "gpt-6-sol";
+pub const DEFAULT_MODEL: &str = "gpt-6-astra";
 
 /// Use the requested application default when available, then the account default.
 pub fn default_model(models: &[Model]) -> Option<&Model> {
@@ -153,11 +153,11 @@ mod tests {
         serde_json::from_value(serde_json::json!({"model":id,"displayName":id,"isDefault":default,"defaultReasoningEffort":"medium","supportedReasoningEfforts":[{"reasoningEffort":"medium","description":"Balanced"}]})).unwrap()
     }
     #[test]
-    fn default_prefers_sol_but_explicit_choice_survives_refresh() {
-        let mut models = vec![model("gpt-5.6-sol", true), model("gpt-6-astra", false)];
+    fn default_prefers_astra_but_explicit_choice_survives_refresh() {
+        let mut models = vec![model("gpt-5.6-sol", true), model("gpt-6-sol", false)];
         let mut prefs = Preferences::default();
         assert_eq!(prefs.resolve(&models).unwrap().id, "gpt-5.6-sol");
-        models.push(model("gpt-6-sol", false));
+        models.push(model("gpt-6-astra", false));
         assert_eq!(prefs.resolve(&models).unwrap().id, DEFAULT_MODEL);
         models.push(model("gpt-6.1", false));
         assert_eq!(prefs.resolve(&models).unwrap().id, DEFAULT_MODEL);

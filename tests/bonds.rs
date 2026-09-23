@@ -41,13 +41,32 @@ fn bond_presets_have_distinct_geometry_and_valid_native_state() {
         assert_eq!(BondPreset::of(&d.bonds[0]), Some(preset));
         assert!(!scene::primitives(&d).is_empty());
     }
-    assert!(matches!(
-        &scene::primitives(&single(BondPreset::Wedge))[0],
-        Primitive::Polygon(_)
-    ));
+    use reshiki::graphics::{PathCommand, flattened};
+    let solid = scene::primitives(&single(BondPreset::Wedge));
+    let Primitive::Path {
+        commands,
+        filled: true,
+        style,
+    } = &solid[0]
+    else {
+        panic!("A solid wedge must have a filled outline");
+    };
+    assert_eq!(style.fill, Some([0, 0, 0]));
+    assert_eq!(commands.last(), Some(&PathCommand::Close));
+    let outline = &flattened(commands)[0];
+    assert!(outline[0].distance(*outline.last().unwrap()) < 0.001);
     let hollow = scene::primitives(&single(BondPreset::HollowWedge));
-    assert_eq!(hollow.len(), 3);
-    assert!(hollow.iter().all(|p| matches!(p, Primitive::Line(..))));
+    assert_eq!(hollow.len(), 1);
+    let Primitive::Path {
+        commands,
+        filled: false,
+        ..
+    } = &hollow[0]
+    else {
+        panic!("A hollow wedge must retain an unfilled outline");
+    };
+    assert_eq!(commands.last(), Some(&PathCommand::Close));
+    assert_eq!(flattened(commands)[0], *outline);
     let dashed = scene::svg(&single(BondPreset::Dashed));
     let dotted = scene::svg(&single(BondPreset::Dotted));
     assert!(dashed.contains("stroke-dasharray"));
@@ -159,6 +178,25 @@ fn bond_color_reaches_shared_vector_and_raster_exports() {
             .unwrap()
             .starts_with(b"%PDF")
     );
+}
+
+#[test]
+fn hashed_wedge_bars_never_taper_below_the_normal_bond_width() {
+    for width in [0.1, 0.6, 1.5] {
+        let mut doc = single(BondPreset::Wedge);
+        doc.bonds[0].display = "hash".into();
+        doc.drawing_style.line_width_pt = width;
+        doc.drawing_style.bold_width_pt = width * 3.;
+        let bars = scene::primitives(&doc);
+        assert!(bars.len() > 1);
+        for bar in bars {
+            let Primitive::Line(a, b, stroke) = bar else {
+                panic!("Expected separated hash bars");
+            };
+            assert!(a.distance(b) >= doc.drawing_style.line_width() - 0.001);
+            assert_eq!(stroke, doc.drawing_style.line_width());
+        }
+    }
 }
 
 #[tokio::test]

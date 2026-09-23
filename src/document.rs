@@ -38,6 +38,14 @@ pub struct Atom {
     pub id: u64,
     pub element: String,
     pub position: Point,
+    /// Projection depth in drawing units, retained when tilting back.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub depth: f32,
+    /// Target atom IDs. Without `attachment` this is a nonchemical centroid.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub centroid: Vec<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attachment: Option<crate::attachments::Kind>,
     #[serde(default)]
     pub charge: i32,
     #[serde(default)]
@@ -63,6 +71,12 @@ pub struct Atom {
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Bond {
+    /// Draw the inner component along its ring; chemical order stays unchanged.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub ring_arc: bool,
+    /// Boldness describes projection depth, never a tetrahedral wedge.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub projection: bool,
     #[serde(default)]
     pub z_order: i16,
     #[serde(
@@ -89,6 +103,9 @@ pub struct Bond {
     pub secondary_display: Option<String>,
     #[serde(default)]
     pub color: [u8; 3],
+}
+fn is_zero(value: &f32) -> bool {
+    *value == 0.
 }
 fn plain() -> String {
     "plain".into()
@@ -189,12 +206,15 @@ impl Document {
             id,
             element: element.into(),
             position,
+            depth: 0.,
+            centroid: vec![],
+            attachment: None,
             charge: 0,
             radical_electrons: 0,
             marks: vec![],
             isotope: 0,
             explicit_h: 0,
-            no_implicit: false,
+            no_implicit: element == "*",
             aromatic: false,
             stereo: None,
             map_num: 0,
@@ -232,6 +252,8 @@ impl Document {
             .find(|x| (x.a == a && x.b == b) || (x.a == b && x.b == a))
         {
             *bond = Bond {
+                ring_arc: false,
+                projection: false,
                 z_order: bond.z_order,
                 indicator: bond.indicator.clone(),
                 cip_label: None,
@@ -247,6 +269,8 @@ impl Document {
             };
         } else {
             self.bonds.push(Bond {
+                ring_arc: false,
+                projection: false,
                 z_order: 0,
                 indicator: Default::default(),
                 cip_label: None,
@@ -299,6 +323,7 @@ impl Document {
         self.annotations.retain(|a| !ids.contains(&a.id));
         self.arrows.retain(|a| !ids.contains(&a.id));
         self.graphics.retain(|a| !ids.contains(&a.id));
+        crate::projection::prune_centroids(self);
         self.prune_groups();
         crate::reactions::prune(self);
     }
@@ -325,6 +350,7 @@ impl Document {
                 a.map_points(|p| p.offset(dx, dy));
             }
         }
+        crate::projection::sync_centroids(self);
     }
     pub fn all_ids(&self) -> Vec<u64> {
         self.atoms
@@ -336,6 +362,8 @@ impl Document {
             .collect()
     }
     pub fn validate(&self) -> Result<(), String> {
+        crate::projection::validate(self)?;
+        crate::attachments::validate(self)?;
         self.drawing_style.validate()?;
         let mut picture_bytes = 0_usize;
         let mut picture_pixels = 0_u64;
@@ -372,6 +400,9 @@ impl Document {
         let empty_neighbors = HashSet::new();
         for a in &self.atoms {
             a.display.validate()?;
+            if a.display.variable.is_some() && a.element != "*" {
+                return Err("Variable labels require wildcard atoms".into());
+            }
             if a.cip_label
                 .as_ref()
                 .is_some_and(|s| !["R", "S", "r", "s"].contains(&s.as_str()))
@@ -538,6 +569,8 @@ mod tests {
         let mut doc = Document::default();
         let a = doc.add_atom("C", Point::default());
         doc.bonds.push(Bond {
+            ring_arc: false,
+            projection: false,
             z_order: 0,
             indicator: Default::default(),
             cip_label: None,

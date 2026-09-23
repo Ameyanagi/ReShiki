@@ -10,6 +10,61 @@ pub struct Abbreviation {
     pub reverse_label: String,
     pub anchor: u64,
     pub members: Vec<u64>,
+    #[serde(default, skip_serializing_if = "LabelAlignment::is_auto")]
+    pub alignment: LabelAlignment,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LabelAlignment {
+    #[default]
+    Auto,
+    Left,
+    Center,
+    Right,
+    Above,
+}
+impl LabelAlignment {
+    pub const ALL: [Self; 5] = [
+        Self::Auto,
+        Self::Left,
+        Self::Center,
+        Self::Right,
+        Self::Above,
+    ];
+    pub fn is_auto(&self) -> bool {
+        *self == Self::Auto
+    }
+    pub fn cdxml(self) -> &'static str {
+        match self {
+            Self::Auto => "Auto",
+            Self::Left => "Left",
+            Self::Center => "Center",
+            Self::Right => "Right",
+            Self::Above => "Above",
+        }
+    }
+    pub fn from_cdxml(value: &str) -> Result<Self, String> {
+        match value {
+            "Auto" | "Best" => Ok(Self::Auto),
+            "Left" => Ok(Self::Left),
+            "Center" => Ok(Self::Center),
+            "Right" => Ok(Self::Right),
+            "Above" => Ok(Self::Above),
+            _ => Err("Unsupported abbreviation label alignment".into()),
+        }
+    }
+}
+impl std::fmt::Display for LabelAlignment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Auto => "Automatic",
+            Self::Left => "Flush left",
+            Self::Center => "Centered",
+            Self::Right => "Flush right",
+            Self::Above => "Stacked above",
+        })
+    }
 }
 
 pub const PRESETS: &[&str] = &[
@@ -39,10 +94,10 @@ impl Abbreviation {
         }
         let mut reached = HashSet::from([self.anchor]);
         let mut external = 0;
-        for bond in &doc.bonds {
-            if members.contains(&bond.a) != members.contains(&bond.b) {
+        for (a, b) in crate::attachments::edges(doc) {
+            if members.contains(&a) != members.contains(&b) {
                 external += 1;
-                if bond.a != self.anchor && bond.b != self.anchor {
+                if a != self.anchor && b != self.anchor {
                     return Err(
                         "Only the abbreviation's attachment atom can connect outside it".into(),
                     );
@@ -54,12 +109,12 @@ impl Abbreviation {
         }
         loop {
             let before = reached.len();
-            for b in &doc.bonds {
-                if members.contains(&b.a)
-                    && members.contains(&b.b)
-                    && (reached.contains(&b.a) || reached.contains(&b.b))
+            for (a, b) in crate::attachments::edges(doc) {
+                if members.contains(&a)
+                    && members.contains(&b)
+                    && (reached.contains(&a) || reached.contains(&b))
                 {
-                    reached.extend([b.a, b.b]);
+                    reached.extend([a, b]);
                 }
             }
             if reached.len() == before {
@@ -73,6 +128,11 @@ impl Abbreviation {
     }
 
     pub fn faces_left(&self, doc: &Document) -> bool {
+        match self.alignment {
+            LabelAlignment::Left => return false,
+            LabelAlignment::Right => return true,
+            _ => {}
+        }
         let Some(anchor) = doc.atom(self.anchor) else {
             return false;
         };
@@ -169,6 +229,7 @@ impl Document {
             .or_else(|| members.first().copied())
             .ok_or("Select atoms to abbreviate")?;
         let abbreviation = Abbreviation {
+            alignment: Default::default(),
             label: label.trim().into(),
             reverse_label: reverse_label.trim().into(),
             anchor,
@@ -210,6 +271,8 @@ impl Document {
                             a.no_implicit,
                             a.radical_electrons,
                             a.map_num,
+                            a.attachment,
+                            &a.centroid,
                         ) == (
                             &b.element,
                             b.charge,
@@ -218,6 +281,8 @@ impl Document {
                             b.no_implicit,
                             b.radical_electrons,
                             b.map_num,
+                            b.attachment,
+                            &b.centroid,
                         )
                     })
                 });

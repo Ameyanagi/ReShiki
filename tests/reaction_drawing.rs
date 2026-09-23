@@ -198,6 +198,7 @@ fn reaction_completion_is_atomic_and_rejects_incomplete_labels() -> anyhow::Resu
     let part = molfile::Imported {
         molecule: document::prepare(&water)?,
         annotations: molfile::FileAnnotations {
+            attachments: Vec::new(),
             is_3d: false,
             attachment_points: vec![None],
             dummy_labels: vec![None],

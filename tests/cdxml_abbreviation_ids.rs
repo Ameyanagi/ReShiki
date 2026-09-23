@@ -133,7 +133,17 @@ fn associated_records_match_original_read_exactly() -> anyhow::Result<()> {
             match (&result, &case.expected) {
                 (Ok(actual), Some(expected)) => {
                     accepted += 1;
-                    let actual = serde_json::to_value(actual)?;
+                    let mut actual = serde_json::to_value(actual)?;
+                    // The original reader discarded label justification. Its
+                    // atom-ID contract stays exact; alignment has separate
+                    // ChemDraw fixture and native/CDXML/CDX round-trip checks.
+                    if let Some(groups) = actual.as_array_mut() {
+                        for group in groups {
+                            if let Some(group) = group.as_object_mut() {
+                                group.remove("alignment");
+                            }
+                        }
+                    }
                     (actual != *expected).then(|| format!("{actual} != {expected}"))
                 }
                 (Err(error), None) => {

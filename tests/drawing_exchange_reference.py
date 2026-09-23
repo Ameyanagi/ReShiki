@@ -15,6 +15,12 @@ def main():
             if request.get("operation") == "import":
                 result = worker.handle(request)
             else:
+                # Corrected export contract: hydrate display H counts from the
+                # independent RDKit graph, not a stale drawing-label cache.
+                # ChemDraw treats an explicit bare N label differently from NH.
+                molecule = worker.from_document(request["document"])
+                for atom, chemical in zip(request["document"]["atoms"], molecule.GetAtoms()):
+                    atom["label_h"] = chemical.GetTotalNumHs()
                 result = dict(
                     output=worker.export_cdxml(
                         request["document"],

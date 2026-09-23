@@ -17,6 +17,7 @@ pub enum Section {
     Bonds,
     BondDirection,
     Atoms,
+    AtomColors,
     Arrange,
     Groups,
     Molecule,
@@ -105,6 +106,15 @@ pub enum Action {
     Figure(FigureFormat),
     Chemical(ChemicalFormat),
     RefreshProperties,
+    Centroid,
+    Attachment(reshiki::attachments::Kind),
+    DepthBonds,
+    RingArc,
+    OpenAtomColors,
+    ColorElement(String),
+    ColorWholeDrawing(bool),
+    ColorHex(String),
+    ApplyAtomColor,
     PropertiesCalculated(PropertyKey, Box<Result<Analysis, String>>),
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -120,6 +130,9 @@ pub(super) struct State {
     chemical: ChemicalFormat,
     pending: Option<PropertyKey>,
     properties: Option<(PropertyKey, Result<Analysis, String>)>,
+    color_element: Option<String>,
+    color_whole_drawing: bool,
+    color_hex: String,
 }
 impl State {
     pub(super) fn update(&mut self, action: Action) {
@@ -129,7 +142,17 @@ impl State {
             }
             Action::Figure(format) => self.figure = format,
             Action::Chemical(format) => self.chemical = format,
-            Action::RefreshProperties | Action::PropertiesCalculated(..) => {}
+            Action::ColorElement(element) => self.color_element = Some(element),
+            Action::ColorWholeDrawing(value) => self.color_whole_drawing = value,
+            Action::ColorHex(value) => self.color_hex = value,
+            Action::RefreshProperties
+            | Action::PropertiesCalculated(..)
+            | Action::Centroid
+            | Action::Attachment(_)
+            | Action::RingArc
+            | Action::OpenAtomColors
+            | Action::ApplyAtomColor
+            | Action::DepthBonds => {}
         }
     }
 }
@@ -188,7 +211,8 @@ impl App {
     }
 
     pub(super) fn properties_subscription(&self) -> Subscription<Message> {
-        if !self.inspector_open
+        if reshiki::attachments::present(&self.doc)
+            || !self.inspector_open
             || self.inspector_tab != InspectorTab::Properties
             || self.busy
             || self.erase_stroke
@@ -216,6 +240,93 @@ impl App {
 
     pub(super) fn inspector_action(&mut self, action: Action) -> Task<Message> {
         match action {
+            Action::OpenAtomColors => {
+                self.inspector_open = true;
+                self.inspector_tab = InspectorTab::Properties;
+                self.inspector_ui.expanded.insert(Section::AtomColors, true);
+                self.inspector_ui.color_whole_drawing = self.selected.is_empty();
+                if self.inspector_ui.color_hex.is_empty() {
+                    self.inspector_ui.color_hex = "#205091".into();
+                }
+                Task::none()
+            }
+            Action::ApplyAtomColor => {
+                let Some(color) = super::graphics::parse_color(&self.inspector_ui.color_hex) else {
+                    self.status = "Enter a six-digit hex color, for example #205091".into();
+                    self.error = true;
+                    return Task::none();
+                };
+                let before = self.doc.clone();
+                let ids = self.atom_color_targets();
+                let style = self.doc.drawing_style.text_style();
+                for atom in &mut self.doc.atoms {
+                    if ids.contains(&atom.id) {
+                        atom.text_style.get_or_insert_with(|| style.clone()).color = color;
+                    }
+                }
+                self.changed(before);
+                self.status = format!("Colored {} atom labels", ids.len());
+                self.error = false;
+                Task::none()
+            }
+            Action::RingArc => {
+                let before = self.doc.clone();
+                match reshiki::ring_arcs::toggle(&mut self.doc, &self.selected) {
+                    Ok(on) => {
+                        self.changed(before);
+                        self.status = if on {
+                            "Inner ring curve added · Bond orders retained"
+                        } else {
+                            "Inner ring curve removed"
+                        }
+                        .into();
+                        self.error = false;
+                    }
+                    Err(error) => {
+                        self.status = error;
+                        self.error = true;
+                    }
+                }
+                Task::none()
+            }
+            Action::Centroid => {
+                let before = self.doc.clone();
+                match reshiki::projection::add_centroid(&mut self.doc, &self.selected) {
+                    Ok(id) => {
+                        self.selected = vec![id];
+                        self.changed(before);
+                        self.status =
+                            "Centroid added · Draw a dashed contact from this point".into();
+                    }
+                    Err(error) => {
+                        self.status = error;
+                        self.error = true;
+                    }
+                }
+                Task::none()
+            }
+            Action::Attachment(kind) => {
+                let before = self.doc.clone();
+                match reshiki::attachments::add(&mut self.doc, &self.selected, kind) {
+                    Ok(id) => {
+                        self.selected = vec![id];
+                        self.changed(before);
+                        self.status = "Attachment point added · Draw a bond from * to the metal or substituent".into();
+                        self.error = false;
+                    }
+                    Err(error) => {
+                        self.status = error;
+                        self.error = true;
+                    }
+                }
+                Task::none()
+            }
+            Action::DepthBonds => {
+                let before = self.doc.clone();
+                reshiki::projection::depth_bonds(&mut self.doc, &self.selected);
+                self.changed(before);
+                Task::none()
+            }
             Action::RefreshProperties => {
                 let Some(key) = self.property_key() else {
                     return self.update(Message::Analyze);
@@ -340,6 +451,7 @@ impl App {
             .color(muted())
         ]
         .spacing(10);
+        body = body.push(self.atom_colors_panel());
         let molecular_first = self.selected.is_empty()
             || self.property_key().is_some_and(|key| !key.atoms.is_empty());
         if molecular_first {
@@ -459,7 +571,118 @@ impl App {
         )
     }
 
+    fn color_elements(&self) -> Vec<String> {
+        self.doc
+            .atoms
+            .iter()
+            .filter(|a| a.centroid.is_empty())
+            .filter(|a| self.inspector_ui.color_whole_drawing || self.selected.contains(&a.id))
+            .map(|a| a.element.clone())
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect()
+    }
+
+    fn atom_color_targets(&self) -> Vec<u64> {
+        let elements = self.color_elements();
+        let element = self
+            .inspector_ui
+            .color_element
+            .as_ref()
+            .filter(|e| elements.contains(e))
+            .or(elements.first());
+        self.doc
+            .atoms
+            .iter()
+            .filter(|a| a.centroid.is_empty() && Some(&a.element) == element)
+            .filter(|a| self.inspector_ui.color_whole_drawing || self.selected.contains(&a.id))
+            .map(|a| a.id)
+            .collect()
+    }
+
+    fn atom_colors_panel(&self) -> Element<'_, Message> {
+        let elements = self.color_elements();
+        let element = self
+            .inspector_ui
+            .color_element
+            .clone()
+            .filter(|e| elements.contains(e))
+            .or_else(|| elements.first().cloned());
+        let count = self.atom_color_targets().len();
+        let body = column![
+            checkbox(self.inspector_ui.color_whole_drawing)
+                .label("Whole drawing")
+                .on_toggle(|v| Message::InspectorAction(Action::ColorWholeDrawing(v))),
+            text(if self.inspector_ui.color_whole_drawing {
+                "Choose an element to color throughout the drawing."
+            } else {
+                "Only matching atoms in the selection are colored."
+            })
+            .size(11)
+            .color(muted()),
+            pick_list(elements, element, |e| Message::InspectorAction(
+                Action::ColorElement(e)
+            ))
+            .placeholder("Select atoms first")
+            .width(Length::Fill)
+            .text_size(12)
+            .padding(7),
+            row![
+                text_input("#205091", &self.inspector_ui.color_hex)
+                    .on_input(|s| Message::InspectorAction(Action::ColorHex(s)))
+                    .on_submit(Message::InspectorAction(Action::ApplyAtomColor))
+                    .size(12)
+                    .padding(7),
+                command("Apply", Message::InspectorAction(Action::ApplyAtomColor)).on_press_maybe(
+                    (count > 0).then_some(Message::InspectorAction(Action::ApplyAtomColor))
+                ),
+            ]
+            .spacing(6),
+            text(format!("{count} matching atoms"))
+                .size(11)
+                .color(muted()),
+        ]
+        .spacing(8);
+        self.inspector_section(
+            Section::AtomColors,
+            "Color atoms by element",
+            "",
+            false,
+            body,
+        )
+    }
+
     fn molecular_properties(&self) -> Element<'_, Message> {
+        if reshiki::attachments::present(&self.doc) {
+            let selected = (!self.selected.is_empty())
+                .then(|| reshiki::editing::selection(&self.doc, &self.selected));
+            let doc = selected.as_ref().unwrap_or(&self.doc);
+            let mut body = column![
+                text(reshiki::attachments::ANALYSIS_NOTICE)
+                    .size(11)
+                    .color(muted())
+            ]
+            .spacing(8);
+            if let Ok(composition) = reshiki::attachments::composition(doc) {
+                body = body
+                    .push(
+                        text(format!(
+                            "{} · {:.3} g/mol",
+                            composition.formula, composition.mass
+                        ))
+                        .size(14),
+                    )
+                    .push(
+                        text(format!(
+                            "{} defined atoms · Attachment points excluded",
+                            doc.atoms.iter().filter(|a| a.element != "*").count()
+                        ))
+                        .size(11)
+                        .color(muted()),
+                    );
+            }
+            return container(body).padding(10).into();
+        }
         let key = self.property_key();
         let ids: HashSet<_> = key
             .as_ref()
@@ -572,7 +795,7 @@ impl App {
     }
 
     fn arrangement_panel(&self, multiple: bool) -> Element<'_, Message> {
-        let arrange = column![
+        let mut arrange = column![
             text("Rotate & reflect").size(11).color(muted()),
             row![
                 command("↶ 30°", Message::Transform(Transform::Rotate(-30.))).width(Length::Fill),
@@ -585,6 +808,35 @@ impl App {
                 command("Flip V", Message::Transform(Transform::FlipVertical)).width(Length::Fill)
             ]
             .spacing(6),
+            text("3D tilt").size(11).color(muted()),
+            row![
+                command("X −15°", Message::Transform(Transform::TiltX(-15.))).width(Length::Fill),
+                command("X +15°", Message::Transform(Transform::TiltX(15.))).width(Length::Fill),
+            ]
+            .spacing(4),
+            row![
+                command("Y −15°", Message::Transform(Transform::TiltY(-15.))).width(Length::Fill),
+                command("Y +15°", Message::Transform(Transform::TiltY(15.))).width(Length::Fill),
+            ]
+            .spacing(4),
+            command(
+                "Emphasize front bonds",
+                Message::InspectorAction(Action::DepthBonds)
+            )
+            .width(Length::Fill),
+            row![
+                command("Add centroid", Message::InspectorAction(Action::Centroid))
+                    .width(Length::Fill),
+                command("Dummy atom (*)", Message::Element("*".into())).width(Length::Fill),
+            ]
+            .spacing(4),
+            command("Add multi-center attachment", Message::InspectorAction(Action::Attachment(reshiki::attachments::Kind::MultiCenter)))
+                .width(Length::Fill),
+            command("Add variable attachment", Message::InspectorAction(Action::Attachment(reshiki::attachments::Kind::Variable)))
+                .width(Length::Fill),
+            text("Select the target atoms, then add a point. Multi-center attaches to all; variable attaches to one of the selected positions.")
+                .size(11)
+                .color(muted()),
             text("Align horizontally").size(11).color(muted()),
             row![
                 command("Left", Message::Arrange(Arrange::AlignLeft)).width(Length::Fill),
@@ -615,6 +867,15 @@ impl App {
                 .color(muted()),
         ]
         .spacing(6);
+        if reshiki::rings::selected_cycle(&self.doc, &self.selected).is_some() {
+            arrange = arrange.push(
+                command(
+                    "Saturated ↔ Aromatic · Shift+R",
+                    Message::ToggleSelectedRing,
+                )
+                .width(Length::Fill),
+            );
+        }
         self.inspector_section(
             Section::Arrange,
             "Arrange & transform",
@@ -643,6 +904,15 @@ impl App {
             .filter(|b| self.selected.contains(&b.a) && self.selected.contains(&b.b))
             .collect();
         let mut body = column![].spacing(10);
+        if self.atom_text_target().is_some() {
+            body = body.push(
+                command(
+                    "Edit atom label… · Enter",
+                    Message::AtomText(super::atom_text::Action::Begin(None)),
+                )
+                .width(Length::Fill),
+            );
+        }
         if let Some(first) = bonds.first() {
             let preset = BondPreset::of(first)
                 .filter(|p| bonds.iter().all(|b| BondPreset::of(b) == Some(*p)));
@@ -692,6 +962,8 @@ impl App {
                     command("Toggle aromatic circle · A", Message::AromaticDisplay)
                         .on_press_maybe((!self.busy).then_some(Message::AromaticDisplay)),
                 );
+                controls = controls.push(command("Toggle inner ring curve", Message::InspectorAction(Action::RingArc)))
+                    .push(text("Select consecutive ring atoms for a partial curve, or the whole ring for a circle. Bond orders stay unchanged.").size(11).color(muted()));
             }
             body = body.push(self.inspector_section(
                 Section::Bonds,
@@ -1024,6 +1296,75 @@ mod tests {
         let _ = app.inspector_action(Action::PropertiesCalculated(key, Box::new(Ok(result))));
     }
 
+    #[test]
+    fn element_colors_respect_scope_and_undo_without_touching_bonds() {
+        let (mut app, _) = App::new();
+        let a = app.doc.add_atom("Cu", reshiki::document::Point::default());
+        let b = app
+            .doc
+            .add_atom("Cu", reshiki::document::Point::new(40., 0.));
+        let n = app
+            .doc
+            .add_atom("N", reshiki::document::Point::new(80., 0.));
+        app.doc.add_bond(b, n, 5, "plain");
+        app.doc.atom_mut(a).unwrap().text_style = Some(reshiki::typography::TextStyle {
+            italic: true,
+            ..Default::default()
+        });
+        app.selected = vec![a, n];
+        let original = app.doc.clone();
+        for action in [
+            Action::OpenAtomColors,
+            Action::ColorElement("Cu".into()),
+            Action::ColorHex("#205091".into()),
+            Action::ApplyAtomColor,
+        ] {
+            let _ = app.inspector_action(action);
+        }
+        assert_eq!(
+            app.doc.atom(a).unwrap().text_style.as_ref().unwrap().color,
+            [32, 80, 145]
+        );
+        assert!(app.doc.atom(a).unwrap().text_style.as_ref().unwrap().italic);
+        assert_eq!(app.doc.atom(b), original.atom(b));
+        assert_eq!(app.doc.atom(n), original.atom(n));
+        assert_eq!(app.doc.bonds, original.bonds);
+        assert_eq!(app.selected, vec![a, n]);
+        assert!(app.history.undo(&mut app.doc));
+        assert_eq!(app.doc, original);
+        let _ = app.inspector_action(Action::ColorWholeDrawing(true));
+        let _ = app.inspector_action(Action::ApplyAtomColor);
+        assert_eq!(
+            app.doc.atom(b).unwrap().text_style.as_ref().unwrap().color,
+            [32, 80, 145]
+        );
+        assert_eq!(app.doc.atom(n), original.atom(n));
+        let colored = app.doc.clone();
+        let _ = app.inspector_action(Action::ColorHex("bad".into()));
+        let _ = app.inspector_action(Action::ApplyAtomColor);
+        assert_eq!(app.doc, colored);
+    }
+
+    #[test]
+    fn inner_curve_is_one_undo_step_and_keeps_chemical_orders() {
+        let (mut app, _) = App::new();
+        let ids = reshiki::editing::ring(
+            &mut app.doc,
+            reshiki::document::Point::default(),
+            5,
+            false,
+            0.,
+        );
+        app.selected = ids[..3].to_vec();
+        let original = app.doc.clone();
+        let _ = app.inspector_action(Action::RingArc);
+        assert_eq!(app.doc.bonds.iter().filter(|b| b.ring_arc).count(), 2);
+        assert!(app.history.undo(&mut app.doc));
+        assert_eq!(app.doc, original);
+        assert!(app.history.redo(&mut app.doc));
+        assert_eq!(reshiki::ring_arcs::render(&app.doc).primitives.len(), 1);
+    }
+
     #[tokio::test]
     async fn selected_properties_use_only_the_fragment_without_changing_the_drawing() {
         let (mut app, _) = App::new();
@@ -1085,6 +1426,97 @@ mod tests {
         let _ = app.inspector_action(Action::PropertiesCalculated(old, Box::new(Ok(analysis))));
         assert!(app.property_analysis().is_none());
         assert!(app.inspector_ui.pending.is_none());
+    }
+
+    #[test]
+    fn aromatic_shortcut_keeps_tool_size_and_selected_ring_topology() {
+        let (mut app, _) = App::new();
+        for size in 3..=8 {
+            let _ = app.update(Message::RingSize(size));
+            let _ = app.update(Message::AromaticRing(false));
+            let _ = app.update(Message::ToggleAromaticRing);
+            assert_eq!(app.ring_size, size);
+            assert!(app.aromatic_ring);
+            let _ = app.update(Message::ToggleAromaticRing);
+            assert_eq!(app.ring_size, size);
+            assert!(!app.aromatic_ring);
+        }
+        app.selected = reshiki::editing::ring(
+            &mut app.doc,
+            reshiki::document::Point::default(),
+            5,
+            false,
+            5.,
+        );
+        app.tool = Tool::Select;
+        let before = app.doc.clone();
+        let _ = app.update(Message::ToggleAromaticRing);
+        assert_eq!(app.doc.atoms.len(), 5);
+        assert!(app.doc.bonds.iter().all(|b| b.order == 4));
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, before);
+    }
+
+    #[test]
+    fn tilted_ring_and_centroid_are_atomic_undoable_edits() {
+        let (mut app, _) = App::new();
+        app.selected = reshiki::editing::ring(
+            &mut app.doc,
+            reshiki::document::Point::new(100., 100.),
+            5,
+            false,
+            5.,
+        );
+        let planar = app.doc.clone();
+        let ring = app.selected.clone();
+        let _ = app.update(Message::Transform(Transform::TiltX(60.)));
+        let tilted = app.doc.clone();
+        assert!(tilted.atoms.iter().any(|a| a.depth.abs() > 1.));
+        assert_eq!(tilted.bonds, planar.bonds);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, planar);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc, tilted);
+        app.selected = ring;
+        let _ = app.update(Message::InspectorAction(Action::Centroid));
+        assert_eq!(app.doc.atoms.len(), 6);
+        let centroid = app.selected[0];
+        assert_eq!(app.doc.atom(centroid).unwrap().centroid.len(), 5);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, tilted);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc.atom(centroid).unwrap().element, "*");
+        app.doc.validate().unwrap();
+    }
+
+    #[test]
+    fn semantic_attachment_creation_is_undoable() -> Result<(), String> {
+        for kind in [
+            reshiki::attachments::Kind::MultiCenter,
+            reshiki::attachments::Kind::Variable,
+        ] {
+            let (mut app, _) = App::new();
+            app.selected = reshiki::editing::ring(
+                &mut app.doc,
+                reshiki::document::Point::new(100., 100.),
+                6,
+                true,
+                5.,
+            );
+            let before = app.doc.clone();
+            let _ = app.update(Message::InspectorAction(Action::Attachment(kind)));
+            let id = *app.selected.first().ok_or("No point selected")?;
+            let point = app.doc.atom(id).ok_or("Missing point")?;
+            assert_eq!(point.attachment, Some(kind));
+            assert_eq!(point.centroid.len(), 6);
+            let after = app.doc.clone();
+            let _ = app.update(Message::Undo);
+            assert_eq!(app.doc, before);
+            let _ = app.update(Message::Redo);
+            assert_eq!(app.doc, after);
+            app.doc.validate()?;
+        }
+        Ok(())
     }
 
     #[test]

@@ -12,6 +12,7 @@ mod abbreviations;
 mod arrows;
 mod assistant;
 mod atom_labels;
+mod atom_text;
 mod cleanup;
 mod clipboard;
 mod context_menu;
@@ -57,6 +58,7 @@ pub enum Message {
     Reaction(reactions::Action),
     DrawingStyle(document_styles::Action),
     InlineText(inline_text::Action),
+    AtomText(atom_text::Action),
     Join(joining::Action),
     Pages(pages::Action),
     Printing(printing::Action),
@@ -115,6 +117,7 @@ pub enum Message {
     TextColor(String),
     ApplyTextColor,
     TextAlign(reshiki::typography::TextAlign),
+    GroupLabelAlign(reshiki::abbreviations::LabelAlignment),
     TextSpacing(f32),
     TextWidth(String),
     ApplyTextWidth,
@@ -173,6 +176,7 @@ pub enum Message {
     RingSize(u8),
     AromaticRing(bool),
     ToggleAromaticRing,
+    ToggleSelectedRing,
     ArrowStyle(reshiki::arrows::Preset),
     ArrowAction(arrows::Action),
     CustomElement(String),
@@ -266,6 +270,7 @@ pub struct App {
     caption_format: reshiki::typography::TextFormat,
     caption_target: Option<u64>,
     inline_text: Option<inline_text::State>,
+    atom_text: Option<atom_text::State>,
     joining: Option<joining::State>,
     pages: pages::State,
     reactions: reactions::State,
@@ -366,6 +371,7 @@ impl App {
             caption_format: Default::default(),
             caption_target: None,
             inline_text: None,
+            atom_text: None,
             joining: None,
             pages: pages::State::default(),
             printing: printing::State::default(),
@@ -593,6 +599,9 @@ impl App {
                     Key::Named(Named::Enter) if mods.command() => {
                         Some(Message::InlineText(inline_text::Action::Finish(true)))
                     }
+                    Key::Named(Named::Enter) if mods.is_empty() => {
+                        Some(Message::AtomText(atom_text::Action::Begin(None)))
+                    }
                     Key::Named(Named::Escape) => Some(Message::Escape),
                     _ => None,
                 }
@@ -646,6 +655,7 @@ impl App {
         self.changed_continuing(before, false);
     }
     fn changed_continuing(&mut self, before: Document, continuing: bool) {
+        reshiki::projection::sync_centroids(&mut self.doc);
         self.cleanup = None;
         self.doc.reconcile_abbreviations(&before);
         if let Err(error) = reshiki::reactions::reconcile(&mut self.doc) {
@@ -804,6 +814,20 @@ impl App {
     }
 
     fn update_inner(&mut self, message: Message) -> Task<Message> {
+        if self.updates.restarting && !matches!(message, Message::Updates(_)) {
+            return Task::none();
+        }
+        if let Message::AtomText(action) = message {
+            return self.atom_text_action(action);
+        }
+        if self.atom_text.is_some() {
+            if matches!(message, Message::Escape) {
+                return self.atom_text_action(atom_text::Action::Cancel);
+            }
+            if !atom_text::background(&message) {
+                return Task::none();
+            }
+        }
         if self.help_open && matches!(message, Message::Escape | Message::ToggleHelp) {
             self.help_open = false;
             return Task::none();
@@ -874,6 +898,11 @@ impl App {
         if let Message::Canvas(Edit::Click(p)) = message
             && self.tool == Tool::Text
         {
+            if let Some(id) = canvas::hit_object(&self.doc, p, 8. / self.camera.zoom)
+                .filter(|id| self.doc.atom(*id).is_some())
+            {
+                return self.atom_text_action(atom_text::Action::Begin(Some(id)));
+            }
             let id = canvas::hit_object(&self.doc, p, 8. / self.camera.zoom)
                 .filter(|id| self.doc.annotations.iter().any(|a| a.id == *id));
             return self.inline_action(inline_text::Action::Begin(id, p));
@@ -972,6 +1001,7 @@ impl App {
             | Message::Updates(_)
             | Message::Palette(_)
             | Message::InlineText(_)
+            | Message::AtomText(_)
             | Message::Join(_)
             | Message::Escape => {}
             Message::ContextKey(key) => return self.context_key(&key),
@@ -993,7 +1023,7 @@ impl App {
                         .is_some_and(|due| std::time::Instant::now() >= due)
                 {
                     self.refresh_due = None;
-                    if !self.doc.atoms.is_empty() {
+                    if !self.doc.atoms.is_empty() && !reshiki::attachments::present(&self.doc) {
                         return self.run(
                             Request::molecule("analyze", self.doc.clone()),
                             Job::RefreshLabels,
@@ -1480,6 +1510,7 @@ impl App {
                 }
             }
             Message::TextAlign(alignment) => self.apply_paragraph(Some(alignment), None, None),
+            Message::GroupLabelAlign(alignment) => self.apply_group_alignment(alignment),
             Message::TextSpacing(spacing) => self.apply_paragraph(None, Some(spacing), None),
             Message::TextWidth(value) => self.text_width_input = value,
             Message::ApplyTextWidth => {
@@ -1507,13 +1538,33 @@ impl App {
             Message::AromaticRing(value) => {
                 self.toolbar.ring = Tool::Ring;
                 self.aromatic_ring = value;
-                if value {
-                    self.ring_size = 6;
-                }
                 self.tool = Tool::Ring;
             }
             Message::ToggleAromaticRing => {
+                if self.tool.selects()
+                    && reshiki::rings::selected_cycle(&self.doc, &self.selected).is_some()
+                {
+                    return self.update(Message::ToggleSelectedRing);
+                }
                 return self.update(Message::AromaticRing(!self.aromatic_ring));
+            }
+            Message::ToggleSelectedRing => {
+                let before = self.doc.clone();
+                match reshiki::rings::toggle_selected_aromatic(&mut self.doc, &self.selected) {
+                    Ok(aromatic) => {
+                        self.changed(before);
+                        self.status = if aromatic {
+                            "Selected ring set to aromatic"
+                        } else {
+                            "Selected ring set to saturated"
+                        }
+                        .into();
+                    }
+                    Err(error) => {
+                        self.error = true;
+                        self.status = error;
+                    }
+                }
             }
             Message::ArrowStyle(style) => {
                 self.arrow_style = style;
@@ -2516,6 +2567,10 @@ impl App {
                 editing::transform_about(&mut self.doc, &ids, pivot, scale, rotation);
                 self.selected = ids;
             }
+            Edit::Tilt { ids, x, y } => {
+                crate::canvas::tilt::apply(&mut self.doc, &ids, x, y);
+                self.selected = ids;
+            }
             Edit::RingPreset(preset, anchor, direction, connect, alternate) => {
                 let drawing = reshiki::rings::Drawing {
                     preset,
@@ -2609,6 +2664,7 @@ impl App {
                             self.doc.invalidate_chemistry(&[id]);
                             if let Some(a) = self.doc.atom_mut(id) {
                                 a.element = self.element.clone();
+                                a.display.variable = None;
                                 a.explicit_h = 0;
                                 a.no_implicit = false;
                                 a.charge = 0;
@@ -2834,8 +2890,11 @@ impl App {
 
     pub fn view(&self) -> Element<'_, Message> {
         file_shortcuts::wrap(
-            self.with_updates(self.with_help(self.with_palette(self.workspace()))),
+            self.with_assistant_image(self.with_atom_text(
+                self.with_updates(self.with_help(self.with_palette(self.workspace()))),
+            )),
             self.help_open,
+            self.assistant.viewed_image.is_some(),
         )
     }
 }
