@@ -14,6 +14,9 @@ use std::{
     time::Duration,
 };
 
+#[path = "support/reference_presentation.rs"]
+mod reference_presentation;
+
 #[derive(Clone, Serialize, Deserialize)]
 struct Case {
     operation: String,
@@ -315,6 +318,7 @@ async fn aromatic_cases(reference: &PythonEngine, lazy: bool) -> anyhow::Result<
 fn equal(actual: Response, expected: Response) -> anyhow::Result<()> {
     let mut actual = serde_json::to_value(actual)?;
     let mut expected = serde_json::to_value(expected)?;
+    reference_presentation::compare_export(&actual, &mut expected)?;
     for field in ["mass", "exact_mass", "logp", "tpsa"] {
         if let (Some(a), Some(e)) = (
             actual["analysis"][field].as_f64(),
@@ -347,6 +351,22 @@ fn outcome(
         (a, e) => anyhow::bail!("Outcome changed: {a:?} != {e:?}"),
     }
 }
+fn concurrent_indices(cases: &[Case]) -> Vec<usize> {
+    cases
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| c.operation == "import" || !c.document.atoms.is_empty())
+        .take(12)
+        .chain(
+            cases
+                .iter()
+                .enumerate()
+                .filter(|(_, case)| case.operation == "aromatic")
+                .take(4),
+        )
+        .map(|(index, _)| index)
+        .collect()
+}
 async fn child(mode: &str, helper: &Path, cases: &[Case]) -> anyhow::Result<()> {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let temp = tempfile::tempdir()?;
@@ -357,12 +377,14 @@ async fn child(mode: &str, helper: &Path, cases: &[Case]) -> anyhow::Result<()> 
         include_str!("native_routing_guard.py"),
     )?;
     let fixture = temp.path().join("cases.json");
+    let responses = temp.path().join("responses.json");
     std::fs::write(&fixture, serde_json::to_vec(&serde_json::to_value(cases)?)?)?;
     let mut command = tokio::process::Command::new(std::env::current_exe()?);
     command
         .args(["--exact", "routing_child", "--ignored", "--nocapture"])
         .env("RESHIKI_NATIVE_ROUTING_MODE", mode)
         .env("RESHIKI_NATIVE_ROUTING_FIXTURE", fixture)
+        .env("RESHIKI_NATIVE_ROUTING_RESPONSES", &responses)
         .env("RESHIKI_ROOT", &guard)
         .env(
             "RESHIKI_REFERENCE_PYTHON",
@@ -386,6 +408,26 @@ async fn child(mode: &str, helper: &Path, cases: &[Case]) -> anyhow::Result<()> 
         !temp.path().join("unexpected-cache").exists(),
         "Created a Python runtime cache"
     );
+    if matches!(mode, "native" | "lazy") {
+        // Compare outside the guarded subprocess: the independent drawing
+        // codec is test-only and must not weaken the Python-free runtime check.
+        let actual: Vec<(usize, Result<Response, String>)> =
+            serde_json::from_value(serde_json::from_slice(&std::fs::read(responses)?)?)?;
+        let mut expected_indices: Vec<_> =
+            (0..cases.len()).chain(concurrent_indices(cases)).collect();
+        let mut actual_indices: Vec<_> = actual.iter().map(|(index, _)| *index).collect();
+        expected_indices.sort_unstable();
+        actual_indices.sort_unstable();
+        anyhow::ensure!(
+            actual_indices == expected_indices,
+            "Missing routing responses"
+        );
+        for (index, response) in actual {
+            let case = cases.get(index).context("Invalid routing response index")?;
+            outcome(response, case.expected.clone())
+                .with_context(|| format!("{mode}/{}/{:?}", case.operation, case.format))?;
+        }
+    }
     Ok(())
 }
 
@@ -610,32 +652,27 @@ async fn routing_child() -> anyhow::Result<()> {
         .join("python-started");
     let local = LocalEngine::default();
     if matches!(mode.as_str(), "native" | "lazy") {
-        for case in &cases {
+        let mut responses = Vec::new();
+        for (index, case) in cases.iter().enumerate() {
             let request = case.request();
             let before = serde_json::to_value(&request)?;
-            outcome(local.execute(request.clone()).await, case.expected.clone())
-                .with_context(|| format!("{}/{:?}", case.operation, case.format))?;
+            responses.push((index, local.execute(request.clone()).await));
             assert_eq!(before, serde_json::to_value(request)?);
         }
         let mut tasks = tokio::task::JoinSet::new();
-        for case in cases
-            .iter()
-            .filter(|c| c.operation == "import" || !c.document.atoms.is_empty())
-            .take(12)
-            .chain(
-                cases
-                    .iter()
-                    .filter(|case| case.operation == "aromatic")
-                    .take(4),
-            )
-            .cloned()
-        {
+        for index in concurrent_indices(&cases) {
+            let case = cases.get(index).context("Missing concurrent case")?.clone();
             let local = local.clone();
-            tasks.spawn(async move { outcome(local.execute(case.request()).await, case.expected) });
+            tasks.spawn(async move { (index, local.execute(case.request()).await) });
         }
         while let Some(result) = tasks.join_next().await {
-            result??;
+            responses.push(result?);
         }
+        std::fs::write(
+            std::env::var_os("RESHIKI_NATIVE_ROUTING_RESPONSES")
+                .context("Missing response path")?,
+            serde_json::to_vec(&responses)?,
+        )?;
     } else if mode == "invalid-imports" {
         for case in &cases {
             let request = case.request();

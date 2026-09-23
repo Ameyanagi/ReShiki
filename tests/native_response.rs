@@ -13,6 +13,9 @@ use reshiki::{
 };
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
+#[path = "support/reference_presentation.rs"]
+mod reference_presentation;
+
 fn helper(name: &str) -> anyhow::Result<Option<PathBuf>> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("artifacts/inchi-helper")
@@ -50,6 +53,7 @@ async fn prepare(request: Arc<Request>) -> anyhow::Result<Option<Arc<Prepared>>>
 fn equal(actual: Response, expected: Response) -> anyhow::Result<()> {
     let mut actual = serde_json::to_value(actual)?;
     let mut expected = serde_json::to_value(expected)?;
+    reference_presentation::compare_export(&actual, &mut expected)?;
     for field in ["mass", "exact_mass", "logp", "tpsa"] {
         if let (Some(a), Some(e)) = (
             actual["analysis"][field].as_f64(),

@@ -6,6 +6,9 @@ use reshiki::engine::{ChemistryEngine, LocalEngine, PythonEngine, Request, Respo
 
 type TestResult = anyhow::Result<()>;
 
+#[path = "support/reference_presentation.rs"]
+mod reference_presentation;
+
 #[tokio::test]
 async fn rust_mol_import_preserves_complete_reference_responses() -> TestResult {
     import_responses("mol", "tests/molfile_engine_reference.py").await
@@ -255,6 +258,7 @@ async fn import_responses(format: &str, script: &str) -> TestResult {
 fn assert_response_matches(actual: Response, expected: Response) -> TestResult {
     let mut actual = serde_json::to_value(actual)?;
     let mut expected = serde_json::to_value(expected)?;
+    reference_presentation::compare_export(&actual, &mut expected)?;
     if let (Some(a), Some(e)) = (
         actual["analysis"].as_object_mut(),
         expected["analysis"].as_object_mut(),
@@ -786,18 +790,39 @@ async fn mol_dummy_atoms_retain_the_reference_query_import_rejection() -> TestRe
 
 #[tokio::test]
 async fn native_drawings_match_the_original_python_importer() -> TestResult {
+    use reshiki::abbreviations::LabelAlignment;
     let local = LocalEngine::default();
     let reference = PythonEngine::default();
-    for data in [
-        include_bytes!("fixtures/native-ethyl-clipboard.cdx").as_slice(),
-        include_bytes!("fixtures/abbreviations-native.cdx").as_slice(),
-        include_bytes!("fixtures/picture-group-native.cdx").as_slice(),
+    for (data, alignments) in [
+        (
+            include_bytes!("fixtures/native-ethyl-clipboard.cdx").as_slice(),
+            vec![],
+        ),
+        (
+            include_bytes!("fixtures/abbreviations-native.cdx").as_slice(),
+            vec![LabelAlignment::Left, LabelAlignment::Right],
+        ),
+        (
+            include_bytes!("fixtures/picture-group-native.cdx").as_slice(),
+            vec![],
+        ),
     ] {
         let request = Request::import("cdx", &STANDARD.encode(data));
-        let expected = reference
+        let mut expected = reference
             .execute(request.clone())
             .await
             .map_err(anyhow::Error::msg)?;
+        // The actual ChemDraw fixture declares Boc Flush Left and OMe Flush
+        // Right. The old worker discarded both LabelJustification values.
+        let groups = &mut expected
+            .document
+            .as_mut()
+            .context("Missing reference drawing")?
+            .abbreviations;
+        assert_eq!(groups.len(), alignments.len());
+        for (group, alignment) in groups.iter_mut().zip(alignments) {
+            group.alignment = alignment;
+        }
         let actual = local.execute(request).await.map_err(anyhow::Error::msg)?;
         assert_response_matches(actual, expected)?;
     }
