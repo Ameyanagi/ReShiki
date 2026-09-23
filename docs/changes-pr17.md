@@ -1,12 +1,10 @@
 # PR #17: molecular editing and assistant review
 
-[Open the private interactive review](https://reshiki-pr17-review.ameyanagi.chatgpt.site) for expandable screenshots, light/dark themes and a personal checklist.
-
 Review of [PR #17](https://github.com/Ameyanagi/ReShiki/pull/17), prepared on 2026-09-23. These changes are on the PR branch. **The public release remains v0.6.1.** A version number in a development screenshot does not mean these changes have been released.
 
 ## Groups that retain their atoms
 
-Boc and the other 29 ordinary presets are defined fragments, not just text. Cp is cyclopentadienyl (C5H5−); Cp* is pentamethylcyclopentadienyl (C10H15−). Their five-center attachment and real atoms remain in the drawing when the label is collapsed. Metal charge remains as entered. Composition excludes attachment points; it does not validate the complex's coordination chemistry.
+Boc and the other ordinary presets (29 in total) are defined fragments, not just text. Cp is cyclopentadienyl (C5H5−); Cp* is pentamethylcyclopentadienyl (C10H15−). Their five-center attachment and real atoms remain in the drawing when the label is collapsed. Metal charge remains as entered. Composition excludes attachment points; it does not validate the complex's coordination chemistry.
 
 ![Cp*2Fe with its counted composition](images/pr17/cp-star-formula.png)
 
