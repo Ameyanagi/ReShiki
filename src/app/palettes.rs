@@ -600,11 +600,11 @@ impl App {
                     width: 1.,
                     radius: 10.into(),
                 },
-                shadow: iced::Shadow {
+                shadow: super::workspace::surface_shadow(iced::Shadow {
                     color: Color::from_rgba8(20, 40, 35, 0.18),
                     offset: iced::Vector::new(0., 5.),
                     blur_radius: 18.,
-                },
+                }),
                 ..Default::default()
             });
         stack![

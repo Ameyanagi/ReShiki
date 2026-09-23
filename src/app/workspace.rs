@@ -2234,6 +2234,17 @@ pub(super) fn panel(_: &Theme) -> container::Style {
         ..Default::default()
     }
 }
+pub(super) fn surface_shadow(shadow: iced::Shadow) -> iced::Shadow {
+    // Windows uses Tiny Skia. Its shadow pass ignores the damage clip and
+    // repeatedly blends over retained pixels during partial redraws, darkening
+    // even the inside of dialogs. Keep the surface borders on this backend.
+    if cfg!(windows) {
+        iced::Shadow::default()
+    } else {
+        shadow
+    }
+}
+
 fn sheet(_: &Theme) -> container::Style {
     container::Style {
         background: Some(Color::WHITE.into()),
@@ -2242,18 +2253,11 @@ fn sheet(_: &Theme) -> container::Style {
             width: 1.,
             radius: 1.0.into(),
         },
-        // Tiny Skia's shadow pass does not clip to the damaged region. During
-        // partial redraws it darkens unchanged canvas pixels and is expensive
-        // for this large surface; the sheet border already separates it.
-        shadow: if cfg!(windows) {
-            iced::Shadow::default()
-        } else {
-            iced::Shadow {
-                color: Color::from_rgba8(35, 45, 57, 0.08),
-                offset: iced::Vector::new(0., 2.),
-                blur_radius: 8.,
-            }
-        },
+        shadow: surface_shadow(iced::Shadow {
+            color: Color::from_rgba8(35, 45, 57, 0.08),
+            offset: iced::Vector::new(0., 2.),
+            blur_radius: 8.,
+        }),
         ..Default::default()
     }
 }
