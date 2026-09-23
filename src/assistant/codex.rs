@@ -441,9 +441,7 @@ async fn generate(
         let _ = progress.send(Progress::Started { model: model.label.clone(), effort: effort.clone() }).await;
         let _ = progress.send(Progress::Catalog(Account { connected: true, models })).await;
         let source = if let Some(image) = image {
-            let path = server.directory.path().join("source.png");
-            tokio::fs::write(&path, image.png()).await.map_err(|e|e.to_string())?;
-            Some(path)
+            Some(prepare_source_image(server.directory.path(), image).await?)
         } else { None };
         let instructions = format!("{INSTRUCTIONS} {IMAGE_INSTRUCTIONS}");
         let thread = server.request("thread/start", json!({"cwd":server.directory.path(),"sandbox":"read-only","approvalPolicy":"never","ephemeral":true,"developerInstructions":instructions,"config":{"mcp_servers":{}},"model":model_id,"dynamicTools":super::canvas_tools::definitions()})).await?;
@@ -489,6 +487,22 @@ async fn generate(
     }.await;
     server.shutdown().await;
     result
+}
+
+async fn prepare_source_image(
+    directory: &std::path::Path,
+    image: crate::pictures::Picture,
+) -> Result<PathBuf, String> {
+    // Both generation and visual review receive this same opaque copy. Keep the
+    // original Picture for the chat history, canvas, clipboard and exports.
+    let png = tokio::task::spawn_blocking(move || image.png_on_white())
+        .await
+        .map_err(|e| format!("Could not prepare the source image: {e}"))??;
+    let path = directory.join("source.png");
+    tokio::fs::write(&path, png)
+        .await
+        .map_err(|e| format!("Could not write the source image: {e}"))?;
+    Ok(path)
 }
 
 struct Turn<'a> {
@@ -792,6 +806,40 @@ fn explanation_prefix(source: &str) -> Option<String> {
 mod tests {
     use super::*;
 
+    fn transparent_source_image() -> anyhow::Result<crate::pictures::Picture> {
+        let rgba = image::RgbaImage::from_fn(8, 6, |x, y| {
+            image::Rgba([0, 0, 0, if x == y { 255 } else { 0 }])
+        });
+        let mut bytes = std::io::Cursor::new(Vec::new());
+        rgba.write_to(&mut bytes, image::ImageFormat::Png)?;
+        crate::pictures::Picture::import(bytes.get_ref()).map_err(anyhow::Error::msg)
+    }
+
+    #[tokio::test]
+    async fn source_handoff_is_opaque_without_changing_chat_picture() -> anyhow::Result<()> {
+        let directory = tempfile::tempdir()?;
+        let image = transparent_source_image()?;
+        let original = image.png().to_vec();
+        let source = prepare_source_image(directory.path(), image.clone())
+            .await
+            .map_err(anyhow::Error::msg)?;
+        assert_eq!(source, directory.path().join("source.png"));
+        let decoded = image::load_from_memory(&tokio::fs::read(source).await?)?;
+        assert_eq!(decoded.color(), image::ColorType::Rgb8);
+        assert_eq!((decoded.width(), decoded.height()), (8, 6));
+        for (x, y, pixel) in decoded.to_rgb8().enumerate_pixels() {
+            assert_eq!(pixel.0, if x == y { [0; 3] } else { [255; 3] });
+        }
+        assert_eq!(image.png(), original);
+
+        let error = prepare_source_image(&directory.path().join("missing"), image)
+            .await
+            .err()
+            .ok_or_else(|| anyhow::anyhow!("Writing to a missing directory should fail"))?;
+        assert!(error.contains("Could not write the source image"));
+        Ok(())
+    }
+
     #[test]
     fn active_turns_survive_four_minutes_but_stalls_and_total_runtime_are_bounded() {
         let start = tokio::time::Instant::now();
@@ -849,8 +897,8 @@ mod tests {
         assert_eq!(explanation_prefix(r#"{"molecules":[]}"#), None);
     }
     #[cfg(unix)]
-    async fn fake_review(always_edit: bool) -> (Server, tempfile::TempDir) {
-        let evidence = tempfile::tempdir().unwrap();
+    async fn fake_review(always_edit: bool) -> anyhow::Result<(Server, tempfile::TempDir)> {
+        let evidence = tempfile::tempdir()?;
         let script = r#"
 import sys, json, pathlib, hashlib
 count = 0
@@ -874,7 +922,7 @@ for line in sys.stdin:
     print(json.dumps({'method':'item/completed','params':{'item':{'type':'agentMessage','text':json.dumps(result)}}}), flush=True)
     print(json.dumps({'method':'turn/completed','params':{'turn':{'status':'completed'}}}), flush=True)
 "#;
-        let directory = tempfile::tempdir().unwrap();
+        let directory = tempfile::tempdir()?;
         let mut child = Command::new("python3")
             .arg("-u")
             .arg("-c")
@@ -885,11 +933,18 @@ for line in sys.stdin:
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
             .kill_on_drop(true)
-            .spawn()
-            .unwrap();
-        let input = child.stdin.take().unwrap();
-        let output = BufReader::new(child.stdout.take().unwrap());
-        (
+            .spawn()?;
+        let input = child
+            .stdin
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("Missing mock stdin"))?;
+        let output = BufReader::new(
+            child
+                .stdout
+                .take()
+                .ok_or_else(|| anyhow::anyhow!("Missing mock stdout"))?,
+        );
+        Ok((
             Server {
                 child,
                 input,
@@ -904,14 +959,15 @@ for line in sys.stdin:
                 ),
             },
             evidence,
-        )
+        ))
     }
 
     #[cfg(unix)]
     #[tokio::test]
-    async fn corrections_are_rerendered_and_exact_final_images_are_required() {
+    async fn corrections_are_rerendered_and_exact_final_images_are_required() -> anyhow::Result<()>
+    {
         for (always_edit, with_source) in [(false, false), (true, false), (false, true)] {
-            let (mut server, evidence) = fake_review(always_edit).await;
+            let (mut server, evidence) = fake_review(always_edit).await?;
             let (tx, mut rx) = tokio::sync::mpsc::channel(32);
             let mut doc = crate::document::Document::default();
             doc.arrows.push(crate::document::Arrow::new(
@@ -933,9 +989,15 @@ for line in sys.stdin:
                 review: Default::default(),
             };
             let source_path = server.directory.path().join("source.png");
-            let source_png = super::super::canvas_tools::image(&outcome.document).unwrap();
+            let source_png = transparent_source_image()?
+                .png_on_white()
+                .map_err(anyhow::Error::msg)?;
             if with_source {
-                std::fs::write(&source_path, &source_png).unwrap();
+                let prepared =
+                    prepare_source_image(server.directory.path(), transparent_source_image()?)
+                        .await
+                        .map_err(anyhow::Error::msg)?;
+                assert_eq!(prepared, source_path);
             }
             let turn = Turn {
                 thread: "test",
@@ -947,19 +1009,19 @@ for line in sys.stdin:
             };
             review_draft(&mut server, &turn, "Review this test scheme", &mut outcome)
                 .await
-                .unwrap();
+                .map_err(anyhow::Error::msg)?;
             assert_eq!(outcome.review.passes, if always_edit { 3 } else { 2 });
             assert_eq!(outcome.review.verified, !always_edit);
             assert_ne!(
-                std::fs::read_to_string(evidence.path().join("1")).unwrap(),
-                std::fs::read_to_string(evidence.path().join("2")).unwrap()
+                std::fs::read_to_string(evidence.path().join("1"))?,
+                std::fs::read_to_string(evidence.path().join("2"))?
             );
             assert!(!evidence.path().join("4").exists());
             for pass in 1..=outcome.review.passes {
                 let source = evidence.path().join(format!("source-{pass}"));
                 assert_eq!(source.exists(), with_source);
                 if with_source {
-                    assert_eq!(std::fs::read(source).unwrap(), source_png);
+                    assert_eq!(std::fs::read(source)?, source_png);
                 }
             }
             let mut previews = 0;
@@ -971,5 +1033,6 @@ for line in sys.stdin:
             assert_eq!(previews, if always_edit { 2 } else { 1 });
             server.shutdown().await;
         }
+        Ok(())
     }
 }

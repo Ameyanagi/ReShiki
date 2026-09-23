@@ -9,6 +9,25 @@ async fn main() -> anyhow::Result<()> {
             .position(|a| a == key)
             .and_then(|i| args.get(i + 1))
     };
+    if let Some(path) = option("--prepare-image") {
+        let output = std::path::PathBuf::from(
+            option("--output")
+                .map(String::as_str)
+                .unwrap_or("artifacts/image-handoff"),
+        );
+        let picture = reshiki::pictures::Picture::open(std::path::Path::new(path))
+            .map_err(anyhow::Error::msg)?;
+        let png = picture.png_on_white().map_err(anyhow::Error::msg)?;
+        std::fs::create_dir_all(&output)?;
+        std::fs::write(output.join("source.png"), png)?;
+        writeln!(
+            std::io::stdout(),
+            "Prepared opaque source: {} × {} pixels",
+            picture.width(),
+            picture.height()
+        )?;
+        return Ok(());
+    }
     if let Some(path) = option("--render") {
         let doc = serde_json::from_slice(&std::fs::read(path)?)?;
         let output = std::path::PathBuf::from(
