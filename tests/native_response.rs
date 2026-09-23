@@ -3,6 +3,7 @@
 //! through the real engine transport, including both f32 conversion boundaries.
 use anyhow::Context;
 use reshiki::{
+    arrows::ArrowStyle,
     chemistry::{document as molecular, inchi::generator},
     document::{Annotation, Document, Point},
     engine::{
@@ -303,12 +304,22 @@ async fn styles_high_ids_groups_abbreviations_and_reaction_warnings_survive() ->
         .document
         .context("Missing abbreviation")?;
     all_operations(&reference, &config, &abbreviated, "abbreviations").await?;
-    let reaction = reference
+    let mut reaction = reference
         .execute(Request::import("rsmi", "CCO.O>O>CC=O.O"))
         .await
         .map_err(anyhow::Error::msg)?
         .document
         .context("Missing reaction")?;
+    // The app's new arrowhead default differs from the legacy Python engine.
+    // Give both exporters the same explicit style for this response comparison.
+    for arrow in &mut reaction.arrows {
+        arrow.style = Some(ArrowStyle {
+            head_length_pt: 3.0,
+            head_width_pt: 1.2,
+            head_notch: 0.0,
+            ..ArrowStyle::default()
+        });
+    }
     all_operations(&reference, &config, &reaction, "reaction warnings").await?;
     let mut document = imported(&reference, "N[C@@H](C)C(=O)O").await?;
     let offset = (1u64 << 53) + 100;

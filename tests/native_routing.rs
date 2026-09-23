@@ -3,6 +3,7 @@
 //! in the parent; environment overrides never mutate the test runner process.
 use anyhow::Context;
 use reshiki::{
+    arrows::ArrowStyle,
     document::{Annotation, Document, Point},
     engine::{ChemistryEngine, LocalEngine, PythonEngine, Request, Response},
 };
@@ -206,14 +207,23 @@ async fn cases(lazy: bool) -> anyhow::Result<Vec<Case>> {
             }
             documents.push(doc);
         }
-        documents.push(
-            reference
-                .execute(Request::import("rsmi", "CCO.O>O>CC=O.O"))
-                .await
-                .map_err(anyhow::Error::msg)?
-                .document
-                .context("Missing reaction")?,
-        );
+        let mut reaction = reference
+            .execute(Request::import("rsmi", "CCO.O>O>CC=O.O"))
+            .await
+            .map_err(anyhow::Error::msg)?
+            .document
+            .context("Missing reaction")?;
+        // Use a shared explicit style when comparing with the legacy Python
+        // exporter, whose implicit arrowhead default predates the new app UI.
+        for arrow in &mut reaction.arrows {
+            arrow.style = Some(ArrowStyle {
+                head_length_pt: 3.0,
+                head_width_pt: 1.2,
+                head_notch: 0.0,
+                ..ArrowStyle::default()
+            });
+        }
+        documents.push(reaction);
     }
     let mut result = Vec::new();
     for document in documents {
