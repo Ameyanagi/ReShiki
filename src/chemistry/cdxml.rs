@@ -16,6 +16,7 @@ mod abbreviations;
 mod arrows;
 pub(crate) use arrows::native_hypot;
 mod association;
+mod attachments;
 pub mod bonds;
 pub mod graphics;
 mod groups;

@@ -41,9 +41,11 @@ pub struct Atom {
     /// Projection depth in drawing units, retained when tilting back.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub depth: f32,
-    /// A nonchemical attachment point tracking the mean of these atom IDs.
+    /// Target atom IDs. Without `attachment` this is a nonchemical centroid.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub centroid: Vec<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attachment: Option<crate::attachments::Kind>,
     #[serde(default)]
     pub charge: i32,
     #[serde(default)]
@@ -206,6 +208,7 @@ impl Document {
             position,
             depth: 0.,
             centroid: vec![],
+            attachment: None,
             charge: 0,
             radical_electrons: 0,
             marks: vec![],
@@ -360,6 +363,7 @@ impl Document {
     }
     pub fn validate(&self) -> Result<(), String> {
         crate::projection::validate(self)?;
+        crate::attachments::validate(self)?;
         self.drawing_style.validate()?;
         let mut picture_bytes = 0_usize;
         let mut picture_pixels = 0_u64;

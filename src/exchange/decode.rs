@@ -272,7 +272,7 @@ fn convert(tree: &Tree<'_>, schema: &Schema, fonts: &mut HashMap<u16, u16>) -> R
                 r.done()?;
                 el.set(p.name, values.join(" "));
             }
-            "CDXObjectIDArray" | "INT16ListWithCounts" => {
+            "CDXObjectIDArray" | "CDXObjectIDArrayWithCounts" | "INT16ListWithCounts" => {
                 let count = if p.kind == "CDXObjectIDArray" {
                     data.len() / 4
                 } else {
@@ -280,7 +280,7 @@ fn convert(tree: &Tree<'_>, schema: &Schema, fonts: &mut HashMap<u16, u16>) -> R
                 };
                 let mut values = Vec::new();
                 for _ in 0..count {
-                    values.push(if p.kind == "CDXObjectIDArray" {
+                    values.push(if p.kind != "INT16ListWithCounts" {
                         r.u32()?.to_string()
                     } else {
                         r.u16()?.to_string()

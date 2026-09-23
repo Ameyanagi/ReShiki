@@ -108,6 +108,25 @@ struct Writer<'a> {
 /// appearances and ownership rather than detaching or flattening objects.
 pub fn write(document: &Document, options: Options<'_>) -> Result<String> {
     document.validate().map_err(invalid)?;
+    // ChemDraw 26 discards nested MultiAttachment definitions when saving a
+    // Fragment label. Expand these groups for editable exchange so every real
+    // atom and target survives; native/figure output keeps the compact label.
+    let mut expanded;
+    let document = if document.abbreviations.iter().any(|g| {
+        g.members
+            .iter()
+            .any(|id| document.atom(*id).is_some_and(|a| a.attachment.is_some()))
+    }) {
+        expanded = document.clone();
+        expanded.abbreviations.retain(|g| {
+            !g.members
+                .iter()
+                .any(|id| document.atom(*id).is_some_and(|a| a.attachment.is_some()))
+        });
+        &expanded
+    } else {
+        document
+    };
     if document.bonds.iter().any(|b| b.ring_arc)
         || document.atoms.iter().any(|a| a.display.variable.is_some())
     {
@@ -115,7 +134,8 @@ pub fn write(document: &Document, options: Options<'_>) -> Result<String> {
             "CDXML cannot yet preserve inner ring curves or variable atom labels. Save as ReShiki (.rsk) or export SVG/PDF to keep this appearance.",
         ));
     }
-    let molecule = crate::chemistry::document::prepare(document)?;
+    let interchange = crate::attachments::interchange_graph(document).map_err(invalid)?;
+    let molecule = crate::chemistry::document::prepare(&interchange)?;
     let mut w = Writer::new(document, options)?;
     w.atoms(&molecule.state.graph)?;
     w.bonds()?;

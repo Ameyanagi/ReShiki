@@ -114,9 +114,9 @@ pub fn validate(document: &Document) -> Result<()> {
     check_size(document)?;
     let ids: HashSet<_> = document.atoms.iter().map(|a| a.id).collect();
     let mut adjacency: HashMap<u64, Vec<u64>> = HashMap::new();
-    for bond in &document.bonds {
-        adjacency.entry(bond.a).or_default().push(bond.b);
-        adjacency.entry(bond.b).or_default().push(bond.a);
+    for (a, b) in crate::attachments::edges(document) {
+        adjacency.entry(a).or_default().push(b);
+        adjacency.entry(b).or_default().push(a);
     }
     let mut used = HashSet::<u64>::new();
     for group in &document.abbreviations {

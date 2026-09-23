@@ -18,6 +18,7 @@ pub mod arrows;
 pub mod assistant;
 pub mod atom_labels;
 pub mod atom_text;
+pub mod attachments;
 mod bond_joins;
 pub mod bonds;
 pub mod chains;
@@ -36,6 +37,7 @@ pub mod export;
 pub mod graphics;
 pub mod grouping;
 pub mod joining;
+pub mod ligands;
 #[cfg(windows)]
 mod native_windows;
 pub mod pages;

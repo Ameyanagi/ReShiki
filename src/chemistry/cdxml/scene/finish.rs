@@ -186,6 +186,17 @@ impl CdxmlScene {
             .collect::<Result<_>>()?;
         document.groups = self.base.groups;
         document.abbreviations = self.base.abbreviations;
+        for attachment in self.attachments {
+            let atom = document
+                .atom_mut(attachment.id)
+                .ok_or(SceneError::Invalid("Missing attachment atom"))?;
+            atom.element = "*".into();
+            atom.no_implicit = true;
+            atom.label_h = 0;
+            atom.cip_label = None;
+            atom.attachment = Some(attachment.kind);
+            atom.centroid = attachment.members;
+        }
         Ok(())
     }
 }

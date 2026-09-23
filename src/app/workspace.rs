@@ -28,6 +28,14 @@ impl App {
             .iter()
             .filter(|a| self.selected.contains(&a.id))
             .count();
+        let points = self
+            .doc
+            .atoms
+            .iter()
+            .filter(|a| {
+                self.selected.contains(&a.id) && a.element == "*" && a.display.variable.is_none()
+            })
+            .count();
         let bonds = self
             .doc
             .bonds
@@ -47,7 +55,8 @@ impl App {
         if !groups.is_empty() && self.selected.iter().all(|id| covered.contains(id)) {
             add(groups.len(), "group");
         } else {
-            add(atoms, "atom");
+            add(atoms.saturating_sub(points), "atom");
+            add(points, "point");
             add(objects, "object");
         }
         add(bonds, "bond");
@@ -1650,6 +1659,7 @@ impl App {
             .collect();
         let choices: Vec<String> = reshiki::abbreviations::PRESETS
             .iter()
+            .chain(reshiki::ligands::LABELS)
             .map(|s| (*s).into())
             .collect();
         let mut body = column![
@@ -1674,12 +1684,17 @@ impl App {
             horizontal_line(),
         ].spacing(10);
         for group in selected {
+            let atoms = group
+                .members
+                .iter()
+                .filter(|id| self.doc.atom(**id).is_some_and(|a| a.element != "*"))
+                .count();
             body = body.push(
                 text(format!(
                     "{} · {} atom{}",
                     group.label,
-                    group.members.len(),
-                    if group.members.len() == 1 { "" } else { "s" }
+                    atoms,
+                    if atoms == 1 { "" } else { "s" }
                 ))
                 .size(12)
                 .color(Color::from_rgb8(17, 126, 108)),

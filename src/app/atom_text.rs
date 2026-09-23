@@ -52,7 +52,7 @@ impl App {
                 let Some(atom) = self.doc.atom(id) else {
                     return Task::none();
                 };
-                if !atom.centroid.is_empty() {
+                if !atom.centroid.is_empty() && self.doc.abbreviation(id).is_none() {
                     self.status =
                         "This is a tracked attachment point. Edit the atom bonded to it instead."
                             .into();
@@ -127,7 +127,7 @@ impl App {
         };
         let mut content = column![
             text("Edit atom label").size(20),
-            text_input("M, L, X, Boc, Fe…", &state.input)
+            text_input("M, L, X, Boc, Cp, Cp*, Fe…", &state.input)
                 .id("atom-text")
                 .padding(10)
                 .size(18)
@@ -227,6 +227,31 @@ mod tests {
     use super::*;
     use crate::canvas::{Edit, Tool};
     use reshiki::document::Point;
+
+    #[test]
+    fn collapsed_haptic_groups_can_be_edited_and_undone() -> Result<(), String> {
+        let (mut app, _) = App::new();
+        let end = app.doc.add_atom("C", Point::default());
+        app.doc = reshiki::atom_text::apply(&app.doc, end, "Cp*", Mode::Auto)?;
+        app.selected = app
+            .doc
+            .abbreviation(end)
+            .ok_or("Missing group")?
+            .members
+            .clone();
+        let before = app.doc.clone();
+        let _ = app.update(Message::AtomText(Action::Begin(None)));
+        assert_eq!(app.atom_text.as_ref().ok_or("Missing editor")?.input, "Cp*");
+        let _ = app.update(Message::AtomText(Action::Input("Cp".into())));
+        let _ = app.update(Message::AtomText(Action::Apply));
+        assert!(app.atom_text.is_none());
+        assert_eq!(app.doc.atoms.iter().filter(|a| a.element == "C").count(), 5);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, before);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc.atoms.iter().filter(|a| a.element == "C").count(), 5);
+        Ok(())
+    }
 
     #[test]
     fn atom_text_entry_preserves_bonds_is_undoable_and_cancel_is_nonmutating() -> Result<(), String>

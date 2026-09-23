@@ -88,6 +88,8 @@ pub struct NativeScene {
 }
 #[derive(Clone, Debug, Serialize)]
 pub struct CdxmlScene {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<crate::attachments::Attachment>,
     pub molecule: Molecule,
     pub conformer_3d: Option<bool>,
     pub base: NativeScene,
@@ -522,6 +524,7 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
         return Err(SceneError::Invalid("No supported drawing objects found"));
     }
     Ok(CdxmlScene {
+        attachments: prepared.attachments.clone(),
         molecule: prepared.molecule.clone(),
         conformer_3d: prepared.conformer_3d,
         base,

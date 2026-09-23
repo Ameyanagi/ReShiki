@@ -107,6 +107,7 @@ pub enum Action {
     Chemical(ChemicalFormat),
     RefreshProperties,
     Centroid,
+    Attachment(reshiki::attachments::Kind),
     DepthBonds,
     RingArc,
     OpenAtomColors,
@@ -147,6 +148,7 @@ impl State {
             Action::RefreshProperties
             | Action::PropertiesCalculated(..)
             | Action::Centroid
+            | Action::Attachment(_)
             | Action::RingArc
             | Action::OpenAtomColors
             | Action::ApplyAtomColor
@@ -209,7 +211,8 @@ impl App {
     }
 
     pub(super) fn properties_subscription(&self) -> Subscription<Message> {
-        if !self.inspector_open
+        if reshiki::attachments::present(&self.doc)
+            || !self.inspector_open
             || self.inspector_tab != InspectorTab::Properties
             || self.busy
             || self.erase_stroke
@@ -294,6 +297,22 @@ impl App {
                         self.changed(before);
                         self.status =
                             "Centroid added · Draw a dashed contact from this point".into();
+                    }
+                    Err(error) => {
+                        self.status = error;
+                        self.error = true;
+                    }
+                }
+                Task::none()
+            }
+            Action::Attachment(kind) => {
+                let before = self.doc.clone();
+                match reshiki::attachments::add(&mut self.doc, &self.selected, kind) {
+                    Ok(id) => {
+                        self.selected = vec![id];
+                        self.changed(before);
+                        self.status = "Attachment point added · Draw a bond from * to the metal or substituent".into();
+                        self.error = false;
                     }
                     Err(error) => {
                         self.status = error;
@@ -634,6 +653,36 @@ impl App {
     }
 
     fn molecular_properties(&self) -> Element<'_, Message> {
+        if reshiki::attachments::present(&self.doc) {
+            let selected = (!self.selected.is_empty())
+                .then(|| reshiki::editing::selection(&self.doc, &self.selected));
+            let doc = selected.as_ref().unwrap_or(&self.doc);
+            let mut body = column![
+                text(reshiki::attachments::ANALYSIS_NOTICE)
+                    .size(11)
+                    .color(muted())
+            ]
+            .spacing(8);
+            if let Ok(composition) = reshiki::attachments::composition(doc) {
+                body = body
+                    .push(
+                        text(format!(
+                            "{} · {:.3} g/mol",
+                            composition.formula, composition.mass
+                        ))
+                        .size(14),
+                    )
+                    .push(
+                        text(format!(
+                            "{} defined atoms · Attachment points excluded",
+                            doc.atoms.iter().filter(|a| a.element != "*").count()
+                        ))
+                        .size(11)
+                        .color(muted()),
+                    );
+            }
+            return container(body).padding(10).into();
+        }
         let key = self.property_key();
         let ids: HashSet<_> = key
             .as_ref()
@@ -781,7 +830,11 @@ impl App {
                 command("Dummy atom (*)", Message::Element("*".into())).width(Length::Fill),
             ]
             .spacing(4),
-            text("Centroids track selected atoms. Dummy atoms are wildcard attachment points.")
+            command("Add multi-center attachment", Message::InspectorAction(Action::Attachment(reshiki::attachments::Kind::MultiCenter)))
+                .width(Length::Fill),
+            command("Add variable attachment", Message::InspectorAction(Action::Attachment(reshiki::attachments::Kind::Variable)))
+                .width(Length::Fill),
+            text("Select the target atoms, then add a point. Multi-center attaches to all; variable attaches to one of the selected positions.")
                 .size(11)
                 .color(muted()),
             text("Align horizontally").size(11).color(muted()),
@@ -1434,6 +1487,36 @@ mod tests {
         let _ = app.update(Message::Redo);
         assert_eq!(app.doc.atom(centroid).unwrap().element, "*");
         app.doc.validate().unwrap();
+    }
+
+    #[test]
+    fn semantic_attachment_creation_is_undoable() -> Result<(), String> {
+        for kind in [
+            reshiki::attachments::Kind::MultiCenter,
+            reshiki::attachments::Kind::Variable,
+        ] {
+            let (mut app, _) = App::new();
+            app.selected = reshiki::editing::ring(
+                &mut app.doc,
+                reshiki::document::Point::new(100., 100.),
+                6,
+                true,
+                5.,
+            );
+            let before = app.doc.clone();
+            let _ = app.update(Message::InspectorAction(Action::Attachment(kind)));
+            let id = *app.selected.first().ok_or("No point selected")?;
+            let point = app.doc.atom(id).ok_or("Missing point")?;
+            assert_eq!(point.attachment, Some(kind));
+            assert_eq!(point.centroid.len(), 6);
+            let after = app.doc.clone();
+            let _ = app.update(Message::Undo);
+            assert_eq!(app.doc, before);
+            let _ = app.update(Message::Redo);
+            assert_eq!(app.doc, after);
+            app.doc.validate()?;
+        }
+        Ok(())
     }
 
     #[test]

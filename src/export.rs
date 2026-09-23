@@ -29,7 +29,9 @@ pub async fn checked_document(
     mut doc: Document,
 ) -> Result<Document, String> {
     doc.validate()?;
-    if doc.atoms.is_empty() {
+    // Semantic attachment drawings can be copied/rendered without inventing
+    // a single molecular identity for their ALL/ANY target sets.
+    if doc.atoms.is_empty() || crate::attachments::present(&doc) {
         return Ok(doc);
     }
     let response = engine

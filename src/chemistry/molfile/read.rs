@@ -46,6 +46,8 @@ pub struct Imported {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct FileAnnotations {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<crate::attachments::Attachment>,
     pub is_3d: bool,
     pub attachment_points: Vec<Option<i32>>,
     pub dummy_labels: Vec<Option<String>>,
@@ -60,7 +62,8 @@ impl Imported {
             &self.molecule,
             self.annotations.is_3d,
             &self.annotations.dummy_labels,
-        )
+        )?
+        .with_attachments(&self.annotations.attachments)
     }
 }
 
@@ -200,6 +203,7 @@ fn dummy_label(symbol: &str) -> Option<String> {
 }
 #[derive(Default)]
 struct FileBond {
+    attachment: Option<crate::attachments::Attachment>,
     unspecified: bool,
     query: bool,
 }
@@ -265,6 +269,13 @@ impl Parsed {
     }
 
     fn finish_in(mut self, context: Context) -> Result<Imported> {
+        if !matches!(context, Context::Molecule)
+            && self.bonds.iter().any(|b| b.attachment.is_some())
+        {
+            return Err(ReadError::Unsupported(
+                "RXN attachment targets; use CDXML or native ReShiki",
+            ));
+        }
         let sanitize_file = !matches!(
             context,
             Context::Reaction {
@@ -457,6 +468,11 @@ impl Parsed {
                 state,
             },
             annotations: FileAnnotations {
+                attachments: self
+                    .bonds
+                    .iter()
+                    .filter_map(|b| b.attachment.clone())
+                    .collect(),
                 is_3d,
                 attachment_points: self.atoms.iter().map(|a| a.attachment).collect(),
                 dummy_labels: self.atoms.into_iter().map(|a| a.dummy_label).collect(),
@@ -476,6 +492,7 @@ fn order(code: i32, v3000: bool) -> (u8, FileBond) {
                 FileBond {
                     unspecified: true,
                     query: code != 0,
+                    ..Default::default()
                 },
             );
         }

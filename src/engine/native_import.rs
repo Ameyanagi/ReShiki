@@ -120,7 +120,8 @@ pub async fn execute(
         Preparation::Deferred(reason) => return Ok(Outcome::Deferred(reason)),
     };
     let Prepared { molecule, document } = *prepared;
-    let analysis = if molecule.state.graph.atoms.is_empty() {
+    let attachments = crate::attachments::present(&document);
+    let analysis = if molecule.state.graph.atoms.is_empty() || attachments {
         None
     } else {
         Some(native_response::analyze_prepared(Arc::new(molecule), config).await?)
@@ -130,7 +131,11 @@ pub async fn execute(
         analysis,
         output: None,
         engine_version: chemistry::RDKIT_VERSION.into(),
-        warnings: Vec::new(),
+        warnings: if attachments {
+            vec![crate::attachments::ANALYSIS_NOTICE.into()]
+        } else {
+            Vec::new()
+        },
     })))
 }
 

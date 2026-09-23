@@ -39,10 +39,10 @@ impl Abbreviation {
         }
         let mut reached = HashSet::from([self.anchor]);
         let mut external = 0;
-        for bond in &doc.bonds {
-            if members.contains(&bond.a) != members.contains(&bond.b) {
+        for (a, b) in crate::attachments::edges(doc) {
+            if members.contains(&a) != members.contains(&b) {
                 external += 1;
-                if bond.a != self.anchor && bond.b != self.anchor {
+                if a != self.anchor && b != self.anchor {
                     return Err(
                         "Only the abbreviation's attachment atom can connect outside it".into(),
                     );
@@ -54,12 +54,12 @@ impl Abbreviation {
         }
         loop {
             let before = reached.len();
-            for b in &doc.bonds {
-                if members.contains(&b.a)
-                    && members.contains(&b.b)
-                    && (reached.contains(&b.a) || reached.contains(&b.b))
+            for (a, b) in crate::attachments::edges(doc) {
+                if members.contains(&a)
+                    && members.contains(&b)
+                    && (reached.contains(&a) || reached.contains(&b))
                 {
-                    reached.extend([b.a, b.b]);
+                    reached.extend([a, b]);
                 }
             }
             if reached.len() == before {
@@ -210,6 +210,8 @@ impl Document {
                             a.no_implicit,
                             a.radical_electrons,
                             a.map_num,
+                            a.attachment,
+                            &a.centroid,
                         ) == (
                             &b.element,
                             b.charge,
@@ -218,6 +220,8 @@ impl Document {
                             b.no_implicit,
                             b.radical_electrons,
                             b.map_num,
+                            b.attachment,
+                            &b.centroid,
                         )
                     })
                 });

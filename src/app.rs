@@ -1022,7 +1022,7 @@ impl App {
                         .is_some_and(|due| std::time::Instant::now() >= due)
                 {
                     self.refresh_due = None;
-                    if !self.doc.atoms.is_empty() {
+                    if !self.doc.atoms.is_empty() && !reshiki::attachments::present(&self.doc) {
                         return self.run(
                             Request::molecule("analyze", self.doc.clone()),
                             Job::RefreshLabels,

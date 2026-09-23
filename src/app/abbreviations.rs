@@ -35,6 +35,42 @@ impl App {
             Action::ReverseLabel(value) => self.abbreviations.reverse_label = value,
             Action::Replace | Action::Find => {
                 let replace = matches!(action, Action::Replace);
+                if replace && reshiki::ligands::LABELS.contains(&self.abbreviations.preset.as_str())
+                {
+                    let anchor = self
+                        .doc
+                        .abbreviations
+                        .iter()
+                        .find(|g| {
+                            !self.selected.is_empty()
+                                && self.selected.iter().all(|id| g.members.contains(id))
+                        })
+                        .map(|g| g.anchor)
+                        .or_else(|| {
+                            (self.selected.len() == 1)
+                                .then(|| self.selected.first().copied())
+                                .flatten()
+                        });
+                    match anchor
+                        .ok_or_else(|| "Select one endpoint or an existing group".to_string())
+                        .and_then(|id| {
+                            reshiki::ligands::replace(&self.doc, id, &self.abbreviations.preset)
+                        }) {
+                        Ok(doc) => {
+                            self.doc = doc;
+                            self.changed(before);
+                            self.selected = anchor.into_iter().collect();
+                            self.status = "Ligand abbreviated · Real atoms and five-center attachment retained".into();
+                            self.error = false;
+                            self.tool = Tool::Select;
+                        }
+                        Err(error) => {
+                            self.status = error;
+                            self.error = true;
+                        }
+                    }
+                    return Task::none();
+                }
                 let mut request = Request::molecule("abbreviate", self.doc.clone());
                 request.selected_ids = Some(self.selected.clone());
                 request.format = Some(if replace { "replace" } else { "find" }.into());

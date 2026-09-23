@@ -90,6 +90,7 @@ impl Writer<'_> {
     }
     pub(super) fn atoms(&mut self, graph: &crate::chemistry::graph::Graph) -> Result<()> {
         let doc = self.doc;
+        let valences = graph.valences().map_err(invalid)?;
         let mut degrees: HashMap<u64, usize> = HashMap::new();
         for b in &doc.bonds {
             for id in [b.a, b.b] {
@@ -97,6 +98,16 @@ impl Writer<'_> {
             }
         }
         for (i, a) in doc.atoms.iter().enumerate() {
+            let label_h = u32::from(
+                graph
+                    .atoms
+                    .get(i)
+                    .ok_or_else(|| invalid("Missing chemical atom"))?
+                    .explicit_hydrogens,
+            ) + valences
+                .get(i)
+                .ok_or_else(|| invalid("Missing chemical valence"))?
+                .implicit_hydrogens;
             let atomic_number = graph
                 .atoms
                 .get(i)
@@ -132,12 +143,44 @@ impl Writer<'_> {
                     },
                 )?;
             }
+            if let Some(kind) = a.attachment {
+                self.tree.set(node, "NodeType", kind.cdxml())?;
+                let members = a
+                    .centroid
+                    .iter()
+                    .map(|id| self.atom_xml(*id))
+                    .collect::<Result<Vec<_>>>()?
+                    .join(" ");
+                self.tree.set(node, "Attachments", members)?;
+                // Semantic nodes have no element or text label in ChemDraw.
+                self.tree
+                    .node_mut(node)?
+                    .attrs
+                    .retain(|(key, _)| *key != "Element");
+                continue;
+            }
+            if crate::attachments::hidden(a, doc) {
+                // Keep the chemical wildcard and its bonds for editable copy,
+                // but omit its editing handle from destination applications.
+                self.tree.set(node, "Visible", "no")?;
+                self.tree.set(node, "NodeType", "Unspecified")?;
+                self.tree.set(node, "NumHydrogens", "0")?;
+                // ChemDraw converts a textless Element=0 to carbon on save.
+                // The hidden sentinel preserves its unspecified identity.
+                self.text(
+                    node,
+                    "*",
+                    &TextFormat::default(),
+                    [("p", self.position(a.position))],
+                )?;
+                continue;
+            }
             if a.explicit_h != 0 {
                 self.tree
                     .set(node, "NumHydrogens", a.explicit_h.to_string())?;
             }
             if !a.marks.is_empty() {
-                self.tree.set(node, "NumHydrogens", a.label_h.to_string())?;
+                self.tree.set(node, "NumHydrogens", label_h.to_string())?;
             }
             let mut s = a
                 .text_style
@@ -163,11 +206,11 @@ impl Writer<'_> {
                 });
             }
             let show = a.display.hydrogens.unwrap_or(doc.atom_labels.hydrogens);
-            if a.label_h != 0 && show && a.element != "H" {
+            if label_h != 0 && show && a.element != "H" {
                 label.push('H');
-                if a.label_h > 1 {
+                if label_h > 1 {
                     let start = label.len();
-                    label.push_str(&a.label_h.to_string());
+                    label.push_str(&label_h.to_string());
                     spans.push(TextSpan {
                         start,
                         end: label.len(),

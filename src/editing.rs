@@ -39,7 +39,8 @@ pub enum Arrange {
 }
 
 pub fn selection(doc: &Document, ids: &[u64]) -> Document {
-    let ids = doc.expand_abbreviation_selection(ids);
+    let ids = crate::attachments::selection(doc, ids);
+    let ids = doc.expand_abbreviation_selection(&ids);
     let ids = ids.as_slice();
     let mut part = doc.clone();
     part.reactions
@@ -387,6 +388,15 @@ pub fn groups(doc: &Document, ids: &[u64]) -> Vec<Vec<u64>> {
         let mut group = vec![*id];
         let mut i = 0;
         while let Some(current) = group.get(i).copied() {
+            for atom in doc.atoms.iter().filter(|a| a.attachment.is_some()) {
+                if atom.id == current || atom.centroid.contains(&current) {
+                    for id in std::iter::once(&atom.id).chain(&atom.centroid) {
+                        if remaining.remove(id) {
+                            group.push(*id);
+                        }
+                    }
+                }
+            }
             for persistent in &doc.groups {
                 if persistent.members.contains(&current) {
                     for id in &persistent.members {

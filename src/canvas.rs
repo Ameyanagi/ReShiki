@@ -1520,6 +1520,17 @@ impl MoleculeCanvas<'_> {
             }
         }
         draw_document(frame, &preview, self.camera, bounds);
+        // Editing aids stay out of the shared scene used by figure/Office export.
+        for atom in reshiki::attachments::editor_markers(&preview) {
+            let center = self.camera.screen(atom.position, bounds);
+            let stroke = Stroke::default()
+                .with_width(1.2)
+                .with_color(rgb([19, 135, 116]));
+            frame.stroke(&Path::circle(center, 4.), stroke);
+            for delta in [Vector::new(6., 0.), Vector::new(0., 6.)] {
+                frame.stroke(&Path::line(center - delta, center + delta), stroke);
+            }
+        }
         if selected.len() == 1
             && (self.tool.selects() || matches!(self.tool, Tool::Arrow | Tool::EditPoints))
         {
@@ -1866,13 +1877,27 @@ fn bond_target_with(
     end: World,
     source: Option<u64>,
     radius: f32,
-    drawing: BondDrawing,
+    mut drawing: BondDrawing,
 ) -> (World, Option<u64>) {
+    let origin = source.and_then(|id| doc.atom(id));
+    if origin.is_some_and(|a| !a.centroid.is_empty()) {
+        // A centre-to-metal contact often extends beyond the ring radius.
+        // A normal fixed length can land exactly on a member atom instead.
+        drawing.fixed_length = false;
+    }
     let nearest = |p: World| {
         doc.atoms
             .iter()
             .filter(|a| {
-                doc.atom_visible(a.id) && Some(a.id) != source && a.position.distance(p) < radius
+                doc.atom_visible(a.id)
+                    && Some(a.id) != source
+                    && a.position.distance(p) < radius
+                    && !origin.is_some_and(|o| {
+                        o.attachment.is_some()
+                            && (o.centroid.contains(&a.id) || !a.centroid.is_empty())
+                    })
+                    && !(a.attachment.is_some()
+                        && source.is_some_and(|id| a.centroid.contains(&id)))
             })
             .min_by(|a, b| a.position.distance(p).total_cmp(&b.position.distance(p)))
     };
@@ -2889,6 +2914,35 @@ mod tests {
                 .is_none()
         );
         assert!(doc.atoms.is_empty());
+    }
+
+    #[test]
+    fn attachment_bond_drag_reaches_beyond_the_ring_and_snaps_to_metal() -> Result<(), String> {
+        let mut doc = Document::default();
+        let members = reshiki::editing::ring(&mut doc, World::new(0., 0.), 6, true, 5.);
+        let point =
+            reshiki::attachments::add(&mut doc, &members, reshiki::attachments::Kind::MultiCenter)?;
+        let start = doc.atom(point).ok_or("Missing attachment")?.position;
+        let settings = BondDrawing::default();
+        for degrees in (0..360).step_by(30) {
+            let angle = (degrees as f32).to_radians();
+            let cursor = start.offset(126. * angle.cos(), 126. * angle.sin());
+            let (end, target) = bond_target_with(&doc, start, cursor, Some(point), 8., settings);
+            assert!(target.is_none());
+            assert!((end.distance(start) - 126.).abs() < 0.01);
+        }
+        let metal = doc.add_atom("Fe", start.offset(110., 91.));
+        let target = doc.atom(metal).ok_or("Missing metal")?.position;
+        assert_eq!(
+            bond_target_with(&doc, start, target, Some(point), 8., settings),
+            (target, Some(metal))
+        );
+        assert_eq!(
+            bond_target_with(&doc, target, start, Some(metal), 8., settings),
+            (start, Some(point))
+        );
+        assert!(settings.fixed_length);
+        Ok(())
     }
 
     #[test]

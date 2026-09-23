@@ -28,7 +28,7 @@ pub(crate) fn atom_label_bounds(a: &Atom, doc: &Document) -> Option<(Point, Poin
 }
 
 fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
-    if !doc.atom_visible(a.id) || !a.centroid.is_empty() {
+    if !doc.atom_visible(a.id) || crate::attachments::hidden(a, doc) {
         return vec![];
     }
     if let Some(group) = doc.abbreviation(a.id) {

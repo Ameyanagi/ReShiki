@@ -20,6 +20,8 @@ impl std::fmt::Display for Mode {
 pub fn description(text: &str, mode: Mode) -> &'static str {
     if mode == Mode::Text {
         "Text on a dummy atom; existing bonds stay connected."
+    } else if crate::ligands::LABELS.contains(&text.trim()) {
+        "A real Cp (C5H5−) or Cp* (C10H15−) ligand with a five-center attachment. Metal charge stays as entered."
     } else if mode == Mode::Group
         || PRESETS.contains(&text.trim()) && !ELEMENTS.contains(&text.trim())
     {
@@ -41,6 +43,9 @@ pub fn apply(doc: &Document, id: u64, text: &str, mode: Mode) -> Result<Document
         return Err("Enter 1–32 characters for the atom label".into());
     }
     let atom = doc.atom(id).ok_or("The atom is no longer available")?;
+    if mode != Mode::Text && crate::ligands::LABELS.contains(&text) {
+        return crate::ligands::replace(doc, id, text);
+    }
     if !atom.centroid.is_empty() {
         return Err(
             "This is a tracked attachment point. Edit the atom bonded to it instead.".into(),

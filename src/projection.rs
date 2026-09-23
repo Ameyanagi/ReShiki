@@ -57,7 +57,7 @@ pub fn sync_centroids(doc: &mut Document) {
     let positions: Vec<_> = doc
         .atoms
         .iter()
-        .filter(|a| !a.centroid.is_empty())
+        .filter(|a| !a.centroid.is_empty() && a.attachment.is_none())
         .filter_map(|a| {
             let points: Option<Vec<_>> = a.centroid.iter().map(|id| doc.atom(*id)).collect();
             let points = points?;
@@ -104,7 +104,7 @@ pub fn tilt(doc: &mut Document, ids: &[u64], degrees: f32, around_x: bool) {
     let selected: Vec<_> = doc
         .atoms
         .iter()
-        .filter(|a| ids.contains(&a.id) && a.centroid.is_empty())
+        .filter(|a| ids.contains(&a.id) && (a.centroid.is_empty() || a.attachment.is_some()))
         .collect();
     let center = if selected.is_empty() {
         crate::editing::center(doc, &ids)
@@ -137,7 +137,7 @@ pub fn tilt(doc: &mut Document, ids: &[u64], degrees: f32, around_x: bool) {
         }
     };
     for a in &mut doc.atoms {
-        if ids.contains(&a.id) && a.centroid.is_empty() {
+        if ids.contains(&a.id) && (a.centroid.is_empty() || a.attachment.is_some()) {
             (a.position, a.depth) = rotate(a.position, a.depth);
         }
     }

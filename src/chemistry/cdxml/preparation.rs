@@ -87,6 +87,8 @@ fn error(stage: PreparationStage, cause: PreparationCause) -> PreparationError {
 /// shares the combined molecule's scaled positions; chemistry is still raw.
 #[derive(Clone, Debug, Serialize)]
 pub struct PreparedCdxml {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<crate::attachments::Attachment>,
     pub molecule: Molecule,
     pub expanded_xml: String,
     pub abbreviations: Vec<Abbreviation>,
@@ -345,7 +347,8 @@ fn combine(parts: &[Fragment]) -> Result<Combined> {
 /// remains unrounded; scene assembly and final document validation are separate.
 pub fn prepare_cdxml(text: &str) -> Result<PreparedCdxml> {
     use PreparationStage::*;
-    let source = validate(text)?;
+    let mut source = validate(text)?;
+    at(Validation, super::attachments::normalize(&mut source))?;
     let molecular_root = at(Validation, source.node(0))?.tag == "CDXML";
     let flattened = at(Expansion, super::abbreviations::flatten_tree(source))?;
     let chemical = at(
@@ -361,6 +364,7 @@ pub fn prepare_cdxml(text: &str) -> Result<PreparedCdxml> {
         Vec::new()
     };
     let tree = at(Bindings, Tree::parse_import(&flattened.xml))?;
+    let attachments = at(Bindings, super::attachments::read(&tree, &fragments))?;
     let fragment_bindings = bindings(&tree, &fragments)?;
     let mut combined = combine(&fragments)?;
     let document = at(Style, presentation::parse(&flattened.xml))?;
@@ -485,6 +489,7 @@ pub fn prepare_cdxml(text: &str) -> Result<PreparedCdxml> {
         .map(|i| u64::try_from(i + 1).map_err(|_| error(Combination, PreparationCause::Limit)))
         .collect::<Result<_>>()?;
     Ok(PreparedCdxml {
+        attachments,
         molecule: Molecule {
             rdkit_version: RDKIT_VERSION,
             ids,

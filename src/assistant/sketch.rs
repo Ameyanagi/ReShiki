@@ -59,6 +59,8 @@ pub struct Tilt {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Centroid {
+    #[serde(default)]
+    pub kind: Option<crate::attachments::Kind>,
     pub atoms: Vec<usize>,
     pub contact: Option<usize>,
 }
@@ -310,9 +312,18 @@ impl Sketch {
         }
         for centroid in &self.centroids {
             let members: Vec<_> = centroid.atoms.iter().map(|i| *i as u64 + 1).collect();
-            let id = crate::projection::add_centroid(&mut doc, &members)?;
+            let id = if let Some(kind) = centroid.kind {
+                crate::attachments::add(&mut doc, &members, kind)?
+            } else {
+                crate::projection::add_centroid(&mut doc, &members)?
+            };
             if let Some(contact) = centroid.contact {
-                doc.add_bond(id, contact as u64 + 1, 5, "dashed");
+                doc.add_bond(
+                    id,
+                    contact as u64 + 1,
+                    if centroid.kind.is_some() { 1 } else { 5 },
+                    "dashed",
+                );
                 if let Some(b) = doc.bonds.last_mut() {
                     b.z_order = -1;
                 }
@@ -364,13 +375,13 @@ pub fn schema() -> Value {
     let indices = json!({"type":"array","maxItems":300,"items":{"type":"integer","minimum":0}});
     let color = json!({"anyOf":[{"type":"null"},{"type":"array","minItems":3,"maxItems":3,"items":{"type":"integer","minimum":0,"maximum":255}}],"description":"RGB label color from the source; null uses the drawing style."});
     json!({"anyOf":[{"type":"null"},{"type":"object","additionalProperties":false,
-        "description":"Use explicit coordinates for coordination complexes, macrocycles, projected organometallics, and source diagrams whose arrangement SMILES layout cannot preserve. An entire reaction scheme can be one sketch: use arrows and captions and place all participants in the same coordinate system. Keep molecules and reactions empty when using sketch. For corresponding ligand/complex panels, reuse the same ligand coordinates translated horizontally, then add the metal and its contacts; do not fold or rotate the ligand around the metal. Place donor atoms around the metal as in the source. Keep ring sizes, labels and inner delocalization curves. For ordinary simple molecules use SMILES. All coordinates are in bond-length units, x right, y down, with a typical bond length of 1. Default to a flat 2D drawing with tilts empty. Only when the source actually shows perspective, build planar rings and circles and project them together using explicit tilts. Metal coordination alone is not a reason to tilt. Use centroids for ring-centre contacts, not loose lines. Atom element * is a dummy wildcard: set variable to E or another visible generic label instead of inventing an element. For tBu or similar groups include the full atom graph then use abbreviations to collapse it. Use ring_arc on consecutive ring bonds for partial inner curves, preserving their underlying bond orders. Captions use top-left positions. Reaction arrows require empty space of at least one bond length on either side. All indices are zero-based. Keep the original arrangement. This is a diagram requiring manual chemical review, not validated molecular data. Leave molecules and reactions empty.",
+        "description":"Use explicit coordinates for coordination complexes, macrocycles, projected organometallics, and source diagrams whose arrangement SMILES layout cannot preserve. An entire reaction scheme can be one sketch: use arrows and captions and place all participants in the same coordinate system. Keep molecules and reactions empty when using sketch. For corresponding ligand/complex panels, reuse the same ligand coordinates translated horizontally, then add the metal and its contacts; do not fold or rotate the ligand around the metal. Place donor atoms around the metal as in the source. Keep ring sizes, labels and inner delocalization curves. For ordinary simple molecules use SMILES. All coordinates are in bond-length units, x right, y down, with a typical bond length of 1. Default to a flat 2D drawing with tilts empty. Only when the source actually shows perspective, build planar rings and circles and project them together using explicit tilts. Metal coordination alone is not a reason to tilt. Use centroids with kind multi_center for haptic contacts (all target atoms), kind variable for alternative attachment positions, and null only for nonchemical drawing anchors. Do not use loose lines for attachments. Atom element * is a dummy wildcard: set variable to E or another visible generic label instead of inventing an element. For tBu or similar groups include the full atom graph then use abbreviations to collapse it. Use ring_arc on consecutive ring bonds for partial inner curves, preserving their underlying bond orders. Captions use top-left positions. Reaction arrows require empty space of at least one bond length on either side. All indices are zero-based. Keep the original arrangement. This is a diagram requiring manual chemical review, not validated molecular data. Leave molecules and reactions empty.",
         "properties":{
             "arrows":{"type":"array","maxItems":16,"items":{"type":"object","additionalProperties":false,"properties":{"start":point,"end":point},"required":["start","end"]}},
             "captions":{"type":"array","maxItems":64,"items":{"type":"object","additionalProperties":false,"properties":{"text":{"type":"string","maxLength":500},"position":point,"color":color},"required":["text","position","color"]}},
             "abbreviations":{"type":"array","maxItems":32,"items":{"type":"object","additionalProperties":false,"properties":{"label":{"type":"string"},"anchor":{"type":"integer","minimum":0},"atoms":indices},"required":["label","anchor","atoms"]}},
             "tilts":{"type":"array","maxItems":32,"items":{"type":"object","additionalProperties":false,"properties":{"atoms":indices,"shapes":indices,"x_degrees":{"type":"number","minimum":-85,"maximum":85},"y_degrees":{"type":"number","minimum":-85,"maximum":85},"depth_bonds":{"type":"boolean","description":"Bold the foreground single bonds according to their retained depth; preserves stereo wedges."}},"required":["atoms","shapes","x_degrees","y_degrees","depth_bonds"]}},
-            "centroids":{"type":"array","maxItems":32,"items":{"type":"object","additionalProperties":false,"properties":{"atoms":indices,"contact":{"anyOf":[{"type":"null"},{"type":"integer","minimum":0}],"description":"Optional metal atom index. Creates a dashed nonchemical contact to the tracked centroid."}},"required":["atoms","contact"]}},
+            "centroids":{"type":"array","maxItems":32,"items":{"type":"object","additionalProperties":false,"properties":{"kind":{"anyOf":[{"type":"null"},{"type":"string","enum":["multi_center","variable"]}],"description":"multi_center means all atoms (eta bonding); variable means one of the listed positions; null is a nonchemical centroid."},"atoms":indices,"contact":{"anyOf":[{"type":"null"},{"type":"integer","minimum":0}],"description":"Optional metal/substituent index outside the target set. Creates a bond to the attachment point."}},"required":["atoms","contact","kind"]}},
             "atoms":{"type":"array","maxItems":300,"items":{"type":"object","additionalProperties":false,"properties":{"color":color,"variable":{"anyOf":[{"type":"null"},{"type":"string","maxLength":8}],"description":"Only for element *. Visible variable label such as E; null otherwise."},"element":{"type":"string"},"x":number,"y":number,"charge":{"type":"integer","minimum":-8,"maximum":8},"isotope":{"type":"integer","minimum":0,"maximum":300},"hydrogens":{"type":"integer","minimum":0,"maximum":8}},"required":["element","x","y","charge","isotope","hydrogens","color","variable"]}},
             "bonds":{"type":"array","maxItems":600,"items":{"type":"object","additionalProperties":false,"properties":{"ring_arc":{"type":"boolean","description":"Replace the inner line along this ring edge by an inner curve; use on consecutive edges for the partial N-C-N delocalization convention. Does not change bond order."},"a":{"type":"integer","minimum":0,"description":"Zero-based index in atoms"},"b":{"type":"integer","minimum":0},"order":{"type":"integer","minimum":1,"maximum":7,"description":"1 single, 2 double, 3 triple, 4 aromatic, 5 dative, 6 quadruple, 7 partial"},"display":{"type":"string","enum":["plain","bold","wedge","hashed","dashed","wavy"]}},"required":["a","b","order","display","ring_arc"]}},
             "shapes":{"type":"array","maxItems":100,"items":{"type":"object","additionalProperties":false,"properties":{"kind":{"type":"string","enum":["line","ellipse"]},"start":point,"end":point,"dashed":{"type":"boolean"}},"required":["kind","start","end","dashed"]}}
@@ -495,6 +506,7 @@ mod tests {
                 depth_bonds: true,
             });
             sketch.centroids.push(Centroid {
+                kind: None,
                 atoms,
                 contact: Some(0),
             });

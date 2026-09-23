@@ -168,7 +168,7 @@ fn validate_offset(offset: Option<Point>) -> Result<(), String> {
     }
 }
 pub fn visible(a: &Atom, doc: &Document) -> bool {
-    if !a.centroid.is_empty() {
+    if crate::attachments::hidden(a, doc) {
         return false;
     }
     let degree = doc
