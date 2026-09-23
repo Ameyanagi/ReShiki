@@ -18,13 +18,28 @@ import Screenshot from "../../../components/Screenshot.astro";
 
 Drag a selected object to move it. Drag a corner handle to resize; use the top handle to rotate. **Shift** snaps rotation to 15°.
 
+Moving a bonded endpoint or collapsed group follows the configured bond length and angle grid. Hold **Option/Alt** to move freely. Whole molecules translate freely without changing their internal geometry.
+
+## Tilt a drawing
+
+Select the atoms, choose the **3D tilt** tool on the left, and drag. Vertical movement rotates around X; horizontal movement rotates around Y. Hold **Shift** for 15° increments. Release to commit one Undo step; **Escape** cancels the preview. Labels remain upright, and aromatic circles follow the ring.
+
+Right-click a selection → **3D tilt** also offers X/Y step commands. The top controls offer **Front bonds** for depth emphasis and **Done** to return to selection. Tilt changes drawing perspective, not chemical stereochemistry.
+
+<Screenshot
+  src="/doc-images/pr17/tilt-tool.png"
+  alt="The tilt tool and top controls with a projected ring selected."
+/>
+
+Right-click menus now show relevant commands under **Arrange & transform…**, **Bond appearance…** and **Attachment points…**. Select the objects first to see their actions.
+
 ## Keep related objects together
 
 Select a molecule and its caption, then **Group** (**⌘/Ctrl+G**). Use **Shift+⌘/Ctrl+G** to ungroup.
 
 **Properties** offers alignment, distribution, **Flip H/V**, and **Add frame**. **Duplicate** makes another editable copy.
 
-To align a reaction, select its molecules and arrow, right-click, and choose **Align middles**. Each molecule or group moves as a unit. Use **Align & distribute…** for other edges and even spacing.
+To align a reaction, select its molecules and arrow, right-click, and open **Arrange & transform… → Align middles**. Each molecule or group moves as a unit. The same submenu offers other edges and even spacing.
 
 <Screenshot
   src="/manual/selection-group.png"
@@ -34,6 +49,8 @@ To align a reaction, select its molecules and arrow, right-click, and choose **A
 ## Change color
 
 Select the objects, choose **All selected**, **Text**, or **Bonds** in the Style toolbar, then choose a swatch. Enter a hex color and press Return for a custom color.
+
+To recolor matching atoms together, choose **Atoms…**, select an element and color, then **Apply**. Choose **Selection** or **Whole drawing**; other elements and bonds retain their colors. Undo restores the change in one step.
 
 <Screenshot
   src="/manual/color-scope.png"
@@ -54,3 +71,5 @@ Select the objects, choose **All selected**, **Text**, or **Bonds** in the Style
 **Selected atoms** keeps the rest fixed. **Selected molecules** includes each complete molecule touched by the selection. Other molecules stay in place. **Keep orientation** preserves the drawing's direction.
 
 Apply is one Undo step. Cleanup adjusts molecular geometry; it does not arrange an entire reaction scheme.
+
+Attachment-containing complexes, including Cp/Cp\* groups, retain their geometry with an explicit limitation. Independent ordinary molecules can still be cleaned; unsupported complex geometry is not replaced by a guessed arrangement.

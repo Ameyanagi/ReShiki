@@ -22,7 +22,7 @@ Draw molecules, build reaction schemes, and prepare figures on an editable canva
 
 Start with JACS / ACS styling. Attach templates, refine selected structures, or ask the assistant to propose a drawing. Review edits and undo changes. Copy editable structures or export SVG, PDF, and PNG.
 
-Version 0.6 adds direct toolbar selection, sweep erasing, alignment, and assistant draft previews with visual review. Version 0.6.1 introduces the rust Reaction Cycle identity. The assistant defaults to GPT-6 Sol when available. New drawings use `.rsk`; existing `.reshiki` and `.moruno` drawings remain supported. [Read the 0.6.1 release notes](https://reshiki.com/developer/changes-0.6.1/).
+Version 0.7 adds typed multi-center/variable attachments, chemically defined Cp/Cp* groups, constrained movement, a 3D tilt tool, improved bond junctions, image history in the assistant, and in-app updates. The assistant defaults to GPT-6-Astra when available. New drawings use `.rsk`; existing `.reshiki` and `.moruno` drawings remain supported. [Read the 0.7 release notes](https://reshiki.com/developer/changes-0.7/) and [illustrated change log](docs/changes-pr17.md).
 
 ## Install
 

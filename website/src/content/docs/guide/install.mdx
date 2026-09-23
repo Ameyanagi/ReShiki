@@ -5,7 +5,7 @@ description: Download ReShiki and open your first drawing.
 
 import Screenshot from "../../../components/Screenshot.astro";
 
-ReShiki 0.6 includes the drawing and chemistry tools. **You do not need to install Python, RDKit, or uv.** There is no chemistry download or environment setup on first launch. See [what changed in 0.6](/developer/changes-0.6/).
+ReShiki 0.7 includes the drawing and chemistry tools. **You do not need to install Python, RDKit, or uv.** There is no chemistry download or environment setup on first launch. See [what changed in 0.7](/developer/changes-0.7/).
 
 ## 1. Download and open
 
@@ -45,4 +45,4 @@ Click **ReShiki** at the top left → **Check for updates**. ReShiki also checks
   alt="ReShiki's update window shows the installed version, a manual check button, downloads, and the automatic-check preference."
 />
 
-When an update is available, save your drawing and choose **Update and restart**. ReShiki downloads the matching release, verifies its checksum (and the developer signature on macOS), installs it, and reopens your saved drawing. Installation waits for unsaved edits and assistant drafts to be resolved. If a download or verification fails, the running app stays in place. **Release notes** opens the release page. Automatic checks never install an update without your click.
+When an update is available, save your drawing and choose **Update and restart**. ReShiki downloads the matching release, verifies its checksum (and the developer signature on macOS), installs it, and reopens your saved drawing. Installation waits for unsaved drawings, pending atom-label edits, assistant drafts and unfinished text/image input to be resolved. Clear the assistant input or attachment when finished with it. If a download or verification fails, the running app stays in place. **Release notes** opens the release page. Automatic checks never install an update without your click.

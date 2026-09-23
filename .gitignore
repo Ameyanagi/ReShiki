@@ -14,3 +14,4 @@ __pycache__/
 /website/dist/
 /website/src/content/docs/reference/
 /website/src/content/docs/developer/
+/website/public/doc-images/

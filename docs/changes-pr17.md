@@ -1,6 +1,6 @@
 # PR #17: molecular editing and assistant review
 
-Review of [PR #17](https://github.com/Ameyanagi/ReShiki/pull/17), prepared on 2026-09-23. These changes are on the PR branch. **The public release remains v0.6.1.** A version number in a development screenshot does not mean these changes have been released.
+Illustrated development review of [PR #17](https://github.com/Ameyanagi/ReShiki/pull/17), prepared on 2026-09-23 and included in [ReShiki 0.7.0](changes-0.7.md). Development screenshots retain their original v0.6.1 build labels. See the [release validation record](release-0.7-validation.md) for publication checks.
 
 ## Groups that retain their atoms
 
@@ -196,11 +196,11 @@ This index covers all user-facing feature updates and fixes in the current PR di
 
 ### Desktop updates
 
-| Update                            | Behavior and how to try it                                                                                                                                                                             | Boundary                                                                                           |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
-| In-app checking and release notes | The About/update dialog reports the installed/latest version, checks manually and controls automatic checks. Click ReShiki → Check for updates.                                                        | Automatic checks do not install updates.                                                           |
-| Verified install and restart      | The updater verifies the package, protects unsaved drawings and assistant drafts, installs and reopens the saved file. When a newer supported release exists, save work and choose Update and restart. | The current public release remains v0.6.1; no future-version upgrade has been demonstrated.        |
-| Failure recovery                  | Failed download/verification leaves the running app intact; replacement helpers support rollback. Consult signed macOS staging and replacement/rollback test evidence.                                 | Native Windows/Linux UI installation and a real later-version upgrade still need platform testing. |
+| Update                            | Behavior and how to try it                                                                                                                                                                             | Boundary                                                                                             |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| In-app checking and release notes | The About/update dialog reports the installed/latest version, checks manually and controls automatic checks. Click ReShiki → Check for updates.                                                        | Automatic checks do not install updates.                                                             |
+| Verified install and restart      | The updater verifies the package, protects unsaved drawings and assistant drafts, installs and reopens the saved file. When a newer supported release exists, save work and choose Update and restart. | The updater was staged against v0.6.1; a real upgrade to a later release remains to be demonstrated. |
+| Failure recovery                  | Failed download/verification leaves the running app intact; replacement helpers support rollback. Consult signed macOS staging and replacement/rollback test evidence.                                 | Native Windows/Linux UI installation and a real later-version upgrade still need platform testing.   |
 
 ### Validation & documented limits
 

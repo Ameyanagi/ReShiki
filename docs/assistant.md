@@ -63,6 +63,10 @@ Proposals support up to 32 molecules, eight reaction steps, 300 atoms per molecu
 
 The integration follows the official [Codex app-server protocol](https://learn.chatgpt.com/docs/app-server), using structured output, public progress summaries, bounded drawing tools and local image inputs. `cargo run --example assistant_smoke -- --generate --prompt '…' --output artifacts/assistant-qa` exercises generation and mandatory review with the local sign-in. `--generate --image source.png --output artifacts/image-qa` exercises image reconstruction and source comparison. `--render drawing.rsk --output artifacts/assistant-qa/render` renders an existing drawing and its close-ups without a model request.
 
+Sent images stay with their user messages during the current conversation, even after the composer attachment is removed. Click a thumbnail to enlarge and inspect it. History is session-local and does not survive an app restart.
+
+A five-minute inactivity timeout renews with relevant progress; each model turn has a twenty-minute hard limit. Connection setup has a sixty-second limit. Completed previews remain available after interruption.
+
 ## Model and navigation defaults
 
 The assistant defaults to GPT-6 Astra (`gpt-6-astra`) when it is available in the connected Codex catalog, otherwise to the account default. Explicit model choices remain saved. Reasoning and service options come from the selected model’s catalog entry.
@@ -71,11 +75,13 @@ Opening model, effort or edit-mode menus preserves the conversation position. Cl
 
 ## Projected structures and attachment points
 
-Select ring atoms and open **Properties → Arrange & transform**. **3D tilt** rotates their retained XYZ positions about X or Y in 15° steps. The opposite step restores the geometry; labels remain upright. Aromatic circles follow the ring automatically. Select a separately drawn ellipse with the ring to tilt them together. **Emphasize front bonds** uses depth to bold foreground single bonds without assigning wedge stereochemistry.
+Select ring atoms and choose the left **3D tilt** tool. Drag vertically for X or horizontally for Y; hold **Shift** for 15° snapping. Right-click → **3D tilt…**, the top controls and **Properties → Arrange & transform** also offer X/Y steps. The opposite step restores the geometry; labels remain upright. Aromatic circles follow the ring automatically. Select a separately drawn ellipse with the ring to tilt them together. **Emphasize front bonds** uses depth to bold foreground single bonds without assigning wedge stereochemistry.
 
-**Add centroid** creates an invisible, selectable ring-centre anchor that follows the selected atoms. A dashed contact can connect that anchor to a metal. **Dummy atom (\*)** places an explicit wildcard attachment point; it is not a carbon atom. Native ReShiki files preserve centroids and projection depth. Figures preserve their appearance. Molecular export of centroid diagrams is blocked because these drawing contacts do not encode validated multicentre chemical bonds.
+**Add centroid** creates a selectable ring-centre anchor with an editor-only marker that follows the selected atoms. A dashed contact can connect that anchor to a metal. **Dummy atom (\*)** places an explicit wildcard attachment point; it is not a carbon atom. Native ReShiki files preserve centroids and projection depth. Figures preserve their appearance. Molecular export of centroid diagrams is blocked because these drawing contacts do not encode validated multicentre chemical bonds.
 
-The assistant can use these same tilt and centroid operations for an attached source image. Such diagrams always require manual review before applying.
+Typed **multi-center** and **variable attachment** points are available separately; they retain all-target or alternative-target meaning through supported exchange. A legacy drawing centroid is never silently promoted to either type. See [attachment comparison](chemdraw-attachment-comparison.md). The assistant can use these operations while reconstructing an image, keeping flat drawings flat unless perspective is visible or requested. Such diagrams always require manual review before applying.
+
+Native/figure output retains front-bond emphasis. CDXML/CDX rejects that emphasis until it can be preserved without being interpreted as stereochemistry; turn off **Front bonds** for supported editable export.
 
 The compact composer keeps the image thumbnail beside the prompt. Use **＋** for attachments, the model menu to change models, and **Review** for replacement and automatic-application settings.
 

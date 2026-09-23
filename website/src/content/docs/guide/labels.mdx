@@ -27,7 +27,24 @@ Adding a charge to a skeletal carbon leaves the carbon label implicit. The charg
 
 ## Shorten a group
 
+Select an atom and press **Enter** to edit its label. **Automatic** recognizes elements and defined groups; **Chemical abbreviation** chooses a nickname explicitly, including names that conflict with element symbols. **Text label** keeps literal text such as M, L or X on a wildcard atom. Text labels do not imply an element, query or molecular formula.
+
 Use **Properties → Labels & chemistry → Chemical abbreviations…** to replace a terminal group with a preset such as **OMe**, or contract a selected fragment. **Expand selected** restores its atoms for editing.
+
+Defined groups such as **Boc** retain their full atom/bond graph for composition. **Cp** is cyclopentadienyl (C5H5−); **Cp\*** is pentamethylcyclopentadienyl (C10H15−). Their attachment handles are not counted as atoms. Metal charge still needs the correct explicit assignment.
+
+Group labels default to **Automatic** alignment. Select groups and use the existing top **Left / Center / Right** buttons; the adjacent menu restores **Automatic** or selects **Above**. Captions share those buttons, and mixed selections update together. Alignment never changes the group's atoms or bonds. Above positions one nickname above its anchor rather than stacking arbitrary formula tokens.
+
+<Screenshot
+  src="/doc-images/pr17/group-alignment-toolbar.png"
+  alt="Chemical group alignment uses the existing top text-alignment buttons and the adjacent Automatic/Above menu."
+/>
+
+## Attach to several atoms
+
+Select the target atoms, right-click → **Attachment points…**, and choose **Multi-center attachment** for simultaneous participation, such as η6-arene or η3-allyl. **Variable attachment** represents alternative attachment positions. Draw a bond from the new point to a metal or substituent. These are distinct from a plain dummy atom or drawing centroid.
+
+Anonymous dummy and attachment handles remain visible in the editor but disappear from figures and image copies. Explicit labels remain visible. Native editing retains target IDs; supported editable exchange uses CDXML/CDX attachment nodes or V3000 ALL/ANY lists. See [the verified scope and limitations](/developer/chemdraw-attachment-comparison/).
 
 <Screenshot
   src="/manual/abbreviations.png"

@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -6,6 +6,9 @@ const root = fileURLToPath(new URL("../../", import.meta.url));
 const source = path.join(root, "docs");
 const content = path.join(root, "website/src/content/docs");
 const destination = path.join(content, "developer");
+const publishedImages = path.join(root, "website/public/doc-images");
+await rm(publishedImages, { recursive: true, force: true });
+await cp(path.join(source, "images"), publishedImages, { recursive: true });
 const guides = {
   install: ["getting-started"],
   "first-molecule": ["bond-tools", "chain-tools", "tool-palettes"],
@@ -58,6 +61,9 @@ for (const name of (await readdir(source)).filter((name) => name.endsWith(".md")
       return `](/developer/${path.basename(file, ".md")}/${fragment}${suffix})`;
     }
     const relative = path.relative(root, resolved).split(path.sep).join("/");
+    if (relative.startsWith("docs/images/")) {
+      return `](/doc-images/${relative.slice("docs/images/".length)}${fragment}${suffix})`;
+    }
     return `](https://github.com/Ameyanagi/ReShiki/blob/main/${relative}${fragment}${suffix})`;
   });
   const topic = path.basename(name, ".md");

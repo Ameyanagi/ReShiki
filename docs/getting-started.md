@@ -4,7 +4,7 @@ ReShiki is a desktop workspace for editable chemical drawings. Molecule processi
 
 ## Install
 
-ReShiki 0.6 includes its native chemistry tools. No Python, RDKit, or uv installation is needed, and the app does not download a chemistry environment on first launch.
+ReShiki 0.7 includes its native chemistry tools. No Python, RDKit, or uv installation is needed, and the app does not download a chemistry environment on first launch.
 
 Download a package for your computer from [GitHub Releases](https://github.com/Ameyanagi/ReShiki/releases). The release workflow builds these packages:
 

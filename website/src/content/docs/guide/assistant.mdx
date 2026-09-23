@@ -28,6 +28,10 @@ Ordinary molecules use the local chemistry engine. Projected organometallic stru
 
 Source images are sent to Codex for reconstruction and review. Supported inputs are up to 16 MB and 16 million pixels, with at most 8192 pixels on either side.
 
+Sent images stay with their user messages during the current conversation, even after the composer attachment is removed. Click a thumbnail to enlarge and inspect it. History is session-local and does not survive an app restart.
+
+A five-minute inactivity timeout renews with relevant progress; each model turn has a twenty-minute hard limit. Connection setup has a sixty-second limit. Completed previews remain available after interruption.
+
 ## Follow its progress
 
 **Preparing your scheme…**, an elapsed timer, and **Stop** appear immediately. The activity card then shows a composition outline, completed structure counts, an editable draft preview, and the quality-check stage. During a quiet model response, the timer remains visible; the app does not invent a completion percentage.
@@ -108,11 +112,13 @@ The assistant defaults to **GPT-6 Astra** when it is available in your Codex acc
 
 ## Projected structures and attachment points
 
-Select ring atoms and open **Properties → Arrange & transform**. **3D tilt** rotates their retained XYZ positions about X or Y in 15° steps. The opposite step restores the geometry; labels remain upright. Aromatic circles follow the ring automatically. Select a separately drawn ellipse with the ring to tilt them together. **Emphasize front bonds** uses depth to bold foreground single bonds without assigning wedge stereochemistry.
+Select ring atoms and choose the left **3D tilt** tool. Drag vertically for X or horizontally for Y; hold **Shift** for 15° snapping. Right-click → **3D tilt…**, the top controls and **Properties → Arrange & transform** also offer X/Y steps. The opposite step restores the geometry; labels remain upright. Aromatic circles follow the ring automatically. Select a separately drawn ellipse with the ring to tilt them together. **Emphasize front bonds** uses depth to bold foreground single bonds without assigning wedge stereochemistry.
 
-**Add centroid** creates an invisible, selectable ring-centre anchor that follows the selected atoms. A dashed contact can connect that anchor to a metal. **Dummy atom (\*)** places an explicit wildcard attachment point; it is not a carbon atom. Native ReShiki files preserve centroids and projection depth. Figures preserve their appearance. Molecular export of centroid diagrams is blocked because these drawing contacts do not encode validated multicentre chemical bonds.
+**Add centroid** creates a selectable ring-centre anchor with an editor-only marker that follows the selected atoms. A dashed contact can connect that anchor to a metal. **Dummy atom (\*)** places an explicit wildcard attachment point; it is not a carbon atom. Native ReShiki files preserve centroids and projection depth. Figures preserve their appearance. Molecular export of centroid diagrams is blocked because these drawing contacts do not encode validated multicentre chemical bonds.
 
-The assistant can use these same tilt and centroid operations for an attached source image. Such diagrams always require manual review before applying.
+Typed **multi-center** and **variable attachment** points are available separately; they retain all-target or alternative-target meaning through supported exchange. A legacy drawing centroid is never silently promoted to either type. See [attachment comparison](/developer/chemdraw-attachment-comparison/). The assistant can use these operations while reconstructing an image, keeping flat drawings flat unless perspective is visible or requested. Such diagrams always require manual review before applying.
+
+Native/figure output retains front-bond emphasis. CDXML/CDX rejects that emphasis until it can be preserved without being interpreted as stereochemistry; turn off **Front bonds** for supported editable export.
 
 The compact composer keeps the image thumbnail beside the prompt. Use **＋** for attachments, the model menu to change models, and **Review** for replacement and automatic-application settings.
 
