@@ -294,8 +294,11 @@ fn connection_directions(doc: &Document, source: &Atom) -> Vec<f32> {
 }
 
 static BUNDLED: LazyLock<Result<Vec<Template>, String>> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("../assets/templates.json"))
-        .map_err(|e| format!("Bundled templates could not be read: {e}"))
+    let mut templates: Vec<Template> =
+        serde_json::from_str(include_str!("../assets/templates.json"))
+            .map_err(|e| format!("Bundled templates could not be read: {e}"))?;
+    templates.extend(crate::haworth::templates()?);
+    Ok(templates)
 });
 pub fn builtin_error() -> Option<&'static str> {
     BUNDLED.as_ref().err().map(String::as_str)

@@ -375,7 +375,7 @@ fn finish(
                 .ok_or(Error::Empty)?
                 .inchi
                 .clone(),
-            Some("mol") => molfile::write(
+            Some("mol") => molfile::write_absolute(
                 &prepared.ok_or(Error::MissingPrepared)?.molecule,
                 Default::default(),
             )?,

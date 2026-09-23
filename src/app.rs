@@ -1128,7 +1128,7 @@ impl App {
                     .filter(|bond| {
                         self.selected.contains(&bond.a)
                             && self.selected.contains(&bond.b)
-                            && !preset.preserves_aromatic_order(bond)
+                            && !preset.preserves_chemistry(bond)
                     })
                     .flat_map(|bond| [bond.a, bond.b])
                     .collect();
@@ -2768,7 +2768,7 @@ impl App {
                             if let Some(preset) = self
                                 .tool
                                 .bond_preset()
-                                .filter(|p| p.preserves_aromatic_order(&b))
+                                .filter(|p| p.preserves_chemistry(&b))
                             {
                                 preset.place(&mut self.doc, b.a, b.b);
                             } else {
@@ -2970,7 +2970,7 @@ fn chemistry_changed(before: &Document, after: &Document) -> bool {
             b.indicator = Default::default();
             a.cip_label = None;
             b.cip_label = None;
-            if a.order == 4 && b.order == 4 {
+            if a.order == 4 && b.order == 4 || a.order == b.order && a.projection && b.projection {
                 a.display = "plain".into();
                 b.display = "plain".into();
                 a.projection = false;
@@ -3032,6 +3032,65 @@ fn platform_shortcut(macos: &'static str, other: &'static str) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn haworth_tools_and_edge_styles_are_undoable_without_erasing_sugar_stereo()
+    -> anyhow::Result<()> {
+        use anyhow::Context;
+        use reshiki::{
+            bonds::BondPreset as P,
+            haworth::{Anomer, Sugar, sugar_document},
+            rings::Preset,
+        };
+        for preset in [Preset::HaworthFive, Preset::HaworthSix] {
+            let (mut app, _) = App::new();
+            app.doc = Document::default();
+            let before = app.doc.clone();
+            app.edit(Edit::RingPreset(
+                preset,
+                Point::default(),
+                None,
+                false,
+                false,
+            ));
+            assert!(!app.error, "{}", app.status);
+            let placed = app.doc.clone();
+            assert!(placed.bonds.iter().all(|b| b.projection));
+            let _ = app.update(Message::Undo);
+            assert_eq!(app.doc, before);
+            let _ = app.update(Message::Redo);
+            assert_eq!(app.doc, placed);
+        }
+        for preset in [P::Wedge, P::HashedWedge, P::Bold, P::Single] {
+            let (mut app, _) = App::new();
+            app.doc =
+                sugar_document(Sugar::Glucose, Anomer::Alpha, 42.).map_err(anyhow::Error::msg)?;
+            app.doc.reconcile_molecule_groups();
+            let source = app.doc.clone();
+            let bond = source
+                .bonds
+                .iter()
+                .find(|b| b.display == "bold")
+                .context("Front edge")?;
+            app.selected = vec![bond.a, bond.b];
+            let _ = app.update(Message::ApplyBondPreset(preset));
+            assert!(!app.error, "{}", app.status);
+            assert_eq!(app.doc.atoms, source.atoms);
+            assert!(!chemistry_changed(&source, &app.doc));
+            if app.doc != source {
+                let _ = app.update(Message::Undo);
+                assert_eq!(app.doc, source);
+            }
+            let a = source.atom(bond.a).context("Front atom")?.position;
+            let b = source.atom(bond.b).context("Front atom")?.position;
+            app.tool = Tool::StyledBond(preset);
+            app.edit(Edit::Click(Point::new((a.x + b.x) / 2., (a.y + b.y) / 2.)));
+            assert!(!app.error, "{}", app.status);
+            assert_eq!(app.doc.atoms, source.atoms);
+            assert!(!chemistry_changed(&source, &app.doc));
+        }
+        Ok(())
+    }
 
     #[test]
     fn inspector_changes_reset_scrolling_but_normal_updates_keep_the_position() {

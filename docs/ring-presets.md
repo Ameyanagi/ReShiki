@@ -1,5 +1,7 @@
 # Ring presets and expanded template catalog
 
+The later [Haworth update](haworth-projections.md) adds five/six-member perspective outlines and 12 carbohydrate templates, bringing the current library to 93 entries. The original 81-entry milestone is described below.
+
 JACS / ACS remains the default. The new chair and cyclopentadiene tools use 14.4 pt edges (42 world units), Arial 10 pt labels and 0.6 pt lines unless the user changes the preferred bond length.
 
 ## Ring workflow

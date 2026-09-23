@@ -46,7 +46,7 @@ Original update validation: **89 Rust tests**, including exact-anchor regioisome
 
 ## Remaining limits
 
-- The library now contains 81 built-ins. Common rings, two chair projections, 20 neutral free amino acids and five nucleobases are included; sugars, nucleotide/DNA/RNA assemblies, peptide construction and many specialized families remain missing. See [catalog and ring presets](ring-presets.md).
+- The library now contains 93 built-ins. Common rings, two chair projections, 20 neutral free amino acids, five nucleobases and 12 [Haworth carbohydrate entries](haworth-projections.md) are included; nucleotide/DNA/RNA assemblies, peptide construction and many specialized families remain missing. See [catalog and ring presets](ring-presets.md).
 - Attachment still requires matching supported elements, charge/isotope and available valence; it excludes stereocenters, explicit-H/mapped sites and unsupported target bond styles. General aromatic re-kekulization and arbitrary post-insertion joining remain incomplete.
 - There is no modifier-driven free resizing during placement or viewport auto-pan. Selection handles can resize a placed instance.
 - Captions remain upright under rotation, and the existing annotation model does not support arbitrary rotated text.

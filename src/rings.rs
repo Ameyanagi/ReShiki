@@ -1,5 +1,5 @@
 //! Molecular ring drawings. Chair presets are 2D depictions, not 3D conformers
-//! or stereochemical assignments. Every edge uses the chosen bond length.
+//! or stereochemical assignments. Haworth outlines use foreshortened edges.
 use crate::{
     document::{Document, Point},
     editing, templates,
@@ -14,6 +14,8 @@ pub enum Preset {
     ChairUp,
     ChairDown,
     Cyclopentadiene,
+    HaworthFive,
+    HaworthSix,
 }
 impl Preset {
     pub const ALL: &'static [Self] = &[
@@ -21,8 +23,15 @@ impl Preset {
         Self::ChairUp,
         Self::ChairDown,
         Self::Cyclopentadiene,
+        Self::HaworthFive,
+        Self::HaworthSix,
     ];
     pub fn document(self, length: f32, alternate: bool) -> Document {
+        match self {
+            Self::HaworthFive => return crate::haworth::Ring::Five.document(length, false),
+            Self::HaworthSix => return crate::haworth::Ring::Six.document(length, false),
+            _ => {}
+        }
         let mut doc = Document::default();
         let points = match self {
             Self::ChairUp | Self::ChairDown => {
@@ -86,6 +95,8 @@ impl std::fmt::Display for Preset {
             Self::ChairUp => "Chair A",
             Self::ChairDown => "Chair B",
             Self::Cyclopentadiene => "Cyclopentadiene",
+            Self::HaworthFive => "Haworth 5",
+            Self::HaworthSix => "Haworth 6",
         })
     }
 }

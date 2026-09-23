@@ -36,6 +36,7 @@ pub mod exchange;
 pub mod export;
 pub mod graphics;
 pub mod grouping;
+pub mod haworth;
 pub mod joining;
 pub mod ligands;
 #[cfg(windows)]

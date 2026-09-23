@@ -2,7 +2,7 @@
 
 Click **C** in the main tools palette to open a periodic table containing all 118 elements. Choose a symbol, then click an existing atom to change its element or empty space to place it. Hover shows the symbol and atomic number. Existing element keyboard shortcuts remain available.
 
-Click a **bond**, **ring**, or **arrow** tool to open a floating palette with visual previews. The palette is a compact grid with names on hover; it does not stretch across the canvas. Select the desired style and continue drawing. The bond palette contains all 17 supported presets; rings include sizes 3–8, benzene, chair projections and cyclopentadiene. Click outside the palette, its close button, or Escape to dismiss it. Keyboard shortcuts still select tools directly.
+Click a **bond**, **ring**, or **arrow** tool to open a floating palette with visual previews. The palette is a compact grid with names on hover; it does not stretch across the canvas. Select the desired style and continue drawing. The bond palette contains all 17 supported presets; rings include sizes 3–8, benzene, chair projections, cyclopentadiene and [Haworth 5/6 projections](haworth-projections.md). Click outside the palette, its close button, or Escape to dismiss it. Keyboard shortcuts still select tools directly.
 
 The arrow palette includes **Curved / electron pair**, **Single electron**, and **Bent / elbow**, alongside straight reaction arrows. Elbow arrows have two straight segments. Select an arrow and drag its middle handle to place the corner; drag either endpoint to resize it. Properties offers reverse direction, flip bend and straighten. Elbows retain an editable corner in native files and supported CDXML/CDX exchange.
 

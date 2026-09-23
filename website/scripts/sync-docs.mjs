@@ -12,7 +12,13 @@ await cp(path.join(source, "images"), publishedImages, { recursive: true });
 const guides = {
   install: ["getting-started"],
   "first-molecule": ["bond-tools", "chain-tools", "tool-palettes"],
-  templates: ["ring-presets", "template-library", "template-placement", "fragment-joining"],
+  templates: [
+    "haworth-projections",
+    "ring-presets",
+    "template-library",
+    "template-placement",
+    "fragment-joining",
+  ],
   editing: [
     "contextual-shortcuts",
     "selection-and-groups",

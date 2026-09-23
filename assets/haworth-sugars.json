@@ -1,0 +1,102 @@
+[
+  {
+    "name": "α-D-glucopyranose",
+    "sugar": "glucose",
+    "anomer": "alpha",
+    "smiles": "C([C@@H]1[C@H]([C@@H]([C@H]([C@H](O1)O)O)O)O)O",
+    "formula": "C6H12O6",
+    "inchikey": "WQZGKKKJIJFFOK-DVKNGEFBSA-N",
+    "cid": 79025,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/79025"
+  },
+  {
+    "name": "β-D-glucopyranose",
+    "sugar": "glucose",
+    "anomer": "beta",
+    "smiles": "C([C@@H]1[C@H]([C@@H]([C@H]([C@@H](O1)O)O)O)O)O",
+    "formula": "C6H12O6",
+    "inchikey": "WQZGKKKJIJFFOK-VFUOTHLCSA-N",
+    "cid": 64689,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/64689"
+  },
+  {
+    "name": "α-D-galactopyranose",
+    "sugar": "galactose",
+    "anomer": "alpha",
+    "smiles": "C([C@@H]1[C@@H]([C@@H]([C@H]([C@H](O1)O)O)O)O)O",
+    "formula": "C6H12O6",
+    "inchikey": "WQZGKKKJIJFFOK-PHYPRBDBSA-N",
+    "cid": 439357,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/439357"
+  },
+  {
+    "name": "β-D-galactopyranose",
+    "sugar": "galactose",
+    "anomer": "beta",
+    "smiles": "C([C@@H]1[C@@H]([C@@H]([C@H]([C@@H](O1)O)O)O)O)O",
+    "formula": "C6H12O6",
+    "inchikey": "WQZGKKKJIJFFOK-FPRJBGLDSA-N",
+    "cid": 439353,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/439353"
+  },
+  {
+    "name": "α-D-mannopyranose",
+    "sugar": "mannose",
+    "anomer": "alpha",
+    "smiles": "C([C@@H]1[C@H]([C@@H]([C@@H]([C@H](O1)O)O)O)O)O",
+    "formula": "C6H12O6",
+    "inchikey": "WQZGKKKJIJFFOK-PQMKYFCFSA-N",
+    "cid": 185698,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/185698"
+  },
+  {
+    "name": "β-D-mannopyranose",
+    "sugar": "mannose",
+    "anomer": "beta",
+    "smiles": "C([C@@H]1[C@H]([C@@H]([C@@H]([C@@H](O1)O)O)O)O)O",
+    "formula": "C6H12O6",
+    "inchikey": "WQZGKKKJIJFFOK-RWOPYEJCSA-N",
+    "cid": 439680,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/439680"
+  },
+  {
+    "name": "α-D-ribofuranose",
+    "sugar": "ribose",
+    "anomer": "alpha",
+    "smiles": "C([C@@H]1[C@H]([C@H]([C@H](O1)O)O)O)O",
+    "formula": "C5H10O5",
+    "inchikey": "HMFHBZSHGGEWLO-AIHAYLRMSA-N",
+    "cid": 445894,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/445894"
+  },
+  {
+    "name": "β-D-ribofuranose",
+    "sugar": "ribose",
+    "anomer": "beta",
+    "smiles": "C([C@@H]1[C@H]([C@H]([C@@H](O1)O)O)O)O",
+    "formula": "C5H10O5",
+    "inchikey": "HMFHBZSHGGEWLO-TXICZTDVSA-N",
+    "cid": 447347,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/447347"
+  },
+  {
+    "name": "α-D-fructofuranose",
+    "sugar": "fructose",
+    "anomer": "alpha",
+    "smiles": "C([C@@H]1[C@H]([C@@H]([C@@](O1)(CO)O)O)O)O",
+    "formula": "C6H12O6",
+    "inchikey": "RFSUNEUAIZKAJO-ZXXMMSQZSA-N",
+    "cid": 11105942,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/11105942"
+  },
+  {
+    "name": "β-D-fructofuranose",
+    "sugar": "fructose",
+    "anomer": "beta",
+    "smiles": "C([C@@H]1[C@H]([C@@H]([C@](O1)(CO)O)O)O)O",
+    "formula": "C6H12O6",
+    "inchikey": "RFSUNEUAIZKAJO-ARQDHWQXSA-N",
+    "cid": 439709,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/439709"
+  }
+]

@@ -381,6 +381,8 @@ impl App {
                     RingPreset::ChairUp,
                     RingPreset::ChairDown,
                     RingPreset::Cyclopentadiene,
+                    RingPreset::HaworthFive,
+                    RingPreset::HaworthSix,
                 ] {
                     options.push((p.document(42., false), p.to_string(), Action::RingPreset(p)));
                 }

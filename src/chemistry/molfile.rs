@@ -44,7 +44,14 @@ fn at<T>(items: &[T], index: usize) -> Result<&T, Error> {
 /// conventions. V3000 is automatic for dative bonds, large graphs/coordinates.
 /// Queries, enhanced stereo groups and non-tetrahedral tags are not drawing data.
 pub fn write(molecule: &Molecule, options: Options) -> Result<String, Error> {
-    write_part(molecule, options, false, &[])
+    write_part(molecule, options, false, &[], false)
+}
+
+/// Drawing stereocenters describe a specific configuration. Mark them absolute
+/// so consumers such as ChemDraw do not interpret the file as a racemate.
+/// Keep `write` unchanged for RDKit-compatible reference output.
+pub fn write_absolute(molecule: &Molecule, options: Options) -> Result<String, Error> {
+    write_part(molecule, options, false, &[], true)
 }
 
 /// Write semantic ALL/ANY endpoints as V3000 properties. Distributed charges
@@ -99,12 +106,13 @@ pub fn write_document(doc: &crate::document::Document) -> Result<String, Error> 
         },
         false,
         &endpoints,
+        true,
     )
 }
 
 /// Reaction CTABs retain aromatic bond types instead of assigning Kekulé bonds.
 pub(crate) fn reaction_ctab(molecule: &Molecule) -> Result<String, Error> {
-    write_part(molecule, Options { force_v3000: true }, true, &[])
+    write_part(molecule, Options { force_v3000: true }, true, &[], false)
 }
 
 fn write_part(
@@ -112,6 +120,7 @@ fn write_part(
     options: Options,
     reaction: bool,
     attachments: &[crate::attachments::Attachment],
+    absolute: bool,
 ) -> Result<String, Error> {
     let source = &molecule.state;
     source.graph.validate().map_err(invalid)?;
@@ -204,6 +213,14 @@ fn write_part(
                 .iter()
                 .any(|&v| v >= 100000. || v <= -10000.)
         });
+    let chiral = u8::from(
+        absolute
+            && source
+                .metadata
+                .atoms
+                .iter()
+                .any(|a| matches!(a.chiral_tag, 1 | 2)),
+    );
     let mut output = if reaction {
         String::new()
     } else {
@@ -214,9 +231,12 @@ fn write_part(
             output.push_str("  0  0  0  0  0  0  0  0  0  0999 V3000\n");
         }
         output.push_str("M  V30 BEGIN CTAB\n");
-        writeln!(output, "M  V30 COUNTS {n} {e} 0 0 0\nM  V30 BEGIN ATOM")?;
+        writeln!(
+            output,
+            "M  V30 COUNTS {n} {e} 0 0 {chiral}\nM  V30 BEGIN ATOM"
+        )?;
     } else {
-        writeln!(output, "{n:3}{e:3}  0  0  0  0  0  0  0  0999 V2000")?;
+        writeln!(output, "{n:3}{e:3}  0  0{chiral:3}  0  0  0  0  0999 V2000")?;
     }
     for (i, atom) in graph.atoms.iter().enumerate() {
         let p = at(&molecule.positions, i)?;
