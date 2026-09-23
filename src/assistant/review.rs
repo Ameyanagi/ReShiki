@@ -402,10 +402,44 @@ pub fn internal_overlaps(doc: &Document) -> Vec<String> {
 
 pub fn quality(doc: &Document, composition: &Composition) -> Vec<String> {
     let mut issues = internal_overlaps(doc);
-    if !diagram_groups(doc).is_empty() {
+    let has_anchors = doc.atoms.iter().any(|a| !a.centroid.is_empty());
+    if !diagram_groups(doc).is_empty() || has_anchors {
         issues.push(super::sketch::REVIEW_NOTE.into());
-        if let Err(error) = crate::chemistry::document::prepare(doc) {
-            issues.push(format!("Chemical assignments need review: {error}"));
+        if let Err(error) = doc.validate() {
+            issues.push(format!("Invalid drawing: {error}"));
+        } else {
+            // Check the explicit ligand graph, not whether a complete complex
+            // can be reduced to an ordinary molecular identifier. Removing
+            // anchors here never invents metal-carbon bonds or changes the
+            // actual drawing; coordination itself remains a manual check.
+            let chemical = if has_anchors {
+                let atoms: Vec<_> = doc
+                    .atoms
+                    .iter()
+                    .filter(|a| a.centroid.is_empty())
+                    .cloned()
+                    .collect();
+                let ids: std::collections::HashSet<_> = atoms.iter().map(|a| a.id).collect();
+                let bonds = doc
+                    .bonds
+                    .iter()
+                    .filter(|b| ids.contains(&b.a) && ids.contains(&b.b))
+                    .cloned()
+                    .collect();
+                issues.push("Attachment targets are retained; full coordination-valence validation is unavailable. The defined ligand atoms and bonds are checked separately.".into());
+                Some(Document {
+                    atoms,
+                    bonds,
+                    ..Default::default()
+                })
+            } else {
+                None
+            };
+            if let Err(error) =
+                crate::chemistry::document::prepare(chemical.as_ref().unwrap_or(doc))
+            {
+                issues.push(format!("Chemical assignments need review: {error}"));
+            }
         }
     }
     let ts = targets(doc);

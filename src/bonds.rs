@@ -202,6 +202,7 @@ impl Bond {
             ]
             .as_slice(),
             2 => ["plain", "wavy", "bold", "dashed"].as_slice(),
+            4 if self.projection => ["plain", "bold"].as_slice(),
             0 => ["dotted"].as_slice(),
             5 => ["plain", "dashed"].as_slice(),
             7 => ["plain", "dashed"].as_slice(),

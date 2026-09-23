@@ -83,6 +83,14 @@ Select ring atoms and choose the left **3D tilt** tool. Drag vertically for X or
 
 Typed **multi-center** and **variable attachment** points are available separately; they retain all-target or alternative-target meaning through supported exchange. A legacy drawing centroid is never silently promoted to either type. See [attachment comparison](chemdraw-attachment-comparison.md). The assistant can use these operations while reconstructing an image, keeping flat drawings flat unless perspective is visible or requested. Such diagrams always require manual review before applying.
 
+For **Cp** and **Cp\***, the assistant can build the defined aromatic ligand first, then apply X/Y tilts and an in-plane rotation. Cp* retains all five methyl groups (C₁₀H₁₅⁻), and Cp retains C₅H₅⁻. Their aromatic circles follow the stored 3D ring plane. Foreground emphasis preserves aromatic bond orders; it does not assign stereochemical wedges. The metal connects through a five-center attachment with a solid, dashed or dative contact chosen to match the source. A zero tilt leaves the ligand planar. Ligand and metal charges stay explicit; reconstructing an image is still subject to chemical review.
+
+![The same defined aromatic Cp* ligand before and after a 65-degree X tilt and 40-degree screen rotation](images/assistant-cp-star-tilt.png)
+
+The AI supplies the ligand name and placement parameters; local code creates the atoms and projection. This avoids generating each ring/methyl coordinate separately. Images, instructions and visual review still consume model tokens; review can run for up to three passes. The reduced coordinate output is not a measured guarantee of lower total usage. Developers can render a saved proposal offline with `cargo run --example assistant_smoke -- --render-proposal proposal.json --output artifacts/proposal-preview`.
+
+Attachment-containing drafts check their defined atoms and ligand bonds separately. The inability to produce an ordinary molecular identifier is reported as a coordination-analysis limitation, not an invalid drawing. Real ligand-valence errors still appear, and **Auto apply** continues to wait for manual review of these reconstructions.
+
 Native/figure output retains front-bond emphasis. CDXML/CDX rejects that emphasis until it can be preserved without being interpreted as stereochemistry; turn off **Front bonds** for supported editable export.
 
 The compact composer keeps the image thumbnail beside the prompt. Use **＋** for attachments, the model menu to change models, and **Review** for replacement and automatic-application settings.

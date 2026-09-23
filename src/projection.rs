@@ -157,7 +157,7 @@ pub fn tilt(doc: &mut Document, ids: &[u64], degrees: f32, around_x: bool) {
     sync_centroids(doc);
 }
 
-/// Emphasize only ordinary single bonds; never rewrite stereo wedges or orders.
+/// Emphasize single/aromatic ring outlines; never rewrite stereo wedges or orders.
 pub fn depth_bonds(doc: &mut Document, ids: &[u64]) {
     let atoms: Vec<_> = doc
         .atoms
@@ -170,7 +170,7 @@ pub fn depth_bonds(doc: &mut Document, ids: &[u64]) {
     let mean = atoms.iter().map(|a| a.depth).sum::<f32>() / atoms.len() as f32;
     let depth: std::collections::HashMap<_, _> = atoms.iter().map(|a| (a.id, a.depth)).collect();
     for b in &mut doc.bonds {
-        if b.order == 1
+        if matches!(b.order, 1 | 4)
             && matches!(b.display.as_str(), "plain" | "bold")
             && let (Some(a), Some(z)) = (depth.get(&b.a), depth.get(&b.b))
         {

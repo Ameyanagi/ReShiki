@@ -7,6 +7,8 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+mod ligand;
+pub use ligand::{Ligand, LigandKind};
 
 pub const REVIEW_NOTE: &str = "Reconstructed as an editable diagram. Check bond orders, charges and coordination assignments before exporting molecular data.";
 
@@ -26,6 +28,8 @@ pub struct Sketch {
     pub captions: Vec<Caption>,
     #[serde(default)]
     pub abbreviations: Vec<Abbreviation>,
+    #[serde(default)]
+    pub ligands: Vec<Ligand>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -63,6 +67,24 @@ pub struct Centroid {
     pub kind: Option<crate::attachments::Kind>,
     pub atoms: Vec<usize>,
     pub contact: Option<usize>,
+    #[serde(default)]
+    pub contact_style: Option<ContactStyle>,
+}
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ContactStyle {
+    Single,
+    Dashed,
+    Dative,
+}
+impl ContactStyle {
+    fn parts(self) -> (u8, &'static str) {
+        match self {
+            Self::Single => (1, "plain"),
+            Self::Dashed => (5, "dashed"),
+            Self::Dative => (5, "plain"),
+        }
+    }
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -105,12 +127,33 @@ pub enum ShapeKind {
 
 impl Sketch {
     pub fn validate(&self) -> Result<(), String> {
-        if self.atoms.is_empty()
+        if (self.atoms.is_empty() && self.ligands.is_empty())
+            || self.ligands.len() > 16
             || self.atoms.len() > 300
             || self.bonds.len() > 600
             || self.shapes.len() > 100
         {
             return Err("Use a diagram with 1–300 atoms, at most 600 bonds and 100 shapes".into());
+        }
+        let ligand_atoms: usize = self.ligands.iter().map(|l| l.kind.atom_count()).sum();
+        if self.atoms.len() + ligand_atoms + self.centroids.len() > 300 {
+            return Err("Defined ligands and attachment points exceed the 300 atom limit".into());
+        }
+        let ligand_bonds: usize = self
+            .ligands
+            .iter()
+            .map(|l| l.kind.atom_count() - 1 + usize::from(l.contact.is_some()))
+            .sum();
+        let contacts = self
+            .centroids
+            .iter()
+            .filter(|c| c.contact.is_some())
+            .count();
+        if self.bonds.len() + ligand_bonds + contacts > 600 {
+            return Err("Defined ligands and contacts exceed the 600 bond limit".into());
+        }
+        for ligand in &self.ligands {
+            ligand.validate(self.atoms.len())?;
         }
         let bounded = |x: f32| x.is_finite() && x.abs() <= 50.;
         for a in &self.atoms {
@@ -149,7 +192,7 @@ impl Sketch {
                 || b.b >= self.atoms.len()
                 || b.a == b.b
                 || !(1..=7).contains(&b.order)
-                || !["plain", "bold", "wedge", "hashed", "dashed", "wavy"]
+                || !["plain", "bold", "wedge", "hash", "hashed", "dashed", "wavy"]
                     .contains(&b.display.as_str())
                 || !pairs.insert((b.a.min(b.b), b.a.max(b.b)))
             {
@@ -222,7 +265,8 @@ impl Sketch {
             }
         }
         for c in &self.centroids {
-            if c.atoms.len() < 2
+            if (c.contact.is_none() && c.contact_style.is_some())
+                || c.atoms.len() < 2
                 || c.atoms.len() > 300
                 || c.atoms
                     .iter()
@@ -318,18 +362,25 @@ impl Sketch {
                 crate::projection::add_centroid(&mut doc, &members)?
             };
             if let Some(contact) = centroid.contact {
-                // The attachment node carries ALL/ANY semantics. Its contact
-                // uses the same plain single bond as manual typed attachments.
-                let (order, display) = if centroid.kind.is_some() {
-                    (1, "plain")
-                } else {
-                    (5, "dashed")
-                };
+                // Keep ALL/ANY target semantics while matching the source's
+                // contact appearance. Old proposals retain their defaults.
+                let style = centroid
+                    .contact_style
+                    .unwrap_or(if centroid.kind.is_some() {
+                        ContactStyle::Single
+                    } else {
+                        ContactStyle::Dashed
+                    });
+                let (order, display) = style.parts();
                 doc.add_bond(id, contact as u64 + 1, order, display);
                 if let Some(b) = doc.bonds.last_mut() {
                     b.z_order = -1;
+                    b.color = settings.bond_color;
                 }
             }
+        }
+        for ligand in &self.ligands {
+            ligand.append(&mut doc, settings)?;
         }
         for a in &self.arrows {
             doc.arrows.push(crate::document::Arrow {
@@ -380,15 +431,16 @@ pub fn schema() -> Value {
     json!({"anyOf":[{"type":"null"},{"type":"object","additionalProperties":false,
         "description":"Use explicit coordinates for coordination complexes, macrocycles, projected organometallics, and source diagrams whose arrangement SMILES layout cannot preserve. An entire reaction scheme can be one sketch: use arrows and captions and place all participants in the same coordinate system. Keep molecules and reactions empty when using sketch. For corresponding ligand/complex panels, reuse the same ligand coordinates translated horizontally, then add the metal and its contacts; do not fold or rotate the ligand around the metal. Place donor atoms around the metal as in the source. Keep ring sizes, labels and inner delocalization curves. For ordinary simple molecules use SMILES. All coordinates are in bond-length units, x right, y down, with a typical bond length of 1. Default to a flat 2D drawing with tilts empty. Only when the source actually shows perspective, build planar rings and circles and project them together using explicit tilts. Metal coordination alone is not a reason to tilt. Use centroids with kind multi_center for haptic contacts (all target atoms), kind variable for alternative attachment positions, and null only for nonchemical drawing anchors. Do not use loose lines for attachments. Atom element * is a dummy wildcard: set variable to E or another visible generic label instead of inventing an element. For tBu or similar groups include the full atom graph then use abbreviations to collapse it. Use ring_arc on consecutive ring bonds for partial inner curves, preserving their underlying bond orders. Captions use top-left positions. Reaction arrows require empty space of at least one bond length on either side. All indices are zero-based. Keep the original arrangement. This is a diagram requiring manual chemical review, not validated molecular data. Leave molecules and reactions empty.",
         "properties":{
+            "ligands":{"type":"array","maxItems":16,"description":"For Cp and Cp* use these defined ligands instead of tracing ring atoms or drawing ellipses. Each creates a real aromatic five-member ring (charge -1), five hydrogens for Cp or five methyl groups for Cp*, an aromatic circle and a five-center attachment. Apply X tilt, Y tilt, then screen rotation. Do not duplicate the generated atoms in atoms/bonds/centroids/shapes. Metal charges remain as entered.","items":{"type":"object","additionalProperties":false,"properties":{"kind":{"type":"string","enum":["Cp","Cp*"]},"center":point,"x_degrees":{"type":"number","minimum":-85,"maximum":85},"y_degrees":{"type":"number","minimum":-85,"maximum":85},"rotation_degrees":{"type":"number","minimum":-360,"maximum":360,"description":"Screen rotation after the X/Y tilts; sets the projected ellipse direction."},"depth_bonds":{"type":"boolean","description":"Emphasize the foreground ring/substituent bonds without changing aromatic orders or assigning tetrahedral stereo."},"contact":{"anyOf":[{"type":"null"},{"type":"integer","minimum":0}],"description":"Index of the metal in atoms, or null for an unbound ligand."},"contact_style":{"anyOf":[{"type":"null"},{"type":"string","enum":["single","dashed","dative"]}],"description":"Match the source contact; null defaults to a solid single line. Must be null when contact is null."}},"required":["kind","center","x_degrees","y_degrees","rotation_degrees","depth_bonds","contact","contact_style"]}},
             "arrows":{"type":"array","maxItems":16,"items":{"type":"object","additionalProperties":false,"properties":{"start":point,"end":point},"required":["start","end"]}},
             "captions":{"type":"array","maxItems":64,"items":{"type":"object","additionalProperties":false,"properties":{"text":{"type":"string","maxLength":500},"position":point,"color":color},"required":["text","position","color"]}},
             "abbreviations":{"type":"array","maxItems":32,"items":{"type":"object","additionalProperties":false,"properties":{"label":{"type":"string"},"anchor":{"type":"integer","minimum":0},"atoms":indices},"required":["label","anchor","atoms"]}},
             "tilts":{"type":"array","maxItems":32,"items":{"type":"object","additionalProperties":false,"properties":{"atoms":indices,"shapes":indices,"x_degrees":{"type":"number","minimum":-85,"maximum":85},"y_degrees":{"type":"number","minimum":-85,"maximum":85},"depth_bonds":{"type":"boolean","description":"Bold the foreground single bonds according to their retained depth; preserves stereo wedges."}},"required":["atoms","shapes","x_degrees","y_degrees","depth_bonds"]}},
-            "centroids":{"type":"array","maxItems":32,"items":{"type":"object","additionalProperties":false,"properties":{"kind":{"anyOf":[{"type":"null"},{"type":"string","enum":["multi_center","variable"]}],"description":"multi_center means all atoms (eta bonding); variable means one of the listed positions; null is a nonchemical centroid."},"atoms":indices,"contact":{"anyOf":[{"type":"null"},{"type":"integer","minimum":0}],"description":"Optional metal/substituent index outside the target set. Creates a bond to the attachment point."}},"required":["atoms","contact","kind"]}},
+            "centroids":{"type":"array","maxItems":32,"items":{"type":"object","additionalProperties":false,"properties":{"kind":{"anyOf":[{"type":"null"},{"type":"string","enum":["multi_center","variable"]}],"description":"multi_center means all atoms (eta bonding); variable means one of the listed positions; null is a nonchemical centroid."},"atoms":indices,"contact":{"anyOf":[{"type":"null"},{"type":"integer","minimum":0}],"description":"Optional metal/substituent index outside the target set. Creates a bond from the attachment point to this atom."},"contact_style":{"anyOf":[{"type":"null"},{"type":"string","enum":["single","dashed","dative"]}],"description":"single is a solid line, dashed is a dashed coordination contact (no arrowhead), dative is a donor-to-metal arrow. Match the source. Null preserves the default: single for typed attachments, dashed for legacy centroids. Must be null without a contact."}},"required":["atoms","contact","kind","contact_style"]}},
             "atoms":{"type":"array","maxItems":300,"items":{"type":"object","additionalProperties":false,"properties":{"color":color,"variable":{"anyOf":[{"type":"null"},{"type":"string","maxLength":8}],"description":"Only for element *. Visible variable label such as E; null otherwise."},"element":{"type":"string"},"x":number,"y":number,"charge":{"type":"integer","minimum":-8,"maximum":8},"isotope":{"type":"integer","minimum":0,"maximum":300},"hydrogens":{"type":"integer","minimum":0,"maximum":8}},"required":["element","x","y","charge","isotope","hydrogens","color","variable"]}},
-            "bonds":{"type":"array","maxItems":600,"items":{"type":"object","additionalProperties":false,"properties":{"ring_arc":{"type":"boolean","description":"Replace the inner line along this ring edge by an inner curve; use on consecutive edges for the partial N-C-N delocalization convention. Does not change bond order."},"a":{"type":"integer","minimum":0,"description":"Zero-based index in atoms"},"b":{"type":"integer","minimum":0},"order":{"type":"integer","minimum":1,"maximum":7,"description":"1 single, 2 double, 3 triple, 4 aromatic, 5 dative, 6 quadruple, 7 partial"},"display":{"type":"string","enum":["plain","bold","wedge","hashed","dashed","wavy"]}},"required":["a","b","order","display","ring_arc"]}},
+            "bonds":{"type":"array","maxItems":600,"items":{"type":"object","additionalProperties":false,"properties":{"ring_arc":{"type":"boolean","description":"Replace the inner line along this ring edge by an inner curve; use on consecutive edges for the partial N-C-N delocalization convention. Does not change bond order."},"a":{"type":"integer","minimum":0,"description":"Zero-based index in atoms"},"b":{"type":"integer","minimum":0},"order":{"type":"integer","minimum":1,"maximum":7,"description":"1 single, 2 double, 3 triple, 4 aromatic, 5 dative (a donor to b acceptor), 6 quadruple, 7 partial"},"display":{"type":"string","enum":["plain","bold","wedge","hash","hashed","dashed","wavy"],"description":"Match the source: hash is a tapered hashed wedge; hashed has uniform width. Orders 1 supports plain/bold/wedge/hash/hashed/wavy; order 2 plain/bold/dashed/wavy; orders 5 and 7 plain/dashed; other orders plain."}},"required":["a","b","order","display","ring_arc"]}},
             "shapes":{"type":"array","maxItems":100,"items":{"type":"object","additionalProperties":false,"properties":{"kind":{"type":"string","enum":["line","ellipse"]},"start":point,"end":point,"dashed":{"type":"boolean"}},"required":["kind","start","end","dashed"]}}
-        },"required":["atoms","bonds","shapes","tilts","centroids","arrows","captions","abbreviations"]}]})
+        },"required":["atoms","bonds","shapes","tilts","centroids","arrows","captions","abbreviations","ligands"]}]})
 }
 
 #[cfg(test)]
@@ -451,6 +503,7 @@ mod tests {
             arrows: vec![],
             captions: vec![],
             abbreviations: vec![],
+            ligands: vec![],
         }
     }
     #[test]
@@ -517,6 +570,7 @@ mod tests {
                     kind,
                     atoms,
                     contact: Some(0),
+                    contact_style: None,
                 });
             }
             let doc = sketch.render(&Default::default())?;

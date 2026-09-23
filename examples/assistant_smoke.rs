@@ -28,14 +28,26 @@ async fn main() -> anyhow::Result<()> {
         )?;
         return Ok(());
     }
-    if let Some(path) = option("--render") {
-        let doc = serde_json::from_slice(&std::fs::read(path)?)?;
+    if let Some(path) = option("--render").or_else(|| option("--render-proposal")) {
+        let doc = if option("--render-proposal").is_some() {
+            let proposal: assistant::Proposal = serde_json::from_slice(&std::fs::read(path)?)?;
+            proposal.validate().map_err(anyhow::Error::msg)?;
+            assistant::render(&Default::default(), &proposal, &Default::default())
+                .await
+                .map_err(anyhow::Error::msg)?
+        } else {
+            serde_json::from_slice(&std::fs::read(path)?)?
+        };
         let output = std::path::PathBuf::from(
             option("--output")
                 .map(String::as_str)
                 .unwrap_or("artifacts/assistant-qa/render"),
         );
         std::fs::create_dir_all(&output)?;
+        std::fs::write(
+            output.join("drawing.rsk"),
+            serde_json::to_string_pretty(&doc)?,
+        )?;
         for (index, (_, png)) in assistant::review::images(&doc)
             .map_err(anyhow::Error::msg)?
             .into_iter()

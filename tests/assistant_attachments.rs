@@ -4,7 +4,7 @@ use reshiki::{
     assistant::{
         self, Proposal,
         canvas_tools::{CanvasTools, Snapshot},
-        sketch::{Atom, Bond, Centroid, Sketch},
+        sketch::{Atom, Bond, Centroid, ContactStyle, Sketch},
     },
     attachments::Kind,
     document::{Document, Point},
@@ -48,10 +48,12 @@ fn arene_contact(kind: Kind) -> Proposal {
                 kind: Some(kind),
                 atoms: (0..6).collect(),
                 contact: Some(6),
+                contact_style: None,
             }],
             arrows: vec![],
             captions: vec![],
             abbreviations: vec![],
+            ligands: vec![],
         }),
         ..Default::default()
     }
@@ -167,5 +169,159 @@ async fn typed_attachment_proposals_preview_without_applying_and_retain_exchange
                 .contains("A group cuts through a molecule")
         );
     }
+    Ok(())
+}
+
+#[test]
+fn contact_appearances_preserve_attachment_targets_through_exchange() -> anyhow::Result<()> {
+    for kind in [Kind::MultiCenter, Kind::Variable] {
+        for (style, expected) in [
+            (ContactStyle::Single, (1, "plain")),
+            (ContactStyle::Dashed, (5, "dashed")),
+            (ContactStyle::Dative, (5, "plain")),
+        ] {
+            let mut proposal = arene_contact(kind);
+            let sketch = proposal.sketch.as_mut().context("Missing sketch")?;
+            sketch
+                .centroids
+                .first_mut()
+                .context("Missing point")?
+                .contact_style = Some(style);
+            let document = sketch
+                .render(&Default::default())
+                .map_err(anyhow::Error::msg)?;
+            let before = document.clone();
+            let xml = reshiki::exchange::drawing::write(&document, Default::default())?;
+            let cdx = reshiki::exchange::to_cdx(&xml).map_err(anyhow::Error::msg)?;
+            for doc in [
+                document.clone(),
+                reshiki::chemistry::cdxml::import_cdxml(&xml)?.document,
+                reshiki::chemistry::cdxml::import_cdxml(
+                    &reshiki::exchange::from_cdx(&cdx).map_err(anyhow::Error::msg)?,
+                )?
+                .document,
+            ] {
+                let point = doc
+                    .atoms
+                    .iter()
+                    .find(|a| a.attachment == Some(kind))
+                    .context("Lost point")?;
+                let contact = doc
+                    .bonds
+                    .iter()
+                    .find(|b| b.a == point.id || b.b == point.id)
+                    .context("Lost contact")?;
+                assert_eq!((contact.order, contact.display.as_str()), expected);
+                assert_eq!(point.centroid.len(), 6);
+                assert_eq!(doc.atoms.len(), 8);
+                assert_eq!(doc.bonds.len(), 7);
+                assert!(
+                    doc.atom(contact.b).is_some_and(|a| a.element == "Ru"),
+                    "Dative direction must run from the ligand to the metal"
+                );
+                assert!(
+                    !assistant::canvas_tools::image(&doc)
+                        .map_err(anyhow::Error::msg)?
+                        .is_empty()
+                );
+            }
+            assert_eq!(document, before);
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn attachment_review_checks_ligand_errors_without_misreporting_export_limits() -> anyhow::Result<()>
+{
+    for kind in [Kind::MultiCenter, Kind::Variable] {
+        let proposal = arene_contact(kind);
+        let mut doc = proposal
+            .sketch
+            .context("Missing sketch")?
+            .render(&Default::default())
+            .map_err(anyhow::Error::msg)?;
+        let before = doc.clone();
+        let issues = assistant::review::quality(&doc, &Default::default());
+        assert!(
+            issues
+                .iter()
+                .any(|s| s.contains("full coordination-valence validation is unavailable"))
+        );
+        assert!(
+            !issues
+                .iter()
+                .any(|s| s.contains("Chemical assignments need review")
+                    || s.contains("Invalid drawing")
+                    || s.contains("ordinary molecular identifiers")),
+            "{issues:?}"
+        );
+        assert!(
+            !assistant::review::Report {
+                verified: true,
+                issues,
+                ..Default::default()
+            }
+            .can_auto_apply()
+        );
+        assert_eq!(
+            doc, before,
+            "Review must not strip the actual attachment targets"
+        );
+
+        // The previous check stopped at the attachment export restriction and
+        // never reached this genuine valence error in the explicitly drawn graph.
+        let n = doc.add_atom("N", Point::new(150., 130.));
+        for i in 0..5 {
+            let angle = (i as f32 * 72.).to_radians();
+            let c = doc.add_atom(
+                "C",
+                Point::new(150. + 40. * angle.cos(), 130. + 40. * angle.sin()),
+            );
+            doc.add_bond(n, c, 1, "plain");
+        }
+        let invalid = doc.clone();
+        let issues = assistant::review::quality(&doc, &Default::default());
+        assert!(
+            issues
+                .iter()
+                .any(|s| s.starts_with("Chemical assignments need review:")
+                    && s.to_lowercase().contains("valence")),
+            "{issues:?}"
+        );
+        assert!(
+            !issues
+                .iter()
+                .any(|s| s.contains("ordinary molecular identifiers"))
+        );
+        assert_eq!(doc, invalid);
+    }
+    Ok(())
+}
+
+#[test]
+fn contact_style_is_backward_compatible_and_requires_a_contact() -> anyhow::Result<()> {
+    let proposal = arene_contact(Kind::MultiCenter);
+    let mut value = serde_json::to_value(&proposal)?;
+    value
+        .pointer_mut("/sketch/centroids/0")
+        .and_then(Value::as_object_mut)
+        .context("Missing point")?
+        .remove("contact_style");
+    let decoded: Proposal = serde_json::from_value(value)?;
+    let mut sketch = decoded.sketch.context("Missing sketch")?;
+    let legacy = sketch
+        .render(&Default::default())
+        .map_err(anyhow::Error::msg)?;
+    assert!(
+        legacy
+            .bonds
+            .last()
+            .is_some_and(|b| b.order == 1 && b.display == "plain")
+    );
+    let centroid = sketch.centroids.first_mut().context("Missing point")?;
+    centroid.contact = None;
+    centroid.contact_style = Some(ContactStyle::Dashed);
+    assert!(sketch.validate().is_err());
     Ok(())
 }

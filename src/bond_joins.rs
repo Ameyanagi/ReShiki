@@ -1,7 +1,7 @@
 //! Shared, bounded corners for normal, bold and tapered bond outlines.
 use crate::document::{Bond, Document, Point};
 fn eligible(b: &Bond) -> bool {
-    b.order == 1
+    (b.order == 1 || b.order == 4 && b.projection)
         && matches!(
             b.display.as_str(),
             "plain" | "bold" | "wedge" | "hollow_wedge"
