@@ -318,12 +318,14 @@ impl Sketch {
                 crate::projection::add_centroid(&mut doc, &members)?
             };
             if let Some(contact) = centroid.contact {
-                doc.add_bond(
-                    id,
-                    contact as u64 + 1,
-                    if centroid.kind.is_some() { 1 } else { 5 },
-                    "dashed",
-                );
+                // The attachment node carries ALL/ANY semantics. Its contact
+                // uses the same plain single bond as manual typed attachments.
+                let (order, display) = if centroid.kind.is_some() {
+                    (1, "plain")
+                } else {
+                    (5, "dashed")
+                };
+                doc.add_bond(id, contact as u64 + 1, order, display);
                 if let Some(b) = doc.bonds.last_mut() {
                     b.z_order = -1;
                 }
@@ -490,48 +492,61 @@ mod tests {
     }
 
     #[test]
-    fn native_ring_centroids_and_tilts_render_valid_contacts() {
-        let mut sketch = sandwich();
-        sketch
-            .shapes
-            .retain(|s| matches!(s.kind, ShapeKind::Ellipse));
-        for (index, atoms) in [
-            (0, (1..6).collect::<Vec<_>>()),
-            (1, (6..11).collect::<Vec<_>>()),
+    fn native_ring_centroids_and_tilts_render_valid_contacts() -> Result<(), String> {
+        for kind in [
+            None,
+            Some(crate::attachments::Kind::MultiCenter),
+            Some(crate::attachments::Kind::Variable),
         ] {
-            sketch.tilts.push(Tilt {
-                atoms: atoms.clone(),
-                shapes: vec![index],
-                x_degrees: 30.,
-                y_degrees: 0.,
-                depth_bonds: true,
-            });
-            sketch.centroids.push(Centroid {
-                kind: None,
-                atoms,
-                contact: Some(0),
-            });
+            let mut sketch = sandwich();
+            sketch
+                .shapes
+                .retain(|s| matches!(s.kind, ShapeKind::Ellipse));
+            for (index, atoms) in [
+                (0, (1..6).collect::<Vec<_>>()),
+                (1, (6..11).collect::<Vec<_>>()),
+            ] {
+                sketch.tilts.push(Tilt {
+                    atoms: atoms.clone(),
+                    shapes: vec![index],
+                    x_degrees: 30.,
+                    y_degrees: 0.,
+                    depth_bonds: true,
+                });
+                sketch.centroids.push(Centroid {
+                    kind,
+                    atoms,
+                    contact: Some(0),
+                });
+            }
+            let doc = sketch.render(&Default::default())?;
+            doc.validate()?;
+            assert_eq!(doc.atoms.len(), 13);
+            assert_eq!(doc.bonds.len(), 12);
+            for centroid in doc.atoms.iter().filter(|a| !a.centroid.is_empty()) {
+                assert_eq!(centroid.centroid.len(), 5);
+                let contact = doc
+                    .bonds
+                    .iter()
+                    .find(|b| b.a == centroid.id || b.b == centroid.id)
+                    .ok_or("Missing ring contact")?;
+                assert_eq!(centroid.attachment, kind);
+                let (order, display) = if kind.is_some() {
+                    (1, "plain")
+                } else {
+                    (5, "dashed")
+                };
+                assert_eq!(contact.display, display);
+                assert_eq!(contact.order, order);
+                assert!(contact.a == 1 || contact.b == 1);
+            }
+            assert!(crate::assistant::canvas_tools::image(&doc).is_ok());
+            assert!(
+                crate::chemistry::document::prepare(&doc).is_err(),
+                "No fabricated haptic molecular data"
+            );
         }
-        let doc = sketch.render(&Default::default()).unwrap();
-        doc.validate().unwrap();
-        assert_eq!(doc.atoms.len(), 13);
-        assert_eq!(doc.bonds.len(), 12);
-        for centroid in doc.atoms.iter().filter(|a| !a.centroid.is_empty()) {
-            assert_eq!(centroid.centroid.len(), 5);
-            let contact = doc
-                .bonds
-                .iter()
-                .find(|b| b.a == centroid.id || b.b == centroid.id)
-                .unwrap();
-            assert_eq!(contact.display, "dashed");
-            assert_eq!(contact.order, 5);
-            assert!(contact.a == 1 || contact.b == 1);
-        }
-        assert!(crate::assistant::canvas_tools::image(&doc).is_ok());
-        assert!(
-            crate::chemistry::document::prepare(&doc).is_err(),
-            "No fabricated haptic molecular data"
-        );
+        Ok(())
     }
 
     #[test]
