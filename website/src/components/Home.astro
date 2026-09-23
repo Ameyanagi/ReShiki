@@ -30,6 +30,12 @@ const guides = [
 ---
 
 <div class="reshiki-home not-content">
+  <p class="home-release">
+    <a href="https://github.com/Ameyanagi/ReShiki/releases/latest" data-latest-release>
+      Latest release<span data-release-version></span>
+      <span aria-hidden="true">↗</span>
+    </a>
+  </p>
   <p class="home-platforms">
     macOS · Windows · Linux
     <span aria-hidden="true">/</span>
@@ -105,3 +111,32 @@ const guides = [
     Shiki is <span lang="ja">式</span>, as in chemical equation. R is also Rust; RE is also reaction.
   </p>
 </div>
+
+<script>
+  async function showLatestRelease() {
+    const version = document.querySelector<HTMLElement>("[data-release-version]");
+    if (!version) return;
+
+    try {
+      const response = await fetch("https://api.github.com/repos/Ameyanagi/ReShiki/releases/latest", {
+        headers: { Accept: "application/vnd.github+json" },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!response.ok) return;
+      const release = await response.json();
+      if (
+        release.draft !== false ||
+        release.prerelease !== false ||
+        typeof release.tag_name !== "string" ||
+        !/^v\d+\.\d+\.\d+$/.test(release.tag_name)
+      ) return;
+
+      version.textContent = ` · ${release.tag_name}`;
+    } catch {
+      // Keep the working release link when GitHub is unavailable.
+    }
+  }
+
+  void showLatestRelease();
+  document.addEventListener("astro:page-load", showLatestRelease);
+</script>
