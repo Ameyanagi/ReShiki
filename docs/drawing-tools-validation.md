@@ -65,7 +65,7 @@ fixes audited against the PR diff.
 
 ## Ring curves, element colors, and coordination diagrams
 
-- Select consecutive ring atoms, open Properties → Bond appearance, and choose **Toggle inner ring curve**. Selecting the entire ring produces a circle. The stroke follows native atom positions and retained projection depth; the original bond orders are preserved. Changing a bond preset clears its curve override. Breaking the ring restores the ordinary bond depiction.
+- Select consecutive ring atoms, open Properties → Bond appearance, and choose **Toggle inner ring curve**. Selecting the entire ring produces a circle. The stroke follows native atom positions and retained projection depth; the original bond orders are preserved. Aromatic projection styles retain the curve override; chemical order changes clear it. Breaking the ring restores the ordinary bond depiction.
 - A partial curve replaces an aromatic ring's full circle without adding dashed inner lines on its remaining edges. Regression coverage includes 5–8-member rings, tilted and wraparound segments, fused and separate rings, open aromatic bonds, native round trips, and figure exports. Unselected explicit double bonds retain their second stroke.
 - Choose **Atoms…** beside the color controls, pick an element and a hex color, then Apply. The default scope is the selection when one exists; **Whole drawing** applies to every matching atom. Bonds, other elements, captions and font settings are retained. Applying color and adding a curve are each one undoable edit.
 - Tests cover partial and closed curves, mixed-color continuity, reversible tilt, persistence, broken rings, protection of stereochemical bonds, selected/whole-document coloring, and undo/redo.
