@@ -136,11 +136,11 @@ impl App {
                 width: 1.,
                 color: Color::from_rgb8(207, 216, 216),
             },
-            shadow: iced::Shadow {
+            shadow: super::workspace::surface_shadow(iced::Shadow {
                 color: Color::from_rgba8(20, 40, 35, 0.18),
                 offset: iced::Vector::new(0., 8.),
                 blur_radius: 30.,
-            },
+            }),
             ..Default::default()
         });
         stack![
@@ -200,6 +200,98 @@ fn group(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn shortcuts_dialog_partial_redraws_preserve_unchanged_pixels() {
+        use iced::advanced::{graphics::Viewport, layout, mouse, widget::Tree};
+        use resvg::tiny_skia::{Mask, Pixmap};
+
+        let (mut app, _) = App::new();
+        app.help_open = true;
+        let size = iced::Size::new(1040., 680.);
+        let bounds = iced::Rectangle::with_size(size);
+        let mut renderer = iced::Renderer::new(iced::Font::default(), iced::Pixels(16.));
+        let mut view = app.with_help(Space::new().width(Length::Fill).height(Length::Fill).into());
+        let mut tree = Tree::new(view.as_widget());
+        let node =
+            view.as_widget_mut()
+                .layout(&mut tree, &renderer, &layout::Limits::new(size, size));
+        view.as_widget_mut().update(
+            &mut tree,
+            &iced::Event::Window(iced::window::Event::RedrawRequested(
+                std::time::Instant::now(),
+            )),
+            iced::advanced::Layout::new(&node),
+            mouse::Cursor::Unavailable,
+            &renderer,
+            &mut iced::advanced::clipboard::Null,
+            &mut iced::advanced::Shell::new(&mut Vec::new()),
+            &bounds,
+        );
+        view.as_widget().draw(
+            &tree,
+            &mut renderer,
+            &app.theme(),
+            &iced::advanced::renderer::Style::default(),
+            iced::advanced::Layout::new(&node),
+            mouse::Cursor::Unavailable,
+            &bounds,
+        );
+
+        // Simulate small hover/caret redraws inside the dialog. The compositor
+        // clears only the damaged region, so drawing outside it corrupts the
+        // retained pixels even though the dialog's contents have not changed.
+        let damage = iced::Rectangle {
+            x: 500.,
+            y: 300.,
+            width: 40.,
+            height: 40.,
+        };
+        for scale in [1., 1.25, 2.] {
+            let width = (size.width * scale) as u32;
+            let height = (size.height * scale) as u32;
+            let viewport = Viewport::with_physical_size(iced::Size::new(width, height), scale);
+            let mut pixels = Pixmap::new(width, height).unwrap();
+            let mut mask = Mask::new(width, height).unwrap();
+            renderer.draw(
+                &mut pixels.as_mut(),
+                &mut mask,
+                &viewport,
+                &[bounds],
+                Color::WHITE,
+            );
+            let original = pixels.clone();
+            for _ in 0..16 {
+                renderer.draw(
+                    &mut pixels.as_mut(),
+                    &mut mask,
+                    &viewport,
+                    &[damage],
+                    Color::WHITE,
+                );
+            }
+            let physical_damage = damage * scale;
+            let changed = pixels
+                .pixels()
+                .iter()
+                .zip(original.pixels())
+                .enumerate()
+                .filter(|(index, (actual, expected))| {
+                    let point = iced::Point::new(
+                        (*index % width as usize) as f32,
+                        (*index / width as usize) as f32,
+                    );
+                    !physical_damage.contains(point) && actual != expected
+                })
+                .count();
+            assert_eq!(
+                changed, 0,
+                "partial redraws changed pixels outside damage at scale {scale}"
+            );
+        }
+    }
+
     #[test]
     fn question_mark_accepts_the_native_unmodified_slash_key() {
         use iced::keyboard::{Key, Modifiers};
