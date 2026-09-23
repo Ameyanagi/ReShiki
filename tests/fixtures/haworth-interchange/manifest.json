@@ -1,0 +1,133 @@
+{
+  "application": "ChemDraw 26.0.0.6599 for macOS",
+  "date": "2026-09-24",
+  "method": "ChemDraw AppleScript save; file types inventoried through its native menus",
+  "structures": [
+    {
+      "id": "alpha-D-glucopyranose",
+      "name": "α-D-glucopyranose",
+      "inchikey": "WQZGKKKJIJFFOK-DVKNGEFBSA-N",
+      "chemdraw_smiles": "O[C@@H]1[C@H](O)[C@@H](O)[C@H](O)[C@@H](CO)O1",
+      "atoms": 12,
+      "bonds": 12,
+      "source": "https://pubchem.ncbi.nlm.nih.gov/compound/79025"
+    },
+    {
+      "id": "beta-D-glucopyranose",
+      "name": "β-D-glucopyranose",
+      "inchikey": "WQZGKKKJIJFFOK-VFUOTHLCSA-N",
+      "chemdraw_smiles": "O[C@H]1[C@H](O)[C@@H](O)[C@H](O)[C@@H](CO)O1",
+      "atoms": 12,
+      "bonds": 12,
+      "source": "https://pubchem.ncbi.nlm.nih.gov/compound/64689"
+    },
+    {
+      "id": "alpha-D-galactopyranose",
+      "name": "α-D-galactopyranose",
+      "inchikey": "WQZGKKKJIJFFOK-PHYPRBDBSA-N",
+      "chemdraw_smiles": "O[C@@H]1[C@H](O)[C@@H](O)[C@@H](O)[C@@H](CO)O1",
+      "atoms": 12,
+      "bonds": 12,
+      "source": "https://pubchem.ncbi.nlm.nih.gov/compound/439357"
+    },
+    {
+      "id": "beta-D-galactopyranose",
+      "name": "β-D-galactopyranose",
+      "inchikey": "WQZGKKKJIJFFOK-FPRJBGLDSA-N",
+      "chemdraw_smiles": "O[C@H]1[C@H](O)[C@@H](O)[C@@H](O)[C@@H](CO)O1",
+      "atoms": 12,
+      "bonds": 12,
+      "source": "https://pubchem.ncbi.nlm.nih.gov/compound/439353"
+    },
+    {
+      "id": "alpha-D-mannopyranose",
+      "name": "α-D-mannopyranose",
+      "inchikey": "WQZGKKKJIJFFOK-PQMKYFCFSA-N",
+      "chemdraw_smiles": "O[C@@H]1[C@@H](O)[C@@H](O)[C@H](O)[C@@H](CO)O1",
+      "atoms": 12,
+      "bonds": 12,
+      "source": "https://pubchem.ncbi.nlm.nih.gov/compound/185698"
+    },
+    {
+      "id": "beta-D-mannopyranose",
+      "name": "β-D-mannopyranose",
+      "inchikey": "WQZGKKKJIJFFOK-RWOPYEJCSA-N",
+      "chemdraw_smiles": "O[C@H]1[C@@H](O)[C@@H](O)[C@H](O)[C@@H](CO)O1",
+      "atoms": 12,
+      "bonds": 12,
+      "source": "https://pubchem.ncbi.nlm.nih.gov/compound/439680"
+    },
+    {
+      "id": "alpha-D-ribofuranose",
+      "name": "α-D-ribofuranose",
+      "inchikey": "HMFHBZSHGGEWLO-AIHAYLRMSA-N",
+      "chemdraw_smiles": "O[C@@H]1[C@H](O)[C@H](O)[C@@H](CO)O1",
+      "atoms": 10,
+      "bonds": 10,
+      "source": "https://pubchem.ncbi.nlm.nih.gov/compound/445894"
+    },
+    {
+      "id": "beta-D-ribofuranose",
+      "name": "β-D-ribofuranose",
+      "inchikey": "HMFHBZSHGGEWLO-TXICZTDVSA-N",
+      "chemdraw_smiles": "O[C@H]1[C@H](O)[C@H](O)[C@@H](CO)O1",
+      "atoms": 10,
+      "bonds": 10,
+      "source": "https://pubchem.ncbi.nlm.nih.gov/compound/447347"
+    },
+    {
+      "id": "alpha-D-fructofuranose",
+      "name": "α-D-fructofuranose",
+      "inchikey": "RFSUNEUAIZKAJO-ZXXMMSQZSA-N",
+      "chemdraw_smiles": "O[C@]1(CO)[C@@H](O)[C@H](O)[C@@H](CO)O1",
+      "atoms": 12,
+      "bonds": 12,
+      "source": "https://pubchem.ncbi.nlm.nih.gov/compound/11105942"
+    },
+    {
+      "id": "beta-D-fructofuranose",
+      "name": "β-D-fructofuranose",
+      "inchikey": "RFSUNEUAIZKAJO-ARQDHWQXSA-N",
+      "chemdraw_smiles": "O[C@@]1(CO)[C@@H](O)[C@H](O)[C@@H](CO)O1",
+      "atoms": 12,
+      "bonds": 12,
+      "source": "https://pubchem.ncbi.nlm.nih.gov/compound/439709"
+    },
+    {
+      "id": "furanose-scaffold",
+      "name": "Furanose scaffold",
+      "inchikey": "WYURNTSHIVDZCO-UHFFFAOYSA-N",
+      "chemdraw_smiles": "C1CCCO1",
+      "atoms": 5,
+      "bonds": 5,
+      "source": null
+    },
+    {
+      "id": "carbon-5-ring",
+      "name": "5-membered carbon outline",
+      "inchikey": "RGSFGYAAUTVSQA-UHFFFAOYSA-N",
+      "chemdraw_smiles": "C1CCCC1",
+      "atoms": 5,
+      "bonds": 5,
+      "source": null
+    },
+    {
+      "id": "pyranose-scaffold",
+      "name": "Pyranose scaffold",
+      "inchikey": "DHXVGJBLRPWPCS-UHFFFAOYSA-N",
+      "chemdraw_smiles": "C1CCCCO1",
+      "atoms": 6,
+      "bonds": 6,
+      "source": null
+    },
+    {
+      "id": "carbon-6-ring",
+      "name": "6-membered carbon outline",
+      "inchikey": "XDTMQSROBMDMFD-UHFFFAOYSA-N",
+      "chemdraw_smiles": "C1CCCCC1",
+      "atoms": 6,
+      "bonds": 6,
+      "source": null
+    }
+  ]
+}

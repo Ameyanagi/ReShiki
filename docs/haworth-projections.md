@@ -24,14 +24,20 @@ The conventions follow the [IUPAC Haworth drawing recommendations](https://iupac
 
 ## Save, copy and exchange
 
-| Output                        | Retained information                                                                                       |
-| ----------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Native `.rsk`                 | Editable atoms, contracted groups, configurations and perspective styling                                  |
-| SVG, PNG, PDF and figure copy | Visible Haworth appearance                                                                                 |
-| MOL / isomeric SMILES         | Molecular connectivity and defined stereochemistry; MOL uses conventional stereo bonds and expanded groups |
-| CDXML / CDX                   | Export currently rejects styled perspective edges rather than silently changing their meaning              |
+| Output                        | Retained information                                                                                                                                      |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Native `.rsk`                 | Editable atoms, contracted groups, configurations and perspective styling                                                                                 |
+| SVG, PNG, PDF and figure copy | Visible Haworth appearance                                                                                                                                |
+| MOL / isomeric SMILES         | Molecular connectivity and defined stereochemistry; MOL uses conventional stereo bonds and expanded groups                                                |
+| CDXML / CDX                   | The 14 supplied Haworth drawings retain editable structure, stereochemistry and perspective styling; inconsistent or unsupported projections are rejected |
 
 Drawing MOL exports mark defined tetrahedral configurations as absolute. Without this flag, ChemDraw may place them in a relative `&1` stereo group. The low-level reference writer retains RDKit's default output for compatibility tests; the application writer sets the flag. See [RDKit's chiral-flag semantics](https://rdkit.org/docs/cppapi/MolFileStereochem_8h_source.html).
+
+Styled editable exchange checks the drawing against its stored stereochemistry. The supported convention has one bold front edge, two wedges widening toward that edge, a five- or six-member ring and unambiguous up/down substituents. Rotation and translation are supported. Moving a substituent across the ring plane without changing the stored configuration, mirroring the projection while retaining the original configuration, or distorting the ring can make the drawing inconsistent; editable export then reports an error. Native and figure exports remain available.
+
+Import recognizes this convention in ChemDraw CDXML/CDX and ChemDraw-authored 2D V2000/V3000 MOL files. ChemDraw writes a MOL front edge as a wedge, so those files need their original bond directions retained during import. Treating all three front edges as ordinary stereobonds loses the configurations at the back of the ring. This recognition is limited to the tested convention, and does not provide general Fischer/Haworth conversion or arbitrary carbohydrate recognition.
+
+See the [complete ChemDraw format study](haworth-interchange.md) for the 14-structure matrix, reproducible capture commands, clipboard formats and limits of each type of output.
 
 ## Verification
 

@@ -58,6 +58,7 @@ impl SmilesReaction {
                         state: part.prepared.state,
                     },
                     annotations: molfile::FileAnnotations {
+                        chemdraw_directions: Vec::new(),
                         attachments: Vec::new(),
                         is_3d,
                         attachment_points: vec![None; n],

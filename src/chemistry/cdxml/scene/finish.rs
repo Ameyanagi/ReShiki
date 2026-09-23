@@ -47,13 +47,17 @@ impl CdxmlScene {
     /// boundary (Value f64 -> Document f32). The prepared conformer is retained
     /// at f64 throughout chemical reconstruction. Errors publish no drawing.
     pub fn into_document(self) -> Result<ImportedCdxml> {
+        let planar = !self.conformer_3d.unwrap_or(false);
         let drawing = chemistry::document::for_import_scene(
             &self.molecule,
             self.conformer_3d.unwrap_or(false),
         )?;
         let labels = drawing.labels()?;
-        let molecule = self.molecule.clone();
-        let document = drawing.finish_with(labels, |document| self.restore(document))?;
+        let mut molecule = self.molecule.clone();
+        let mut document = drawing.finish_with(labels, |document| self.restore(document))?;
+        if planar && crate::haworth::interchange::restore(&mut document) {
+            molecule = chemistry::document::prepare(&document)?;
+        }
         Ok(ImportedCdxml { molecule, document })
     }
     fn restore(self, document: &mut Document) -> Result<()> {

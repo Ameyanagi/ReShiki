@@ -341,10 +341,7 @@ fn substituent_directions_and_condensed_groups_match_haworth_conventions() -> Re
                 6
             }
         );
-        assert!(
-            reshiki::exchange::drawing::write(&doc, Default::default()).is_err(),
-            "Unrepresentable projection exchange must be explicit"
-        );
+        reshiki::exchange::drawing::write(&doc, Default::default())?;
     }
     Ok(())
 }

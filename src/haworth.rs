@@ -5,6 +5,7 @@ use crate::{
     templates::{Anchor, Template},
 };
 use serde::Deserialize;
+pub(crate) mod interchange;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Ring {

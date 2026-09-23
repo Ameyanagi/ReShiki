@@ -166,11 +166,14 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             let imported = molfile::read(&text)?;
             let drawing = imported.drawing()?;
             let labels = drawing.labels()?;
-            let document = drawing.finish(labels)?;
-            Prepared {
-                molecule: imported.molecule,
-                document,
-            }
+            let mut document = drawing.finish(labels)?;
+            let restored = imported.restore_haworth(&mut document);
+            let molecule = if restored {
+                molecular::prepare(&document)?
+            } else {
+                imported.molecule
+            };
+            Prepared { molecule, document }
         }
         "cdxml" | "cdx" => {
             let xml = if format == "cdx" {

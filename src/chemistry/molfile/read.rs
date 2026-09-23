@@ -46,6 +46,10 @@ pub struct Imported {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct FileAnnotations {
+    /// Original ChemDraw directions for the application's Haworth recognition.
+    /// Excluded from the RDKit-compatible serialized parser snapshot.
+    #[serde(skip)]
+    pub chemdraw_directions: Vec<Direction>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub attachments: Vec<crate::attachments::Attachment>,
     pub is_3d: bool,
@@ -54,6 +58,55 @@ pub struct FileAnnotations {
 }
 
 impl Imported {
+    pub(crate) fn restore_haworth(&self, document: &mut crate::document::Document) -> bool {
+        if self.annotations.is_3d || self.annotations.chemdraw_directions.is_empty() {
+            return false;
+        }
+        let mut source = document.clone();
+        let mut originals = std::collections::HashMap::new();
+        for (bond, direction) in self
+            .molecule
+            .state
+            .graph
+            .bonds
+            .iter()
+            .zip(&self.annotations.chemdraw_directions)
+        {
+            let (Some(&a), Some(&b)) =
+                (self.molecule.ids.get(bond.a), self.molecule.ids.get(bond.b))
+            else {
+                return false;
+            };
+            originals.insert((a.min(b), a.max(b)), (a, b, direction));
+        }
+        for bond in &mut source.bonds {
+            let Some(&(a, b, direction)) = originals.get(&(bond.a.min(bond.b), bond.a.max(bond.b)))
+            else {
+                return false;
+            };
+            if bond.a != a {
+                bond.stereo_atoms.reverse();
+            }
+            bond.a = a;
+            bond.b = b;
+            if bond.order == 1 {
+                bond.display = match direction {
+                    Direction::Wedge => "wedge",
+                    Direction::Hash => "hash",
+                    Direction::Unknown => "wavy",
+                    _ => "plain",
+                }
+                .into();
+            }
+        }
+        if crate::haworth::interchange::restore_mol(&mut source) {
+            *document = source;
+            true
+        } else {
+            false
+        }
+    }
+
     pub fn drawing(
         &self,
     ) -> std::result::Result<crate::chemistry::document::Drawing, crate::chemistry::document::Error>
@@ -208,6 +261,7 @@ struct FileBond {
     query: bool,
 }
 struct Parsed {
+    chemdraw: bool,
     graph: Graph,
     metadata: Metadata,
     directions: Vec<Direction>,
@@ -226,6 +280,7 @@ enum Context {
 impl Parsed {
     fn new(marked_3d: bool) -> Self {
         Self {
+            chemdraw: false,
             graph: Graph {
                 atoms: Vec::new(),
                 bonds: Vec::new(),
@@ -269,6 +324,11 @@ impl Parsed {
     }
 
     fn finish_in(mut self, context: Context) -> Result<Imported> {
+        let chemdraw_directions = if self.chemdraw && matches!(context, Context::Molecule) {
+            self.directions.clone()
+        } else {
+            Vec::new()
+        };
         if !matches!(context, Context::Molecule)
             && self.bonds.iter().any(|b| b.attachment.is_some())
         {
@@ -468,6 +528,7 @@ impl Parsed {
                 state,
             },
             annotations: FileAnnotations {
+                chemdraw_directions,
                 attachments: self
                     .bonds
                     .iter()
@@ -535,6 +596,7 @@ fn read_molecule(reader: &mut Reader<'_>) -> Result<Parsed> {
     let marked = info
         .get(20..22)
         .is_some_and(|s| s.eq_ignore_ascii_case("3D"));
+    let chemdraw = info.get(2..10) == Some("ChemDraw");
     reader.next()?;
     let counts = reader.next()?;
     let n = reader.count(reader.field_integer(counts, 0, 3)?, 100_000)?;
@@ -545,6 +607,7 @@ fn read_molecule(reader: &mut Reader<'_>) -> Result<Parsed> {
         "V2000"
     };
     let mut parsed = Parsed::new(marked);
+    parsed.chemdraw = chemdraw;
     match version {
         "V2000" => v2000::read(reader, &mut parsed, n, e)?,
         "V3000" if n == 0 && e == 0 => v3000::read(reader, &mut parsed, true)?,
