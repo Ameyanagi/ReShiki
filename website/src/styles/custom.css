@@ -123,6 +123,31 @@
   outline-offset: 5px;
 }
 
+.home-release {
+  margin: 0 0 0.9rem;
+}
+
+.home-release a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 0.4rem;
+  color: var(--sl-color-text-accent);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.home-release a:hover {
+  border-color: var(--sl-color-text-accent);
+  background: var(--reshiki-surface);
+}
+
+.home-release a > span:last-child {
+  margin-left: 0.2rem;
+}
+
 .home-platforms {
   display: flex;
   justify-content: flex-start;
