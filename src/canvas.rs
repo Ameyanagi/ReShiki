@@ -2032,6 +2032,7 @@ fn draw_document_with_minimum_stroke(
                 &Path::line(camera.screen(a, bounds), camera.screen(b, bounds)),
                 Stroke::default()
                     .with_width((width * camera.zoom).max(minimum))
+                    .with_line_cap(canvas::LineCap::Round)
                     .with_color(Color::BLACK),
             ),
             Primitive::Polygon(points) => {

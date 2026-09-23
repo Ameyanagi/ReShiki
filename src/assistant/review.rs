@@ -97,6 +97,7 @@ impl Target {
                     .unwrap_or(0)
                     + 1
             ),
+            "diagram" => "Image diagram".into(),
             "molecule" => format!(
                 "Molecule {}",
                 self.name
@@ -157,6 +158,18 @@ pub fn fragment(doc: &Document, ids: &[u64]) -> Document {
     part
 }
 
+/// Keep reconstructed projections and their ring-centre graphics together.
+pub fn diagram_groups(doc: &Document) -> Vec<&crate::grouping::Group> {
+    doc.groups
+        .iter()
+        .filter(|g| {
+            g.integral
+                && doc.graphics.iter().any(|a| g.members.contains(&a.id))
+                && doc.atoms.iter().any(|a| g.members.contains(&a.id))
+        })
+        .collect()
+}
+
 pub fn targets(doc: &Document) -> Vec<Target> {
     let mut result = Vec::new();
     let mut add = |name: String, kind: &str, ids: Vec<u64>, text: String| {
@@ -188,11 +201,25 @@ pub fn targets(doc: &Document) -> Vec<Target> {
         };
         add(format!("reaction:{i}"), "panel", ids, String::new());
     }
+    let diagrams = diagram_groups(doc);
+    for group in &diagrams {
+        add(
+            format!("diagram:{}", group.id),
+            "diagram",
+            group.members.clone(),
+            String::new(),
+        );
+    }
     for (i, ids) in crate::reactions::molecules(doc, &doc.all_ids())
         .into_iter()
         .enumerate()
     {
-        add(format!("molecule:{i}"), "molecule", ids, String::new());
+        if !diagrams
+            .iter()
+            .any(|g| ids.iter().any(|id| g.members.contains(id)))
+        {
+            add(format!("molecule:{i}"), "molecule", ids, String::new());
+        }
     }
     for a in &doc.arrows {
         add(
@@ -275,7 +302,7 @@ pub fn apply(doc: &Document, edits: &[Edit], compact_allowed: bool) -> Result<Do
                 if bounded(*degrees)
                     && degrees.abs() <= 360.
                     && (*degrees / 30. - (*degrees / 30.).round()).abs() < 0.001
-                    && target.kind == "molecule" =>
+                    && matches!(target.kind.as_str(), "molecule" | "diagram") =>
             {
                 editing::transform(
                     &mut candidate,
@@ -303,7 +330,9 @@ pub fn apply(doc: &Document, edits: &[Edit], compact_allowed: bool) -> Result<Do
                     });
                 }
             }
-            Edit::Compact { .. } if compact_allowed && target.kind == "molecule" => {
+            Edit::Compact { .. }
+                if compact_allowed && matches!(target.kind.as_str(), "molecule" | "diagram") =>
+            {
                 composition::compact_chains(&mut candidate, &target.ids)?;
             }
             _ => {
@@ -336,6 +365,9 @@ pub fn apply(doc: &Document, edits: &[Edit], compact_allowed: bool) -> Result<Do
 
 pub fn quality(doc: &Document, composition: &Composition) -> Vec<String> {
     let mut issues = Vec::new();
+    if !diagram_groups(doc).is_empty() {
+        issues.push(super::sketch::REVIEW_NOTE.into());
+    }
     let ts = targets(doc);
     for (i, a) in ts.iter().enumerate() {
         if a.kind == "panel" {

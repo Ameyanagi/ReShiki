@@ -173,6 +173,7 @@ pub enum Message {
     RingSize(u8),
     AromaticRing(bool),
     ToggleAromaticRing,
+    ToggleSelectedRing,
     ArrowStyle(reshiki::arrows::Preset),
     ArrowAction(arrows::Action),
     CustomElement(String),
@@ -646,6 +647,7 @@ impl App {
         self.changed_continuing(before, false);
     }
     fn changed_continuing(&mut self, before: Document, continuing: bool) {
+        reshiki::projection::sync_centroids(&mut self.doc);
         self.cleanup = None;
         self.doc.reconcile_abbreviations(&before);
         if let Err(error) = reshiki::reactions::reconcile(&mut self.doc) {
@@ -804,6 +806,9 @@ impl App {
     }
 
     fn update_inner(&mut self, message: Message) -> Task<Message> {
+        if self.updates.restarting && !matches!(message, Message::Updates(_)) {
+            return Task::none();
+        }
         if self.help_open && matches!(message, Message::Escape | Message::ToggleHelp) {
             self.help_open = false;
             return Task::none();
@@ -1507,13 +1512,33 @@ impl App {
             Message::AromaticRing(value) => {
                 self.toolbar.ring = Tool::Ring;
                 self.aromatic_ring = value;
-                if value {
-                    self.ring_size = 6;
-                }
                 self.tool = Tool::Ring;
             }
             Message::ToggleAromaticRing => {
+                if self.tool.selects()
+                    && reshiki::rings::selected_cycle(&self.doc, &self.selected).is_some()
+                {
+                    return self.update(Message::ToggleSelectedRing);
+                }
                 return self.update(Message::AromaticRing(!self.aromatic_ring));
+            }
+            Message::ToggleSelectedRing => {
+                let before = self.doc.clone();
+                match reshiki::rings::toggle_selected_aromatic(&mut self.doc, &self.selected) {
+                    Ok(aromatic) => {
+                        self.changed(before);
+                        self.status = if aromatic {
+                            "Selected ring set to aromatic"
+                        } else {
+                            "Selected ring set to saturated"
+                        }
+                        .into();
+                    }
+                    Err(error) => {
+                        self.error = true;
+                        self.status = error;
+                    }
+                }
             }
             Message::ArrowStyle(style) => {
                 self.arrow_style = style;

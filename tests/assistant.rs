@@ -14,6 +14,7 @@ fn molecule(smiles: &str, label: &str) -> Molecule {
 }
 fn reaction() -> Proposal {
     Proposal {
+        sketch: None,
         replace_ids: vec![],
         composition: Default::default(),
         explanation: "Esterification".into(),
@@ -138,6 +139,7 @@ async fn water_names_remain_captions_while_only_duplicate_formulas_are_hidden() 
         let mut water = molecule("O", label);
         water.coefficient = coefficient;
         let proposal = Proposal {
+            sketch: None,
             replace_ids: vec![],
             composition: Default::default(),
             explanation: String::new(),
@@ -170,6 +172,7 @@ async fn water_names_remain_captions_while_only_duplicate_formulas_are_hidden() 
 async fn invalid_molecule_discards_entire_candidate_and_ambiguous_answer_has_no_drawing() {
     let engine = LocalEngine::default();
     let proposal = Proposal {
+        sketch: None,
         replace_ids: vec![],
         composition: Default::default(),
         explanation: "Which isomer?".into(),
@@ -207,6 +210,7 @@ async fn invalid_molecule_discards_entire_candidate_and_ambiguous_answer_has_no_
 #[tokio::test]
 async fn hydrolysis_uses_coefficients_and_editable_r_groups_without_overlapping_water() {
     let proposal = Proposal {
+        sketch: None,
         replace_ids: vec![],
         composition: Default::default(),
         explanation: "General triglyceride hydrolysis".into(),
@@ -797,6 +801,7 @@ async fn upright_carbonyls_keep_orthogonal_branch_arrows_and_independent_caption
         part.rotation = ((-90. - carbonyl_angle(&doc, &doc.all_ids())) / 30.).round() * 30.;
     }
     let proposal = Proposal {
+        sketch: None,
         composition: assistant::composition::Composition {
             arrangement: assistant::composition::Arrangement::Branching,
             ..Default::default()

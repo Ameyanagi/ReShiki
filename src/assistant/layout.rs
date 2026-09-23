@@ -302,6 +302,9 @@ pub async fn render_progress(
     if !settings.bond_length.is_finite() || !(4.0..=600.).contains(&settings.bond_length) {
         return Err("Invalid drawing bond length".into());
     }
+    if let Some(sketch) = &proposal.sketch {
+        return sketch.render(&settings);
+    }
     let gap = settings.bond_length;
     let mut doc = Document {
         drawing_style: settings.drawing_style.clone(),

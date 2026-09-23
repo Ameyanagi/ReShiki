@@ -428,6 +428,19 @@ pub async fn paste(engine: LocalEngine, image_only: bool) -> Result<Document, St
     paste_packet(engine, packet).await
 }
 
+/// Read only an explicitly requested clipboard image, without inserting it or
+/// falling back to chemical/text interpretation.
+pub async fn picture() -> Result<Option<crate::pictures::Picture>, String> {
+    let packet = invoke("read_picture", &[]).await?;
+    let Some(item) = packet.representations.first() else {
+        return Ok(None);
+    };
+    let data = item.bytes()?;
+    tokio::task::spawn_blocking(move || crate::pictures::Picture::import(&data).map(Some))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 async fn paste_packet(engine: LocalEngine, packet: Packet) -> Result<Document, String> {
     let item = packet
         .representations

@@ -21,6 +21,8 @@ pub const ELEMENTS: &[&str] = &[
 #[derive(Debug, Clone, Copy)]
 pub enum Transform {
     Rotate(f32),
+    TiltX(f32),
+    TiltY(f32),
     FlipHorizontal,
     FlipVertical,
 }
@@ -96,6 +98,12 @@ pub fn append(doc: &mut Document, source: &Document, offset: Point) -> Vec<u64> 
             return vec![];
         };
         a.id = mapped;
+        for id in &mut a.centroid {
+            let Some(mapped) = mapping.get(id).copied() else {
+                return vec![];
+            };
+            *id = mapped;
+        }
         a.position = a.position.offset(offset.x, offset.y);
         if let Some(s) = &mut a.stereo {
             for id in &mut s.neighbors {
@@ -237,6 +245,10 @@ pub fn center(doc: &Document, ids: &[u64]) -> Point {
 }
 
 pub fn transform(doc: &mut Document, ids: &[u64], transform: Transform) {
+    if let Transform::TiltX(degrees) | Transform::TiltY(degrees) = transform {
+        crate::projection::tilt(doc, ids, degrees, matches!(transform, Transform::TiltX(_)));
+        return;
+    }
     let center = center(doc, ids);
     let convert = |p: Point| {
         let x = p.x - center.x;
@@ -248,15 +260,23 @@ pub fn transform(doc: &mut Document, ids: &[u64], transform: Transform) {
             }
             Transform::FlipHorizontal => (-x, y),
             Transform::FlipVertical => (x, -y),
+            Transform::TiltX(_) | Transform::TiltY(_) => (x, y),
         };
         center.offset(x, y)
     };
     map_positions(doc, ids, convert);
-    if !matches!(transform, Transform::Rotate(_)) {
+    crate::projection::sync_centroids(doc);
+    if matches!(
+        transform,
+        Transform::FlipHorizontal | Transform::FlipVertical
+    ) {
         // Reflect the projection while preserving the molecule's stereochemistry.
         for b in &mut doc.bonds {
             if ids.contains(&b.a) && ids.contains(&b.b) {
                 b.double_position = b.double_position.reversed();
+                if b.projection {
+                    continue;
+                }
                 b.display = match (b.order, b.display.as_str()) {
                     (1, "wedge") => "hash",
                     (1, "hash") => "wedge",
@@ -278,6 +298,16 @@ pub fn transform_about(doc: &mut Document, ids: &[u64], pivot: Point, scale: f32
         || (scale == 1.0 && degrees == 0.0)
     {
         return;
+    }
+    for atom in &mut doc.atoms {
+        if ids.contains(&atom.id) {
+            atom.depth *= scale;
+        }
+    }
+    for graphic in &mut doc.graphics {
+        if ids.contains(&graphic.id) {
+            graphic.depth = graphic.depth.map(|z| z * scale);
+        }
     }
     let (s, c) = degrees.to_radians().sin_cos();
     map_positions(doc, ids, |p| {

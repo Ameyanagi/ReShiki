@@ -18,6 +18,22 @@ pub enum Action {
     Connect,
     Connected(u64, Result<codex::Account, String>),
     Input(text_editor::Action),
+    Paste {
+        image_only: bool,
+    },
+    OpenImage,
+    ImageRead {
+        serial: u64,
+        epoch: u64,
+        image_only: bool,
+        result: Result<Option<reshiki::pictures::Picture>, String>,
+    },
+    TextPasted {
+        serial: u64,
+        epoch: u64,
+        text: Option<String>,
+    },
+    ClearImage,
     Example(&'static str),
     Model(Option<String>),
     Menu(Option<Menu>),
@@ -62,12 +78,16 @@ pub enum Menu {
     Models,
     Effort,
     Edits,
+    Attachments,
 }
 
 #[derive(Default)]
 pub struct State {
     waiting_for_canvas_edit: bool,
     input: text_editor::Content,
+    source_image: Option<reshiki::pictures::Picture>,
+    image_serial: u64,
+    reading_image: bool,
     pub draft: Option<Draft>,
     messages: Vec<(String, String)>,
     account: Option<codex::Account>,
@@ -178,6 +198,139 @@ impl App {
             Action::Input(action) => {
                 self.assistant.input.perform(action);
             }
+            Action::Paste { image_only } => {
+                self.assistant.menu = None;
+                if self.assistant.reading_image || (image_only && self.assistant.busy) {
+                    return Task::none();
+                }
+                self.assistant.image_serial = self.assistant.image_serial.wrapping_add(1);
+                let serial = self.assistant.image_serial;
+                let epoch = self.file_epoch;
+                self.assistant.reading_image = true;
+                if !reshiki::clipboard::available() {
+                    return iced::clipboard::read().map(move |text| {
+                        Message::Assistant(Action::TextPasted {
+                            serial,
+                            epoch,
+                            text,
+                        })
+                    });
+                }
+                return Task::perform(reshiki::clipboard::picture(), move |result| {
+                    Message::Assistant(Action::ImageRead {
+                        serial,
+                        epoch,
+                        image_only,
+                        result,
+                    })
+                });
+            }
+            Action::OpenImage => {
+                self.assistant.menu = None;
+                if self.assistant.busy || self.assistant.reading_image {
+                    return Task::none();
+                }
+                self.assistant.image_serial = self.assistant.image_serial.wrapping_add(1);
+                let serial = self.assistant.image_serial;
+                let epoch = self.file_epoch;
+                self.assistant.reading_image = true;
+                return Task::perform(
+                    async {
+                        let Some(file) = rfd::AsyncFileDialog::new()
+                            .set_title("Attach a chemical drawing")
+                            .add_filter("Images", &["png", "jpg", "jpeg", "tif", "tiff", "webp"])
+                            .pick_file()
+                            .await
+                        else {
+                            return Ok(None);
+                        };
+                        let path = file.path().to_owned();
+                        tokio::task::spawn_blocking(move || {
+                            reshiki::pictures::Picture::open(&path).map(Some)
+                        })
+                        .await
+                        .map_err(|e| e.to_string())?
+                    },
+                    move |result| {
+                        Message::Assistant(Action::ImageRead {
+                            serial,
+                            epoch,
+                            image_only: true,
+                            result,
+                        })
+                    },
+                );
+            }
+            Action::ImageRead {
+                serial,
+                epoch,
+                image_only,
+                result,
+            } => {
+                if serial != self.assistant.image_serial {
+                    return Task::none();
+                }
+                self.assistant.reading_image = false;
+                if epoch != self.file_epoch {
+                    return Task::none();
+                }
+                match result {
+                    Ok(Some(_)) if self.assistant.busy => {
+                        self.assistant.status =
+                            "Finish or stop the current request, then paste the image again."
+                                .into();
+                    }
+                    Ok(Some(image)) => {
+                        // Keep the exact source for follow-up requests and show it in the composer.
+                        self.assistant.source_image = Some(image);
+                        self.assistant.error = false;
+                        self.assistant.status =
+                            "Image attached · Add instructions or Send to draw its structure."
+                                .into();
+                    }
+                    Ok(None) if !image_only => {
+                        self.assistant.reading_image = true;
+                        return iced::clipboard::read().map(move |text| {
+                            Message::Assistant(Action::TextPasted {
+                                serial,
+                                epoch,
+                                text,
+                            })
+                        });
+                    }
+                    Ok(None) => {
+                        self.assistant.status =
+                            "Copy an image, then choose Paste image, or open an image file.".into();
+                    }
+                    Err(error) => {
+                        self.assistant.error = true;
+                        self.assistant.status = format!("Could not read image: {error}");
+                    }
+                }
+            }
+            Action::TextPasted {
+                serial,
+                epoch,
+                text,
+            } => {
+                if serial != self.assistant.image_serial {
+                    return Task::none();
+                }
+                self.assistant.reading_image = false;
+                if epoch == self.file_epoch
+                    && let Some(text) = text
+                {
+                    self.assistant.input.perform(text_editor::Action::Edit(
+                        text_editor::Edit::Paste(std::sync::Arc::new(text)),
+                    ));
+                }
+            }
+            Action::ClearImage => {
+                self.assistant.menu = None;
+                self.assistant.source_image = None;
+                self.assistant.image_serial = self.assistant.image_serial.wrapping_add(1);
+                self.assistant.reading_image = false;
+            }
             Action::Example(value) => {
                 self.assistant.input = text_editor::Content::with_text(value);
             }
@@ -242,6 +395,9 @@ impl App {
                 }
             }
             Action::Reset => {
+                self.assistant.source_image = None;
+                self.assistant.image_serial = self.assistant.image_serial.wrapping_add(1);
+                self.assistant.reading_image = false;
                 self.assistant.waiting_for_canvas_edit = false;
                 self.assistant.cancel.stop();
                 let serial = self.assistant.serial.wrapping_add(1);
@@ -261,6 +417,8 @@ impl App {
                 self.assistant.follow_chat = true;
             }
             Action::Stop => {
+                self.assistant.image_serial = self.assistant.image_serial.wrapping_add(1);
+                self.assistant.reading_image = false;
                 self.assistant.waiting_for_canvas_edit = false;
                 self.assistant.cancel.stop();
                 self.assistant.serial = self.assistant.serial.wrapping_add(1);
@@ -517,12 +675,14 @@ impl App {
             action @ (Action::Send | Action::Improve) => {
                 let improving = matches!(action, Action::Improve);
 
-                if self.assistant.busy || self.cleanup.is_some() {
+                if self.assistant.busy || self.assistant.reading_image || self.cleanup.is_some() {
                     return Task::none();
                 }
                 let prompt = self.assistant.input.text().trim().to_string();
                 let prompt = if improving && prompt.is_empty() {
                     self.assistant.messages.iter().rev().find(|(r,_)| r == "You").map(|(_,s)| s.clone()).unwrap_or_else(|| "Improve this scheme’s spacing, alignment and captions while preserving all chemistry and structural detail.".into())
+                } else if prompt.is_empty() && self.assistant.source_image.is_some() {
+                    "Draw the molecular structures shown in the attached image as editable objects, preserving the depicted chemistry and arrangement.".into()
                 } else {
                     prompt
                 };
@@ -643,6 +803,7 @@ impl App {
                 let revision = self.revision;
                 let epoch = self.file_epoch;
                 let preferences = self.assistant.preferences.clone();
+                let source_image = self.assistant.source_image.clone();
                 let shared = std::sync::Arc::new(std::sync::RwLock::new(
                     assistant::canvas_tools::Snapshot {
                         document: self.doc.clone(),
@@ -669,7 +830,26 @@ impl App {
                     Task::perform(
                         async move {
                             if let Some(seed) = seed {
-                                codex::improve(request, preferences, cancel, tx, canvas, seed).await
+                                codex::improve_with_image(
+                                    request,
+                                    preferences,
+                                    cancel,
+                                    tx,
+                                    canvas,
+                                    seed,
+                                    source_image,
+                                )
+                                .await
+                            } else if let Some(image) = source_image {
+                                codex::propose_image(
+                                    request,
+                                    preferences,
+                                    cancel,
+                                    tx,
+                                    Some(canvas),
+                                    image,
+                                )
+                                .await
                             } else {
                                 codex::propose(request, preferences, cancel, tx, Some(canvas)).await
                             }
@@ -851,7 +1031,7 @@ impl App {
     }
     pub(super) fn assistant_panel(&self) -> Element<'_, Message> {
         let state = &self.assistant;
-        let mut chat = column![].spacing(16).padding([4, 2]).width(Length::Fill);
+        let mut chat = column![].spacing(12).padding([2, 2]).width(Length::Fill);
         if state.messages.is_empty() {
             chat = chat.push(Space::new().height(20))
                 .push(text("What would you like to draw?").size(19))
@@ -1103,15 +1283,12 @@ impl App {
             );
         }
         let model_label = match state.model() {
-            Some(model) if state.preferences.model.is_none() => {
-                format!("{} · Default", model.label)
-            }
             Some(model) => model.label.clone(),
             None => state
                 .preferences
                 .model
                 .clone()
-                .unwrap_or_else(|| "Default model".into()),
+                .unwrap_or_else(|| "GPT-6 Astra".into()),
         };
         let effort = state
             .model()
@@ -1119,7 +1296,7 @@ impl App {
             .unwrap_or("Reasoning");
         let editor = text_editor(&state.input)
             .placeholder(if state.messages.is_empty() {
-                "Describe a molecule or reaction…"
+                "Describe a molecule, or paste an image…"
             } else {
                 "Ask for changes or another drawing…"
             })
@@ -1131,12 +1308,14 @@ impl App {
                     Some(text_editor::Binding::Custom(Message::Assistant(
                         Action::Send,
                     )))
+                } else if key.modifiers.command() && matches!(&key.key, iced::keyboard::Key::Character(c) if c.eq_ignore_ascii_case("v")) {
+                    Some(text_editor::Binding::Custom(Message::Assistant(Action::Paste { image_only:false })))
                 } else {
                     text_editor::Binding::from_key_press(key)
                 }
             })
             .size(13)
-            .height(80)
+            .height(64)
             .padding(4)
             .style(|_, _| text_editor::Style {
                 background: Color::TRANSPARENT.into(),
@@ -1145,24 +1324,38 @@ impl App {
                 value: Color::from_rgb8(37, 46, 48),
                 selection: Color::from_rgb8(198, 223, 215),
             });
-        let controls = row![
-            action(format!("{model_label} ⌄"), Action::Menu(Some(Menu::Models))).padding([6, 4]),
-            Space::new().width(Length::Fill),
-            action(format!("{effort} ⌄"), Action::Menu(Some(Menu::Effort))).padding([6, 4]),
-        ]
-        .spacing(4)
-        .align_y(Alignment::Center);
-        let composer = container(column![editor, controls].spacing(7))
-            .padding(10)
-            .style(|_| card());
+        let mut input_row = row![editor].spacing(8).align_y(Alignment::Center);
+        if let Some(source) = &state.source_image
+            && let Some(handle) = source.handle(false)
+        {
+            input_row = input_row.push(super::workspace::hover_hint(
+                button(
+                    iced::widget::image(handle)
+                        .width(46)
+                        .height(46)
+                        .content_fit(iced::ContentFit::Contain),
+                )
+                .padding(3)
+                .style(super::workspace::control(false))
+                .on_press(Message::Assistant(Action::Menu(Some(Menu::Attachments)))),
+                format!(
+                    "Attached image · {} × {} · Click for options",
+                    source.width(),
+                    source.height()
+                ),
+                tooltip::Position::Top,
+            ));
+        }
         let submit = if state.busy {
             action("■ Stop", Action::Stop)
         } else {
             action("↑ Send", Action::Send)
                 .style(button::primary)
                 .on_press_maybe(
-                    (!state.input.text().trim().is_empty() && self.cleanup.is_none())
-                        .then_some(Message::Assistant(Action::Send)),
+                    ((!state.input.text().trim().is_empty() || state.source_image.is_some())
+                        && !state.reading_image
+                        && self.cleanup.is_none())
+                    .then_some(Message::Assistant(Action::Send)),
                 )
         };
         let connection = super::workspace::hover_hint(
@@ -1182,36 +1375,49 @@ impl App {
             },
             tooltip::Position::Top,
         );
+        let attach = super::workspace::hover_hint(
+            action("＋", Action::Menu(Some(Menu::Attachments))).padding([5, 8]),
+            "Attach or paste an image",
+            tooltip::Position::Top,
+        );
+        let composer = container(
+            column![
+                input_row,
+                row![
+                    attach,
+                    action(format!("{model_label} ⌄"), Action::Menu(Some(Menu::Models)))
+                        .padding([5, 3]),
+                    Space::new().width(Length::Fill),
+                    submit.padding([6, 10])
+                ]
+                .spacing(4)
+                .align_y(Alignment::Center)
+            ]
+            .spacing(4),
+        )
+        .padding(8)
+        .style(|_| card());
         let footer = column![
             activity,
+            composer,
             row![
-                checkbox(state.replace)
-                    .label("Replace selection")
-                    .text_size(11)
-                    .on_toggle(|v| Message::Assistant(Action::Replace(v))),
+                connection,
                 Space::new().width(Length::Fill),
+                action(format!("{effort} ⌄"), Action::Menu(Some(Menu::Effort))).padding([3, 4]),
                 action(
                     if state.preferences.auto_apply {
-                        "Accept all edits ⌄"
+                        "Auto apply ⌄"
                     } else {
-                        "Review edits ⌄"
+                        "Review ⌄"
                     },
                     Action::Menu(Some(Menu::Edits))
                 )
-                .padding([5, 6])
-                .style(super::workspace::control(state.preferences.auto_apply))
+                .padding([3, 4])
             ]
-            .align_y(Alignment::Center),
-            composer,
-            row![connection, Space::new().width(Length::Fill), submit].align_y(Alignment::Center),
-            text(super::platform_shortcut(
-                "Drawing context is shared when you send · ⌘ Enter to send",
-                "Drawing context is shared when you send · Ctrl+Enter to send"
-            ))
-            .size(10)
-            .color(super::workspace::muted())
+            .spacing(4)
+            .align_y(Alignment::Center)
         ]
-        .spacing(8);
+        .spacing(5);
         let result_navigation: Element<'_, Message> = if !state.follow_chat
             && (state.draft.is_some() || state.completed.is_some() || state.busy)
         {
@@ -1242,9 +1448,9 @@ impl App {
                 result_navigation,
                 footer
             ]
-            .spacing(14),
+            .spacing(9),
         )
-        .padding(14)
+        .padding(10)
         .height(Length::Fill)
         .into();
         // Always keep the chat at the same location in the widget tree.
@@ -1290,7 +1496,51 @@ impl App {
         let state = &self.assistant;
         let mut options = column![].spacing(4);
         match menu {
+            Menu::Attachments => {
+                options = options.push(text("Reference image").size(12)).push(
+                    action("Choose image…", Action::OpenImage)
+                        .width(Length::Fill)
+                        .on_press_maybe(
+                            (!state.busy && !state.reading_image)
+                                .then_some(Message::Assistant(Action::OpenImage)),
+                        ),
+                );
+                if reshiki::clipboard::available() {
+                    options =
+                        options.push(
+                            action("Paste image", Action::Paste { image_only: true })
+                                .width(Length::Fill)
+                                .on_press_maybe((!state.busy && !state.reading_image).then_some(
+                                    Message::Assistant(Action::Paste { image_only: true }),
+                                )),
+                        );
+                }
+                if state.source_image.is_some() {
+                    options = options.push(
+                        action("Remove attached image", Action::ClearImage)
+                            .width(Length::Fill)
+                            .on_press_maybe(
+                                (!state.busy).then_some(Message::Assistant(Action::ClearImage)),
+                            ),
+                    );
+                }
+                options = options.push(
+                    text(super::platform_shortcut(
+                        "Paste with ⌘V · Send with ⌘Enter",
+                        "Paste with Ctrl+V · Send with Ctrl+Enter",
+                    ))
+                    .size(11),
+                );
+            }
             Menu::Edits => {
+                options = options
+                    .push(
+                        checkbox(state.replace)
+                            .label("Replace selection")
+                            .text_size(12)
+                            .on_toggle(|v| Message::Assistant(Action::Replace(v))),
+                    )
+                    .push(iced::widget::rule::horizontal(1));
                 options = options.push(
                     text("Assistant edits")
                         .size(12)
@@ -1333,12 +1583,12 @@ impl App {
                         .padding(9),
                 );
                 options = options.push(
-                    action("Default · GPT-6 Sol", Action::Model(None))
+                    action("Default · GPT-6 Astra", Action::Model(None))
                         .width(Length::Fill)
                         .style(super::workspace::control(state.preferences.model.is_none())),
                 );
                 options = options.push(
-                    text("Uses GPT-6 Sol when available; otherwise your account default")
+                    text("Uses GPT-6 Astra when available; otherwise your account default")
                         .size(10)
                         .color(super::workspace::muted()),
                 );
@@ -1464,6 +1714,99 @@ fn card() -> container::Style {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn source_picture() -> reshiki::pictures::Picture {
+        let image = image::RgbaImage::from_pixel(2, 2, image::Rgba([255, 255, 255, 255]));
+        let mut png = std::io::Cursor::new(Vec::new());
+        image.write_to(&mut png, image::ImageFormat::Png).unwrap();
+        reshiki::pictures::Picture::import(&png.into_inner()).unwrap()
+    }
+
+    #[test]
+    fn pasting_image_attaches_until_send_without_mutating_the_canvas() {
+        let (mut app, _) = App::new();
+        let before = app.doc.clone();
+        let picture = source_picture();
+        let task = app.assistant_action(Action::ImageRead {
+            serial: app.assistant.image_serial,
+            epoch: app.file_epoch,
+            image_only: false,
+            result: Ok(Some(picture.clone())),
+        });
+        assert_eq!(task.units(), 0);
+        assert!(!app.assistant.busy);
+        assert_eq!(app.assistant.source_image, Some(picture));
+        assert_eq!(app.doc, before);
+        assert!(app.assistant.messages.is_empty());
+        let task = app.assistant_action(Action::Send);
+        assert!(task.units() > 0);
+        assert!(app.assistant.busy);
+        assert!(
+            app.assistant
+                .messages
+                .last()
+                .unwrap()
+                .1
+                .contains("attached image")
+        );
+        let _ = app.assistant_action(Action::Stop);
+        assert!(!app.assistant.busy);
+    }
+
+    #[test]
+    fn late_clipboard_results_cannot_restart_reset_or_stopped_work() {
+        let (mut app, _) = App::new();
+        let serial = app.assistant.image_serial;
+        let epoch = app.file_epoch;
+        let _ = app.assistant_action(Action::Reset);
+        let _ = app.assistant_action(Action::ImageRead {
+            serial,
+            epoch,
+            image_only: false,
+            result: Ok(Some(source_picture())),
+        });
+        let _ = app.assistant_action(Action::TextPasted {
+            serial,
+            epoch,
+            text: Some("stale text".into()),
+        });
+        assert!(app.assistant.source_image.is_none());
+        assert!(app.assistant.input.text().trim().is_empty());
+        assert!(!app.assistant.busy);
+        let serial = app.assistant.image_serial;
+        let _ = app.assistant_action(Action::Stop);
+        let _ = app.assistant_action(Action::ImageRead {
+            serial,
+            epoch,
+            image_only: false,
+            result: Ok(Some(source_picture())),
+        });
+        assert!(app.assistant.source_image.is_none());
+        assert!(!app.assistant.busy);
+    }
+
+    #[test]
+    fn text_paste_and_stale_document_image_keep_the_canvas_unchanged() {
+        let (mut app, _) = App::new();
+        let before = app.doc.clone();
+        let serial = app.assistant.image_serial;
+        let epoch = app.file_epoch;
+        let _ = app.assistant_action(Action::TextPasted {
+            serial,
+            epoch,
+            text: Some("Draw ethanol".into()),
+        });
+        assert_eq!(app.assistant.input.text().trim(), "Draw ethanol");
+        let _ = app.assistant_action(Action::ImageRead {
+            serial,
+            epoch: epoch.wrapping_add(1),
+            image_only: false,
+            result: Ok(Some(source_picture())),
+        });
+        assert!(app.assistant.source_image.is_none());
+        assert!(!app.assistant.busy);
+        assert_eq!(app.doc, before);
+    }
     #[test]
     fn menus_and_completion_preserve_history_scroll_until_jump_is_requested() {
         let (mut app, _) = App::new();
@@ -1608,6 +1951,7 @@ mod tests {
         let mut fragment = Document::default();
         fragment.add_atom("O", reshiki::document::Point::default());
         let proposal = Proposal {
+            sketch: None,
             replace_ids: vec![],
             composition: Default::default(),
             explanation: "Water".into(),

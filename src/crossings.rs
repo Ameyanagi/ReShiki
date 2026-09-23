@@ -138,9 +138,23 @@ fn path_half(
     let mut out = vec![];
     let mut cursor = None;
     let mut pen = None;
+    let mut subpath_start = None;
     for command in commands {
+        // A closed outline has a real final edge. Clip it like every other
+        // segment, otherwise hollow wedges lose their narrow cap at crossings.
+        let closing_edge;
+        let command = if matches!(command, PathCommand::Close) {
+            let Some(start) = subpath_start else {
+                continue;
+            };
+            closing_edge = Line(start);
+            &closing_edge
+        } else {
+            command
+        };
         let end = match command {
             Move(p) => {
+                subpath_start = Some(*p);
                 cursor = Some(*p);
                 pen = None;
                 continue;

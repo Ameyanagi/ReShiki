@@ -177,6 +177,9 @@ impl PathCommand {
 /// An affine frame preserves rotated and reflected shapes without flattening them.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Graphic {
+    /// Depth of origin, axis_x and axis_y for reversible 3D projection.
+    #[serde(default)]
+    pub depth: [f32; 3],
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub picture: Option<crate::pictures::Picture>,
     pub id: u64,
@@ -237,6 +240,7 @@ impl Graphic {
                 Point::new(length * angle.cos(), length * angle.sin())
             };
             return Self {
+                depth: [0.; 3],
                 picture: None,
                 id,
                 kind,
@@ -280,6 +284,7 @@ impl Graphic {
             )
         };
         Self {
+            depth: [0.; 3],
             picture: None,
             id,
             kind,

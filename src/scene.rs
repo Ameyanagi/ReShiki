@@ -28,7 +28,7 @@ pub(crate) fn atom_label_bounds(a: &Atom, doc: &Document) -> Option<(Point, Poin
 }
 
 fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
-    if !doc.atom_visible(a.id) {
+    if !doc.atom_visible(a.id) || !a.centroid.is_empty() {
         return vec![];
     }
     if let Some(group) = doc.abbreviation(a.id) {
@@ -415,6 +415,10 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
         })
         .collect();
     let crossing_gaps = crate::crossings::gaps(doc);
+    // Fill joined bond outlines together. Separate antialiased polygons leave
+    // translucent seams even when their mathematical corners agree exactly.
+    let mut joined: std::collections::BTreeMap<[u8; 3], Vec<crate::graphics::PathCommand>> =
+        Default::default();
     for (bond_index, b) in doc
         .bonds
         .iter()
@@ -450,29 +454,26 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
         let ny = ux;
         let bond_start = out.len();
         match b.display.as_str() {
-            "wedge" => out.push(Primitive::Polygon(vec![
-                start,
-                end.offset(
-                    nx * style.world(style.bold_width_pt) / 2.0,
-                    ny * style.world(style.bold_width_pt) / 2.0,
-                ),
-                end.offset(
-                    -nx * style.world(style.bold_width_pt) / 2.0,
-                    -ny * style.world(style.bold_width_pt) / 2.0,
-                ),
-            ])),
+            "plain" | "bold" | "wedge" if crate::bond_joins::needed(doc, b) => {
+                out.push(Primitive::Polygon(crate::bond_joins::polygon(
+                    doc, b, start, end,
+                )));
+            }
             "hollow_wedge" => {
-                let width = style.world(style.bold_width_pt) / 2.0;
-                let points = [
-                    start,
-                    end.offset(nx * width, ny * width),
-                    end.offset(-nx * width, -ny * width),
-                    start,
-                ];
-                for pair in points.windows(2) {
-                    if let [a, b] = pair {
-                        out.push(Primitive::Line(*a, *b, style.line_width()));
-                    }
+                use crate::graphics::PathCommand;
+                let points = crate::bond_joins::polygon(doc, b, start, end);
+                if let Some(first) = points.first() {
+                    let mut commands = vec![PathCommand::Move(*first)];
+                    commands.extend(points.iter().skip(1).copied().map(PathCommand::Line));
+                    commands.push(PathCommand::Close);
+                    out.push(Primitive::Path {
+                        commands,
+                        style: crate::graphics::GraphicStyle {
+                            width_pt: style.line_width_pt,
+                            ..Default::default()
+                        },
+                        filled: false,
+                    });
                 }
             }
             "hash" | "hashed" => {
@@ -487,12 +488,20 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
                     let t = if b.display == "hashed" { 1.0 } else { t };
                     out.push(Primitive::Line(
                         p.offset(
-                            nx * t * style.world(style.bold_width_pt) / 2.0,
-                            ny * t * style.world(style.bold_width_pt) / 2.0,
+                            nx * (style.line_width()
+                                + t * (style.world(style.bold_width_pt) - style.line_width()))
+                                / 2.0,
+                            ny * (style.line_width()
+                                + t * (style.world(style.bold_width_pt) - style.line_width()))
+                                / 2.0,
                         ),
                         p.offset(
-                            -nx * t * style.world(style.bold_width_pt) / 2.0,
-                            -ny * t * style.world(style.bold_width_pt) / 2.0,
+                            -nx * (style.line_width()
+                                + t * (style.world(style.bold_width_pt) - style.line_width()))
+                                / 2.0,
+                            -ny * (style.line_width()
+                                + t * (style.world(style.bold_width_pt) - style.line_width()))
+                                / 2.0,
                         ),
                         style.line_width(),
                     ));
@@ -616,6 +625,20 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             let bond_primitives = out.drain(bond_start..).collect();
             out.extend(crate::crossings::cut(bond_primitives, gaps));
         }
+        if crate::bond_joins::needed(doc, b) && b.display != "hollow_wedge" {
+            use crate::graphics::PathCommand;
+            let commands = joined.entry(b.color).or_default();
+            for primitive in out.drain(bond_start..) {
+                if let Primitive::Polygon(points) = primitive
+                    && let Some(first) = points.first()
+                {
+                    commands.push(PathCommand::Move(*first));
+                    commands.extend(points.iter().skip(1).copied().map(PathCommand::Line));
+                    commands.push(PathCommand::Close);
+                }
+            }
+            continue;
+        }
         if b.color != [0, 0, 0] {
             for primitive in out.iter_mut().skip(bond_start) {
                 use crate::graphics::{GraphicStyle, PathCommand};
@@ -660,6 +683,25 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             }
         }
     }
+    for (color, points) in crate::bond_joins::junctions(doc) {
+        use crate::graphics::PathCommand;
+        if let Some(first) = points.first() {
+            let commands = joined.entry(color).or_default();
+            commands.push(PathCommand::Move(*first));
+            commands.extend(points.iter().skip(1).copied().map(PathCommand::Line));
+            commands.push(PathCommand::Close);
+        }
+    }
+    out.extend(joined.into_iter().map(|(color, commands)| Primitive::Path {
+        commands,
+        style: crate::graphics::GraphicStyle {
+            stroke: color,
+            fill: Some(color),
+            width_pt: 0.,
+            ..Default::default()
+        },
+        filled: true,
+    }));
     for a in doc.atoms.iter().filter(|a| doc.atom_visible(a.id)) {
         out.extend(labels.get(&a.id).into_iter().flatten().cloned());
         out.extend(

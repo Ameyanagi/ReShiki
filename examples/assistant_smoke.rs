@@ -86,6 +86,12 @@ async fn main() -> anyhow::Result<()> {
             },
         )
         .await
+    } else if let Some(path) = option("--image") {
+        codex::propose_image(
+            option("--prompt").cloned().unwrap_or_else(|| "Reconstruct and clean up the chemical drawing in this image, preserving the depicted chemistry and arrangement.".into()),
+            Default::default(), Default::default(), tx, Some(canvas),
+            reshiki::pictures::Picture::open(std::path::Path::new(path)).map_err(anyhow::Error::msg)?,
+        ).await
     } else {
         codex::propose(
             prompt,

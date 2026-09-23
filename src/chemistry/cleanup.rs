@@ -510,6 +510,7 @@ fn rewedge(molecule: &Molecule, base: &Document, work: &mut usize) -> Result<Vec
         let mut display = bond.display.clone();
         let atom = *indices.get(&bond.a).ok_or(Error::Layout)?;
         if bond.order == 1
+            && !bond.projection
             && matches!(
                 display.as_str(),
                 "wedge" | "hash" | "hollow_wedge" | "hashed" | "bold"

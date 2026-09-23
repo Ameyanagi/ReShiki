@@ -105,6 +105,8 @@ pub enum Action {
     Figure(FigureFormat),
     Chemical(ChemicalFormat),
     RefreshProperties,
+    Centroid,
+    DepthBonds,
     PropertiesCalculated(PropertyKey, Box<Result<Analysis, String>>),
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -129,7 +131,10 @@ impl State {
             }
             Action::Figure(format) => self.figure = format,
             Action::Chemical(format) => self.chemical = format,
-            Action::RefreshProperties | Action::PropertiesCalculated(..) => {}
+            Action::RefreshProperties
+            | Action::PropertiesCalculated(..)
+            | Action::Centroid
+            | Action::DepthBonds => {}
         }
     }
 }
@@ -216,6 +221,28 @@ impl App {
 
     pub(super) fn inspector_action(&mut self, action: Action) -> Task<Message> {
         match action {
+            Action::Centroid => {
+                let before = self.doc.clone();
+                match reshiki::projection::add_centroid(&mut self.doc, &self.selected) {
+                    Ok(id) => {
+                        self.selected = vec![id];
+                        self.changed(before);
+                        self.status =
+                            "Centroid added · Draw a dashed contact from this point".into();
+                    }
+                    Err(error) => {
+                        self.status = error;
+                        self.error = true;
+                    }
+                }
+                Task::none()
+            }
+            Action::DepthBonds => {
+                let before = self.doc.clone();
+                reshiki::projection::depth_bonds(&mut self.doc, &self.selected);
+                self.changed(before);
+                Task::none()
+            }
             Action::RefreshProperties => {
                 let Some(key) = self.property_key() else {
                     return self.update(Message::Analyze);
@@ -572,7 +599,7 @@ impl App {
     }
 
     fn arrangement_panel(&self, multiple: bool) -> Element<'_, Message> {
-        let arrange = column![
+        let mut arrange = column![
             text("Rotate & reflect").size(11).color(muted()),
             row![
                 command("↶ 30°", Message::Transform(Transform::Rotate(-30.))).width(Length::Fill),
@@ -585,6 +612,31 @@ impl App {
                 command("Flip V", Message::Transform(Transform::FlipVertical)).width(Length::Fill)
             ]
             .spacing(6),
+            text("3D tilt").size(11).color(muted()),
+            row![
+                command("X −15°", Message::Transform(Transform::TiltX(-15.))).width(Length::Fill),
+                command("X +15°", Message::Transform(Transform::TiltX(15.))).width(Length::Fill),
+            ]
+            .spacing(4),
+            row![
+                command("Y −15°", Message::Transform(Transform::TiltY(-15.))).width(Length::Fill),
+                command("Y +15°", Message::Transform(Transform::TiltY(15.))).width(Length::Fill),
+            ]
+            .spacing(4),
+            command(
+                "Emphasize front bonds",
+                Message::InspectorAction(Action::DepthBonds)
+            )
+            .width(Length::Fill),
+            row![
+                command("Add centroid", Message::InspectorAction(Action::Centroid))
+                    .width(Length::Fill),
+                command("Dummy atom (*)", Message::Element("*".into())).width(Length::Fill),
+            ]
+            .spacing(4),
+            text("Centroids track selected atoms. Dummy atoms are wildcard attachment points.")
+                .size(11)
+                .color(muted()),
             text("Align horizontally").size(11).color(muted()),
             row![
                 command("Left", Message::Arrange(Arrange::AlignLeft)).width(Length::Fill),
@@ -615,6 +667,15 @@ impl App {
                 .color(muted()),
         ]
         .spacing(6);
+        if reshiki::rings::selected_cycle(&self.doc, &self.selected).is_some() {
+            arrange = arrange.push(
+                command(
+                    "Saturated ↔ Aromatic · Shift+R",
+                    Message::ToggleSelectedRing,
+                )
+                .width(Length::Fill),
+            );
+        }
         self.inspector_section(
             Section::Arrange,
             "Arrange & transform",
@@ -1085,6 +1146,67 @@ mod tests {
         let _ = app.inspector_action(Action::PropertiesCalculated(old, Box::new(Ok(analysis))));
         assert!(app.property_analysis().is_none());
         assert!(app.inspector_ui.pending.is_none());
+    }
+
+    #[test]
+    fn aromatic_shortcut_keeps_tool_size_and_selected_ring_topology() {
+        let (mut app, _) = App::new();
+        for size in 3..=8 {
+            let _ = app.update(Message::RingSize(size));
+            let _ = app.update(Message::AromaticRing(false));
+            let _ = app.update(Message::ToggleAromaticRing);
+            assert_eq!(app.ring_size, size);
+            assert!(app.aromatic_ring);
+            let _ = app.update(Message::ToggleAromaticRing);
+            assert_eq!(app.ring_size, size);
+            assert!(!app.aromatic_ring);
+        }
+        app.selected = reshiki::editing::ring(
+            &mut app.doc,
+            reshiki::document::Point::default(),
+            5,
+            false,
+            5.,
+        );
+        app.tool = Tool::Select;
+        let before = app.doc.clone();
+        let _ = app.update(Message::ToggleAromaticRing);
+        assert_eq!(app.doc.atoms.len(), 5);
+        assert!(app.doc.bonds.iter().all(|b| b.order == 4));
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, before);
+    }
+
+    #[test]
+    fn tilted_ring_and_centroid_are_atomic_undoable_edits() {
+        let (mut app, _) = App::new();
+        app.selected = reshiki::editing::ring(
+            &mut app.doc,
+            reshiki::document::Point::new(100., 100.),
+            5,
+            false,
+            5.,
+        );
+        let planar = app.doc.clone();
+        let ring = app.selected.clone();
+        let _ = app.update(Message::Transform(Transform::TiltX(60.)));
+        let tilted = app.doc.clone();
+        assert!(tilted.atoms.iter().any(|a| a.depth.abs() > 1.));
+        assert_eq!(tilted.bonds, planar.bonds);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, planar);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc, tilted);
+        app.selected = ring;
+        let _ = app.update(Message::InspectorAction(Action::Centroid));
+        assert_eq!(app.doc.atoms.len(), 6);
+        let centroid = app.selected[0];
+        assert_eq!(app.doc.atom(centroid).unwrap().centroid.len(), 5);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, tilted);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc.atom(centroid).unwrap().element, "*");
+        app.doc.validate().unwrap();
     }
 
     #[test]

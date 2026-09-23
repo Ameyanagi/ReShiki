@@ -897,7 +897,13 @@ impl App {
             palette = palette.push(line);
         }
         palette = palette.push(Space::new().height(10)).push(section("ATOMS"));
-        for pair in [["C", "N"], ["O", "S"], ["P", "F"], ["Cl", "Br"]] {
+        for pair in [
+            ["C", "N"],
+            ["O", "S"],
+            ["P", "F"],
+            ["Cl", "Br"],
+            ["Fe", "*"],
+        ] {
             let mut line = row![].spacing(4);
             for symbol in pair {
                 line = line.push(
@@ -1139,7 +1145,11 @@ impl App {
                                 .size(14)
                                 .text_size(12),
                         )
-                        .push(text("Click / drag to attach").size(11).color(muted()));
+                        .push(
+                            text("Click / drag to attach · Shift+R keeps ring size")
+                                .size(11)
+                                .color(muted()),
+                        );
                 } else {
                     options = options.push(
                         text(if preset == reshiki::rings::Preset::Cyclopentadiene {

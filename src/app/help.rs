@@ -27,7 +27,10 @@ impl App {
                 ("2 / 3 / 4", "Double / Triple / Quadruple"),
                 ("X", "Straight chain"),
                 ("Shift X", "Snaking chain"),
-                ("R / Shift R", "Ring / Aromatic ring"),
+                (
+                    "R / Shift R",
+                    "Ring / Toggle saturated–aromatic (same size)",
+                ),
                 ("A / T / E", "Arrow / Text / Eraser"),
                 ("Alt drag", "Draw bonds freely"),
                 ("Esc", "Return to selection"),

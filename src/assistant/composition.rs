@@ -256,6 +256,13 @@ pub fn straighten(doc: &mut Document, ids: &[u64]) -> bool {
 }
 
 pub fn straighten_all(doc: &mut Document) -> usize {
+    let diagram_ids: std::collections::HashSet<_> = super::review::diagram_groups(doc)
+        .iter()
+        .flat_map(|g| g.members.iter().copied())
+        .collect();
     let molecules = crate::reactions::molecules(doc, &doc.all_ids());
-    molecules.iter().filter(|ids| straighten(doc, ids)).count()
+    molecules
+        .iter()
+        .filter(|ids| !ids.iter().any(|id| diagram_ids.contains(id)) && straighten(doc, ids))
+        .count()
 }

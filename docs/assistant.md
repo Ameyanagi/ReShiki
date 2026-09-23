@@ -2,6 +2,16 @@
 
 Open **Assistant** in the toolbar and describe a molecule or chemical scheme. ReShiki uses your existing local Codex sign-in. The model menu lists the models available to your account; model, reasoning, service tier and Review/Accept-all preferences are saved. If needed, run `codex login` and reconnect. `RESHIKI_CODEX` can point to a specific executable.
 
+## Draw from an image
+
+Copy a chemical drawing, focus the assistant prompt and press **Cmd/Ctrl+V**, or choose **＋ → Paste image**. Image paste is supported on macOS and Windows. **＋ → Choose image…** accepts PNG, JPEG, TIFF and WebP files on every platform. A source thumbnail appears in the prompt. Add any instructions, then choose **Send**. With an image and no text, Send asks the AI agent to draw the structures shown. You can send follow-up instructions afterward. Text-only paste still inserts text into the prompt.
+
+The image is passed to the AI agent with your request. The agent identifies the structures and proposes editable molecules; the local chemistry engine renders its proposal. Review compares the rendered result with the original image. The source stays available for follow-ups until **＋ → Remove attached image** or **New conversation**. Images are shared with Codex only for the requested assistant operation and are held in temporary files during generation/review. Inputs are limited to 16 MB, 16 million pixels and 8192 pixels per side.
+
+Projected organometallic drawings, such as the ferrocene sandwich illustration on [Organometallic chemistry](https://en.wikipedia.org/wiki/Organometallic_chemistry), can use an editable diagram with atoms, bonds, ring circles and contact lines. These objects stay grouped during layout review. Ring-centre contacts use editable centroid anchors and dashed drawing bonds, not validated multicentre chemical bonds; these diagrams always require explicit review before application and should not be treated as validated molecular data for chemistry export. Unreadable structures should produce a clarification rather than a guessed drawing.
+
+The normal **Review edits** / **Accept all edits** preference still controls application. **Apply** remains undoable.
+
 ## Activity and drafts
 
 Sending a request immediately shows **Preparing your scheme…**, an elapsed timer and **Stop** in the conversation. A short composition outline appears before structures are prepared. Structure counts report completed local preparation work. Rendered drafts appear as panels become available, followed by the visual review stage. Quiet responses keep the timer and a waiting message visible; there are no estimated completion percentages.
@@ -47,14 +57,28 @@ Additions use the current drawing, preserving edits made during generation. Repl
 
 ## Data and limits
 
-The request, conversation, prior proposal and drawing context are shared with Codex. The assistant can inspect the current canvas and prepare optional early previews. The required review also receives overview and close-up images plus editable drawing data. Images are temporary, bounded in pixel dimensions, and scoped to the drawing. Tools cannot control other apps or execute commands. Ordinary drawing and local chemistry do not require a connection.
+The request, conversation, prior proposal, attached source image and drawing context are shared with Codex. The assistant can inspect the current canvas and prepare optional early previews. The required review also receives overview and close-up images plus editable drawing data. Images are temporary, bounded in pixel dimensions, and scoped to the drawing. Tools cannot control other apps or execute commands. Ordinary drawing and local chemistry do not require a connection.
 
 Proposals support up to 32 molecules, eight reaction steps, 300 atoms per molecule and 1,500 atoms overall. Generation supports forward, equilibrium and retrosynthesis arrows. Explicit reaction roles remain available through **Properties → Reaction roles…** and reaction exchange; see [reaction workflow and exchange limits](reactions.md).
 
-The integration follows the official [Codex app-server protocol](https://learn.chatgpt.com/docs/app-server), using structured output, public progress summaries, bounded drawing tools and local image inputs. `cargo run --example assistant_smoke -- --generate --prompt '…' --output artifacts/assistant-qa` exercises generation and mandatory review with the local sign-in. `--render drawing.rsk --output artifacts/assistant-qa/render` renders an existing drawing and its close-ups without a model request.
+The integration follows the official [Codex app-server protocol](https://learn.chatgpt.com/docs/app-server), using structured output, public progress summaries, bounded drawing tools and local image inputs. `cargo run --example assistant_smoke -- --generate --prompt '…' --output artifacts/assistant-qa` exercises generation and mandatory review with the local sign-in. `--generate --image source.png --output artifacts/image-qa` exercises image reconstruction and source comparison. `--render drawing.rsk --output artifacts/assistant-qa/render` renders an existing drawing and its close-ups without a model request.
 
 ## Model and navigation defaults
 
-The assistant defaults to GPT-6 Sol (`gpt-6-sol`) when it is available in the connected Codex catalog, otherwise to the account default. Explicit model choices remain saved. Reasoning and service options come from the selected model’s catalog entry.
+The assistant defaults to GPT-6 Astra (`gpt-6-astra`) when it is available in the connected Codex catalog, otherwise to the account default. Explicit model choices remain saved. Reasoning and service options come from the selected model’s catalog entry.
 
 Opening model, effort or edit-mode menus preserves the conversation position. Closing and reopening the panel restores that position. Use **Jump to result** to return to a completed draft after reading earlier messages.
+
+## Projected structures and attachment points
+
+Select ring atoms and open **Properties → Arrange & transform**. **3D tilt** rotates their retained XYZ positions about X or Y in 15° steps. The opposite step restores the geometry; labels remain upright. Aromatic circles follow the ring automatically. Select a separately drawn ellipse with the ring to tilt them together. **Emphasize front bonds** uses depth to bold foreground single bonds without assigning wedge stereochemistry.
+
+**Add centroid** creates an invisible, selectable ring-centre anchor that follows the selected atoms. A dashed contact can connect that anchor to a metal. **Dummy atom (\*)** places an explicit wildcard attachment point; it is not a carbon atom. Native ReShiki files preserve centroids and projection depth. Figures preserve their appearance. Molecular export of centroid diagrams is blocked because these drawing contacts do not encode validated multicentre chemical bonds.
+
+The assistant can use these same tilt and centroid operations for an attached source image. Such diagrams always require manual review before applying.
+
+The compact composer keeps the image thumbnail beside the prompt. Use **＋** for attachments, the model menu to change models, and **Review** for replacement and automatic-application settings.
+
+## Ring shortcut
+
+**Shift+R** toggles saturated/aromatic ring drawing while retaining the current member count. With the Select tool and one complete 3–8 member ring selected, the same shortcut converts that ring in place. Atom positions, attachments and charges are preserved; Undo restores the original bonds. The aromatic drawing mode does not infer charges or establish chemical aromaticity. **A** still toggles the circle/alternating-bond display of an already aromatic ring.
