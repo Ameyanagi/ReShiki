@@ -115,6 +115,7 @@ pub fn stroke(doc: &mut Document, from: Point, to: Point, radius: f32) {
         let affected: Vec<_> = bonds.iter().flat_map(|(a, b)| [*a, *b]).collect();
         doc.invalidate_chemistry(&affected);
         doc.bonds.retain(|b| !bonds.contains(&(b.a, b.b)));
+        crate::ring_fills::prune(doc);
     }
 }
 

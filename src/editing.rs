@@ -179,6 +179,14 @@ pub fn append(doc: &mut Document, source: &Document, offset: Point) -> Vec<u64> 
             *id = mapped;
         }
     }
+    for fill in &mut part.ring_fills {
+        for id in &mut fill.atoms {
+            let Some(mapped) = mapping.get(id).copied() else {
+                return vec![];
+            };
+            *id = mapped;
+        }
+    }
     for reaction in &mut part.reactions {
         if reaction.remap(&mapping).is_none() {
             return vec![];
@@ -193,6 +201,7 @@ pub fn append(doc: &mut Document, source: &Document, offset: Point) -> Vec<u64> 
     doc.groups.extend(part.groups);
     doc.abbreviations.extend(part.abbreviations);
     doc.reactions.extend(part.reactions);
+    doc.ring_fills.extend(part.ring_fills);
     if !doc.reactions.is_empty() {
         doc.version = 15;
     }

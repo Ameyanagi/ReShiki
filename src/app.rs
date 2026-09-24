@@ -115,6 +115,7 @@ pub enum Message {
     FontSize(String),
     ApplyFontSize,
     ColorScope(typography::ColorScope),
+    ClearRingFill,
     TextColor(String),
     ApplyTextColor,
     TextAlign(reshiki::typography::TextAlign),
@@ -580,6 +581,7 @@ impl App {
     }
     fn changed_continuing(&mut self, before: Document, continuing: bool) {
         reshiki::projection::sync_centroids(&mut self.doc);
+        reshiki::ring_fills::prune(&mut self.doc);
         self.cleanup = None;
         self.doc.reconcile_abbreviations(&before);
         if let Err(error) = reshiki::reactions::reconcile(&mut self.doc) {
@@ -1425,9 +1427,15 @@ impl App {
                     self.status = "Enter a font size from 4 to 144 pt".into();
                 }
             },
+            Message::ClearRingFill => self.apply_ring_color(None),
             Message::ColorScope(scope) => {
                 self.color_scope = scope;
                 self.sync_color_input();
+                if scope == typography::ColorScope::Rings {
+                    self.status =
+                        "Ring interiors · Select a ring, then choose a color in the top toolbar"
+                            .into();
+                }
             }
             Message::TextColor(value) => self.text_color_input = value,
             Message::ApplyTextColor => {
@@ -3414,6 +3422,30 @@ mod tests {
         checked_labels(&mut app);
         let _ = app.update(Message::Redo);
         assert_eq!(app.doc, second);
+    }
+
+    #[test]
+    fn ring_color_toolbar_changes_only_fills_and_undo_restores_them() -> Result<(), String> {
+        let (mut app, _) = App::new();
+        app.selected = editing::ring(&mut app.doc, Point::default(), 6, true, 0.);
+        let original = app.doc.clone();
+        let _ = app.update(Message::ColorScope(typography::ColorScope::Rings));
+        let _ = app.update(Message::TextStyle(reshiki::typography::StyleChange::Color(
+            [201, 224, 248],
+        )));
+        assert_eq!(app.doc.ring_fills.len(), 1);
+        assert_eq!(app.doc.atoms, original.atoms);
+        assert_eq!(app.doc.bonds, original.bonds);
+        assert_eq!(app.current_selection_color(), Some([201, 224, 248]));
+        let colored = app.doc.clone();
+        let _ = app.update(Message::ClearRingFill);
+        assert!(app.doc.ring_fills.is_empty());
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, colored);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, original);
+        app.doc.validate()?;
+        Ok(())
     }
 
     #[test]

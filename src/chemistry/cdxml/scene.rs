@@ -1,6 +1,7 @@
 //! Detached original CDXML scene assembly and checked drawing reconstruction.
 mod circles;
 mod finish;
+mod ring_fills;
 use super::{
     ImportPoint, NativeArrow, NativeAtomDisplay, NativeMark, NativeStereo, ObjectMapEntry,
     PreparedAtoms, PreparedCdxml,
@@ -83,6 +84,8 @@ pub struct NativeScene {
     pub arrows: Vec<NativeArrow>,
     pub atom_labels: crate::atom_labels::Settings,
     pub graphics: Vec<NativeGraphic>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub ring_fills: Vec<crate::ring_fills::RingFill>,
     pub groups: Vec<crate::grouping::Group>,
     pub abbreviations: Vec<crate::abbreviations::Abbreviation>,
 }
@@ -274,6 +277,7 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
         arrows: Vec::new(),
         atom_labels: Default::default(),
         graphics: Vec::new(),
+        ring_fills: Vec::new(),
         groups: Vec::new(),
         abbreviations: Vec::new(),
     };
@@ -455,6 +459,10 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
         .collect::<Result<Vec<_>>>()?;
     let filtered = tree.serialize()?;
     let filtered_source = presentation::parse(&filtered)?;
+    for (source, fill) in ring_fills::read(&nodes, &order, &tree, prepared, &association)? {
+        objects.put(source, fill.atoms.clone())?;
+        base.ring_fills.push(fill);
+    }
     let claimed: BTreeSet<_> = objects
         .entries
         .iter()

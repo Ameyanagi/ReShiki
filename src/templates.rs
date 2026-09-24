@@ -559,6 +559,11 @@ pub fn place_anchored(
                 .filter_map(|(a, b)| added.get(a).map(|id| (*id, *b)))
                 .collect();
             let mapped = |id: u64| mapping.get(&id).copied().unwrap_or(id);
+            for fill in &mut result.ring_fills {
+                for id in &mut fill.atoms {
+                    *id = mapped(*id);
+                }
+            }
             let mut affected = target.to_vec();
             affected.extend(mapping.keys());
             result.invalidate_chemistry(&affected);

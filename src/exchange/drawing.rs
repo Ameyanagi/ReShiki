@@ -165,6 +165,7 @@ pub fn write(document: &Document, options: Options<'_>) -> Result<String> {
     w.marks()?;
     w.arrows()?;
     let middle = w.graphics()?;
+    w.ring_fills(middle.saturating_sub(1))?;
     let arrow_nodes: std::collections::HashSet<_> = document
         .arrows
         .iter()
@@ -187,6 +188,24 @@ pub fn write(document: &Document, options: Options<'_>) -> Result<String> {
     w.crossings(middle)?;
     w.groups()?;
     w.abbreviations()?;
+    if !document.ring_fills.is_empty() {
+        // Editable readers need a distinct stacking ordinal for every object.
+        // Equal Z values on atoms/bonds can make an opaque fill cover them.
+        let mut layers = Vec::new();
+        for key in w.tree.descendants(w.page)? {
+            if let Some(z) = w.tree.get(key, "Z")? {
+                layers.push((
+                    z.parse::<usize>()
+                        .map_err(|_| invalid("Invalid stacking order"))?,
+                    key,
+                ));
+            }
+        }
+        layers.sort_by_key(|(z, _)| *z);
+        for (rank, (_, key)) in layers.into_iter().enumerate() {
+            w.tree.set(key, "Z", (rank + 1).to_string())?;
+        }
+    }
     w.tree.serialize()
 }
 

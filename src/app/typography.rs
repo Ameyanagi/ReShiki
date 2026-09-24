@@ -9,9 +9,10 @@ pub enum ColorScope {
     All,
     Text,
     Bonds,
+    Rings,
 }
 impl ColorScope {
-    pub const ALL: [Self; 3] = [Self::All, Self::Text, Self::Bonds];
+    pub const ALL: [Self; 4] = [Self::All, Self::Text, Self::Bonds, Self::Rings];
 }
 impl std::fmt::Display for ColorScope {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -19,6 +20,7 @@ impl std::fmt::Display for ColorScope {
             Self::All => "All selected",
             Self::Text => "Text",
             Self::Bonds => "Bonds",
+            Self::Rings => "Ring interiors",
         })
     }
 }
@@ -120,6 +122,27 @@ impl App {
         }
     }
     pub(super) fn current_selection_color(&self) -> Option<[u8; 3]> {
+        if self.color_scope == ColorScope::Rings {
+            let cycles = reshiki::ring_fills::selected_cycles(&self.doc, &self.selected);
+            let colors: Option<Vec<_>> = cycles
+                .iter()
+                .map(|atoms| {
+                    self.doc
+                        .ring_fills
+                        .iter()
+                        .find(|fill| {
+                            fill.atoms.len() == atoms.len()
+                                && fill.atoms.iter().all(|id| atoms.contains(id))
+                        })
+                        .map(|f| f.color)
+                })
+                .collect();
+            let colors = colors?;
+            return colors
+                .first()
+                .copied()
+                .filter(|first| colors.iter().all(|c| c == first));
+        }
         if (self.inline_text.is_some() && self.color_scope != ColorScope::Bonds)
             || self.selected.is_empty()
             || (self.text_range().is_some()
@@ -356,7 +379,29 @@ impl App {
         self.changed(before);
         self.sync_style_inputs();
     }
+    pub(super) fn apply_ring_color(&mut self, color: Option<[u8; 3]>) {
+        let before = self.doc.clone();
+        let count = reshiki::ring_fills::apply(&mut self.doc, &self.selected, color);
+        self.changed(before);
+        self.sync_color_input();
+        self.status = if count == 0 {
+            "Select every atom of a ring to change its interior color".into()
+        } else {
+            format!(
+                "{} {count} ring interior(s)",
+                if color.is_some() {
+                    "Colored"
+                } else {
+                    "Cleared"
+                }
+            )
+        };
+    }
     pub(super) fn apply_selection_color(&mut self, color: [u8; 3]) {
+        if self.color_scope == ColorScope::Rings {
+            self.apply_ring_color(Some(color));
+            return;
+        }
         if self.inline_text.is_some() {
             if self.color_scope != ColorScope::Bonds {
                 self.inline_checkpoint();

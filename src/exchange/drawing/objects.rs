@@ -290,13 +290,58 @@ impl Writer<'_> {
         }
         Ok(())
     }
+    pub(super) fn ring_fills(&mut self, z: usize) -> Result<()> {
+        let doc = self.doc;
+        for fill in &doc.ring_fills {
+            let commands = fill.commands(doc);
+            if commands.is_empty() {
+                continue;
+            }
+            let basis = fill
+                .atoms
+                .iter()
+                .map(|id| {
+                    let index = self
+                        .atom_indices
+                        .get(id)
+                        .ok_or_else(|| invalid("Missing ring atom"))?;
+                    let node = self
+                        .atom_nodes
+                        .get(*index)
+                        .ok_or_else(|| invalid("Missing ring node"))?;
+                    self.tree.value(*node, "id")
+                })
+                .collect::<Result<Vec<_>>>()?
+                .join(" ");
+            for (points, closed) in curve_points(&commands)? {
+                let node =
+                    self.curve(self.page, &points, closed, fill.color, true, 0., false, z)?;
+                // Standard filled curves remain visible to other editors. These
+                // references let ReShiki recover ownership when still intact.
+                // CurveType already encodes closure. A redundant binary Closed
+                // property changes filled-curve rendering in external readers.
+                self.tree
+                    .node_mut(node)?
+                    .attrs
+                    .retain(|(name, _)| *name != "Closed");
+                self.tree.set(node, "Name", "ReShiki ring fill")?;
+                self.tree.set(node, "BasisObjects", basis.clone())?;
+            }
+        }
+        Ok(())
+    }
     pub(super) fn graphics(&mut self) -> Result<usize> {
         let doc = self.doc;
         let mut ordered: Vec<_> = doc.graphics.iter().collect();
         ordered.sort_by_key(|g| g.layer);
-        let middle = ordered.iter().filter(|g| g.layer < 0).count() + 1;
+        let fill_layer = usize::from(!doc.ring_fills.is_empty());
+        let middle = ordered.iter().filter(|g| g.layer < 0).count() + 1 + fill_layer;
         for (index, g) in ordered.into_iter().enumerate() {
-            let z = if g.layer < 0 { index + 1 } else { index + 2 };
+            let z = if g.layer < 0 {
+                index + 1
+            } else {
+                index + 2 + fill_layer
+            };
             if g.kind == GraphicKind::Picture {
                 let n = self.picture(g, z)?;
                 self.objects.push((g.id, n));
