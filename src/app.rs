@@ -2507,6 +2507,10 @@ impl App {
                 crate::canvas::tilt::apply(&mut self.doc, &ids, x, y);
                 self.selected = ids;
             }
+            Edit::ScaleAxes { ids, pivot, x, y } => {
+                editing::scale_axes_about(&mut self.doc, &ids, pivot, x, y);
+                self.selected = ids;
+            }
             Edit::RingPreset(preset, anchor, direction, connect, alternate) => {
                 let drawing = reshiki::rings::Drawing {
                     preset,
@@ -4271,6 +4275,45 @@ mod tests {
         assert_eq!(app.tool, Tool::Select);
         app.edit(Edit::Template(Point::new(500., 500.), None));
         assert_eq!(app.doc, snapshots[3]);
+    }
+
+    #[test]
+    fn axis_resize_has_one_step_undo_and_ignores_invalid_scales() -> Result<(), String> {
+        let (mut app, _) = App::new();
+        let a = app.doc.add_atom("C", Point::new(-20., -10.));
+        let b = app.doc.add_atom("C", Point::new(20., 10.));
+        let remote = app.doc.add_atom("O", Point::new(150., 80.));
+        app.doc.add_bond(a, b, 1, "wedge");
+        let original = app.doc.clone();
+        app.edit(Edit::ScaleAxes {
+            ids: vec![a, b],
+            pivot: Point::new(-20., -10.),
+            x: 2.,
+            y: 1.,
+        });
+        assert_eq!(
+            app.doc.atom(b).ok_or("Atom")?.position,
+            Point::new(60., 10.)
+        );
+        assert_eq!(app.doc.atom(remote), original.atom(remote));
+        assert_eq!(app.doc.bonds, original.bonds);
+        let resized = app.doc.clone();
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, original);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc, resized);
+        for (x, y) in [(1., 1.), (f32::NAN, 1.), (0., 1.), (1., -1.)] {
+            app.edit(Edit::ScaleAxes {
+                ids: vec![a, b],
+                pivot: Point::default(),
+                x,
+                y,
+            });
+            assert_eq!(app.doc, resized);
+        }
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, original, "No-op drags do not consume undo steps");
+        Ok(())
     }
 
     #[test]
