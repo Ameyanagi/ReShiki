@@ -206,7 +206,7 @@ mod tests {
         assert!(primitive.iter().any(|p| matches!(p, crate::scene::Primitive::Text{text, style, ..} if text == "N" && style.size_pt == 16.)));
         assert!(primitive.iter().any(|p| matches!(p, crate::scene::Primitive::Text{text, style, ..} if text == "O" && style.size_pt == 12.)));
         let mut crowded = styled;
-        crowded.atom_mut(b).ok_or("Oxygen")?.position.x = 62.;
+        crowded.atom_mut(b).ok_or("Oxygen")?.position.x = 40.;
         assert!(
             !crate::scene::primitives(&crowded)
                 .iter()

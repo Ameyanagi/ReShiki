@@ -742,6 +742,36 @@ mod compatibility_tests {
     }
 
     #[test]
+    fn new_group_and_pi_ligand_keys_undo_and_respect_text_editors() -> Result<(), String> {
+        for key in ["M", "Z", "j", "J"] {
+            let (mut app, _) = App::new();
+            app.doc = Document::default();
+            let target = app.doc.add_atom(
+                if matches!(key, "j" | "J") { "Fe" } else { "C" },
+                Point::default(),
+            );
+            let original = app.doc.clone();
+            app.selected = vec![target];
+            let _ = app.update(Message::ContextKey(key.into()));
+            assert!(!app.error, "{key}: {}", app.status);
+            assert_ne!(app.doc, original);
+            app.doc.validate()?;
+            let changed = app.doc.clone();
+            let _ = app.update(Message::Undo);
+            assert_eq!(app.doc, original);
+            assert!(!app.history.can_undo());
+            let _ = app.update(Message::Redo);
+            assert_eq!(app.doc, changed);
+            let _ = app.update(Message::AtomText(super::super::atom_text::Action::Begin(
+                Some(target),
+            )));
+            let _ = app.update(Message::ContextKey(key.into()));
+            assert_eq!(app.doc, changed);
+        }
+        Ok(())
+    }
+
+    #[test]
     fn join_merges_sites_instead_of_adding_an_extra_bond_and_undo_restores_all()
     -> Result<(), String> {
         let (mut app, _) = App::new();

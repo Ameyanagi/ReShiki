@@ -25,6 +25,7 @@ pub mod chains;
 pub mod chemistry;
 pub mod cleanup;
 pub mod clipboard;
+pub mod common_groups;
 pub mod compatibility;
 pub mod crossings;
 pub mod document;

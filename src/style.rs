@@ -214,6 +214,85 @@ pub fn glyph_metrics(c: char, style: &crate::typography::TextStyle) -> GlyphMetr
     result
 }
 
+type InkBox = (crate::document::Point, crate::document::Point);
+static GLYPH_INK: LazyLock<Mutex<HashMap<GlyphKey, Option<InkBox>>>> =
+    LazyLock::new(Default::default);
+
+/// Ink boxes relative to the text's top-left origin, excluding blank line height.
+/// Keep individual glyphs separate so superscripts do not mask empty corners.
+pub(crate) fn text_ink_boxes(
+    text: &str,
+    size: f32,
+    style: &crate::typography::TextStyle,
+) -> Vec<InkBox> {
+    use crate::document::Point;
+    use resvg::usvg::fontdb::{Family, Query};
+    let mut x = 0.;
+    let mut boxes = Vec::new();
+    for c in text.chars() {
+        let (family, advance) = glyph_metrics(c, style);
+        let key = (family.to_owned(), style.bold, style.italic, c);
+        let cached = GLYPH_INK
+            .lock()
+            .ok()
+            .and_then(|cache| cache.get(&key).copied());
+        let ink = if let Some(ink) = cached {
+            ink
+        } else {
+            let ink = FONTS
+                .query(&Query {
+                    families: &[Family::Name(family)],
+                    weight: resvg::usvg::fontdb::Weight(if style.bold { 700 } else { 400 }),
+                    style: if style.italic {
+                        resvg::usvg::fontdb::Style::Italic
+                    } else {
+                        resvg::usvg::fontdb::Style::Normal
+                    },
+                    ..Default::default()
+                })
+                .and_then(|id| {
+                    FONTS.with_face_data(id, |bytes, index| {
+                        let face = ttf_parser::Face::parse(bytes, index).ok()?;
+                        let glyph = face.glyph_index(c)?;
+                        let bbox = face.glyph_bounding_box(glyph)?;
+                        let em = face.units_per_em() as f32;
+                        let ascent = face.ascender() as f32;
+                        Some((
+                            Point::new(bbox.x_min as f32 / em, (ascent - bbox.y_max as f32) / em),
+                            Point::new(bbox.x_max as f32 / em, (ascent - bbox.y_min as f32) / em),
+                        ))
+                    })
+                })
+                .flatten()
+                .or_else(|| {
+                    (!c.is_whitespace()).then_some((Point::default(), Point::new(advance, 1.)))
+                });
+            if let Ok(mut cache) = GLYPH_INK.lock() {
+                if cache.len() >= 16384 {
+                    cache.clear();
+                }
+                cache.insert(key, ink);
+            }
+            ink
+        };
+        if let Some((lo, hi)) = ink {
+            boxes.push((
+                Point::new(x + lo.x * size, lo.y * size),
+                Point::new(x + hi.x * size, hi.y * size),
+            ));
+        }
+        if style.underline {
+            // Underline metrics differ between backends. Reserve its full band.
+            boxes.push((
+                Point::new(x, size * 0.8),
+                Point::new(x + advance * size, size * 1.1),
+            ));
+        }
+        x += advance * size;
+    }
+    boxes
+}
+
 static FONT_NAMES: LazyLock<Vec<&'static str>> = LazyLock::new(|| {
     let names: std::collections::BTreeSet<_> = FONTS
         .faces()

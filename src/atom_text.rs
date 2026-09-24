@@ -1,5 +1,8 @@
 //! Text at an atom endpoint: an element, a real collapsed group, or a named dummy.
 use crate::{abbreviations::PRESETS, document::Document, editing::ELEMENTS};
+fn known_group(text: &str) -> bool {
+    PRESETS.contains(&text) || crate::common_groups::LABELS.contains(&text)
+}
 mod hydride;
 pub use hydride::entry;
 
@@ -37,7 +40,7 @@ pub fn description(text: &str, mode: Mode) -> &'static str {
         "A real Cp (C5H5−) or Cp* (C10H15−) ligand with a five-center attachment. Metal charge stays as entered."
     } else if formula_group(text.trim()).is_some()
         || mode == Mode::Group
-        || PRESETS.contains(&text.trim()) && !ELEMENTS.contains(&text.trim())
+        || known_group(text.trim()) && !ELEMENTS.contains(&text.trim())
     {
         "A real chemical group. Expand it later from Abbreviations. Requires a single-bond endpoint."
     } else if hydride::parse(text.trim()).is_ok_and(|h| h.is_some()) {
@@ -70,7 +73,7 @@ pub fn apply(doc: &Document, id: u64, text: &str, mode: Mode) -> Result<Document
     let element = ELEMENTS.contains(&text) || text == "*";
     let formula = (mode != Mode::Text).then(|| formula_group(text)).flatten();
     if mode == Mode::Group
-        && !PRESETS.contains(&text)
+        && !known_group(text)
         && formula.is_none()
         && let Some(group) = doc.abbreviation(id)
     {
@@ -89,7 +92,7 @@ pub fn apply(doc: &Document, id: u64, text: &str, mode: Mode) -> Result<Document
     }
     if mode == Mode::Group
         || formula.is_some()
-        || mode == Mode::Auto && !element && PRESETS.contains(&text)
+        || mode == Mode::Auto && !element && known_group(text)
     {
         let selected = doc
             .abbreviation(id)

@@ -1751,6 +1751,7 @@ impl App {
             .collect();
         let choices: Vec<String> = reshiki::abbreviations::PRESETS
             .iter()
+            .chain(reshiki::common_groups::LABELS.iter())
             .chain(reshiki::ligands::LABELS)
             .map(|s| (*s).into())
             .collect();

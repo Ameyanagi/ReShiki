@@ -9,8 +9,11 @@ fn template(name: &str) -> &'static Document {
 }
 
 #[tokio::test]
-async fn every_thumbnail_is_the_structure_that_gets_placed() {
+async fn every_thumbnail_is_the_structure_that_gets_placed()
+-> Result<(), Box<dyn std::error::Error>> {
     let engine = LocalEngine::default();
+    let catalog: Vec<serde_json::Value> =
+        serde_json::from_str(include_str!("../assets/template-catalog.json"))?;
     for item in LIBRARY.iter() {
         let empty = Document::default();
         let (doc, ids) = place(&empty, &item.document, Point::new(150.0, 90.0), None, 5.0).unwrap();
@@ -30,7 +33,32 @@ async fn every_thumbnail_is_the_structure_that_gets_placed() {
             .analysis
             .unwrap();
         assert_eq!(actual.smiles, expected.smiles, "{}", item.name);
+        if matches!(item.group.as_str(), "Macrocycles" | "Ligands") {
+            let facts = catalog
+                .iter()
+                .find(|f| f.get("name").and_then(|v| v.as_str()) == Some(item.name.as_str()))
+                .ok_or("Missing catalog entry")?;
+            assert_eq!(
+                actual.formula,
+                facts
+                    .get("formula")
+                    .and_then(|v| v.as_str())
+                    .ok_or("Missing formula")?,
+                "{}",
+                item.name
+            );
+            assert_eq!(
+                actual.inchikey,
+                facts
+                    .get("inchikey")
+                    .and_then(|v| v.as_str())
+                    .ok_or("Missing InChIKey")?,
+                "{}",
+                item.name
+            );
+        }
     }
+    Ok(())
 }
 
 #[tokio::test]

@@ -225,6 +225,10 @@ fn fragment(preset: &Preset) -> Result<perception::State> {
 /// intersecting abbreviations. Input and final whole-document chemistry should
 /// be prepared by the caller, just as they are around the original Python edit.
 pub fn replace(document: &Document, selection: &[u64], label: &str) -> Result<Document> {
+    if crate::common_groups::LABELS.contains(&label) {
+        return crate::common_groups::replace(document, selection, label)
+            .map_err(Error::Definition);
+    }
     let preset = presets()?
         .iter()
         .find(|p| p.label == label)
@@ -417,6 +421,7 @@ pub fn replace(document: &Document, selection: &[u64], label: &str) -> Result<Do
         members,
     });
     result.version = 15;
+    crate::ring_fills::prune(&mut result);
     validate(&result)?;
     Ok(result)
 }

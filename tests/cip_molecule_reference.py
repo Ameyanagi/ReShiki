@@ -25,10 +25,9 @@ FIXTURE = Path(__file__).parent / "fixtures/cip-molecule-native.json.gz"
 
 
 def molecules():
-    texts = [
-        t["smiles"]
-        for t in json.loads((Path(__file__).parents[1] / "assets/templates.json").read_text())
-    ]
+    # Frozen native responses use positional keys and seeded permutations.
+    # Their input ordering must not change when the UI template library grows.
+    texts = json.loads((Path(__file__).parent / "fixtures/cip-template-inputs.json").read_text())
     texts += [
         "c1nccnc1",
         "[n-]1nnnc1",
