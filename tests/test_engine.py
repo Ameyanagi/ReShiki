@@ -197,7 +197,7 @@ class ChemistryTests(unittest.TestCase):
     def test_builtin_catalog_matches_frozen_pubchem_formula_and_stereochemistry(self):
         catalog = json.loads((ROOT / "assets/template-catalog.json").read_text(encoding="utf-8"))
         library = json.loads((ROOT / "assets/templates.json").read_text(encoding="utf-8"))
-        self.assertEqual(len(catalog), 79)
+        self.assertEqual(len(catalog), 91)
         self.assertEqual(len(library), len(catalog))
         self.assertEqual(sum(item["group"] == "Amino acids" for item in catalog), 20)
         for expected, item in zip(catalog, library):
