@@ -3073,7 +3073,9 @@ mod tests {
         let (mut app, _) = App::new();
         app.busy = false;
         let idle = subscriptions(&app);
-        assert_eq!(idle, 2); // Window close and keyboard/mouse events only.
+        // Window close and keyboard/mouse events, plus the event-driven
+        // Finder receiver on macOS. None of these schedules a polling timer.
+        assert_eq!(idle, 2 + usize::from(cfg!(target_os = "macos")));
         app.assistant.busy = true;
         assert_eq!(subscriptions(&app), idle + 1);
         app.assistant.busy = false;
