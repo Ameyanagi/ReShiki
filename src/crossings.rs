@@ -4,6 +4,8 @@ use crate::{
     scene::Primitive,
     style::{DEFAULT, DrawingStyle},
 };
+mod ring_strokes;
+pub(crate) use ring_strokes::ring_stroke;
 #[derive(Debug, Clone, Copy)]
 pub struct Gap {
     origin: Point,
