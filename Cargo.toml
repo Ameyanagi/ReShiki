@@ -12,8 +12,11 @@ default = []
 rdkit-reference = []
 
 [workspace]
-members = ["native/windows", "crates/depict-math"]
+members = ["native/macos", "native/windows", "crates/depict-math"]
 default-members = ["."]
+
+[target.'cfg(target_os = "macos")'.dependencies]
+reshiki-macos = { path = "native/macos" }
 
 [target.'cfg(windows)'.dependencies]
 reshiki-windows = { path = "native/windows" }

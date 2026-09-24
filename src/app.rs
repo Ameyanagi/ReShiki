@@ -19,6 +19,10 @@ mod context_menu;
 mod document_styles;
 mod file_shortcuts;
 mod files;
+#[cfg(target_os = "macos")]
+mod macos_files;
+#[cfg(target_os = "macos")]
+pub(crate) use macos_files::install_document_events;
 mod graphics;
 mod help;
 mod icons;
@@ -197,6 +201,8 @@ pub enum Message {
         result: Box<Result<Response, String>>,
     },
     Opened(Option<(PathBuf, Result<String, String>)>),
+    #[cfg(target_os = "macos")]
+    MacFiles(macos_files::Action),
     Saved(u64, Box<Document>, Result<Option<PathBuf>, String>),
     Exported(Result<Option<PathBuf>, String>),
     Close(iced::window::Id),
@@ -297,6 +303,8 @@ pub struct App {
     status: String,
     error: bool,
     path: Option<PathBuf>,
+    #[cfg(target_os = "macos")]
+    native_opening: bool,
     #[cfg(windows)]
     office_path: Option<PathBuf>,
     saved: Document,
@@ -402,6 +410,8 @@ impl App {
             status: "Ready · Choose a tool to start drawing".into(),
             error: false,
             path: None,
+            #[cfg(target_os = "macos")]
+            native_opening: false,
             #[cfg(windows)]
             office_path: None,
             saved: Document::default(),
@@ -484,6 +494,8 @@ impl App {
     }
     pub fn subscription(&self) -> Subscription<Message> {
         Subscription::batch([
+            #[cfg(target_os = "macos")]
+            macos_files::subscription(),
             self.updates.subscription(),
             self.properties_subscription(),
             if self.assistant.needs_poll() {
@@ -722,6 +734,10 @@ impl App {
             .unwrap_or(&self.doc)
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        #[cfg(target_os = "macos")]
+        if let Message::MacFiles(action) = message {
+            return self.mac_file_action(action);
+        }
         let previous = self.inspector_tab;
         let task = self.update_inner(message);
         // Include inspector changes made by tool-specific handlers, which can
@@ -2082,6 +2098,8 @@ impl App {
                     return self.perform(action);
                 }
             }
+            #[cfg(target_os = "macos")]
+            Message::MacFiles(_) => {}
             Message::Opened(file) => {
                 if let Some((path, result)) = file {
                     match result {
