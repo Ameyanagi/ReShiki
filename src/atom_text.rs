@@ -1,5 +1,18 @@
 //! Text at an atom endpoint: an element, a real collapsed group, or a named dummy.
 use crate::{abbreviations::PRESETS, document::Document, editing::ELEMENTS};
+mod hydride;
+pub use hydride::entry;
+
+/// Unambiguous condensed spellings of existing structural definitions.
+fn formula_group(text: &str) -> Option<(&'static str, &'static str)> {
+    match text {
+        "C2H5" | "C₂H₅" => Some(("Et", "H5C2")),
+        "CH2CH3" | "CH₂CH₃" => Some(("Et", "H3CH2C")),
+        "OCH3" | "OCH₃" => Some(("OMe", "H3CO")),
+        "OC2H5" | "OC₂H₅" => Some(("OEt", "H5C2O")),
+        _ => None,
+    }
+}
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Mode {
@@ -22,10 +35,13 @@ pub fn description(text: &str, mode: Mode) -> &'static str {
         "Text on a dummy atom; existing bonds stay connected."
     } else if crate::ligands::LABELS.contains(&text.trim()) {
         "A real Cp (C5H5−) or Cp* (C10H15−) ligand with a five-center attachment. Metal charge stays as entered."
-    } else if mode == Mode::Group
+    } else if formula_group(text.trim()).is_some()
+        || mode == Mode::Group
         || PRESETS.contains(&text.trim()) && !ELEMENTS.contains(&text.trim())
     {
         "A real chemical group. Expand it later from Abbreviations. Requires a single-bond endpoint."
+    } else if hydride::parse(text.trim()).is_ok_and(|h| h.is_some()) {
+        "An atom with the entered hydrogen count. Checking chemistry will not rewrite this label. Type the element alone to restore automatic hydrogens."
     } else if ELEMENTS.contains(&text.trim()) || text.trim() == "*" {
         "An element symbol (or * for a dummy atom)."
     } else {
@@ -52,7 +68,29 @@ pub fn apply(doc: &Document, id: u64, text: &str, mode: Mode) -> Result<Document
         );
     }
     let element = ELEMENTS.contains(&text) || text == "*";
-    if mode == Mode::Group || mode == Mode::Auto && !element && PRESETS.contains(&text) {
+    let formula = (mode != Mode::Text).then(|| formula_group(text)).flatten();
+    if mode == Mode::Group
+        && !PRESETS.contains(&text)
+        && formula.is_none()
+        && let Some(group) = doc.abbreviation(id)
+    {
+        let mut result = doc.clone();
+        let renamed = result
+            .abbreviations
+            .iter_mut()
+            .find(|g| g.anchor == id)
+            .ok_or("Missing group")?;
+        if group.label != text {
+            renamed.label = text.into();
+            renamed.reverse_label.clear();
+        }
+        result.validate()?;
+        return Ok(result);
+    }
+    if mode == Mode::Group
+        || formula.is_some()
+        || mode == Mode::Auto && !element && PRESETS.contains(&text)
+    {
         let selected = doc
             .abbreviation(id)
             .map(|a| a.members.clone())
@@ -60,10 +98,12 @@ pub fn apply(doc: &Document, id: u64, text: &str, mode: Mode) -> Result<Document
         if doc.abbreviation(id).is_some_and(|a| a.label == text) {
             return Ok(doc.clone());
         }
-        let mut result =
-            crate::chemistry::abbreviations::replace(doc, &selected, text).map_err(|e| {
-                format!("{e}. Choose Text label to use the text without a chemical group.")
-            })?;
+        let mut result = crate::chemistry::abbreviations::replace(
+            doc,
+            &selected,
+            formula.map(|f| f.0).unwrap_or(text),
+        )
+        .map_err(|e| format!("{e}. Choose Text label to use the text without a chemical group."))?;
         // The template is planar; retain the original anchor's position and depth.
         let anchor = result
             .atom(id)
@@ -81,6 +121,12 @@ pub fn apply(doc: &Document, id: u64, text: &str, mode: Mode) -> Result<Document
             a.position = a.position.offset(shift.x, shift.y);
             a.depth = atom.depth;
         }
+        if let Some((_, reverse)) = formula
+            && let Some(group) = result.abbreviations.iter_mut().find(|g| g.anchor == id)
+        {
+            group.label = text.into();
+            group.reverse_label = reverse.into();
+        }
         result.invalidate_chemistry(&selected);
         result.validate()?;
         return Ok(result);
@@ -91,7 +137,14 @@ pub fn apply(doc: &Document, id: u64, text: &str, mode: Mode) -> Result<Document
                 .into(),
         );
     }
-    let new_element = if mode != Mode::Text && element {
+    let explicit = if mode != Mode::Text && !element {
+        hydride::parse(text)?
+    } else {
+        None
+    };
+    let new_element = if let Some(h) = &explicit {
+        h.element.as_str()
+    } else if mode != Mode::Text && element {
         text
     } else {
         "*"
@@ -102,7 +155,7 @@ pub fn apply(doc: &Document, id: u64, text: &str, mode: Mode) -> Result<Document
     let a = result
         .atom_mut(id)
         .ok_or("The atom is no longer available")?;
-    let chemistry_changed = a.element != new_element;
+    let previous = (a.element.clone(), a.charge, a.explicit_h, a.no_implicit);
     if a.element != new_element {
         a.element = new_element.into();
         a.charge = 0;
@@ -114,6 +167,15 @@ pub fn apply(doc: &Document, id: u64, text: &str, mode: Mode) -> Result<Document
         a.stereo = None;
     }
     a.display.variable = variable;
+    if let Some(h) = &explicit {
+        a.explicit_h = h.hydrogens;
+        a.no_implicit = true;
+        a.label_h = h.hydrogens;
+        a.charge = h.charge;
+    } else if mode != Mode::Text && element && new_element != "*" {
+        a.explicit_h = 0;
+        a.no_implicit = false;
+    }
     if new_element == "*" {
         a.no_implicit = true;
         a.explicit_h = 0;
@@ -122,7 +184,7 @@ pub fn apply(doc: &Document, id: u64, text: &str, mode: Mode) -> Result<Document
     if new_element == "C" {
         a.display.carbons = Some(crate::atom_labels::Carbons::All);
     }
-    if chemistry_changed {
+    if previous != (a.element.clone(), a.charge, a.explicit_h, a.no_implicit) {
         result.invalidate_chemistry(&[id]);
     }
     result.validate()?;

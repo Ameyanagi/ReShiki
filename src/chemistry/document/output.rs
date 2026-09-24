@@ -494,6 +494,12 @@ fn reconstruct(
             if let Some(old) = old {
                 bond = old.clone();
             }
+            // A normalized dative bond has chemical direction. Restoring an
+            // old metal-first single bond must not reverse donor -> acceptor.
+            if b.order == 5 {
+                bond.a = *at(&work.ids, b.a)?;
+                bond.b = *at(&work.ids, b.b)?;
+            }
             bond.order = if old.is_some_and(|b| b.order == 4) && at(&state.graph.bonds, i)?.aromatic
             {
                 4
