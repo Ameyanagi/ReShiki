@@ -364,7 +364,10 @@ impl App {
                         reshiki::scene::effective_double_position(&self.doc, current).cycled(),
                     ));
                 }
-                return self.update(Message::ApplyBondPreset(preset));
+                let result =
+                    hotkeys::bond_edit(&self.doc, a, b, preset).map(|doc| (doc, vec![a, b]));
+                self.commit_hotkey(result, &format!("{preset} bond"));
+                return Task::none();
             }
             let position = match key {
                 "l" => Some(DoublePosition::Left),
@@ -669,6 +672,35 @@ mod compatibility_tests {
             let _ = app.update(Message::Undo);
             assert_eq!(app.doc, original, "{key}");
         }
+        Ok(())
+    }
+
+    #[test]
+    fn triple_shortcut_geometry_and_order_undo_and_redo_as_one_edit() -> Result<(), String> {
+        let (mut app, _) = App::new();
+        app.doc = Document::default();
+        let a = app.doc.add_atom("C", Point::new(0., 0.));
+        let b = app.doc.add_atom("C", Point::new(36.373, -21.));
+        let c = app.doc.add_atom("C", Point::new(72.746, 0.));
+        let d = app.doc.add_atom("C", Point::new(109.119, -21.));
+        for (a, b) in [(a, b), (b, c), (c, d)] {
+            app.doc.add_bond(a, b, 1, "plain");
+        }
+        app.selected = vec![b, c];
+        app.hover = None;
+        let original = app.doc.clone();
+        let _ = app.context_key("3");
+        assert!(!app.error, "{}", app.status);
+        let changed = app.doc.clone();
+        assert_ne!(
+            changed.atom(a).ok_or("Missing atom")?.position,
+            original.atom(a).ok_or("Missing atom")?.position
+        );
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, original);
+        assert!(!app.history.can_undo());
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc, changed);
         Ok(())
     }
 

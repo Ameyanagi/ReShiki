@@ -172,7 +172,13 @@ pub fn place_with_mode(
         })
         .collect();
     let length = if lengths.is_empty() {
-        crate::style::DEFAULT.bond_length_world
+        part.bonds
+            .iter()
+            .find_map(|b| {
+                let length = part.atom(b.a)?.position.distance(part.atom(b.b)?.position);
+                (length > 0.001).then_some(length)
+            })
+            .unwrap_or(doc.drawing_style.bond_length_world)
     } else {
         lengths.iter().sum::<f32>() / lengths.len() as f32
     };
@@ -245,10 +251,8 @@ pub fn place_with_mode(
         .ok_or("The chosen template atom has no available valence for a new bond.")
 }
 
-fn connection_directions(doc: &Document, source: &Atom) -> Vec<f32> {
-    use std::f32::consts::{PI, TAU};
-    let neighbors: Vec<_> = doc
-        .bonds
+fn bond_directions(doc: &Document, source: &Atom) -> Vec<(f32, u8)> {
+    doc.bonds
         .iter()
         .filter_map(|b| {
             let other = if b.a == source.id {
@@ -262,11 +266,16 @@ fn connection_directions(doc: &Document, source: &Atom) -> Vec<f32> {
             (point.distance(source.position) > 0.001).then_some((
                 (point.y - source.position.y)
                     .atan2(point.x - source.position.x)
-                    .rem_euclid(TAU),
+                    .rem_euclid(std::f32::consts::TAU),
                 b.order,
             ))
         })
-        .collect();
+        .collect()
+}
+
+fn connection_directions(doc: &Document, source: &Atom) -> Vec<f32> {
+    use std::f32::consts::{PI, TAU};
+    let neighbors = bond_directions(doc, source);
     match neighbors.as_slice() {
         [] => vec![0.],
         &[(angle, 3 | 6)] => vec![angle + PI],
@@ -290,6 +299,45 @@ fn connection_directions(doc: &Document, source: &Atom) -> Vec<f32> {
                 .map(|(a, _)| a)
                 .collect()
         }
+    }
+}
+
+/// Align a shared atom's open valences before scoring collisions. Sampling
+/// arbitrary rotations can turn a 120-degree junction into 105/135 degrees.
+fn shared_atom_rotations(
+    doc: &Document,
+    target: &Atom,
+    part: &Document,
+    source: &Atom,
+) -> Vec<f32> {
+    use std::f32::consts::PI;
+    let source_bonds = bond_directions(part, source);
+    let target_bonds = bond_directions(doc, target);
+    match (source_bonds.as_slice(), target_bonds.as_slice()) {
+        ([], _) | (_, []) => vec![0.],
+        (&[(a, source_order)], &[(b, target_order)])
+            if matches!(source_order, 3 | 6)
+                || matches!(target_order, 3 | 6)
+                || source_order == 2 && target_order == 2 =>
+        {
+            vec![b + PI - a]
+        }
+        (_, &[(angle, _)]) => connection_directions(part, source)
+            .into_iter()
+            .map(|outward| angle - outward)
+            .collect(),
+        (&[(angle, _)], _) => connection_directions(doc, target)
+            .into_iter()
+            .map(|outward| outward - angle)
+            .collect(),
+        _ => connection_directions(doc, target)
+            .into_iter()
+            .flat_map(|target_outward| {
+                connection_directions(part, source)
+                    .into_iter()
+                    .map(move |source_outward| target_outward + PI - source_outward)
+            })
+            .collect(),
     }
 }
 
@@ -634,16 +682,14 @@ pub fn place_anchored(
                 }
             })
             .collect();
-        let length = if neighbors.is_empty() {
-            crate::style::DEFAULT.bond_length_world
-        } else {
+        let length = (!neighbors.is_empty()).then(|| {
             neighbors
                 .iter()
                 .map(|a| a.position.distance(target.position))
                 .sum::<f32>()
                 / neighbors.len() as f32
-        };
-        if length < 0.001 {
+        });
+        if length.is_some_and(|length| length < 0.001) {
             return Err("Choose an atom with nonzero bond lengths.");
         }
         for source in &part.atoms {
@@ -684,14 +730,21 @@ pub fn place_anchored(
             if source_length < 0.001 {
                 continue;
             }
-            for step in 0..24 {
+            let rotations = if direction.is_some_and(|p| p.distance(point) > radius) {
+                (0..24)
+                    .map(|step| step as f32 * std::f32::consts::TAU / 24.)
+                    .collect()
+            } else {
+                shared_atom_rotations(doc, target, part, source)
+            };
+            for rotation in rotations {
                 consider(
                     &[source.id],
                     &[id],
                     source.position,
                     target.position,
-                    length / source_length,
-                    step as f32 * std::f32::consts::TAU / 24.0,
+                    length.unwrap_or(source_length) / source_length,
+                    rotation,
                 );
             }
         }
