@@ -1,7 +1,16 @@
 //! Shared, bounded corners for normal, bold and tapered bond outlines.
 use crate::document::{Bond, Document, Point};
+#[cfg(test)]
+mod double_tests;
 fn eligible(b: &Bond) -> bool {
-    (b.order == 1 || b.order == 4 && b.projection)
+    (b.order == 1
+        || b.order == 4 && b.projection
+        || matches!(b.order, 2 | 7)
+            && match b.double_position {
+                crate::bonds::DoublePosition::Auto => b.display == "bold",
+                crate::bonds::DoublePosition::Left | crate::bonds::DoublePosition::Right => true,
+                crate::bonds::DoublePosition::Center => false,
+            })
         && matches!(
             b.display.as_str(),
             "plain" | "bold" | "wedge" | "hollow_wedge"

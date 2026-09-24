@@ -28,10 +28,11 @@ fn chain(count: usize) -> (Document, Vec<u64>) {
 }
 
 fn main() -> anyhow::Result<()> {
+    let category_filter = std::env::args().nth(2);
     let directory = PathBuf::from(
         std::env::args_os()
             .nth(1)
-            .context("Usage: shortcut_qa OUTPUT_DIRECTORY")?,
+            .context("Usage: shortcut_qa OUTPUT_DIRECTORY [CATEGORY]")?,
     );
     fs::create_dir_all(&directory)?;
     let mut cases = Vec::<(String, String, Document)>::new();
@@ -149,6 +150,61 @@ fn main() -> anyhow::Result<()> {
         }
         cases.push(("Bonds".into(), format!("Double {position}"), doc));
     }
+    for position in [
+        reshiki::bonds::DoublePosition::Auto,
+        reshiki::bonds::DoublePosition::Left,
+        reshiki::bonds::DoublePosition::Right,
+        reshiki::bonds::DoublePosition::Center,
+    ] {
+        for reverse in [false, true] {
+            let (mut doc, ids) = chain(4);
+            let a = *ids.get(1).context("Missing atom")?;
+            let b = *ids.get(2).context("Missing atom")?;
+            reshiki::bonds::BondPreset::BoldDouble.place(&mut doc, a, b);
+            let bond = doc
+                .bonds
+                .iter_mut()
+                .find(|e| e.a == a && e.b == b)
+                .context("Missing bold double")?;
+            bond.double_position = position;
+            if reverse {
+                bond.reverse();
+            }
+            cases.push((
+                "Bonds".into(),
+                format!(
+                    "Bold double {position}{}",
+                    if reverse { ", reversed" } else { "" }
+                ),
+                doc,
+            ));
+        }
+    }
+    for variant in ["ring", "labeled", "colored", "three-way"] {
+        let mut doc = if variant == "ring" {
+            let mut ring = Document::default();
+            editing::ring(&mut ring, Point::default(), 6, false, 0.);
+            ring
+        } else {
+            chain(4).0
+        };
+        reshiki::bonds::BondPreset::BoldDouble.apply(doc.bonds.get_mut(1).context("Missing edge")?);
+        if variant == "labeled" {
+            doc.atoms.get_mut(1).context("Missing atom")?.element = "N".into();
+        }
+        if variant == "colored" {
+            for b in &mut doc.bonds {
+                b.color = [180, 68, 32];
+            }
+        }
+        if variant == "three-way" {
+            let atom = doc.atoms.get(1).context("Missing atom")?;
+            let (id, position) = (atom.id, atom.position);
+            let other = doc.add_atom("C", position.offset(0., -42.));
+            doc.add_bond(id, other, 1, "plain");
+        }
+        cases.push(("Bonds".into(), format!("Bold double, {variant}"), doc));
+    }
     for (label, transform) in [
         ("Rotate 15", Transform::Rotate(15.)),
         ("Tilt X 12", Transform::TiltX(12.)),
@@ -197,7 +253,15 @@ fn main() -> anyhow::Result<()> {
         "<!doctype html><meta charset='utf-8'><title>Drawing shortcut review</title><style>body{font:16px system-ui;background:#f4f5f4;color:#202824;margin:32px}h1{font-size:28px}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}article{background:white;padding:20px;border:1px solid #d5ddd9;border-radius:12px}img{width:100%;height:210px;object-fit:contain}p{font-size:13px;color:#53605a}a{color:#286655}</style><h1>Drawing shortcut review</h1><p>Generated using the editor's graph operations and figure renderer. Chemical analysis results are listed separately from visual inspection. Files and this review stay outside Git.</p><div class='grid'>",
     );
     let mut sheets = std::collections::BTreeMap::<String, Vec<(String, Document)>>::new();
-    for (index, (category, title, mut doc)) in cases.into_iter().enumerate() {
+    for (index, (category, title, mut doc)) in cases
+        .into_iter()
+        .filter(|(category, _, _)| {
+            category_filter
+                .as_ref()
+                .is_none_or(|filter| filter.eq_ignore_ascii_case(category))
+        })
+        .enumerate()
+    {
         doc.validate().map_err(anyhow::Error::msg)?;
         let mut request = Request::molecule("analyze", doc.clone());
         request.selected_ids = None;
@@ -263,6 +327,10 @@ fn main() -> anyhow::Result<()> {
                     text: title
                         .replace("Group ", "")
                         .replace("Growth ", "")
+                        .replace("Bold double", "Bold ×2")
+                        .replace(" of bond", "")
+                        .replace("Automatic", "Auto")
+                        .replace(", reversed", " ↔")
                         .replace(" degrees", "°"),
                     format: reshiki::typography::TextFormat {
                         style: reshiki::typography::TextStyle {
