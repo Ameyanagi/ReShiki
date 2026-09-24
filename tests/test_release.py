@@ -41,6 +41,12 @@ class ReleaseTests(unittest.TestCase):
                 "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
                 (destination / "sources/rdkit/NOTICE").read_text(),
             )
+            self.assertIn("MIT OR Apache-2.0", (destination / "LICENSE").read_text())
+            self.assertIn(
+                "Copyright (c) 2026 Ameyanagi and ReShiki contributors",
+                (destination / "LICENSE-MIT").read_text(),
+            )
+            self.assertIn("Version 2.0, January 2004", (destination / "LICENSE-APACHE").read_text())
 
     @staticmethod
     def pe_image(machine):

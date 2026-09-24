@@ -38,6 +38,25 @@ The AI assistant is optional and uses your local Codex sign-in. [Install Codex a
 
 ## Contribute
 
+### License
+
+Original ReShiki code and documentation are dual-licensed under the
+[MIT License](LICENSE-MIT) or [Apache License 2.0](LICENSE-APACHE), at your
+option. Both permit commercial use, including use at work.
+
+Third-party dependencies and copied, ported, or adapted code retain their
+existing licenses and notices. See [LICENSE](LICENSE) for scope and
+[NOTICE](NOTICE) for the attribution records. Release packages include the
+project licenses and third-party notices in their `Licenses` directory.
+
+Unless explicitly stated otherwise, contributions intentionally submitted
+for inclusion in original ReShiki code are offered under MIT OR Apache-2.0.
+Contributions to separately licensed components must preserve their
+applicable terms and attribution. Read the [contribution license agreement](CONTRIBUTING.md)
+and confirm it in your pull request.
+
+### Development
+
 ReShiki uses Rust, Iced, and a bundled native InChI helper. See the [developer guide](https://reshiki.com/developer/development/) for setup, checks, and contribution instructions.
 
 ReShiki is under active development. [Report a problem](https://github.com/Ameyanagi/ReShiki/issues).

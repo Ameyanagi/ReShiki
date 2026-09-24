@@ -1,6 +1,7 @@
 {
   "name": "@reshiki/docs",
   "private": true,
+  "license": "MIT OR Apache-2.0",
   "type": "module",
   "scripts": {
     "sync": "bun scripts/sync-docs.mjs",

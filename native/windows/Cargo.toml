@@ -3,6 +3,7 @@ name = "reshiki-windows"
 version = "0.1.0"
 edition = "2024"
 publish = false
+license = "MIT OR Apache-2.0"
 description = "Small, safe Windows clipboard and printing interface for ReShiki"
 
 [target.'cfg(windows)'.dependencies]
