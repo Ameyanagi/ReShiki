@@ -963,7 +963,7 @@ impl App {
             );
             if atoms.len() >= 3 {
                 controls = controls.push(
-                    command("Toggle aromatic circle · A", Message::AromaticDisplay)
+                    command("Toggle aromatic circle", Message::AromaticDisplay)
                         .on_press_maybe((!self.busy).then_some(Message::AromaticDisplay)),
                 );
                 controls = controls.push(command("Toggle inner ring curve", Message::InspectorAction(Action::RingArc)))

@@ -861,29 +861,29 @@ impl App {
     fn tool_palette(&self) -> Element<'_, Message> {
         use reshiki::graphics::GraphicKind as G;
         let tools = [
-            (Tool::Select, "Select / move · V"),
-            (Tool::Lasso, "Lasso select · L"),
+            (Tool::Select, "Select / move · Space"),
+            (Tool::Lasso, "Lasso select · l"),
             (
                 Tool::Tilt,
                 "3D tilt · Drag a ring or selection · Shift snaps to 15°",
             ),
-            (Tool::Erase, "Eraser · E · Drag to erase"),
-            (Tool::Atom, "Atom label · C, N, O…"),
-            (Tool::Bond(1), "Single bond · B / 1"),
+            (Tool::Erase, "Eraser · Drag to erase"),
+            (Tool::Atom, "Atom label · c, n, o…"),
+            (Tool::Bond(1), "Single bond · x / 1"),
             (Tool::Bond(2), "Double bond · 2"),
             (Tool::Bond(3), "Triple bond · 3"),
             (self.toolbar.bond, "Other bonds"),
-            (self.toolbar.ring, "Rings · R / Aromatic · Shift+R"),
+            (self.toolbar.ring, "Rings · r / Aromatic · Shift R"),
             (
                 Tool::Chain(reshiki::chains::ChainMode::Straight),
-                "Straight chain · X",
+                "Straight chain · Shift X",
             ),
             (
                 Tool::Chain(reshiki::chains::ChainMode::Snaking),
-                "Snaking chain · Shift+X",
+                "Snaking chain",
             ),
-            (Tool::Arrow, "Reaction & electron-flow arrows · A"),
-            (Tool::Text, "Text label · T"),
+            (Tool::Arrow, "Reaction & electron-flow arrows · e"),
+            (Tool::Text, "Text label · t"),
             (Tool::Graphic(self.toolbar.rectangle.kind), "Rectangles"),
             (
                 Tool::Graphic(self.toolbar.ellipse.kind),
@@ -982,7 +982,7 @@ impl App {
                 .padding([5, 10])
                 .on_press(Message::ToggleHelp)
                 .style(control(self.help_open)),
-                "Keyboard shortcuts (?)",
+                "Keyboard shortcuts (F1)",
                 tooltip::Position::Right,
             )
         ]

@@ -298,6 +298,27 @@ impl App {
                     }
                     Key::Character(c) if key.modifiers.command() => {
                         match c.to_ascii_lowercase().as_str() {
+                            "l" if key.modifiers.shift() => {
+                                Some(Message::TextAlign(reshiki::typography::TextAlign::Left))
+                            }
+                            "c" if key.modifiers.shift() => {
+                                Some(Message::TextAlign(reshiki::typography::TextAlign::Center))
+                            }
+                            "r" if key.modifiers.shift() => {
+                                Some(Message::TextAlign(reshiki::typography::TextAlign::Right))
+                            }
+                            "j" if key.modifiers.shift() => Some(Message::TextAlign(
+                                reshiki::typography::TextAlign::Justified,
+                            )),
+                            "f" => Some(Message::TextStyle(StyleChange::Formula(
+                                !self.current_text_style().formula,
+                            ))),
+                            "-" => Some(Message::TextStyle(StyleChange::Script(
+                                reshiki::typography::Script::Subscript,
+                            ))),
+                            "+" | "=" => Some(Message::TextStyle(StyleChange::Script(
+                                reshiki::typography::Script::Superscript,
+                            ))),
                             "z" => Some(Message::InlineText(Action::Undo(key.modifiers.shift()))),
                             "b" => Some(Message::TextStyle(StyleChange::Bold(
                                 !self.current_text_style().bold,
@@ -349,9 +370,17 @@ impl App {
                     .size(10)
                     .color(super::workspace::muted()),
                 Space::new().width(Length::Fill),
-                button(text("Done ↵").size(11))
-                    .on_press(Message::InlineText(Action::Finish(true)))
-                    .style(super::workspace::control(true))
+                iced::widget::tooltip(
+                    button(text("Done ↵").size(11))
+                        .on_press(Message::InlineText(Action::Finish(true)))
+                        .style(super::workspace::control(true)),
+                    text(super::platform_shortcut(
+                        "Apply · ⌘ Enter",
+                        "Apply · Ctrl Enter"
+                    ))
+                    .size(12),
+                    iced::widget::tooltip::Position::Top,
+                )
             ]
             .align_y(Alignment::Center)
             .padding([2, 7]),
@@ -509,6 +538,13 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::Tool(_)
             | Message::Palette(_)
             | Message::ContextKey(_)
+            | Message::Shortcut(
+                super::shortcuts::Action::FixedLength
+                    | super::shortcuts::Action::FixedAngles
+                    | super::shortcuts::Action::Nudge(..)
+                    | super::shortcuts::Action::Join
+                    | super::shortcuts::Action::CopyText(_)
+            )
             | Message::New
             | Message::Open
             | Message::Save

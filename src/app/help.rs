@@ -8,10 +8,11 @@ use iced::widget::{
 use iced::{Alignment, Border, Color, Element, Length};
 
 pub(super) fn is_shortcut(key: &iced::keyboard::Key, modifiers: iced::keyboard::Modifiers) -> bool {
-    !modifiers.command()
-        && !modifiers.control()
-        && !modifiers.alt()
-        && matches!(key, iced::keyboard::Key::Character(c) if c == "?" || (c == "/" && modifiers.shift()))
+    modifiers.is_empty()
+        && matches!(
+            key,
+            iced::keyboard::Key::Named(iced::keyboard::key::Named::F1)
+        )
 }
 
 impl App {
@@ -22,16 +23,17 @@ impl App {
         let drawing = group(
             "Drawing tools",
             &[
-                ("V / L", "Select / Lasso"),
-                ("B / 1", "Single bond"),
+                ("Space / l", "Select / Lasso"),
+                ("x / 1", "Single bond"),
                 ("2 / 3 / 4", "Double / Triple / Quadruple"),
-                ("X", "Straight chain"),
-                ("Shift X", "Snaking chain"),
+                ("Shift X", "Straight chain"),
                 (
-                    "R / Shift R",
+                    "r / Shift R",
                     "Ring / Toggle saturated–aromatic (same size)",
                 ),
-                ("A / T / E", "Arrow / Text / Eraser"),
+                ("e / t / Shift T", "Arrow / Text / Brackets"),
+                ("j / Shift J", "Benzene / Cyclopentadiene"),
+                ("F1", "Keyboard shortcuts"),
                 ("Option / Alt drag", "Draw or move bonded atoms freely"),
                 ("Esc", "Return to selection"),
             ],
@@ -45,7 +47,7 @@ impl App {
                     platform_shortcut("⇧ ⌘ A", "Ctrl Shift A"),
                     "Invert selection",
                 ),
-                (platform_shortcut("⌘ D", "Ctrl D"), "Duplicate"),
+                (platform_shortcut("⇧ ⌘ D", "Ctrl Shift D"), "Duplicate"),
                 (
                     platform_shortcut("⌘ Z / ⇧ ⌘ Z", "Ctrl Z / Ctrl Shift Z"),
                     "Undo / Redo",
@@ -55,21 +57,25 @@ impl App {
             ],
         );
         let context = column![
-            text("Edit under the pointer").size(14),
-            text("Hover an atom to change its element:")
-                .size(12)
-                .color(muted()),
-            shortcut("C N O S P F H", "Element symbol"),
-            shortcut("S / D / T", "Single / Double / Triple bond"),
-            text("Hover or select a bond. Repeat D to shift the double bond lines.")
-                .size(12)
-                .color(muted()),
-            shortcut("A", "Aromatic circle / Alternating bonds"),
-            text("Select an aromatic ring first.")
-                .size(12)
-                .color(muted()),
-        ]
-        .spacing(8);
+            text("Under the pointer (case-sensitive)").size(14),
+            shortcut("1 / 2 / 3", "Bond: single / double / triple"),
+            shortcut("b / w / h / y", "Bond: bold / wedge / hashed wedge / wavy"),
+            shortcut("d / D / B / H", "Bond: dashed / partial double / bold double / hashed"),
+            shortcut("l / c / r", "Double line: left / center / right"),
+            shortcut("c n o s p f h", "Atom: C N O S P F H"),
+            shortcut("b / C / B / i / L / S", "Atom: Br / Cl / B / I / Li / Si"),
+            shortcut("m / e / y / P", "Atom: Me / Et / Boc / Ph"),
+            shortcut("A / E / F / H / N / O / Q", "Ac / CO₂Me / CF₃ / Cbz / NO₂ / OMe / Fmoc"),
+            shortcut("d / + / −", "Atom: deuterium / increase / decrease charge"),
+            shortcut("r / x", "Atom: variable R / X"),
+            shortcut("0 / 1 / 2 / 8 / z", "Atom: branch / chain / carbonyl / =CH₂ / alkyne"),
+            shortcut("3 / 6 / 7 / v / u", "Atom: phenyl / 6-ring / 5-ring / 3-ring / 4-ring"),
+            shortcut("9 / K / k", "Atom: dimethyl / tert-butyl / sulfonyl"),
+            shortcut("v / 4–8 / a / z / 9 / 0", "Bond: fuse rings / benzene / diene / chairs"),
+            shortcut("g / ? / Enter", "Select / Properties / Edit atom label"),
+            text("Uppercase means Shift-letter. Repeat 2 on a double bond to cycle its line placement.")
+                .size(12).color(muted()),
+        ].spacing(8);
         let files = group(
             "Files",
             &[
@@ -79,17 +85,39 @@ impl App {
                 ),
                 (platform_shortcut("⌘ S", "Ctrl S"), "Save"),
                 (
-                    platform_shortcut("⌘ I / ⌘ E", "Ctrl I / Ctrl E"),
+                    platform_shortcut("⌘ I / ⇧ ⌘ E", "Ctrl I / Ctrl Shift E"),
                     "Import / Export",
                 ),
                 (platform_shortcut("⌘ P", "Ctrl P"), "Print"),
+                (
+                    platform_shortcut("⌘ J", "Ctrl J"),
+                    "Join selected atoms / bonds",
+                ),
+                (platform_shortcut("⇧ ⌘ K", "Ctrl Shift K"), "Clean up"),
+                (
+                    platform_shortcut("⌘ L / ⌘ E", "Ctrl L / Ctrl E"),
+                    "Fixed bond length / angles",
+                ),
+                (
+                    platform_shortcut("⌥ ⌘ K", "Alt K"),
+                    "Aromatic circle / alternating bonds",
+                ),
+                (platform_shortcut("⌘ D", "Ctrl D"), "Copy CDXML text"),
+                (
+                    platform_shortcut("⌥ ⌘ C / ⌥ ⌘ O", "Ctrl Alt C / Ctrl Alt O"),
+                    "Copy SMILES / MOL",
+                ),
+                (
+                    "Alt arrows / Shift Alt arrows",
+                    "Rotate / 3D tilt selection",
+                ),
+                ("Arrows / Shift arrows", "Nudge 1 / 10 units"),
             ],
         );
-        let body = row![
-            column![drawing, context].spacing(22).width(Length::Fill),
-            column![editing, files].spacing(22).width(Length::Fill),
-        ]
-        .spacing(30);
+        let body = column![drawing, context, editing, files]
+            .spacing(24)
+            .width(Length::Fill)
+            .padding([0, 12]);
         let popup = container(
             column![
                 row![
@@ -110,7 +138,7 @@ impl App {
                 ]
                 .align_y(Alignment::Center)
                 .spacing(12),
-                scrollable(body).height(Length::Shrink),
+                scrollable(body).height(Length::Fill),
                 row![
                     text("Hold a tool or click its corner for more options.")
                         .size(12)
@@ -128,6 +156,7 @@ impl App {
         )
         .padding(24)
         .width(720)
+        .height(650)
         .max_height(650)
         .style(|_| container::Style {
             background: Some(Color::WHITE.into()),
@@ -293,13 +322,15 @@ mod tests {
     }
 
     #[test]
-    fn question_mark_accepts_the_native_unmodified_slash_key() {
-        use iced::keyboard::{Key, Modifiers};
-        let slash = Key::Character("/".into());
-        assert!(is_shortcut(&slash, Modifiers::SHIFT));
-        assert!(is_shortcut(&Key::Character("?".into()), Modifiers::empty()));
-        assert!(!is_shortcut(&slash, Modifiers::empty()));
-        assert!(!is_shortcut(&slash, Modifiers::SHIFT | Modifiers::ALT));
+    fn help_uses_f1_and_leaves_question_mark_for_properties() {
+        use iced::keyboard::{Key, Modifiers, key::Named};
+        assert!(is_shortcut(&Key::Named(Named::F1), Modifiers::empty()));
+        assert!(!is_shortcut(
+            &Key::Character("?".into()),
+            Modifiers::empty()
+        ));
+        assert!(!is_shortcut(&Key::Character("/".into()), Modifiers::SHIFT));
+        assert!(!is_shortcut(&Key::Named(Named::F1), Modifiers::ALT));
     }
 
     #[test]
