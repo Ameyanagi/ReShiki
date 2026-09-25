@@ -94,7 +94,8 @@ export default defineConfig({
           label: "Developer",
           collapsed: true,
           items: [
-            { label: "Merged changes awaiting release", slug: "developer/changes-unreleased" },
+            { label: "ReShiki 0.8.0", slug: "developer/changes-0.8" },
+            { label: "Unreleased changes", slug: "developer/changes-unreleased" },
             { label: "Build and test", slug: "developer/development" },
             { label: "Architecture", slug: "developer/architecture" },
             { label: "Release and signing", slug: "developer/releasing" },

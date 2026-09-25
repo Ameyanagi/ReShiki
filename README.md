@@ -22,17 +22,19 @@ Draw molecules, build reaction schemes, and prepare figures on an editable canva
 
 Start with JACS / ACS styling. Attach templates, refine selected structures, or ask the assistant to propose a drawing. Review edits and undo changes. Copy editable structures or export SVG, PDF, and PNG.
 
-Version 0.7 adds typed multi-center/variable attachments, chemically defined Cp/Cp* groups, constrained movement, a 3D tilt tool, improved bond junctions, image history in the assistant, and in-app updates. The assistant defaults to GPT-6-Astra when available. New drawings use `.rsk`; existing `.reshiki` and `.moruno` drawings remain supported. [Read the 0.7 release notes](https://reshiki.com/developer/changes-0.7/) and [illustrated change log](docs/changes-pr17.md).
+Version 0.8 adds contextual shortcuts and one editable example gallery, Haworth templates, ring interior colors, independent resizing, and improved tilted Cp/arene editing and editable clipboard transfer. Large PNG exports adapt their resolution, and PNG/PDF/SVG figure export remains available for drawings with unresolved chemistry. [Illustrated release notes](docs/changes-0.8.md) · [Shortcut gallery and reference](docs/contextual-shortcuts.md).
+
+New drawings use `.rsk`; existing `.reshiki` and `.moruno` drawings remain supported. Groups and templates are available now and may be extended or revised in future releases.
 
 ## Install
 
-Download ReShiki for Apple Silicon macOS, Windows (x64 / ARM64), or Linux (x64 / ARM64). Version 0.6 includes the drawing and chemistry tools: no Python, RDKit, or uv installation is needed. Drawing, imports, cleanup, and molecular properties work offline from the first launch.
+Download ReShiki for Apple Silicon macOS, Windows (x64 / ARM64), or Linux (x64 / ARM64). ReShiki includes the drawing and chemistry tools: no Python, RDKit, or uv installation is needed. Drawing, imports, cleanup, and molecular properties work offline from the first launch.
 
 On Mac, open the disk image and drag ReShiki to Applications. On Windows, run setup. Click **ReShiki** in the app to check for updates.
 
 [Installation guide](https://reshiki.com/guide/install/)
 
-Version 0.7.1 fixes transparent image input, Cp/Cp* projections, aromatic wedge editing, partial ring curves, and Windows popup shadows. See the [illustrated changes](docs/changes-0.7.1.md).
+Open **Help → Open shortcut examples** for a single editable reference file. Double-click an example structure to select it, then copy it into your drawing. See the [clipboard compatibility table](docs/clipboard.md#changes-made-for-an-external-copy) for supported transfer and explicit conversions.
 
 The AI assistant is optional and uses your local Codex sign-in. [Install Codex and connect the assistant](docs/assistant-setup.md) for text and image requests; ordinary drawing and chemistry work offline without it.
 
@@ -61,4 +63,4 @@ ReShiki uses Rust, Iced, and a bundled native InChI helper. See the [developer g
 
 ReShiki is under active development. [Report a problem](https://github.com/Ameyanagi/ReShiki/issues).
 
-See the [merged changes awaiting release](docs/changes-unreleased.md) and the [shortcut list with one editable example document](docs/contextual-shortcuts.md). Group and template definitions may be extended or revised in future releases.
+See the [release notes](docs/changes-0.8.md) and the [shortcut list with one editable example document](docs/contextual-shortcuts.md). Group and template definitions may be extended or revised in future releases.

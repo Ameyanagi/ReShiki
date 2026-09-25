@@ -18,7 +18,7 @@ subset. Windows file dialogs support paths containing spaces and Unicode.
 
 Normal Copy/Paste within ReShiki retains editable atoms, bonds, captions, arrows,
 graphics, pictures and groups. Cut removes the selection only after the clipboard write
-succeeds. Ctrl+Shift+C copies an image; Ctrl+Shift+V explicitly pastes a picture.
+succeeds. Ctrl+Shift+C copies an image; **Import → Paste picture** explicitly pastes a picture.
 
 Windows Copy provides native ReShiki data, supported editable interchange data
 and an editable Office object containing the complete drawing and a preview.
