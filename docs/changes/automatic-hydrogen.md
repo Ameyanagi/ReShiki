@@ -45,7 +45,7 @@ Both captures have the same coordinates and 1000 × 601 framing.
 Automatic placement follows movement and rotation, considering bond directions
 independently of bond lengths. Two bonds use their open angle bisector: labels
 stack when it is within 22.5 degrees of vertical and otherwise stay inline.
-Straight bonds use a stable perpendicular direction; reversing bond order does
+Straight bonds use a stable open side; reversing bond order does
 not flip the result. More than two bonds use angular clearance. Stacked label parts share the attachment element's
 left edge. Spacing uses the glyph outlines, including subscripts. Bonds clip
 against those same outlines. Manual hydrogen-position choices remain available
