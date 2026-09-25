@@ -2,6 +2,8 @@
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf};
 
+pub use super::provider::Provider;
+
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct Effort {
     #[serde(rename = "reasoningEffort")]
@@ -101,6 +103,15 @@ pub struct Preferences {
     pub model: Option<String>,
     pub efforts: BTreeMap<String, String>,
     pub tiers: BTreeMap<String, String>,
+    pub provider: Provider,
+    #[serde(default)]
+    pub openai_model: Option<String>,
+    #[serde(default)]
+    pub anthropic_model: Option<String>,
+    #[serde(default)]
+    pub openai_base_url: String,
+    #[serde(default)]
+    pub anthropic_base_url: String,
 }
 impl Preferences {
     pub fn resolve<'a>(&self, models: &'a [Model]) -> Result<&'a Model, String> {
@@ -111,6 +122,42 @@ impl Preferences {
             None => default_model(models)
                 .ok_or_else(|| "No available models. Reconnect to Codex.".into()),
         }
+    }
+    /// Active model id for an HTTP provider (explicit choice or provider default).
+    pub fn http_model(&self, provider: Provider) -> String {
+        let explicit = match provider {
+            Provider::OpenAI => self.openai_model.as_deref(),
+            Provider::Anthropic => self.anthropic_model.as_deref(),
+            Provider::Codex => None,
+        };
+        explicit
+            .filter(|s| !s.trim().is_empty())
+            .map(str::to_string)
+            .unwrap_or_else(|| provider.default_model().to_string())
+    }
+    /// Effective base URL for an HTTP provider (preference, env, then default).
+    pub fn http_base_url(&self, provider: Provider) -> String {
+        let configured = match provider {
+            Provider::OpenAI => self.openai_base_url.as_str(),
+            Provider::Anthropic => self.anthropic_base_url.as_str(),
+            Provider::Codex => "",
+        };
+        super::provider::base_url(provider, configured)
+    }
+    /// Synthetic single-entry catalog for HTTP providers so the existing
+    /// model/effort UI keeps working (efforts/tiers come from Codex only).
+    pub fn http_catalog(&self, provider: Provider) -> Vec<Model> {
+        let id = self.http_model(provider);
+        vec![Model {
+            id: id.clone(),
+            label: id,
+            description: format!("{} · configured in Providers", provider.label()),
+            is_default: true,
+            efforts: vec![],
+            default_effort: "medium".into(),
+            tiers: vec![],
+            default_tier: None,
+        }]
     }
     pub fn effort<'a>(&'a self, model: &'a Model) -> &'a str {
         self.efforts

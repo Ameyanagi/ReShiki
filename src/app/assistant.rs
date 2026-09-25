@@ -5,7 +5,7 @@ use iced::widget::{
     text_editor, text_input, tooltip,
 };
 use iced::{Alignment, Border, Color, Element, Length, Task};
-use reshiki::assistant::settings::{Preferences, effort_label};
+use reshiki::assistant::settings::{Preferences, Provider, effort_label};
 use reshiki::{
     assistant::{self, DrawingSettings, Proposal, codex},
     document::Document,
@@ -37,6 +37,13 @@ pub enum Action {
     ViewImage(Option<reshiki::pictures::Picture>),
     Example(&'static str),
     Model(Option<String>),
+    Provider(Provider),
+    HttpModel(String),
+    HttpBaseUrl(String),
+    ApiKeyInput(String),
+    SaveApiKey,
+    ClearApiKey,
+    ApiKeySaved(Result<(), String>),
     Menu(Option<Menu>),
     Search(String),
     ChatScrolled {
@@ -77,6 +84,7 @@ pub struct Draft {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Menu {
     Models,
+    Providers,
     Effort,
     Edits,
     Attachments,
@@ -99,6 +107,11 @@ pub struct State {
     pub draft: Option<Draft>,
     messages: Vec<ChatMessage>,
     account: Option<codex::Account>,
+    http_catalog: Vec<codex::Model>,
+    http_connected: bool,
+    api_key_input: String,
+    api_key_status: String,
+    api_key_error: bool,
     preferences: Preferences,
     preferences_dirty: bool,
     preferences_saving: bool,
@@ -153,6 +166,8 @@ impl State {
         if !cfg!(test) {
             state.preferences = Preferences::load();
         }
+        state.http_catalog = state.preferences.http_catalog(state.preferences.provider);
+        state.follow_chat = true;
         state
     }
     fn retain_preview(&mut self, reason: &str) {
@@ -174,9 +189,26 @@ impl State {
         }
     }
     fn model(&self) -> Option<&codex::Model> {
-        self.account
-            .as_ref()
-            .and_then(|a| self.preferences.resolve(&a.models).ok())
+        if self.preferences.provider == Provider::Codex {
+            self.account
+                .as_ref()
+                .and_then(|a| self.preferences.resolve(&a.models).ok())
+        } else {
+            let id = self.preferences.http_model(self.preferences.provider);
+            self.http_catalog
+                .iter()
+                .find(|m| m.id == id)
+                .or(self.http_catalog.first())
+        }
+    }
+    fn provider_connected(&self) -> bool {
+        match self.preferences.provider {
+            Provider::Codex => self.account.as_ref().is_some_and(|a| a.connected),
+            _ => self.http_connected,
+        }
+    }
+    fn provider_label(&self) -> &'static str {
+        self.preferences.provider.short_label()
     }
     fn record(&mut self, role: &str, text: String) {
         self.messages.push(ChatMessage {
@@ -440,10 +472,99 @@ impl App {
                 }
             }
             Action::Model(value) => {
-                self.assistant.preferences.model = value;
+                if self.assistant.preferences.provider == Provider::Codex {
+                    self.assistant.preferences.model = value;
+                } else {
+                    match self.assistant.preferences.provider {
+                        Provider::OpenAI => self.assistant.preferences.openai_model = value,
+                        Provider::Anthropic => self.assistant.preferences.anthropic_model = value,
+                        Provider::Codex => {}
+                    }
+                    self.assistant.http_catalog = self
+                        .assistant
+                        .preferences
+                        .http_catalog(self.assistant.preferences.provider);
+                }
                 self.assistant.preferences_dirty = true;
                 self.assistant.menu = None;
             }
+            Action::Provider(provider) => {
+                self.assistant.preferences.provider = provider;
+                self.assistant.http_catalog = self.assistant.preferences.http_catalog(provider);
+                self.assistant.api_key_status.clear();
+                self.assistant.api_key_error = false;
+                self.assistant.preferences_dirty = true;
+                self.assistant.menu = Some(Menu::Providers);
+            }
+            Action::HttpModel(value) => {
+                let trimmed = value.trim().to_string();
+                match self.assistant.preferences.provider {
+                    Provider::OpenAI => {
+                        self.assistant.preferences.openai_model =
+                            (!trimmed.is_empty()).then_some(trimmed)
+                    }
+                    Provider::Anthropic => {
+                        self.assistant.preferences.anthropic_model =
+                            (!trimmed.is_empty()).then_some(trimmed)
+                    }
+                    Provider::Codex => {}
+                }
+                self.assistant.http_catalog = self
+                    .assistant
+                    .preferences
+                    .http_catalog(self.assistant.preferences.provider);
+                self.assistant.preferences_dirty = true;
+            }
+            Action::HttpBaseUrl(value) => {
+                match self.assistant.preferences.provider {
+                    Provider::OpenAI => self.assistant.preferences.openai_base_url = value,
+                    Provider::Anthropic => self.assistant.preferences.anthropic_base_url = value,
+                    Provider::Codex => {}
+                }
+                self.assistant.preferences_dirty = true;
+            }
+            Action::ApiKeyInput(value) => {
+                self.assistant.api_key_input = value;
+            }
+            Action::SaveApiKey => {
+                let provider = self.assistant.preferences.provider;
+                let key = self.assistant.api_key_input.clone();
+                return Task::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || {
+                            reshiki::assistant::provider::set_api_key(provider, &key)
+                        })
+                        .await
+                        .map_err(|e| e.to_string())?
+                    },
+                    |result| Message::Assistant(Action::ApiKeySaved(result)),
+                );
+            }
+            Action::ClearApiKey => {
+                let provider = self.assistant.preferences.provider;
+                return Task::perform(
+                    async move {
+                        tokio::task::spawn_blocking(move || {
+                            reshiki::assistant::provider::delete_api_key(provider)
+                        })
+                        .await
+                        .map_err(|e| e.to_string())?
+                    },
+                    |result| Message::Assistant(Action::ApiKeySaved(result)),
+                );
+            }
+            Action::ApiKeySaved(result) => match result {
+                Ok(()) => {
+                    self.assistant.api_key_input.clear();
+                    self.assistant.api_key_status =
+                        "Saved in the OS keychain for this device.".into();
+                    self.assistant.api_key_error = false;
+                }
+                Err(error) => {
+                    self.assistant.api_key_status = error;
+                    self.assistant.api_key_error = true;
+                }
+            },
             Action::Menu(value) => {
                 self.assistant.menu = if self.assistant.menu == value {
                     None
@@ -535,13 +656,16 @@ impl App {
                 self.assistant.cancel = Default::default();
                 self.assistant.busy = true;
                 self.assistant.error = false;
-                self.assistant.status = "Connecting to Codex…".into();
+                let provider = self.assistant.preferences.provider;
+                self.assistant.status = format!("Connecting to {}…", provider.label());
                 self.assistant.started = Some(std::time::Instant::now());
                 let serial = self.assistant.serial;
                 let cancel = self.assistant.cancel.clone();
-                return Task::perform(codex::connect(cancel), move |result| {
-                    Message::Assistant(Action::Connected(serial, result))
-                });
+                let preferences = self.assistant.preferences.clone();
+                return Task::perform(
+                    async move { assistant::http::connect(provider, &preferences, cancel).await },
+                    move |result| Message::Assistant(Action::Connected(serial, result)),
+                );
             }
             Action::Connected(serial, result) => {
                 if serial != self.assistant.serial {
@@ -549,15 +673,26 @@ impl App {
                 }
                 self.assistant.busy = false;
                 self.assistant.started = None;
+                let provider = self.assistant.preferences.provider;
                 match result {
                     Ok(account) => {
                         self.assistant.error = !account.connected;
-                        self.assistant.status = if account.connected {
-                            "Connected to Codex".into()
+                        if provider == Provider::Codex {
+                            self.assistant.status = if account.connected {
+                                "Connected to Codex".into()
+                            } else {
+                                "Run `codex login` to sign in, then reconnect.".into()
+                            };
+                            self.assistant.account = Some(account);
                         } else {
-                            "Run `codex login` to sign in, then reconnect.".into()
-                        };
-                        self.assistant.account = Some(account);
+                            self.assistant.status = if account.connected {
+                                format!("Connected to {}", provider.label())
+                            } else {
+                                "Add an API key in Providers, then reconnect.".to_string()
+                            };
+                            self.assistant.http_catalog = account.models;
+                            self.assistant.http_connected = account.connected;
+                        }
                     }
                     Err(error) => {
                         self.assistant.status = error;
@@ -629,7 +764,12 @@ impl App {
                             }
                             codex::Progress::Status(message) => self.assistant.status = message,
                             codex::Progress::Catalog(account) => {
-                                self.assistant.account = Some(account)
+                                if self.assistant.preferences.provider == Provider::Codex {
+                                    self.assistant.account = Some(account);
+                                } else {
+                                    self.assistant.http_catalog = account.models;
+                                    self.assistant.http_connected = account.connected;
+                                }
                             }
                             codex::Progress::Reply(reply) => self.assistant.reply = reply,
                             codex::Progress::Started { model, effort } => {
@@ -795,8 +935,10 @@ impl App {
                 };
                 if context.atoms.len() > 1000 {
                     self.assistant.error = true;
-                    self.assistant.status =
-                        "Select a smaller part of the drawing to share with Codex".into();
+                    self.assistant.status = format!(
+                        "Select a smaller part of the drawing to share with {}",
+                        self.assistant.provider_label()
+                    );
                     return Task::none();
                 }
                 let settings = DrawingSettings {
@@ -916,8 +1058,10 @@ impl App {
                     iced::widget::operation::snap_to_end("assistant-chat"),
                     Task::perform(
                         async move {
+                            let provider = preferences.provider;
                             if let Some(seed) = seed {
-                                codex::improve_with_image(
+                                assistant::http::improve_with_image(
+                                    provider,
                                     request,
                                     preferences,
                                     cancel,
@@ -928,7 +1072,8 @@ impl App {
                                 )
                                 .await
                             } else if let Some(image) = source_image {
-                                codex::propose_image(
+                                assistant::http::propose_image(
+                                    provider,
                                     request,
                                     preferences,
                                     cancel,
@@ -938,7 +1083,15 @@ impl App {
                                 )
                                 .await
                             } else {
-                                codex::propose(request, preferences, cancel, tx, Some(canvas)).await
+                                assistant::http::propose(
+                                    provider,
+                                    request,
+                                    preferences,
+                                    cancel,
+                                    tx,
+                                    Some(canvas),
+                                )
+                                .await
                             }
                         },
                         move |result| {
@@ -984,7 +1137,10 @@ impl App {
                         } else {
                             proposal.replace_ids.clone()
                         };
-                        self.assistant.record("Codex", proposal.explanation.clone());
+                        self.assistant.record(
+                            self.assistant.provider_label(),
+                            proposal.explanation.clone(),
+                        );
                         if !fragment.all_ids().is_empty() {
                             self.assistant.preview = None;
                             let can_auto_apply = review.can_auto_apply();
@@ -1169,7 +1325,7 @@ impl App {
             } else {
                 chat = chat.push(
                     column![
-                        text("Codex").size(11).color(Color::from_rgb8(17, 126, 108)),
+                        text(role).size(11).color(Color::from_rgb8(17, 126, 108)),
                         text(&message.text).size(13).width(Length::Fill)
                     ]
                     .spacing(6),
@@ -1179,7 +1335,9 @@ impl App {
         if !state.reply.is_empty() && state.busy {
             chat = chat.push(
                 column![
-                    text("Codex").size(11).color(Color::from_rgb8(17, 126, 108)),
+                    text(state.provider_label())
+                        .size(11)
+                        .color(Color::from_rgb8(17, 126, 108)),
                     text(&state.reply).size(13).width(Length::Fill)
                 ]
                 .spacing(6),
@@ -1372,7 +1530,8 @@ impl App {
             )
         ]
         .align_y(Alignment::Center);
-        let connected = state.account.as_ref().is_some_and(|a| a.connected);
+        let connected = state.provider_connected();
+        let provider_short = state.provider_label();
         let mut activity = column![].spacing(6);
         if state.busy {
             let seconds = state.started.map(|t| t.elapsed().as_secs()).unwrap_or(0);
@@ -1400,11 +1559,23 @@ impl App {
         }
         let model_label = match state.model() {
             Some(model) => model.label.clone(),
-            None => state
-                .preferences
-                .model
-                .clone()
-                .unwrap_or_else(|| "GPT-6 Astra".into()),
+            None => match state.preferences.provider {
+                Provider::Codex => state
+                    .preferences
+                    .model
+                    .clone()
+                    .unwrap_or_else(|| "GPT-6 Astra".into()),
+                Provider::OpenAI => state
+                    .preferences
+                    .openai_model
+                    .clone()
+                    .unwrap_or_else(|| Provider::OpenAI.default_model().into()),
+                Provider::Anthropic => state
+                    .preferences
+                    .anthropic_model
+                    .clone()
+                    .unwrap_or_else(|| Provider::Anthropic.default_model().into()),
+            },
         };
         let effort = state
             .model()
@@ -1477,9 +1648,9 @@ impl App {
         let connection = super::workspace::hover_hint(
             action(
                 if connected {
-                    "● Codex"
+                    format!("● {provider_short}")
                 } else {
-                    "Connect Codex"
+                    format!("Connect {provider_short}")
                 },
                 Action::Connect,
             )
@@ -1487,8 +1658,17 @@ impl App {
             if connected {
                 "Connected · Click to refresh models"
             } else {
-                "Connect using your Codex sign-in"
+                "Connect the selected provider"
             },
+            tooltip::Position::Top,
+        );
+        let provider_button = super::workspace::hover_hint(
+            action(
+                format!("{} ⌄", state.preferences.provider.label()),
+                Action::Menu(Some(Menu::Providers)),
+            )
+            .padding([5, 3]),
+            "Choose Codex, OpenAI-compatible or Anthropic",
             tooltip::Position::Top,
         );
         let attach = super::workspace::hover_hint(
@@ -1501,6 +1681,7 @@ impl App {
                 input_row,
                 row![
                     attach,
+                    provider_button,
                     action(format!("{model_label} ⌄"), Action::Menu(Some(Menu::Models)))
                         .padding([5, 3]),
                     Space::new().width(Length::Fill),
@@ -1692,37 +1873,41 @@ impl App {
                 }
             }
             Menu::Models => {
-                options = options.push(
-                    text_input("Search models…", &state.search)
-                        .on_input(|s| Message::Assistant(Action::Search(s)))
-                        .size(13)
-                        .padding(9),
-                );
-                options = options.push(
-                    action("Default · GPT-6 Astra", Action::Model(None))
-                        .width(Length::Fill)
-                        .style(super::workspace::control(state.preferences.model.is_none())),
-                );
-                options = options.push(
-                    text("Uses GPT-6 Astra when available; otherwise your account default")
+                if state.preferences.provider != Provider::Codex {
+                    let provider = state.preferences.provider;
+                    let current = state.preferences.http_model(provider);
+                    options = options.push(
+                        text(format!("{} model", provider.label()))
+                            .size(12)
+                            .color(super::workspace::muted()),
+                    );
+                    options = options.push(
+                        text_input("model id…", &current)
+                            .on_input(|s| Message::Assistant(Action::HttpModel(s)))
+                            .size(13)
+                            .padding(9),
+                    );
+                    options = options.push(
+                        text(if provider == Provider::OpenAI {
+                            "Fetched from GET /models when connected; any chat-completions model id works (try gpt-4o-mini or a local Ollama tag)."
+                        } else {
+                            "Anthropic has no list endpoint; known Sonnet/Opus/Haiku ids are offered, any valid model id works."
+                        })
                         .size(10)
                         .color(super::workspace::muted()),
-                );
-                if let Some(account) = &state.account {
+                    );
                     let search = state.search.to_lowercase();
-                    let mut models: Vec<_> = account
-                        .models
-                        .iter()
-                        .filter(|m| {
-                            m.label.to_lowercase().contains(&search)
-                                || m.id.to_lowercase().contains(&search)
-                        })
-                        .collect();
-                    // Keep the resolved model visible first; retain catalog ordering otherwise.
-                    models
-                        .sort_by_key(|m| state.model().is_none_or(|selected| selected.id != m.id));
-                    for model in models {
-                        let selected = state.preferences.model.as_deref() == Some(&model.id);
+                    options = options.push(
+                        text_input("Search models…", &state.search)
+                            .on_input(|s| Message::Assistant(Action::Search(s)))
+                            .size(13)
+                            .padding(9),
+                    );
+                    for model in state.http_catalog.iter().filter(|m| {
+                        m.label.to_lowercase().contains(&search)
+                            || m.id.to_lowercase().contains(&search)
+                    }) {
+                        let selected = current == model.id;
                         options = options.push(
                             button(
                                 column![
@@ -1743,12 +1928,198 @@ impl App {
                             .on_press(Message::Assistant(Action::Model(Some(model.id.clone())))),
                         );
                     }
+                    options = options.push(
+                        action("Providers…", Action::Menu(Some(Menu::Providers)))
+                            .width(Length::Fill),
+                    );
                 } else {
-                    options = options.push(text("Connect to load your available models.").size(12));
+                    options = options.push(
+                        text_input("Search models…", &state.search)
+                            .on_input(|s| Message::Assistant(Action::Search(s)))
+                            .size(13)
+                            .padding(9),
+                    );
+                    options = options.push(
+                        action("Default · GPT-6 Astra", Action::Model(None))
+                            .width(Length::Fill)
+                            .style(super::workspace::control(state.preferences.model.is_none())),
+                    );
+                    options = options.push(
+                        text("Uses GPT-6 Astra when available; otherwise your account default")
+                            .size(10)
+                            .color(super::workspace::muted()),
+                    );
+                    if let Some(account) = &state.account {
+                        let search = state.search.to_lowercase();
+                        let mut models: Vec<_> = account
+                            .models
+                            .iter()
+                            .filter(|m| {
+                                m.label.to_lowercase().contains(&search)
+                                    || m.id.to_lowercase().contains(&search)
+                            })
+                            .collect();
+                        // Keep the resolved model visible first; retain catalog ordering otherwise.
+                        models.sort_by_key(|m| {
+                            state.model().is_none_or(|selected| selected.id != m.id)
+                        });
+                        for model in models {
+                            let selected = state.preferences.model.as_deref() == Some(&model.id);
+                            options = options.push(
+                                button(
+                                    column![
+                                        row![
+                                            text(&model.label).size(13),
+                                            Space::new().width(Length::Fill),
+                                            text(if selected { "✓" } else { "" }).size(13)
+                                        ],
+                                        text(&model.description)
+                                            .size(10)
+                                            .color(super::workspace::muted())
+                                    ]
+                                    .spacing(4),
+                                )
+                                .width(Length::Fill)
+                                .padding([9, 10])
+                                .style(super::workspace::control(selected))
+                                .on_press(Message::Assistant(Action::Model(Some(
+                                    model.id.clone(),
+                                )))),
+                            );
+                        }
+                    } else {
+                        options =
+                            options.push(text("Connect to load your available models.").size(12));
+                    }
+                    options = options.push(
+                        action("Providers…", Action::Menu(Some(Menu::Providers)))
+                            .width(Length::Fill),
+                    );
+                }
+            }
+            Menu::Providers => {
+                options = options.push(text("Provider").size(12).color(super::workspace::muted()));
+                for (provider, description) in [
+                    (
+                        Provider::Codex,
+                        "Local Codex sign-in (`codex login`). No API key in ReShiki.",
+                    ),
+                    (
+                        Provider::OpenAI,
+                        "Any OpenAI-compatible chat endpoint: OpenAI, Ollama, LM Studio, OpenRouter.",
+                    ),
+                    (
+                        Provider::Anthropic,
+                        "Anthropic Messages API with tool use and vision.",
+                    ),
+                ] {
+                    let selected = state.preferences.provider == provider;
+                    options = options.push(
+                        button(
+                            column![
+                                row![
+                                    text(provider.label()).size(13),
+                                    Space::new().width(Length::Fill),
+                                    text(if selected { "✓" } else { "" }).size(13)
+                                ],
+                                text(description).size(10).color(super::workspace::muted())
+                            ]
+                            .spacing(4),
+                        )
+                        .width(Length::Fill)
+                        .padding([9, 10])
+                        .style(super::workspace::control(selected))
+                        .on_press(Message::Assistant(Action::Provider(provider))),
+                    );
+                }
+                let provider = state.preferences.provider;
+                if provider == Provider::Codex {
+                    options = options.push(
+                        text("Codex launches its local app-server automatically. Set RESHIKI_CODEX to a custom executable path when needed.")
+                            .size(11)
+                            .color(super::workspace::muted()),
+                    );
+                } else {
+                    let (base_url, key_hint) = match provider {
+                        Provider::OpenAI => (
+                            state.preferences.openai_base_url.clone(),
+                            "RESHIKI_OPENAI_API_KEY or OPENAI_API_KEY, else the saved keychain entry.",
+                        ),
+                        Provider::Anthropic => (
+                            state.preferences.anthropic_base_url.clone(),
+                            "RESHIKI_ANTHROPIC_API_KEY or ANTHROPIC_API_KEY, else the saved keychain entry.",
+                        ),
+                        Provider::Codex => (String::new(), ""),
+                    };
+                    options =
+                        options.push(text("Base URL").size(12).color(super::workspace::muted()));
+                    options = options.push(
+                        text_input(provider.default_base_url(), &base_url)
+                            .on_input(|s| Message::Assistant(Action::HttpBaseUrl(s)))
+                            .size(13)
+                            .padding(9),
+                    );
+                    options = options.push(text("Model").size(12).color(super::workspace::muted()));
+                    let current_model = state.preferences.http_model(provider);
+                    options = options.push(
+                        text_input(provider.default_model(), &current_model)
+                            .on_input(|s| Message::Assistant(Action::HttpModel(s)))
+                            .size(13)
+                            .padding(9),
+                    );
+                    options = options.push(
+                        text("API key (stored in the OS keychain)")
+                            .size(12)
+                            .color(super::workspace::muted()),
+                    );
+                    options = options.push(
+                        text_input("sk-…", &state.api_key_input)
+                            .on_input(|s| Message::Assistant(Action::ApiKeyInput(s)))
+                            .size(13)
+                            .padding(9),
+                    );
+                    options = options.push(
+                        row![
+                            action("Save key", Action::SaveApiKey),
+                            action("Forget key", Action::ClearApiKey),
+                        ]
+                        .spacing(6),
+                    );
+                    if !state.api_key_status.is_empty() {
+                        options = options.push(text(&state.api_key_status).size(11).color(
+                            if state.api_key_error {
+                                Color::from_rgb8(175, 54, 54)
+                            } else {
+                                super::workspace::muted()
+                            },
+                        ));
+                    }
+                    let has_key = reshiki::assistant::provider::has_api_key(provider);
+                    options = options.push(
+                        text(if has_key {
+                            "API key available (environment or keychain)."
+                        } else {
+                            key_hint
+                        })
+                        .size(10)
+                        .color(super::workspace::muted()),
+                    );
+                    options = options.push(
+                        text("Generation uses canvas_plan/inspect/preview tools and mandatory image review, matching Codex.")
+                            .size(10)
+                            .color(super::workspace::muted()),
+                    );
                 }
             }
             Menu::Effort => {
                 options = options.push(text("Reasoning").size(12).color(super::workspace::muted()));
+                if state.preferences.provider != Provider::Codex {
+                    options = options.push(
+                        text("HTTP providers use their own defaults; reasoning and service tiers are Codex-only.")
+                            .size(11)
+                            .color(super::workspace::muted()),
+                    );
+                }
                 if let Some(model) = state.model() {
                     for effort in &model.efforts {
                         let label = if effort.id == model.initial_effort() {

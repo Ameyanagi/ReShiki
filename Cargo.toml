@@ -65,6 +65,7 @@ pdf-writer = "0.12.1"
 ttf-parser = "0.25"
 svg2pdf = { version = "0.13", default-features = false, features = ["text", "image"] }
 reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
+keyring = "3"
 semver = "1"
 open = "5"
 roxmltree = "0.20"

@@ -57,12 +57,42 @@ async fn main() -> anyhow::Result<()> {
         }
         return Ok(());
     }
-    let account = codex::connect(Default::default())
+    let provider: assistant::provider::Provider = option("--provider")
+        .map(|s| match s.to_lowercase().as_str() {
+            "openai" | "openai-compatible" | "custom" => assistant::provider::Provider::OpenAI,
+            "anthropic" | "claude" => assistant::provider::Provider::Anthropic,
+            _ => assistant::provider::Provider::Codex,
+        })
+        .unwrap_or(assistant::provider::Provider::Codex);
+    let mut preferences = assistant::settings::Preferences {
+        provider,
+        ..Default::default()
+    };
+    if let Some(model) = option("--model") {
+        match provider {
+            assistant::provider::Provider::OpenAI => preferences.openai_model = Some(model.clone()),
+            assistant::provider::Provider::Anthropic => {
+                preferences.anthropic_model = Some(model.clone())
+            }
+            assistant::provider::Provider::Codex => preferences.model = Some(model.clone()),
+        }
+    }
+    if let Some(base_url) = option("--base-url") {
+        match provider {
+            assistant::provider::Provider::OpenAI => preferences.openai_base_url = base_url.clone(),
+            assistant::provider::Provider::Anthropic => {
+                preferences.anthropic_base_url = base_url.clone()
+            }
+            assistant::provider::Provider::Codex => {}
+        }
+    }
+    let account = assistant::http::connect(provider, &preferences, Default::default())
         .await
         .map_err(anyhow::Error::msg)?;
     writeln!(
         std::io::stdout(),
-        "Codex connected: {}; available models: {}",
+        "{} connected: {}; available models: {}",
+        provider.label(),
         account.connected,
         account.models.len()
     )?;
@@ -108,9 +138,10 @@ async fn main() -> anyhow::Result<()> {
             .map(|path| reshiki::pictures::Picture::open(std::path::Path::new(path)))
             .transpose()
             .map_err(anyhow::Error::msg)?;
-        codex::improve_with_image(
+        assistant::http::improve_with_image(
+            provider,
             prompt,
-            Default::default(),
+            preferences,
             Default::default(),
             tx,
             canvas,
@@ -123,15 +154,17 @@ async fn main() -> anyhow::Result<()> {
         )
         .await
     } else if let Some(path) = option("--image") {
-        codex::propose_image(
+        assistant::http::propose_image(
+            provider,
             option("--prompt").cloned().unwrap_or_else(|| "Reconstruct and clean up the chemical drawing in this image, preserving the depicted chemistry and arrangement.".into()),
-            Default::default(), Default::default(), tx, Some(canvas),
+            preferences, Default::default(), tx, Some(canvas),
             reshiki::pictures::Picture::open(std::path::Path::new(path)).map_err(anyhow::Error::msg)?,
         ).await
     } else {
-        codex::propose(
+        assistant::http::propose(
+            provider,
             prompt,
-            Default::default(),
+            preferences,
             Default::default(),
             tx,
             Some(canvas),

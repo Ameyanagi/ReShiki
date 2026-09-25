@@ -2,6 +2,13 @@
 
 The approved stack, PRs #22–#31, was merged on 25 September 2026 after passing checks and visual review. The published release remains **0.7.1**. This page describes the development version and the additional shortcut-help work.
 
+## Assistant providers beyond Codex
+
+- **Provider selector:** the assistant footer offers Codex (default, local CLI sign-in), OpenAI-compatible HTTP endpoints (OpenAI, Ollama, LM Studio, OpenRouter, vLLM) and Anthropic. Provider, base URL and model persist in `assistant-preferences.json`; API keys never touch that file.
+- **Credentials:** HTTP keys resolve from `RESHIKI_OPENAI_API_KEY`/`OPENAI_API_KEY` or `RESHIKI_ANTHROPIC_API_KEY`/`ANTHROPIC_API_KEY`, then the OS keychain (`reshiki/openai`, `reshiki/anthropic`). The Providers menu saves/forgets keychain entries and reports availability. Base URLs honor `RESHIKI_OPENAI_BASE_URL`/`RESHIKI_ANTHROPIC_BASE_URL` overrides.
+- **Tool-loop parity:** OpenAI function tools and Anthropic custom tools expose `canvas_plan`/`canvas_inspect`/`canvas_preview` with the same bounded local execution, rendered-image feedback and 16-call limit as Codex. Generation returns the shared Proposal schema; the mandatory three-pass visual review returns the shared Critique schema with re-rendering and deterministic quality gates.
+- **Headless checks:** `cargo run --example assistant_smoke -- --provider openai --base-url <url> --model <id> --generate …` and `--provider anthropic …` exercise the same generation/review path as Codex. See [assistant setup](assistant-setup.md).
+
 ## Drawing and chemistry
 
 - **Haworth projections:** carbohydrate templates with defined stereochemistry, plus five- and six-member outlines. Native, figure and checked editable exports retain supported depictions. Blank scaffolds do not infer stereochemistry. [Usage and tested scope](haworth-projections.md).
