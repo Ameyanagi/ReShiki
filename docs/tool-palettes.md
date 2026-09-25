@@ -12,7 +12,7 @@ Canvas, SVG, PDF and PNG share the crossing geometry. Native document version 11
 
 ## 3D tilt and right-click commands
 
-Choose the tilted-ring icon in the second row of the left tool palette. Click a molecule to select it, or select a region by dragging empty space, then drag the selection to tilt. Vertical motion rotates around X; horizontal motion rotates around Y. Hold Shift for 15° snapping. Each gesture previews without changing the document until release and creates one Undo step. Escape cancels; Done or V returns to Select. X/Y ±15° and Front bonds remain available above the canvas.
+Choose the tilted-ring icon in the second row of the left tool palette. Click a molecule to select it, or select a region by dragging empty space, then drag the selection to tilt. Vertical motion rotates around X; horizontal motion rotates around Y. Hold Shift for 15° snapping. Each gesture previews without changing the document until release and creates one Undo step. Escape cancels; Done, Space or Escape returns to Select. X/Y ±15° and Front bonds remain available above the canvas.
 
 Right-click a ring or selected objects for 3D tilt, Arrange & transform, Bond appearance and Attachment points when applicable. Clipboard commands form a separate section; Delete stays at the bottom. Empty canvas offers Undo/Redo, Paste, Select all and Fit drawing. Right-clicking an existing selection retains it. Aromatic and substituted ring interiors are recognized, while ring fusion keeps its original stricter requirements.
 

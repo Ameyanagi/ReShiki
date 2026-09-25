@@ -16,7 +16,7 @@ macOS retains its existing native drawing/CDX and PDF/PNG/SVG clipboard represen
 
 Editable external exchange uses the supported binary CDX/CDXML subset. It covers tested molecules, formal charges, isotopes, tetrahedral and double-bond stereo, bond/label colors, styled text, supported arrows, graphics, embedded raster pictures and nested groups. Some scientific symbols and orbitals become editable vector paths rather than retaining their original preset type. If the receiving editor asks which document settings to use, preserving the copied settings retains the source appearance.
 
-Paste prefers native drawing data and explicit external chemical formats, then PNG/JPEG/TIFF/WebP pictures, then plain chemical text. A structurally valid drawing can be pasted even if chemical validation fails; its atoms, bonds and supplied charges are preserved, with a review notice and no molecular properties. Malformed or unsupported editable content still produces an error rather than silently substituting a picture. **Ctrl+Shift+V** / **Cmd+Shift+V** or **Import → Paste picture** explicitly chooses a raster representation, including when editable formats are also present.
+Paste prefers native drawing data and explicit external chemical formats, then PNG/JPEG/TIFF/WebP pictures, then plain chemical text. A structurally valid drawing can be pasted even if chemical validation fails; its atoms, bonds and supplied charges are preserved, with a review notice and no molecular properties. Malformed or unsupported editable content still produces an error rather than silently substituting a picture. **Import → Paste picture** explicitly chooses a raster representation, including when editable formats are also present.
 
 ## Editable ligand copying
 

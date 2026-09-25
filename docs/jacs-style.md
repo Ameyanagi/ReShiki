@@ -12,13 +12,13 @@ ReShiki defaults to the ACS structure preset for JACS-oriented drawings. This ap
 | Multiple-bond spacing    | 18% of nominal bond length |
 | Label margin             | 1.6 pt                     |
 | Hash spacing             | 2.5 pt                     |
-| PNG resolution           | 1200 dpi                   |
+| PNG resolution           | Up to 1200 dpi             |
 
 The numeric structure settings come from the [ACS graphics preparation guide](https://pubs.acs.org/paragonplus/submission/general/graphics_prep.html). The [current JACS author guidelines](https://researcher-resources.acs.org/publish/author_guidelines?coden=jacsat), checked on 2026-09-16, specify 1200 dpi for black-and-white line art and allow Helvetica or Arial lettering. The current JACS page does not repeat the full older structure-settings table; this preset combines that established ACS table with current JACS output guidance.
 
 ## Implementation
 
-`engine/drawing_style.json` is the shared definition, embedded in the Rust application. A normal 42-unit bond in ReShiki represents 14.4 publication points. Existing document coordinates stay intact. SVG declares dimensions in points; PDF explicitly converts the SVG's 96 px/in coordinate system to 72 pt/in. PNG has matching physical dimensions and 1200 dpi metadata. Screen zoom never changes exported size.
+`engine/drawing_style.json` is the shared definition, embedded in the Rust application. A normal 42-unit bond in ReShiki represents 14.4 publication points. Existing document coordinates stay intact. SVG declares dimensions in points; PDF explicitly converts the SVG's 96 px/in coordinate system to 72 pt/in. PNG has matching physical dimensions and records its actual resolution, up to 1200 dpi. Large files use [automatic resolution](figure-export.md). Screen zoom never changes exported size.
 
 Atom labels use measured font advances and separate text runs for hydrogen subscripts, isotope masses and charges. Hydrogens choose a side based on neighboring bonds; ring double bonds use an inset second line. Annotation selection bounds and multiline spacing follow the larger default font. Arial must be available for exact font matching; fallback sans-serif metrics are used otherwise.
 

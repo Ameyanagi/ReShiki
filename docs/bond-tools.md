@@ -71,4 +71,4 @@ See the broader [feature-gap audit](feature-status.md) for the remaining workspa
 
 The Style palette now offers **All selected**, **Text**, and **Bonds** color scopes. Choose Bonds to recolor selected bond strokes while retaining label colors, or All selected to recolor the complete selected drawing. Click a bond’s middle to select both endpoints; Shift-click adds more. The selection summary explicitly counts selected bonds.
 
-Clicking an existing double bond with the matching double-bond tool cycles centered, left and right placement. Its order, chemical identity and color stay unchanged. Hovering or selecting a bond supports S/D/T for single/double/triple; repeated D also cycles line position. Each change is one Undo step.
+Clicking an existing double bond with the matching double-bond tool cycles centered, left and right placement. Its order, chemical identity and color stay unchanged. Hovering or selecting a bond supports 1/2/3 for single/double/triple; repeated 2 also cycles line position. Each change is one Undo step.

@@ -2,7 +2,7 @@
 
 Help now opens one editable ReShiki document of labeled examples in a separate window. Copy structures into your drawing, edit them, or save your own reference. Existing work and its Undo history stay in the original window.
 
-[Download the single reference file](../../assets/examples/shortcut-examples.rsk) · [Complete shortcut list](../contextual-shortcuts.md) · [Merged changes awaiting release](../changes-unreleased.md)
+[Download the single reference file](../../assets/examples/shortcut-examples.rsk) · [Complete shortcut list](../contextual-shortcuts.md) · [ReShiki 0.8.0 release notes](../changes-0.8.md)
 
 Groups and templates are available in their current form and may be extended or revised in future releases.
 

@@ -35,7 +35,7 @@ Export dialogs also add the selected format’s extension when you omit it.
 
 Molecular and reaction data formats do not retain the full figure layout. Keep the `.rsk` original.
 
-SVG/PNG/PDF retain partial ring curves, free atom labels and front-bond emphasis. Editable CDXML/CDX supports the checked [Haworth convention](/developer/haworth-projections/). Other projection emphasis, partial ring curves and free atom labels remain unsupported in editable exchange; turn off **Front bonds** for other projected structures. Cp/Cp\* are expanded for editable exchange because ChemDraw resaves lose nested haptic definitions in collapsed labels. V3000 attachments require one bond per point; variable attachments do not imply a unique molecular formula.
+SVG/PNG/PDF retain partial ring curves, free atom labels and front-bond emphasis. Editable CDXML/CDX supports the checked [Haworth convention](/developer/haworth-projections/) and tested Cp/arene perspective edges, aromatic ellipses, hidden ligand charges and multi-center targets. Original 3D editing metadata is guaranteed only in `.rsk`. Cp/Cp\* groups expand into editable atoms and targets during exchange so that external resaving retains their attachments. Ordinary Copy simplifies unsupported appearances only in the external copy and reports the changes; see the [complete compatibility table](/developer/clipboard/#changes-made-for-an-external-copy). Strict CDXML file export rejects unsupported representations. V3000 attachments require one bond per point; variable attachments do not imply a unique molecular formula.
 
 Anonymous dummy/attachment markers are editor handles and are omitted from figures and Office image copies. Explicit text labels remain visible.
 
@@ -48,7 +48,7 @@ Anonymous dummy/attachment markers are editor handles and are omitted from figur
 
 Select the objects, then **⌘/Ctrl+C** and **⌘/Ctrl+V**. **Cut** and **Duplicate** are also available above the canvas.
 
-On Windows and macOS, Copy offers supported editable drawing data and an image to the receiving app. **Ctrl+Shift+C** / **Shift+⌘+C** copies an image explicitly; **Ctrl+Shift+V** / **Shift+⌘+V** pastes a picture. Editable exchange depends on the receiving app and the objects used.
+On Windows and macOS, Copy offers supported editable drawing data and an image to the receiving app. **Ctrl+Shift+C** / **Shift+⌘+C** copies an image explicitly; **Import → Paste picture** chooses a picture explicitly. Editable exchange depends on the receiving app and the objects used.
 
 In Windows desktop Office, normal Copy embeds a ReShiki drawing. Double-click it,
 edit in ReShiki and use **Ctrl+S** to update the open Office document. Then save

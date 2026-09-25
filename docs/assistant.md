@@ -1,6 +1,6 @@
 # Drawing with the assistant
 
-Open **Assistant** in the toolbar and describe a molecule or chemical scheme. ReShiki uses your existing local Codex sign-in. Start with [Set up Codex for the assistant](assistant-setup.md) for installation, sign-in, costs, and how the connection works. The model menu lists the models available to your account; model, reasoning, service tier and Review/Accept-all preferences are saved. `RESHIKI_CODEX` can point to a specific executable. See the [illustrated 0.7.1 changes](changes-0.7.1.md) for screenshots of the latest image, ligand, and aromatic-bond improvements.
+Open **Assistant** in the toolbar and describe a molecule or chemical scheme. ReShiki uses your existing local Codex sign-in. Start with [Set up Codex for the assistant](assistant-setup.md) for installation, sign-in, costs, and how the connection works. The model menu lists the models available to your account; model, reasoning, service tier and Review/Accept-all preferences are saved. `RESHIKI_CODEX` can point to a specific executable. See the [illustrated 0.8 changes](changes-0.8.md) for screenshots of ligand, clipboard and drawing improvements.
 
 ## Draw from an image
 
