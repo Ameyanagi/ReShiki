@@ -1,4 +1,5 @@
 //! Transactional chemistry edits shared by contextual drawing shortcuts.
+mod ligands;
 use crate::{
     atom_text::{self, Mode},
     bonds::BondPreset,
@@ -34,6 +35,8 @@ pub fn atom_label(key: &str) -> Option<(&'static str, Mode)> {
         "F" => "CF3",
         "H" => "Cbz",
         "m" => "Me",
+        "M" => "MgBr",
+        "Z" => "N3",
         "N" => "NO2",
         "O" => "OMe",
         "P" => "Ph",
@@ -178,6 +181,14 @@ pub fn atom_edit(
     key: &str,
     length: f32,
 ) -> Option<Result<(Document, u64), String>> {
+    if matches!(key, "j" | "J") {
+        return Some(ligands::add(
+            doc,
+            id,
+            if key == "j" { 5 } else { 6 },
+            length,
+        ));
+    }
     if let Some((label, mode)) = atom_label(key) {
         return Some(atom_text::apply(doc, id, label, mode).map(|mut candidate| {
             if mode == Mode::Auto

@@ -246,6 +246,28 @@ fn text_bounds(runs: &[Primitive]) -> Option<(Point, Point)> {
         })
 }
 
+fn label_ink_boxes(runs: &[Primitive]) -> Vec<(Point, Point)> {
+    runs.iter()
+        .flat_map(|run| {
+            if let Primitive::Text {
+                position,
+                text,
+                size,
+                style,
+                ..
+            } = run
+            {
+                crate::style::text_ink_boxes(text, *size, style)
+                    .into_iter()
+                    .map(|(lo, hi)| (position.offset(lo.x, lo.y), position.offset(hi.x, hi.y)))
+                    .collect()
+            } else {
+                Vec::new()
+            }
+        })
+        .collect()
+}
+
 /// Visible selected extents, including atom labels in the original graph.
 pub fn selection_bounds(doc: &Document, ids: &[u64]) -> Option<(Point, Point)> {
     let mut points = Vec::new();
@@ -298,13 +320,29 @@ fn label_end(
     origin: Point,
     ux: f32,
     uy: f32,
-    bounds: Option<(Point, Point)>,
+    bounds: &[(Point, Point)],
     max: f32,
     margin: f32,
 ) -> Point {
-    let Some((lo, hi)) = bounds else {
-        return origin;
-    };
+    bounds
+        .iter()
+        .map(|&(lo, hi)| label_box_end(origin, ux, uy, lo, hi, max, margin))
+        .max_by(|a, b| {
+            let along = |p: &Point| (p.x - origin.x) * ux + (p.y - origin.y) * uy;
+            along(a).total_cmp(&along(b))
+        })
+        .unwrap_or(origin)
+}
+
+fn label_box_end(
+    origin: Point,
+    ux: f32,
+    uy: f32,
+    lo: Point,
+    hi: Point,
+    max: f32,
+    margin: f32,
+) -> Point {
     // Intersect the whole segment with the padded label box. A label can
     // extend past the bond midpoint, or sit above its attachment position.
     let mut enter: f32 = 0.;
@@ -453,7 +491,8 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             let bounds = doc
                 .atom(*id)
                 .filter(|a| visible(a, doc) || doc.abbreviation(*id).is_some())
-                .and_then(|_| text_bounds(runs));
+                .map(|_| label_ink_boxes(runs))
+                .unwrap_or_default();
             (*id, bounds)
         })
         .collect();
@@ -481,7 +520,10 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             a.position,
             ux,
             uy,
-            label_bounds.get(&a.id).copied().flatten(),
+            label_bounds
+                .get(&a.id)
+                .map(Vec::as_slice)
+                .unwrap_or_default(),
             length,
             style.world(style.margin_width_pt),
         );
@@ -489,7 +531,10 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             z.position,
             -ux,
             -uy,
-            label_bounds.get(&z.id).copied().flatten(),
+            label_bounds
+                .get(&z.id)
+                .map(Vec::as_slice)
+                .unwrap_or_default(),
             length,
             style.world(style.margin_width_pt),
         );
@@ -627,7 +672,10 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
                         first,
                         ux,
                         uy,
-                        label_bounds.get(&a.id).copied().flatten(),
+                        label_bounds
+                            .get(&a.id)
+                            .map(Vec::as_slice)
+                            .unwrap_or_default(),
                         available,
                         style.world(style.margin_width_pt),
                     );
@@ -635,7 +683,10 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
                         last,
                         -ux,
                         -uy,
-                        label_bounds.get(&z.id).copied().flatten(),
+                        label_bounds
+                            .get(&z.id)
+                            .map(Vec::as_slice)
+                            .unwrap_or_default(),
                         available,
                         style.world(style.margin_width_pt),
                     );
@@ -1029,7 +1080,8 @@ mod tests {
                         );
                         let boxes: Vec<_> = [n, c]
                             .into_iter()
-                            .filter_map(|id| doc.atom(id).and_then(|a| atom_label_bounds(a, &doc)))
+                            .filter_map(|id| doc.atom(id))
+                            .flat_map(|a| label_ink_boxes(&atom_label(a, &doc)))
                             .collect();
                         for primitive in primitives(&doc) {
                             if let Primitive::Line(from, to, width) = primitive {
@@ -1051,6 +1103,40 @@ mod tests {
                         }
                     }
                 }
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn expanded_azide_and_magnesium_bromide_keep_visible_bonds() -> Result<(), String> {
+        for key in ["M", "Z"] {
+            for angle in (0..360).step_by(15) {
+                let mut doc = Document::default();
+                let c = doc.add_atom("C", Point::new(-42., 0.));
+                let end = doc.add_atom("C", Point::default());
+                doc.add_bond(c, end, 1, "plain");
+                doc = crate::hotkeys::atom_edit(&doc, end, key, 42.)
+                    .ok_or("key")??
+                    .0;
+                let members = doc.abbreviation(end).ok_or("group")?.members.clone();
+                doc.expand_abbreviations(&members);
+                let ids = doc.all_ids();
+                crate::editing::transform_about(&mut doc, &ids, Point::default(), 1., angle as f32);
+                let drawing = primitives(&doc);
+                let strokes: usize = drawing
+                    .iter()
+                    .map(|p| match p {
+                        Primitive::Line(_, _, _) | Primitive::Polygon(_) => 1,
+                        Primitive::Path { commands, .. } => commands
+                            .iter()
+                            .filter(|c| matches!(c, crate::graphics::PathCommand::Move(_)))
+                            .count(),
+                        _ => 0,
+                    })
+                    .sum();
+                let expected = if key == "M" { 2 } else { 5 };
+                assert_eq!(strokes, expected, "{key}, {angle} degrees");
             }
         }
         Ok(())

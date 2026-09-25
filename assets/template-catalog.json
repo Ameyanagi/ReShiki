@@ -908,5 +908,180 @@
     "inchikey": "KZSNJWFQEVHDMF-BYPYZUCNSA-N",
     "pubchem_cid": 6287,
     "source": "https://pubchem.ncbi.nlm.nih.gov/compound/6287"
+  },
+  {
+    "name": "12-Crown-4",
+    "group": "Macrocycles",
+    "query": "12-Crown-4",
+    "keywords": [
+      "crown",
+      "ether"
+    ],
+    "note": "Uncomplexed macrocycle; conformation is illustrative.",
+    "smiles": "C1COCCOCCOCCO1",
+    "formula": "C8H16O4",
+    "inchikey": "XQQZRZQVBFHBHL-UHFFFAOYSA-N",
+    "pubchem_cid": 9269,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/9269"
+  },
+  {
+    "name": "15-Crown-5",
+    "group": "Macrocycles",
+    "query": "15-Crown-5",
+    "keywords": [
+      "crown",
+      "ether"
+    ],
+    "note": "Uncomplexed macrocycle; conformation is illustrative.",
+    "smiles": "C1COCCOCCOCCOCCO1",
+    "formula": "C10H20O5",
+    "inchikey": "VFTFKUDGYRBSAL-UHFFFAOYSA-N",
+    "pubchem_cid": 36336,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/36336"
+  },
+  {
+    "name": "18-Crown-6",
+    "group": "Macrocycles",
+    "query": "18-Crown-6",
+    "keywords": [
+      "crown",
+      "ether"
+    ],
+    "note": "Uncomplexed macrocycle; conformation is illustrative.",
+    "smiles": "C1COCCOCCOCCOCCOCCO1",
+    "formula": "C12H24O6",
+    "inchikey": "XEZNGIUYQVAUSS-UHFFFAOYSA-N",
+    "pubchem_cid": 28557,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/28557"
+  },
+  {
+    "name": "Cyclen",
+    "group": "Macrocycles",
+    "query": "Cyclen",
+    "keywords": [
+      "tetraazacyclododecane"
+    ],
+    "note": "Uncomplexed macrocycle; conformation is illustrative.",
+    "smiles": "C1CNCCNCCNCCN1",
+    "formula": "C8H20N4",
+    "inchikey": "QBPPRVHXOZRESW-UHFFFAOYSA-N",
+    "pubchem_cid": 64963,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/64963"
+  },
+  {
+    "name": "Cyclam",
+    "group": "Macrocycles",
+    "query": "Cyclam",
+    "keywords": [
+      "tetraazacyclotetradecane"
+    ],
+    "note": "Uncomplexed macrocycle; conformation is illustrative.",
+    "smiles": "C1CNCCNCCCNCCNC1",
+    "formula": "C10H24N4",
+    "inchikey": "MDAXKAUIABOHTD-UHFFFAOYSA-N",
+    "pubchem_cid": 64964,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/64964"
+  },
+  {
+    "name": "2,2'-Bipyridine",
+    "group": "Ligands",
+    "query": "2,2'-Bipyridine",
+    "keywords": [
+      "bpy",
+      "bipy"
+    ],
+    "note": "Uncoordinated ligand; metal contacts are not assigned.",
+    "smiles": "C1=CC=NC(=C1)C2=CC=CC=N2",
+    "formula": "C10H8N2",
+    "inchikey": "ROFVEXUMMXZLPA-UHFFFAOYSA-N",
+    "pubchem_cid": 1474,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/1474"
+  },
+  {
+    "name": "1,10-Phenanthroline",
+    "group": "Ligands",
+    "query": "1,10-Phenanthroline",
+    "keywords": [
+      "phen"
+    ],
+    "note": "Uncoordinated ligand; metal contacts are not assigned.",
+    "smiles": "C1=CC2=C(C3=C(C=CC=N3)C=C2)N=C1",
+    "formula": "C12H8N2",
+    "inchikey": "DGEZNRSVGBDHLK-UHFFFAOYSA-N",
+    "pubchem_cid": 1318,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/1318"
+  },
+  {
+    "name": "2,2':6',2\"-Terpyridine",
+    "group": "Ligands",
+    "query": "2,2':6',2\"-Terpyridine",
+    "keywords": [
+      "terpy",
+      "tpy"
+    ],
+    "note": "Uncoordinated ligand; metal contacts are not assigned.",
+    "smiles": "C1=CC=NC(=C1)C2=NC(=CC=C2)C3=CC=CC=N3",
+    "formula": "C15H11N3",
+    "inchikey": "DRGAZIDRYFYHIJ-UHFFFAOYSA-N",
+    "pubchem_cid": 70848,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/70848"
+  },
+  {
+    "name": "Triphenylphosphine",
+    "group": "Ligands",
+    "query": "Triphenylphosphine",
+    "keywords": [
+      "PPh3"
+    ],
+    "note": "Uncoordinated ligand; metal contacts are not assigned.",
+    "smiles": "C1=CC=C(C=C1)P(C2=CC=CC=C2)C3=CC=CC=C3",
+    "formula": "C18H15P",
+    "inchikey": "RIOQSEWOXXDEQQ-UHFFFAOYSA-N",
+    "pubchem_cid": 11776,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/11776"
+  },
+  {
+    "name": "1,2-Bis(diphenylphosphino)ethane",
+    "group": "Ligands",
+    "query": "1,2-Bis(diphenylphosphino)ethane",
+    "keywords": [
+      "dppe"
+    ],
+    "note": "Uncoordinated ligand; metal contacts are not assigned.",
+    "smiles": "C1=CC=C(C=C1)P(CCP(C2=CC=CC=C2)C3=CC=CC=C3)C4=CC=CC=C4",
+    "formula": "C26H24P2",
+    "inchikey": "QFMZQPDHXULLKC-UHFFFAOYSA-N",
+    "pubchem_cid": 74267,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/74267"
+  },
+  {
+    "name": "Acetylacetone",
+    "group": "Ligands",
+    "query": "Acetylacetone",
+    "keywords": [
+      "Hacac",
+      "pentane-2,4-dione"
+    ],
+    "note": "Uncoordinated ligand; metal contacts are not assigned.",
+    "smiles": "CC(=O)CC(=O)C",
+    "formula": "C5H8O2",
+    "inchikey": "YRKCREAYFQTBPV-UHFFFAOYSA-N",
+    "pubchem_cid": 31261,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/31261"
+  },
+  {
+    "name": "Ethylenediamine",
+    "group": "Ligands",
+    "query": "Ethylenediamine",
+    "keywords": [
+      "en",
+      "ethane-1,2-diamine"
+    ],
+    "note": "Uncoordinated ligand; metal contacts are not assigned.",
+    "smiles": "C(CN)N",
+    "formula": "C2H8N2",
+    "inchikey": "PIICEJLVQHRZGT-UHFFFAOYSA-N",
+    "pubchem_cid": 3301,
+    "source": "https://pubchem.ncbi.nlm.nih.gov/compound/3301"
   }
 ]

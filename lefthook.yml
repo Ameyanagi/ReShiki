@@ -7,7 +7,7 @@ pre-commit:
     oxfmt:
       glob: "*.{js,mjs,cjs,ts,tsx,jsx,json,css,md,mdx,yml,yaml,toml}"
       exclude: "assets/**"
-      run: bun run --bun oxfmt --check {staged_files}
+      run: bun run --bun oxfmt --check --no-error-on-unmatched-pattern {staged_files}
     ruff:
       glob: "*.{py,toml,lock}"
       run: uv run --locked ruff check engine scripts tests

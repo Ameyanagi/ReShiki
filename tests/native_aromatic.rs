@@ -10,7 +10,7 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
-    io::{BufRead, Write},
+    io::{BufRead, Read, Write},
     path::{Path, PathBuf},
     process::Stdio,
     sync::Arc,
@@ -475,8 +475,16 @@ async fn complete_aromatic_responses_match_goldens() -> anyhow::Result<()> {
         "Unserialized golden inputs"
     );
     for (name, expected) in &header.source_sha256 {
-        let source = Path::new(env!("CARGO_MANIFEST_DIR")).join(name);
-        let actual = format!("{:x}", Sha256::digest(std::fs::read(&source)?));
+        let bytes = if name == "assets/templates.json" {
+            // Captured requests contain the complete historical template input.
+            // Preserve its exact source bytes separately as the live library grows.
+            let mut bytes = Vec::new();
+            fixture::open("aromatic-template-inputs.json.gz")?.read_to_end(&mut bytes)?;
+            bytes
+        } else {
+            std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join(name))?
+        };
+        let actual = format!("{:x}", Sha256::digest(bytes));
         anyhow::ensure!(actual == *expected, "Reference source changed: {name}");
     }
     let config = Config::new(helper);
