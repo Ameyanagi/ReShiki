@@ -33,7 +33,7 @@ Export dialogs also add the selected format’s extension when you omit it.
 
 Molecular and reaction data formats do not retain the full figure layout. Keep the `.rsk` original.
 
-For the 0.7 drawing features, SVG/PNG/PDF retain partial ring curves, free atom labels and front-bond emphasis. Editable CDXML/CDX currently rejects those appearances instead of changing their meaning; turn off **Front bonds** before supported editable projection export. Cp/Cp\* are expanded for editable exchange because ChemDraw resaves lose nested haptic definitions in collapsed labels. V3000 attachments require one bond per point; variable attachments do not imply a unique molecular formula.
+SVG/PNG/PDF retain partial ring curves, free atom labels and front-bond emphasis. Editable CDXML/CDX supports the checked [Haworth convention](/developer/haworth-projections/). Other projection emphasis, partial ring curves and free atom labels remain unsupported in editable exchange; turn off **Front bonds** for other projected structures. Cp/Cp\* are expanded for editable exchange because ChemDraw resaves lose nested haptic definitions in collapsed labels. V3000 attachments require one bond per point; variable attachments do not imply a unique molecular formula.
 
 Anonymous dummy/attachment markers are editor handles and are omitted from figures and Office image copies. Explicit text labels remain visible.
 

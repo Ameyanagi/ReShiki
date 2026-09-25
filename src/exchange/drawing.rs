@@ -117,10 +117,12 @@ pub fn write(document: &Document, options: Options<'_>) -> Result<String> {
             "CDXML cannot yet preserve hidden charge labels. Show charges before editable export, or use ReShiki (.rsk), SVG, PNG or PDF. The chemical charges are retained.",
         ));
     }
+    let haworth = crate::haworth::interchange::export_bonds(document).map_err(invalid)?;
     if document
         .bonds
         .iter()
-        .any(|bond| bond.projection && bond.display != "plain")
+        .enumerate()
+        .any(|(i, bond)| bond.projection && bond.display != "plain" && !haworth.contains(&i))
     {
         return Err(invalid(
             "CDXML cannot yet preserve non-stereochemical front-bond emphasis or projected wedge styles. Restore plain bond appearance before editable export, or use ReShiki (.rsk), SVG, PNG or PDF to retain the appearance.",

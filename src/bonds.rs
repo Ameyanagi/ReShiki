@@ -159,10 +159,17 @@ impl BondPreset {
     pub fn preserves_aromatic_order(self, bond: &Bond) -> bool {
         bond.order == 4 && self.parts().0 == 1
     }
+    /// Styling a retained perspective bond must not erase sugar stereocenters.
+    pub fn preserves_chemistry(self, bond: &Bond) -> bool {
+        self.preserves_aromatic_order(bond)
+            || bond.projection && bond.order == 1 && self.parts().0 == 1
+    }
     pub fn apply(self, bond: &mut Bond) {
         let (order, display, secondary) = self.parts();
-        if self.preserves_aromatic_order(bond) {
-            bond.projection = display != "plain";
+        if self.preserves_chemistry(bond) {
+            if bond.order == 4 {
+                bond.projection = display != "plain";
+            }
         } else {
             bond.ring_arc = false;
             bond.projection = false;
@@ -176,7 +183,7 @@ impl BondPreset {
     pub fn place(self, doc: &mut Document, a: u64, b: u64) {
         if let Some(bond) = doc.bonds.iter_mut().find(|bond| {
             ((bond.a == a && bond.b == b) || (bond.a == b && bond.b == a))
-                && self.preserves_aromatic_order(bond)
+                && self.preserves_chemistry(bond)
         }) {
             if bond.a != a {
                 bond.reverse();

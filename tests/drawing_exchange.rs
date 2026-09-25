@@ -207,6 +207,10 @@ fn editable_drawing_output_matches_original_writer() -> anyhow::Result<()> {
     docs.extend(
         reshiki::templates::LIBRARY
             .iter()
+            // The original writer predates Haworth semantics and explicit
+            // contracted-group alignment. Those templates are checked against
+            // real ChemDraw exports in haworth_interchange.rs instead.
+            .filter(|t| t.group != "Carbohydrates")
             .map(|t| (format!("template/{}", t.id), t.document.clone())),
     );
     use reshiki::{

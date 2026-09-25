@@ -99,7 +99,7 @@ The AI supplies the ligand name and placement parameters; local code creates the
 
 Attachment-containing drafts check their defined atoms and ligand bonds separately. The inability to produce an ordinary molecular identifier is reported as a coordination-analysis limitation, not an invalid drawing. Real ligand-valence errors still appear, and **Auto apply** continues to wait for manual review of these reconstructions.
 
-Native/figure output retains front-bond emphasis. CDXML/CDX rejects projection-only emphasis until it can be preserved without being interpreted as stereochemistry; restore plain bond appearance for supported editable export.
+Native/figure output retains front-bond emphasis. CDXML/CDX supports the checked [Haworth convention](haworth-projections.md); other projection-only emphasis is rejected until it can be preserved without being interpreted as stereochemistry. Restore plain bond appearance for other editable projection exports.
 
 The compact composer keeps the image thumbnail beside the prompt. Use **＋** for attachments, the model menu to change models, and **Review** for replacement and automatic-application settings.
 

@@ -1,0 +1,57 @@
+{
+  "application": "ChemDraw 26.0.0.6599 for macOS",
+  "checked_on": "2026-09-24",
+  "method": "Opened each ReShiki MOL export in ChemDraw, selected the molecule, copied, and read org.opensmiles.smiles from that clipboard. Compared InChIKeys using RDKit with independent PubChem records. These are observed GUI outputs, not RDKit-generated SMILES.",
+  "results": [
+    {
+      "name": "α-D-glucopyranose",
+      "chemdraw_smiles": "O[C@@H]1[C@H](O)[C@@H](O)[C@H](O)[C@@H](CO)O1",
+      "inchikey": "WQZGKKKJIJFFOK-DVKNGEFBSA-N"
+    },
+    {
+      "name": "β-D-glucopyranose",
+      "chemdraw_smiles": "O[C@H]1[C@H](O)[C@@H](O)[C@H](O)[C@@H](CO)O1",
+      "inchikey": "WQZGKKKJIJFFOK-VFUOTHLCSA-N"
+    },
+    {
+      "name": "α-D-galactopyranose",
+      "chemdraw_smiles": "O[C@@H]1[C@H](O)[C@@H](O)[C@@H](O)[C@@H](CO)O1",
+      "inchikey": "WQZGKKKJIJFFOK-PHYPRBDBSA-N"
+    },
+    {
+      "name": "β-D-galactopyranose",
+      "chemdraw_smiles": "O[C@H]1[C@H](O)[C@@H](O)[C@@H](O)[C@@H](CO)O1",
+      "inchikey": "WQZGKKKJIJFFOK-FPRJBGLDSA-N"
+    },
+    {
+      "name": "α-D-mannopyranose",
+      "chemdraw_smiles": "O[C@@H]1[C@@H](O)[C@@H](O)[C@H](O)[C@@H](CO)O1",
+      "inchikey": "WQZGKKKJIJFFOK-PQMKYFCFSA-N"
+    },
+    {
+      "name": "β-D-mannopyranose",
+      "chemdraw_smiles": "O[C@H]1[C@@H](O)[C@@H](O)[C@H](O)[C@@H](CO)O1",
+      "inchikey": "WQZGKKKJIJFFOK-RWOPYEJCSA-N"
+    },
+    {
+      "name": "α-D-ribofuranose",
+      "chemdraw_smiles": "O[C@@H]1[C@H](O)[C@H](O)[C@@H](CO)O1",
+      "inchikey": "HMFHBZSHGGEWLO-AIHAYLRMSA-N"
+    },
+    {
+      "name": "β-D-ribofuranose",
+      "chemdraw_smiles": "O[C@H]1[C@H](O)[C@H](O)[C@@H](CO)O1",
+      "inchikey": "HMFHBZSHGGEWLO-TXICZTDVSA-N"
+    },
+    {
+      "name": "α-D-fructofuranose",
+      "chemdraw_smiles": "O[C@]1(CO)[C@@H](O)[C@H](O)[C@@H](CO)O1",
+      "inchikey": "RFSUNEUAIZKAJO-ZXXMMSQZSA-N"
+    },
+    {
+      "name": "β-D-fructofuranose",
+      "chemdraw_smiles": "O[C@@]1(CO)[C@@H](O)[C@H](O)[C@@H](CO)O1",
+      "inchikey": "RFSUNEUAIZKAJO-ARQDHWQXSA-N"
+    }
+  ]
+}
