@@ -1763,7 +1763,7 @@ impl App {
             text_input("Label, e.g. Ar", &self.abbreviations.label).on_input(move |s| action(A::Label(s))).on_submit(action(A::Contract)).size(13),
             text_input("From the right (optional)", &self.abbreviations.reverse_label).on_input(move |s| action(A::ReverseLabel(s))).on_submit(action(A::Contract)).size(13),
             command("Contract selection", action(A::Contract)).on_press_maybe((!self.selected.is_empty() && !self.abbreviations.label.trim().is_empty()).then_some(action(A::Contract))),
-            text("Select a connected fragment with at most one outside bond. A custom name does not change its chemistry.").size(11).color(muted()),
+            text("Select a connected fragment whose outside bonds meet one selected atom. A custom name does not change its chemistry.").size(11).color(muted()),
             horizontal_line(),
         ].spacing(10);
         for group in selected {

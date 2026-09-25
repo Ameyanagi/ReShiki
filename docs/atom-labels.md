@@ -8,6 +8,14 @@ settings: changing them does not change the molecular graph or its formula.
 Drawing carbon/H/stereo defaults apply to newly added atoms. Hydrogen placement
 is a per-atom choice applied to the current scope.
 
+Automatic placement uses the internal bond angles to choose an inline or stacked
+label. With two bonds it uses their angle bisector, including a stable choice
+for straight bonds. Terminal labels keep the usual inline
+form. It updates when a structure moves or rotates; explicit placement overrides
+it. Condensed display labels such as CCl₂ and NMe use the same placement logic,
+keeping the attachment element at the vertex and subscripts with their label.
+Unknown names remain intact. See the [internal-label examples and scope](changes/automatic-hydrogen.md).
+
 Number assigns one sequence in creation/import order. Starts include `1`,
 `atom1`, `a`, `A`, `α` and `Α`; letter sequences continue beyond the alphabet.
 A single selected atom also accepts a custom number such as `Cα` or `12a`.

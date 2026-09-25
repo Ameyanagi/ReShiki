@@ -1,7 +1,7 @@
 //! Replace a selected endpoint using fixed native template geometry. Chemistry
 //! preparation and drawing reconstruction remain Rust calculations; the final
 //! whole-document check and full CIP labels are the caller's responsibility.
-use super::{Preset, check_size, presets, validate};
+use super::{AttachmentPolicy, Preset, check_size, presets, validate_with_policy};
 #[cfg(all(target_os = "windows", target_arch = "aarch64"))]
 use crate::chemistry::windows_trigonometry as trigonometry;
 use crate::{
@@ -225,6 +225,15 @@ fn fragment(preset: &Preset) -> Result<perception::State> {
 /// intersecting abbreviations. Input and final whole-document chemistry should
 /// be prepared by the caller, just as they are around the original Python edit.
 pub fn replace(document: &Document, selection: &[u64], label: &str) -> Result<Document> {
+    replace_with_policy(document, selection, label, AttachmentPolicy::Terminal)
+}
+
+pub fn replace_with_policy(
+    document: &Document,
+    selection: &[u64],
+    label: &str,
+    policy: AttachmentPolicy,
+) -> Result<Document> {
     if crate::common_groups::LABELS.contains(&label) {
         return crate::common_groups::replace(document, selection, label)
             .map_err(Error::Definition);
@@ -422,6 +431,6 @@ pub fn replace(document: &Document, selection: &[u64], label: &str) -> Result<Do
     });
     result.version = 15;
     crate::ring_fills::prune(&mut result);
-    validate(&result)?;
+    validate_with_policy(&result, policy)?;
     Ok(result)
 }

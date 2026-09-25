@@ -93,19 +93,13 @@ impl Abbreviation {
             return Err("Invalid abbreviation atoms or attachment".into());
         }
         let mut reached = HashSet::from([self.anchor]);
-        let mut external = 0;
         for (a, b) in crate::attachments::edges(doc) {
-            if members.contains(&a) != members.contains(&b) {
-                external += 1;
-                if a != self.anchor && b != self.anchor {
-                    return Err(
-                        "Only the abbreviation's attachment atom can connect outside it".into(),
-                    );
-                }
+            if members.contains(&a) != members.contains(&b) && a != self.anchor && b != self.anchor
+            {
+                return Err(
+                    "Only the abbreviation's attachment atom can connect outside it".into(),
+                );
             }
-        }
-        if external > 1 {
-            return Err("Abbreviations currently need a single attachment bond".into());
         }
         loop {
             let before = reached.len();

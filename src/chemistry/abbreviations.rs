@@ -7,7 +7,7 @@ mod matcher;
 mod replacement;
 use super::{RDKIT_VERSION, document::Molecule};
 use crate::{abbreviations::Abbreviation, document::Document};
-pub use replacement::{Error as ReplacementError, replace};
+pub use replacement::{Error as ReplacementError, replace, replace_with_policy};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
@@ -26,6 +26,8 @@ pub enum Error {
     Members,
     #[error("Abbreviations need one attachment atom and at most one outside bond")]
     Attachment,
+    #[error("All abbreviation bonds must connect through its attachment atom")]
+    InternalAttachment,
     #[error("An abbreviation must be connected")]
     Connected,
     #[error("Unknown abbreviation")]
@@ -105,9 +107,21 @@ pub fn presets() -> Result<&'static [Preset]> {
     .map_err(Clone::clone)
 }
 
-/// Validate precisely the abbreviation contract, independently of preparation.
-/// Graph connectivity is indexed once, making even large collapsed groups linear.
+/// The original preset interface accepts terminal groups only. Desktop
+/// interchange also permits explicitly defined internal groups on one atom.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum AttachmentPolicy {
+    Terminal,
+    SharedAnchor,
+}
+
 pub fn validate(document: &Document) -> Result<()> {
+    validate_with_policy(document, AttachmentPolicy::Terminal)
+}
+
+/// Validate the abbreviation contract independently of preparation. Graph
+/// connectivity is indexed once, making even large collapsed groups linear.
+pub fn validate_with_policy(document: &Document, policy: AttachmentPolicy) -> Result<()> {
     if !document.abbreviations.is_empty() && document.version < 10 {
         return Err(Error::Version);
     }
@@ -153,8 +167,12 @@ pub fn validate(document: &Document) -> Result<()> {
             for &other in adjacency.get(&id).into_iter().flatten() {
                 if !members.contains(&other) {
                     external += 1;
-                    if external > 1 || id != group.anchor {
+                    if policy == AttachmentPolicy::Terminal && (external > 1 || id != group.anchor)
+                    {
                         return Err(Error::Attachment);
+                    }
+                    if id != group.anchor {
+                        return Err(Error::InternalAttachment);
                     }
                 }
             }
@@ -183,6 +201,22 @@ pub fn find(
     molecule: &Molecule,
     selection: &[u64],
     label: Option<&str>,
+) -> Result<Document> {
+    find_with_policy(
+        document,
+        molecule,
+        selection,
+        label,
+        AttachmentPolicy::Terminal,
+    )
+}
+
+pub fn find_with_policy(
+    document: &Document,
+    molecule: &Molecule,
+    selection: &[u64],
+    label: Option<&str>,
+    policy: AttachmentPolicy,
 ) -> Result<Document> {
     let mut available: Vec<_> = presets()?
         .iter()
@@ -277,6 +311,6 @@ pub fn find(
         });
     }
     result.version = 15;
-    validate(&result)?;
+    validate_with_policy(&result, policy)?;
     Ok(result)
 }

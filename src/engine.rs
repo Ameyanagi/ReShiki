@@ -224,14 +224,27 @@ impl<B: ChemistryEngine> ChemistryEngine for LocalEngine<B> {
                 tokio::task::spawn_blocking(move || {
                     use crate::chemistry::{abbreviations, document as chemistry};
                     document.validate()?;
-                    abbreviations::validate(&document).map_err(|e| e.to_string())?;
+                    let policy = abbreviations::AttachmentPolicy::SharedAnchor;
+                    abbreviations::validate_with_policy(&document, policy)
+                        .map_err(|e| e.to_string())?;
                     let molecule = chemistry::prepare(&document).map_err(|e| e.to_string())?;
                     if replace {
-                        abbreviations::replace(&document, &selected, label.as_deref().unwrap_or(""))
-                            .map_err(|e| e.to_string())
+                        abbreviations::replace_with_policy(
+                            &document,
+                            &selected,
+                            label.as_deref().unwrap_or(""),
+                            policy,
+                        )
+                        .map_err(|e| e.to_string())
                     } else {
-                        abbreviations::find(&document, &molecule, &selected, label.as_deref())
-                            .map_err(|e| e.to_string())
+                        abbreviations::find_with_policy(
+                            &document,
+                            &molecule,
+                            &selected,
+                            label.as_deref(),
+                            policy,
+                        )
+                        .map_err(|e| e.to_string())
                     }
                 })
                 .await

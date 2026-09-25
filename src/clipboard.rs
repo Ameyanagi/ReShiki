@@ -569,6 +569,65 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    async fn internal_condensed_labels_keep_editable_text_and_formula_formatting()
+    -> anyhow::Result<()> {
+        use anyhow::{Context, ensure};
+        let source: Document =
+            serde_json::from_str(include_str!("../docs/changes/fixtures/internal-labels.rsk"))?;
+        let (outcome, representations) = prepare_copy(Default::default(), source, false)
+            .await
+            .map_err(anyhow::Error::msg)?;
+        ensure!(outcome.external_editable && !outcome.image_only);
+        let binary = representations
+            .iter()
+            .find(|r| r.kind == CDX_TYPES[0])
+            .context("CDX")?;
+        let xml = crate::exchange::from_cdx(&binary.bytes().map_err(anyhow::Error::msg)?)
+            .map_err(anyhow::Error::msg)?;
+        let tree = roxmltree::Document::parse(&xml)?;
+        ensure!(!tree.descendants().any(|n| n.has_tag_name("embeddedobject")));
+        for label in ["CCl2", "CF2", "NMe"] {
+            let runs: Vec<_> = tree
+                .descendants()
+                .filter(|n| n.has_tag_name("s") && n.text() == Some(label))
+                .collect();
+            ensure!(runs.len() == 4, "Missing {label} orientations");
+            ensure!(
+                runs.iter().all(|n| n
+                    .attribute("face")
+                    .and_then(|s| s.parse::<u8>().ok())
+                    .is_some_and(|f| f & 96 == 96)),
+                "{label} lost formula typography"
+            );
+        }
+        for (format, data) in [("cdx", binary.data.as_str()), ("cdxml", xml.as_str())] {
+            let back = LocalEngine::default()
+                .request(Request::import(format, data))
+                .await
+                .map_err(anyhow::Error::msg)?
+                .document
+                .context("Imported drawing")?;
+            ensure!(back.atoms.len() == 60 && back.bonds.len() == 40 && back.graphics.is_empty());
+            for label in ["CCl2", "CF2", "NMe"] {
+                ensure!(
+                    back.atoms
+                        .iter()
+                        .filter(|a| a.display.variable.as_deref() == Some(label))
+                        .count()
+                        == 4,
+                    "{format} lost {label}: {:?}",
+                    back.atoms
+                        .iter()
+                        .filter(|a| a.display.variable.is_some() || a.element == "*")
+                        .map(|a| (&a.element, &a.display.variable))
+                        .collect::<Vec<_>>()
+                );
+            }
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn projected_arene_with_bold_edge_has_editable_clipboard_and_native_depth()
     -> anyhow::Result<()> {
         use anyhow::{Context, ensure};
