@@ -3,4 +3,5 @@ name = "reshiki-depict-math"
 version = "0.1.0"
 edition = "2024"
 publish = false
+license = "MIT OR Apache-2.0"
 description = "Paired math call for the pinned native depiction ABI"

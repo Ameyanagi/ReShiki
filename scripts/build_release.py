@@ -17,6 +17,7 @@ import zipfile
 from pathlib import Path
 
 from check_runtime_dependencies import verify_runtime
+from license_notices import copy_notices
 
 ROOT = Path(__file__).resolve().parents[1]
 RELEASE_TARGETS = {
@@ -204,15 +205,7 @@ def notices(destination):
     with (destination / "rust-dependencies.json").open("w") as stream:
         run(["cargo", "metadata", "--format-version", "1", "--locked"], cwd=ROOT, stdout=stream)
     metadata = json.loads((destination / "rust-dependencies.json").read_text(encoding="utf-8"))
-    for package in metadata["packages"]:
-        source = Path(package["manifest_path"]).parent
-        for candidate in source.iterdir():
-            if candidate.is_file() and candidate.name.upper().startswith(
-                ("LICENSE", "COPYING", "NOTICE")
-            ):
-                folder = destination / "rust" / f"{package['name']}-{package['version']}"
-                folder.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(candidate, folder / candidate.name)
+    copy_notices(ROOT, destination, metadata)
 
 
 def mac_bundle(destination, profile, *, target=None, inchi_helper=None):

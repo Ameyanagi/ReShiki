@@ -1,0 +1,41 @@
+name: Contribution license
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions: {}
+
+jobs:
+  agreement:
+    name: Contribution license agreement
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm contributor agreement
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import sys
+
+          body = os.environ.get("PR_BODY", "")
+          # PR text is data, never interpolated into shell or Python source.
+          original = re.search(
+              r"(?m)^- \[[xX]\] I have read \[CONTRIBUTING\.md\].*"
+              r"agree to offer my original contributions under both MIT and Apache-2\.0",
+              body,
+          )
+          third_party = re.search(
+              r"(?m)^- \[[xX]\] Any third-party material is identified below with its source "
+              r"and license, and its required notices are preserved; otherwise, "
+              r"no third-party material is added\.",
+              body,
+          )
+          if not original or not third_party:
+              print("::error::Read CONTRIBUTING.md and confirm both contribution license "
+                    "checkboxes in the pull request description. See the PR template.")
+              sys.exit(1)
+          print("Contribution license agreement confirmed in the PR description.")
+          PY

@@ -2,6 +2,8 @@
 name = "reshiki-engine"
 version = "0.1.0"
 description = "Local chemistry worker for ReShiki"
+# Original ReShiki code; third-party adaptations retain their own terms.
+license = "MIT OR Apache-2.0"
 requires-python = ">=3.11,<3.14"
 dependencies = ["rdkit>=2025.9,<2027"]
 

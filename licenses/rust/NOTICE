@@ -1,0 +1,19 @@
+Dependency license supplements
+=============================
+
+Some published Rust crates omit their workspace's license files. manifest.json
+maps exact package versions and license declarations to upstream license texts
+from pinned source revisions. Each text has a source URL and SHA-256 digest;
+identical texts are shared to avoid duplicating them in the source repository.
+The package's declared authors are retained for attribution.
+
+Where upstream provides only a license identifier or a link to its terms,
+the corresponding standard MIT or CC0 text is also included. These standard
+texts do not assert a new copyright holder or replace upstream notices.
+The MIT option is used for packages offering MIT alongside other licenses.
+Existing upstream statements about other available options remain intact.
+
+The release builder combines these supplements with notices already present
+in dependency archives, retaining nested license files and AUTHORS records.
+It does not fetch license texts from the network. A dependency version or
+license change requires reviewing the corresponding supplement again.
