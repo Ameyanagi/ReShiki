@@ -112,6 +112,8 @@ impl App {
                     "Rotate / 3D tilt selection",
                 ),
                 ("Arrows / Shift arrows", "Nudge 1 / 10 units"),
+                ("Drag side handle", "Change width or height"),
+                ("Drag corner handle", "Resize proportionally"),
             ],
         );
         let body = column![drawing, context, editing, files]

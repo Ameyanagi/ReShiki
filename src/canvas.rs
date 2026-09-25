@@ -134,6 +134,12 @@ pub enum Edit {
         scale: f32,
         rotation: f32,
     },
+    ScaleAxes {
+        ids: Vec<u64>,
+        pivot: World,
+        x: f32,
+        y: f32,
+    },
     Bond(World, World, Option<u64>, Option<u64>),
     Ring(World, Option<World>),
     RingPreset(reshiki::rings::Preset, World, Option<World>, bool, bool),
@@ -853,15 +859,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                     }
                     Gesture::AtomIndicator { owner } => Edit::AtomIndicator(owner, p),
                     Gesture::GraphicPoint { id, index } => Edit::GraphicPoint(id, index, p),
-                    Gesture::Transform(drag) => {
-                        let (scale, rotation) = drag.values(p, state.modifiers.shift());
-                        Edit::Transform {
-                            ids: drag.ids,
-                            pivot: drag.pivot,
-                            scale,
-                            rotation,
-                        }
-                    }
+                    Gesture::Transform(drag) => drag.into_edit(p, state.modifiers.shift()),
                     Gesture::Tilt(drag) => {
                         if !inside || self.tool != Tool::Tilt {
                             return Some(Action::request_redraw().and_capture());
@@ -1341,8 +1339,7 @@ impl MoleculeCanvas<'_> {
             let end = self
                 .camera
                 .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
-            let (scale, rotation) = drag.values(end, state.modifiers.shift());
-            reshiki::editing::transform_about(&mut preview, &drag.ids, drag.pivot, scale, rotation);
+            drag.apply(&mut preview, end, state.modifiers.shift());
             ring_selection = Some(drag.ids.clone());
         }
         if let (Some(Gesture::Ring { start, attached }), Some(p)) = (&state.gesture, state.cursor)
@@ -1853,6 +1850,38 @@ impl MoleculeCanvas<'_> {
                 SelectionBox::new(&preview, selected, self.camera, bounds)
             {
                 selection.draw(frame, 0.0);
+            }
+            if let (Some(Gesture::Transform(drag)), Some(p)) = (&state.gesture, state.cursor)
+                && let Handle::Edge(i) = drag.handle
+            {
+                let end = self
+                    .camera
+                    .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
+                let (scale, _) = drag.values(end, false);
+                let position = Point::new(
+                    (p.x - bounds.x + 16.).clamp(4., (bounds.width - 120.).max(4.)),
+                    (p.y - bounds.y + 18.).clamp(4., (bounds.height - 28.).max(4.)),
+                );
+                frame.fill_rectangle(
+                    position - Vector::new(4., 3.),
+                    iced::Size::new(116., 23.),
+                    Color::WHITE,
+                );
+                frame.fill_text(canvas::Text {
+                    content: format!(
+                        "{} {:.0}%",
+                        if i.is_multiple_of(2) {
+                            "Height"
+                        } else {
+                            "Width"
+                        },
+                        scale * 100.
+                    ),
+                    position,
+                    color: rgb([30, 100, 85]),
+                    size: 12.into(),
+                    ..Default::default()
+                });
             }
         }
         if self.tool == Tool::Tilt

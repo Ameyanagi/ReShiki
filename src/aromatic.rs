@@ -185,10 +185,80 @@ pub(crate) fn ring_circles(doc: &Document, aromatic_only: bool) -> Vec<Circle> {
     result
 }
 
+// A stretched regular ring retains an affine image of its inner circle.
+// Fit only regular polygons under an affine transform; arbitrary distorted
+// rings keep the conservative clearance calculation below.
+fn stretched_plane(atoms: &[&crate::document::Atom]) -> Option<(Vec<Point>, [Point; 2])> {
+    if atoms.len() < 4 {
+        return None;
+    }
+    let n = atoms.len() as f32;
+    let center = [
+        atoms.iter().map(|a| a.position.x).sum::<f32>() / n,
+        atoms.iter().map(|a| a.position.y).sum::<f32>() / n,
+        atoms.iter().map(|a| a.depth).sum::<f32>() / n,
+    ];
+    let [cx, cy, cz] = center;
+    let points: Vec<_> = atoms
+        .iter()
+        .enumerate()
+        .map(|(i, a)| {
+            let (sin, cos) = (i as f32 * std::f32::consts::TAU / n).sin_cos();
+            (
+                [a.position.x - cx, a.position.y - cy, a.depth - cz],
+                sin,
+                cos,
+            )
+        })
+        .collect();
+    let mut u = [0.; 3];
+    let mut v = [0.; 3];
+    for (p, sin, cos) in &points {
+        for ((u, v), value) in u.iter_mut().zip(&mut v).zip(p) {
+            *u += value * cos * 2. / n;
+            *v += value * sin * 2. / n;
+        }
+    }
+    let dot = |a: [f32; 3], b: [f32; 3]| a.into_iter().zip(b).map(|(a, b)| a * b).sum::<f32>();
+    let ru = dot(u, u).sqrt();
+    let rv = dot(v, v).sqrt();
+    let radius = (ru + rv) / 2.;
+    if !radius.is_finite()
+        || ru < 0.01
+        || rv < 0.01
+        || ((ru - rv).abs() < radius * 0.0001 && dot(u, v).abs() < ru * rv * 0.0001)
+    {
+        return None;
+    }
+    if points.iter().any(|(p, sin, cos)| {
+        p.iter()
+            .zip(u)
+            .zip(v)
+            .any(|((p, u), v)| (p - u * cos - v * sin).abs() > radius * 0.002)
+    }) {
+        return None;
+    }
+    let [ux, uy, _] = u;
+    let [vx, vy, _] = v;
+    Some((
+        points
+            .iter()
+            .map(|(_, sin, cos)| Point::new(radius * cos, radius * sin))
+            .collect(),
+        [
+            Point::new(ux / radius, uy / radius),
+            Point::new(vx / radius, vy / radius),
+        ],
+    ))
+}
+
 // A rigidly tilted planar ring retains its unprojected circle as an ellipse.
 pub(crate) fn ring_plane(doc: &Document, ids: &[u64]) -> Option<(Vec<Point>, [Point; 2])> {
     let atoms: Option<Vec<_>> = ids.iter().map(|id| doc.atom(*id)).collect();
     let atoms = atoms?;
+    if let Some(plane) = stretched_plane(&atoms) {
+        return Some(plane);
+    }
     if !atoms.iter().any(|a| a.depth.abs() > 0.001) {
         return None;
     }

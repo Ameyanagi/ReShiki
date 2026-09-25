@@ -318,6 +318,25 @@ pub fn transform_about(doc: &mut Document, ids: &[u64], pivot: Point, scale: f32
     });
 }
 
+/// Stretch the drawing in its plane without reflecting atoms or resizing text.
+/// Projection depth stays unchanged: this changes X/Y, not the Z axis.
+pub fn scale_axes_about(doc: &mut Document, ids: &[u64], pivot: Point, x: f32, y: f32) {
+    if !x.is_finite()
+        || !y.is_finite()
+        || x <= 0.
+        || y <= 0.
+        || !pivot.x.is_finite()
+        || !pivot.y.is_finite()
+        || (x == 1. && y == 1.)
+    {
+        return;
+    }
+    map_positions(doc, ids, |p| {
+        pivot.offset((p.x - pivot.x) * x, (p.y - pivot.y) * y)
+    });
+    crate::projection::sync_centroids(doc);
+}
+
 fn map_positions(doc: &mut Document, ids: &[u64], convert: impl Fn(Point) -> Point) {
     let ids = doc.expand_abbreviation_selection(ids);
     let ids = ids.as_slice();
