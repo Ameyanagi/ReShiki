@@ -142,74 +142,117 @@ fn colored_branches_join_the_same_ring_outline_without_changing_chemistry() -> a
 }
 
 #[test]
-fn a_substituent_does_not_deform_the_thick_ring_corner() -> anyhow::Result<()> {
+fn substituted_bold_ring_matches_the_three_way_vector_junction() -> anyhow::Result<()> {
     use anyhow::Context;
     let source: Document = serde_json::from_str(include_str!(
         "../../docs/changes/fixtures/arene-bold-join.rsk"
     ))?;
-    for tilt in [-25., 0., 20.] {
-        for rotation in [0., 47., 130.] {
+    // Independently exported vector intersections, in points relative to the
+    // substituted carbon. The source PDF rounds coordinates to 1/256 point.
+    // These describe thin/bold, bold/branch and branch/thin intersections.
+    let expected = [
+        Point::new(-0.554688, -0.886718),
+        Point::new(1.347656, -0.031250),
+        Point::new(0.210937, -0.363281),
+    ];
+    for rotation in [0_f32, 47., 130., 271.] {
+        for reversed in [false, true] {
             let mut doc = source.clone();
             let ids = doc.all_ids();
-            crate::projection::tilt(&mut doc, &ids, tilt, true);
-            // Keep this regression's thick/thin junction at the substituted
-            // carbon; automatic depth emphasis may move to another ring edge.
-            for (bond, original) in doc.bonds.iter_mut().zip(&source.bonds) {
-                bond.display.clone_from(&original.display);
-            }
             editing::transform_about(&mut doc, &ids, Point::default(), 1., rotation);
-            let mut bare = doc.clone();
-            let fluorine = bare
-                .atoms
-                .iter()
-                .find(|a| a.element == "F")
-                .context("F")?
-                .id;
-            bare.bonds.retain(|b| b.a != fluorine && b.b != fluorine);
-            bare.atoms.retain(|a| a.id != fluorine);
-            for bond in &bare.bonds {
-                let attached = doc
+            if reversed {
+                for bond in &mut doc.bonds {
+                    bond.reverse();
+                }
+                doc.bonds.reverse();
+            }
+            let center = doc.atom(2).context("Substituted carbon")?.position;
+            let (sin, cos) = rotation.to_radians().sin_cos();
+            let expected = expected.map(|p| {
+                center.offset(
+                    doc.drawing_style.world(p.x * cos - p.y * sin),
+                    doc.drawing_style.world(p.x * sin + p.y * cos),
+                )
+            });
+            for (other, corners) in [(1, [0, 2]), (3, [0, 1]), (7, [1, 2])] {
+                let bond = doc
                     .bonds
                     .iter()
-                    .find(|b| b.a == bond.a && b.b == bond.b)
-                    .context("Ring edge")?;
-                let a = bare.atom(bond.a).context("A")?.position;
-                let b = bare.atom(bond.b).context("B")?.position;
-                for (p, q) in bond_joins::polygon(&doc, attached, a, b)
-                    .iter()
-                    .zip(bond_joins::polygon(&bare, bond, a, b))
-                {
+                    .find(|b| (b.a == 2 && b.b == other) || (b.b == 2 && b.a == other))
+                    .context("Junction bond")?;
+                let outline = bond_joins::polygon(
+                    &doc,
+                    bond,
+                    doc.atom(bond.a).context("Start")?.position,
+                    doc.atom(bond.b).context("End")?.position,
+                );
+                anyhow::ensure!(
+                    outline.iter().any(|p| p.distance(center) < 0.001),
+                    "Three-way color boundary must pass through its atom"
+                );
+                for corner in corners {
                     anyhow::ensure!(
-                        p.distance(q) < 0.001,
-                        "Substituent changes ring silhouette: tilt {tilt}, rotation {rotation}, edge {bond:?}, corners {p:?}/{q:?}"
+                        outline
+                            .iter()
+                            .any(|p| p.distance(expected[corner]) < doc.drawing_style.world(0.005)),
+                        "Wrong shared corner {corner}: rotation {rotation}, reversed {reversed}, neighbor {other}, outline {outline:?}, expected {:?}",
+                        expected[corner]
                     );
                 }
             }
-            // Inside the ring's ink the branch must not introduce its color.
-            let branch = doc
-                .bonds
-                .iter()
-                .find(|b| b.a == fluorine || b.b == fluorine)
-                .context("Branch")?;
-            let carbon = if branch.a == fluorine {
-                branch.b
-            } else {
-                branch.a
-            };
+            // Check the actual scene, including seam underpainting: the notch
+            // above the branch must remain transparent, not become a triangle.
             let (pixmap, origin, scale) = raster(&doc).map_err(anyhow::Error::msg)?;
-            let point = doc.atom(carbon).context("Carbon")?.position;
+            let sample = center.offset(
+                doc.drawing_style.world(0.5 * cos + 0.55 * sin),
+                doc.drawing_style.world(0.5 * sin - 0.55 * cos),
+            );
             let pixel = pixmap
                 .pixel(
-                    ((point.x - origin.x) * scale).floor() as u32,
-                    ((point.y - origin.y) * scale).floor() as u32,
+                    ((sample.x - origin.x) * scale).floor() as u32,
+                    ((sample.y - origin.y) * scale).floor() as u32,
                 )
-                .context("Pixel")?;
+                .context("Notch pixel")?;
             anyhow::ensure!(
-                pixel.alpha() == 255 && pixel.red() == 0 && pixel.green() == 0 && pixel.blue() == 0,
-                "Colored branch intrudes into the ring"
+                pixel.alpha() < 20,
+                "Filled notch at rotation {rotation}, reversed {reversed}: {}",
+                pixel.alpha()
             );
         }
     }
+    Ok(())
+}
+
+#[test]
+fn junction_underpainting_keeps_nearby_crossing_clearance() -> anyhow::Result<()> {
+    use anyhow::Context;
+    let mut doc = Document::default();
+    let joint = doc.add_atom("C", Point::default());
+    for (x, y, display) in [
+        (-36., -21., "plain"),
+        (-36., 21., "bold"),
+        (42., 0., "plain"),
+    ] {
+        let end = doc.add_atom("C", Point::new(x, y));
+        doc.add_bond(joint, end, 1, display);
+    }
+    doc.bonds.last_mut().context("Colored branch")?.color = [43, 112, 97];
+    let a = doc.add_atom("C", Point::new(5., -30.));
+    let b = doc.add_atom("C", Point::new(5., 30.));
+    doc.add_bond(a, b, 1, "plain");
+    doc.bonds.last_mut().context("Crossing")?.z_order = 1;
+    let (pixmap, origin, scale) = raster(&doc).map_err(anyhow::Error::msg)?;
+    let pixel = pixmap
+        .pixel(
+            ((2.5 - origin.x) * scale).floor() as u32,
+            ((0. - origin.y) * scale).floor() as u32,
+        )
+        .context("Crossing clearance pixel")?;
+    anyhow::ensure!(
+        pixel.alpha() == 0,
+        "Junction paint filled crossing clearance: {}",
+        pixel.alpha()
+    );
     Ok(())
 }
 

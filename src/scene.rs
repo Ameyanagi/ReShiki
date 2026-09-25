@@ -557,11 +557,9 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             "plain" | "bold" | "wedge"
                 if !matches!(b.order, 2 | 7) && crate::bond_joins::needed(doc, b) =>
             {
-                out.extend(
-                    crate::bond_joins::outlines(doc, b, start, end)
-                        .into_iter()
-                        .map(Primitive::Polygon),
-                );
+                out.push(Primitive::Polygon(crate::bond_joins::polygon(
+                    doc, b, start, end,
+                )));
             }
             "hollow_wedge" => {
                 use crate::graphics::PathCommand;
@@ -705,11 +703,9 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
                         continue;
                     }
                     if index == 0 && *offset == 0. && crate::bond_joins::needed(doc, b) {
-                        out.extend(
-                            crate::bond_joins::outlines(doc, b, first, last)
-                                .into_iter()
-                                .map(Primitive::Polygon),
-                        );
+                        out.push(Primitive::Polygon(crate::bond_joins::polygon(
+                            doc, b, first, last,
+                        )));
                     } else if display == "bold" {
                         // An explicitly centered bold rail still needs flat
                         // ends; round caps protrude beyond the junction.
@@ -778,10 +774,7 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             let bond_primitives = out.drain(bond_start..).collect();
             out.extend(crate::crossings::cut(bond_primitives, gaps));
         }
-        if crate::bond_joins::needed(doc, b)
-            && b.display != "hollow_wedge"
-            && !crate::bond_joins::behind_backbone(doc, b)
-        {
+        if crate::bond_joins::needed(doc, b) && b.display != "hollow_wedge" {
             use crate::graphics::PathCommand;
             let commands = joined.entry(b.color).or_default();
             let mut secondary = Vec::new();
@@ -842,13 +835,40 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             }
         }
     }
-    for (color, points) in crate::bond_joins::junctions(doc) {
+    for junction in crate::bond_joins::junctions(doc) {
         use crate::graphics::PathCommand;
-        if let Some(first) = points.first() {
-            let commands = joined.entry(color).or_default();
-            commands.push(PathCommand::Move(*first));
-            commands.extend(points.iter().skip(1).copied().map(PathCommand::Line));
-            commands.push(PathCommand::Close);
+        let mut commands = Vec::new();
+        for (bond_index, points) in junction.parts {
+            let parts = crate::crossings::cut(
+                vec![Primitive::Polygon(points)],
+                crossing_gaps
+                    .get(bond_index)
+                    .map(Vec::as_slice)
+                    .unwrap_or_default(),
+            );
+            for part in parts {
+                if let Primitive::Polygon(points) = part
+                    && let Some(first) = points.first()
+                {
+                    commands.push(PathCommand::Move(*first));
+                    commands.extend(points.iter().skip(1).copied().map(PathCommand::Line));
+                    commands.push(PathCommand::Close);
+                }
+            }
+        }
+        if junction.underlay {
+            out.push(Primitive::Path {
+                commands,
+                style: crate::graphics::GraphicStyle {
+                    stroke: junction.color,
+                    fill: Some(junction.color),
+                    width_pt: 0.,
+                    ..Default::default()
+                },
+                filled: true,
+            });
+        } else {
+            joined.entry(junction.color).or_default().extend(commands);
         }
     }
     out.extend(joined.into_iter().map(|(color, commands)| Primitive::Path {
