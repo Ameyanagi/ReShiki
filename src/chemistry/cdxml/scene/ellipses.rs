@@ -2,6 +2,22 @@
 use super::*;
 
 pub(super) fn remove(tree: &mut Tree, prepared: &PreparedCdxml) -> Result<Vec<usize>> {
+    let mut curves = Vec::new();
+    for index in tree.descendants(0)? {
+        let node = tree.node(index)?;
+        if node.tag == "curve"
+            && node.attr("Closed") == Some("yes")
+            && node.attr("FillType").is_none_or(|v| v == "None")
+            && ["ArrowheadHead", "ArrowheadTail"]
+                .iter()
+                .all(|key| node.attr(key).is_none_or(|v| v == "None"))
+        {
+            curves.push(index);
+        }
+    }
+    if curves.is_empty() {
+        return Ok(Vec::new());
+    }
     let mut document = Document {
         drawing_style: prepared.drawing_style.clone().into_document()?,
         ..Default::default()
@@ -15,25 +31,15 @@ pub(super) fn remove(tree: &mut Tree, prepared: &PreparedCdxml) -> Result<Vec<us
         document.add_atom("C", Point::new((p.x * 28.) as f32, (-p.y * 28.) as f32));
         document.atoms.last_mut().ok_or(SceneError::Limit)?.id = id;
     }
-    document.bonds = prepared
-        .bonds
-        .iter()
-        .cloned()
-        .map(|b| b.into_document().map_err(SceneError::from))
-        .collect::<Result<_>>()?;
+    // Recognition needs topology and positions only. Preserve native layer and
+    // color values until the complete scene crosses the document boundary.
+    for bond in &prepared.bonds {
+        document.add_bond(bond.a, bond.b, bond.order, "plain");
+    }
     let circles = crate::aromatic::circles(&document);
     let mut removed = Vec::new();
-    for index in tree.descendants(0)? {
+    for index in curves {
         let node = tree.node(index)?;
-        if node.tag != "curve"
-            || node.attr("Closed") != Some("yes")
-            || node.attr("FillType").is_some_and(|v| v != "None")
-            || ["ArrowheadHead", "ArrowheadTail"]
-                .iter()
-                .any(|key| node.attr(key).is_some_and(|v| v != "None"))
-        {
-            continue;
-        }
         let values = node
             .attr("CurvePoints")
             .unwrap_or("")
