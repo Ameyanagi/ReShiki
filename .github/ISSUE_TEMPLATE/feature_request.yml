@@ -1,0 +1,28 @@
+name: Feature request
+description: Suggest a drawing feature, shortcut, template, or workflow improvement.
+title: "[Feature]: "
+body:
+  - type: textarea
+    id: use_case
+    attributes:
+      label: What would you like to do?
+      description: Describe the task and the behavior that would help.
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: Example image or sketch
+      description: Paste an example of the desired drawing or UI. For shortcuts, show the starting target and expected result for each key/context. Label reference images or sketches clearly. If the request has no visible output, explain the expected result in words.
+    validations:
+      required: true
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Interaction and compatibility
+      description: Describe the keys, modifiers, menus, target (atom/bond/selection), and export formats involved. Mention existing shortcuts that should keep working.
+  - type: textarea
+    id: release_caption
+    attributes:
+      label: Suggested release-note caption
+      description: Optional one-sentence description of the benefit. The implementing PR will add verified example images for reuse in the changelog.
