@@ -161,7 +161,7 @@ impl Default for Camera {
     fn default() -> Self {
         Self {
             center: World::default(),
-            zoom: 1.7,
+            zoom: 1.0,
         }
     }
 }
