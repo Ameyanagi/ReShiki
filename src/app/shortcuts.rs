@@ -328,6 +328,20 @@ impl App {
             return Task::none();
         }
         if ["/", "?", "=", "Enter"].contains(&key) {
+            if key == "Enter"
+                && self
+                    .selected
+                    .iter()
+                    .filter(|id| self.doc.atom(**id).is_some())
+                    .count()
+                    > 1
+            {
+                return self.update(Message::AtomText(if self.atom_text_target().is_some() {
+                    super::atom_text::Action::Begin(None)
+                } else {
+                    super::atom_text::Action::ContractSelection
+                }));
+            }
             if let Some(id) = atom {
                 self.selected = vec![id];
                 if ["=", "Enter"].contains(&key) {

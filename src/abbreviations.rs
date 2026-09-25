@@ -154,12 +154,54 @@ impl Abbreviation {
     }
 
     pub fn text<'a>(&'a self, doc: &Document) -> &'a str {
-        if self.faces_left(doc) && !self.reverse_label.is_empty() {
+        if self.faces_left(doc) && !self.reverse_label.trim().is_empty() {
             &self.reverse_label
         } else {
             &self.label
         }
     }
+}
+
+/// The bond belongs to an element glyph, never to a following subscript.
+/// Nicknames that are not formulas retain their edge-character alignment.
+pub(crate) fn anchor_range(text: &str, left: bool) -> std::ops::Range<usize> {
+    let mut tokens = Vec::new();
+    let mut chars = text.char_indices().peekable();
+    let mut formula = true;
+    while let Some((start, c)) = chars.next() {
+        if !c.is_ascii_uppercase() {
+            formula = false;
+            break;
+        }
+        let mut end = start + c.len_utf8();
+        if let Some(&(i, c)) = chars.peek().filter(|(_, c)| c.is_ascii_lowercase()) {
+            end = i + c.len_utf8();
+            chars.next();
+        }
+        let symbol = text.get(start..end).unwrap_or_default();
+        if !crate::editing::ELEMENTS.contains(&symbol) {
+            formula = false;
+            break;
+        }
+        if symbol != "H" {
+            tokens.push(start..end);
+        }
+        while chars
+            .peek()
+            .is_some_and(|(_, c)| c.is_ascii_digit() || ('₀'..='₉').contains(c))
+        {
+            chars.next();
+        }
+    }
+    if formula && let Some(range) = if left { tokens.last() } else { tokens.first() } {
+        return range.clone();
+    }
+    let character = if left {
+        text.char_indices().next_back()
+    } else {
+        text.char_indices().next()
+    };
+    character.map(|(i, c)| i..i + c.len_utf8()).unwrap_or(0..0)
 }
 
 impl Document {

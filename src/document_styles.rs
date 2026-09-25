@@ -161,12 +161,14 @@ mod tests {
     }
 
     #[test]
-    fn style_roundtrip_preserves_coordinates_and_explicit_overrides() {
+    fn style_roundtrip_preserves_coordinates_and_explicit_overrides()
+    -> Result<(), Box<dyn std::error::Error>> {
         let mut doc = Document::default();
         let a = doc.add_atom("N", Point::new(20., 30.));
-        let b = doc.add_atom("O", Point::new(62., 30.));
+        // Leave room for presentation-size labels without rescaling geometry.
+        let b = doc.add_atom("O", Point::new(104., 30.));
         doc.add_bond(a, b, 1, "plain");
-        doc.atoms[1].text_style = Some(TextStyle {
+        doc.atom_mut(b).ok_or("Oxygen")?.text_style = Some(TextStyle {
             size_pt: 12.,
             color: [80, 0, 0],
             ..Default::default()
@@ -177,18 +179,41 @@ mod tests {
             text: "Scheme 1".into(),
             format: Default::default(),
         });
-        let styled = apply(&doc, Preset::Presentation.style(), true, false).unwrap();
-        assert_eq!(styled.atoms[0].position, doc.atoms[0].position);
-        assert_eq!(styled.atoms[1].text_style, doc.atoms[1].text_style);
-        assert_eq!(styled.annotations[0].format.style.size_pt, 16.);
+        let styled = apply(&doc, Preset::Presentation.style(), true, false)?;
+        assert_eq!(
+            styled.atom(a).ok_or("Nitrogen")?.position,
+            doc.atom(a).ok_or("Nitrogen")?.position
+        );
+        assert_eq!(
+            styled.atom(b).ok_or("Oxygen")?.text_style,
+            doc.atom(b).ok_or("Oxygen")?.text_style
+        );
+        assert_eq!(
+            styled
+                .annotations
+                .first()
+                .ok_or("Caption")?
+                .format
+                .style
+                .size_pt,
+            16.
+        );
         assert_eq!(styled.bonds, doc.bonds);
-        let reopened: Document =
-            serde_json::from_str(&serde_json::to_string(&styled).unwrap()).unwrap();
+        let reopened: Document = serde_json::from_str(&serde_json::to_string(&styled)?)?;
         assert_eq!(styled, reopened);
         let primitive = crate::scene::primitives(&styled);
         assert!(primitive.iter().any(|p| matches!(p, crate::scene::Primitive::Line(_, _, width) if (*width - styled.drawing_style.world(1.)).abs() < 0.001)));
         assert!(primitive.iter().any(|p| matches!(p, crate::scene::Primitive::Text{text, style, ..} if text == "N" && style.size_pt == 16.)));
         assert!(primitive.iter().any(|p| matches!(p, crate::scene::Primitive::Text{text, style, ..} if text == "O" && style.size_pt == 12.)));
+        let mut crowded = styled;
+        crowded.atom_mut(b).ok_or("Oxygen")?.position.x = 62.;
+        assert!(
+            !crate::scene::primitives(&crowded)
+                .iter()
+                .any(|p| matches!(p, crate::scene::Primitive::Line(..))),
+            "A bond completely covered by enlarged labels must not cross their text"
+        );
+        Ok(())
     }
 
     #[test]

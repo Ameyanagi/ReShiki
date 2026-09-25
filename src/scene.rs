@@ -47,14 +47,17 @@ fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
                 ..Default::default()
             },
         );
-        let anchor_character = if group.faces_left(doc) {
-            content.chars().last()
-        } else {
-            content.chars().next()
+        let range = crate::abbreviations::anchor_range(content, group.faces_left(doc));
+        let format = crate::typography::TextFormat {
+            style: style.clone(),
+            ..Default::default()
         };
-        let half = anchor_character
-            .map(|c| crate::style::styled_text_width(&c.to_string(), size, &style) * 0.5)
-            .unwrap_or(0.0);
+        let before =
+            crate::typography::layout(content.get(..range.start).unwrap_or_default(), &format)
+                .width;
+        let through =
+            crate::typography::layout(content.get(..range.end).unwrap_or_default(), &format).width;
+        let anchor_x = (before + through) / 2.;
         let origin = a.position.offset(
             if matches!(
                 group.alignment,
@@ -62,10 +65,8 @@ fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
                     | crate::abbreviations::LabelAlignment::Above
             ) {
                 -layout.width / 2.
-            } else if group.faces_left(doc) {
-                half - layout.width
             } else {
-                -half
+                -anchor_x
             },
             if group.alignment == crate::abbreviations::LabelAlignment::Above {
                 -layout.height - size * 0.35
@@ -122,9 +123,14 @@ fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
     } else {
         0.0
     };
-    if show_element && a.element != "H" && a.label_h > 0 && crate::atom_labels::hydrogens(a, doc) {
-        let count = if a.label_h > 1 {
-            a.label_h.to_string()
+    let label_h = if a.no_implicit {
+        a.explicit_h
+    } else {
+        a.label_h.max(a.explicit_h)
+    };
+    if show_element && a.element != "H" && label_h > 0 && crate::atom_labels::hydrogens(a, doc) {
+        let count = if label_h > 1 {
+            label_h.to_string()
         } else {
             String::new()
         };
@@ -289,7 +295,7 @@ pub fn selection_bounds(doc: &Document, ids: &[u64]) -> Option<(Point, Point)> {
 }
 
 fn label_end(
-    atom: &Atom,
+    origin: Point,
     ux: f32,
     uy: f32,
     bounds: Option<(Point, Point)>,
@@ -297,24 +303,31 @@ fn label_end(
     margin: f32,
 ) -> Point {
     let Some((lo, hi)) = bounds else {
-        return atom.position;
+        return origin;
     };
-    let dx = if ux > 0.001 {
-        (hi.x + margin - atom.position.x) / ux
-    } else if ux < -0.001 {
-        (lo.x - margin - atom.position.x) / ux
-    } else {
-        f32::INFINITY
-    };
-    let dy = if uy > 0.001 {
-        (hi.y + margin - atom.position.y) / uy
-    } else if uy < -0.001 {
-        (lo.y - margin - atom.position.y) / uy
-    } else {
-        f32::INFINITY
-    };
-    let distance = dx.min(dy).clamp(0.0, max.max(0.0));
-    atom.position.offset(ux * distance, uy * distance)
+    // Intersect the whole segment with the padded label box. A label can
+    // extend past the bond midpoint, or sit above its attachment position.
+    let mut enter: f32 = 0.;
+    let mut exit = max.max(0.);
+    for (position, direction, low, high) in [
+        (origin.x, ux, lo.x - margin, hi.x + margin),
+        (origin.y, uy, lo.y - margin, hi.y + margin),
+    ] {
+        if direction.abs() < 1e-6 {
+            if position < low || position > high {
+                return origin;
+            }
+        } else {
+            let first = (low - position) / direction;
+            let last = (high - position) / direction;
+            enter = enter.max(first.min(last));
+            exit = exit.min(first.max(last));
+            if enter > exit {
+                return origin;
+            }
+        }
+    }
+    origin.offset(ux * exit, uy * exit)
 }
 
 /// Resolve automatic positioning identically for drawing and repeated-click edits.
@@ -464,21 +477,24 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
         let ux = (z.position.x - a.position.x) / length;
         let uy = (z.position.y - a.position.y) / length;
         let start = label_end(
-            a,
+            a.position,
             ux,
             uy,
             label_bounds.get(&a.id).copied().flatten(),
-            length * 0.45,
+            length,
             style.world(style.margin_width_pt),
         );
         let end = label_end(
-            z,
+            z.position,
             -ux,
             -uy,
             label_bounds.get(&z.id).copied().flatten(),
-            length * 0.45,
+            length,
             style.world(style.margin_width_pt),
         );
+        if (end.x - start.x) * ux + (end.y - start.y) * uy <= 0.1 {
+            continue;
+        }
         let nx = -uy;
         let ny = ux;
         let bond_start = out.len();
@@ -602,6 +618,29 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
                     };
                     let first = start.offset(nx * offset + ux * trim, ny * offset + uy * trim);
                     let last = end.offset(nx * offset - ux * trim, ny * offset - uy * trim);
+                    let available = (last.x - first.x) * ux + (last.y - first.y) * uy;
+                    if available <= 0.1 {
+                        continue;
+                    }
+                    let first = label_end(
+                        first,
+                        ux,
+                        uy,
+                        label_bounds.get(&a.id).copied().flatten(),
+                        available,
+                        style.world(style.margin_width_pt),
+                    );
+                    let last = label_end(
+                        last,
+                        -ux,
+                        -uy,
+                        label_bounds.get(&z.id).copied().flatten(),
+                        available,
+                        style.world(style.margin_width_pt),
+                    );
+                    if (last.x - first.x) * ux + (last.y - first.y) * uy <= 0.1 {
+                        continue;
+                    }
                     if index == 0 && *offset == 0. && crate::bond_joins::needed(doc, b) {
                         out.push(Primitive::Polygon(crate::bond_joins::polygon(
                             doc, b, first, last,
@@ -959,6 +998,135 @@ pub fn svg(doc: &Document) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn rotated_group_bonds_do_not_cross_label_ink() -> Result<(), String> {
+        use crate::abbreviations::LabelAlignment;
+        for label in ["C2H5", "OCH3", "Boc"] {
+            for alignment in LabelAlignment::ALL {
+                for order in [1, 2, 3] {
+                    for degrees in (0..360).step_by(15) {
+                        let mut doc = Document::default();
+                        let n = doc.add_atom("N", Point::new(-70., 0.));
+                        let c = doc.add_atom("C", Point::default());
+                        doc.add_bond(n, c, 1, "plain");
+                        doc =
+                            crate::atom_text::apply(&doc, c, label, crate::atom_text::Mode::Auto)?;
+                        // Imported group drawings may carry multiple bonds.
+                        doc.bonds
+                            .iter_mut()
+                            .find(|b| b.a == n && b.b == c)
+                            .ok_or("Bond")?
+                            .order = order;
+                        doc.abbreviations.first_mut().ok_or("Group")?.alignment = alignment;
+                        let ids = doc.all_ids();
+                        crate::editing::transform_about(
+                            &mut doc,
+                            &ids,
+                            Point::default(),
+                            1.,
+                            degrees as f32,
+                        );
+                        let boxes: Vec<_> = [n, c]
+                            .into_iter()
+                            .filter_map(|id| doc.atom(id).and_then(|a| atom_label_bounds(a, &doc)))
+                            .collect();
+                        for primitive in primitives(&doc) {
+                            if let Primitive::Line(from, to, width) = primitive {
+                                // Sample the complete stroked rail, not only its midpoint.
+                                for step in 0..=100 {
+                                    let t = step as f32 / 100.;
+                                    let p = from.offset((to.x - from.x) * t, (to.y - from.y) * t);
+                                    for (lo, hi) in &boxes {
+                                        assert!(
+                                            p.x < lo.x - width / 2.
+                                                || p.x > hi.x + width / 2.
+                                                || p.y < lo.y - width / 2.
+                                                || p.y > hi.y + width / 2.,
+                                            "Bond crosses {label} at {degrees}°, {alignment:?}, order {order}: {p:?}"
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn group_labels_remain_visible_and_anchor_to_elements_at_every_angle() -> Result<(), String> {
+        use crate::abbreviations::LabelAlignment;
+        for label in ["C2H5", "C₂H₅", "OCH3", "Boc"] {
+            let mut source = Document::default();
+            let n = source.add_atom("N", Point::new(-70., 0.));
+            let a = source.add_atom("C", Point::default());
+            source.add_bond(n, a, 1, "plain");
+            source = crate::atom_text::apply(&source, a, label, crate::atom_text::Mode::Auto)?;
+            for alignment in LabelAlignment::ALL {
+                for angle in (0..360).step_by(5) {
+                    let mut doc = source.clone();
+                    doc.abbreviations.first_mut().ok_or("Group")?.alignment = alignment;
+                    let ids = doc.all_ids();
+                    crate::editing::transform_about(
+                        &mut doc,
+                        &ids,
+                        Point::default(),
+                        1.,
+                        angle as f32,
+                    );
+                    let atom = doc.atom(a).ok_or("Anchor")?;
+                    let runs = atom_label(atom, &doc);
+                    let (lo, hi) = text_bounds(&runs).ok_or("Label disappeared")?;
+                    assert!(lo.x.is_finite() && lo.y.is_finite() && hi.x > lo.x && hi.y > lo.y);
+                    assert!((hi.x - lo.x) < 120., "Label bounds exploded at {angle}°");
+                    let mut text = String::new();
+                    for run in &runs {
+                        if let Primitive::Text { text: value, .. } = run {
+                            text.push_str(value);
+                        }
+                    }
+                    assert_eq!(text, doc.abbreviation(a).ok_or("Group")?.text(&doc));
+                    if label == "C2H5"
+                        && !matches!(alignment, LabelAlignment::Above | LabelAlignment::Center)
+                    {
+                        // Digits are scripts; the attachment is centered on C,
+                        // even for the reversed H5C2 spelling.
+                        let (position, size, style) = runs
+                            .iter()
+                            .find_map(|p| match p {
+                                Primitive::Text {
+                                    text,
+                                    position,
+                                    size,
+                                    style,
+                                    ..
+                                } if text == "C" => Some((position, size, style)),
+                                _ => None,
+                            })
+                            .ok_or("Carbon glyph")?;
+                        let center =
+                            position.x + crate::style::styled_text_width("C", *size, style) / 2.;
+                        assert!(
+                            (center - atom.position.x).abs() < 0.01,
+                            "{alignment:?}, {angle}°"
+                        );
+                    }
+                }
+            }
+        }
+        // Imported groups can contain a whitespace-only reverse spelling.
+        let mut doc = Document::default();
+        let n = doc.add_atom("N", Point::new(70., 0.));
+        let a = doc.add_atom("C", Point::default());
+        doc.add_bond(n, a, 1, "plain");
+        doc = crate::atom_text::apply(&doc, a, "Boc", crate::atom_text::Mode::Auto)?;
+        doc.abbreviations.first_mut().ok_or("Group")?.reverse_label = "  ".into();
+        assert!(atom_label_bounds(doc.atom(a).ok_or("Anchor")?, &doc).is_some());
+        assert_eq!(doc.abbreviation(a).ok_or("Group")?.text(&doc), "Boc");
+        Ok(())
+    }
     #[test]
     fn svg_preserves_annotations_and_escapes_xml() {
         let mut d = Document::default();

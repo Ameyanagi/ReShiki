@@ -353,6 +353,20 @@ impl App {
                         true,
                     ));
                 }
+                if atoms
+                    && self
+                        .selected
+                        .iter()
+                        .filter(|id| self.doc.atom(**id).is_some())
+                        .count()
+                        > 1
+                {
+                    entries.push(command(
+                        "Create group label…",
+                        Message::AtomText(super::atom_text::Action::ContractSelection),
+                        true,
+                    ));
+                }
                 if atoms {
                     let connected: Vec<_> =
                         reshiki::editing::groups(&self.doc, &self.doc.all_ids())
