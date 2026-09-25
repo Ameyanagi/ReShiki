@@ -170,6 +170,11 @@ impl Prepared {
                 }
             }
         }
+        for fill in &mut placed.ring_fills {
+            for id in &mut fill.atoms {
+                *id = original_id(*id);
+            }
+        }
         for b in &mut placed.bonds {
             b.a = original_id(b.a);
             b.b = original_id(b.b);

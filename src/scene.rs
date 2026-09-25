@@ -423,6 +423,7 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             .filter(|g| g.layer < 0)
             .flat_map(graphic_primitive),
     );
+    out.extend(doc.ring_fills.iter().filter_map(|fill| fill.primitive(doc)));
     let arcs = crate::ring_arcs::render(doc);
     // A partial curve replaces the ring's circle, not its aromatic membership.
     // Retain every ring here so its other edges do not gain fallback dashes.

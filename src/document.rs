@@ -153,6 +153,8 @@ pub struct Document {
     pub abbreviations: Vec<crate::abbreviations::Abbreviation>,
     #[serde(default)]
     pub atom_labels: crate::atom_labels::Settings,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ring_fills: Vec<crate::ring_fills::RingFill>,
     pub version: u32,
     pub atoms: Vec<Atom>,
     pub bonds: Vec<Bond>,
@@ -170,6 +172,7 @@ pub struct Document {
 impl Default for Document {
     fn default() -> Self {
         Self {
+            ring_fills: vec![],
             version: 15,
             drawing_style: Default::default(),
             page_layout: None,
@@ -324,6 +327,7 @@ impl Document {
         self.arrows.retain(|a| !ids.contains(&a.id));
         self.graphics.retain(|a| !ids.contains(&a.id));
         crate::projection::prune_centroids(self);
+        crate::ring_fills::prune(self);
         self.prune_groups();
         crate::reactions::prune(self);
     }
@@ -363,6 +367,7 @@ impl Document {
     }
     pub fn validate(&self) -> Result<(), String> {
         crate::projection::validate(self)?;
+        crate::ring_fills::validate(self)?;
         crate::attachments::validate(self)?;
         self.drawing_style.validate()?;
         let mut picture_bytes = 0_usize;

@@ -526,6 +526,21 @@ impl App {
                         true,
                     ));
                 }
+                if !reshiki::ring_fills::selected_cycles(&self.doc, &self.selected).is_empty() {
+                    entries.push(command(
+                        "Color ring interior…",
+                        Message::ColorScope(super::typography::ColorScope::Rings),
+                        true,
+                    ));
+                    entries.push(command(
+                        "Clear ring fill",
+                        Message::ClearRingFill,
+                        self.doc
+                            .ring_fills
+                            .iter()
+                            .any(|f| f.atoms.iter().all(|id| self.selected.contains(id))),
+                    ));
+                }
                 if reshiki::ring_arcs::toggle(&mut self.doc.clone(), &self.selected).is_ok() {
                     entries.push(command(
                         "Toggle inner ring curve",

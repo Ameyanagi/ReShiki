@@ -49,6 +49,7 @@ pub mod projection;
 pub mod reactions;
 pub mod recovery;
 pub mod ring_arcs;
+pub mod ring_fills;
 pub mod rings;
 pub mod scene;
 pub mod scientific;

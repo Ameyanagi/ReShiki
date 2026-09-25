@@ -401,14 +401,27 @@ impl App {
                 .text_size(11)
                 .padding(6),
             );
-        for (name, c) in [
-            ("Black", [0, 0, 0]),
-            ("Blue", [32, 80, 145]),
-            ("Teal", [17, 126, 108]),
-            ("Red", [180, 50, 55]),
-            ("Purple", [116, 65, 147]),
-        ] {
-            let active = self.current_selection_color() == Some(c);
+        let ring_colors = self.color_scope == super::typography::ColorScope::Rings;
+        let palette = if ring_colors {
+            [
+                ("Yellow", [255, 241, 174]),
+                ("Blue", [201, 224, 248]),
+                ("Teal", [198, 233, 220]),
+                ("Pink", [249, 207, 209]),
+                ("Purple", [226, 211, 245]),
+            ]
+        } else {
+            [
+                ("Black", [0, 0, 0]),
+                ("Blue", [32, 80, 145]),
+                ("Teal", [17, 126, 108]),
+                ("Red", [180, 50, 55]),
+                ("Purple", [116, 65, 147]),
+            ]
+        };
+        let current_color = self.current_selection_color();
+        for (name, c) in palette {
+            let active = current_color == Some(c);
             tools = tools.push(hover_hint(
                 button(Space::new().width(12).height(12))
                     .padding(4)
@@ -440,6 +453,13 @@ impl App {
             format!("Custom color · Enter to apply to {}", self.color_scope),
             tooltip::Position::Bottom,
         ));
+        if ring_colors {
+            tools = tools.push(hover_hint(
+                command("Clear fill", Message::ClearRingFill),
+                "Remove the selected rings’ interior color",
+                tooltip::Position::Bottom,
+            ));
+        }
         tools = tools.push(command(
             "Atoms…",
             Message::InspectorAction(super::inspector::Action::OpenAtomColors),

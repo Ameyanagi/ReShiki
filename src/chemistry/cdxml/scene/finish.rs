@@ -190,6 +190,7 @@ impl CdxmlScene {
             .map(|g| g.into_document(&mut budget).map_err(SceneError::from))
             .collect::<Result<_>>()?;
         document.groups = self.base.groups;
+        document.ring_fills = self.base.ring_fills;
         document.abbreviations = self.base.abbreviations;
         for attachment in self.attachments {
             let atom = document
