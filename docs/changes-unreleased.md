@@ -4,7 +4,7 @@ The reviewed drawing, shortcut, Haworth and export updates are recorded in [ReSh
 
 ## Comfortable starting zoom
 
-New drawings start at **100%**, leaving more room for molecules and reaction schemes. Resizing the window preserves that view, and **Fit** on an empty drawing returns to 100%. Opening an existing drawing still fits its contents; the maximum fit zoom remains 250%.
+New drawings start at **100%**, leaving more room for molecules and reaction schemes. Resizing the window preserves that view, and **Fit** on an empty drawing returns to 100%. Opening an existing drawing still fits its contents; the maximum fit zoom remains 250%. [PR #39](https://github.com/Ameyanagi/ReShiki/pull/39).
 
 | Previous default: 250%                                                                          | New default: 100%                                                                                |
 | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
