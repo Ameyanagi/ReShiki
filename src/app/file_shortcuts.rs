@@ -103,24 +103,11 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
             return;
         }
         if let Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) = event
-            && modifiers.command()
-            && let keyboard::Key::Character(c) = key
+            && let Some(message) = file_message(key, *modifiers)
         {
-            let message = match c.to_ascii_lowercase().as_str() {
-                "p" => Some(Message::Printing(super::printing::Action::Start(
-                    reshiki::printing::Scope::Document,
-                ))),
-                "n" => Some(Message::New),
-                "o" => Some(Message::Open),
-                "s" if modifiers.shift() => Some(Message::SaveAs),
-                "s" => Some(Message::Save),
-                _ => None,
-            };
-            if let Some(message) = message {
-                shell.publish(message);
-                shell.capture_event();
-                return;
-            }
+            shell.publish(message);
+            shell.capture_event();
+            return;
         }
         self.0.as_widget_mut().update(
             tree, event, layout, cursor, renderer, clipboard, shell, viewport,
@@ -149,5 +136,48 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
         self.0
             .as_widget_mut()
             .overlay(tree, layout, renderer, viewport, translation)
+    }
+}
+
+fn file_message(key: &keyboard::Key, modifiers: keyboard::Modifiers) -> Option<Message> {
+    if !modifiers.command() || modifiers.alt() {
+        return None;
+    }
+    let keyboard::Key::Character(c) = key else {
+        return None;
+    };
+    Some(match c.to_ascii_lowercase().as_str() {
+        "p" if !modifiers.shift() => Message::Printing(super::printing::Action::Start(
+            reshiki::printing::Scope::Document,
+        )),
+        "n" if !modifiers.shift() => Message::New,
+        "o" if !modifiers.shift() => Message::Open,
+        "s" if modifiers.shift() => Message::SaveAs,
+        "s" => Message::Save,
+        _ => return None,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn longer_chords_do_not_trigger_plain_file_commands() {
+        use keyboard::{Key, Modifiers};
+        let primary = if cfg!(target_os = "macos") {
+            Modifiers::LOGO
+        } else {
+            Modifiers::CTRL
+        };
+        assert!(matches!(
+            file_message(&Key::Character("s".into()), primary | Modifiers::SHIFT),
+            Some(Message::SaveAs)
+        ));
+        for c in ["n", "o", "p"] {
+            let key = Key::Character(c.into());
+            assert!(file_message(&key, primary).is_some());
+            assert!(file_message(&key, primary | Modifiers::SHIFT).is_none());
+            assert!(file_message(&key, primary | Modifiers::ALT).is_none());
+        }
     }
 }

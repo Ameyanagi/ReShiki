@@ -67,6 +67,7 @@ pub enum Message {
     Palette(palettes::Action),
     Assistant(assistant::Action),
     ContextKey(String),
+    Shortcut(shortcuts::Action),
     AromaticDisplay,
     Abbreviations(abbreviations::Action),
     Labels(atom_labels::Action),
@@ -510,7 +511,6 @@ impl App {
             },
             iced::window::close_requests().map(Message::Close),
             iced::event::listen_with(|event, status, _window| {
-                use iced::keyboard::{Key, key::Named};
                 if status == iced::event::Status::Ignored
                     && let Some(forward) = template_library::navigation_event(&event)
                 {
@@ -518,7 +518,8 @@ impl App {
                 }
                 let iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
                     key,
-                    modifiers: mods,
+                    modified_key,
+                    modifiers,
                     ..
                 }) = event
                 else {
@@ -527,84 +528,7 @@ impl App {
                 if status == iced::event::Status::Captured {
                     return None;
                 }
-                if help::is_shortcut(&key, mods) {
-                    return Some(Message::ToggleHelp);
-                }
-                match key {
-                    Key::Character(c) if mods.command() => match c.as_str() {
-                        "y" | "Y" if cfg!(windows) => Some(Message::Redo),
-                        "z" | "Z" => Some(if mods.shift() {
-                            Message::Redo
-                        } else {
-                            Message::Undo
-                        }),
-                        "a" | "A" => Some(if mods.shift() {
-                            Message::InvertSelection
-                        } else {
-                            Message::SelectAll
-                        }),
-                        "g" | "G" => Some(if mods.shift() {
-                            Message::Ungroup
-                        } else {
-                            Message::Group
-                        }),
-                        "c" | "C" => Some(if mods.shift() && reshiki::clipboard::available() {
-                            Message::CopyImage
-                        } else {
-                            Message::Copy(false)
-                        }),
-                        "x" | "X" => Some(Message::Copy(true)),
-                        "v" | "V" if mods.shift() && reshiki::clipboard::available() => {
-                            Some(Message::PastePicture)
-                        }
-                        "v" | "V" => Some(Message::Paste),
-                        "d" | "D" => Some(Message::Duplicate),
-                        "i" | "I" => Some(Message::ToggleImport),
-                        "e" | "E" => Some(Message::Inspector(InspectorTab::Export)),
-                        _ => None,
-                    },
-                    Key::Character(c)
-                        if mods.shift()
-                            && !mods.control()
-                            && !mods.alt()
-                            && c.eq_ignore_ascii_case("r") =>
-                    {
-                        Some(Message::ToggleAromaticRing)
-                    }
-                    Key::Character(c) if !mods.control() && !mods.alt() => match c.as_str() {
-                        "x" | "X" => Some(Message::Tool(Tool::Chain(if mods.shift() {
-                            reshiki::chains::ChainMode::Snaking
-                        } else {
-                            reshiki::chains::ChainMode::Straight
-                        }))),
-                        "v" => Some(Message::Tool(Tool::Select)),
-                        "l" => Some(Message::Tool(Tool::Lasso)),
-                        "b" | "1" => Some(Message::Tool(Tool::Bond(1))),
-                        "2" => Some(Message::Tool(Tool::Bond(2))),
-                        "3" => Some(Message::Tool(Tool::Bond(3))),
-                        "4" => Some(Message::Tool(Tool::StyledBond(
-                            reshiki::bonds::BondPreset::Quadruple,
-                        ))),
-                        "r" => Some(Message::Tool(Tool::Ring)),
-
-                        "e" => Some(Message::Tool(Tool::Erase)),
-                        c if ["c", "n", "o", "s", "p", "f", "h", "d", "t", "a"]
-                            .contains(&c.to_ascii_lowercase().as_str()) =>
-                        {
-                            Some(Message::ContextKey(c.to_ascii_uppercase()))
-                        }
-                        _ => None,
-                    },
-                    Key::Named(Named::Delete | Named::Backspace) => Some(Message::Delete),
-                    Key::Named(Named::Enter) if mods.command() => {
-                        Some(Message::InlineText(inline_text::Action::Finish(true)))
-                    }
-                    Key::Named(Named::Enter) if mods.is_empty() => {
-                        Some(Message::AtomText(atom_text::Action::Begin(None)))
-                    }
-                    Key::Named(Named::Escape) => Some(Message::Escape),
-                    _ => None,
-                }
+                shortcuts::key_message(&key, &modified_key, modifiers)
             }),
         ])
     }
@@ -1005,6 +929,7 @@ impl App {
             | Message::Join(_)
             | Message::Escape => {}
             Message::ContextKey(key) => return self.context_key(&key),
+            Message::Shortcut(action) => return self.shortcut_action(action),
             Message::AromaticDisplay => {
                 if self.selected.is_empty() {
                     self.status = "Select an aromatic ring first".into();

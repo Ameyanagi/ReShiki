@@ -570,10 +570,7 @@ impl App {
 
 /// Mouse buttons used by browsers, including native macOS auxiliary button codes.
 pub fn navigation_event(event: &iced::Event) -> Option<bool> {
-    use iced::{
-        keyboard::{self, Key, key::Named},
-        mouse,
-    };
+    use iced::mouse;
     match event {
         iced::Event::Mouse(mouse::Event::ButtonPressed(
             mouse::Button::Back | mouse::Button::Other(3),
@@ -581,15 +578,7 @@ pub fn navigation_event(event: &iced::Event) -> Option<bool> {
         iced::Event::Mouse(mouse::Event::ButtonPressed(
             mouse::Button::Forward | mouse::Button::Other(4),
         )) => Some(true),
-        iced::Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. })
-            if modifiers.alt() && !modifiers.command() =>
-        {
-            match key {
-                Key::Named(Named::ArrowLeft) => Some(false),
-                Key::Named(Named::ArrowRight) => Some(true),
-                _ => None,
-            }
-        }
+
         _ => None,
     }
 }

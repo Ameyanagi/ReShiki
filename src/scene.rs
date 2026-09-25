@@ -324,6 +324,9 @@ pub fn effective_double_position(doc: &Document, bond: &Bond) -> crate::bonds::D
         P::Auto => match automatic_double_side(doc, bond) {
             Some(side) if side < 0. => P::Left,
             Some(_) => P::Right,
+            // Keep the bold stroke on the atom-to-atom skeleton. Centering
+            // unequal strokes offsets the backbone from its attached bonds.
+            None if bond.display == "bold" => P::Right,
             None => P::Center,
         },
         position => position,
@@ -480,7 +483,9 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
         let ny = ux;
         let bond_start = out.len();
         match b.display.as_str() {
-            "plain" | "bold" | "wedge" if crate::bond_joins::needed(doc, b) => {
+            "plain" | "bold" | "wedge"
+                if !matches!(b.order, 2 | 7) && crate::bond_joins::needed(doc, b) =>
+            {
                 out.push(Primitive::Polygon(crate::bond_joins::polygon(
                     doc, b, start, end,
                 )));
@@ -597,7 +602,21 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
                     };
                     let first = start.offset(nx * offset + ux * trim, ny * offset + uy * trim);
                     let last = end.offset(nx * offset - ux * trim, ny * offset - uy * trim);
-                    if matches!(display, "dashed" | "dotted") {
+                    if index == 0 && *offset == 0. && crate::bond_joins::needed(doc, b) {
+                        out.push(Primitive::Polygon(crate::bond_joins::polygon(
+                            doc, b, first, last,
+                        )));
+                    } else if display == "bold" {
+                        // An explicitly centered bold rail still needs flat
+                        // ends; round caps protrude beyond the junction.
+                        let half = style.world(style.bold_width_pt) / 2.;
+                        out.push(Primitive::Polygon(vec![
+                            first.offset(nx * half, ny * half),
+                            last.offset(nx * half, ny * half),
+                            last.offset(-nx * half, -ny * half),
+                            first.offset(-nx * half, -ny * half),
+                        ]));
+                    } else if matches!(display, "dashed" | "dotted") {
                         out.push(Primitive::Path {
                             commands: vec![
                                 crate::graphics::PathCommand::Move(first),
@@ -658,16 +677,19 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
         if crate::bond_joins::needed(doc, b) && b.display != "hollow_wedge" {
             use crate::graphics::PathCommand;
             let commands = joined.entry(b.color).or_default();
+            let mut secondary = Vec::new();
             for primitive in out.drain(bond_start..) {
-                if let Primitive::Polygon(points) = primitive
-                    && let Some(first) = points.first()
-                {
-                    commands.push(PathCommand::Move(*first));
-                    commands.extend(points.iter().skip(1).copied().map(PathCommand::Line));
-                    commands.push(PathCommand::Close);
+                if let Primitive::Polygon(points) = primitive {
+                    if let Some(first) = points.first() {
+                        commands.push(PathCommand::Move(*first));
+                        commands.extend(points.iter().skip(1).copied().map(PathCommand::Line));
+                        commands.push(PathCommand::Close);
+                    }
+                } else {
+                    secondary.push(primitive);
                 }
             }
-            continue;
+            out.extend(secondary);
         }
         if b.color != [0, 0, 0] {
             for primitive in out.iter_mut().skip(bond_start) {
