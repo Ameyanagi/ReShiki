@@ -1,0 +1,41 @@
+name: Bug report
+description: Report an incorrect drawing, interaction, import, or export.
+title: "[Bug]: "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What went wrong?
+      description: Describe the current result and what you expected.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps and input drawing
+      description: Include the exact steps or keys. Attach a small native drawing or other input that reproduces the problem, if you can share it.
+      placeholder: "1. Open the attached drawing..."
+    validations:
+      required: true
+  - type: textarea
+    id: current_image
+    attributes:
+      label: Current result image
+      description: Paste or drag in a screenshot or exported figure showing the defect. Include a close-up for small gaps or label overlaps. If the issue has no visible output, describe the error or attach a log instead.
+    validations:
+      required: true
+  - type: textarea
+    id: expected_image
+    attributes:
+      label: Expected result or comparison
+      description: If available, add a reference image, a working version's output, or an annotated sketch. Identify its source and label it as expected behavior. Use matching framing and scale where possible.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Version and capture settings
+      description: ReShiki version, operating system, zoom, and relevant import/export format. Include font and drawing-style settings if they affect the result.
+    validations:
+      required: true
+  - type: markdown
+    attributes:
+      value: "A fix's pull request should include matched before/after images and a reusable release-note caption. See [visual review guidance](https://github.com/Ameyanagi/ReShiki/blob/main/docs/visual-review.md)."
