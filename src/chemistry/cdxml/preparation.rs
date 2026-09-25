@@ -346,6 +346,16 @@ fn combine(parts: &[Fragment]) -> Result<Combined> {
 /// no result is published until all preparation stages succeed. Raw f64 data
 /// remains unrounded; scene assembly and final document validation are separate.
 pub fn prepare_cdxml(text: &str) -> Result<PreparedCdxml> {
+    prepare(text, true)
+}
+
+/// Preserve structurally valid drawing input when chemical validation fails.
+/// This state is for scene reconstruction only, never molecular properties.
+pub(crate) fn prepare_drawing(text: &str) -> Result<PreparedCdxml> {
+    prepare(text, false)
+}
+
+fn prepare(text: &str, check_chemistry: bool) -> Result<PreparedCdxml> {
     use PreparationStage::*;
     let mut source = validate(text)?;
     at(Validation, super::attachments::normalize(&mut source))?;
@@ -431,6 +441,74 @@ pub fn prepare_cdxml(text: &str) -> Result<PreparedCdxml> {
             }
         }
     }
+    let state = if check_chemistry {
+        chemical_state(&combined)?
+    } else {
+        let graph = &combined.graph;
+        at(
+            Sanitization,
+            graph.validate().map_err(PreparationCause::Chemistry),
+        )?;
+        at(
+            Sanitization,
+            combined
+                .metadata
+                .validate(graph)
+                .map_err(PreparationCause::Chemistry),
+        )?;
+        perception::State {
+            graph: graph.clone(),
+            metadata: combined.metadata.clone(),
+            directions: combined.directions.clone(),
+            valences: at(
+                Sanitization,
+                graph
+                    .provisional_valences()
+                    .map_err(PreparationCause::Chemistry),
+            )?,
+            conjugated: vec![false; graph.bonds.len()],
+            hybridizations: vec![
+                crate::chemistry::electronic::Hybridization::Unspecified;
+                graph.atoms.len()
+            ],
+            rings: perception::RingCache {
+                kind: perception::RingKind::Symmetric,
+                atoms: at(
+                    Sanitization,
+                    crate::chemistry::rings::perceive(graph, Default::default())
+                        .map_err(|e| PreparationCause::Chemistry(e.to_string())),
+                )?
+                .atoms,
+            },
+            properties: perception::Properties::unspecified(graph),
+        }
+    };
+    let ids = (0..state.graph.atoms.len())
+        .map(|i| u64::try_from(i + 1).map_err(|_| error(Combination, PreparationCause::Limit)))
+        .collect::<Result<_>>()?;
+    Ok(PreparedCdxml {
+        attachments,
+        molecule: Molecule {
+            rdkit_version: RDKIT_VERSION,
+            ids,
+            positions: combined.positions,
+            state,
+        },
+        expanded_xml: flattened.xml,
+        abbreviations: flattened.abbreviations,
+        fragments,
+        fragment_bindings,
+        drawing_style,
+        bonds,
+        palette,
+        source_scale,
+        conformer_scale,
+        conformer_3d: combined.conformer_3d,
+    })
+}
+
+fn chemical_state(combined: &Combined) -> Result<perception::State> {
+    use PreparationStage::*;
     let sanitized = at(
         Sanitization,
         sanitize::sanitize(&combined.graph, &combined.metadata, &combined.directions),
@@ -461,7 +539,7 @@ pub fn prepare_cdxml(text: &str) -> Result<PreparedCdxml> {
     // SanitizeMol clears computed properties, including raw fallback CIP ranks.
     // Noncomputed CDXML annotations remain in the separate source fragments.
     let properties = perception::Properties::unspecified(&drawn.graph);
-    let state = at(
+    at(
         Legacy,
         perception::perceive(
             &perception::State {
@@ -484,27 +562,5 @@ pub fn prepare_cdxml(text: &str) -> Result<PreparedCdxml> {
             },
         )
         .map_err(PreparationCause::Chemistry),
-    )?;
-    let ids = (0..state.graph.atoms.len())
-        .map(|i| u64::try_from(i + 1).map_err(|_| error(Combination, PreparationCause::Limit)))
-        .collect::<Result<_>>()?;
-    Ok(PreparedCdxml {
-        attachments,
-        molecule: Molecule {
-            rdkit_version: RDKIT_VERSION,
-            ids,
-            positions: combined.positions,
-            state,
-        },
-        expanded_xml: flattened.xml,
-        abbreviations: flattened.abbreviations,
-        fragments,
-        fragment_bindings,
-        drawing_style,
-        bonds,
-        palette,
-        source_scale,
-        conformer_scale,
-        conformer_3d: combined.conformer_3d,
-    })
+    )
 }

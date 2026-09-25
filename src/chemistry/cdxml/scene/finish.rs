@@ -43,6 +43,72 @@ fn pair(a: u64, b: u64) -> (u64, u64) {
     (a.min(b), a.max(b))
 }
 impl CdxmlScene {
+    /// Retain source chemistry and appearance without assigning bond orders,
+    /// charges or CIP labels. Callers must report the validation warning and
+    /// withhold molecular properties for this drawing.
+    pub(crate) fn into_unchecked_drawing(self) -> Result<Document> {
+        if self.conformer_3d.is_none() {
+            return Err(SceneError::Invalid(
+                "Unvalidated drawing requires source coordinates",
+            ));
+        }
+        let mut document = Document::default();
+        for (i, source) in self.molecule.state.graph.atoms.iter().enumerate() {
+            let p = self.molecule.positions.get(i).ok_or(SceneError::Limit)?;
+            let element = chemistry::ELEMENTS
+                .get(usize::from(source.atomic_number))
+                .ok_or(SceneError::Limit)?;
+            let id = *self.molecule.ids.get(i).ok_or(SceneError::Limit)?;
+            let map = self
+                .molecule
+                .state
+                .metadata
+                .atoms
+                .get(i)
+                .ok_or(SceneError::Limit)?
+                .map_number;
+            document.atoms.push(document::Atom {
+                id,
+                element: element.symbol.into(),
+                position: Point::new((p.x * 28.0) as f32, (-p.y * 28.0) as f32),
+                depth: 0.,
+                centroid: Vec::new(),
+                attachment: None,
+                charge: i32::from(source.charge),
+                isotope: u32::from(source.isotope),
+                explicit_h: u32::from(source.explicit_hydrogens),
+                no_implicit: source.no_implicit,
+                aromatic: source.aromatic,
+                radical_electrons: source.radical_electrons,
+                label_h: u32::from(source.explicit_hydrogens)
+                    + self
+                        .molecule
+                        .state
+                        .valences
+                        .get(i)
+                        .ok_or(SceneError::Limit)?
+                        .implicit_hydrogens,
+                map_num: u32::try_from(map).map_err(|_| SceneError::Invalid("Invalid atom map"))?,
+                display: Default::default(),
+                cip_label: None,
+                marks: Vec::new(),
+                stereo: None,
+                text_style: None,
+            });
+        }
+        document.bonds = self
+            .base
+            .bonds
+            .iter()
+            .map(|b| b.bond.clone().into_document().map_err(SceneError::from))
+            .collect::<Result<_>>()?;
+        self.restore(&mut document)?;
+        document
+            .validate()
+            .map_err(|_| SceneError::Invalid("Invalid preserved drawing"))?;
+        Ok(document)
+    }
+
     /// Apply the original full-CIP reconstruction, then the actual response
     /// boundary (Value f64 -> Document f32). The prepared conformer is retained
     /// at f64 throughout chemical reconstruction. Errors publish no drawing.

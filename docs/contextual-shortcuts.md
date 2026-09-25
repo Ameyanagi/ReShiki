@@ -1,19 +1,21 @@
 # Shortcuts and editable examples
 
-Open **Help** at the bottom of the tool strip, or press **F1**, then choose **Open shortcut examples**. This opens **one editable ReShiki file** in a separate window. It contains nine pages of labeled structures made with the same operations as the keyboard shortcuts.
+Open **Help** at the bottom of the tool strip, or press **F1**, then choose **Open shortcut examples**. This opens **one editable ReShiki file** in a separate window. It contains nine sections of labeled structures made with the same operations as the keyboard shortcuts.
 
-[Download the shortcut examples (.rsk)](../assets/examples/shortcut-examples.rsk). This is a single document, not a template collection. Open it with **Open**, or double-click the downloaded file. Use **View → Page setup…** if its page controls are hidden. The bundled Help copy opens those controls automatically.
+[Download the shortcut examples (.rsk)](../assets/examples/shortcut-examples.rsk). This is a single document, not a template collection. Open it with **Open**, or double-click the downloaded file. The gallery uses the normal unbounded canvas, without print pages or a page-navigation panel.
 
-1. Browse with the **‹ / ›** page buttons on the right.
+1. Scroll vertically or sideways to pan. **Cmd/Ctrl+scroll** zooms at the pointer; +/− and **Fit** also work.
 2. Double-click a structure to select its molecule. Its caption stays separate.
 3. **Cmd/Ctrl+C**, switch to your drawing, then **Cmd/Ctrl+V**.
 4. Edit the pasted atoms and bonds normally. **Save as** keeps your own copy of the reference.
 
-The pages cover common groups; elements, variables and charges; atom growth; ring attachment; bond styles and double-line placement; ring fusion; ligands and typed labels; drawing tools; and selection transforms. The structures are editable molecular objects, not embedded pictures. Group and template definitions are the current implementation and may be extended or revised in future releases.
+The sections cover common groups; elements, variables and charges; atom growth; ring attachment; bond styles and double-line placement; ring fusion; ligands and typed labels; drawing tools; and selection transforms. The structures are editable molecular objects, not embedded pictures. Group and template definitions are the current implementation and may be extended or revised in future releases.
 
-![The editable shortcut reference with page navigation](images/shortcut-help/gallery.png)
+![The editable shortcut reference on the normal canvas](images/shortcut-help/gallery.png)
 
-[View all nine example pages and the drawing gestures](changes/shortcut-help.md).
+[View all nine example sections and the drawing gestures](changes/shortcut-help.md).
+
+The canvas fills the drawing area. Rulers reserve only their top and left gutters when enabled; the crosshair is an overlay. **View → Page setup…** is optional and is intended for printing and multipage PDF export.
 
 ## How to read the keys
 
@@ -55,7 +57,7 @@ Choose an element in **Atoms**, then drag from an existing atom to add it with a
 | Enter or =                | Edit atom label                                             |
 | g / ?                     | Select target / open its properties                         |
 
-Defined groups keep their underlying atoms and bonds, so molecular properties include their composition. Variable R/X labels do not define a complete molecular formula. **j** and **J** retain the metal as the target for repeated ligand insertion; charges remain explicit. The initial ligand is flat; tilt it only when the desired drawing needs perspective.
+Defined groups keep their underlying atoms and bonds, so molecular properties include their composition. Variable R/X labels do not define a complete molecular formula. **j** and **J** retain the metal as the target for repeated ligand insertion; chemical charges are retained. The initial ligand uses a 60° perspective tilt with tapered front edges and the metal contact behind the ring. Its X/Y/Z coordinates are retained, so the 3D Tilt tool can rotate it further. Cp carries −1 in the chemical data; arene is neutral. Cp’s minus sign is hidden by default in the drawing. Charge display can be changed in Atoms → Show charge without changing that data. Native documents retain the 3D model; external Copy uses a picture when the projected appearance cannot be represented as editable exchange data.
 
 With multiple atoms selected, **Enter** opens **Contract selection** so you can name the fragment.
 

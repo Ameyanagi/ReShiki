@@ -24,12 +24,28 @@ The approved stack, PRs #22–#31, was merged on 25 September 2026 after passing
 
 ## Shortcut help and direct drawing gestures
 
-**Help → Open shortcut examples** opens one bundled, editable `.rsk` document in a separate window. Its nine pages contain labeled examples that can be selected and copied into another drawing. It works offline; Save as creates a personal copy. [Download and shortcut list](contextual-shortcuts.md).
+**Help → Open shortcut examples** opens one bundled, editable `.rsk` document in a separate window. Its nine sections on the normal unbounded canvas contain labeled examples that can be selected and copied into another drawing. It works offline; Save as creates a personal copy. [Download and shortcut list](contextual-shortcuts.md).
 
 Choose an element in Atoms and **drag from an existing atom** to add it with a single bond. Clicking still replaces an atom. Fixed length and angle settings apply; Option/Alt permits free placement. Connecting existing endpoints preserves their elements and existing bond order.
 
 The Rings palette offers **Benzene** with alternating bonds and **Aromatic circle**. Hold **Cmd/Ctrl while placing a regular ring, benzene or cyclopentadiene** for the circle form. Select an existing aromatic ring and press **a** to toggle circle/alternating display. Chairs and Haworth tools keep their existing projection behavior.
 
-[Native screenshots, all nine example pages, and before/after fixes](changes/shortcut-help.md).
+[Native screenshots, all nine example sections, and before/after fixes](changes/shortcut-help.md).
 
 ![Help with the editable shortcut reference](images/shortcut-help/help.png)
+
+The normal canvas fills the drawing area. The permanent gray inset and paper border are removed; enabled rulers reserve only their own gutters, and crosshairs remain overlays. Optional page setup is for printing and multipage PDF output.
+
+Scroll vertically or sideways to pan the canvas. Hold Cmd/Ctrl while scrolling to zoom at the pointer; +/− and Fit remain available.
+
+### Clipboard transfer of unresolved drawings
+
+Editable CDXML/CDX transfer preserves structurally valid drawings when chemical bond assignment fails, with a review warning and no inferred molecular properties. Copy supplies a sized picture fallback for appearances that editable exchange cannot represent, while retaining the editable native drawing for ReShiki. [Before and after screenshots](changes/shortcut-help.md#editable-clipboard-transfer).
+
+### Perspective pi-ligand shortcuts
+
+At an atom, `j` and `J` now create tilted Cp and arene rings with retained 3D coordinates, tapered front edges and a contact behind the ring. Further tilts preserve real bond lengths, aromaticity and multi-center targets. Native copying retains the editable model; unsupported external projected appearance uses the reported picture fallback. [Before/after examples](changes/shortcut-help.md#perspective-ligand-shortcuts).
+
+### Moving attachment points
+
+Dragging or nudging a centroid or multi-center attachment now moves the ligand and its substituents together, leaving the metal and other ligands fixed unless selected. Right-click → **Move attachment point only** retains deliberate endpoint adjustments. [Before/after captures](changes/shortcut-help.md#move-a-ligand-from-its-attachment-point).

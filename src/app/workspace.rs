@@ -743,20 +743,9 @@ impl App {
         } else {
             self.context_bar()
         };
-        let workspace = column![
-            context,
-            container(
-                container(paper)
-                    .style(sheet)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-            )
-            .padding(18)
-            .width(Length::Fill)
+        let workspace = column![context, paper]
             .height(Length::Fill)
-        ]
-        .height(Length::Fill)
-        .width(Length::Fill);
+            .width(Length::Fill);
         let mut body = row![self.tool_palette(), workspace].height(Length::Fill);
         if self.inspector_open {
             body = body.push(self.inspector());
@@ -2267,22 +2256,6 @@ pub(super) fn surface_shadow(shadow: iced::Shadow) -> iced::Shadow {
     }
 }
 
-fn sheet(_: &Theme) -> container::Style {
-    container::Style {
-        background: Some(Color::WHITE.into()),
-        border: Border {
-            color: Color::from_rgb8(215, 220, 226),
-            width: 1.,
-            radius: 1.0.into(),
-        },
-        shadow: surface_shadow(iced::Shadow {
-            color: Color::from_rgba8(35, 45, 57, 0.08),
-            offset: iced::Vector::new(0., 2.),
-            blur_radius: 8.,
-        }),
-        ..Default::default()
-    }
-}
 fn tip(_: &Theme) -> container::Style {
     container::Style {
         background: Some(Color::from_rgb8(40, 48, 57).into()),

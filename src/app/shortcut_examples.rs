@@ -1,7 +1,10 @@
 //! A fresh, editable copy of the bundled reference in its own document window.
 use super::{App, InspectorTab, Message};
 use iced::Task;
-use reshiki::document::Document;
+use reshiki::{
+    document::{Document, Point},
+    style::DEFAULT as STYLE,
+};
 
 const DRAWING: &str = include_str!("../../assets/examples/shortcut-examples.rsk");
 
@@ -18,12 +21,15 @@ impl App {
         self.file_epoch = self.file_epoch.wrapping_add(1);
         self.sync_drawing_defaults();
         self.recovered.clear();
-        self.inspector_open = true;
-        self.inspector_tab = InspectorTab::Pages;
-        self.fit_pages(Some(0));
+        self.inspector_open = false;
+        self.inspector_tab = InspectorTab::Properties;
+        self.pages = Default::default();
+        // Start at the common groups at a readable scale on the ordinary canvas.
+        self.camera.center = Point::new(STYLE.world(270.), STYLE.world(210.));
+        self.camera.zoom = 0.5;
+        self.fit_to_view = false;
         self.status =
-            "Shortcut examples · Browse with the page arrows; double-click a structure to copy it"
-                .into();
+            "Shortcut examples · Pan or zoom to browse; double-click a structure to copy it".into();
         Ok(())
     }
 }
@@ -79,15 +85,23 @@ mod tests {
     use reshiki::document::Point;
 
     #[test]
-    fn gallery_is_an_unsaved_copy_with_page_navigation() -> Result<(), String> {
+    fn gallery_is_an_unsaved_copy_on_the_normal_canvas() -> Result<(), String> {
         let (mut app, _) = App::new();
         app.load_shortcut_examples()?;
         assert_eq!(app.document_name(), "Shortcut examples");
         assert!(app.path.is_none());
         assert!(!app.dirty());
-        assert!(matches!(app.inspector_tab, InspectorTab::Pages));
-        assert_eq!(app.pages.fit, Some(Some(0)));
-        assert!(app.doc.page_layout.as_ref().is_some_and(|l| l.count() > 1));
+        assert!(matches!(app.inspector_tab, InspectorTab::Properties));
+        assert!(!app.inspector_open);
+        assert!(app.pages.fit.is_none());
+        assert!(app.doc.page_layout.is_none());
+        let doc = app.doc.clone();
+        let _ = app.update(Message::Viewport(iced::Size::new(900., 600.)));
+        let _ = app.update(Message::Fit);
+        let (lo, hi) = app.doc.bounds();
+        assert!((hi.x - lo.x) * app.camera.zoom <= 820.1);
+        assert!((hi.y - lo.y) * app.camera.zoom <= 520.1);
+        assert_eq!(app.doc, doc);
         app.doc.add_atom("C", Point::default());
         assert!(app.dirty());
         let _ = app.update(Message::Discard);

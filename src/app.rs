@@ -172,7 +172,7 @@ pub enum Message {
     ClipboardRead {
         epoch: u64,
         revision: u64,
-        result: Box<Result<Document, String>>,
+        result: Box<Result<reshiki::clipboard::PasteOutcome, String>>,
     },
     Paste,
     PastePicture,
@@ -669,7 +669,7 @@ impl App {
         let viewport = self.guides.paper(iced::Rectangle::with_size(self.viewport));
         self.camera.zoom = ((viewport.width - 80.0).max(100.0) / (hi.x - lo.x).max(240.0))
             .min((viewport.height - 80.0).max(100.0) / (hi.y - lo.y).max(200.0))
-            .clamp(0.25, 2.5);
+            .clamp(0.005, 2.5);
         self.fit_to_view = true;
     }
     fn pending(&mut self, action: Pending) -> Task<Message> {

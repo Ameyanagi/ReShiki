@@ -9,20 +9,19 @@ fn bundled_gallery_is_one_editable_document_and_samples_copy_independently() -> 
     let doc: Document =
         serde_json::from_str(include_str!("../assets/examples/shortcut-examples.rsk"))?;
     doc.validate().map_err(anyhow::Error::msg)?;
-    assert_eq!(doc.page_layout.as_ref().map(|l| l.count()), Some(9));
-    let layout = doc
-        .page_layout
-        .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("Page layout"))?;
+    assert!(
+        doc.page_layout.is_none(),
+        "The gallery uses the ordinary unbounded canvas"
+    );
+    assert_eq!(
+        doc.annotations
+            .iter()
+            .filter(|a| a.text.starts_with("Section "))
+            .count(),
+        9
+    );
     let mut molecules = 0;
     for ids in editing::groups(&doc, &doc.all_ids()) {
-        let part = editing::selection(&doc, &ids);
-        assert_eq!(
-            layout.overflow(&part),
-            0,
-            "Off-page sample: {ids:?} {:?}",
-            reshiki::scene::selection_bounds(&doc, &ids)
-        );
         if !ids.iter().any(|id| doc.atom(*id).is_some()) {
             continue;
         }
@@ -46,7 +45,6 @@ fn bundled_gallery_is_one_editable_document_and_samples_copy_independently() -> 
         );
         molecules += 1;
     }
-    assert_eq!(layout.overflow(&doc), 0, "Examples must fit on their pages");
     assert!(
         molecules >= 90,
         "The gallery should cover every structure-producing key"

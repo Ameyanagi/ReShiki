@@ -16,7 +16,7 @@ struct Sample {
     caption: String,
     drawing: Document,
 }
-struct Sheet {
+struct Section {
     title: &'static str,
     hint: &'static str,
     samples: Vec<Sample>,
@@ -64,7 +64,7 @@ fn caption(doc: &mut Document, text: &str, p: Point, size: f32, bold: bool, widt
         format,
     });
 }
-fn sheets() -> anyhow::Result<Vec<Sheet>> {
+fn sections() -> anyhow::Result<Vec<Section>> {
     let mut groups = Vec::new();
     for (key, label) in [
         ("m", "Me"),
@@ -303,47 +303,47 @@ fn sheets() -> anyhow::Result<Vec<Sheet>> {
         transforms.push(sample(label, doc));
     }
     Ok(vec![
-        Sheet {
+        Section {
             title: "Common groups",
             hint: "Hover an atom, then press the key. Uppercase means Shift+letter. Groups retain their atoms.",
             samples: groups,
         },
-        Sheet {
+        Section {
             title: "Elements, variables and charge",
             hint: "Hover an atom or select one atom. R and X are variable labels, not fully specified molecules.",
             samples: atoms,
         },
-        Sheet {
+        Section {
             title: "Grow a structure",
             hint: "Hover the endpoint unless stated otherwise. The next edit continues from the new endpoint.",
             samples: growth,
         },
-        Sheet {
+        Section {
             title: "Attach rings",
             hint: "Hover an atom. Select a complete aromatic ring and press a to switch circle / alternating bonds.",
             samples: rings,
         },
-        Sheet {
+        Section {
             title: "Change a bond",
             hint: "Hover the middle bond. Repeat 2 to cycle double-line placement. f brings a crossing bond forward.",
             samples: bonds,
         },
-        Sheet {
+        Section {
             title: "Fuse rings",
             hint: "Hover an existing bond. Ring shortcuts share its two endpoints and preserve the connected structure.",
             samples: fusion,
         },
-        Sheet {
+        Section {
             title: "Groups, ligands and typed labels",
-            hint: "j / J add flat pi ligands at an atom. Enter opens its label editor; Cmd/Ctrl+Enter finishes typing.",
+            hint: "j / J add tilted pi ligands with retained 3D coordinates. Enter edits labels; Cmd/Ctrl+Enter finishes typing.",
             samples: attachments,
         },
-        Sheet {
+        Section {
             title: "Choose a drawing tool",
             hint: "Move the pointer to empty canvas and clear the selection first. Then press the key and draw.",
             samples: tools,
         },
-        Sheet {
+        Section {
             title: "Transform a selection",
             hint: "Select the entire structure first. Option is Alt on Mac. Opposite arrow keys reverse rotation or tilt.",
             samples: transforms,
@@ -352,12 +352,20 @@ fn sheets() -> anyhow::Result<Vec<Sheet>> {
 }
 
 pub fn build() -> anyhow::Result<Document> {
-    let sheets = sheets()?;
+    build_document(false)
+}
+
+fn build_document(print_review: bool) -> anyhow::Result<Document> {
+    let sections = sections()?;
     let layout = Layout {
         width_pt: 540.,
         height_pt: 420.,
-        columns: 1,
-        rows: u8::try_from(sheets.len())?,
+        columns: if print_review { 1 } else { 3 },
+        rows: if print_review {
+            u8::try_from(sections.len())?
+        } else {
+            3
+        },
         margins: reshiki::pages::Margins {
             top: 12.,
             right: 12.,
@@ -367,30 +375,30 @@ pub fn build() -> anyhow::Result<Document> {
         ..Layout::default()
     };
     let mut doc = Document {
-        page_layout: Some(layout.clone()),
+        page_layout: print_review.then_some(layout.clone()),
         ..Document::default()
     };
-    for (index, sheet) in sheets.iter().enumerate() {
-        let (lo, _) = layout.bounds(index).context("Page")?;
+    for (index, section) in sections.iter().enumerate() {
+        let (lo, _) = layout.bounds(index).context("Section position")?;
         let p = |x: f32, y: f32| lo.offset(STYLE.world(x), STYLE.world(y));
         caption(
             &mut doc,
-            &format!("{:02}  {}", index + 1, sheet.title),
+            &format!("{:02}  {}", index + 1, section.title),
             p(24., 18.),
             19.,
             true,
             492.,
         );
-        caption(&mut doc, sheet.hint, p(24., 48.), 9., false, 492.);
-        let columns = match sheet.title {
+        caption(&mut doc, section.hint, p(24., 48.), 9., false, 492.);
+        let columns = match section.title {
             "Fuse rings" => 4,
             "Groups, ligands and typed labels" => 2,
             _ => 3,
         };
         let width = 492. / columns as f32;
-        let rows = sheet.samples.len().div_ceil(columns);
+        let rows = section.samples.len().div_ceil(columns);
         let height = 294. / rows as f32;
-        for (i, item) in sheet.samples.iter().enumerate() {
+        for (i, item) in section.samples.iter().enumerate() {
             item.drawing.validate().map_err(anyhow::Error::msg)?;
             let left = 24. + (i % columns) as f32 * width;
             let top = 78. + (i / columns) as f32 * height;
@@ -450,9 +458,9 @@ pub fn build() -> anyhow::Result<Document> {
         caption(
             &mut doc,
             &format!(
-                "Page {} / {}  ·  Use the page arrows on the right. Groups and templates may be revised in future releases.",
+                "Section {} / {}  ·  Pan or zoom to browse. Groups and templates may be revised in future releases.",
                 index + 1,
-                sheets.len()
+                sections.len()
             ),
             p(24., 394.),
             7.5,
@@ -477,7 +485,7 @@ fn main() -> anyhow::Result<()> {
         fs::create_dir_all(&out)?;
         fs::write(
             out.join("shortcut-examples.pdf"),
-            reshiki::export::pages_pdf(&doc).map_err(anyhow::Error::msg)?,
+            reshiki::export::pages_pdf(&build_document(true)?).map_err(anyhow::Error::msg)?,
         )?;
     }
     Ok(())

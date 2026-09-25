@@ -107,6 +107,16 @@ struct Writer<'a> {
 /// Serialize a complete drawing without mutating it. Reject unrepresentable
 /// appearances and ownership rather than detaching or flattening objects.
 pub fn write(document: &Document, options: Options<'_>) -> Result<String> {
+    write_impl(document, options, false)
+}
+
+/// Transfer a validated drawing even when its chemical assignment is pending.
+/// Preserve explicit input; do not manufacture charges or molecular properties.
+pub(crate) fn write_preserving(document: &Document, options: Options<'_>) -> Result<String> {
+    write_impl(document, options, true)
+}
+
+fn write_impl(document: &Document, options: Options<'_>, preserve_drawing: bool) -> Result<String> {
     document.validate().map_err(invalid)?;
     if document
         .atoms
@@ -155,11 +165,21 @@ pub fn write(document: &Document, options: Options<'_>) -> Result<String> {
         ));
     }
     let interchange = crate::attachments::interchange_graph(document).map_err(invalid)?;
-    let molecule = crate::chemistry::document::prepare(&interchange)?;
+    let (graph, rings) = match crate::chemistry::document::prepare(&interchange) {
+        Ok(molecule) => (molecule.state.graph, molecule.state.rings.atoms),
+        Err(crate::chemistry::document::Error::Sanitization(_)) if preserve_drawing => {
+            let graph = crate::chemistry::document::drawing_graph(&interchange)?;
+            let rings = crate::chemistry::rings::perceive(&graph, Default::default())
+                .map_err(|e| invalid(e.to_string()))?
+                .atoms;
+            (graph, rings)
+        }
+        Err(error) => return Err(error.into()),
+    };
     let mut w = Writer::new(document, options)?;
-    w.atoms(&molecule.state.graph)?;
+    w.atoms(&graph)?;
     w.bonds()?;
-    w.circles(&molecule.state.rings.atoms)?;
+    w.circles(&rings)?;
     w.labels()?;
     w.annotations()?;
     w.marks()?;

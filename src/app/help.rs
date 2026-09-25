@@ -78,7 +78,7 @@ impl App {
             shortcut("b / C / B / i / L / S", "Atom: Br / Cl / B / I / Li / Si"),
             shortcut("m / e / y / P", "Atom: Me / Et / Boc / Ph"),
             shortcut("M / Z", "Atom: MgBr / N₃ (complete chemical groups)"),
-            shortcut("j / J on an atom", "Cp / arene pi ligand; repeat at a metal for another ligand"),
+            shortcut("j / J on an atom", "Tilted Cp / arene ligand; repeat at a metal to add another"),
             shortcut("A / E / F / H / N / O / Q", "Ac / CO₂Me / CF₃ / Cbz / NO₂ / OMe / Fmoc"),
             shortcut("d / + / −", "Atom: deuterium / increase / decrease charge"),
             shortcut("r / x", "Atom: variable R / X"),
@@ -128,6 +128,14 @@ impl App {
                 ("Arrows / Shift arrows", "Nudge 1 / 10 units"),
                 ("Drag side handle", "Change width or height"),
                 ("Drag corner handle", "Resize proportionally"),
+                (
+                    "Scroll / side-scroll",
+                    "Pan the canvas vertically / horizontally",
+                ),
+                (
+                    platform_shortcut("⌘ / Ctrl + scroll", "Ctrl + scroll"),
+                    "Zoom at the pointer",
+                ),
             ],
         );
         let examples = column![

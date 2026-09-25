@@ -90,20 +90,19 @@ pub(super) fn add(
         return Err("Pi-ligand replacement needs a single-bond endpoint".into());
     }
     let angle = if neighbors.is_empty() {
-        -std::f32::consts::FRAC_PI_2
+        -std::f32::consts::FRAC_PI_6
     } else {
         editing::open_angle(atom.position, &neighbors)
     };
     let radius = length / (2. * (std::f32::consts::PI / size as f32).sin());
     let center = if metal {
         atom.position.offset(
-            (length + radius) * angle.cos(),
-            (length + radius) * angle.sin(),
+            (length + radius * 0.5) * angle.cos(),
+            (length + radius * 0.5) * angle.sin(),
         )
     } else {
         atom.position
     };
-    let toward = angle + std::f32::consts::PI;
     let mut result = doc.clone();
     let anchor = if metal {
         result.add_atom("*", center)
@@ -112,9 +111,31 @@ pub(super) fn add(
     };
     let mut ring = vec![];
     for i in 0..size {
-        let t = toward - std::f32::consts::PI / size as f32
+        let t = std::f32::consts::PI - std::f32::consts::PI / size as f32
             + i as f32 * std::f32::consts::TAU / size as f32;
         let p = center.offset(radius * t.cos(), radius * t.sin());
+        let carbon = result.add_atom("C", p);
+        let a = result.atom_mut(carbon).ok_or("Missing ring atom")?;
+        a.aromatic = true;
+        a.explicit_h = 1;
+        a.label_h = 1;
+        a.no_implicit = true;
+        a.depth = atom.depth;
+        if size == 5 && i == 0 {
+            a.charge = -1;
+            a.display.hide_charge = true;
+        }
+        ring.push(carbon);
+    }
+    for (&a, &b) in ring.iter().zip(ring.iter().cycle().skip(1)) {
+        result.add_bond(a, b, 4, "plain");
+    }
+    // Build a regular ring in XYZ, then rotate it. Keeping depth is essential:
+    // later tilts and the aromatic ellipse must use the same physical plane.
+    crate::projection::tilt(&mut result, &ring, 60., false);
+    editing::transform_about(&mut result, &ring, center, 1., angle.to_degrees());
+    for carbon in &ring {
+        let p = result.atom(*carbon).ok_or("Missing ring atom")?.position;
         if doc
             .atoms
             .iter()
@@ -126,20 +147,30 @@ pub(super) fn add(
                     .into(),
             );
         }
-        let carbon = result.add_atom("C", p);
-        let a = result.atom_mut(carbon).ok_or("Missing ring atom")?;
-        a.aromatic = true;
-        a.explicit_h = 1;
-        a.label_h = 1;
-        a.no_implicit = true;
-        a.depth = atom.depth;
-        if size == 5 && i == 0 {
-            a.charge = -1;
-        }
-        ring.push(carbon);
     }
-    for (&a, &b) in ring.iter().zip(ring.iter().cycle().skip(1)) {
-        result.add_bond(a, b, 4, "plain");
+    // A thick near edge tapers into the far edges. These are perspective
+    // styles on aromatic bonds, never tetrahedral stereochemical wedges.
+    let front: std::collections::HashSet<_> = result
+        .atoms
+        .iter()
+        .filter(|a| ring.contains(&a.id) && a.depth > atom.depth + length * 0.01)
+        .map(|a| a.id)
+        .collect();
+    for bond in &mut result.bonds {
+        if !ring.contains(&bond.a) || !ring.contains(&bond.b) {
+            continue;
+        }
+        bond.projection = true;
+        bond.display = match (front.contains(&bond.a), front.contains(&bond.b)) {
+            (true, true) => "bold",
+            (true, false) => {
+                std::mem::swap(&mut bond.a, &mut bond.b);
+                "wedge"
+            }
+            (false, true) => "wedge",
+            (false, false) => "plain",
+        }
+        .into();
     }
     let point = result.atom_mut(anchor).ok_or("Missing ring attachment")?;
     point.element = "*".into();
@@ -156,6 +187,13 @@ pub(super) fn add(
     point.radical_electrons = 0;
     if metal {
         result.add_bond(id, anchor, 1, "plain");
+    }
+    for bond in &mut result.bonds {
+        if bond.a == anchor || bond.b == anchor {
+            // The contact enters behind the ligand; keep both the ring
+            // outline and its aromatic ellipse unbroken at the crossing.
+            bond.z_order = -1;
+        }
     }
     for group in &mut result.groups {
         if group.members.contains(&id) {

@@ -43,6 +43,7 @@ pub use labels::{
 };
 pub use marks::{AtomMarks, Marks, NativeMark, read_marks};
 pub use normalize::chemistry_xml;
+pub(crate) use preparation::prepare_drawing;
 pub use preparation::{
     PreparationCause, PreparationError, PreparationStage, PreparedCdxml, prepare_cdxml,
 };

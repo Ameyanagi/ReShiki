@@ -149,7 +149,7 @@ pub(crate) async fn execute(request: Request) -> Result<Response, Error> {
             let output = if request.format.as_deref() == Some("mol") {
                 molfile::write_document(document)?
             } else {
-                let xml = exchange::drawing::write(document, (&request).into())?;
+                let xml = exchange::drawing::write_preserving(document, (&request).into())?;
                 if request.format.as_deref() == Some("cdx") {
                     STANDARD.encode(exchange::to_cdx(&xml).map_err(Error::Chemistry)?)
                 } else {
@@ -174,11 +174,47 @@ pub(crate) async fn execute(request: Request) -> Result<Response, Error> {
         }) else {
             return Ok::<_, Error>(None);
         };
-        let molecule = molecular::prepare(document)?;
+        let molecule = match molecular::prepare(document) {
+            Ok(molecule) => molecule,
+            Err(molecular::Error::Sanitization(_))
+                if source.protocol == 1
+                    && source.operation == "export"
+                    && matches!(source.format.as_deref(), Some("cdxml" | "cdx")) =>
+            {
+                return Ok(None);
+            }
+            Err(error) => return Err(error.into()),
+        };
         let drawing = molecular::for_drawing(&molecule, document)?;
         Ok(Some(Arc::new(Prepared { molecule, drawing })))
     })
     .await??;
+    if prepared.is_none()
+        && request
+            .document
+            .as_ref()
+            .is_some_and(|d| !d.atoms.is_empty())
+        && request.operation == "export"
+        && matches!(request.format.as_deref(), Some("cdxml" | "cdx"))
+    {
+        return tokio::task::spawn_blocking(move || {
+            let document = request.document.as_ref().ok_or(Error::MissingDocument)?;
+            let xml = exchange::drawing::write_preserving(document, request.as_ref().into())?;
+            let output = if request.format.as_deref() == Some("cdx") {
+                STANDARD.encode(exchange::to_cdx(&xml).map_err(Error::Chemistry)?)
+            } else {
+                xml
+            };
+            Ok(Response {
+                document: Some(document.clone()),
+                analysis: None,
+                output: Some(output),
+                engine_version: chemistry::RDKIT_VERSION.into(),
+                warnings: vec!["Drawing exported; chemical assignments remain unvalidated.".into()],
+            })
+        })
+        .await?;
+    }
     build_with_config(request, prepared, None).await
 }
 

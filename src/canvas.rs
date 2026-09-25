@@ -95,7 +95,9 @@ impl Tool {
             Self::Graphic(_) => {
                 "Drag to draw · Shift constrains proportions or angle · Escape cancels"
             }
-            Self::EditPoints => "Drag a curve point or control handle · Escape returns to Select",
+            Self::EditPoints => {
+                "Drag a curve handle or attachment point only · Escape returns to Select"
+            }
         }
     }
 }
@@ -472,14 +474,19 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
             Event::Mouse(mouse::Event::WheelScrolled { delta })
                 if inside && state.gesture.is_none() =>
             {
-                let amount = match delta {
-                    mouse::ScrollDelta::Lines { y, .. } => *y * 0.12,
-                    mouse::ScrollDelta::Pixels { y, .. } => *y * 0.003,
+                let (x, y, zoom_amount) = match delta {
+                    mouse::ScrollDelta::Lines { x, y } => (*x * 40., *y * 40., *y * 0.12),
+                    mouse::ScrollDelta::Pixels { x, y } => (*x, *y, *y * 0.003),
                 };
-                Some(
-                    Action::publish(Edit::Zoom(amount.exp(), self.camera.world(point?, bounds)))
-                        .and_capture(),
-                )
+                if !x.is_finite() || !y.is_finite() {
+                    return None;
+                }
+                let edit = if state.modifiers.command() || state.modifiers.control() {
+                    Edit::Zoom(zoom_amount.exp(), self.camera.world(point?, bounds))
+                } else {
+                    Edit::Pan(x / self.camera.zoom, y / self.camera.zoom)
+                };
+                Some(Action::publish(edit).and_capture())
             }
             // macOS can report Control-click as a secondary click.
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right))
@@ -607,6 +614,17 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                     }
                 }
                 if self.tool == Tool::EditPoints {
+                    if let Some(id) = self.doc.nearest(p, 10. / self.camera.zoom).filter(|id| {
+                        self.doc.atom(*id).is_some_and(|a| a.attachment.is_some())
+                            && self.doc.abbreviation(*id).is_none()
+                    }) {
+                        state.gesture = Some(Gesture::Move {
+                            start: p,
+                            ids: vec![id],
+                            clicked: vec![id],
+                        });
+                        return Some(Action::request_redraw().and_capture());
+                    }
                     for g in self
                         .doc
                         .graphics
@@ -672,15 +690,23 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                     Tool::Select | Tool::Lasso => Some(if !hit.is_empty() {
                         Gesture::Move {
                             start: p,
-                            ids: if state.modifiers.shift() {
-                                reshiki::selection_region::combine(self.selected, &hit, true, false)
-                            } else if !state.modifiers.alt()
-                                && hit.iter().all(|id| self.selected.contains(id))
-                            {
-                                self.selected.to_vec()
-                            } else {
-                                hit.clone()
-                            },
+                            ids: reshiki::attachments::movement_selection(
+                                self.doc,
+                                &if state.modifiers.shift() {
+                                    reshiki::selection_region::combine(
+                                        self.selected,
+                                        &hit,
+                                        true,
+                                        false,
+                                    )
+                                } else if !state.modifiers.alt()
+                                    && hit.iter().all(|id| self.selected.contains(id))
+                                {
+                                    self.selected.to_vec()
+                                } else {
+                                    hit.clone()
+                                },
+                            ),
                             clicked: hit,
                         }
                     } else if self.tool == Tool::Lasso {
@@ -2675,6 +2701,105 @@ mod tests {
     use iced::widget::canvas::Program;
 
     #[test]
+    fn unbounded_canvas_edges_accept_input_with_or_without_crosshair() -> Result<(), String> {
+        let doc = Document::default();
+        let bounds = Rectangle::new(Point::new(20., 50.), iced::Size::new(400., 300.));
+        for crosshair in [false, true] {
+            let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+            canvas.tool = Tool::Atom;
+            canvas.guides.crosshair = crosshair;
+            assert_eq!(canvas.guides.paper(bounds), bounds);
+            for p in [Point::new(21., 51.), Point::new(419., 349.)] {
+                let mut state = State::default();
+                let cursor = mouse::Cursor::Available(p);
+                canvas.update(
+                    &mut state,
+                    &Event::Mouse(mouse::Event::CursorMoved { position: p }),
+                    bounds,
+                    cursor,
+                );
+                let action = canvas
+                    .update(
+                        &mut state,
+                        &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+                        bounds,
+                        cursor,
+                    )
+                    .ok_or("Edge click should reach the canvas")?;
+                let Some(Edit::Click(world)) = action.into_inner().0 else {
+                    return Err("Expected atom placement".into());
+                };
+                let expected = canvas
+                    .camera
+                    .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
+                assert!(world.distance(expected) < 0.001);
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn scroll_pans_both_axes_and_command_or_control_zooms_at_pointer() -> Result<(), String> {
+        use iced::keyboard::Modifiers;
+        let doc = Document::default();
+        let bounds = Rectangle::new(Point::new(20., 50.), iced::Size::new(500., 350.));
+        for rulers in [false, true] {
+            for zoom in [0.5, 2.] {
+                let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+                canvas.guides.rulers = rulers;
+                canvas.camera.zoom = zoom;
+                let paper = canvas.guides.paper(bounds);
+                let local = Point::new(123., 87.);
+                let pointer = Point::new(paper.x + local.x, paper.y + local.y);
+                let anchor = canvas.camera.world(local, paper);
+                let cursor = mouse::Cursor::Available(pointer);
+                for (delta, expected_x, expected_y) in [
+                    (mouse::ScrollDelta::Pixels { x: 24., y: -18. }, 24., -18.),
+                    (mouse::ScrollDelta::Lines { x: -2., y: 1. }, -80., 40.),
+                ] {
+                    let mut state = State::default();
+                    let action = canvas
+                        .update(
+                            &mut state,
+                            &Event::Mouse(mouse::Event::WheelScrolled { delta }),
+                            bounds,
+                            cursor,
+                        )
+                        .ok_or("Scroll action")?;
+                    let Some(Edit::Pan(dx, dy)) = action.into_inner().0 else {
+                        return Err("Unmodified scroll must pan".into());
+                    };
+                    let mut moved = canvas.camera;
+                    moved.center = moved.center.offset(-dx, -dy);
+                    let position = moved.screen(anchor, paper);
+                    assert!((position.x - local.x - expected_x).abs() < 0.001);
+                    assert!((position.y - local.y - expected_y).abs() < 0.001);
+                    for modifiers in [Modifiers::CTRL, Modifiers::COMMAND] {
+                        let mut state = State {
+                            modifiers,
+                            ..Default::default()
+                        };
+                        let action = canvas
+                            .update(
+                                &mut state,
+                                &Event::Mouse(mouse::Event::WheelScrolled { delta }),
+                                bounds,
+                                cursor,
+                            )
+                            .ok_or("Zoom action")?;
+                        let Some(Edit::Zoom(factor, point)) = action.into_inner().0 else {
+                            return Err("Modified scroll must zoom".into());
+                        };
+                        assert_eq!(point, anchor);
+                        assert!((factor - 1.) * expected_y > 0.);
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
     fn rulers_exclude_editing_and_pointer_coordinates_use_the_inset_paper() {
         let doc = Document::default();
         let canvas = MoleculeCanvas {
@@ -2730,6 +2855,7 @@ mod tests {
             click.into_inner().0,
             Some(Edit::Click(World { x: 0., y: 0. }))
         ));
+        state.modifiers = iced::keyboard::Modifiers::COMMAND;
         let action = canvas
             .update(
                 &mut state,
@@ -3289,6 +3415,70 @@ mod tests {
             matches!(action.into_inner().0, Some(Edit::Move(ids, 60., 30.)) if ids == vec![atom])
         );
         assert_eq!(doc.atom(atom).unwrap().position, World::default());
+    }
+
+    #[test]
+    fn centroid_drag_moves_ligand_and_point_edit_mode_moves_only_the_point() -> Result<(), String> {
+        let mut doc = Document::default();
+        let metal = doc.add_atom("Fe", World::default());
+        let (doc, _) = reshiki::hotkeys::atom_edit(&doc, metal, "j", 42.).ok_or("Shortcut")??;
+        let anchor = doc
+            .atoms
+            .iter()
+            .find(|a| a.attachment.is_some())
+            .ok_or("Point")?;
+        let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+        let bounds = Rectangle::with_size(iced::Size::new(400., 300.));
+        let start = canvas.camera.screen(anchor.position, bounds);
+        let end = Point::new(start.x + 35., start.y + 25.);
+        for tool in [Tool::Select, Tool::EditPoints] {
+            canvas.tool = tool;
+            let mut state = State {
+                modifiers: iced::keyboard::Modifiers::ALT,
+                ..Default::default()
+            };
+            canvas.update(
+                &mut state,
+                &Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+                bounds,
+                mouse::Cursor::Available(start),
+            );
+            let Some(Gesture::Move {
+                ids: preview_ids, ..
+            }) = &state.gesture
+            else {
+                return Err("Missing drag preview".into());
+            };
+            let preview_ids = preview_ids.clone();
+            let result = canvas
+                .update(
+                    &mut state,
+                    &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                    bounds,
+                    mouse::Cursor::Available(end),
+                )
+                .and_then(|action| action.into_inner().0)
+                .ok_or("Missing move")?;
+            let Edit::Move(ids, dx, dy) = result else {
+                return Err("Expected move".into());
+            };
+            assert_eq!(ids, preview_ids);
+            assert!((dx - 35.).abs() < 0.001 && (dy - 25.).abs() < 0.001);
+            if tool == Tool::Select {
+                assert_eq!(ids.len(), 6);
+                assert!(anchor.centroid.iter().all(|id| ids.contains(id)));
+                assert!(!ids.contains(&metal));
+            } else {
+                assert_eq!(ids, vec![anchor.id]);
+            }
+            let mut preview = doc.clone();
+            preview.translate(&preview_ids, dx, dy);
+            let mut committed = doc.clone();
+            committed.translate(&ids, dx, dy);
+            assert_eq!(preview, committed);
+            assert_eq!(committed.atom(metal), doc.atom(metal));
+        }
+        Ok(())
     }
 
     #[test]

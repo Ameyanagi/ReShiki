@@ -90,7 +90,7 @@ impl Writer<'_> {
     }
     pub(super) fn atoms(&mut self, graph: &crate::chemistry::graph::Graph) -> Result<()> {
         let doc = self.doc;
-        let valences = graph.valences().map_err(invalid)?;
+        let valences = graph.provisional_valences().map_err(invalid)?;
         let mut degrees: HashMap<u64, usize> = HashMap::new();
         for b in &doc.bonds {
             for id in [b.a, b.b] {

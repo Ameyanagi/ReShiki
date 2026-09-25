@@ -144,7 +144,12 @@ impl App {
             Action::Crosshair => return self.update(Message::Crosshair(!self.guides.crosshair)),
             Action::Nudge(x, y) => {
                 let before = self.doc.clone();
-                self.doc.translate(&self.selected, x, y);
+                let ids = if self.tool == Tool::EditPoints {
+                    self.selected.clone()
+                } else {
+                    reshiki::attachments::movement_selection(&self.doc, &self.selected)
+                };
+                self.doc.translate(&ids, x, y);
                 self.changed(before);
             }
             Action::Join => {
