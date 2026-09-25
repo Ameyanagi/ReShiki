@@ -175,7 +175,7 @@ fn pi_shortcuts_retain_a_retiltable_3d_plane_and_keep_contacts_behind_the_ring()
             .iter()
             .position(|b| b.a == metal || b.b == metal)
             .ok_or("contact")?;
-        assert_eq!(doc.bonds.get(contact).ok_or("contact")?.z_order, -1);
+        assert_eq!(doc.bonds.get(contact).ok_or("contact")?.z_order, 0);
         let gaps = reshiki::crossings::gaps(&doc);
         assert!(!gaps.get(contact).ok_or("contact gaps")?.is_empty());
         assert!(

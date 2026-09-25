@@ -1,5 +1,5 @@
 //! Crossing clearance for cubic aromatic circles and partial ring curves.
-use super::{Gap, cross, delta, thickness};
+use super::{Gap, cross, delta, depth, thickness};
 use crate::{
     aromatic::Circle,
     document::{Document, Point},
@@ -159,6 +159,11 @@ pub(crate) fn ring_stroke(
         .max()
         .unwrap_or_default();
     let mut gaps = Vec::new();
+    let plane = depth::Plane::fit(doc, &ring.atoms);
+    let projected = doc
+        .bonds
+        .iter()
+        .any(|b| b.projection && ring.contains_bond(b.a, b.b));
     for (index, bond) in doc.bonds.iter().enumerate() {
         if ring.contains_bond(bond.a, bond.b) || !doc.bond_visible(bond.a, bond.b) {
             continue;
@@ -196,7 +201,19 @@ pub(crate) fn ring_stroke(
             continue;
         }
         let axis = Point::new(ab.x / length, ab.y / length);
-        if (bond.z_order, index) > rank {
+        let layer = depth::layer(doc, bond, &ring.atoms, projected);
+        let front = |t: f32| {
+            if layer == rank.0
+                && let Some((plane, z)) = plane.as_ref().zip(depth::at(doc, bond, t))
+            {
+                let dz = z - plane.at(a.offset(ab.x * t, ab.y * t));
+                if dz.abs() > 0.001 {
+                    return dz > 0.;
+                }
+            }
+            (layer, index) > rank
+        };
+        if hits.iter().all(|(t, _)| front(*t)) {
             *commands = cut_curve(
                 commands,
                 Mask {
@@ -208,6 +225,24 @@ pub(crate) fn ring_stroke(
             );
         } else {
             for (t, sine) in hits {
+                if front(t) {
+                    // A single bond can pass in front of the far side and
+                    // behind the near side. Cut only this foreground crossing.
+                    let half = thickness(bond, &doc.drawing_style) * 0.5 + DEFAULT.world(1.1);
+                    let reach = (half + doc.drawing_style.world(style.width_pt)) / sine.max(0.15);
+                    let low = (t * length - reach).max(0.);
+                    let high = (t * length + reach).min(length);
+                    *commands = cut_curve(
+                        commands,
+                        Mask {
+                            origin: a.offset(axis.x * low, axis.y * low),
+                            axis,
+                            length: high - low,
+                            half,
+                        },
+                    );
+                    continue;
+                }
                 let half = ((doc.drawing_style.world(style.width_pt) * 0.5 + DEFAULT.world(1.1))
                     / sine.max(0.15))
                 .min(length * 0.22);

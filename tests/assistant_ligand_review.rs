@@ -31,6 +31,43 @@ fn edit(target: &str, angles: [f32; 3], show_charge: bool) -> Edit {
 }
 
 #[test]
+fn review_accepts_tapered_projection_edges_and_preserves_the_chemical_graph() -> anyhow::Result<()>
+{
+    let mut source = Document::default();
+    let metal = source.add_atom("Fe", reshiki::document::Point::default());
+    let mut doc = reshiki::hotkeys::atom_edit(&source, metal, "j", 42.)
+        .context("Cp shortcut")?
+        .map_err(anyhow::Error::msg)?
+        .0;
+    assert!(
+        doc.bonds
+            .iter()
+            .any(|b| b.projection && b.display == "wedge")
+    );
+    let original = doc.clone();
+    for angles in [[17., -8., 12.], [-17., 8., -12.]] {
+        let target = review::targets(&doc)
+            .into_iter()
+            .find(|t| t.kind == "ligand")
+            .context("Cp review target")?;
+        doc = review::apply(&doc, &[edit(&target.name, angles, false)], true)
+            .map_err(anyhow::Error::msg)?;
+        assert_eq!(doc.atom(metal), original.atom(metal));
+        for (a, b) in doc.bonds.iter().zip(&original.bonds) {
+            assert_eq!(
+                (a.a, a.b, a.order, &a.stereo),
+                (b.a, b.b, b.order, &b.stereo)
+            );
+        }
+    }
+    assert_eq!(
+        reshiki::attachments::composition(&doc).map_err(anyhow::Error::msg)?,
+        reshiki::attachments::composition(&original).map_err(anyhow::Error::msg)?
+    );
+    Ok(())
+}
+
+#[test]
 fn defined_ligand_phase_and_depth_preserve_graph_and_leave_methyl_bonds_thin() -> anyhow::Result<()>
 {
     let mut s = sketch()?;

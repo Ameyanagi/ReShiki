@@ -9,16 +9,11 @@ fn drawing(tilted: bool, partial: bool, front: bool) -> Result<Document, String>
     let mut doc = Document::default();
     let metal = doc.add_atom("Fe", Point::default());
     doc.atom_mut(metal).ok_or("metal")?.charge = 2;
-    doc = reshiki::hotkeys::atom_edit(&doc, metal, "J", 42.)
-        .ok_or("key")??
-        .0;
-    let ring = doc
-        .atoms
-        .iter()
-        .find(|a| a.attachment.is_some())
-        .ok_or("attachment")?
-        .centroid
-        .clone();
+    // Fixed geometry isolates curve clipping from shortcut presentation defaults.
+    let ring = reshiki::editing::ring(&mut doc, Point::new(0., -84.), 6, true, 0.);
+    let anchor =
+        reshiki::attachments::add(&mut doc, &ring, reshiki::attachments::Kind::MultiCenter)?;
+    doc.add_bond(metal, anchor, 1, "plain");
     for bond in &mut doc.bonds {
         if ring.contains(&bond.a) && ring.contains(&bond.b) {
             bond.color = BLUE;

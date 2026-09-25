@@ -1701,6 +1701,7 @@ impl App {
                         .map(|b| b.z_order)
                         .min()
                         .unwrap_or(0)
+                        .min(-1)
                         .saturating_sub(1)
                 };
                 for bond in &mut self.doc.bonds {

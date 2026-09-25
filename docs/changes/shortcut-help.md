@@ -62,6 +62,26 @@ For a deliberate endpoint adjustment, right-click the attachment and choose **Mo
 
 Both captures use the same [arene/Ru input](fixtures/attachment-movement.rsk) at 250% zoom and the same Option-drag offset. The title differs because the after build opens a copy. Selection changes can recenter a fitted view; saved coordinates confirm that Ru remains fixed. The ligand was already tilted in both builds; only the drag behavior differs.
 
+## Front and back after dragging or tilting
+
+The ligand's stored X/Y/Z coordinates now determine clearance at each crossing. Moving it across the metal can put the contact in front of the far ring edge and ellipse, or behind the near side. Previously, the contact remained behind every edge regardless of its depth. Both the outline and inner curve now follow the geometry, including contacts crossing a ring vertex.
+
+| Before: contact incorrectly hidden by the far side                                                                | After: clearance follows depth                                                                           |
+| ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| ![Ru contact incorrectly interrupted by the far arene edge and ellipse](../images/shortcut-help/depth-before.png) | ![Ru contact passes in front of the far arene edge and ellipse](../images/shortcut-help/depth-after.png) |
+
+These native screenshots open the same [saved ligand drawing](fixtures/ligand-depth.rsk) at 250% zoom. The before build is `83e93e8`; the after build includes this fix. No coordinates or bond orders were changed between these captures.
+
+Dragging translates the ligand without changing its orientation or depth. Further 3D tilts recalculate its thick and tapered perspective edges. Ordinary stereochemical wedges keep their meaning, and explicit front/back controls remain available. Automated cases cover Cp and arene, older saved shortcut contacts, crossing both sides of one ring, depth interpolation, reversible tilt, and save/reopen.
+
+The expanded [editable depth examples](fixtures/depth-examples.rsk) cover arene movement and further tilt, Cp vertex crossings, partial inner curves, a Cp* dimer with explicit contact layers, assistant retilting, and an unchanged Haworth projection. Each case was exported as SVG, PNG and PDF. The dimer is a drawing regression: its complete coordination and formal-charge assignment is not chemically validated.
+
+![Eight examples of ligand depth, ring curves, further tilting and retained Haworth appearance](../images/shortcut-help/depth-examples.png)
+
+Regenerate these examples with `cargo run --example projection_depth_qa -- /tmp/projection-depth-review`.
+
+This change fixes visibility and perspective styling from existing coordinates. New bonds drawn with the mouse still start their new endpoint at depth zero; automatic placement in a tilted ring's plane is not implemented yet.
+
 ## Both ring interactions
 
 - **During placement:** choose Benzene and hold **Cmd on Mac / Ctrl on Windows or Linux** while clicking or dragging for a circle. A normal click gives alternating bonds. The modifier also works with regular rings and cyclopentadiene; chair and Haworth tools retain their existing behavior.

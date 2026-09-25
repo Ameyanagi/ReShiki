@@ -49,3 +49,5 @@ At an atom, `j` and `J` now create tilted Cp and arene rings with retained 3D co
 ### Moving attachment points
 
 Dragging or nudging a centroid or multi-center attachment now moves the ligand and its substituents together, leaving the metal and other ligands fixed unless selected. Right-click → **Move attachment point only** retains deliberate endpoint adjustments. [Before/after captures](changes/shortcut-help.md#move-a-ligand-from-its-attachment-point).
+
+Crossing clearance now uses retained 3D depth at each intersection. After a ligand is dragged across the metal, the contact passes in front of the far ring edge and behind the near side as appropriate; the aromatic ellipse follows the same ordering. Further tilts update thick and tapered perspective edges. [Before/after captures](changes/shortcut-help.md#front-and-back-after-dragging-or-tilting).

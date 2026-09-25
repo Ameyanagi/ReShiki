@@ -339,7 +339,7 @@ pub fn apply(doc: &Document, edits: &[Edit], compact_allowed: bool) -> Result<Do
                 let layer = if *in_front {
                     layers.max().unwrap_or(0).checked_add(1)
                 } else {
-                    layers.min().unwrap_or(0).checked_sub(1)
+                    layers.min().unwrap_or(0).min(-1).checked_sub(1)
                 }
                 .ok_or("Bond layer limit reached")?;
                 for bond in &mut candidate.bonds {

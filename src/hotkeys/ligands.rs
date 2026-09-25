@@ -150,28 +150,13 @@ pub(super) fn add(
     }
     // A thick near edge tapers into the far edges. These are perspective
     // styles on aromatic bonds, never tetrahedral stereochemical wedges.
-    let front: std::collections::HashSet<_> = result
-        .atoms
-        .iter()
-        .filter(|a| ring.contains(&a.id) && a.depth > atom.depth + length * 0.01)
-        .map(|a| a.id)
-        .collect();
     for bond in &mut result.bonds {
         if !ring.contains(&bond.a) || !ring.contains(&bond.b) {
             continue;
         }
         bond.projection = true;
-        bond.display = match (front.contains(&bond.a), front.contains(&bond.b)) {
-            (true, true) => "bold",
-            (true, false) => {
-                std::mem::swap(&mut bond.a, &mut bond.b);
-                "wedge"
-            }
-            (false, true) => "wedge",
-            (false, false) => "plain",
-        }
-        .into();
     }
+    crate::projection::refresh_depth_bonds(&mut result, &ring);
     let point = result.atom_mut(anchor).ok_or("Missing ring attachment")?;
     point.element = "*".into();
     point.position = center;
@@ -187,13 +172,6 @@ pub(super) fn add(
     point.radical_electrons = 0;
     if metal {
         result.add_bond(id, anchor, 1, "plain");
-    }
-    for bond in &mut result.bonds {
-        if bond.a == anchor || bond.b == anchor {
-            // The contact enters behind the ligand; keep both the ring
-            // outline and its aromatic ellipse unbroken at the crossing.
-            bond.z_order = -1;
-        }
     }
     for group in &mut result.groups {
         if group.members.contains(&id) {

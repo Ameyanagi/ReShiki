@@ -374,7 +374,7 @@ impl Sketch {
                 let (order, display) = style.parts();
                 doc.add_bond(id, contact as u64 + 1, order, display);
                 if let Some(b) = doc.bonds.last_mut() {
-                    b.z_order = -1;
+                    b.z_order = -2;
                     b.color = settings.bond_color;
                 }
             }

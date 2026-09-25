@@ -4,6 +4,7 @@ use crate::{
     scene::Primitive,
     style::{DEFAULT, DrawingStyle},
 };
+mod depth;
 mod ring_strokes;
 pub(crate) use ring_strokes::ring_stroke;
 #[derive(Debug, Clone, Copy)]
@@ -52,13 +53,15 @@ pub fn gaps(doc: &Document) -> Vec<Vec<Gap>> {
     let mut active: Vec<(usize, Point, Point)> = vec![];
     let mut budget = 200_000_usize;
     for (i, a, b) in segments {
-        active.retain(|(_, c, d)| c.x.max(d.x) >= a.x.min(b.x));
+        // Rigid rotations can put the same ring vertex a few ulps outside a
+        // segment bound. Keep endpoint crossings through the broad phase.
+        active.retain(|(_, c, d)| c.x.max(d.x) + 0.001 >= a.x.min(b.x));
         for (j, c, d) in &active {
             if budget == 0 {
                 return gaps;
             }
             budget -= 1;
-            if a.y.min(b.y) >= c.y.max(d.y) || a.y.max(b.y) <= c.y.min(d.y) {
+            if a.y.min(b.y) > c.y.max(d.y) + 0.001 || a.y.max(b.y) < c.y.min(d.y) - 0.001 {
                 continue;
             }
             let (Some(first), Some(second)) = (doc.bonds.get(i), doc.bonds.get(*j)) else {
@@ -79,10 +82,13 @@ pub fn gaps(doc: &Document) -> Vec<Vec<Gap>> {
             }
             let t = cross(ac, cd) / determinant;
             let u = cross(ac, ab) / determinant;
-            if !(0.04..0.96).contains(&t) || !(0.04..0.96).contains(&u) {
+            let crosses = |t: f32, projected: bool| {
+                (0.04..0.96).contains(&t) || projected && (-0.0001..=1.0001).contains(&t)
+            };
+            if !crosses(t, first.projection) || !crosses(u, second.projection) {
                 continue;
             }
-            let first_over = (first.z_order, i) > (second.z_order, *j);
+            let first_over = depth::bond_over(doc, i, t, *j, u);
             let (under, from, to, parameter, over) = if first_over {
                 (*j, *c, *d, u, first)
             } else {
