@@ -1,6 +1,6 @@
 # ReShiki 0.8.0
 
-ReShiki 0.8.0 adds contextual drawing shortcuts, one editable shortcut gallery, Haworth templates, ring fills, and improved ligand drawing and interchange. It also fixes large PNG exports and figure exports of drawings with unresolved chemical assignments. This release includes the reviewed changes from PRs #22–#34 and the internal-label corrections described below. [Download](https://github.com/Ameyanagi/ReShiki/releases/tag/v0.8.0) · [Release validation](release-0.8.0-validation.md).
+ReShiki 0.8.0 adds contextual drawing shortcuts, one editable shortcut gallery, Haworth templates, ring fills, and improved ligand drawing and interchange. It also fixes large PNG exports and figure exports of drawings with unresolved chemical assignments. This release includes the reviewed changes from PRs #22–#34 and [#36](https://github.com/Ameyanagi/ReShiki/pull/36). [Download](https://github.com/Ameyanagi/ReShiki/releases/tag/v0.8.0) · [Release validation](release-0.8.0-validation.md).
 
 ## Drawing and chemistry
 
