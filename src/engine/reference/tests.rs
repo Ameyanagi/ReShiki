@@ -91,12 +91,13 @@ async fn compare(
     request: Request,
 ) -> anyhow::Result<Response> {
     let before = request.document.clone();
+    let context = format!("Operation {} ({:?})", request.operation, request.format);
     let expected = reference
         .execute(request.clone())
         .await
         .map_err(anyhow::Error::msg)?;
     let actual = local.execute(request).await.map_err(anyhow::Error::msg)?;
-    matches(&actual, &expected)?;
+    matches(&actual, &expected).context(context)?;
     if let (Some(before), Some(after)) = (before, &actual.document) {
         let mut history = History::default();
         let mut doc = after.clone();

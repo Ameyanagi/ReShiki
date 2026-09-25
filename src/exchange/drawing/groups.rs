@@ -22,6 +22,8 @@ impl Writer<'_> {
         let mut active: Vec<(usize, P, P)> = Vec::new();
         let mut budget = 200_000;
         let mut crossings = vec![Vec::new(); doc.bonds.len()];
+        let mut in_front = vec![Vec::new(); doc.bonds.len()];
+        let mut incoming = vec![0_usize; doc.bonds.len()];
         'sweep: for (i, a, b) in segments {
             active.retain(|(_, c, d)| c.x.max(d.x) >= a.x.min(b.x));
             for &(j, c, d) in &active {
@@ -53,6 +55,14 @@ impl Writer<'_> {
                 let t = (dx * by - dy * bx) / det;
                 let u = (dx * ay - dy * ax) / det;
                 if t > 0.04 && t < 0.96 && u > 0.04 && u < 0.96 {
+                    let (under, over) =
+                        if crate::crossings::bond_over(doc, i, t as f32, j, u as f32) {
+                            (j, i)
+                        } else {
+                            (i, j)
+                        };
+                    in_front.get_mut(under).ok_or(Error::Limit)?.push(over);
+                    *incoming.get_mut(over).ok_or(Error::Limit)? += 1;
                     crossings
                         .get_mut(i)
                         .ok_or_else(|| invalid("Missing crossing list"))?
@@ -68,8 +78,29 @@ impl Writer<'_> {
         if crossings.iter().all(Vec::is_empty) {
             return Ok(());
         }
-        let mut ordered: Vec<_> = (0..doc.bonds.len()).collect();
-        ordered.sort_by_key(|&i| doc.bonds.get(i).map(|b| (b.z_order, i)));
+        let mut ready: BTreeSet<_> = incoming
+            .iter()
+            .zip(&doc.bonds)
+            .enumerate()
+            .filter(|(_, (n, _))| **n == 0)
+            .map(|(i, (_, bond))| (bond.z_order, i))
+            .collect();
+        let mut ordered = Vec::new();
+        while let Some((_, i)) = ready.pop_first() {
+            ordered.push(i);
+            for &over in in_front.get(i).ok_or(Error::Limit)? {
+                let count = incoming.get_mut(over).ok_or(Error::Limit)?;
+                *count = count.checked_sub(1).ok_or(Error::Limit)?;
+                if *count == 0 {
+                    ready.insert((doc.bonds.get(over).ok_or(Error::Limit)?.z_order, over));
+                }
+            }
+        }
+        if ordered.len() != doc.bonds.len() {
+            return Err(invalid(
+                "Cyclic crossing depths cannot be represented by CDX stacking order",
+            ));
+        }
         if middle + ordered.len() + doc.graphics.len() > 32760 {
             return Err(invalid("Too many bond layers for editable interchange"));
         }

@@ -175,7 +175,7 @@ impl CdxmlScene {
                 bond.order = old.order;
             }
             bond.display = old.display;
-            if bond.order == 4 && bond.display == "bold" {
+            if bond.order == 4 && matches!(bond.display.as_str(), "bold" | "wedge") {
                 bond.projection = true;
             }
             bond.secondary_display = old.secondary_display;
@@ -211,9 +211,14 @@ impl CdxmlScene {
                     .text_style
                     .map(NativeTextStyle::into_document)
                     .transpose()?;
+                let hidden_charge = old
+                    .marks
+                    .iter()
+                    .any(|m| m.hidden == Some(true) && m.kind.charge());
                 atom.marks = old
                     .marks
                     .into_iter()
+                    .filter(|m| m.hidden != Some(true))
                     .map(|m| crate::scientific::AtomMark {
                         kind: m.kind,
                         offset: narrow(m.offset),
@@ -224,6 +229,7 @@ impl CdxmlScene {
                 if let Some(value) = old.display {
                     atom.display = display(value)?;
                 }
+                atom.display.hide_charge = hidden_charge;
             }
         }
         if !previous.is_empty() {

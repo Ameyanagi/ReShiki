@@ -52,6 +52,7 @@ pub(super) fn normalize_tree(mut tree: Tree) -> Result<String> {
             tree.node_mut(index)?.set("Order", "1".into());
         }
         let normalized = match display.as_str() {
+            "Bold" | "WedgeBegin" | "WedgeEnd" if original_order == "1.5" => Some("Solid"),
             "HollowWedgeBegin" => Some("WedgeBegin"),
             "HollowWedgeEnd" => Some("WedgeEnd"),
             "Hash" => Some("WedgedHashBegin"),

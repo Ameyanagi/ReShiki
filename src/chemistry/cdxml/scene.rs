@@ -1,5 +1,6 @@
 //! Detached original CDXML scene assembly and checked drawing reconstruction.
 mod circles;
+mod ellipses;
 mod finish;
 mod ring_fills;
 use super::{

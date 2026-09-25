@@ -48,7 +48,7 @@ Editable CDXML/CDX transfer preserves structurally valid drawings when chemical 
 
 ### Perspective pi-ligand shortcuts
 
-At an atom, `j` and `J` now create tilted Cp and arene rings with retained 3D coordinates, tapered front edges and a contact behind the ring. Further tilts preserve real bond lengths, aromaticity and multi-center targets. Native copying retains the editable model; unsupported external projected appearance uses the reported picture fallback. [Before/after examples](changes/shortcut-help.md#perspective-ligand-shortcuts).
+At an atom, `j` and `J` now create tilted Cp and arene rings with retained 3D coordinates, tapered front edges and a contact behind the ring. Further tilts preserve real bond lengths, aromaticity and multi-center targets. Native copying retains the editable model. Cp/arene rings also transfer as editable CDX with aromatic bonds, perspective edges, hidden ligand charges and multicenter targets; the returned native CDX fixtures are tested on import. The [clipboard compatibility table](clipboard.md#changes-made-for-an-external-copy) lists remaining conversions. [Before/after examples](changes/shortcut-help.md#perspective-ligand-shortcuts).
 
 ### Moving attachment points
 

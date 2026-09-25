@@ -5,6 +5,7 @@ use crate::{
     style::{DEFAULT, DrawingStyle},
 };
 mod depth;
+pub(crate) use depth::bond_over;
 mod ring_strokes;
 pub(crate) use ring_strokes::ring_stroke;
 #[derive(Debug, Clone, Copy)]

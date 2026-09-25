@@ -234,7 +234,7 @@ fn stretched_plane(atoms: &[&crate::document::Atom]) -> Option<(Vec<Point>, [Poi
         p.iter()
             .zip(u)
             .zip(v)
-            .any(|((p, u), v)| (p - u * cos - v * sin).abs() > radius * 0.002)
+            .any(|((p, u), v)| (p - u * cos - v * sin).abs() > radius * 0.006)
     }) {
         return None;
     }

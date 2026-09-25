@@ -31,7 +31,9 @@ mod read_abbreviations;
 mod scene;
 mod stereo;
 mod tree;
+mod variables;
 mod xml_guard;
+pub(crate) use variables::drawing_variables;
 
 pub use abbreviations::{Abbreviation, Flattened, flatten_abbreviations};
 pub use arrows::{ArrowError, ArrowReader, NativeArrow, NativeArrowStyle};

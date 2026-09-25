@@ -194,6 +194,17 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             } else {
                 text
             };
+            let (xml, variables) =
+                cdxml::drawing_variables(&xml).map_err(|e| Error::Binary(e.to_string()))?;
+            if !variables.0.is_empty() {
+                let prepared = cdxml::prepare_drawing(&xml)?;
+                let mut document = cdxml::assemble_cdxml(&prepared)?.into_unchecked_drawing()?;
+                variables
+                    .restore(&prepared, &mut document)
+                    .map_err(|e| Error::Binary(e.to_string()))?;
+                return Ok(Preparation::Drawing(Box::new(document),
+                    "Drawing imported with R/X labels as uninterpreted atom text; query semantics and molecular properties are unavailable".into()));
+            }
             let prepared = match cdxml::prepare_cdxml(&xml) {
                 Ok(prepared) => prepared,
                 Err(error) if matches!(error.cause, cdxml::PreparationCause::Sanitization(_)) => {

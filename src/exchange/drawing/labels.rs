@@ -159,6 +159,27 @@ impl Writer<'_> {
                     .retain(|(key, _)| *key != "Element");
                 continue;
             }
+            if self.variable_labels
+                && let Some(label) = &a.display.variable
+            {
+                // A display label on an unspecified atom is not a query atom
+                // or an abbreviation with an invented molecular definition.
+                self.tree.set(node, "NodeType", "Unspecified")?;
+                self.tree.set(node, "NumHydrogens", "0")?;
+                self.text(
+                    node,
+                    label,
+                    &TextFormat {
+                        style: a
+                            .text_style
+                            .clone()
+                            .unwrap_or_else(|| doc.drawing_style.text_style()),
+                        ..Default::default()
+                    },
+                    [("p", self.position(a.position))],
+                )?;
+                continue;
+            }
             if crate::attachments::hidden(a, doc) {
                 // Keep the chemical wildcard and its bonds for editable copy,
                 // but omit its editing handle from destination applications.
@@ -175,7 +196,10 @@ impl Writer<'_> {
                 )?;
                 continue;
             }
-            if a.explicit_h != 0 {
+            if super::ligands::implicit_carbon(a, doc) {
+                self.tree.set(node, "IgnoreWarnings", "yes")?;
+            }
+            if a.explicit_h != 0 && !super::ligands::implicit_carbon(a, doc) {
                 self.tree
                     .set(node, "NumHydrogens", a.explicit_h.to_string())?;
             }
@@ -221,12 +245,12 @@ impl Writer<'_> {
                     });
                 }
             }
-            if a.charge != 0 && !a.marks.iter().any(|m| m.kind.charge()) {
+            if a.charge != 0 && !a.display.hide_charge && !a.marks.iter().any(|m| m.kind.charge()) {
                 let start = label.len();
                 if a.charge.unsigned_abs() > 1 {
                     label.push_str(&a.charge.unsigned_abs().to_string());
                 }
-                label.push(if a.charge > 0 { '+' } else { '−' });
+                label.push(if a.charge > 0 { '+' } else { '-' });
                 spans.push(TextSpan {
                     start,
                     end: label.len(),
@@ -312,6 +336,9 @@ impl Writer<'_> {
                     ("color", color),
                 ],
             )?;
+            if b.order == 4 && b.projection {
+                self.tree.set(n, "IgnoreWarnings", "yes")?;
+            }
             if let Some(second) = &b.secondary_display {
                 self.tree.set(n, "Display2", display(second)?)?;
             }
@@ -351,6 +378,7 @@ impl Writer<'_> {
             .iter()
             .map(|b| ((b.a.min(b.b), b.a.max(b.b)), b))
             .collect();
+        let projected = crate::aromatic::circles(doc);
         for ring in rings {
             self.spend(ring.len())?;
             let atoms = ring
@@ -375,6 +403,14 @@ impl Writer<'_> {
                 })
                 .collect::<Result<Vec<_>>>()?;
             if bonds.iter().any(|b| b.order != 4) {
+                continue;
+            }
+            if let Some(circle) = projected.iter().find(|c| {
+                c.projected_axes.is_some()
+                    && c.atoms.len() == atoms.len()
+                    && atoms.iter().all(|a| c.atoms.contains(&a.id))
+            }) {
+                self.projected_circle(circle)?;
                 continue;
             }
             let points: Vec<P> = atoms.iter().map(|a| a.position.into()).collect();

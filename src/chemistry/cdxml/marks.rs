@@ -10,6 +10,8 @@ use std::collections::HashMap;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct NativeMark {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hidden: Option<bool>,
     pub kind: MarkKind,
     pub offset: ImportPoint,
     pub angle: f64,
@@ -160,6 +162,7 @@ pub fn read_marks(xml: &str, prepared: &PreparedAtoms<'_>, source_scale: f64) ->
             ));
         }
         let mark = NativeMark {
+            hidden: (kind.charge() && graphic.attr("Visible") == Some("no")).then_some(true),
             kind,
             offset: ImportPoint {
                 x: x1 * source_scale - xy.x,

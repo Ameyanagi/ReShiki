@@ -315,6 +315,19 @@ def write_graphics(
                 closed = True
         if current:
             groups.append((current, closed))
+        for points, closed in groups:
+            if (
+                closed
+                and len(points) >= 9
+                and all(
+                    abs(a - b) < 1e-6
+                    for a, b in zip(
+                        (points[1]["x"], points[1]["y"]), (points[-2]["x"], points[-2]["y"])
+                    )
+                )
+            ):
+                points[0] = points[-3]
+                del points[-3:]
         return groups
 
     for index, g in enumerate(ordered):

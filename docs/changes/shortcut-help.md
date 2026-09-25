@@ -48,7 +48,27 @@ At an atom, **j** adds Cp and **J** adds an arene ligand with an initial 60° ti
 | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | ![Flat Cp and arene shortcut examples](../images/shortcut-help/ligands-before.png) | ![Tilted Cp and arene examples with front edges and rear contacts](../images/shortcut-help/07-ligands.png) |
 
-Native `.rsk` keeps the coordinates and editable objects. Projected ligand styles currently use the explicit picture fallback when copied to external drawing editors; external editable projection interchange remains a limitation.
+Native `.rsk` keeps the coordinates and editable objects. Cp/arene perspective now also transfers as editable CDX, as verified below. Complete original tilt metadata is retained in native documents; it is not guaranteed through external editors.
+
+## Editable Cp and arene round trips
+
+Ordinary Copy now carries the tilted Cp/arene examples as editable ring atoms and bonds, including aromatic bond order, perspective edges, multicenter targets and hidden ligand charges. It no longer forces C/H labels over the ring. This works for both individual complexes and the complete shortcut gallery.
+
+| Before: overlapping carbon labels after paste                                                     | After: editable skeletal rings after paste                                                                   |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| ![Reported gallery paste with overlapping C/H labels](../images/shortcut-help/pi-copy-before.png) | ![Gallery pasted as native editable rings with aromatic ellipses](../images/shortcut-help/pi-copy-after.png) |
+
+The before image is the reported section 7 paste; the after image captures the same section in the receiving desktop editor. The captures use different zoom levels and crops; no chemical objects were retouched. The typed Cp* entry expands into its editable group in that editor. Metal charges stay as entered.
+
+The cause was in the editable representation: explicit hydrogen counts forced carbon labels, and an incorrectly closed ellipse caused the receiving editor to discard aromatic bond orders. Closed ellipses now use four cubic segments with twelve control points and the native implied-boolean encoding. Hidden Cp charges use attached invisible symbols, positioned away from the metal to prevent reassignment to it. Charge text also uses the supported minus encoding so NO2/N3 group definitions survive a return copy.
+
+The complete gallery was copied out, selected in the receiving editor, copied back and pasted into the optimized ReShiki app. The saved return document contains 483 nodes (478 atoms and five attachment points), 429 bonds and 132 captions, including 33 aromatic bonds, three hidden Cp charges and the Fe2+ charge. Native clipboard captures contain editable objects and no embedded picture. Regression tests check both directions and retain unrelated curve graphics.
+
+For the close-up below, section 7 was selected from that saved return document and copied into a separate native drawing.
+
+![Returned ligand examples selected as editable objects in the release app](../images/shortcut-help/pi-copy-return.png)
+
+[Editable two-Cp source](fixtures/pi-ligands-copy.rsk) · [Captured binary fixtures and provenance](../../tests/fixtures/ligand-exchange/README.md) · [Compatibility conversions](../clipboard.md#changes-made-for-an-external-copy). R/X labels returned as query nicknames are imported as uninterpreted atom text with a visible notice; molecular properties and query semantics are unavailable for that drawing. Other unsupported query chemistry remains rejected.
 
 ## Move a ligand from its attachment point
 
@@ -124,7 +144,7 @@ The optimized macOS build was also tested through the actual system clipboard: c
 
 ![The release build reports editable drawing and images copied for the selected arene](../images/shortcut-help/editable-arene-release.png)
 
-This does not enable every projected style: projected wedges outside the supported Haworth convention, hidden charges and other unsupported appearances still use a picture for external clipboard transfer. That fallback now says **Copied · editable in ReShiki; picture in other apps**, with details available on hover. A successful copy no longer displays a multiline red error. External editable transfer retains the tested 2D appearance; use native `.rsk` to preserve the full tilt metadata.
+Cp/arene perspective wedges and hidden ligand charges now transfer as editable CDX as well. Other unsupported features are simplified only in the external copy, with a notice; see the [compatibility table](../clipboard.md#changes-made-for-an-external-copy). When a picture fallback is still necessary, it says **Copied · editable in ReShiki; picture in other apps**, with details available on hover. A successful copy no longer displays a multiline red error. External editable transfer retains the tested 2D appearance; use native `.rsk` to preserve the full tilt metadata.
 
 ## Automatic formula text
 

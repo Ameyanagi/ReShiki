@@ -39,6 +39,7 @@ def chemistry_xml(root):
                 parent.remove(child)
     for bond in result.iter("b"):
         display = bond.get("Display", "Solid")
+        original_order = bond.get("Order", "1")
         if display not in DISPLAY or bond.get("Display2", "Solid") not in (
             "Solid",
             "Dash",
@@ -52,11 +53,13 @@ def chemistry_xml(root):
         if bond.get("Order") in ("hydrogen", "1.5"):
             bond.set("Order", "1")
         # RDKit does not recognize these equivalent stereochemical depictions.
-        if display.startswith("HollowWedge"):
+        if original_order == "1.5" and display in ("Bold", "WedgeBegin", "WedgeEnd"):
+            bond.set("Display", "Solid")
+        elif display.startswith("HollowWedge"):
             bond.set("Display", display.replace("HollowWedge", "Wedge"))
         elif display == "Hash":
             bond.set("Display", "WedgedHashBegin")
-        elif display == "Bold" and bond.get("Order", "1") == "1":
+        elif display == "Bold" and original_order == "1":
             bond.set("Display", "WedgeBegin")
     return result
 

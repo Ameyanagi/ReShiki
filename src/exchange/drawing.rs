@@ -7,10 +7,13 @@ use crate::{
     typography::{TextFormat, TextStyle},
 };
 use std::collections::HashMap;
+mod clipboard;
 mod groups;
 mod labels;
+mod ligands;
 mod objects;
 mod tree;
+pub(crate) use clipboard::write as write_clipboard;
 use tree::{Key, Tree};
 
 #[derive(Debug, thiserror::Error)]
@@ -102,26 +105,32 @@ struct Writer<'a> {
     scale: f64,
     shift: P,
     work: usize,
+    variable_labels: bool,
 }
 
 /// Serialize a complete drawing without mutating it. Reject unrepresentable
 /// appearances and ownership rather than detaching or flattening objects.
 pub fn write(document: &Document, options: Options<'_>) -> Result<String> {
-    write_impl(document, options, false)
+    write_impl(document, options, false, false)
 }
 
 /// Transfer a validated drawing even when its chemical assignment is pending.
 /// Preserve explicit input; do not manufacture charges or molecular properties.
 pub(crate) fn write_preserving(document: &Document, options: Options<'_>) -> Result<String> {
-    write_impl(document, options, true)
+    write_impl(document, options, true, false)
 }
 
-fn write_impl(document: &Document, options: Options<'_>, preserve_drawing: bool) -> Result<String> {
+fn write_impl(
+    document: &Document,
+    options: Options<'_>,
+    preserve_drawing: bool,
+    variable_labels: bool,
+) -> Result<String> {
     document.validate().map_err(invalid)?;
     if document
         .atoms
         .iter()
-        .any(|a| a.charge != 0 && a.display.hide_charge)
+        .any(|a| a.charge != 0 && a.display.hide_charge && !ligands::hidden_charge(a))
     {
         return Err(invalid(
             "CDXML cannot yet preserve hidden charge labels. Show charges before editable export, or use ReShiki (.rsk), SVG, PNG or PDF. The chemical charges are retained.",
@@ -148,7 +157,7 @@ fn write_impl(document: &Document, options: Options<'_>, preserve_drawing: bool)
         document
     };
     if document.bonds.iter().any(|b| b.ring_arc)
-        || document.atoms.iter().any(|a| a.display.variable.is_some())
+        || (!variable_labels && document.atoms.iter().any(|a| a.display.variable.is_some()))
     {
         return Err(invalid(
             "CDXML cannot yet preserve inner ring curves or variable atom labels. Save as ReShiki (.rsk) or export SVG/PDF to keep this appearance.",
@@ -169,7 +178,7 @@ fn write_impl(document: &Document, options: Options<'_>, preserve_drawing: bool)
     if document.bonds.iter().enumerate().any(|(i, bond)| {
         // A chemically aromatic bold edge cannot specify a tetrahedral center.
         // Other projected styles still require a verified interchange mapping.
-        let aromatic_bold = bond.display == "bold"
+        let aromatic_bold = matches!(bond.display.as_str(), "bold" | "wedge")
             && graph.bonds.get(i).is_some_and(|b| b.aromatic)
             && [bond.a, bond.b]
                 .iter()
@@ -181,12 +190,14 @@ fn write_impl(document: &Document, options: Options<'_>, preserve_drawing: bool)
         ));
     }
     let mut w = Writer::new(document, options)?;
+    w.variable_labels = variable_labels;
     w.atoms(&graph)?;
     w.bonds()?;
     w.circles(&rings)?;
     w.labels()?;
     w.annotations()?;
     w.marks()?;
+    w.hidden_charges()?;
     w.arrows()?;
     let middle = w.graphics()?;
     w.ring_fills(middle.saturating_sub(1))?;
@@ -358,6 +369,7 @@ impl<'a> Writer<'a> {
             scale,
             shift,
             work: 50_000_000,
+            variable_labels: false,
         };
         w.font(&style.font_family)?;
         w.color([255; 3])?;

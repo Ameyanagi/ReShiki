@@ -27,7 +27,7 @@ pub(super) fn layer(doc: &Document, bond: &Bond, ring: &[u64], projected: bool) 
     }
 }
 
-pub(super) fn bond_over(doc: &Document, i: usize, t: f32, j: usize, u: f32) -> bool {
+pub(crate) fn bond_over(doc: &Document, i: usize, t: f32, j: usize, u: f32) -> bool {
     let (Some(a), Some(b)) = (doc.bonds.get(i), doc.bonds.get(j)) else {
         return i > j;
     };
