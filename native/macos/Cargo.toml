@@ -1,0 +1,25 @@
+[package]
+name = "reshiki-macos"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Native macOS document-open integration for ReShiki"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.4"
+objc2-foundation = { version = "0.3.2", default-features = false, features = [
+  "std",
+  "NSAppleEventDescriptor",
+  "NSAppleEventManager",
+  "NSObject",
+  "NSNotification",
+  "NSString",
+  "NSURL",
+  "objc2-core-services",
+] }
+objc2-app-kit = { version = "0.3.2", default-features = false, features = [
+  "std",
+  "NSApplication",
+  "NSResponder",
+] }
+tokio = { version = "1", features = ["sync"] }

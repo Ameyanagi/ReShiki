@@ -251,6 +251,17 @@ class NativeRuntimeTests(unittest.TestCase):
             with (app / "Contents/Info.plist").open("rb") as stream:
                 info = plistlib.load(stream)
             self.assertEqual(info["CFBundleIconFile"], "ReShiki.icns")
+            document_type = info["CFBundleDocumentTypes"][0]
+            self.assertEqual(document_type["CFBundleTypeRole"], "Editor")
+            self.assertEqual(document_type["LSItemContentTypes"], ["dev.reshiki.drawing"])
+            self.assertEqual(document_type["CFBundleTypeExtensions"], ["rsk", "reshiki", "moruno"])
+            exported_type = info["UTExportedTypeDeclarations"][0]
+            self.assertEqual(exported_type["UTTypeIdentifier"], "dev.reshiki.drawing")
+            self.assertEqual(exported_type["UTTypeConformsTo"], ["public.json"])
+            self.assertEqual(
+                exported_type["UTTypeTagSpecification"]["public.filename-extension"],
+                document_type["CFBundleTypeExtensions"],
+            )
             self.assertEqual(
                 (app / "Contents/Resources/ReShiki.icns").read_bytes(),
                 (build_release.ROOT / "assets/branding/reshiki.icns").read_bytes(),

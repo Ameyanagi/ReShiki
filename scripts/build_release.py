@@ -260,6 +260,26 @@ def mac_bundle(destination, profile, *, target=None, inchi_helper=None):
             resources.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / "assets/branding/reshiki.icns", resources / "ReShiki.icns")
             info["CFBundleIconFile"] = "ReShiki.icns"
+            info["CFBundleDocumentTypes"] = [
+                dict(
+                    CFBundleTypeName="ReShiki drawing",
+                    CFBundleTypeRole="Editor",
+                    LSHandlerRank="Owner",
+                    CFBundleTypeExtensions=["rsk", "reshiki", "moruno"],
+                    LSItemContentTypes=["dev.reshiki.drawing"],
+                    CFBundleTypeIconFile="ReShiki.icns",
+                )
+            ]
+            info["UTExportedTypeDeclarations"] = [
+                dict(
+                    UTTypeIdentifier="dev.reshiki.drawing",
+                    UTTypeDescription="ReShiki drawing",
+                    UTTypeConformsTo=["public.json"],
+                    UTTypeTagSpecification={
+                        "public.filename-extension": ["rsk", "reshiki", "moruno"]
+                    },
+                )
+            ]
         with (bundle / "Contents/Info.plist").open("wb") as stream:
             plistlib.dump(info, stream)
     # Reusing a development bundle must not retain the previous worker payload.

@@ -75,6 +75,17 @@ fn main() -> iced::Result {
             }
         }
     }
+    #[cfg(target_os = "macos")]
+    let _document_events = match reshiki_macos::install_document_events() {
+        Ok((handler, events)) => {
+            app::install_document_events(events);
+            Some(handler)
+        }
+        Err(error) => {
+            eprintln!("Could not register macOS document events: {error}");
+            None
+        }
+    };
     iced::application(app::App::new, app::App::update, app::App::view)
         .default_font(iced::Font::with_name(reshiki::style::ui_font_family()))
         .title(app::App::title)
