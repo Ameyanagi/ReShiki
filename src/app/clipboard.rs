@@ -89,8 +89,10 @@ impl App {
             }
         } else if outcome.image_only {
             "Image copied"
+        } else if cfg!(windows) && outcome.external_editable {
+            "Copied editable drawing · use Copy Image for a picture"
         } else if cfg!(windows) {
-            "Editable drawing copied · use Copy Image for a picture"
+            "Copied · editable in ReShiki; use Copy Image for other apps"
         } else if outcome.external_editable {
             "Editable drawing and images copied"
         } else {

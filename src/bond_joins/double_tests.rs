@@ -66,7 +66,7 @@ fn colored_branches_join_the_same_ring_outline_without_changing_chemistry() -> a
     let source: Document = serde_json::from_str(include_str!(
         "../../docs/changes/fixtures/arene-bold-join.rsk"
     ))?;
-    for rotation in [0., 47., 130.] {
+    for rotation in (0..360).step_by(17).map(|r| r as f32).chain([47., 130.]) {
         for reversed in [false, true] {
             for color in [[43, 112, 97], [0, 0, 0], [180, 68, 32]] {
                 let mut doc = source.clone();

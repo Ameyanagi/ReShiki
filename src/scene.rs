@@ -778,7 +778,10 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             let bond_primitives = out.drain(bond_start..).collect();
             out.extend(crate::crossings::cut(bond_primitives, gaps));
         }
-        if crate::bond_joins::needed(doc, b) && b.display != "hollow_wedge" {
+        if crate::bond_joins::needed(doc, b)
+            && b.display != "hollow_wedge"
+            && !crate::bond_joins::behind_backbone(doc, b)
+        {
             use crate::graphics::PathCommand;
             let commands = joined.entry(b.color).or_default();
             let mut secondary = Vec::new();

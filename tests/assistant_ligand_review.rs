@@ -199,8 +199,9 @@ fn review_tilts_only_one_ligand_and_preserves_3d_lengths_contacts_and_chemistry(
     Ok(())
 }
 
-#[test]
-fn hiding_charge_labels_keeps_formula_and_native_data_and_can_be_reversed() -> anyhow::Result<()> {
+#[tokio::test]
+async fn hiding_charge_labels_keeps_formula_and_native_data_and_can_be_reversed()
+-> anyhow::Result<()> {
     let before = draft()?;
     let targets: Vec<_> = review::targets(&before)
         .into_iter()
@@ -228,10 +229,48 @@ fn hiding_charge_labels_keeps_formula_and_native_data_and_can_be_reversed() -> a
             .map_err(anyhow::Error::msg)?
             .is_empty()
     );
-    let error = reshiki::exchange::drawing::write(&hidden, Default::default())
-        .err()
-        .context("Expected explicit interchange limitation")?;
-    assert!(error.to_string().contains("hidden charge labels"));
+    let xml = reshiki::exchange::drawing::write(&hidden, Default::default())?;
+    let cdx = reshiki::exchange::to_cdx(&xml).map_err(anyhow::Error::msg)?;
+    let xml = reshiki::exchange::from_cdx(&cdx).map_err(anyhow::Error::msg)?;
+    let response = reshiki::engine::LocalEngine::default()
+        .request(reshiki::engine::Request::import("cdxml", &xml))
+        .await
+        .map_err(anyhow::Error::msg)?;
+    assert!(response.analysis.is_none());
+    assert!(
+        response
+            .warnings
+            .iter()
+            .any(|w| w.contains("Coordination assignments need review"))
+    );
+    let imported = response.document.context("Imported ligand drawing")?;
+    assert_eq!(
+        imported
+            .bonds
+            .iter()
+            .filter(|b| b.order == 1 && b.display == "hash")
+            .count(),
+        2
+    );
+    assert_eq!(
+        imported
+            .bonds
+            .iter()
+            .filter(|b| b.order == 1 && b.display == "wedge")
+            .count(),
+        2
+    );
+    assert_eq!(imported.atoms.iter().map(|a| a.charge).sum::<i32>(), -2);
+    assert_eq!(
+        imported
+            .atoms
+            .iter()
+            .filter(|a| a.charge == -1 && a.display.hide_charge)
+            .count(),
+        2
+    );
+    assert_eq!(imported.bonds.iter().filter(|b| b.order == 4).count(), 10);
+    assert!(!reshiki::scene::svg(&imported).contains('−'));
     let edits: Vec<_> = targets
         .iter()
         .map(|t| edit(&t.name, [0.; 3], true))

@@ -186,7 +186,7 @@ fn cp_star_dimer_wedges_keep_both_ellipses_ligands_and_contacts() -> anyhow::Res
 fn projected_styles_are_not_silently_exported_as_stereochemical_wedges() -> anyhow::Result<()> {
     for preset in APPEARANCES
         .into_iter()
-        .filter(|p| !matches!(p, BondPreset::Single | BondPreset::Bold))
+        .filter(|p| !matches!(p, BondPreset::Single | BondPreset::Bold | BondPreset::Wedge))
     {
         let mut doc = ring(6, 65.);
         preset.apply(doc.bonds.first_mut().context("Missing edge")?);
@@ -202,6 +202,27 @@ fn projected_styles_are_not_silently_exported_as_stereochemical_wedges() -> anyh
         let imported = reshiki::chemistry::cdxml::import_cdxml(&xml)?.document;
         assert_eq!(imported.bonds.iter().filter(|b| b.order == 4).count(), 6);
         assert!(imported.atoms.iter().all(|a| a.stereo.is_none()));
+    }
+    Ok(())
+}
+
+#[test]
+fn aromatic_front_edges_remain_aromatic_without_creating_stereocenters() -> anyhow::Result<()> {
+    for preset in [BondPreset::Bold, BondPreset::Wedge] {
+        let mut doc = ring(6, 65.);
+        preset.apply(doc.bonds.first_mut().context("Missing edge")?);
+        let xml = reshiki::exchange::drawing::write(&doc, Default::default())?;
+        let cdx = reshiki::exchange::to_cdx(&xml).map_err(anyhow::Error::msg)?;
+        let xml = reshiki::exchange::from_cdx(&cdx).map_err(anyhow::Error::msg)?;
+        let imported = reshiki::chemistry::cdxml::import_cdxml(&xml)?.document;
+        assert_eq!(imported.bonds.iter().filter(|b| b.order == 4).count(), 6);
+        assert!(imported.atoms.iter().all(|a| a.stereo.is_none()));
+        assert!(
+            imported
+                .bonds
+                .iter()
+                .any(|b| b.projection && BondPreset::of(b) == Some(preset))
+        );
     }
     Ok(())
 }

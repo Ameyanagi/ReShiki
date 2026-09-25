@@ -121,9 +121,21 @@ pub fn polygon(doc: &Document, b: &Bond, start: Point, end: Point) -> Vec<Point>
     let [bl, br] = cap(doc, b, b.b, end, start);
     vec![al, br, bl, ar]
 }
+/// A differently colored substituent is painted underneath the ring. Adjacent
+/// separately antialiased colors otherwise leave a translucent seam, even when
+/// their boundaries agree. The ring covers the branch root with its own ink.
+pub fn behind_backbone(doc: &Document, b: &Bond) -> bool {
+    [b.a, b.b].iter().any(|id| {
+        branches::backbone(doc, *id)
+            .is_some_and(|ring| !ring.contains(b) && ring.has_different_color(b.color))
+    })
+}
 /// Keep a ring's outer miter intact and stop substituents at that outline.
 pub fn outlines(doc: &Document, b: &Bond, start: Point, end: Point) -> Vec<Vec<Point>> {
     let mut parts = vec![polygon(doc, b, start, end)];
+    if behind_backbone(doc, b) {
+        return parts;
+    }
     for (id, point) in [(b.a, start), (b.b, end)] {
         if doc
             .atom(id)

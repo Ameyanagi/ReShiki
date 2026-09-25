@@ -10,6 +10,9 @@ impl Backbone<'_> {
     pub(super) fn contains(&self, bond: &Bond) -> bool {
         self.edges.iter().any(|edge| std::ptr::eq(*edge, bond))
     }
+    pub(super) fn has_different_color(&self, color: [u8; 3]) -> bool {
+        self.edges.iter().any(|edge| edge.color != color)
+    }
     pub(super) fn boundary(&self, doc: &Document, id: u64) -> Option<[(Point, Point, f32); 2]> {
         let point = doc.atom(id)?.position;
         let [first, second] = self.edges;

@@ -26,6 +26,8 @@ The shortcut gallery is supplied as editable CDX on the clipboard even when its 
 
 When a receiving editor returns R/X as query nicknames, ReShiki imports them as uninterpreted atom text with a notice. Molecular properties and query semantics are unavailable for that drawing; other unsupported query types remain rejected. NO2/N3 group definitions retain their formal charges through the tested return copy. [Before/after captures and return-paste verification](changes/shortcut-help.md#editable-cp-and-arene-round-trips).
 
+Styled metal contacts are also retained when chemical normalization would otherwise turn their single bonds into coordinate bonds with incompatible wedge styles. That import keeps the supplied drawing, reports that coordination assignments need review, and withholds molecular properties.
+
 ### Changes made for an external copy
 
 | Feature                                                                 | Editable CDX clipboard behavior                                                                           |

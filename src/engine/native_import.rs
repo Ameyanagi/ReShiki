@@ -220,6 +220,13 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
                 }
                 Err(error) => return Err(error.into()),
             };
+            if styled_coordination_changed(&prepared) {
+                let scene = cdxml::assemble_cdxml(&cdxml::prepare_drawing(&xml)?)?;
+                return Ok(Preparation::Drawing(
+                    Box::new(scene.into_unchecked_drawing()?),
+                    "Drawing imported; styled metal contacts retained as drawn. Coordination assignments need review; molecular properties are unavailable".into(),
+                ));
+            }
             let mut scene = cdxml::assemble_cdxml(&prepared)?;
             if scene.conformer_3d.is_none() {
                 layout(&mut scene.molecule, &[])?;
@@ -247,6 +254,30 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
     };
     prepared.document.validate().map_err(Error::Document)?;
     Ok(Preparation::Complete(Box::new(prepared)))
+}
+
+// Sanitization can normalize an overvalent metal contact to a dative bond.
+// A wedge/hash on the source single bond has no equivalent dative appearance.
+// Preserve that drawing explicitly instead of either dropping its style or
+// publishing properties for a different graph. Ordinary molecular parsing
+// and supported plain/dashed coordinate bonds retain their strict behavior.
+fn styled_coordination_changed(prepared: &cdxml::PreparedCdxml) -> bool {
+    let ids = &prepared.molecule.ids;
+    let changed: std::collections::HashSet<_> = prepared
+        .molecule
+        .state
+        .graph
+        .bonds
+        .iter()
+        .filter(|b| b.order == 5)
+        .filter_map(|b| ids.get(b.a).zip(ids.get(b.b)))
+        .map(|(&a, &b)| (a.min(b), a.max(b)))
+        .collect();
+    prepared.bonds.iter().any(|b| {
+        b.order == 1
+            && !matches!(b.display.as_str(), "plain" | "dashed")
+            && changed.contains(&(b.a.min(b.b), b.a.max(b.b)))
+    })
 }
 
 fn finish_reaction(drawing: reaction::Drawing) -> Result<Prepared, Error> {

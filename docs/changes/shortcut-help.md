@@ -40,6 +40,16 @@ The seven-atom, six-bond sample was copied from an external editor into ReShiki,
 
 If a drawing uses appearance settings that editable CDX cannot yet preserve, Copy now includes a sized picture for other drawing editors and explains the fallback. ReShiki-to-ReShiki copying retains the editable original. This preserves appearance but does not turn unsupported objects into editable chemical structures in another app.
 
+## Styled metal-contact import
+
+A metal-complex drawing could export successfully, then fail on return with **Unsupported bond appearance for this order**. Chemical normalization converted some single metal–chloride contacts to coordinate bonds while retaining wedge/hash styles that are invalid for that bond order. Native import now retains the source drawing for this case, reports that coordination assignments need review, and withholds molecular properties. It does not invent a different assignment.
+
+| Before: paste rejected                                                           | After: editable drawing retained                                                                                      |
+| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| ![The metal-complex paste is rejected](../images/shortcut-help/dimer-before.png) | ![The same source pastes with its bond styles and a chemistry-review notice](../images/shortcut-help/dimer-after.png) |
+
+Both captures use the same CDXML source through the native clipboard in the optimized macOS app. The after view is fitted to show the imported drawing. A CDX round-trip regression checks both wedge contacts, both hashed contacts, ten aromatic bonds and two hidden ligand charges.
+
 ## Perspective ligand shortcuts
 
 At an atom, **j** adds Cp and **J** adds an arene ligand with an initial 60° tilt, tapered front edges and a contact behind the ring. The regular ring is built in 3D before projection: its true bond lengths, aromatic order, charges and multi-center targets survive later tilts. The ellipse follows the same ring plane. Wedges here are drawing perspective, not assigned stereochemistry. At a metal, repeating the shortcut adds another ligand and keeps that metal selected. The Cp minus sign is hidden by default, while its −1 charge remains in the chemical data. Metal charges are left as entered; neutral overall charge is not assumed.
@@ -130,11 +140,15 @@ Automatic double-bond placement puts a ring's outer line on its skeleton. The jo
 
 Both figures use the same [saved arene drawing](fixtures/arene-bold-join.rsk). Only rendering changes; the coordinates, double bonds and green C–F bond are unchanged. Tests cover shared corners, rotated/reversed bonds, several tilt angles, transparent raster coverage and preservation of the separate inner double-bond lines.
 
-The green C–F branch exposed a separate issue: joining excluded adjacent bonds with different colors. Widths and directions now determine the junction regardless of color. At an unambiguous thick/thin ring corner, the ring keeps its own outline and the outgoing substituent meets its exterior. The branch no longer changes the corner into a pointed shoulder or paints a colored triangle inside the ring. Tests compare the ring silhouette with and without its substituent across rotations and tilts.
+Differently colored branches are painted underneath the ring outline, preventing translucent antialiasing seams at their shared corner. Regression checks sample 24 rotations in both bond directions without relaxing the opacity threshold.
 
-| Before: colored branch excluded from the join                                                          | After: all three bonds share the junction                                                                         |
-| ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| ![Green C–F bond meets a protruding black ring corner](../images/shortcut-help/arene-color-before.png) | ![Green C–F bond joins the black ring without a protruding corner](../images/shortcut-help/arene-color-after.png) |
+The colored C–F junction is part of the same corner correction. In the earlier renderer, the thick edge ended with a square shoulder beside the thin ring bond. The current outline follows the ring corner, and the colored branch meets its outside without an internal colored triangle. The close-ups below use the same saved drawing and the same view box; only the renderer changes. The earlier full-size comparison did not demonstrate this corner change and has been replaced.
+
+| Before: square shoulder at the ring junction                                                         | After: continuous ring outline                                                                               |
+| ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| ![Enlarged junction before the ring join correction](../images/shortcut-help/arene-color-before.png) | ![The same enlarged junction with the corrected ring outline](../images/shortcut-help/arene-color-after.png) |
+
+The before image is rendered from commit `506471c`; the after image uses the corrected renderer. Both show the carbon at the C–F junction at identical scale. These are crops of vector exports, with no retouching. The complete structure is shown in the preceding comparison. Tests also compare the ring silhouette with and without its substituent across rotations and tilts.
 
 ## Copying the bold arene
 
