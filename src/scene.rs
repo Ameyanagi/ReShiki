@@ -466,19 +466,29 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
     // A partial curve replaces the ring's circle, not its aromatic membership.
     // Retain every ring here so its other edges do not gain fallback dashes.
     let circles = crate::aromatic::circles(doc);
-    out.extend(
-        circles
-            .iter()
-            .filter(|c| !arcs.intersects(c))
-            .flat_map(|c| {
-                c.graphic().parts().into_iter().map(|p| Primitive::Path {
-                    commands: p.commands,
-                    style: p.style,
-                    filled: p.filled,
-                })
-            }),
-    );
+    let mut crossing_gaps = crate::crossings::gaps(doc);
+    for circle in circles.iter().filter(|c| !arcs.intersects(c)) {
+        for part in circle.graphic().parts() {
+            let stroke = Primitive::Path {
+                commands: part.commands,
+                style: part.style,
+                filled: part.filled,
+            };
+            let (stroke, gaps) = crate::crossings::ring_stroke(doc, circle, stroke);
+            out.push(stroke);
+            for (index, gap) in gaps {
+                if let Some(gaps) = crossing_gaps.get_mut(index) {
+                    gaps.push(gap);
+                }
+            }
+        }
+    }
     out.extend(arcs.primitives.iter().cloned());
+    for (index, gap) in &arcs.crossings {
+        if let Some(gaps) = crossing_gaps.get_mut(*index) {
+            gaps.push(*gap);
+        }
+    }
     let labels: std::collections::HashMap<_, _> = doc
         .atoms
         .iter()
@@ -496,7 +506,6 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             (*id, bounds)
         })
         .collect();
-    let crossing_gaps = crate::crossings::gaps(doc);
     // Fill joined bond outlines together. Separate antialiased polygons leave
     // translucent seams even when their mathematical corners agree exactly.
     let mut joined: std::collections::BTreeMap<[u8; 3], Vec<crate::graphics::PathCommand>> =
