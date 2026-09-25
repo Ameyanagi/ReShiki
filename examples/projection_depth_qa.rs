@@ -96,7 +96,7 @@ fn main() -> Result<()> {
         ("Arene: tilted again", retilted),
         ("Cp: contact crosses a ring vertex", cp),
         ("Partial inner curve", partial),
-        ("Cp* dimer: explicit contact layers", dimer),
+        ("Cp* dimer: automatic contact depth", dimer),
         ("Cp* dimer: one ligand retilted", changed_dimer),
         ("Haworth: stereo retained", sugar),
     ];

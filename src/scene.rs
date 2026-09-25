@@ -557,9 +557,11 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             "plain" | "bold" | "wedge"
                 if !matches!(b.order, 2 | 7) && crate::bond_joins::needed(doc, b) =>
             {
-                out.push(Primitive::Polygon(crate::bond_joins::polygon(
-                    doc, b, start, end,
-                )));
+                out.extend(
+                    crate::bond_joins::outlines(doc, b, start, end)
+                        .into_iter()
+                        .map(Primitive::Polygon),
+                );
             }
             "hollow_wedge" => {
                 use crate::graphics::PathCommand;
@@ -703,9 +705,11 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
                         continue;
                     }
                     if index == 0 && *offset == 0. && crate::bond_joins::needed(doc, b) {
-                        out.push(Primitive::Polygon(crate::bond_joins::polygon(
-                            doc, b, first, last,
-                        )));
+                        out.extend(
+                            crate::bond_joins::outlines(doc, b, first, last)
+                                .into_iter()
+                                .map(Primitive::Polygon),
+                        );
                     } else if display == "bold" {
                         // An explicitly centered bold rail still needs flat
                         // ends; round caps protrude beyond the junction.
@@ -1300,13 +1304,13 @@ mod tests {
                 _ => None,
             })
             .collect();
-        assert_eq!(lines.len(), 9);
-        assert_eq!(
-            lines
+        // The six outer edges now share filled joins; the three inset rails
+        // remain independent strokes. Raster coverage is checked in bond_joins.
+        assert_eq!(lines.len(), 3);
+        assert!(
+            drawing
                 .iter()
-                .filter(|(a, b)| (a.distance(*b) - 42.0).abs() < 0.01)
-                .count(),
-            6
+                .any(|p| matches!(p, Primitive::Path { filled: true, .. }))
         );
         assert_eq!(
             lines

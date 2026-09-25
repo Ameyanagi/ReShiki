@@ -295,7 +295,15 @@ fn review_rejects_invalid_or_ambiguous_ligand_edits_without_partial_changes() ->
 
 #[test]
 fn front_contact_stays_continuous_without_changing_its_bond_style() -> anyhow::Result<()> {
-    let before = draft()?;
+    let mut source = sketch()?;
+    source
+        .ligands
+        .first_mut()
+        .context("Missing ligand")?
+        .contact_in_front = Some(false);
+    let before = source
+        .render(&Default::default())
+        .map_err(anyhow::Error::msg)?;
     let target = review::targets(&before)
         .into_iter()
         .find(|t| t.kind == "ligand")
@@ -337,7 +345,7 @@ fn front_contact_stays_continuous_without_changing_its_bond_style() -> anyhow::R
     s.ligands
         .first_mut()
         .context("Missing ligand")?
-        .contact_in_front = true;
+        .contact_in_front = Some(true);
     let generated = s.render(&Default::default()).map_err(anyhow::Error::msg)?;
     assert!(reshiki::crossings::gaps(&generated)[index].is_empty());
     Ok(())

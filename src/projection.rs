@@ -1,6 +1,7 @@
 //! Editable orthographic projections and nonchemical ring-centre anchors.
 use crate::document::{Document, Point};
 use std::collections::HashSet;
+pub mod growth;
 
 pub fn validate(doc: &Document) -> Result<(), String> {
     for atom in &doc.atoms {

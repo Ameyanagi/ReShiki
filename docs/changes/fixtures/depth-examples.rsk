@@ -4143,7 +4143,7 @@
       ]
     },
     {
-      "z_order": -2,
+      "z_order": 0,
       "a": 51,
       "b": 45,
       "order": 1,
@@ -4313,7 +4313,7 @@
       ]
     },
     {
-      "z_order": -2,
+      "z_order": 0,
       "a": 62,
       "b": 46,
       "order": 5,
@@ -4573,7 +4573,7 @@
       ]
     },
     {
-      "z_order": -2,
+      "z_order": 0,
       "a": 81,
       "b": 75,
       "order": 1,
@@ -4743,7 +4743,7 @@
       ]
     },
     {
-      "z_order": -2,
+      "z_order": 0,
       "a": 92,
       "b": 76,
       "order": 5,
@@ -5091,7 +5091,7 @@
         "x": 600.0,
         "y": 1090.0
       },
-      "text": "Cp* dimer: explicit contact layers",
+      "text": "Cp* dimer: automatic contact depth",
       "format": {
         "style": {
           "family": "Arial",

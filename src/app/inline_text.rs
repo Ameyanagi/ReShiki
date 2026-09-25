@@ -20,6 +20,7 @@ pub enum Action {
 struct Revision {
     text: String,
     format: TextFormat,
+    auto_formula: bool,
 }
 pub struct State {
     original: Option<Annotation>,
@@ -27,8 +28,23 @@ pub struct State {
     epoch: u64,
     past: Vec<Revision>,
     future: Vec<Revision>,
+    auto_formula: bool,
 }
 impl App {
+    pub(super) fn auto_format_caption(&mut self) {
+        if self.inline_text.as_ref().is_some_and(|s| s.auto_formula) {
+            let formula = reshiki::typography::is_formula(&self.caption);
+            self.caption_format.style.formula = formula;
+            for span in &mut self.caption_format.spans {
+                span.style.formula = formula;
+            }
+        }
+    }
+    pub(super) fn manual_caption_format(&mut self) {
+        if let Some(state) = &mut self.inline_text {
+            state.auto_formula = false;
+        }
+    }
     pub(super) fn text_history_available(&self, redo: bool) -> Option<bool> {
         self.inline_text.as_ref().map(|s| {
             if redo {
@@ -54,6 +70,7 @@ impl App {
             state.past.push(Revision {
                 text: self.caption.clone(),
                 format: self.caption_format.clone(),
+                auto_formula: state.auto_formula,
             });
             state.future.clear();
             if state.past.len() > 100 {
@@ -178,6 +195,8 @@ impl App {
                 self.caption_editor
                     .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
                 self.inline_text = Some(State {
+                    auto_formula: original.is_none()
+                        && self.caption_format.style.script == reshiki::typography::Script::Normal,
                     position: original.as_ref().map(|a| a.position).unwrap_or(position),
                     original,
                     epoch: self.file_epoch,
@@ -200,6 +219,7 @@ impl App {
                     let current = Revision {
                         text: self.caption.clone(),
                         format: self.caption_format.clone(),
+                        auto_formula: state.auto_formula,
                     };
                     let revision = if redo {
                         state.future.pop()
@@ -214,6 +234,7 @@ impl App {
                         }
                         self.caption = revision.text;
                         self.caption_format = revision.format;
+                        state.auto_formula = revision.auto_formula;
                         self.caption_editor = text_editor::Content::with_text(&self.caption);
                         self.caption_editor
                             .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
@@ -627,6 +648,42 @@ mod tests {
     }
     fn begin(app: &mut App, id: Option<u64>) {
         let _ = app.update(Message::InlineText(Action::Begin(id, Point::new(60., 70.))));
+    }
+
+    #[test]
+    fn new_formula_captions_format_automatically_and_manual_controls_win() {
+        let mut app = app();
+        begin(&mut app, None);
+        type_text(&mut app, "C2H2");
+        assert!(app.caption_format.style.formula);
+        let preview = reshiki::typography::layout(&app.caption, &app.caption_format);
+        assert!(
+            preview
+                .fragments
+                .iter()
+                .any(|f| f.text == "2" && f.style.script == reshiki::typography::Script::Subscript)
+        );
+        assert!(app.finish_inline(true));
+        let original = app.doc.clone();
+        assert!(
+            app.doc.atoms.is_empty(),
+            "Caption formatting must not create molecular atoms"
+        );
+        let _ = app.update(Message::Undo);
+        assert!(app.doc.annotations.is_empty());
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc, original);
+        begin(&mut app, None);
+        type_text(&mut app, "Figure 2");
+        assert!(!app.caption_format.style.formula);
+        let _ = app.update(Message::InlineText(Action::Finish(false)));
+        begin(&mut app, None);
+        type_text(&mut app, "H2O");
+        app.apply_text_style(StyleChange::Formula(false));
+        type_text(&mut app, "2");
+        assert!(!app.caption_format.style.formula);
+        let _ = app.update(Message::InlineText(Action::Finish(false)));
+        assert_eq!(app.doc, original);
     }
 
     #[test]

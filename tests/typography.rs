@@ -4,6 +4,39 @@ use reshiki::{
 };
 
 #[test]
+fn automatic_formula_recognition_excludes_captions_units_and_malformed_input() {
+    for formula in [
+        "C2H2",
+        "H2O",
+        "C2H5OH",
+        "Ca(OH)2",
+        "Fe2(SO4)3",
+        "[CH2]6",
+        "C60",
+    ] {
+        assert!(typography::is_formula(formula), "{formula}");
+    }
+    for caption in [
+        "",
+        "2026",
+        "Figure 2",
+        "Sample C2H2",
+        "25 C",
+        "H2O 10 mL",
+        "NH4+",
+        "Cu2+",
+        "Xx2",
+        "C(2)",
+        "C2()",
+        "(CH2",
+        "CH0",
+        "2H2O",
+    ] {
+        assert!(!typography::is_formula(caption), "{caption}");
+    }
+}
+
+#[test]
 fn utf8_ranges_survive_insert_replace_and_repeated_character_deletion() {
     let mut f = TextFormat::default();
     f.apply("αAAA", Some(3..4), &StyleChange::Bold(true));

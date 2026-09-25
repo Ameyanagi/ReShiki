@@ -2059,12 +2059,18 @@ impl App {
     }
 
     fn status_bar(&self) -> Element<'_, Message> {
-        let left = column![text(&self.status).size(11).color(if self.error {
+        let summary = self.status.lines().next().unwrap_or(&self.status);
+        let message = text(summary).size(11).color(if self.error {
             Color::from_rgb8(168, 52, 47)
         } else {
             muted()
-        })]
-        .width(Length::Fill);
+        });
+        let message: Element<'_, Message> = if self.status.contains('\n') {
+            hover_hint(message, self.status.as_str(), tooltip::Position::Top).into()
+        } else {
+            message.into()
+        };
+        let left = column![message].width(Length::Fill);
         let status = row![
             left,
             command(

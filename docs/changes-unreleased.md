@@ -24,6 +24,10 @@ The approved stack, PRs #22–#31, was merged on 25 September 2026 after passing
 
 ## Shortcut help and direct drawing gestures
 
+New standalone text formulas such as **C₂H₂** and **Ca(OH)₂** acquire subscripts automatically. Ordinary prose stays unchanged, and manual formula/script controls remain available. This formats captions without changing molecular composition. [Before and after](changes/shortcut-help.md#automatic-formula-text).
+
+Bold aromatic ring edges now join automatic double-bond outlines and differently colored branches without protruding caps. The tested bold arene also supports editable CDX/CDXML copy, preserving double-bond placement on reimport. Unsupported appearances retain native editing and an external picture fallback, with concise copy status and hover details. [Matched examples and interchange scope](changes/shortcut-help.md#bold-edges-meet-alternating-ring-bonds).
+
 **Help → Open shortcut examples** opens one bundled, editable `.rsk` document in a separate window. Its nine sections on the normal unbounded canvas contain labeled examples that can be selected and copied into another drawing. It works offline; Save as creates a personal copy. [Download and shortcut list](contextual-shortcuts.md).
 
 Choose an element in Atoms and **drag from an existing atom** to add it with a single bond. Clicking still replaces an atom. Fixed length and angle settings apply; Option/Alt permits free placement. Connecting existing endpoints preserves their elements and existing bond order.
@@ -51,3 +55,7 @@ At an atom, `j` and `J` now create tilted Cp and arene rings with retained 3D co
 Dragging or nudging a centroid or multi-center attachment now moves the ligand and its substituents together, leaving the metal and other ligands fixed unless selected. Right-click → **Move attachment point only** retains deliberate endpoint adjustments. [Before/after captures](changes/shortcut-help.md#move-a-ligand-from-its-attachment-point).
 
 Crossing clearance now uses retained 3D depth at each intersection. After a ligand is dragged across the metal, the contact passes in front of the far ring edge and behind the near side as appropriate; the aromatic ellipse follows the same ordering. Further tilts update thick and tapered perspective edges. [Before/after captures](changes/shortcut-help.md#front-and-back-after-dragging-or-tilting).
+
+Assistant-generated Cp/Cp* ligands also default to depth-based contact ordering. A generated dimer no longer forces both contacts behind their rings: each crossing follows its ligand's coordinates unless the request explicitly overrides front/back placement.
+
+New bonds added directly to Cp or aromatic ring atoms follow the retained ring plane. Clicks, drags and direct keyboard bond growth measure length and angle in that plane; Option/Alt frees those constraints while retaining the plane. Cp substitution replaces the stored ring hydrogen. Other structures and center-to-metal contacts keep their existing behavior. [Examples](changes/shortcut-help.md#add-bonds-in-a-tilted-rings-plane).

@@ -74,13 +74,71 @@ These native screenshots open the same [saved ligand drawing](fixtures/ligand-de
 
 Dragging translates the ligand without changing its orientation or depth. Further 3D tilts recalculate its thick and tapered perspective edges. Ordinary stereochemical wedges keep their meaning, and explicit front/back controls remain available. Automated cases cover Cp and arene, older saved shortcut contacts, crossing both sides of one ring, depth interpolation, reversible tilt, and save/reopen.
 
-The expanded [editable depth examples](fixtures/depth-examples.rsk) cover arene movement and further tilt, Cp vertex crossings, partial inner curves, a Cp* dimer with explicit contact layers, assistant retilting, and an unchanged Haworth projection. Each case was exported as SVG, PNG and PDF. The dimer is a drawing regression: its complete coordination and formal-charge assignment is not chemically validated.
+The expanded [editable depth examples](fixtures/depth-examples.rsk) cover arene movement and further tilt, Cp vertex crossings, partial inner curves, a Cp* dimer with automatic contact depth, assistant retilting, and an unchanged Haworth projection. Each case was exported as SVG, PNG and PDF. The dimer is a drawing regression: its complete coordination and formal-charge assignment is not chemically validated.
 
 ![Eight examples of ligand depth, ring curves, further tilting and retained Haworth appearance](../images/shortcut-help/depth-examples.png)
 
 Regenerate these examples with `cargo run --example projection_depth_qa -- /tmp/projection-depth-review`.
 
-This change fixes visibility and perspective styling from existing coordinates. New bonds drawn with the mouse still start their new endpoint at depth zero; automatic placement in a tilted ring's plane is not implemented yet.
+Checking the dimer exposed a second cause of incorrect clearance: generated Cp/Cp* contacts defaulted to an explicit back layer. With two parallel ligands on opposite sides of their metals, the lower-left contact crosses a far edge and must stay in front; the upper-right contact crosses a near edge and belongs behind it. Generation now defaults to automatic depth. A deliberate front/back override remains available to reproduce a reference drawing.
+
+| Before: both contacts forced behind                                                                                        | After: each crossing follows depth                                                                                                                          |
+| -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ![Lower-left Rh contact incorrectly interrupted at the far Cp star edge](../images/shortcut-help/cp-star-depth-before.png) | ![Lower-left Rh contact continuous across the far edge, with the upper-right contact behind its near edge](../images/shortcut-help/cp-star-depth-after.png) |
+
+These native figure exports use the same source sketch, ring and methyl coordinates, bond orders and contact styles. Only the generated contact layers change. The test also covers omitted and null defaults, explicit front/back requests, rotated drawings, and serialized requests.
+
+## Add bonds in a tilted ring's plane
+
+New bonds grown from Cp and aromatic ring atoms follow the ring's retained plane. Bond-tool clicks, drags, element-tool drags and direct keyboard bond growth use the same XYZ calculation. Length and 15-degree angle increments are measured within the plane, so a foreshortened bond can appear shorter on screen. The live preview retains the same depth as the placed bond.
+
+Option/Alt frees the angle and length while keeping the new endpoint in the plane. Existing target atoms keep their coordinates when connected. Center-to-metal contacts, ordinary chains, nonaromatic rings and nonplanar or ambiguous rings retain their existing behavior. This rule applies to the immediate bond grown from a ring atom; it does not assign a plane to an entire new side chain.
+
+Cp substitution replaces the ring carbon's stored hydrogen and retains its chemical charge. Tests verify that adding before or after a tilt yields matching coordinates and angles, including every Cp carbon, Undo/Redo, save/reopen and edge-on views. The retained coordinates describe a drawing projection, not a calculated molecular conformer.
+
+![New green bonds remain in the Cp and aromatic ring planes after tilting](../images/shortcut-help/plane-growth.png)
+
+[Editable examples](fixtures/plane-growth.rsk). Regenerate them with `cargo run --example plane_growth_qa -- /tmp/plane-growth-review`. The added bonds are colored green for review.
+
+## Bold edges meet alternating ring bonds
+
+Automatic double-bond placement puts a ring's outer line on its skeleton. The join builder now uses that resolved placement too, so a neighboring bold bond shares its corners with the thin outer line. Previously, the join builder excluded automatic plain double bonds, leaving square protrusions at the ends of the bold edge.
+
+| Before: protruding square caps                                                                                     | After: shared ring corners                                                                                  |
+| ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| ![A bold arene edge ends in square protrusions beside double bonds](../images/shortcut-help/arene-bold-before.png) | ![The bold arene edge joins the neighboring thin outer lines](../images/shortcut-help/arene-bold-after.png) |
+
+Both figures use the same [saved arene drawing](fixtures/arene-bold-join.rsk). Only rendering changes; the coordinates, double bonds and green C–F bond are unchanged. Tests cover shared corners, rotated/reversed bonds, several tilt angles, transparent raster coverage and preservation of the separate inner double-bond lines.
+
+The green C–F branch exposed a separate issue: joining excluded adjacent bonds with different colors. Widths and directions now determine the junction regardless of color. At an unambiguous thick/thin ring corner, the ring keeps its own outline and the outgoing substituent meets its exterior. The branch no longer changes the corner into a pointed shoulder or paints a colored triangle inside the ring. Tests compare the ring silhouette with and without its substituent across rotations and tilts.
+
+| Before: colored branch excluded from the join                                                          | After: all three bonds share the junction                                                                         |
+| ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| ![Green C–F bond meets a protruding black ring corner](../images/shortcut-help/arene-color-before.png) | ![Green C–F bond joins the black ring without a protruding corner](../images/shortcut-help/arene-color-after.png) |
+
+## Copying the bold arene
+
+The pictured arene can now be copied as editable CDX/CDXML, including its bold edge, green bond and original alternating-bond placement. The exporter permits bold emphasis on chemically aromatic edges without assigning tetrahedral stereochemistry. Tests check the molecular identifier, atom and bond counts, colors and bond orders after both formats are reimported. Native clipboard data retains the XYZ coordinates and projection flags.
+
+The optimized macOS build was also tested through the actual system clipboard: copy the selected arene, paste into an external drawing editor, choose **As Copied** if prompted about drawing settings, then copy it back. Both captured CDX files contain seven atoms and seven bonds, with no embedded picture. The returned structure retains three double bonds, the bold single edge and green C–F bond. The captured files are regression fixtures.
+
+![The release build reports editable drawing and images copied for the selected arene](../images/shortcut-help/editable-arene-release.png)
+
+This does not enable every projected style: projected wedges outside the supported Haworth convention, hidden charges and other unsupported appearances still use a picture for external clipboard transfer. That fallback now says **Copied · editable in ReShiki; picture in other apps**, with details available on hover. A successful copy no longer displays a multiline red error. External editable transfer retains the tested 2D appearance; use native `.rsk` to preserve the full tilt metadata.
+
+## Automatic formula text
+
+Choose **Text**, click empty canvas and type a standalone neutral formula such as `C2H2`, `C2H5OH` or `Ca(OH)2`. The numbers automatically appear as subscripts in the Appearance preview and the applied caption. Ordinary captions such as `Figure 2` remain unchanged. Finish with **Done** or **Cmd/Ctrl+Enter**.
+
+| Before: baseline digits                                                                 | After: formula subscripts                                                                                        |
+| --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| ![Formula captions with unformatted digits](../images/shortcut-help/formula-before.png) | ![Formula captions with subscripts and an unchanged Figure 2 caption](../images/shortcut-help/formula-after.png) |
+
+[Editable examples](fixtures/formula-text.rsk). The underlying text stays editable ASCII. Native documents and figure exports retain its formatting; the caption does not add atoms or change molecular properties. Detection is deliberately limited to complete neutral formulas: prose, units, unknown symbols and ambiguous charge notation remain unchanged. Use the Style row's **CH₂** and subscript/superscript controls for manual formatting. Existing captions keep their chosen format, and a manual formula or script choice overrides detection for that editing session. Undo/Redo retains both text and formatting.
+
+Desktop verification typed `C2H2` into a new caption, observed automatic CH₂ activation and the subscripted Appearance preview, then applied it with Cmd+Enter. The applied caption displayed C₂H₂; the molecular formula of the separate arene remained C6H5F.
+
+![Formula captions and the corrected arene in the optimized application](../images/shortcut-help/formula-release.png)
 
 ## Both ring interactions
 

@@ -1,13 +1,14 @@
 //! Shared, bounded corners for normal, bold and tapered bond outlines.
 use crate::document::{Bond, Document, Point};
+mod branches;
 #[cfg(test)]
 mod double_tests;
-fn eligible(b: &Bond) -> bool {
+fn eligible(doc: &Document, b: &Bond) -> bool {
     (b.order == 1
         || b.order == 4 && b.projection
         || matches!(b.order, 2 | 7)
-            && match b.double_position {
-                crate::bonds::DoublePosition::Auto => b.display == "bold",
+            && match crate::scene::effective_double_position(doc, b) {
+                crate::bonds::DoublePosition::Auto => false,
                 crate::bonds::DoublePosition::Left | crate::bonds::DoublePosition::Right => true,
                 crate::bonds::DoublePosition::Center => false,
             })
@@ -23,13 +24,12 @@ fn neighbors<'a>(doc: &'a Document, bond: &'a Bond, id: u64) -> impl Iterator<It
     doc.bonds.iter().filter(move |b| {
         (b.a == id || b.b == id)
             && !std::ptr::eq(*b, bond)
-            && eligible(b)
-            && b.color == bond.color
+            && eligible(doc, b)
             && doc.bond_visible(b.a, b.b)
     })
 }
 pub fn needed(doc: &Document, b: &Bond) -> bool {
-    eligible(b)
+    eligible(doc, b)
         && (b.display != "plain"
             || [b.a, b.b]
                 .iter()
@@ -65,6 +65,7 @@ fn cap(doc: &Document, b: &Bond, id: u64, point: Point, opposite: Point) -> [Poi
     );
     let width = end_width(doc, b, id);
     let far_width = end_width(doc, b, other(b, id));
+    let backbone = branches::backbone(doc, id);
     let corner = |side: f32| {
         let start = point.offset(-u.y * width * side, u.x * width * side);
         if doc.atom(id).is_none_or(|a| {
@@ -72,8 +73,12 @@ fn cap(doc: &Document, b: &Bond, id: u64, point: Point, opposite: Point) -> [Poi
         }) {
             return start;
         }
+        if backbone.as_ref().is_some_and(|ring| !ring.contains(b)) {
+            return start;
+        }
         // Each edge meets its angular neighbour, including three-way junctions.
         let adjacent = neighbors(doc, b, id)
+            .filter(|adj| backbone.as_ref().is_none_or(|ring| ring.contains(adj)))
             .filter_map(|adj| {
                 let end = doc.atom(other(adj, id))?.position;
                 let v = subtract(end, point);
@@ -116,6 +121,28 @@ pub fn polygon(doc: &Document, b: &Bond, start: Point, end: Point) -> Vec<Point>
     let [bl, br] = cap(doc, b, b.b, end, start);
     vec![al, br, bl, ar]
 }
+/// Keep a ring's outer miter intact and stop substituents at that outline.
+pub fn outlines(doc: &Document, b: &Bond, start: Point, end: Point) -> Vec<Vec<Point>> {
+    let mut parts = vec![polygon(doc, b, start, end)];
+    for (id, point) in [(b.a, start), (b.b, end)] {
+        if doc
+            .atom(id)
+            .is_none_or(|a| a.position.distance(point) > 0.001)
+        {
+            continue;
+        }
+        if let Some(ring) = branches::backbone(doc, id)
+            && !ring.contains(b)
+            && let Some(boundary) = ring.boundary(doc, id)
+        {
+            parts = parts
+                .into_iter()
+                .flat_map(|part| branches::outside(part, &boundary))
+                .collect();
+        }
+    }
+    parts
+}
 /// Three or more incident strips bound a small central polygon. Fill that
 /// polygon in the same path as the strips, so antialiasing cannot open a seam.
 pub fn junctions(doc: &Document) -> Vec<([u8; 3], Vec<Point>)> {
@@ -128,13 +155,45 @@ pub fn junctions(doc: &Document) -> Vec<([u8; 3], Vec<Point>)> {
             .bonds
             .iter()
             .filter(|b| {
-                eligible(b) && (b.a == atom.id || b.b == atom.id) && doc.bond_visible(b.a, b.b)
+                (b.a == atom.id || b.b == atom.id) && eligible(doc, b) && doc.bond_visible(b.a, b.b)
             })
             .collect();
         let Some(first) = incident.first() else {
             continue;
         };
-        if incident.len() < 3 || incident.iter().any(|b| b.color != first.color) {
+        if incident.len() < 3 {
+            continue;
+        }
+        if branches::backbone(doc, atom.id).is_some() {
+            continue;
+        }
+        // Color is presentation, not connectivity. Join the strips using all
+        // incident widths, then divide a mixed-color junction at its center.
+        if incident.iter().any(|b| b.color != first.color) {
+            let caps: Vec<_> = incident
+                .iter()
+                .filter_map(|b| {
+                    let other = doc.atom(other(b, atom.id))?;
+                    Some((b.color, cap(doc, b, atom.id, atom.position, other.position)))
+                })
+                .collect();
+            if caps.is_empty() {
+                continue;
+            }
+            let mut center = Point::default();
+            for (_, corners) in &caps {
+                for p in corners {
+                    center.x += p.x / (2 * caps.len()) as f32;
+                    center.y += p.y / (2 * caps.len()) as f32;
+                }
+            }
+            for (color, [a, b]) in caps {
+                let mut triangle = vec![a, b, center];
+                if cross(subtract(b, a), subtract(center, a)) > 0. {
+                    triangle.reverse();
+                }
+                result.push((color, triangle));
+            }
             continue;
         }
         let mut points: Vec<_> = incident

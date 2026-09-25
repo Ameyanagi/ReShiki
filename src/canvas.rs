@@ -143,6 +143,7 @@ pub enum Edit {
         y: f32,
     },
     Bond(World, World, Option<u64>, Option<u64>),
+    PlaneBond(u64, reshiki::projection::growth::Endpoint),
     Ring(World, Option<World>),
     DelocalizedRing(World, Option<World>, u8),
     RingPreset(reshiki::rings::Preset, World, Option<World>, bool, bool),
@@ -989,7 +990,22 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                                     self.bond_drawing.unconstrained(state.modifiers.alt()),
                                 )
                             };
-                            Edit::Bond(origin, end, id, target)
+                            if self.tool != Tool::Arrow
+                                && target.is_none()
+                                && let Some((id, endpoint)) = id.and_then(|id| {
+                                    plane_endpoint(
+                                        self.doc,
+                                        id,
+                                        p,
+                                        self.bond_drawing.unconstrained(state.modifiers.alt()),
+                                    )
+                                    .map(|endpoint| (id, endpoint))
+                                })
+                            {
+                                Edit::PlaneBond(id, endpoint)
+                            } else {
+                                Edit::Bond(origin, end, id, target)
+                            }
                         }
                     }
                     Gesture::Move {
@@ -1650,9 +1666,33 @@ impl MoleculeCanvas<'_> {
                     12. / self.camera.zoom,
                     self.bond_drawing.unconstrained(state.modifiers.alt()),
                 );
-                if let Ok((drawing, added)) =
-                    reshiki::editing::add_bonded_atom(self.doc, *id, end, target, self.element)
+                let drawing = self.bond_drawing.unconstrained(state.modifiers.alt());
+                let result = if let Some(endpoint) = target
+                    .is_none()
+                    .then(|| {
+                        plane_endpoint(
+                            self.doc,
+                            *id,
+                            self.camera.world(
+                                Point::new(cursor.x - bounds.x, cursor.y - bounds.y),
+                                bounds,
+                            ),
+                            drawing,
+                        )
+                    })
+                    .flatten()
                 {
+                    reshiki::projection::growth::place(
+                        self.doc,
+                        *id,
+                        endpoint,
+                        self.element,
+                        reshiki::bonds::BondPreset::Single,
+                    )
+                } else {
+                    reshiki::editing::add_bonded_atom(self.doc, *id, end, target, self.element)
+                };
+                if let Ok((drawing, added)) = result {
                     preview = drawing;
                     ring_selection = Some(vec![*id, added]);
                 }
@@ -1681,10 +1721,31 @@ impl MoleculeCanvas<'_> {
                         .zip(target)
                         .is_some_and(|(a, b)| reshiki::bonds::hydrogen_endpoints(self.doc, a, b))
                 {
-                    let a = id.unwrap_or_else(|| preview.add_atom("C", origin));
-                    let z = target.unwrap_or_else(|| preview.add_atom("C", end));
-                    preset.place(&mut preview, a, z);
-                    ring_selection = Some(vec![a, z]);
+                    let plane = id.filter(|_| target.is_none()).and_then(|id| {
+                        plane_endpoint(
+                            self.doc,
+                            id,
+                            self.camera.world(
+                                Point::new(cursor.x - bounds.x, cursor.y - bounds.y),
+                                bounds,
+                            ),
+                            self.bond_drawing.unconstrained(state.modifiers.alt()),
+                        )
+                        .map(|endpoint| (id, endpoint))
+                    });
+                    if let Some((id, endpoint)) = plane {
+                        if let Ok((drawing, added)) =
+                            reshiki::projection::growth::place(self.doc, id, endpoint, "C", preset)
+                        {
+                            preview = drawing;
+                            ring_selection = Some(vec![id, added]);
+                        }
+                    } else {
+                        let a = id.unwrap_or_else(|| preview.add_atom("C", origin));
+                        let z = target.unwrap_or_else(|| preview.add_atom("C", end));
+                        preset.place(&mut preview, a, z);
+                        ring_selection = Some(vec![a, z]);
+                    }
                 } else {
                     frame.stroke(
                         &Path::circle(self.camera.screen(end, bounds), 8.0),
@@ -2145,12 +2206,23 @@ fn bond_target_with(
             })
             .min_by(|a, b| a.position.distance(p).total_cmp(&b.position.distance(p)))
     };
-    let snapped = drawing.endpoint(start, end);
+    let snapped = source
+        .and_then(|id| plane_endpoint(doc, id, end, drawing))
+        .map(|p| p.position)
+        .unwrap_or_else(|| drawing.endpoint(start, end));
     if let Some(atom) = nearest(end).or_else(|| nearest(snapped)) {
         (atom.position, Some(atom.id))
     } else {
         (snapped, None)
     }
+}
+fn plane_endpoint(
+    doc: &Document,
+    id: u64,
+    cursor: World,
+    drawing: BondDrawing,
+) -> Option<reshiki::projection::growth::Endpoint> {
+    reshiki::projection::growth::Plane::at(doc, id)?.endpoint(cursor, drawing)
 }
 pub fn hit_object(doc: &Document, p: World, r: f32) -> Option<u64> {
     let graphic = |front| {
@@ -2997,6 +3069,47 @@ mod tests {
                 )
                 .is_none()
         );
+    }
+
+    #[test]
+    fn aromatic_drag_carries_the_same_xyz_as_the_live_preview() -> Result<(), String> {
+        use reshiki::projection::growth::{self, Plane};
+        let mut doc = reshiki::rings::Preset::Benzene.document(42., false);
+        let ids = doc.all_ids();
+        reshiki::projection::tilt(&mut doc, &ids, 55., false);
+        let atom = doc.atoms.get(1).ok_or("Ring atom")?;
+        let plane = Plane::at(&doc, atom.id).ok_or("Plane")?;
+        let cursor = plane.outward(84.).ok_or("Cursor")?.position;
+        let expected = plane
+            .endpoint(cursor, BondDrawing::default())
+            .ok_or("Preview")?;
+        for tool in [Tool::Atom, Tool::Bond(1)] {
+            let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+            canvas.tool = tool;
+            let press = Point::new(200. + atom.position.x, 150. + atom.position.y);
+            let release = Point::new(200. + cursor.x, 150. + cursor.y);
+            let Edit::PlaneBond(id, end) = pointer_gesture(&canvas, press, release) else {
+                return Err("Expected a bond with retained depth".into());
+            };
+            assert_eq!(id, atom.id);
+            assert_eq!(end, expected);
+            assert!(end.depth.abs() > 1.);
+            let (preview, added) =
+                growth::place(&doc, id, end, "C", reshiki::bonds::BondPreset::Single)?;
+            assert_eq!(preview.atom(added).ok_or("Added")?.depth, end.depth);
+        }
+        // Connecting an existing atom keeps its existing coordinates/depth.
+        let (p, target) = bond_target_with(
+            &doc,
+            atom.position,
+            doc.atoms.first().ok_or("Target")?.position,
+            Some(atom.id),
+            12.,
+            BondDrawing::default(),
+        );
+        assert_eq!(target, doc.atoms.first().map(|a| a.id));
+        assert_eq!(p, doc.atoms.first().ok_or("Target")?.position);
+        Ok(())
     }
 
     #[test]

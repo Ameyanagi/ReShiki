@@ -94,13 +94,16 @@ impl App {
         } else if outcome.external_editable {
             "Editable drawing and images copied"
         } else {
-            "ReShiki drawing and images copied"
+            "Copied · editable in ReShiki; picture in other apps"
         };
-        self.status = std::iter::once(action.to_owned())
-            .chain(outcome.notices.iter().cloned())
-            .collect::<Vec<_>>()
-            .join(" · ");
-        self.error = !outcome.notices.is_empty();
+        self.status = if outcome.notices.is_empty() {
+            action.to_owned()
+        } else {
+            format!("{action} · Review details\n{}", outcome.notices.join("\n"))
+        };
+        // A successfully written clipboard may have format limitations. Keep
+        // their details available without presenting a successful copy as failure.
+        self.error = false;
     }
 
     pub(super) fn clipboard_read(
@@ -185,6 +188,29 @@ mod tests {
             image_only: false,
             notices: vec![],
         })
+    }
+
+    #[test]
+    fn successful_picture_fallback_has_a_concise_status_and_retains_details() {
+        let (mut app, _) = App::new();
+        app.clipboard_written(
+            app.file_epoch,
+            app.revision,
+            vec![],
+            Ok(CopyOutcome {
+                external_editable: false,
+                image_only: false,
+                notices: vec!["Unsupported projected wedge style".into()],
+            }),
+        );
+        assert!(!app.error);
+        assert!(
+            app.status
+                .lines()
+                .next()
+                .is_some_and(|s| s.len() < 110 && s.contains("Copied"))
+        );
+        assert!(app.status.contains("Unsupported projected wedge style"));
     }
 
     #[test]

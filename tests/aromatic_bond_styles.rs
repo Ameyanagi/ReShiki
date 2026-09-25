@@ -184,7 +184,10 @@ fn cp_star_dimer_wedges_keep_both_ellipses_ligands_and_contacts() -> anyhow::Res
 
 #[test]
 fn projected_styles_are_not_silently_exported_as_stereochemical_wedges() -> anyhow::Result<()> {
-    for preset in APPEARANCES.into_iter().filter(|p| *p != BondPreset::Single) {
+    for preset in APPEARANCES
+        .into_iter()
+        .filter(|p| !matches!(p, BondPreset::Single | BondPreset::Bold))
+    {
         let mut doc = ring(6, 65.);
         preset.apply(doc.bonds.first_mut().context("Missing edge")?);
         let error = reshiki::exchange::drawing::write(&doc, Default::default())

@@ -167,10 +167,17 @@ impl CdxmlScene {
             }
             bond.a = old.a;
             bond.b = old.b;
-            if old.order == 4 && chemical.get(&key).copied().ok_or(SceneError::Limit)? {
-                bond.order = 4;
+            if matches!(old.order, 1 | 2 | 4)
+                && chemical.get(&key).copied().ok_or(SceneError::Limit)?
+            {
+                // Keep the source's alternating-bond placement. Chemical
+                // kekulization may choose the opposite, equivalent assignment.
+                bond.order = old.order;
             }
             bond.display = old.display;
+            if bond.order == 4 && bond.display == "bold" {
+                bond.projection = true;
+            }
             bond.secondary_display = old.secondary_display;
             bond.double_position = old.double_position;
             bond.z_order = old.z_order;

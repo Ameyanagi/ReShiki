@@ -546,6 +546,47 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    async fn projected_arene_with_bold_edge_has_editable_clipboard_and_native_depth()
+    -> anyhow::Result<()> {
+        use anyhow::{Context, ensure};
+        let source: Document =
+            serde_json::from_str(include_str!("../docs/changes/fixtures/arene-bold-join.rsk"))?;
+        let (outcome, representations) = prepare_copy(Default::default(), source.clone(), false)
+            .await
+            .map_err(anyhow::Error::msg)?;
+        ensure!(
+            outcome.external_editable && outcome.notices.is_empty(),
+            "{:?}",
+            outcome.notices
+        );
+        let native = representations
+            .iter()
+            .find(|r| r.kind == NATIVE)
+            .context("Native drawing")?;
+        let native = native_document(&native.bytes().map_err(anyhow::Error::msg)?)
+            .map_err(anyhow::Error::msg)?;
+        for (a, b) in source.atoms.iter().zip(&native.atoms) {
+            assert_eq!((a.position, a.depth), (b.position, b.depth));
+        }
+        assert_eq!(source.bonds, native.bonds);
+        let binary = representations
+            .iter()
+            .find(|r| r.kind == CDX_TYPES[0])
+            .context("Binary drawing")?;
+        let back = paste_packet(
+            Default::default(),
+            Packet {
+                representations: vec![binary.clone()],
+            },
+        )
+        .await
+        .map_err(anyhow::Error::msg)?;
+        ensure!(back.atoms.len() == 7 && back.bonds.len() == 7 && back.graphics.is_empty());
+        ensure!(back.atoms.iter().all(|a| a.stereo.is_none()));
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn copying_unvalidated_rings_keeps_editable_exchange_and_paste_warning()
     -> anyhow::Result<()> {
         use anyhow::{Context, ensure};

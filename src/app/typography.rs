@@ -323,6 +323,7 @@ impl App {
             });
             self.caption_format.edited(&self.caption, &text, replaced);
             self.caption = text;
+            self.auto_format_caption();
             if self.inline_text.is_some() {
                 self.sync_style_inputs();
                 return;
@@ -348,6 +349,9 @@ impl App {
         }
         let range = self.text_range();
         self.inline_checkpoint();
+        if matches!(change, StyleChange::Formula(_) | StyleChange::Script(_)) {
+            self.manual_caption_format();
+        }
         let before = self.doc.clone();
         self.caption_format
             .apply(&self.caption, range.clone(), &change);

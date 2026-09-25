@@ -21,6 +21,7 @@ pub(super) fn normalize_tree(mut tree: Tree) -> Result<String> {
             continue;
         }
         let display = node.attr("Display").unwrap_or("Solid").to_owned();
+        let original_order = node.attr("Order").unwrap_or("1").to_owned();
         let secondary = node.attr("Display2").unwrap_or("Solid");
         if !matches!(
             display.as_str(),
@@ -54,7 +55,9 @@ pub(super) fn normalize_tree(mut tree: Tree) -> Result<String> {
             "HollowWedgeBegin" => Some("WedgeBegin"),
             "HollowWedgeEnd" => Some("WedgeEnd"),
             "Hash" => Some("WedgedHashBegin"),
-            "Bold" if tree.node(index)?.attr("Order").unwrap_or("1") == "1" => Some("WedgeBegin"),
+            // An aromatic bold edge has no tetrahedral meaning. Converting it
+            // after the temporary order normalization could invent a hydrogen.
+            "Bold" if original_order == "1" => Some("WedgeBegin"),
             _ => None,
         };
         if let Some(normalized) = normalized {

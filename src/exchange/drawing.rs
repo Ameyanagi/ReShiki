@@ -128,16 +128,6 @@ fn write_impl(document: &Document, options: Options<'_>, preserve_drawing: bool)
         ));
     }
     let haworth = crate::haworth::interchange::export_bonds(document).map_err(invalid)?;
-    if document
-        .bonds
-        .iter()
-        .enumerate()
-        .any(|(i, bond)| bond.projection && bond.display != "plain" && !haworth.contains(&i))
-    {
-        return Err(invalid(
-            "CDXML cannot yet preserve non-stereochemical front-bond emphasis or projected wedge styles. Restore plain bond appearance before editable export, or use ReShiki (.rsk), SVG, PNG or PDF to retain the appearance.",
-        ));
-    }
     // ChemDraw 26 discards nested MultiAttachment definitions when saving a
     // Fragment label. Expand these groups for editable exchange so every real
     // atom and target survives; native/figure output keeps the compact label.
@@ -176,6 +166,20 @@ fn write_impl(document: &Document, options: Options<'_>, preserve_drawing: bool)
         }
         Err(error) => return Err(error.into()),
     };
+    if document.bonds.iter().enumerate().any(|(i, bond)| {
+        // A chemically aromatic bold edge cannot specify a tetrahedral center.
+        // Other projected styles still require a verified interchange mapping.
+        let aromatic_bold = bond.display == "bold"
+            && graph.bonds.get(i).is_some_and(|b| b.aromatic)
+            && [bond.a, bond.b]
+                .iter()
+                .all(|id| document.atom(*id).is_some_and(|a| a.stereo.is_none()));
+        bond.projection && bond.display != "plain" && !haworth.contains(&i) && !aromatic_bold
+    }) {
+        return Err(invalid(
+            "CDXML cannot yet preserve non-stereochemical front-bond emphasis or projected wedge styles. Restore plain bond appearance before editable export, or use ReShiki (.rsk), SVG, PNG or PDF to retain the appearance.",
+        ));
+    }
     let mut w = Writer::new(document, options)?;
     w.atoms(&graph)?;
     w.bonds()?;

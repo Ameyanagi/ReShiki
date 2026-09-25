@@ -2651,6 +2651,33 @@ impl App {
                     at.y + (self.camera.center.y - at.y) * ratio,
                 );
             }
+            Edit::PlaneBond(start, end) => {
+                let preset = self
+                    .tool
+                    .bond_preset()
+                    .unwrap_or(reshiki::bonds::BondPreset::Single);
+                if preset == reshiki::bonds::BondPreset::Dotted {
+                    self.status = "Drag from a bonded explicit H to an existing acceptor".into();
+                    self.error = true;
+                    return;
+                }
+                let element = if self.tool == Tool::Atom {
+                    self.element.as_str()
+                } else {
+                    "C"
+                };
+                match reshiki::projection::growth::place(&self.doc, start, end, element, preset) {
+                    Ok((doc, id)) => {
+                        self.doc = doc;
+                        self.selected = vec![id];
+                    }
+                    Err(error) => {
+                        self.status = error;
+                        self.error = true;
+                        return;
+                    }
+                }
+            }
             Edit::Bond(start, end, a, b) => {
                 if self.tool.bond_preset() == Some(reshiki::bonds::BondPreset::Dotted)
                     && !a
@@ -2816,15 +2843,38 @@ impl App {
                                 self.error = true;
                                 return;
                             };
-                            let end = editing::bond_extension(&self.doc, start, Some(a), order);
-                            let ratio = self.bond_drawing.length
-                                / reshiki::style::DEFAULT.bond_length_world;
-                            let end =
-                                start.offset((end.x - start.x) * ratio, (end.y - start.y) * ratio);
-                            let b = self.doc.add_atom("C", end);
-                            self.doc.add_bond(a, b, order, display);
-                            self.apply_current_bond_preset(a, b);
-                            self.selected = vec![b];
+                            if let Some(endpoint) =
+                                reshiki::projection::growth::Plane::at(&self.doc, a)
+                                    .and_then(|plane| plane.outward(self.bond_drawing.length))
+                            {
+                                let preset = self
+                                    .tool
+                                    .bond_preset()
+                                    .unwrap_or(reshiki::bonds::BondPreset::Single);
+                                match reshiki::projection::growth::place(
+                                    &self.doc, a, endpoint, "C", preset,
+                                ) {
+                                    Ok((doc, id)) => {
+                                        self.doc = doc;
+                                        self.selected = vec![id];
+                                    }
+                                    Err(error) => {
+                                        self.status = error;
+                                        self.error = true;
+                                        return;
+                                    }
+                                }
+                            } else {
+                                let end = editing::bond_extension(&self.doc, start, Some(a), order);
+                                let ratio = self.bond_drawing.length
+                                    / reshiki::style::DEFAULT.bond_length_world;
+                                let end = start
+                                    .offset((end.x - start.x) * ratio, (end.y - start.y) * ratio);
+                                let b = self.doc.add_atom("C", end);
+                                self.doc.add_bond(a, b, order, display);
+                                self.apply_current_bond_preset(a, b);
+                                self.selected = vec![b];
+                            }
                         }
                     }
                     Tool::Ring => {
@@ -4617,6 +4667,33 @@ mod tests {
             .unwrap();
         assert_eq!(analysis.smiles, "CCCCCCC");
         assert_eq!(analysis.formula, "C7H16");
+    }
+
+    #[test]
+    fn aromatic_plane_bond_matches_preview_and_undo_restores_xyz() -> Result<(), String> {
+        use reshiki::projection::growth::{self, Plane};
+        let (mut app, _) = App::new();
+        app.doc = reshiki::rings::Preset::Benzene.document(42., false);
+        let ids = app.doc.all_ids();
+        reshiki::projection::tilt(&mut app.doc, &ids, 55., false);
+        let id = app.doc.atoms.get(1).ok_or("Carbon")?.id;
+        let end = Plane::at(&app.doc, id)
+            .ok_or("Plane")?
+            .outward(42.)
+            .ok_or("Endpoint")?;
+        let before = app.doc.clone();
+        app.tool = Tool::Atom;
+        app.element = "O".into();
+        let (preview, added) =
+            growth::place(&before, id, end, "O", reshiki::bonds::BondPreset::Single)?;
+        app.edit(Edit::PlaneBond(id, end));
+        assert_eq!(app.doc, preview);
+        assert_eq!(app.selected, vec![added]);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, before);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc, preview);
+        Ok(())
     }
 
     #[test]
