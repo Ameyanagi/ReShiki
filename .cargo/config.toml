@@ -1,0 +1,5 @@
+[env]
+# Apple Silicon builds require Apple's compiler, even when PATH provides GCC as cc.
+# Target-specific names leave Linux and Windows compiler selection unchanged.
+CC_aarch64_apple_darwin = "/usr/bin/clang"
+CXX_aarch64_apple_darwin = "/usr/bin/clang++"

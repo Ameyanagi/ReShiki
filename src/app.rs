@@ -441,7 +441,7 @@ impl App {
             import_open: false,
             help_open: false,
             viewport: iced::Size::new(850.0, 600.0),
-            fit_to_view: true,
+            fit_to_view: false,
             template_index: 0,
             templates: template_library::State::load(),
         };
@@ -668,6 +668,11 @@ impl App {
     }
     fn fit(&mut self) {
         self.pages.fit = None;
+        if self.display_document().all_ids().is_empty() {
+            self.camera = Camera::default();
+            self.fit_to_view = false;
+            return;
+        }
         let (lo, hi) = self.display_document().bounds();
         self.camera.center = Point::new((lo.x + hi.x) / 2.0, (lo.y + hi.y) / 2.0);
         let viewport = self.guides.paper(iced::Rectangle::with_size(self.viewport));
@@ -703,7 +708,7 @@ impl App {
                 self.camera = Camera::default();
                 self.pages = pages::State::default();
                 self.styles.editor = None;
-                self.fit_to_view = true;
+                self.fit_to_view = false;
                 self.analysis = None;
                 self.error = false;
                 self.bond_drawing = Default::default();
@@ -4717,12 +4722,49 @@ mod tests {
     }
 
     #[test]
+    fn blank_drawings_keep_starting_zoom_through_resize_and_first_edits() {
+        let (mut app, _) = App::new();
+        assert_eq!(app.camera.zoom, 1.0);
+        let _ = app.update(Message::Viewport(iced::Size::new(1000., 700.)));
+        assert_eq!(app.camera.zoom, 1.0);
+
+        let _ = app.update(Message::Tool(Tool::Atom));
+        app.edit(Edit::Click(Point::default()));
+        assert!(!app.doc.all_ids().is_empty());
+        let _ = app.update(Message::Viewport(iced::Size::new(700., 500.)));
+        assert_eq!(app.camera.zoom, 1.0);
+
+        let _ = app.update(Message::Zoom(1.2));
+        let _ = app.update(Message::Viewport(iced::Size::new(1000., 700.)));
+        assert_eq!(app.camera.zoom, 1.2);
+
+        let _ = app.perform(Pending::New);
+        assert!(app.doc.all_ids().is_empty());
+        assert_eq!(app.camera.zoom, 1.0);
+        let _ = app.update(Message::Viewport(iced::Size::new(700., 500.)));
+        assert_eq!(app.camera.zoom, 1.0);
+    }
+
+    #[test]
+    fn fitting_an_empty_drawing_restores_starting_view() {
+        let (mut app, _) = App::new();
+        app.edit(Edit::Pan(60., -20.));
+        let _ = app.update(Message::Zoom(2.));
+        let _ = app.update(Message::Fit);
+        assert_eq!(app.camera.zoom, 1.0);
+        assert_eq!(app.camera.center, Point::default());
+        let _ = app.update(Message::Viewport(iced::Size::new(1000., 700.)));
+        assert_eq!(app.camera.zoom, 1.0);
+    }
+
+    #[test]
     fn fit_uses_available_canvas_and_respects_manual_pan() {
         let (mut app, _) = App::new();
         app.doc.add_atom("C", Point::new(-250.0, -100.0));
         app.doc.add_atom("O", Point::new(250.0, 100.0));
         let document = app.doc.clone();
         let _ = app.update(Message::Viewport(iced::Size::new(600.0, 400.0)));
+        let _ = app.update(Message::Fit);
         let small_zoom = app.camera.zoom;
         let _ = app.update(Message::Viewport(iced::Size::new(1000.0, 700.0)));
         assert!(app.camera.zoom > small_zoom);
@@ -4782,6 +4824,9 @@ mod tests {
             assert_eq!(app.doc, document);
             assert_eq!(app.path, Some(path));
             assert_eq!(app.status, "Document opened");
+            assert!(app.fit_to_view);
+            assert!(app.camera.zoom > Camera::default().zoom);
+            assert!(app.camera.zoom <= 2.5);
         }
     }
 

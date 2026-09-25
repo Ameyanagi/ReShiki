@@ -6,6 +6,8 @@ ReShiki uses Rust for the editor and chemistry, a standalone native InChI helper
 
 Install Rust 1.95 with rustfmt and Clippy, a C/C++ compiler, and Python 3.12 for the build scripts. On Windows, use a Visual Studio tools shell matching your Rust target.
 
+On Apple Silicon macOS, Cargo defaults C/C++ dependencies to Apple Clang from `/usr/bin`, so a GCC installation earlier on `PATH` does not change the compiler. Set `CC_aarch64_apple_darwin` and `CXX_aarch64_apple_darwin` explicitly to override these repository defaults.
+
 ```sh
 git clone https://github.com/Ameyanagi/ReShiki.git reshiki
 cd reshiki
