@@ -643,6 +643,7 @@ impl App {
             );
         }
         let drawing: Element<'_, Edit> = canvas(MoleculeCanvas {
+            element: &self.element,
             joining: self.joining.as_ref().map(|s| &s.prepared),
             hidden_annotation: self.inline_label_id(),
             bond_drawing: self.bond_drawing,
@@ -768,12 +769,7 @@ impl App {
     }
 
     fn command_bar(&self) -> Element<'_, Message> {
-        let title = self
-            .path
-            .as_ref()
-            .and_then(|p| p.file_name())
-            .map(|p| p.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "Untitled".into());
+        let title = self.document_name();
         let bar = row![
             hover_hint(
                 button(crate::branding::wordmark(21.0))
@@ -994,7 +990,7 @@ impl App {
                         iced::widget::canvas(Glyph(Icon::Keyboard, true))
                             .width(24)
                             .height(24),
-                        text("Shortcuts").size(10),
+                        text("Help").size(10),
                     ]
                     .spacing(3)
                     .align_x(Alignment::Center)
@@ -1002,7 +998,7 @@ impl App {
                 .padding([5, 10])
                 .on_press(Message::ToggleHelp)
                 .style(control(self.help_open)),
-                "Keyboard shortcuts (F1)",
+                "Help, shortcuts and editable examples (F1)",
                 tooltip::Position::Right,
             )
         ]
@@ -1253,7 +1249,12 @@ impl App {
                             .padding(6)
                             .width(160),
                     )
-                    .push(command("Use", Message::ApplyElement));
+                    .push(command("Use", Message::ApplyElement))
+                    .push(
+                        text("Click to replace · Drag from an atom to add with a bond")
+                            .size(11)
+                            .color(muted()),
+                    );
             }
             Tool::Text => {
                 options = options.push(

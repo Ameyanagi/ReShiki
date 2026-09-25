@@ -467,7 +467,7 @@ impl App {
                 text("Click to place. Drag to rotate or choose an attachment side. Click an atom to share it, or a bond to fuse.").size(12),
                 text("Alt/Option on an atom connects the ring with a new bond. Each placement is one Undo step.").size(11).color(muted()),
                 text(match preset {
-                    reshiki::rings::Preset::Cyclopentadiene => "Hold Shift to move the double bonds.",
+                    reshiki::rings::Preset::Benzene | reshiki::rings::Preset::Cyclopentadiene => "Hold Shift to move the double bonds.",
                     reshiki::rings::Preset::HaworthFive | reshiki::rings::Preset::HaworthSix => "Haworth outlines have a bold front edge. Templates → Carbohydrates contains oxygen scaffolds and defined α/β sugars. These blank outlines do not assign stereochemistry.",
                     _ => "Chair projections do not assign stereochemistry. Cleanup may redraw them as regular hexagons.",
                 }).size(11).color(muted()),

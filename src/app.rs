@@ -34,6 +34,7 @@ mod palettes;
 mod pictures;
 mod printing;
 mod reactions;
+mod shortcut_examples;
 mod shortcuts;
 mod template_library;
 mod tool_button;
@@ -110,6 +111,8 @@ pub enum Message {
     ToggleImport,
     InsertInput,
     ToggleHelp,
+    OpenShortcutExamples,
+    ShortcutExamplesOpened(Result<(), String>),
     Viewport(iced::Size),
     Canvas(Edit),
     Tool(Tool),
@@ -303,6 +306,7 @@ pub struct App {
     status: String,
     error: bool,
     path: Option<PathBuf>,
+    untitled_name: Option<&'static str>,
     #[cfg(target_os = "macos")]
     native_opening: bool,
     #[cfg(windows)]
@@ -410,6 +414,7 @@ impl App {
             status: "Ready · Choose a tool to start drawing".into(),
             error: false,
             path: None,
+            untitled_name: None,
             #[cfg(target_os = "macos")]
             native_opening: false,
             #[cfg(windows)]
@@ -462,6 +467,12 @@ impl App {
                 },
                 Message::Opened,
             )
+        } else if !cfg!(test) && std::env::args_os().any(|arg| arg == "--shortcut-examples") {
+            if let Err(error) = app.load_shortcut_examples() {
+                app.status = format!("Could not open shortcut examples: {error}");
+                app.error = true;
+            }
+            Task::none()
         } else {
             Task::none()
         };
@@ -471,13 +482,16 @@ impl App {
     pub fn title(&self) -> String {
         format!(
             "{}{} — ReShiki",
-            self.path
-                .as_ref()
-                .and_then(|p| p.file_name())
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_else(|| "Untitled".into()),
+            self.document_name(),
             if self.dirty() { " •" } else { "" }
         )
+    }
+    fn document_name(&self) -> String {
+        self.path
+            .as_ref()
+            .and_then(|p| p.file_name())
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| self.untitled_name.unwrap_or("Untitled").into())
     }
     pub fn theme(&self) -> Theme {
         Theme::custom(
@@ -576,8 +590,15 @@ impl App {
         }
         let engine = self.engine.clone();
         let revision = self.revision;
+        let aromatic_selection = matches!(kind, Job::AromaticDisplay);
         Task::perform(
-            async move { engine.execute(request).await },
+            async move {
+                if aromatic_selection {
+                    shortcuts::aromatic_selection(engine, request).await
+                } else {
+                    engine.execute(request).await
+                }
+            },
             move |result| Message::EngineDone {
                 revision,
                 kind: kind.clone(),
@@ -673,6 +694,7 @@ impl App {
                 self.changed(before);
                 self.saved = self.doc.clone();
                 self.path = None;
+                self.untitled_name = None;
                 self.selected.clear();
                 self.camera = Camera::default();
                 self.pages = pages::State::default();
@@ -1393,6 +1415,15 @@ impl App {
                     self.palette = None;
                 }
             }
+            Message::OpenShortcutExamples => return shortcut_examples::open(),
+            Message::ShortcutExamplesOpened(result) => {
+                self.help_open = false;
+                self.error = result.is_err();
+                self.status = match result {
+                    Ok(()) => "Shortcut examples opened in a separate window".into(),
+                    Err(error) => format!("Could not open shortcut examples: {error}"),
+                };
+            }
             Message::Viewport(size) => {
                 self.viewport = size;
                 if let Some(index) = self.pages.fit {
@@ -1744,6 +1775,7 @@ impl App {
                     self.sync_drawing_defaults();
                     self.styles.editor = None;
                     self.path = None;
+                    self.untitled_name = None;
                     self.saved = Document::default();
                     self.file_epoch = self.file_epoch.wrapping_add(1);
                     self.changed(before);
@@ -1968,6 +2000,7 @@ impl App {
                             }
                             if matches!(kind, Job::ImportFile) {
                                 self.path = None;
+                                self.untitled_name = None;
                                 self.saved = Document::default();
                                 self.file_epoch = self.file_epoch.wrapping_add(1);
                             }
@@ -2130,6 +2163,7 @@ impl App {
                                         self.styles.editor = None;
                                         self.saved = self.doc.clone();
                                         self.path = Some(path);
+                                        self.untitled_name = None;
                                         self.history = History::default();
                                         self.revision = self.revision.wrapping_add(1);
                                         self.analysis = None;
@@ -2182,6 +2216,15 @@ impl App {
                     }
                 };
                 let snapshot = self.doc.clone();
+                let suggested_name = if self.path.is_some() {
+                    self.document_name()
+                } else {
+                    format!(
+                        "{}.{}",
+                        self.document_name(),
+                        reshiki::compatibility::NATIVE_EXTENSION
+                    )
+                };
                 let epoch = self.file_epoch;
                 return Task::perform(
                     async move {
@@ -2189,12 +2232,8 @@ impl App {
                             p
                         } else {
                             let extension = reshiki::compatibility::NATIVE_EXTENSION;
-                            let Some(path) = files::save_path(
-                                "Save drawing",
-                                &format!("Untitled.{extension}"),
-                                extension,
-                            )
-                            .await
+                            let Some(path) =
+                                files::save_path("Save drawing", &suggested_name, extension).await
                             else {
                                 return Ok(None);
                             };
@@ -2228,6 +2267,7 @@ impl App {
                     }
                     self.saved = *snapshot;
                     self.path = Some(path);
+                    self.untitled_name = None;
                     self.status = if self.office_document() {
                         "Drawing updated in Office. Save the Office document to keep it."
                     } else {
@@ -2556,6 +2596,16 @@ impl App {
                     }
                 }
             }
+            Edit::DelocalizedRing(anchor, direction, size) => {
+                self.selected = editing::ring_oriented(
+                    &mut self.doc,
+                    anchor,
+                    size,
+                    true,
+                    10. / self.camera.zoom,
+                    direction,
+                );
+            }
             Edit::Ring(anchor, direction) => {
                 self.selected = editing::ring_oriented(
                     &mut self.doc,
@@ -2611,7 +2661,24 @@ impl App {
                     self.error = true;
                     return;
                 }
-                if self.tool == Tool::Arrow {
+                if self.tool == Tool::Atom {
+                    let result = a
+                        .ok_or_else(|| "Start the drag on an existing atom".to_string())
+                        .and_then(|id| {
+                            editing::add_bonded_atom(&self.doc, id, end, b, &self.element)
+                        });
+                    match result {
+                        Ok((doc, id)) => {
+                            self.doc = doc;
+                            self.selected = vec![id];
+                        }
+                        Err(error) => {
+                            self.status = error;
+                            self.error = true;
+                            return;
+                        }
+                    }
+                } else if self.tool == Tool::Arrow {
                     self.place_arrow(start, end);
                 } else {
                     let a = a.unwrap_or_else(|| self.doc.add_atom("C", start));
@@ -2986,6 +3053,32 @@ fn platform_shortcut(macos: &'static str, other: &'static str) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn atom_drag_and_click_are_separate_undoable_actions() -> Result<(), String> {
+        let (mut app, _) = App::new();
+        let source = app.doc.add_atom("C", Point::default());
+        let initial = app.doc.clone();
+        app.tool = Tool::Atom;
+        app.element = "O".into();
+        app.edit(Edit::Bond(
+            Point::default(),
+            Point::new(42., 0.),
+            Some(source),
+            None,
+        ));
+        assert_eq!(app.doc.atoms.len(), 2);
+        assert_eq!(app.doc.atom(source).ok_or("Source")?.element, "C");
+        assert_eq!(app.doc.atoms.last().ok_or("Oxygen")?.element, "O");
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, initial);
+        app.edit(Edit::Click(Point::default()));
+        assert_eq!(app.doc.atoms.len(), 1);
+        assert_eq!(app.doc.atom(source).ok_or("Replacement")?.element, "O");
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, initial);
+        Ok(())
+    }
+
     use super::*;
 
     #[test]

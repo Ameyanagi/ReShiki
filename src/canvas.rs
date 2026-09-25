@@ -142,6 +142,7 @@ pub enum Edit {
     },
     Bond(World, World, Option<u64>, Option<u64>),
     Ring(World, Option<World>),
+    DelocalizedRing(World, Option<World>, u8),
     RingPreset(reshiki::rings::Preset, World, Option<World>, bool, bool),
     Template(World, Option<World>),
     Click(World),
@@ -238,12 +239,32 @@ enum Gesture {
         last: Point,
     },
 }
+// Cmd on macOS, Ctrl elsewhere. Chairs and Haworth projections retain their geometry.
+fn delocalized_ring_size(tool: Tool, size: u8, modifiers: iced::keyboard::Modifiers) -> Option<u8> {
+    let held = if cfg!(target_os = "macos") {
+        modifiers.logo()
+    } else {
+        modifiers.control()
+    };
+    if !held {
+        return None;
+    }
+    use reshiki::rings::Preset;
+    match tool {
+        Tool::Ring => Some(size),
+        Tool::RingPreset(Preset::Regular | Preset::Benzene) => Some(6),
+        Tool::RingPreset(Preset::Cyclopentadiene) => Some(5),
+        _ => None,
+    }
+}
+
 pub struct MoleculeCanvas<'a> {
     pub joining: Option<&'a reshiki::joining::Prepared>,
     pub hidden_annotation: Option<u64>,
     pub bond_drawing: BondDrawing,
     pub chain_drawing: ChainDrawing,
     pub doc: &'a Document,
+    pub element: &'a str,
     pub selected: &'a [u64],
     pub tool: Tool,
     pub camera: Camera,
@@ -667,6 +688,12 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                     } else {
                         Gesture::Select { start: p }
                     }),
+                    Tool::Atom if self.doc.nearest(p, 10.0 / self.camera.zoom).is_some() => {
+                        Some(Gesture::Draw {
+                            start: p,
+                            id: self.doc.nearest(p, 10.0 / self.camera.zoom),
+                        })
+                    }
                     Tool::Bond(_)
                     | Tool::StyledBond(_)
                     | Tool::Wedge
@@ -887,7 +914,11 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                                 || matches!(self.tool, Tool::RingPreset(_)),
                             10.0 / self.camera.zoom,
                         );
-                        if self.tool == Tool::Template {
+                        if let Some(size) =
+                            delocalized_ring_size(self.tool, self.ring_size, state.modifiers)
+                        {
+                            Edit::DelocalizedRing(anchor, direction, size)
+                        } else if self.tool == Tool::Template {
                             let (anchor, direction) =
                                 self.template_gesture(start, p, state.modifiers);
                             Edit::Template(anchor, direction)
@@ -904,6 +935,9 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                         }
                     }
                     Gesture::Draw { start, id } => {
+                        if !inside {
+                            return Some(Action::request_redraw().and_capture());
+                        }
                         if start.distance(p) < 3.0 / self.camera.zoom {
                             Edit::Click(p)
                         } else {
@@ -1354,13 +1388,15 @@ impl MoleculeCanvas<'_> {
                 &mut preview,
                 anchor,
                 self.ring_size,
-                self.aromatic_ring,
+                self.aromatic_ring
+                    || delocalized_ring_size(self.tool, self.ring_size, state.modifiers).is_some(),
                 10.0 / self.camera.zoom,
                 direction,
             ));
         }
         if let Tool::RingPreset(preset) = self.tool
             && let Some(p) = state.cursor.filter(|p| bounds.contains(*p))
+            && delocalized_ring_size(self.tool, self.ring_size, state.modifiers).is_none()
         {
             let end = self
                 .camera
@@ -1541,6 +1577,59 @@ impl MoleculeCanvas<'_> {
                     &polygon,
                     state.modifiers,
                 ));
+            }
+        }
+        if let Tool::RingPreset(_) = self.tool
+            && let Some(size) = delocalized_ring_size(self.tool, self.ring_size, state.modifiers)
+            && let Some(p) = state.cursor.filter(|p| bounds.contains(*p))
+        {
+            let end = self
+                .camera
+                .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
+            let (anchor, direction) = if let Some(Gesture::Ring { start, .. }) = &state.gesture {
+                ring_gesture(*start, end, true, 10. / self.camera.zoom)
+            } else {
+                (end, None)
+            };
+            ring_selection = Some(reshiki::editing::ring_oriented(
+                &mut preview,
+                anchor,
+                size,
+                true,
+                10. / self.camera.zoom,
+                direction,
+            ));
+        }
+        if let (
+            Some(Gesture::Draw {
+                start,
+                id: Some(id),
+            }),
+            Some(cursor),
+            Tool::Atom,
+        ) = (&state.gesture, state.cursor, self.tool)
+        {
+            let end = self
+                .camera
+                .world(Point::new(cursor.x - bounds.x, cursor.y - bounds.y), bounds);
+            if start.distance(end) >= 3. / self.camera.zoom
+                && bounds.contains(cursor)
+                && let Some(origin) = self.doc.atom(*id).map(|a| a.position)
+            {
+                let (end, target) = bond_target_with(
+                    self.doc,
+                    origin,
+                    end,
+                    Some(*id),
+                    12. / self.camera.zoom,
+                    self.bond_drawing.unconstrained(state.modifiers.alt()),
+                );
+                if let Ok((drawing, added)) =
+                    reshiki::editing::add_bonded_atom(self.doc, *id, end, target, self.element)
+                {
+                    preview = drawing;
+                    ring_selection = Some(vec![*id, added]);
+                }
             }
         }
         if let (Some(Gesture::Draw { start, id }), Some(cursor), Some(preset)) =
@@ -1755,7 +1844,9 @@ impl MoleculeCanvas<'_> {
             let p = Point::new(p.x - bounds.x, p.y - bounds.y);
             match &state.gesture {
                 Some(Gesture::Draw { start, id })
-                    if self.tool.bond_preset().is_none() && self.tool != Tool::Arrow =>
+                    if self.tool.bond_preset().is_none()
+                        && self.tool != Tool::Arrow
+                        && self.tool != Tool::Atom =>
                 {
                     let origin = id
                         .and_then(|id| self.doc.atom(id).map(|a| a.position))
@@ -2587,6 +2678,7 @@ mod tests {
     fn rulers_exclude_editing_and_pointer_coordinates_use_the_inset_paper() {
         let doc = Document::default();
         let canvas = MoleculeCanvas {
+            element: "C",
             joining: None,
             hidden_annotation: None,
             tool: Tool::Atom,
@@ -2665,6 +2757,7 @@ mod tests {
     fn free_ring_preset_drag_keeps_its_start_as_rotation_anchor() {
         let doc = Document::default();
         let canvas = MoleculeCanvas {
+            element: "C",
             joining: None,
             hidden_annotation: None,
             tool: Tool::RingPreset(reshiki::rings::Preset::ChairUp),
@@ -2699,6 +2792,7 @@ mod tests {
             ArrowStyle::default(),
         ));
         let canvas = MoleculeCanvas {
+            element: "C",
             joining: None,
             hidden_annotation: None,
             tool: Tool::Select,
@@ -2718,6 +2812,7 @@ mod tests {
         assert_eq!(hit_object(&doc, World::new(0., -55.), 4.), Some(1));
         assert_eq!(hit_object(&doc, World::new(0., 0.), 4.), None);
         let canvas = MoleculeCanvas {
+            element: "C",
             joining: None,
             hidden_annotation: None,
             tool: Tool::Arrow,
@@ -2778,10 +2873,129 @@ mod tests {
         );
     }
 
+    #[test]
+    fn atom_click_and_drag_use_distinct_edits_and_bond_constraints() -> Result<(), String> {
+        let mut doc = Document::default();
+        let atom = doc.add_atom("C", World::default());
+        let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+        canvas.tool = Tool::Atom;
+        canvas.element = "O";
+        let start = Point::new(200., 150.);
+        assert!(matches!(
+            pointer_gesture(&canvas, start, start),
+            Edit::Click(_)
+        ));
+        let Edit::Bond(a, b, Some(id), None) =
+            pointer_gesture(&canvas, start, Point::new(255., 178.))
+        else {
+            return Err("Atom drag must create a bond edit".into());
+        };
+        assert_eq!(id, atom);
+        assert!((a.distance(b) - 42.).abs() < 0.001);
+        let angle = (b.y - a.y).atan2(b.x - a.x).to_degrees();
+        assert!((angle - 30.).abs() < 0.001);
+        let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(400., 300.));
+        let mut state = State {
+            modifiers: iced::keyboard::Modifiers::ALT,
+            ..Default::default()
+        };
+        let end = Point::new(255., 178.);
+        for event in [
+            mouse::Event::CursorMoved { position: start },
+            mouse::Event::ButtonPressed(mouse::Button::Left),
+            mouse::Event::CursorMoved { position: end },
+        ] {
+            canvas.update(
+                &mut state,
+                &Event::Mouse(event),
+                bounds,
+                mouse::Cursor::Available(end),
+            );
+        }
+        let edit = canvas
+            .update(
+                &mut state,
+                &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                bounds,
+                mouse::Cursor::Available(end),
+            )
+            .and_then(|a| a.into_inner().0)
+            .ok_or("Missing free drag")?;
+        assert!(
+            matches!(edit, Edit::Bond(_, p, Some(_), None) if p.distance(World::new(55.,28.)) < 0.001),
+            "{edit:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn ring_modifier_draws_a_circle_and_does_not_change_chairs_or_haworth() -> Result<(), String> {
+        use reshiki::rings::Preset;
+        let modifier = if cfg!(target_os = "macos") {
+            iced::keyboard::Modifiers::LOGO
+        } else {
+            iced::keyboard::Modifiers::CTRL
+        };
+        let doc = Document::default();
+        for (tool, size) in [
+            (Tool::Ring, 7),
+            (Tool::RingPreset(Preset::Benzene), 6),
+            (Tool::RingPreset(Preset::Cyclopentadiene), 5),
+        ] {
+            let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+            canvas.tool = tool;
+            canvas.ring_size = 7;
+            let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(400., 300.));
+            let p = Point::new(200., 150.);
+            let mut state = State {
+                modifiers: modifier,
+                ..Default::default()
+            };
+            for event in [
+                mouse::Event::CursorMoved { position: p },
+                mouse::Event::ButtonPressed(mouse::Button::Left),
+            ] {
+                canvas.update(
+                    &mut state,
+                    &Event::Mouse(event),
+                    bounds,
+                    mouse::Cursor::Available(p),
+                );
+            }
+            let edit = canvas
+                .update(
+                    &mut state,
+                    &Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                    bounds,
+                    mouse::Cursor::Available(p),
+                )
+                .and_then(|a| a.into_inner().0)
+                .ok_or("Missing ring gesture")?;
+            assert!(matches!(edit, Edit::DelocalizedRing(_, _, n) if n == size));
+        }
+        for preset in [
+            Preset::ChairUp,
+            Preset::ChairDown,
+            Preset::HaworthFive,
+            Preset::HaworthSix,
+        ] {
+            assert_eq!(
+                delocalized_ring_size(Tool::RingPreset(preset), 6, modifier),
+                None
+            );
+        }
+        assert_eq!(
+            delocalized_ring_size(Tool::Ring, 6, iced::keyboard::Modifiers::empty()),
+            None
+        );
+        Ok(())
+    }
+
     fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_> {
         static STYLE: std::sync::LazyLock<GraphicStyle> =
             std::sync::LazyLock::new(GraphicStyle::default);
         MoleculeCanvas {
+            element: "C",
             joining: None,
             hidden_annotation: None,
             doc,
@@ -3400,6 +3614,7 @@ mod tests {
         doc.add_atom("O", World::new(50., 0.));
         let style = GraphicStyle::default();
         let canvas = MoleculeCanvas {
+            element: "C",
             joining: None,
             hidden_annotation: None,
             bond_drawing: Default::default(),
@@ -3512,6 +3727,7 @@ mod tests {
         doc.group_selection(&[1, 2]).unwrap();
         let style = GraphicStyle::default();
         let canvas = MoleculeCanvas {
+            element: "C",
             joining: None,
             hidden_annotation: None,
             bond_drawing: Default::default(),
@@ -3575,6 +3791,7 @@ mod tests {
         // Alt-drag edits a member immediately, even when its group is selected.
         let selected = [1, 2];
         let canvas = MoleculeCanvas {
+            element: "C",
             joining: None,
             hidden_annotation: None,
             bond_drawing: Default::default(),
@@ -3635,6 +3852,7 @@ mod tests {
         let doc = Document::default();
         let style = GraphicStyle::default();
         let mut canvas = MoleculeCanvas {
+            element: "C",
             joining: None,
             hidden_annotation: None,
             bond_drawing: Default::default(),
@@ -3701,6 +3919,7 @@ mod tests {
         doc.group_selection(&[atom, label]).unwrap();
         let style = GraphicStyle::default();
         let canvas = MoleculeCanvas {
+            element: "C",
             joining: None,
             hidden_annotation: None,
             bond_drawing: Default::default(),
@@ -3793,6 +4012,7 @@ mod tests {
         let b = doc.add_atom("C", World::new(30.0, 0.0));
         doc.add_bond(a, b, 1, "plain");
         let canvas = MoleculeCanvas {
+            element: "C",
             joining: None,
             hidden_annotation: None,
             bond_drawing: Default::default(),
@@ -3934,6 +4154,7 @@ mod tests {
         doc.add_bond(a, b, 1, "plain");
         let original = doc.clone();
         let canvas = MoleculeCanvas {
+            element: "C",
             joining: None,
             hidden_annotation: None,
             bond_drawing: Default::default(),
@@ -4032,6 +4253,7 @@ mod tests {
         assert_eq!(hit_selection(&doc, World::default(), 10.0), vec![a, b]);
         assert_eq!(hit_selection(&doc, World::new(-20.0, 0.0), 10.0), vec![a]);
         let canvas = MoleculeCanvas {
+            element: "C",
             joining: None,
             hidden_annotation: None,
             bond_drawing: Default::default(),
@@ -4066,6 +4288,7 @@ mod tests {
         );
         let selected = [a, b];
         let canvas = MoleculeCanvas {
+            element: "C",
             joining: None,
             hidden_annotation: None,
             bond_drawing: Default::default(),
@@ -4088,6 +4311,7 @@ mod tests {
         let b = doc.add_atom("C", World::new(21.0, 0.0));
         doc.add_bond(a, b, 1, "plain");
         let canvas = MoleculeCanvas {
+            element: "C",
             joining: None,
             hidden_annotation: None,
             bond_drawing: Default::default(),
@@ -4126,6 +4350,7 @@ mod tests {
     fn leaving_the_canvas_requests_a_redraw_and_leaving_the_window_clears_hover() {
         let doc = Document::default();
         let canvas = MoleculeCanvas {
+            element: "C",
             joining: None,
             hidden_annotation: None,
             bond_drawing: Default::default(),
@@ -4180,6 +4405,7 @@ mod tests {
         let mut doc = Document::default();
         let source = doc.add_atom("C", World::default());
         let canvas = MoleculeCanvas {
+            element: "C",
             joining: None,
             hidden_annotation: None,
             bond_drawing: Default::default(),
@@ -4251,6 +4477,7 @@ mod tests {
     fn fast_drag_uses_each_motion_event_instead_of_final_cursor_snapshot() {
         let doc = Document::default();
         let canvas = MoleculeCanvas {
+            element: "C",
             joining: None,
             hidden_annotation: None,
             bond_drawing: Default::default(),

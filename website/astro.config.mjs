@@ -81,6 +81,7 @@ export default defineConfig({
             { label: "Draw your first molecule", slug: "guide/first-molecule" },
             { label: "Build with templates", slug: "guide/templates" },
             { label: "Select and edit", slug: "guide/editing" },
+            { label: "Shortcuts and examples", slug: "guide/shortcuts" },
             { label: "Labels and abbreviations", slug: "guide/labels" },
             { label: "Draw a reaction", slug: "guide/reactions" },
             { label: "Set up Codex", slug: "guide/assistant-setup" },
@@ -93,6 +94,7 @@ export default defineConfig({
           label: "Developer",
           collapsed: true,
           items: [
+            { label: "Merged changes awaiting release", slug: "developer/changes-unreleased" },
             { label: "Build and test", slug: "developer/development" },
             { label: "Architecture", slug: "developer/architecture" },
             { label: "Release and signing", slug: "developer/releasing" },

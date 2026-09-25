@@ -1,5 +1,7 @@
 # Chemical abbreviations
 
+The bundled groups and templates are the current implementation. Their coverage, labels and layouts may be extended or revised in future releases. Existing examples can be saved as editable native drawings.
+
 Select a collapsed group and use the top **Left / Center / Right** buttons to
 align its label. **Automatic** (the default) follows the bond direction; restore
 it or choose Stacked above from the adjacent **Auto / above** menu. Multiple

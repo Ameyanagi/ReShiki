@@ -7,16 +7,16 @@ import Screenshot from "../../../components/Screenshot.astro";
 
 ## Select what to change
 
-| Task                   | Gesture                                 |
-| ---------------------- | --------------------------------------- |
-| Select a molecule      | Double-click an atom                    |
-| Select a bond          | Click its middle with **Select**        |
-| Select a region        | **V**, then drag a box; **L** for lasso |
-| Add / toggle an object | **Shift-click**                         |
-| Remove a region        | **Alt-drag** around it                  |
-| Select everything      | **⌘/Ctrl+A**                            |
+| Task                   | Gesture                                     |
+| ---------------------- | ------------------------------------------- |
+| Select a molecule      | Double-click an atom                        |
+| Select a bond          | Click its middle with **Select**            |
+| Select a region        | **Space**, then drag a box; **l** for lasso |
+| Add / toggle an object | **Shift-click**                             |
+| Remove a region        | **Alt-drag** around it                      |
+| Select everything      | **⌘/Ctrl+A**                                |
 
-Drag a selected object to move it. Drag a corner handle to resize; use the top handle to rotate. **Shift** snaps rotation to 15°.
+Drag a selected object to move it. Drag a corner handle to resize proportionally. Drag a side handle to change only width or height; labels and stroke widths keep their sizes. use the top handle to rotate. **Shift** snaps rotation to 15°.
 
 Moving a bonded endpoint or collapsed group follows the configured bond length and angle grid. Hold **Option/Alt** to move freely. Whole molecules translate freely without changing their internal geometry.
 
@@ -48,7 +48,7 @@ To align a reaction, select its molecules and arrow, right-click, and open **Arr
 
 ## Change color
 
-Select the objects, choose **All selected**, **Text**, or **Bonds** in the Style toolbar, then choose a swatch. Enter a hex color and press Return for a custom color.
+Select the objects, choose **All selected**, **Text**, **Bonds**, or **Ring interiors** in the Style toolbar, then choose a swatch. Enter a hex color and press Return for a custom color.
 
 To recolor matching atoms together, choose **Atoms…**, select an element and color, then **Apply**. Choose **Selection** or **Whole drawing**; other elements and bonds retain their colors. Undo restores the change in one step.
 
@@ -56,6 +56,19 @@ To recolor matching atoms together, choose **Atoms…**, select an element and c
   src="/manual/color-scope.png"
   alt="Color scope lets you choose all objects, text, or bonds."
 />
+
+For a filled ring, select its complete cycle, choose **Ring interiors**, then a color. **No fill** clears it. The fill follows the ring during movement, resizing, copying and deletion; it is retained in native files, figures and supported editable exchange.
+
+<Screenshot
+  src="/doc-images/pr-reviews/pr27-ring-fills.png"
+  alt="Colored ring interiors remain attached to the ring through transformations and export."
+/>
+
+## Join fragments
+
+Select an endpoint or bond in the fragment and press **Cmd/Ctrl+J**. Choose its destination and preview the join before applying it. This is also available through **Move & attach…**.
+
+[Open the complete shortcut reference and editable examples](/guide/shortcuts/).
 
 ## Clean up a selection
 

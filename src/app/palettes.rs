@@ -376,7 +376,12 @@ impl App {
                 }
                 let mut aromatic = Document::default();
                 reshiki::editing::ring(&mut aromatic, Point::default(), 6, true, 42.);
-                options.push((aromatic, "Benzene".into(), Action::Ring(6, true)));
+                options.push((
+                    RingPreset::Benzene.document(42., false),
+                    "Benzene".into(),
+                    Action::RingPreset(RingPreset::Benzene),
+                ));
+                options.push((aromatic, "Aromatic circle".into(), Action::Ring(6, true)));
                 for p in [
                     RingPreset::ChairUp,
                     RingPreset::ChairDown,

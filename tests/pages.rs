@@ -12,6 +12,27 @@ fn drawing() -> Document {
     doc
 }
 #[test]
+fn bonds_on_separate_pages_do_not_report_overflow_but_cross_page_bonds_do() -> Result<(), String> {
+    let layout = Layout {
+        columns: 2,
+        ..Layout::default()
+    };
+    let mut doc = drawing();
+    let ids = doc.all_ids();
+    layout.center(&mut doc, &ids, 0)?;
+    let second = reshiki::editing::append(&mut doc, &drawing(), Point::default());
+    layout.center(&mut doc, &second, 1)?;
+    assert_eq!(layout.overflow(&doc), 0);
+    let a = *ids.last().ok_or("First page atom")?;
+    let b = *second.first().ok_or("Second page atom")?;
+    doc.add_bond(a, b, 1, "plain");
+    assert!(
+        layout.overflow(&doc) > 0,
+        "A connected bond crossing the page gap must be detected"
+    );
+    Ok(())
+}
+#[test]
 fn legacy_documents_remain_unbounded_and_layout_roundtrips() {
     let legacy: Document =
         serde_json::from_str(include_str!("fixtures/ui-drawn-ethanol.reshiki")).unwrap();

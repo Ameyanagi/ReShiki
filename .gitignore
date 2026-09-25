@@ -15,3 +15,6 @@ __pycache__/
 /website/src/content/docs/reference/
 /website/src/content/docs/developer/
 /website/public/doc-images/
+
+/website/public/examples/shortcut-examples.rsk
+/website/src/content/docs/guide/shortcuts.md

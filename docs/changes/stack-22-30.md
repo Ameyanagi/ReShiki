@@ -1,6 +1,6 @@
-# Unreleased stacked changes: visual review
+# Merged changes awaiting release: visual review
 
-These examples document PRs #22–#30. They are review evidence, not a published release. Each page contains reusable images and a release-note caption. Large scratch galleries and build artifacts remain outside the repository.
+PRs #22–#31 were merged on 25 September 2026 after their checks passed and their galleries were reviewed. These examples document #22–#30; #31 adds the galleries and visual review templates. They describe the merged development version, not a published release. Each page contains reusable images and a release-note caption. Large scratch galleries and build artifacts remain outside the repository.
 
 | PR                                                  | Change and images                                    |
 | --------------------------------------------------- | ---------------------------------------------------- |

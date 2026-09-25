@@ -7,7 +7,7 @@ import Screenshot from "../../../components/Screenshot.astro";
 
 ## Write a caption
 
-Choose **Text** (**T**), click the canvas, and type. Double-click a caption to edit it. Select a text range to change its font, size, bold/italic, subscript, superscript, or color. **Done** applies; **Escape** cancels.
+Choose **Text** (**t**, lowercase), click the canvas, and type. Double-click a caption to edit it. Select a text range to change its font, size, bold/italic, subscript, superscript, or color. **Done** or **Cmd/Ctrl+Enter** applies; **Escape** cancels.
 
 <Screenshot
   src="/manual/caption-editing.png"
@@ -39,6 +39,19 @@ Group labels default to **Automatic** alignment. Select groups and use the exist
   src="/doc-images/pr17/group-alignment-toolbar.png"
   alt="Chemical group alignment uses the existing top text-alignment buttons and the adjacent Automatic/Above menu."
 />
+
+## Type formulas and explicit hydrogens
+
+In the atom label editor, type a supported formula such as **C2H5** or **OCH3**. Automatic mode creates a chemical group with real atoms; its digits display as subscripts. Select several atoms and press **Enter** to give that fragment a group name. Use Text label only when you want literal, chemically unspecified text.
+
+An explicit **NH3** label retains three hydrogens. At a metal, its donor contact can be represented without changing it into NH2. These explicit hydrogens participate in molecular properties; labels are not merely decorative. This does not turn off chemical validation.
+
+<Screenshot
+  src="/doc-images/pr-reviews/pr25-nh3.png"
+  alt="Explicit NH3 retains its hydrogens at a metal contact."
+/>
+
+Group and template definitions may be revised in future releases. [Open the shortcut examples](/guide/shortcuts/) to try the current groups in one editable document.
 
 ## Attach to several atoms
 
