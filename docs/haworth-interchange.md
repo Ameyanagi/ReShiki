@@ -46,7 +46,7 @@ The recognizer is bounded, uses checked access and adds no `unsafe`, `unwrap()` 
 
 ChemDraw writes `Geometry`, `BondOrdering` and cached `AS` descriptors into its CDXML. Its documented [geometry convention](https://chemapps.stolaf.edu/iupac/cdx/sdk/properties/Atom_Geometry.htm) describes tetrahedral bond order and says positioned drawings must supply the appropriate visible bonds. Its [CIP property documentation](https://chemapps.stolaf.edu/iupac/cdx/sdk/properties/Atom_CIPStereochemistry.htm) explains that `AS` values can survive unchanged until a structure is edited. ReShiki therefore does not accept cached R/S letters as proof of a configuration; the tests include altered cache values.
 
-The study used our generated structures, actual application exports and published format documentation. It does not redistribute ChemDraw's proprietary templates or depend on executable decompilation.
+Compatibility testing uses original generated structures, native application exports and published format documentation.
 
 ## Reproduce the study
 

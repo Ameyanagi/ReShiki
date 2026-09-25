@@ -9,6 +9,10 @@ on:
         description: Run every live RDKit comparison on all three test platforms
         type: boolean
         default: false
+      capture_aromatic:
+        description: Recapture unchanged aromatic responses and their source provenance
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       live_reference:
@@ -215,3 +219,37 @@ jobs:
             artifacts/depict-windows-*/compiler.log
           if-no-files-found: ignore
           retention-days: 7
+  capture-aromatic:
+    if: github.event_name == 'workflow_dispatch' && inputs.capture_aromatic
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            fixture: macos
+            python: "3.12"
+          - os: windows-2022
+            fixture: windows
+            python: cpython-3.12-windows-x86_64-none
+          - os: ubuntu-22.04
+            fixture: linux
+            python: "3.12"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.3"
+          python-version: ${{ matrix.python }}
+      - run: uv sync --locked
+      - name: Restore the historical template inputs used by the captured requests
+        run: uv run --locked python -c "import gzip,pathlib; pathlib.Path('assets/templates.json').write_bytes(gzip.decompress(pathlib.Path('tests/fixtures/aromatic-template-inputs.json.gz').read_bytes()))"
+      - name: Capture original worker responses on this platform
+        run: uv run --locked python tests/native_aromatic_reference.py --requests tests/fixtures/native-aromatic-${{ matrix.fixture }}.json.gz --output artifacts/native-aromatic-${{ matrix.fixture }}.json.gz
+      - name: Require every recorded request and response to remain unchanged
+        run: uv run --locked python -c "import gzip,json; old=json.loads(gzip.open('tests/fixtures/native-aromatic-${{ matrix.fixture }}.json.gz','rt').readline()); new=json.loads(gzip.open('artifacts/native-aromatic-${{ matrix.fixture }}.json.gz','rt').readline()); assert old['records_sha256']==new['records_sha256'], 'Responses changed; review the differences before accepting new fixtures'"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aromatic-capture-${{ matrix.fixture }}
+          path: artifacts/native-aromatic-${{ matrix.fixture }}.json.gz
+          if-no-files-found: error

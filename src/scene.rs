@@ -835,13 +835,40 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             }
         }
     }
-    for (color, points) in crate::bond_joins::junctions(doc) {
+    for junction in crate::bond_joins::junctions(doc) {
         use crate::graphics::PathCommand;
-        if let Some(first) = points.first() {
-            let commands = joined.entry(color).or_default();
-            commands.push(PathCommand::Move(*first));
-            commands.extend(points.iter().skip(1).copied().map(PathCommand::Line));
-            commands.push(PathCommand::Close);
+        let mut commands = Vec::new();
+        for (bond_index, points) in junction.parts {
+            let parts = crate::crossings::cut(
+                vec![Primitive::Polygon(points)],
+                crossing_gaps
+                    .get(bond_index)
+                    .map(Vec::as_slice)
+                    .unwrap_or_default(),
+            );
+            for part in parts {
+                if let Primitive::Polygon(points) = part
+                    && let Some(first) = points.first()
+                {
+                    commands.push(PathCommand::Move(*first));
+                    commands.extend(points.iter().skip(1).copied().map(PathCommand::Line));
+                    commands.push(PathCommand::Close);
+                }
+            }
+        }
+        if junction.underlay {
+            out.push(Primitive::Path {
+                commands,
+                style: crate::graphics::GraphicStyle {
+                    stroke: junction.color,
+                    fill: Some(junction.color),
+                    width_pt: 0.,
+                    ..Default::default()
+                },
+                filled: true,
+            });
+        } else {
+            joined.entry(junction.color).or_default().extend(commands);
         }
     }
     out.extend(joined.into_iter().map(|(color, commands)| Primitive::Path {
@@ -1300,13 +1327,13 @@ mod tests {
                 _ => None,
             })
             .collect();
-        assert_eq!(lines.len(), 9);
-        assert_eq!(
-            lines
+        // The six outer edges now share filled joins; the three inset rails
+        // remain independent strokes. Raster coverage is checked in bond_joins.
+        assert_eq!(lines.len(), 3);
+        assert!(
+            drawing
                 .iter()
-                .filter(|(a, b)| (a.distance(*b) - 42.0).abs() < 0.01)
-                .count(),
-            6
+                .any(|p| matches!(p, Primitive::Path { filled: true, .. }))
         );
         assert_eq!(
             lines

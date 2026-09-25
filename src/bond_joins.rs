@@ -2,12 +2,12 @@
 use crate::document::{Bond, Document, Point};
 #[cfg(test)]
 mod double_tests;
-fn eligible(b: &Bond) -> bool {
+fn eligible(doc: &Document, b: &Bond) -> bool {
     (b.order == 1
         || b.order == 4 && b.projection
         || matches!(b.order, 2 | 7)
-            && match b.double_position {
-                crate::bonds::DoublePosition::Auto => b.display == "bold",
+            && match crate::scene::effective_double_position(doc, b) {
+                crate::bonds::DoublePosition::Auto => false,
                 crate::bonds::DoublePosition::Left | crate::bonds::DoublePosition::Right => true,
                 crate::bonds::DoublePosition::Center => false,
             })
@@ -23,13 +23,12 @@ fn neighbors<'a>(doc: &'a Document, bond: &'a Bond, id: u64) -> impl Iterator<It
     doc.bonds.iter().filter(move |b| {
         (b.a == id || b.b == id)
             && !std::ptr::eq(*b, bond)
-            && eligible(b)
-            && b.color == bond.color
+            && eligible(doc, b)
             && doc.bond_visible(b.a, b.b)
     })
 }
 pub fn needed(doc: &Document, b: &Bond) -> bool {
-    eligible(b)
+    eligible(doc, b)
         && (b.display != "plain"
             || [b.a, b.b]
                 .iter()
@@ -114,11 +113,38 @@ fn cap(doc: &Document, b: &Bond, id: u64, point: Point, opposite: Point) -> [Poi
 pub fn polygon(doc: &Document, b: &Bond, start: Point, end: Point) -> Vec<Point> {
     let [al, ar] = cap(doc, b, b.a, start, end);
     let [bl, br] = cap(doc, b, b.b, end, start);
-    vec![al, br, bl, ar]
+    // A three-way cap passes through the atom between its two shared corners.
+    // Joining those corners directly would cut off a colored branch's root.
+    let joint = |id, point: Point| {
+        b.display != "hollow_wedge"
+            && doc.atom(id).is_some_and(|a| {
+                a.position.distance(point) < 0.001
+                    && !crate::atom_labels::visible(a, doc)
+                    && neighbors(doc, b, id).take(2).count() == 2
+            })
+    };
+    let mut points = vec![al, br];
+    if joint(b.b, end) {
+        points.push(end);
+    }
+    points.extend([bl, ar]);
+    if joint(b.a, start) {
+        points.push(start);
+    }
+    points
 }
-/// Three or more incident strips bound a small central polygon. Fill that
-/// polygon in the same path as the strips, so antialiasing cannot open a seam.
-pub fn junctions(doc: &Document) -> Vec<([u8; 3], Vec<Point>)> {
+
+pub struct Junction {
+    pub color: [u8; 3],
+    pub parts: Vec<(usize, Vec<Point>)>,
+    pub underlay: bool,
+}
+
+/// Mixed-color sectors share exact edges but are antialiased separately.
+/// Paint their union underneath the color paths to close transparent seams.
+/// Keep the concave boundaries: a convex hull would fill the notch between
+/// the thin ring edge and the substituent at a thick/thin/branch junction.
+pub fn junctions(doc: &Document) -> Vec<Junction> {
     let mut result = Vec::new();
     for atom in &doc.atoms {
         if !doc.atom_visible(atom.id) || crate::atom_labels::visible(atom, doc) {
@@ -127,67 +153,73 @@ pub fn junctions(doc: &Document) -> Vec<([u8; 3], Vec<Point>)> {
         let incident: Vec<_> = doc
             .bonds
             .iter()
-            .filter(|b| {
-                eligible(b) && (b.a == atom.id || b.b == atom.id) && doc.bond_visible(b.a, b.b)
+            .enumerate()
+            .filter(|(_, b)| {
+                (b.a == atom.id || b.b == atom.id) && eligible(doc, b) && doc.bond_visible(b.a, b.b)
             })
             .collect();
-        let Some(first) = incident.first() else {
+        let Some((_, first)) = incident.first() else {
             continue;
         };
-        if incident.len() < 3 || incident.iter().any(|b| b.color != first.color) {
+        let underlay = incident.iter().any(|(_, b)| b.color != first.color);
+        if incident.len() < 3
+            || !underlay && incident.iter().all(|(_, b)| b.display != "hollow_wedge")
+        {
             continue;
         }
-        let mut points: Vec<_> = incident
-            .iter()
-            .filter_map(|b| {
-                doc.atom(other(b, atom.id))
-                    .map(|a| cap(doc, b, atom.id, atom.position, a.position))
-            })
-            .flatten()
-            .collect();
-        points.push(atom.position);
-        points.sort_by(|a, b| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)));
-        points.dedup_by(|a, b| a.distance(*b) < 0.0001);
-        let mut hull: Vec<Point> = Vec::new();
-        for point in &points {
-            while hull.len() >= 2 {
-                let mut previous = hull.iter().rev();
-                let Some(last) = previous.next() else {
-                    break;
-                };
-                let Some(before) = previous.next() else {
-                    break;
-                };
-                if cross(subtract(*last, *before), subtract(*point, *last)) > 0. {
-                    break;
-                }
-                hull.pop();
+        let mut parts = Vec::new();
+        for (index, bond) in &incident {
+            let Some(end) = doc.atom(other(bond, atom.id)) else {
+                continue;
+            };
+            let length = atom.position.distance(end.position);
+            if length < 0.001 {
+                continue;
             }
-            hull.push(*point);
-        }
-        let lower = hull.len();
-        for point in points.iter().rev().skip(1) {
-            while hull.len() > lower {
-                let mut previous = hull.iter().rev();
-                let Some(last) = previous.next() else {
-                    break;
-                };
-                let Some(before) = previous.next() else {
-                    break;
-                };
-                if cross(subtract(*last, *before), subtract(*point, *last)) > 0. {
-                    break;
+            let [left, right] = cap(doc, bond, atom.id, atom.position, end.position);
+            if !underlay || bond.display == "hollow_wedge" {
+                // A hollow wedge keeps its open interior; only its root joins
+                // the shared atom, not a filled segment along its length.
+                let mut triangle = vec![left, right, atom.position];
+                if cross(subtract(right, left), subtract(atom.position, left)) > 0. {
+                    triangle.reverse();
                 }
-                hull.pop();
+                parts.push((*index, triangle));
+                continue;
             }
-            hull.push(*point);
+            let width = end_width(doc, bond, atom.id);
+            let u = Point::new(
+                (end.position.x - atom.position.x) / length,
+                (end.position.y - atom.position.y) / length,
+            );
+            let along = |p: Point| (p.x - atom.position.x) * u.x + (p.y - atom.position.y) * u.y;
+            // Extend beyond both miter corners to avoid self-intersecting
+            // short strips, while staying in the bond's near half.
+            let reach = (2. * half_width(doc, bond))
+                .max(along(left).max(along(right)) + width)
+                .min(length * 0.5);
+            let far_width = width + (end_width(doc, bond, end.id) - width) * reach / length;
+            let far = atom.position.offset(u.x * reach, u.y * reach);
+            parts.push((
+                *index,
+                vec![
+                    left,
+                    far.offset(-u.y * far_width, u.x * far_width),
+                    far.offset(u.y * far_width, -u.x * far_width),
+                    right,
+                    atom.position,
+                ],
+            ));
         }
-        hull.pop();
-        // Match the clockwise winding of bond strips, preventing fill cancellation.
-        hull.reverse();
-        if hull.len() >= 3 {
-            result.push((first.color, hull));
-        }
+        result.push(Junction {
+            color: incident
+                .iter()
+                .map(|(_, b)| b.color)
+                .min()
+                .unwrap_or(first.color),
+            parts,
+            underlay,
+        });
     }
     result
 }

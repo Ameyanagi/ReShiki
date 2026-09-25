@@ -249,6 +249,12 @@ pub fn prepare(document: &Document) -> Result<Molecule, Error> {
     prepare_input(document, input)
 }
 
+/// Structurally checked input for drawing interchange. It has no chemical
+/// validation or inferred bond assignment and must never supply properties.
+pub(crate) fn drawing_graph(document: &Document) -> Result<Graph, Error> {
+    Ok(build(document)?.graph)
+}
+
 /// Cleanup retains native f64 drawing coordinates between reconstruction and
 /// its chemical/visible stereo checks. Do not narrow them through the canvas.
 pub(crate) fn prepare_at(document: &Document, positions: &[Point3]) -> Result<Molecule, Error> {

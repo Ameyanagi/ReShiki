@@ -40,8 +40,9 @@ pub struct Ligand {
     pub show_charge: bool,
     pub contact: Option<usize>,
     pub contact_style: Option<ContactStyle>,
+    /// None follows retained XYZ; booleans are deliberate drawing overrides.
     #[serde(default)]
-    pub contact_in_front: bool,
+    pub contact_in_front: Option<bool>,
 }
 fn show_charge_default() -> bool {
     true
@@ -122,7 +123,11 @@ impl Ligand {
             let (order, display) = self.contact_style.unwrap_or(ContactStyle::Single).parts();
             doc.add_bond(anchor, contact as u64 + 1, order, display);
             if let Some(bond) = doc.bonds.last_mut() {
-                bond.z_order = if self.contact_in_front { 1 } else { -1 };
+                bond.z_order = match self.contact_in_front {
+                    None => 0,
+                    Some(true) => 1,
+                    Some(false) => -2,
+                };
                 bond.color = settings.bond_color;
             }
         }

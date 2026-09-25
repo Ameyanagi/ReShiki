@@ -2,6 +2,43 @@ use crate::document::{Document, Point};
 use std::collections::{HashMap, HashSet};
 
 pub const CLIPBOARD_PREFIX: &str = "RESHIKI_DRAWING_V1\n";
+
+/// Add the chosen element from an existing atom, or join an existing endpoint.
+/// Click-to-replace is separate; dragging never relabels either existing atom.
+pub fn add_bonded_atom(
+    source: &Document,
+    start: u64,
+    end: Point,
+    target: Option<u64>,
+    element: &str,
+) -> Result<(Document, u64), String> {
+    source.validate()?;
+    let origin = source
+        .atom(start)
+        .ok_or("The starting atom is no longer available")?;
+    if !end.x.is_finite() || !end.y.is_finite() || origin.position.distance(end) < 0.001 {
+        return Err("Drag away from the starting atom to add a bond".into());
+    }
+    if let Some(id) = target {
+        if id == start || source.atom(id).is_none() {
+            return Err("Choose a different existing endpoint".into());
+        }
+    } else if element != "*" && !ELEMENTS.contains(&element) {
+        return Err("Choose an element from Atoms first".into());
+    }
+    let mut doc = source.clone();
+    let id = target.unwrap_or_else(|| doc.add_atom(element, end));
+    if !doc
+        .bonds
+        .iter()
+        .any(|b| (b.a == start && b.b == id) || (b.a == id && b.b == start))
+    {
+        doc.invalidate_chemistry(&[start, id]);
+        doc.add_bond(start, id, 1, "plain");
+    }
+    doc.validate()?;
+    Ok((doc, id))
+}
 pub fn clipboard_json(contents: &str) -> Option<&str> {
     contents
         .strip_prefix(CLIPBOARD_PREFIX)

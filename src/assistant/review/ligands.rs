@@ -35,10 +35,11 @@ pub(super) fn find(doc: &Document, anchor: u64) -> Option<Ligand> {
             .iter()
             .filter(|b| b.a == *id || b.b == *id)
             .collect();
-        if bonds
-            .iter()
-            .any(|b| b.stereo.is_some() || !matches!(b.display.as_str(), "plain" | "bold"))
-        {
+        if bonds.iter().any(|b| {
+            b.stereo.is_some()
+                || !(matches!(b.display.as_str(), "plain" | "bold")
+                    || b.projection && b.display == "wedge")
+        }) {
             return None;
         }
         if bonds
@@ -125,17 +126,19 @@ pub(super) fn tilt(
         .atom(ligand.anchor)
         .ok_or("Missing ligand anchor")?
         .position;
-    crate::projection::tilt(doc, &ligand.ids, angles[0], true);
-    crate::projection::tilt(doc, &ligand.ids, angles[1], false);
-    crate::editing::transform_about(doc, &ligand.ids, center, 1., angles[2]);
     // Remove old depth emphasis, including the erroneous methyl emphasis in
-    // older generated drafts. Explicit bond styles are not cleared.
+    // older generated drafts, before rotating. The review's requested emphasis
+    // is applied below; intermediate automatic styling must not reverse these
+    // bonds and trip the independent chemical-data guard.
     for bond in &mut doc.bonds {
         if ligand.ids.contains(&bond.a) && ligand.ids.contains(&bond.b) && bond.projection {
             bond.projection = false;
             bond.display = "plain".into();
         }
     }
+    crate::projection::tilt(doc, &ligand.ids, angles[0], true);
+    crate::projection::tilt(doc, &ligand.ids, angles[1], false);
+    crate::editing::transform_about(doc, &ligand.ids, center, 1., angles[2]);
     if depth_bonds {
         crate::projection::depth_bonds(doc, &ligand.ring);
     }

@@ -9,9 +9,9 @@ import Screenshot from "../../../components/Screenshot.astro";
 
 ReShiki opens with a blank canvas.
 
-1. Press **B** for a single bond. Choose **New** first if a drawing is already open.
+1. Press **1** for a single bond. Choose **New** first if a drawing is already open.
 2. Drag a bond. Drag from its endpoint to add a second bond.
-3. Select the last atom and press **O**. Its label becomes **OH**.
+3. Select the last atom and press **o**. Its label becomes **OH**.
 4. Click empty space to clear the selection, then **Check**. Ethanol should read **C2H6O**.
 
 <Screenshot
@@ -31,7 +31,9 @@ Click **C** in the toolbar to reuse the current element. Hold the button or clic
 
 <Screenshot src="/manual/periodic-table.png" alt="The periodic table opens beside the atom tool." />
 
-For common labels, hover an atom and press **C, N, O, S, P, F, or H**. ReShiki adds the appropriate hydrogen count.
+To add the chosen element with a new bond, **drag from an existing atom**. Clicking an existing atom still replaces it. Hold **Option/Alt** while dragging to bypass length and angle constraints. Dragging onto another existing atom connects them without changing their elements.
+
+For common labels, hover an atom and press **c, n, o, s, p, f, or h** (lowercase). ReShiki adds the appropriate hydrogen count.
 
 ## Change a bond
 
@@ -42,15 +44,15 @@ Click **Single**, **Double**, or **Triple** to select a bond immediately. Click 
   alt="The floating bond palette shows wedge, dashed, coordination and other bond styles."
 />
 
-| With a bond selected or hovered  | Press                     |
-| -------------------------------- | ------------------------- |
-| Single / double / triple         | **S / D / T**             |
-| Move a double bond's second line | **D** again               |
-| Erase an object                  | **E**, then click or drag |
+| With a bond selected or hovered  | Press                                 |
+| -------------------------------- | ------------------------------------- |
+| Single / double / triple         | **1 / 2 / 3**                         |
+| Move a double bond's second line | **2** again                           |
+| Erase an object                  | Choose the eraser, then click or drag |
 
 <Screenshot
   src="/manual/double-bond.png"
-  alt="The selected double bond after pressing D to shift its second line."
+  alt="The selected double bond after pressing 2 to shift its second line."
 />
 
 The controls above the canvas set **Length** and **Angles**. Hold **Alt/Option** while dragging to draw freely.
@@ -66,16 +68,18 @@ Click the ring tool to use the last chosen ring; it starts with a six-membered r
   alt="The ring palette includes regular rings, benzene and chair projections."
 />
 
-Straight and snaking chains have separate one-click toolbar buttons. **X** selects a straight chain; **Shift+X** selects a snaking chain. Drag to set its length. **Straight chain** can use an exact atom count; **Snaking chain** has a **Max atoms** limit.
+Straight and snaking chains have separate one-click toolbar buttons. **Shift+x** (uppercase X) selects a straight chain when no atom or bond is targeted. Choose the snaking-chain button for a snaking chain. Drag to set its length. **Straight chain** can use an exact atom count; **Snaking chain** has a **Max atoms** limit.
 
 <Screenshot
   src="/manual/chain.png"
   alt="Straight and snaking chains, with atom-count and angle controls."
 />
 
-Use **Shift+R** to switch saturated/aromatic ring drawing while keeping the member count. With Select and a complete 3–8 member ring selected, the same shortcut converts that ring in place. This changes drawing notation without inferring charges. Select an already aromatic ring and press **A** to switch between a circle and alternating bonds.
+Use **Shift+R** to switch saturated/aromatic ring drawing while keeping the member count. With Select and a complete 3–8 member ring selected, the same shortcut converts that ring in place. This changes drawing notation without inferring charges. Select an already aromatic ring and press **Cmd/Ctrl+Alt+K** (or **Alt+K** on Windows) to switch between a circle and alternating bonds.
 
 For a partial delocalization curve, select consecutive ring atoms and right-click → **Bond appearance… → Toggle inner ring curve**, or use Properties → Bond appearance. Select the whole ring for a circle. Bond orders stay unchanged; keep `.rsk` or use figure export for this depiction.
+
+Choose **Benzene** for alternating bonds, or **Aromatic circle** for the circle form. Hold **Cmd/Ctrl while placing a ring** to use the circle form for that placement. For an existing aromatic ring, select it and press lowercase **a** to toggle its display. Chairs and Haworth projections retain their geometry when the modifier is held. See the [complete shortcuts and editable examples](/guide/shortcuts/).
 
 [Attach a template →](/guide/templates/)
 

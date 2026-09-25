@@ -500,9 +500,10 @@ fn reconstruct(
                 bond.a = *at(&work.ids, b.a)?;
                 bond.b = *at(&work.ids, b.b)?;
             }
-            bond.order = if old.is_some_and(|b| b.order == 4) && at(&state.graph.bonds, i)?.aromatic
+            bond.order = if let Some(old) = old.filter(|old| matches!(old.order, 1 | 2 | 4))
+                && at(&state.graph.bonds, i)?.aromatic
             {
-                4
+                old.order
             } else {
                 b.order
             };

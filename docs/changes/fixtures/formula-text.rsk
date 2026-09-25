@@ -1,0 +1,127 @@
+{
+  "atom_labels": {
+    "carbons": "skeletal",
+    "hydrogens": true,
+    "stereo": false
+  },
+  "version": 15,
+  "atoms": [],
+  "bonds": [],
+  "annotations": [
+    {
+      "id": 1,
+      "position": {
+        "x": 0.0,
+        "y": 0.0
+      },
+      "text": "C2H2",
+      "format": {
+        "style": {
+          "family": "Arial",
+          "size_pt": 10.0,
+          "bold": false,
+          "italic": false,
+          "underline": false,
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "script": "normal",
+          "formula": true
+        },
+        "spans": [],
+        "alignment": "left",
+        "line_spacing": 1.2,
+        "width_pt": null
+      }
+    },
+    {
+      "id": 2,
+      "position": {
+        "x": 0.0,
+        "y": 60.0
+      },
+      "text": "C2H5OH",
+      "format": {
+        "style": {
+          "family": "Arial",
+          "size_pt": 10.0,
+          "bold": false,
+          "italic": false,
+          "underline": false,
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "script": "normal",
+          "formula": true
+        },
+        "spans": [],
+        "alignment": "left",
+        "line_spacing": 1.2,
+        "width_pt": null
+      }
+    },
+    {
+      "id": 3,
+      "position": {
+        "x": 0.0,
+        "y": 120.0
+      },
+      "text": "Ca(OH)2",
+      "format": {
+        "style": {
+          "family": "Arial",
+          "size_pt": 10.0,
+          "bold": false,
+          "italic": false,
+          "underline": false,
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "script": "normal",
+          "formula": true
+        },
+        "spans": [],
+        "alignment": "left",
+        "line_spacing": 1.2,
+        "width_pt": null
+      }
+    },
+    {
+      "id": 4,
+      "position": {
+        "x": 0.0,
+        "y": 180.0
+      },
+      "text": "Figure 2",
+      "format": {
+        "style": {
+          "family": "Arial",
+          "size_pt": 10.0,
+          "bold": false,
+          "italic": false,
+          "underline": false,
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "script": "normal",
+          "formula": false
+        },
+        "spans": [],
+        "alignment": "left",
+        "line_spacing": 1.2,
+        "width_pt": null
+      }
+    }
+  ],
+  "arrows": [],
+  "graphics": [],
+  "groups": []
+}

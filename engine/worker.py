@@ -309,8 +309,10 @@ def to_document(mol, base=None, rewedge=False):
             {
                 "a": a,
                 "b": z,
-                "order": 4
-                if old and old["order"] == 4 and mol.GetBondWithIdx(b.GetIdx()).GetIsAromatic()
+                "order": old["order"]
+                if old
+                and old["order"] in (1, 2, 4)
+                and mol.GetBondWithIdx(b.GetIdx()).GetIsAromatic()
                 else {v: k for k, v in ORDERS.items()}[b.GetBondType()],
                 "display": display,
                 "stereo": reverse_stereo.get(b.GetStereo()),
@@ -840,7 +842,7 @@ def export_cdxml(
                 start = len(label)
                 charge = a["charge"]
                 label += (str(abs(charge)) if abs(charge) > 1 else "") + (
-                    "+" if charge > 0 else "−"
+                    "+" if charge > 0 else "-"
                 )
                 spans.append(
                     {

@@ -90,20 +90,19 @@ pub(super) fn add(
         return Err("Pi-ligand replacement needs a single-bond endpoint".into());
     }
     let angle = if neighbors.is_empty() {
-        -std::f32::consts::FRAC_PI_2
+        -std::f32::consts::FRAC_PI_6
     } else {
         editing::open_angle(atom.position, &neighbors)
     };
     let radius = length / (2. * (std::f32::consts::PI / size as f32).sin());
     let center = if metal {
         atom.position.offset(
-            (length + radius) * angle.cos(),
-            (length + radius) * angle.sin(),
+            (length + radius * 0.5) * angle.cos(),
+            (length + radius * 0.5) * angle.sin(),
         )
     } else {
         atom.position
     };
-    let toward = angle + std::f32::consts::PI;
     let mut result = doc.clone();
     let anchor = if metal {
         result.add_atom("*", center)
@@ -112,9 +111,31 @@ pub(super) fn add(
     };
     let mut ring = vec![];
     for i in 0..size {
-        let t = toward - std::f32::consts::PI / size as f32
+        let t = std::f32::consts::PI - std::f32::consts::PI / size as f32
             + i as f32 * std::f32::consts::TAU / size as f32;
         let p = center.offset(radius * t.cos(), radius * t.sin());
+        let carbon = result.add_atom("C", p);
+        let a = result.atom_mut(carbon).ok_or("Missing ring atom")?;
+        a.aromatic = true;
+        a.explicit_h = 1;
+        a.label_h = 1;
+        a.no_implicit = true;
+        a.depth = atom.depth;
+        if size == 5 && i == 0 {
+            a.charge = -1;
+            a.display.hide_charge = true;
+        }
+        ring.push(carbon);
+    }
+    for (&a, &b) in ring.iter().zip(ring.iter().cycle().skip(1)) {
+        result.add_bond(a, b, 4, "plain");
+    }
+    // Build a regular ring in XYZ, then rotate it. Keeping depth is essential:
+    // later tilts and the aromatic ellipse must use the same physical plane.
+    crate::projection::tilt(&mut result, &ring, 60., false);
+    editing::transform_about(&mut result, &ring, center, 1., angle.to_degrees());
+    for carbon in &ring {
+        let p = result.atom(*carbon).ok_or("Missing ring atom")?.position;
         if doc
             .atoms
             .iter()
@@ -126,21 +147,16 @@ pub(super) fn add(
                     .into(),
             );
         }
-        let carbon = result.add_atom("C", p);
-        let a = result.atom_mut(carbon).ok_or("Missing ring atom")?;
-        a.aromatic = true;
-        a.explicit_h = 1;
-        a.label_h = 1;
-        a.no_implicit = true;
-        a.depth = atom.depth;
-        if size == 5 && i == 0 {
-            a.charge = -1;
+    }
+    // A thick near edge tapers into the far edges. These are perspective
+    // styles on aromatic bonds, never tetrahedral stereochemical wedges.
+    for bond in &mut result.bonds {
+        if !ring.contains(&bond.a) || !ring.contains(&bond.b) {
+            continue;
         }
-        ring.push(carbon);
+        bond.projection = true;
     }
-    for (&a, &b) in ring.iter().zip(ring.iter().cycle().skip(1)) {
-        result.add_bond(a, b, 4, "plain");
-    }
+    crate::projection::refresh_depth_bonds(&mut result, &ring);
     let point = result.atom_mut(anchor).ok_or("Missing ring attachment")?;
     point.element = "*".into();
     point.position = center;

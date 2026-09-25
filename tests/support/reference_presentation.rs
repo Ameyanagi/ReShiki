@@ -18,6 +18,35 @@ pub fn compare_export(actual: &Value, expected: &mut Value) -> anyhow::Result<()
     if a == e {
         return Ok(());
     }
+    // The original worker predates the absolute-stereochemistry MOL flag
+    // added with Haworth interchange. Check that one explicit distinction;
+    // the caller still compares every other byte and all chemical properties.
+    if a.lines().nth(3).is_some_and(|line| line.ends_with("V2000"))
+        && e.lines().nth(3).is_some_and(|line| line.ends_with("V2000"))
+    {
+        let absolute = actual["document"]["atoms"]
+            .as_array()
+            .is_some_and(|atoms| atoms.iter().any(|a| a["stereo"].is_object()));
+        let actual_flag = a.lines().nth(3).and_then(|line| line.get(12..15));
+        anyhow::ensure!(
+            actual_flag == Some(if absolute { "  1" } else { "  0" }),
+            "Incorrect absolute MOL flag"
+        );
+        let mut lines: Vec<_> = e.split('\n').map(str::to_owned).collect();
+        let counts = lines.get_mut(3).context("Missing MOL counts")?;
+        anyhow::ensure!(
+            counts.get(12..15) == Some("  0"),
+            "Unexpected reference MOL flag"
+        );
+        *counts = format!(
+            "{}{}{}",
+            counts.get(..12).context("Invalid counts prefix")?,
+            actual_flag.context("Missing actual flag")?,
+            counts.get(15..).context("Invalid counts suffix")?
+        );
+        expected["output"] = Value::String(lines.join("\n"));
+        return Ok(());
+    }
     let format = if e.starts_with("<?xml") {
         "cdxml"
     } else if STANDARD

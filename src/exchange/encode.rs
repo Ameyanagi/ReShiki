@@ -88,6 +88,9 @@ impl Encoder {
                 self.schema.names.get(attr.name()).ok_or_else(|| {
                     format!("Unsupported binary drawing property: {}", attr.name())
                 })?;
+            if p.kind == "CDXBooleanImplied" && attr.value() == "no" {
+                continue;
+            }
             let code = p.code;
             let data = encode_value(p, attr.value(), name)?;
             self.property(code, &data)?;
@@ -126,6 +129,7 @@ fn encode_value(p: &Property, value: &str, element: &str) -> Result<Vec<u8>> {
         return encode_number(p, value);
     }
     match p.kind {
+        "CDXBooleanImplied" if value == "yes" => Ok(Vec::new()),
         "CDXBoolean" | "CDXBooleanImplied" => match value {
             "yes" => Ok(vec![1]),
             "no" => Ok(vec![0]),

@@ -208,15 +208,48 @@ impl Layout {
         }
         let pages: Vec<_> = (0..self.count()).filter_map(|i| self.bounds(i)).collect();
         let padding = STYLE.world(4.);
+        let outside = |primitive: &crate::scene::Primitive| {
+            let (lo, hi) = crate::scene::bounds(std::slice::from_ref(primitive));
+            let lo = lo.offset(padding, padding);
+            let hi = hi.offset(-padding, -padding);
+            !pages
+                .iter()
+                .any(|(a, b)| lo.x >= a.x && hi.x <= b.x && lo.y >= a.y && hi.y <= b.y)
+        };
         crate::scene::primitives(doc)
             .iter()
             .filter(|primitive| {
-                let (lo, hi) = crate::scene::bounds(std::slice::from_ref(primitive));
-                let lo = lo.offset(padding, padding);
-                let hi = hi.offset(-padding, -padding);
-                !pages
+                let crate::scene::Primitive::Path {
+                    commands,
+                    style,
+                    filled,
+                } = primitive
+                else {
+                    return outside(primitive);
+                };
+                // Rendering batches disconnected bond polygons into one path. Each
+                // subpath must fit on a page; the batch can span several pages.
+                let mut start = 0;
+                commands
                     .iter()
-                    .any(|(a, b)| lo.x >= a.x && hi.x <= b.x && lo.y >= a.y && hi.y <= b.y)
+                    .enumerate()
+                    .skip(1)
+                    .filter_map(|(i, command)| {
+                        matches!(command, crate::graphics::PathCommand::Move(_)).then_some(i)
+                    })
+                    .chain(std::iter::once(commands.len()))
+                    .any(|end| {
+                        let Some(part_commands) = commands.get(start..end) else {
+                            return true;
+                        };
+                        let part = crate::scene::Primitive::Path {
+                            commands: part_commands.to_vec(),
+                            style: style.clone(),
+                            filled: *filled,
+                        };
+                        start = end;
+                        outside(&part)
+                    })
             })
             .count()
     }

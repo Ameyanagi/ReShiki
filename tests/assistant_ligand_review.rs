@@ -31,6 +31,43 @@ fn edit(target: &str, angles: [f32; 3], show_charge: bool) -> Edit {
 }
 
 #[test]
+fn review_accepts_tapered_projection_edges_and_preserves_the_chemical_graph() -> anyhow::Result<()>
+{
+    let mut source = Document::default();
+    let metal = source.add_atom("Fe", reshiki::document::Point::default());
+    let mut doc = reshiki::hotkeys::atom_edit(&source, metal, "j", 42.)
+        .context("Cp shortcut")?
+        .map_err(anyhow::Error::msg)?
+        .0;
+    assert!(
+        doc.bonds
+            .iter()
+            .any(|b| b.projection && b.display == "wedge")
+    );
+    let original = doc.clone();
+    for angles in [[17., -8., 12.], [-17., 8., -12.]] {
+        let target = review::targets(&doc)
+            .into_iter()
+            .find(|t| t.kind == "ligand")
+            .context("Cp review target")?;
+        doc = review::apply(&doc, &[edit(&target.name, angles, false)], true)
+            .map_err(anyhow::Error::msg)?;
+        assert_eq!(doc.atom(metal), original.atom(metal));
+        for (a, b) in doc.bonds.iter().zip(&original.bonds) {
+            assert_eq!(
+                (a.a, a.b, a.order, &a.stereo),
+                (b.a, b.b, b.order, &b.stereo)
+            );
+        }
+    }
+    assert_eq!(
+        reshiki::attachments::composition(&doc).map_err(anyhow::Error::msg)?,
+        reshiki::attachments::composition(&original).map_err(anyhow::Error::msg)?
+    );
+    Ok(())
+}
+
+#[test]
 fn defined_ligand_phase_and_depth_preserve_graph_and_leave_methyl_bonds_thin() -> anyhow::Result<()>
 {
     let mut s = sketch()?;
@@ -162,8 +199,9 @@ fn review_tilts_only_one_ligand_and_preserves_3d_lengths_contacts_and_chemistry(
     Ok(())
 }
 
-#[test]
-fn hiding_charge_labels_keeps_formula_and_native_data_and_can_be_reversed() -> anyhow::Result<()> {
+#[tokio::test]
+async fn hiding_charge_labels_keeps_formula_and_native_data_and_can_be_reversed()
+-> anyhow::Result<()> {
     let before = draft()?;
     let targets: Vec<_> = review::targets(&before)
         .into_iter()
@@ -191,10 +229,48 @@ fn hiding_charge_labels_keeps_formula_and_native_data_and_can_be_reversed() -> a
             .map_err(anyhow::Error::msg)?
             .is_empty()
     );
-    let error = reshiki::exchange::drawing::write(&hidden, Default::default())
-        .err()
-        .context("Expected explicit interchange limitation")?;
-    assert!(error.to_string().contains("hidden charge labels"));
+    let xml = reshiki::exchange::drawing::write(&hidden, Default::default())?;
+    let cdx = reshiki::exchange::to_cdx(&xml).map_err(anyhow::Error::msg)?;
+    let xml = reshiki::exchange::from_cdx(&cdx).map_err(anyhow::Error::msg)?;
+    let response = reshiki::engine::LocalEngine::default()
+        .request(reshiki::engine::Request::import("cdxml", &xml))
+        .await
+        .map_err(anyhow::Error::msg)?;
+    assert!(response.analysis.is_none());
+    assert!(
+        response
+            .warnings
+            .iter()
+            .any(|w| w.contains("Coordination assignments need review"))
+    );
+    let imported = response.document.context("Imported ligand drawing")?;
+    assert_eq!(
+        imported
+            .bonds
+            .iter()
+            .filter(|b| b.order == 1 && b.display == "hash")
+            .count(),
+        2
+    );
+    assert_eq!(
+        imported
+            .bonds
+            .iter()
+            .filter(|b| b.order == 1 && b.display == "wedge")
+            .count(),
+        2
+    );
+    assert_eq!(imported.atoms.iter().map(|a| a.charge).sum::<i32>(), -2);
+    assert_eq!(
+        imported
+            .atoms
+            .iter()
+            .filter(|a| a.charge == -1 && a.display.hide_charge)
+            .count(),
+        2
+    );
+    assert_eq!(imported.bonds.iter().filter(|b| b.order == 4).count(), 10);
+    assert!(!reshiki::scene::svg(&imported).contains('−'));
     let edits: Vec<_> = targets
         .iter()
         .map(|t| edit(&t.name, [0.; 3], true))
@@ -258,7 +334,15 @@ fn review_rejects_invalid_or_ambiguous_ligand_edits_without_partial_changes() ->
 
 #[test]
 fn front_contact_stays_continuous_without_changing_its_bond_style() -> anyhow::Result<()> {
-    let before = draft()?;
+    let mut source = sketch()?;
+    source
+        .ligands
+        .first_mut()
+        .context("Missing ligand")?
+        .contact_in_front = Some(false);
+    let before = source
+        .render(&Default::default())
+        .map_err(anyhow::Error::msg)?;
     let target = review::targets(&before)
         .into_iter()
         .find(|t| t.kind == "ligand")
@@ -300,7 +384,7 @@ fn front_contact_stays_continuous_without_changing_its_bond_style() -> anyhow::R
     s.ligands
         .first_mut()
         .context("Missing ligand")?
-        .contact_in_front = true;
+        .contact_in_front = Some(true);
     let generated = s.render(&Default::default()).map_err(anyhow::Error::msg)?;
     assert!(reshiki::crossings::gaps(&generated)[index].is_empty());
     Ok(())

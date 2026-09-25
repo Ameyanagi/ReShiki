@@ -17,6 +17,7 @@ mod cleanup;
 mod clipboard;
 mod context_menu;
 mod document_styles;
+mod figure_export;
 mod file_shortcuts;
 mod files;
 #[cfg(target_os = "macos")]
@@ -34,6 +35,7 @@ mod palettes;
 mod pictures;
 mod printing;
 mod reactions;
+mod shortcut_examples;
 mod shortcuts;
 mod template_library;
 mod tool_button;
@@ -110,6 +112,8 @@ pub enum Message {
     ToggleImport,
     InsertInput,
     ToggleHelp,
+    OpenShortcutExamples,
+    ShortcutExamplesOpened(Result<(), String>),
     Viewport(iced::Size),
     Canvas(Edit),
     Tool(Tool),
@@ -169,7 +173,7 @@ pub enum Message {
     ClipboardRead {
         epoch: u64,
         revision: u64,
-        result: Box<Result<Document, String>>,
+        result: Box<Result<reshiki::clipboard::PasteOutcome, String>>,
     },
     Paste,
     PastePicture,
@@ -205,6 +209,7 @@ pub enum Message {
     MacFiles(macos_files::Action),
     Saved(u64, Box<Document>, Result<Option<PathBuf>, String>),
     Exported(Result<Option<PathBuf>, String>),
+    FigureExported(Result<Option<figure_export::Saved>, String>),
     Close(iced::window::Id),
     Discard,
     Cancel,
@@ -300,9 +305,11 @@ pub struct App {
     revision: u64,
     busy: bool,
     clipboard_busy: bool,
+    figure_exporting: bool,
     status: String,
     error: bool,
     path: Option<PathBuf>,
+    untitled_name: Option<&'static str>,
     #[cfg(target_os = "macos")]
     native_opening: bool,
     #[cfg(windows)]
@@ -407,9 +414,11 @@ impl App {
             revision: 0,
             busy: false,
             clipboard_busy: false,
+            figure_exporting: false,
             status: "Ready · Choose a tool to start drawing".into(),
             error: false,
             path: None,
+            untitled_name: None,
             #[cfg(target_os = "macos")]
             native_opening: false,
             #[cfg(windows)]
@@ -462,6 +471,12 @@ impl App {
                 },
                 Message::Opened,
             )
+        } else if !cfg!(test) && std::env::args_os().any(|arg| arg == "--shortcut-examples") {
+            if let Err(error) = app.load_shortcut_examples() {
+                app.status = format!("Could not open shortcut examples: {error}");
+                app.error = true;
+            }
+            Task::none()
         } else {
             Task::none()
         };
@@ -471,13 +486,16 @@ impl App {
     pub fn title(&self) -> String {
         format!(
             "{}{} — ReShiki",
-            self.path
-                .as_ref()
-                .and_then(|p| p.file_name())
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_else(|| "Untitled".into()),
+            self.document_name(),
             if self.dirty() { " •" } else { "" }
         )
+    }
+    fn document_name(&self) -> String {
+        self.path
+            .as_ref()
+            .and_then(|p| p.file_name())
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| self.untitled_name.unwrap_or("Untitled").into())
     }
     pub fn theme(&self) -> Theme {
         Theme::custom(
@@ -576,8 +594,15 @@ impl App {
         }
         let engine = self.engine.clone();
         let revision = self.revision;
+        let aromatic_selection = matches!(kind, Job::AromaticDisplay);
         Task::perform(
-            async move { engine.execute(request).await },
+            async move {
+                if aromatic_selection {
+                    shortcuts::aromatic_selection(engine, request).await
+                } else {
+                    engine.execute(request).await
+                }
+            },
             move |result| Message::EngineDone {
                 revision,
                 kind: kind.clone(),
@@ -648,7 +673,7 @@ impl App {
         let viewport = self.guides.paper(iced::Rectangle::with_size(self.viewport));
         self.camera.zoom = ((viewport.width - 80.0).max(100.0) / (hi.x - lo.x).max(240.0))
             .min((viewport.height - 80.0).max(100.0) / (hi.y - lo.y).max(200.0))
-            .clamp(0.25, 2.5);
+            .clamp(0.005, 2.5);
         self.fit_to_view = true;
     }
     fn pending(&mut self, action: Pending) -> Task<Message> {
@@ -673,6 +698,7 @@ impl App {
                 self.changed(before);
                 self.saved = self.doc.clone();
                 self.path = None;
+                self.untitled_name = None;
                 self.selected.clear();
                 self.camera = Camera::default();
                 self.pages = pages::State::default();
@@ -896,6 +922,7 @@ impl App {
                     | Message::Cancel
                     | Message::Saved(..)
                     | Message::Exported(_)
+                    | Message::FigureExported(_)
                     | Message::Printing(
                         printing::Action::Prepared(..) | printing::Action::Finished(..)
                     )
@@ -1393,6 +1420,15 @@ impl App {
                     self.palette = None;
                 }
             }
+            Message::OpenShortcutExamples => return shortcut_examples::open(),
+            Message::ShortcutExamplesOpened(result) => {
+                self.help_open = false;
+                self.error = result.is_err();
+                self.status = match result {
+                    Ok(()) => "Shortcut examples opened in a separate window".into(),
+                    Err(error) => format!("Could not open shortcut examples: {error}"),
+                };
+            }
             Message::Viewport(size) => {
                 self.viewport = size;
                 if let Some(index) = self.pages.fit {
@@ -1670,6 +1706,7 @@ impl App {
                         .map(|b| b.z_order)
                         .min()
                         .unwrap_or(0)
+                        .min(-1)
                         .saturating_sub(1)
                 };
                 for bond in &mut self.doc.bonds {
@@ -1744,6 +1781,7 @@ impl App {
                     self.sync_drawing_defaults();
                     self.styles.editor = None;
                     self.path = None;
+                    self.untitled_name = None;
                     self.saved = Document::default();
                     self.file_epoch = self.file_epoch.wrapping_add(1);
                     self.changed(before);
@@ -1968,6 +2006,7 @@ impl App {
                             }
                             if matches!(kind, Job::ImportFile) {
                                 self.path = None;
+                                self.untitled_name = None;
                                 self.saved = Document::default();
                                 self.file_epoch = self.file_epoch.wrapping_add(1);
                             }
@@ -2130,6 +2169,7 @@ impl App {
                                         self.styles.editor = None;
                                         self.saved = self.doc.clone();
                                         self.path = Some(path);
+                                        self.untitled_name = None;
                                         self.history = History::default();
                                         self.revision = self.revision.wrapping_add(1);
                                         self.analysis = None;
@@ -2182,6 +2222,15 @@ impl App {
                     }
                 };
                 let snapshot = self.doc.clone();
+                let suggested_name = if self.path.is_some() {
+                    self.document_name()
+                } else {
+                    format!(
+                        "{}.{}",
+                        self.document_name(),
+                        reshiki::compatibility::NATIVE_EXTENSION
+                    )
+                };
                 let epoch = self.file_epoch;
                 return Task::perform(
                     async move {
@@ -2189,12 +2238,8 @@ impl App {
                             p
                         } else {
                             let extension = reshiki::compatibility::NATIVE_EXTENSION;
-                            let Some(path) = files::save_path(
-                                "Save drawing",
-                                &format!("Untitled.{extension}"),
-                                extension,
-                            )
-                            .await
+                            let Some(path) =
+                                files::save_path("Save drawing", &suggested_name, extension).await
                             else {
                                 return Ok(None);
                             };
@@ -2228,6 +2273,7 @@ impl App {
                     }
                     self.saved = *snapshot;
                     self.path = Some(path);
+                    self.untitled_name = None;
                     self.status = if self.office_document() {
                         "Drawing updated in Office. Save the Office document to keep it."
                     } else {
@@ -2252,25 +2298,13 @@ impl App {
             },
             Message::Export(format) => {
                 if ["svg", "pdf", "png"].contains(&format) {
-                    let doc = self.doc.clone();
-                    let engine = self.engine.clone();
-                    return Task::perform(
-                        async move {
-                            let doc = reshiki::export::checked_document(&engine, doc).await?;
-                            let bytes = tokio::task::spawn_blocking(move || {
-                                reshiki::export::drawing(&doc, format)
-                            })
-                            .await
-                            .map_err(|e| e.to_string())??;
-                            save_export(bytes, format).await
-                        },
-                        Message::Exported,
-                    );
+                    return self.export_figure(format, false);
                 }
                 let mut request = Request::molecule("export", self.doc.clone());
                 request.format = Some(format.into());
                 return self.run(request, Job::Export(format));
             }
+            Message::FigureExported(result) => self.figure_exported(result),
             Message::Exported(result) => match result {
                 Ok(Some(path)) => {
                     self.status = format!(
@@ -2556,6 +2590,16 @@ impl App {
                     }
                 }
             }
+            Edit::DelocalizedRing(anchor, direction, size) => {
+                self.selected = editing::ring_oriented(
+                    &mut self.doc,
+                    anchor,
+                    size,
+                    true,
+                    10. / self.camera.zoom,
+                    direction,
+                );
+            }
             Edit::Ring(anchor, direction) => {
                 self.selected = editing::ring_oriented(
                     &mut self.doc,
@@ -2600,6 +2644,33 @@ impl App {
                     at.y + (self.camera.center.y - at.y) * ratio,
                 );
             }
+            Edit::PlaneBond(start, end) => {
+                let preset = self
+                    .tool
+                    .bond_preset()
+                    .unwrap_or(reshiki::bonds::BondPreset::Single);
+                if preset == reshiki::bonds::BondPreset::Dotted {
+                    self.status = "Drag from a bonded explicit H to an existing acceptor".into();
+                    self.error = true;
+                    return;
+                }
+                let element = if self.tool == Tool::Atom {
+                    self.element.as_str()
+                } else {
+                    "C"
+                };
+                match reshiki::projection::growth::place(&self.doc, start, end, element, preset) {
+                    Ok((doc, id)) => {
+                        self.doc = doc;
+                        self.selected = vec![id];
+                    }
+                    Err(error) => {
+                        self.status = error;
+                        self.error = true;
+                        return;
+                    }
+                }
+            }
             Edit::Bond(start, end, a, b) => {
                 if self.tool.bond_preset() == Some(reshiki::bonds::BondPreset::Dotted)
                     && !a
@@ -2611,7 +2682,24 @@ impl App {
                     self.error = true;
                     return;
                 }
-                if self.tool == Tool::Arrow {
+                if self.tool == Tool::Atom {
+                    let result = a
+                        .ok_or_else(|| "Start the drag on an existing atom".to_string())
+                        .and_then(|id| {
+                            editing::add_bonded_atom(&self.doc, id, end, b, &self.element)
+                        });
+                    match result {
+                        Ok((doc, id)) => {
+                            self.doc = doc;
+                            self.selected = vec![id];
+                        }
+                        Err(error) => {
+                            self.status = error;
+                            self.error = true;
+                            return;
+                        }
+                    }
+                } else if self.tool == Tool::Arrow {
                     self.place_arrow(start, end);
                 } else {
                     let a = a.unwrap_or_else(|| self.doc.add_atom("C", start));
@@ -2748,15 +2836,38 @@ impl App {
                                 self.error = true;
                                 return;
                             };
-                            let end = editing::bond_extension(&self.doc, start, Some(a), order);
-                            let ratio = self.bond_drawing.length
-                                / reshiki::style::DEFAULT.bond_length_world;
-                            let end =
-                                start.offset((end.x - start.x) * ratio, (end.y - start.y) * ratio);
-                            let b = self.doc.add_atom("C", end);
-                            self.doc.add_bond(a, b, order, display);
-                            self.apply_current_bond_preset(a, b);
-                            self.selected = vec![b];
+                            if let Some(endpoint) =
+                                reshiki::projection::growth::Plane::at(&self.doc, a)
+                                    .and_then(|plane| plane.outward(self.bond_drawing.length))
+                            {
+                                let preset = self
+                                    .tool
+                                    .bond_preset()
+                                    .unwrap_or(reshiki::bonds::BondPreset::Single);
+                                match reshiki::projection::growth::place(
+                                    &self.doc, a, endpoint, "C", preset,
+                                ) {
+                                    Ok((doc, id)) => {
+                                        self.doc = doc;
+                                        self.selected = vec![id];
+                                    }
+                                    Err(error) => {
+                                        self.status = error;
+                                        self.error = true;
+                                        return;
+                                    }
+                                }
+                            } else {
+                                let end = editing::bond_extension(&self.doc, start, Some(a), order);
+                                let ratio = self.bond_drawing.length
+                                    / reshiki::style::DEFAULT.bond_length_world;
+                                let end = start
+                                    .offset((end.x - start.x) * ratio, (end.y - start.y) * ratio);
+                                let b = self.doc.add_atom("C", end);
+                                self.doc.add_bond(a, b, order, display);
+                                self.apply_current_bond_preset(a, b);
+                                self.selected = vec![b];
+                            }
                         }
                     }
                     Tool::Ring => {
@@ -2986,6 +3097,32 @@ fn platform_shortcut(macos: &'static str, other: &'static str) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn atom_drag_and_click_are_separate_undoable_actions() -> Result<(), String> {
+        let (mut app, _) = App::new();
+        let source = app.doc.add_atom("C", Point::default());
+        let initial = app.doc.clone();
+        app.tool = Tool::Atom;
+        app.element = "O".into();
+        app.edit(Edit::Bond(
+            Point::default(),
+            Point::new(42., 0.),
+            Some(source),
+            None,
+        ));
+        assert_eq!(app.doc.atoms.len(), 2);
+        assert_eq!(app.doc.atom(source).ok_or("Source")?.element, "C");
+        assert_eq!(app.doc.atoms.last().ok_or("Oxygen")?.element, "O");
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, initial);
+        app.edit(Edit::Click(Point::default()));
+        assert_eq!(app.doc.atoms.len(), 1);
+        assert_eq!(app.doc.atom(source).ok_or("Replacement")?.element, "O");
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, initial);
+        Ok(())
+    }
+
     use super::*;
 
     #[test]
@@ -4523,6 +4660,33 @@ mod tests {
             .unwrap();
         assert_eq!(analysis.smiles, "CCCCCCC");
         assert_eq!(analysis.formula, "C7H16");
+    }
+
+    #[test]
+    fn aromatic_plane_bond_matches_preview_and_undo_restores_xyz() -> Result<(), String> {
+        use reshiki::projection::growth::{self, Plane};
+        let (mut app, _) = App::new();
+        app.doc = reshiki::rings::Preset::Benzene.document(42., false);
+        let ids = app.doc.all_ids();
+        reshiki::projection::tilt(&mut app.doc, &ids, 55., false);
+        let id = app.doc.atoms.get(1).ok_or("Carbon")?.id;
+        let end = Plane::at(&app.doc, id)
+            .ok_or("Plane")?
+            .outward(42.)
+            .ok_or("Endpoint")?;
+        let before = app.doc.clone();
+        app.tool = Tool::Atom;
+        app.element = "O".into();
+        let (preview, added) =
+            growth::place(&before, id, end, "O", reshiki::bonds::BondPreset::Single)?;
+        app.edit(Edit::PlaneBond(id, end));
+        assert_eq!(app.doc, preview);
+        assert_eq!(app.selected, vec![added]);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, before);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc, preview);
+        Ok(())
     }
 
     #[test]

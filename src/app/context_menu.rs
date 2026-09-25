@@ -391,6 +391,17 @@ impl App {
                 if tilt {
                     entries.push(submenu("3D tilt…", Page::Tilt));
                 }
+                if self.doc.atoms.iter().any(|a| {
+                    self.selected.contains(&a.id)
+                        && a.attachment.is_some()
+                        && self.doc.abbreviation(a.id).is_none()
+                }) {
+                    entries.push(command(
+                        "Move attachment point only",
+                        Message::Tool(Tool::EditPoints),
+                        true,
+                    ));
+                }
                 entries.push(submenu("Arrange & transform…", Page::Align));
                 if bonds {
                     entries.push(submenu("Bond appearance…", Page::Bonds));

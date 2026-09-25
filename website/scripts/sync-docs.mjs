@@ -9,6 +9,11 @@ const destination = path.join(content, "developer");
 const publishedImages = path.join(root, "website/public/doc-images");
 await rm(publishedImages, { recursive: true, force: true });
 await cp(path.join(source, "images"), publishedImages, { recursive: true });
+await mkdir(path.join(root, "website/public/examples"), { recursive: true });
+await cp(
+  path.join(root, "assets/examples/shortcut-examples.rsk"),
+  path.join(root, "website/public/examples/shortcut-examples.rsk"),
+);
 const guides = {
   install: ["getting-started"],
   "first-molecule": ["bond-tools", "chain-tools", "tool-palettes"],
@@ -67,12 +72,21 @@ for (const name of (await readdir(source)).filter((name) => name.endsWith(".md")
       return `](/developer/${path.basename(file, ".md")}/${fragment}${suffix})`;
     }
     const relative = path.relative(root, resolved).split(path.sep).join("/");
+    if (relative === "assets/examples/shortcut-examples.rsk") {
+      return `](/examples/shortcut-examples.rsk${suffix})`;
+    }
     if (relative.startsWith("docs/images/")) {
       return `](/doc-images/${relative.slice("docs/images/".length)}${fragment}${suffix})`;
     }
     return `](https://github.com/Ameyanagi/ReShiki/blob/main/${relative}${fragment}${suffix})`;
   });
   const topic = path.basename(name, ".md");
+  if (topic === "contextual-shortcuts") {
+    await writeFile(
+      path.join(content, "guide/shortcuts.md"),
+      `---\ntitle: Shortcuts and examples\ndescription: A complete keyboard reference and one editable ReShiki document of examples.\neditUrl: https://github.com/Ameyanagi/ReShiki/edit/main/docs/contextual-shortcuts.md\n---\n${body}`,
+    );
+  }
   const pagination = topic === "development" ? "prev: false\n" : "";
   const guide = guideForTopic.get(topic);
   // Keep archived implementation checks from outranking the visual manual.

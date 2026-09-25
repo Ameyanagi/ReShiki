@@ -303,19 +303,7 @@ impl App {
                 }
             }
             Action::Export => {
-                let doc = self.doc.clone();
-                let engine = self.engine.clone();
-                return Task::perform(
-                    async move {
-                        let doc = reshiki::export::checked_document(&engine, doc).await?;
-                        let bytes =
-                            tokio::task::spawn_blocking(move || reshiki::export::pages_pdf(&doc))
-                                .await
-                                .map_err(|e| e.to_string())??;
-                        super::save_export(bytes, "pdf").await
-                    },
-                    Message::Exported,
-                );
+                return self.export_figure("pdf", true);
             }
         }
         Task::none()
@@ -382,7 +370,9 @@ impl App {
                 .push(
                     command("Export pages as PDF…")
                         .style(button::primary)
-                        .on_press(Message::Pages(Action::Export))
+                        .on_press_maybe(
+                            (!self.figure_exporting).then_some(Message::Pages(Action::Export)),
+                        )
                         .width(Length::Fill),
                 );
             if reshiki::printing::available() {
@@ -537,7 +527,9 @@ impl App {
                 .push(
                     command("Export pages as PDF…")
                         .style(button::primary)
-                        .on_press(Message::Pages(Action::Export))
+                        .on_press_maybe(
+                            (!self.figure_exporting).then_some(Message::Pages(Action::Export)),
+                        )
                         .width(Length::Fill),
                 );
             if reshiki::printing::available() {

@@ -35,6 +35,18 @@ impl App {
                 ("j / Shift J", "Benzene / Cyclopentadiene"),
                 ("F1", "Keyboard shortcuts"),
                 ("Option / Alt drag", "Draw or move bonded atoms freely"),
+                (
+                    "Cmd / Ctrl-click with a ring tool",
+                    "Place the delocalized circle form",
+                ),
+                (
+                    "a with an aromatic ring selected",
+                    "Toggle circle / alternating bonds",
+                ),
+                (
+                    "Atoms: drag from an existing atom",
+                    "Add the chosen element with a single bond",
+                ),
                 ("Esc", "Return to selection"),
             ],
         );
@@ -66,7 +78,7 @@ impl App {
             shortcut("b / C / B / i / L / S", "Atom: Br / Cl / B / I / Li / Si"),
             shortcut("m / e / y / P", "Atom: Me / Et / Boc / Ph"),
             shortcut("M / Z", "Atom: MgBr / N₃ (complete chemical groups)"),
-            shortcut("j / J on an atom", "Cp / arene pi ligand; repeat at a metal for another ligand"),
+            shortcut("j / J on an atom", "Tilted Cp / arene ligand; repeat at a metal to add another"),
             shortcut("A / E / F / H / N / O / Q", "Ac / CO₂Me / CF₃ / Cbz / NO₂ / OMe / Fmoc"),
             shortcut("d / + / −", "Atom: deuterium / increase / decrease charge"),
             shortcut("r / x", "Atom: variable R / X"),
@@ -116,9 +128,25 @@ impl App {
                 ("Arrows / Shift arrows", "Nudge 1 / 10 units"),
                 ("Drag side handle", "Change width or height"),
                 ("Drag corner handle", "Resize proportionally"),
+                (
+                    "Scroll / side-scroll",
+                    "Pan the canvas vertically / horizontally",
+                ),
+                (
+                    platform_shortcut("⌘ / Ctrl + scroll", "Ctrl + scroll"),
+                    "Zoom at the pointer",
+                ),
             ],
         );
-        let body = column![drawing, context, editing, files]
+        let examples = column![
+            button(text("Open shortcut examples ↗").size(14))
+                .padding([10, 16])
+                .on_press(Message::OpenShortcutExamples)
+                .style(control(true)),
+            text("One editable ReShiki file with labeled examples. Opens in a separate window; double-click a structure to select it, then copy and paste into your drawing.")
+                .size(12).color(muted()),
+        ].spacing(8);
+        let body = column![examples, drawing, context, editing, files]
             .spacing(24)
             .width(Length::Fill)
             .padding([0, 12]);
@@ -126,7 +154,7 @@ impl App {
             column![
                 row![
                     column![
-                        text("Keyboard shortcuts").size(22),
+                        text("Help & shortcuts").size(22),
                         text("Quick reference for drawing and editing")
                             .size(12)
                             .color(muted())

@@ -44,6 +44,10 @@ for code, enum in {
     name, kind, _ = PROPERTIES[code]
     PROPERTIES[code] = name, kind, enum
 PROPERTIES[0x13] = ("SupersededBy", "CDXObjectID", {})
+# The published overview duplicates 0xA38. Native closed-curve CDX uses
+# 0xA39 with an empty payload; 0xA38 is the numeric CurveSpacing property.
+PROPERTIES[0xA38] = ("CurveSpacing", "UINT16", {})
+PROPERTIES[0xA39] = ("Closed", "CDXBooleanImplied", {})
 BY_NAME = {v[0]: (k, v[1], v[2]) for k, v in PROPERTIES.items()}
 INTS = {
     "INT8": "b",
@@ -269,6 +273,10 @@ def to_cdx(xml):
             code, kind, enum = BY_NAME[name]
             if kind in INTS:
                 data = numeric(name, kind, enum, value)
+            elif kind == "CDXBooleanImplied" and value == "no":
+                continue
+            elif kind == "CDXBooleanImplied" and value == "yes":
+                data = b""
             elif kind in ("CDXBoolean", "CDXBooleanImplied"):
                 if value not in ("yes", "no"):
                     raise ValueError("Invalid drawing boolean")

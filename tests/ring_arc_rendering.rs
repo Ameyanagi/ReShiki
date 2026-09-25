@@ -22,6 +22,23 @@ fn curves(doc: &Document) -> usize {
         .count()
 }
 
+fn joined_edges(doc: &Document) -> usize {
+    scene::primitives(doc)
+        .iter()
+        .map(|p| match p {
+            Primitive::Path {
+                commands,
+                filled: true,
+                ..
+            } => commands
+                .iter()
+                .filter(|c| matches!(c, PathCommand::Close))
+                .count(),
+            _ => 0,
+        })
+        .sum()
+}
+
 #[test]
 fn partial_aromatic_curve_does_not_add_dashes_on_remaining_ring_edges() -> anyhow::Result<()> {
     for size in [5, 6, 7, 8] {
@@ -125,7 +142,7 @@ fn partial_curve_preserves_unselected_double_bonds_and_figure_exports() -> anyho
     reshiki::ring_arcs::toggle(&mut doc, &ids[..3]).map_err(anyhow::Error::msg)?;
     assert_eq!(curves(&doc), 1);
     assert_eq!(
-        lines(&doc),
+        lines(&doc) + joined_edges(&doc),
         8,
         "Six outer edges and two unselected double-bond strokes"
     );
@@ -143,6 +160,6 @@ fn partial_curve_preserves_unselected_double_bonds_and_figure_exports() -> anyho
     );
     reshiki::ring_arcs::toggle(&mut doc, &ids[..3]).map_err(anyhow::Error::msg)?;
     assert_eq!(doc.bonds, bonds);
-    assert_eq!(lines(&doc), 9);
+    assert_eq!(lines(&doc) + joined_edges(&doc), 9);
     Ok(())
 }

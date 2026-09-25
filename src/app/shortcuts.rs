@@ -144,7 +144,12 @@ impl App {
             Action::Crosshair => return self.update(Message::Crosshair(!self.guides.crosshair)),
             Action::Nudge(x, y) => {
                 let before = self.doc.clone();
-                self.doc.translate(&self.selected, x, y);
+                let ids = if self.tool == Tool::EditPoints {
+                    self.selected.clone()
+                } else {
+                    reshiki::attachments::movement_selection(&self.doc, &self.selected)
+                };
+                self.doc.translate(&ids, x, y);
                 self.changed(before);
             }
             Action::Join => {
@@ -319,6 +324,20 @@ impl App {
                 None
             }
         });
+        // A selected ring gives `a` a display action; atom/bond attachment keys keep priority.
+        if key == "a"
+            && hovered_atom.is_none_or(|id| self.selected.contains(&id))
+            && hovered_bond
+                .is_none_or(|(a, b)| self.selected.contains(&a) && self.selected.contains(&b))
+            && reshiki::rings::selected_cycle(&self.doc, &self.selected).is_some()
+            && self.doc.bonds.iter().any(|b| {
+                self.selected.contains(&b.a)
+                    && self.selected.contains(&b.b)
+                    && matches!(b.order, 2 | 4)
+            })
+        {
+            return self.update(Message::AromaticDisplay);
+        }
         if key == "g" {
             if let Some(id) = atom {
                 self.selected = vec![id];
@@ -435,7 +454,7 @@ impl App {
             "j" => {
                 self.ring_size = 6;
                 self.aromatic_ring = true;
-                Some(Tool::Ring)
+                Some(Tool::RingPreset(reshiki::rings::Preset::Benzene))
             }
             "J" => Some(Tool::RingPreset(reshiki::rings::Preset::Cyclopentadiene)),
             "a" | "e" => Some(Tool::Arrow),
@@ -459,8 +478,111 @@ impl App {
     }
 }
 
+// An independent diagram elsewhere on the page must not block a selected ring's display edit.
+// Keep validation for the complete selected molecule, and preserve the rest of the document.
+pub(super) async fn aromatic_selection(
+    engine: reshiki::engine::LocalEngine,
+    mut request: reshiki::engine::Request,
+) -> Result<reshiki::engine::Response, String> {
+    use reshiki::engine::ChemistryEngine;
+    let Some(mut original) = request.document.clone() else {
+        return engine.execute(request).await;
+    };
+    original.validate()?;
+    let selected = request.selected_ids.as_deref().unwrap_or_default();
+    let atoms: Vec<_> = original.atoms.iter().map(|a| a.id).collect();
+    let scope: Vec<_> = reshiki::editing::groups(&original, &atoms)
+        .into_iter()
+        .filter(|g| g.iter().any(|id| selected.contains(id)))
+        .flatten()
+        .collect();
+    if scope.is_empty() || scope.len() == atoms.len() {
+        return engine.execute(request).await;
+    }
+    request.document = Some(reshiki::editing::selection(&original, &scope));
+    let mut response = engine.execute(request).await?;
+    let edited = response
+        .document
+        .take()
+        .ok_or("The ring edit returned no drawing")?;
+    for atom in &mut original.atoms {
+        if let Some(new) = edited.atom(atom.id) {
+            *atom = new.clone();
+        }
+    }
+    for bond in &mut original.bonds {
+        if let Some(new) = edited
+            .bonds
+            .iter()
+            .find(|b| (b.a == bond.a && b.b == bond.b) || (b.a == bond.b && b.b == bond.a))
+        {
+            *bond = new.clone();
+        }
+    }
+    original.validate()?;
+    response.document = Some(original);
+    response.analysis = None; // A fragment's formula is not the whole drawing's formula.
+    Ok(response)
+}
+
 #[cfg(test)]
 mod tests {
+    #[tokio::test]
+    async fn ring_display_in_the_gallery_preserves_unrelated_ligands_and_captions()
+    -> anyhow::Result<()> {
+        let doc: reshiki::document::Document =
+            serde_json::from_str(include_str!("../../assets/examples/shortcut-examples.rsk"))?;
+        let benzene = reshiki::editing::groups(&doc, &doc.all_ids())
+            .into_iter()
+            .find(|ids| {
+                let part = reshiki::editing::selection(&doc, ids);
+                part.atoms.len() == 6
+                    && part.bonds.len() == 6
+                    && part.bonds.iter().filter(|b| b.order == 2).count() == 3
+            })
+            .ok_or_else(|| anyhow::anyhow!("Missing benzene sample"))?;
+        let mut request = reshiki::engine::Request::molecule("aromatic", doc.clone());
+        request.selected_ids = Some(benzene.clone());
+        let result = aromatic_selection(reshiki::engine::LocalEngine::default(), request)
+            .await
+            .map_err(anyhow::Error::msg)?;
+        assert!(result.analysis.is_none());
+        let changed = result
+            .document
+            .ok_or_else(|| anyhow::anyhow!("Missing drawing"))?;
+        assert_eq!(changed.annotations, doc.annotations);
+        assert_eq!(changed.page_layout, doc.page_layout);
+        assert_eq!(changed.abbreviations, doc.abbreviations);
+        for atom in doc.atoms.iter().filter(|a| !benzene.contains(&a.id)) {
+            assert_eq!(changed.atom(atom.id), Some(atom));
+        }
+        assert!(
+            changed
+                .bonds
+                .iter()
+                .filter(|b| benzene.contains(&b.a) && benzene.contains(&b.b))
+                .all(|b| b.order == 4)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn a_toggles_a_selected_ring_even_with_the_pointer_on_its_atom() -> Result<(), String> {
+        let (mut app, _) = App::new();
+        app.doc = reshiki::rings::Preset::Benzene.document(42., false);
+        app.selected = app.doc.all_ids();
+        let p = app.doc.atoms.first().ok_or("Ring atom")?.position;
+        app.edit(Edit::Hover(Some(p)));
+        let before = app.doc.clone();
+        let _ = app.context_key("a");
+        assert!(
+            app.busy,
+            "Must start display conversion, not attach another phenyl"
+        );
+        assert_eq!(app.doc, before);
+        Ok(())
+    }
+
     use super::*;
     use crate::canvas::Edit;
     use reshiki::atom_labels::Carbons;

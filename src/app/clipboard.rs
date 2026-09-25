@@ -1,6 +1,6 @@
 use super::{App, Message, Point, Tool, editing};
 use iced::Task;
-use reshiki::{clipboard::CopyOutcome, document::Document};
+use reshiki::clipboard::{CopyOutcome, PasteOutcome};
 
 impl App {
     pub(super) fn copy_native(&mut self, cut: bool, image_only: bool) -> Task<Message> {
@@ -43,7 +43,7 @@ impl App {
         self.status = "Reading clipboard…".into();
         let (epoch, revision) = (self.file_epoch, self.revision);
         Task::perform(
-            reshiki::clipboard::paste(self.engine.clone(), image_only),
+            reshiki::clipboard::paste_with_warnings(self.engine.clone(), image_only),
             move |result| Message::ClipboardRead {
                 epoch,
                 revision,
@@ -89,25 +89,30 @@ impl App {
             }
         } else if outcome.image_only {
             "Image copied"
+        } else if cfg!(windows) && outcome.external_editable {
+            "Copied editable drawing · use Copy Image for a picture"
         } else if cfg!(windows) {
-            "Editable drawing copied · use Copy Image for a picture"
+            "Copied · editable in ReShiki; use Copy Image for other apps"
         } else if outcome.external_editable {
             "Editable drawing and images copied"
         } else {
-            "ReShiki drawing and images copied"
+            "Copied · editable in ReShiki; picture in other apps"
         };
-        self.status = std::iter::once(action.to_owned())
-            .chain(outcome.notices.iter().cloned())
-            .collect::<Vec<_>>()
-            .join(" · ");
-        self.error = !outcome.notices.is_empty();
+        self.status = if outcome.notices.is_empty() {
+            action.to_owned()
+        } else {
+            format!("{action} · Review details\n{}", outcome.notices.join("\n"))
+        };
+        // A successfully written clipboard may have format limitations. Keep
+        // their details available without presenting a successful copy as failure.
+        self.error = false;
     }
 
     pub(super) fn clipboard_read(
         &mut self,
         epoch: u64,
         revision: u64,
-        result: Result<Document, String>,
+        result: Result<PasteOutcome, String>,
     ) {
         self.clipboard_busy = false;
         if epoch != self.file_epoch
@@ -120,9 +125,9 @@ impl App {
                 "Drawing changed while reading the clipboard · Paste again to insert here".into();
             return;
         }
-        let part = match result.and_then(|doc| {
-            doc.validate()?;
-            Ok(doc)
+        let outcome = match result.and_then(|outcome| {
+            outcome.document.validate()?;
+            Ok(outcome)
         }) {
             Ok(doc) => doc,
             Err(error) => {
@@ -131,6 +136,7 @@ impl App {
                 return;
             }
         };
+        let part = outcome.document;
         let center = editing::center(&part, &part.all_ids());
         let before = self.doc.clone();
         let selected = editing::append(
@@ -166,12 +172,17 @@ impl App {
         } else {
             self.status = "Editable drawing pasted".into();
         }
+        if !outcome.warnings.is_empty() {
+            self.status.push_str(" · ");
+            self.status.push_str(&outcome.warnings.join(" · "));
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use reshiki::document::Document;
 
     fn success() -> Result<CopyOutcome, String> {
         Ok(CopyOutcome {
@@ -179,6 +190,29 @@ mod tests {
             image_only: false,
             notices: vec![],
         })
+    }
+
+    #[test]
+    fn successful_picture_fallback_has_a_concise_status_and_retains_details() {
+        let (mut app, _) = App::new();
+        app.clipboard_written(
+            app.file_epoch,
+            app.revision,
+            vec![],
+            Ok(CopyOutcome {
+                external_editable: false,
+                image_only: false,
+                notices: vec!["Unsupported projected wedge style".into()],
+            }),
+        );
+        assert!(!app.error);
+        assert!(
+            app.status
+                .lines()
+                .next()
+                .is_some_and(|s| s.len() < 110 && s.contains("Copied"))
+        );
+        assert!(app.status.contains("Unsupported projected wedge style"));
     }
 
     #[test]
@@ -215,10 +249,10 @@ mod tests {
         app.clipboard_read(
             app.file_epoch,
             app.revision.wrapping_add(1),
-            Ok(part.clone()),
+            Ok(part.clone().into()),
         );
         assert_eq!(app.doc, before);
-        app.clipboard_read(app.file_epoch, app.revision, Ok(part));
+        app.clipboard_read(app.file_epoch, app.revision, Ok(part.into()));
         assert_eq!(app.doc.atoms.len(), before.atoms.len() + 2);
         assert_eq!(app.selected.len(), 2);
         let _ = app.update(Message::Undo);

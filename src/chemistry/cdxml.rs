@@ -31,7 +31,9 @@ mod read_abbreviations;
 mod scene;
 mod stereo;
 mod tree;
+mod variables;
 mod xml_guard;
+pub(crate) use variables::drawing_variables;
 
 pub use abbreviations::{Abbreviation, Flattened, flatten_abbreviations};
 pub use arrows::{ArrowError, ArrowReader, NativeArrow, NativeArrowStyle};
@@ -43,6 +45,7 @@ pub use labels::{
 };
 pub use marks::{AtomMarks, Marks, NativeMark, read_marks};
 pub use normalize::chemistry_xml;
+pub(crate) use preparation::prepare_drawing;
 pub use preparation::{
     PreparationCause, PreparationError, PreparationStage, PreparedCdxml, prepare_cdxml,
 };

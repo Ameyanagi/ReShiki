@@ -147,6 +147,24 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
         }
         let expected = case.expected.and_then(|v| wire_response(v).ok());
         let error = match (actual, expected) {
+            (Ok(Outcome::Complete(a)), None) if format == "cdxml" => {
+                // Drawing interchange now retains unresolved chemical input.
+                // Strict molecular preparation must still reject the same
+                // assignment, and no properties may be presented as validated.
+                let strict = reshiki::chemistry::cdxml::prepare_cdxml(&case.text)
+                    .err()
+                    .context("Unexpected relaxation of drawing validation")?;
+                anyhow::ensure!(matches!(
+                    strict.cause,
+                    reshiki::chemistry::cdxml::PreparationCause::Sanitization(_)
+                ));
+                anyhow::ensure!(a.analysis.is_none() && !a.warnings.is_empty());
+                let doc = a.document.context("Missing retained drawing")?;
+                doc.validate().map_err(anyhow::Error::msg)?;
+                anyhow::ensure!(reshiki::chemistry::document::prepare(&doc).is_err());
+                accepted += 1;
+                None
+            }
             (Ok(Outcome::Complete(a)), Some(b)) => {
                 accepted += 1;
                 compare(*a, b).err().map(|e| e.to_string())

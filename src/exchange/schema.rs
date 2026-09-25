@@ -1413,8 +1413,8 @@ pub(super) const PROPERTIES: &[Property] = &[
     },
     Property {
         code: 0x0a38,
-        name: "Closed",
-        kind: "CDXBoolean",
+        name: "CurveSpacing",
+        kind: "UINT16",
         variants: &[],
     },
     Property {
@@ -1930,6 +1930,12 @@ pub(super) const PROPERTIES: &[Property] = &[
         code: 0x0013,
         name: "SupersededBy",
         kind: "CDXObjectID",
+        variants: &[],
+    },
+    Property {
+        code: 0x0a39,
+        name: "Closed",
+        kind: "CDXBooleanImplied",
         variants: &[],
     },
 ];

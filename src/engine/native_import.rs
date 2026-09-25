@@ -85,6 +85,7 @@ struct Prepared {
 }
 enum Preparation {
     Complete(Box<Prepared>),
+    Drawing(Box<Document>, String),
     Inchi(String),
     Deferred(Deferred),
 }
@@ -102,6 +103,15 @@ pub async fn execute(
     let prepared = tokio::task::spawn_blocking(move || prepare((*request).clone())).await??;
     let prepared = match prepared {
         Preparation::Complete(prepared) => prepared,
+        Preparation::Drawing(document, warning) => {
+            return Ok(Outcome::Complete(Box::new(Response {
+                document: Some(*document),
+                analysis: None,
+                output: None,
+                engine_version: chemistry::RDKIT_VERSION.into(),
+                warnings: vec![warning],
+            })));
+        }
         Preparation::Inchi(text) => {
             let reader = match config.clone() {
                 Some(config) => config,
@@ -184,7 +194,40 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             } else {
                 text
             };
-            let mut scene = cdxml::assemble_cdxml(&cdxml::prepare_cdxml(&xml)?)?;
+            let (xml, variables) =
+                cdxml::drawing_variables(&xml).map_err(|e| Error::Binary(e.to_string()))?;
+            if !variables.0.is_empty() {
+                let prepared = cdxml::prepare_drawing(&xml)?;
+                let mut document = cdxml::assemble_cdxml(&prepared)?.into_unchecked_drawing()?;
+                variables
+                    .restore(&prepared, &mut document)
+                    .map_err(|e| Error::Binary(e.to_string()))?;
+                return Ok(Preparation::Drawing(Box::new(document),
+                    "Drawing imported with R/X labels as uninterpreted atom text; query semantics and molecular properties are unavailable".into()));
+            }
+            let prepared = match cdxml::prepare_cdxml(&xml) {
+                Ok(prepared) => prepared,
+                Err(error) if matches!(error.cause, cdxml::PreparationCause::Sanitization(_)) => {
+                    let scene = cdxml::assemble_cdxml(&cdxml::prepare_drawing(&xml)?)?;
+                    let document = scene.into_unchecked_drawing()?;
+                    return Ok(Preparation::Drawing(
+                        Box::new(document),
+                        format!(
+                            "Drawing imported; chemical assignments need review: {}",
+                            error.cause
+                        ),
+                    ));
+                }
+                Err(error) => return Err(error.into()),
+            };
+            if styled_coordination_changed(&prepared) {
+                let scene = cdxml::assemble_cdxml(&cdxml::prepare_drawing(&xml)?)?;
+                return Ok(Preparation::Drawing(
+                    Box::new(scene.into_unchecked_drawing()?),
+                    "Drawing imported; styled metal contacts retained as drawn. Coordination assignments need review; molecular properties are unavailable".into(),
+                ));
+            }
+            let mut scene = cdxml::assemble_cdxml(&prepared)?;
             if scene.conformer_3d.is_none() {
                 layout(&mut scene.molecule, &[])?;
                 scene.conformer_3d = Some(false);
@@ -211,6 +254,30 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
     };
     prepared.document.validate().map_err(Error::Document)?;
     Ok(Preparation::Complete(Box::new(prepared)))
+}
+
+// Sanitization can normalize an overvalent metal contact to a dative bond.
+// A wedge/hash on the source single bond has no equivalent dative appearance.
+// Preserve that drawing explicitly instead of either dropping its style or
+// publishing properties for a different graph. Ordinary molecular parsing
+// and supported plain/dashed coordinate bonds retain their strict behavior.
+fn styled_coordination_changed(prepared: &cdxml::PreparedCdxml) -> bool {
+    let ids = &prepared.molecule.ids;
+    let changed: std::collections::HashSet<_> = prepared
+        .molecule
+        .state
+        .graph
+        .bonds
+        .iter()
+        .filter(|b| b.order == 5)
+        .filter_map(|b| ids.get(b.a).zip(ids.get(b.b)))
+        .map(|(&a, &b)| (a.min(b), a.max(b)))
+        .collect();
+    prepared.bonds.iter().any(|b| {
+        b.order == 1
+            && !matches!(b.display.as_str(), "plain" | "dashed")
+            && changed.contains(&(b.a.min(b.b), b.a.max(b.b)))
+    })
 }
 
 fn finish_reaction(drawing: reaction::Drawing) -> Result<Prepared, Error> {

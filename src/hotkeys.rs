@@ -394,10 +394,12 @@ fn sprout_at(
     } else {
         templates::capacity(atom)
     };
-    if atom.no_implicit
-        || atom.explicit_h != 0
-        || atom.stereo.is_some()
-        || templates::valence(doc, id) + order * 2 > capacity
+    let replacing_h = crate::projection::growth::replaces_hydrogen(doc, id, preset);
+    if atom.stereo.is_some()
+        || !replacing_h
+            && (atom.no_implicit
+                || atom.explicit_h != 0
+                || templates::valence(doc, id) + order * 2 > capacity)
     {
         return Err(
             "This atom has no available valence; edit its hydrogens or stereochemistry first"
@@ -412,6 +414,29 @@ fn sprout_at(
     }
     let start = atom.position;
     let depth = atom.depth;
+    if let Some(plane) = crate::projection::growth::Plane::at(doc, id) {
+        let end = if let Some(angle) = angle {
+            plane.endpoint(
+                start.offset(length * angle.cos(), length * angle.sin()),
+                crate::chains::BondDrawing {
+                    length,
+                    fixed_angles: false,
+                    fixed_length: true,
+                },
+            )
+        } else {
+            plane.outward(length)
+        }
+        .ok_or("Cannot place a bond in the ring plane")?;
+        if doc.nearest(end.position, length * 0.15).is_some() {
+            return Err(
+                "The new atom would overlap another atom; choose a different direction".into(),
+            );
+        }
+        let (drawing, end) = crate::projection::growth::place(doc, id, end, element, preset)?;
+        *doc = drawing;
+        return Ok(if keep_center { id } else { end });
+    }
     let proposed = angle
         .map(|angle| start.offset(length * angle.cos(), length * angle.sin()))
         .unwrap_or_else(|| editing::bond_extension(doc, start, Some(id), order as u8));

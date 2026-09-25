@@ -38,9 +38,76 @@ fn sketch(kind: LigandKind, tilted: bool) -> Sketch {
             show_charge: true,
             contact: Some(0),
             contact_style: Some(ContactStyle::Dashed),
-            contact_in_front: false,
+            contact_in_front: None,
         }],
     }
+}
+
+#[test]
+fn generated_dimer_uses_each_ligands_depth_unless_explicitly_overridden() -> anyhow::Result<()> {
+    let source: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/assistant-cp-star-dimer.json"))?;
+    let base: Sketch = serde_json::from_value(source.clone())?;
+    assert!(base.ligands.iter().all(|l| l.contact_in_front.is_none()));
+    let original = base
+        .render(&Default::default())
+        .map_err(anyhow::Error::msg)?;
+    // Both ligand planes have the same orientation. Their metals sit on
+    // opposite sides on screen, so one contact crosses a far edge and the
+    // other a near edge. A common hardcoded layer cannot describe this.
+    for override_depth in [None, Some(false), Some(true)] {
+        let mut value = source.clone();
+        for ligand in value["ligands"].as_array_mut().context("Ligands")? {
+            ligand["contact_in_front"] = serde_json::to_value(override_depth)?;
+        }
+        let sketch: Sketch = serde_json::from_value(value)?;
+        let serialized = serde_json::to_string(&sketch)?;
+        let restored: Sketch = serde_json::from_str(&serialized)?;
+        assert!(
+            restored
+                .ligands
+                .iter()
+                .all(|l| l.contact_in_front == override_depth)
+        );
+        let doc = restored
+            .render(&Default::default())
+            .map_err(anyhow::Error::msg)?;
+        assert_eq!(
+            doc.atoms, original.atoms,
+            "Only contact layering may change"
+        );
+        for (a, b) in doc.bonds.iter().zip(&original.bonds) {
+            let mut normalized = a.clone();
+            normalized.z_order = b.z_order;
+            assert_eq!(normalized, *b);
+        }
+        let contacts: Vec<_> = doc
+            .bonds
+            .iter()
+            .enumerate()
+            .filter(|(_, b)| {
+                doc.atom(b.a).is_some_and(|a| a.attachment.is_some())
+                    || doc.atom(b.b).is_some_and(|a| a.attachment.is_some())
+            })
+            .map(|(i, _)| i)
+            .collect();
+        assert_eq!(contacts.len(), 2);
+        for angle in [0., 90., 180.] {
+            let mut rotated = doc.clone();
+            let ids = rotated.all_ids();
+            reshiki::editing::transform_about(&mut rotated, &ids, Point::default(), 1., angle);
+            let gaps = reshiki::crossings::gaps(&rotated);
+            for (side, index) in contacts.iter().enumerate() {
+                let in_front = override_depth.unwrap_or(side == 0);
+                assert_eq!(
+                    gaps.get(*index).context("Contact gaps")?.is_empty(),
+                    in_front,
+                    "side {side}, override {override_depth:?}, rotation {angle}"
+                );
+            }
+        }
+    }
+    Ok(())
 }
 
 #[test]

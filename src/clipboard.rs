@@ -63,6 +63,20 @@ pub struct CopyOutcome {
     pub notices: Vec<String>,
 }
 
+#[derive(Debug, Clone)]
+pub struct PasteOutcome {
+    pub document: Document,
+    pub warnings: Vec<String>,
+}
+impl From<Document> for PasteOutcome {
+    fn from(document: Document) -> Self {
+        Self {
+            document,
+            warnings: Vec::new(),
+        }
+    }
+}
+
 /// A raster-only drawing object carries physical bounds for consumers that
 /// ignore PNG resolution metadata. It contains no editable chemical structure.
 fn embedded_png(png: &[u8]) -> Result<Vec<u8>, String> {
@@ -230,6 +244,21 @@ pub async fn copy(
     original: Document,
     image_only: bool,
 ) -> Result<CopyOutcome, String> {
+    let (outcome, representations) = prepare_copy(engine, original, image_only).await?;
+    let operation = if cfg!(windows) && !image_only {
+        "write_embedded"
+    } else {
+        "write"
+    };
+    invoke(operation, &representations).await?;
+    Ok(outcome)
+}
+
+async fn prepare_copy(
+    engine: LocalEngine,
+    original: Document,
+    image_only: bool,
+) -> Result<(CopyOutcome, Vec<Representation>), String> {
     original.validate()?;
     if original.all_ids().is_empty() {
         return Err("There is nothing to copy".into());
@@ -256,11 +285,34 @@ pub async fn copy(
         ));
         let mut request = Request::molecule("export", doc.clone());
         request.format = Some("cdx".into());
-        match engine.request(request).await.and_then(|response| {
+        let direct = engine.request(request).await.and_then(|response| {
             response
                 .output
                 .ok_or_else(|| "Missing binary drawing".into())
-        }) {
+        });
+        let editable = match direct {
+            Ok(data) => Ok(data),
+            Err(original_error) => {
+                let snapshot = doc.clone();
+                let compatible = tokio::task::spawn_blocking(move || {
+                    let (xml, notices) = crate::exchange::drawing::write_clipboard(&snapshot)
+                        .map_err(|e| e.to_string())?;
+                    Ok::<_, String>((STANDARD.encode(crate::exchange::to_cdx(&xml)?), notices))
+                })
+                .await
+                .map_err(|e| e.to_string())?;
+                match compatible {
+                    Ok((data, notices)) => {
+                        outcome.notices.extend(notices);
+                        Ok(data)
+                    }
+                    Err(error) => Err(format!(
+                        "{original_error} · Compatible copy unavailable: {error}"
+                    )),
+                }
+            }
+        };
+        match editable {
             Ok(data) => {
                 // Include the current and legacy native aliases on one item.
                 for kind in CDX_TYPES {
@@ -283,11 +335,17 @@ pub async fn copy(
     for (format, result) in images {
         match result {
             Ok(image) => {
-                if image_only && format == "png" {
+                // Editors that prefer CDX may reject the generic PDF/image
+                // flavors. Supply a sized picture when editable exchange is
+                // unavailable, without claiming it contains editable atoms.
+                if (image_only || !outcome.external_editable) && format == "png" {
                     match image.bytes().and_then(|bytes| embedded_png(&bytes)) {
                         Ok(bytes) => {
                             for kind in CDX_TYPES {
                                 representations.push(Representation::new(kind, &bytes));
+                            }
+                            if !image_only {
+                                outcome.notices.push("Other drawing editors will receive a picture; ReShiki retains the editable original".into());
                             }
                         }
                         Err(error) => outcome
@@ -308,13 +366,7 @@ pub async fn copy(
     if image_count == 0 && image_only {
         return Err(outcome.notices.join(" · "));
     }
-    let operation = if cfg!(windows) && !image_only {
-        "write_embedded"
-    } else {
-        "write"
-    };
-    invoke(operation, &representations).await?;
-    Ok(outcome)
+    Ok((outcome, representations))
 }
 
 fn copy_images(
@@ -424,8 +476,15 @@ pub fn text_request(text: &str) -> Request {
 }
 
 pub async fn paste(engine: LocalEngine, image_only: bool) -> Result<Document, String> {
+    Ok(paste_with_warnings(engine, image_only).await?.document)
+}
+
+pub async fn paste_with_warnings(
+    engine: LocalEngine,
+    image_only: bool,
+) -> Result<PasteOutcome, String> {
     let packet = invoke(if image_only { "read_picture" } else { "read" }, &[]).await?;
-    paste_packet(engine, packet).await
+    paste_packet_with_warnings(engine, packet).await
 }
 
 /// Read only an explicitly requested clipboard image, without inserting it or
@@ -441,7 +500,15 @@ pub async fn picture() -> Result<Option<crate::pictures::Picture>, String> {
         .map_err(|e| e.to_string())?
 }
 
+#[cfg(test)]
 async fn paste_packet(engine: LocalEngine, packet: Packet) -> Result<Document, String> {
+    Ok(paste_packet_with_warnings(engine, packet).await?.document)
+}
+
+async fn paste_packet_with_warnings(
+    engine: LocalEngine,
+    packet: Packet,
+) -> Result<PasteOutcome, String> {
     let item = packet
         .representations
         .first()
@@ -450,7 +517,8 @@ async fn paste_packet(engine: LocalEngine, packet: Packet) -> Result<Document, S
     if item.kind == NATIVE || item.kind == "dev.moruno.drawing" {
         return tokio::task::spawn_blocking(move || native_document(&data))
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| e.to_string())?
+            .map(PasteOutcome::from);
     }
     if matches!(
         item.kind.as_str(),
@@ -458,7 +526,8 @@ async fn paste_packet(engine: LocalEngine, packet: Packet) -> Result<Document, S
     ) {
         return tokio::task::spawn_blocking(move || crate::pictures::clipboard_document(&data))
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| e.to_string())?
+            .map(PasteOutcome::from);
     }
     let request = if item.kind.contains("cdxml") {
         Request::import(
@@ -475,7 +544,7 @@ async fn paste_packet(engine: LocalEngine, packet: Packet) -> Result<Document, S
     ) {
         let text = std::str::from_utf8(&data).map_err(|_| "Invalid clipboard text encoding")?;
         if let Some(json) = editing::clipboard_json(text) {
-            return native_document(json.as_bytes());
+            return native_document(json.as_bytes()).map(PasteOutcome::from);
         }
         text_request(text)
     } else {
@@ -484,18 +553,215 @@ async fn paste_packet(engine: LocalEngine, packet: Packet) -> Result<Document, S
                 .into(),
         );
     };
-    let doc = engine
-        .request(request)
-        .await?
+    let response = engine.request(request).await?;
+    let doc = response
         .document
         .ok_or("No drawing returned from the clipboard")?;
     doc.validate()?;
-    Ok(doc)
+    Ok(PasteOutcome {
+        document: doc,
+        warnings: response.warnings,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn projected_arene_with_bold_edge_has_editable_clipboard_and_native_depth()
+    -> anyhow::Result<()> {
+        use anyhow::{Context, ensure};
+        let source: Document =
+            serde_json::from_str(include_str!("../docs/changes/fixtures/arene-bold-join.rsk"))?;
+        let (outcome, representations) = prepare_copy(Default::default(), source.clone(), false)
+            .await
+            .map_err(anyhow::Error::msg)?;
+        ensure!(
+            outcome.external_editable && outcome.notices.is_empty(),
+            "{:?}",
+            outcome.notices
+        );
+        let native = representations
+            .iter()
+            .find(|r| r.kind == NATIVE)
+            .context("Native drawing")?;
+        let native = native_document(&native.bytes().map_err(anyhow::Error::msg)?)
+            .map_err(anyhow::Error::msg)?;
+        for (a, b) in source.atoms.iter().zip(&native.atoms) {
+            assert_eq!((a.position, a.depth), (b.position, b.depth));
+        }
+        assert_eq!(source.bonds, native.bonds);
+        let binary = representations
+            .iter()
+            .find(|r| r.kind == CDX_TYPES[0])
+            .context("Binary drawing")?;
+        let back = paste_packet(
+            Default::default(),
+            Packet {
+                representations: vec![binary.clone()],
+            },
+        )
+        .await
+        .map_err(anyhow::Error::msg)?;
+        ensure!(back.atoms.len() == 7 && back.bonds.len() == 7 && back.graphics.is_empty());
+        ensure!(back.atoms.iter().all(|a| a.stereo.is_none()));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn copying_unvalidated_rings_keeps_editable_exchange_and_paste_warning()
+    -> anyhow::Result<()> {
+        use anyhow::{Context, ensure};
+        let source = Representation::new(
+            CDX_TYPES[0],
+            include_bytes!("../tests/fixtures/aromatic-five-attachment.cdx"),
+        );
+        let pasted = paste_packet_with_warnings(
+            Default::default(),
+            Packet {
+                representations: vec![source],
+            },
+        )
+        .await
+        .map_err(anyhow::Error::msg)?;
+        ensure!(!pasted.warnings.is_empty());
+        let (outcome, representations) =
+            prepare_copy(Default::default(), pasted.document.clone(), false)
+                .await
+                .map_err(anyhow::Error::msg)?;
+        ensure!(outcome.external_editable && !outcome.image_only);
+        let binary = representations
+            .iter()
+            .find(|r| r.kind == CDX_TYPES[0])
+            .context("Missing editable drawing")?;
+        let back = paste_packet_with_warnings(
+            Default::default(),
+            Packet {
+                representations: vec![binary.clone()],
+            },
+        )
+        .await
+        .map_err(anyhow::Error::msg)?;
+        ensure!(back.document.atoms.len() == pasted.document.atoms.len());
+        ensure!(!back.warnings.is_empty());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn simplified_appearance_keeps_editable_atoms_and_the_native_original()
+    -> anyhow::Result<()> {
+        use anyhow::{Context, ensure};
+        let mut doc = Document::default();
+        let id = doc.add_atom("*", crate::document::Point::default());
+        doc.atom_mut(id).context("Missing label")?.display.variable = Some("M".into());
+        let mut cases = vec![doc];
+        for (key, element) in [("j", "Fe"), ("J", "Ru")] {
+            let mut source = Document::default();
+            let id = source.add_atom(element, crate::document::Point::default());
+            cases.push(
+                crate::hotkeys::atom_edit(&source, id, key, 42.)
+                    .context("Ligand shortcut")?
+                    .map_err(anyhow::Error::msg)?
+                    .0,
+            );
+        }
+        for doc in cases {
+            let (outcome, representations) = prepare_copy(Default::default(), doc.clone(), false)
+                .await
+                .map_err(anyhow::Error::msg)?;
+            ensure!(outcome.external_editable, "{:?}", outcome.notices);
+            let native = representations
+                .iter()
+                .find(|r| r.kind == NATIVE)
+                .context("Missing native drawing")?;
+            ensure!(
+                native_document(&native.bytes().map_err(anyhow::Error::msg)?)
+                    .map_err(anyhow::Error::msg)?
+                    == doc
+            );
+            let binary = representations
+                .iter()
+                .find(|r| r.kind == CDX_TYPES[0])
+                .context("Missing editable copy")?;
+            let back = paste_packet(
+                Default::default(),
+                Packet {
+                    representations: vec![binary.clone()],
+                },
+            )
+            .await
+            .map_err(anyhow::Error::msg)?;
+            ensure!(back.atoms.len() == doc.atoms.len() && back.bonds.len() == doc.bonds.len());
+            ensure!(back.graphics.is_empty());
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn complete_shortcut_gallery_has_editable_cdx_without_altering_the_native_copy()
+    -> anyhow::Result<()> {
+        use anyhow::{Context, ensure};
+        let source: Document =
+            serde_json::from_str(include_str!("../assets/examples/shortcut-examples.rsk"))?;
+        let (outcome, representations) = prepare_copy(Default::default(), source.clone(), false)
+            .await
+            .map_err(anyhow::Error::msg)?;
+        ensure!(outcome.external_editable, "{:?}", outcome.notices);
+        ensure!(
+            outcome.notices.iter().any(|n| n.contains("variable label")),
+            "Missing variable-label notice"
+        );
+        let native = representations
+            .iter()
+            .find(|r| r.kind == NATIVE)
+            .context("Native drawing")?;
+        ensure!(
+            native_document(&native.bytes().map_err(anyhow::Error::msg)?)
+                .map_err(anyhow::Error::msg)?
+                == source
+        );
+        let cdx = representations
+            .iter()
+            .find(|r| r.kind == CDX_TYPES[0])
+            .context("Editable CDX")?;
+        let xml = crate::exchange::from_cdx(&cdx.bytes().map_err(anyhow::Error::msg)?)
+            .map_err(anyhow::Error::msg)?;
+        let tree = roxmltree::Document::parse(&xml)?;
+        ensure!(
+            !tree.descendants().any(|n| n.has_tag_name("embeddedobject")),
+            "Gallery must not be flattened into a picture"
+        );
+        for label in ["R", "X"] {
+            ensure!(tree.descendants().any(|n| {
+                n.has_tag_name("n")
+                    && n.attribute("Element") == Some("0")
+                    && n.descendants()
+                        .any(|s| s.has_tag_name("s") && s.text() == Some(label))
+            }));
+        }
+        let back = paste_packet(
+            Default::default(),
+            Packet {
+                representations: vec![cdx.clone()],
+            },
+        )
+        .await
+        .map_err(anyhow::Error::msg)?;
+        ensure!(
+            back.atoms.len() == source.atoms.len(),
+            "Atom count: {} / {}",
+            back.atoms.len(),
+            source.atoms.len()
+        );
+        ensure!(back.bonds.len() == source.bonds.len());
+        ensure!(back.annotations.len() == source.annotations.len());
+        ensure!(
+            back.atoms.iter().map(|a| a.charge).sum::<i32>()
+                == source.atoms.iter().map(|a| a.charge).sum::<i32>()
+        );
+        Ok(())
+    }
 
     #[tokio::test]
     async fn previous_native_and_text_clipboards_remain_editable() -> anyhow::Result<()> {

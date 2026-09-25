@@ -70,12 +70,24 @@ async fn main() -> anyhow::Result<()> {
         for format in ["cdxml", "cdx"] {
             let mut request = Request::molecule("export", doc.clone());
             request.format = Some(format.into());
-            let output = engine
-                .request(request)
-                .await
-                .map_err(anyhow::Error::msg)?
-                .output
-                .context("Export")?;
+            let response = match engine.request(request).await {
+                Ok(response) => response,
+                Err(error)
+                    if doc.bonds.iter().any(|b| b.projection)
+                        && (error.contains("front-bond emphasis")
+                            || error.contains("hidden charge labels")) =>
+                {
+                    // Perspective examples retain their XYZ model in native
+                    // files. Report the editable-format limit beside figures.
+                    fs::write(
+                        out.join(format!("case-{i}.{format}-unavailable.txt")),
+                        error,
+                    )?;
+                    continue;
+                }
+                Err(error) => return Err(anyhow::Error::msg(error)),
+            };
+            let output = response.output.context("Export")?;
             let bytes = if format == "cdx" {
                 use base64::Engine;
                 base64::engine::general_purpose::STANDARD.decode(output)?

@@ -3,6 +3,58 @@ use crate::{document::Point, style};
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
 
+/// Conservative recognition for newly typed standalone neutral formulas.
+/// Captions, units, reaction conditions and unknown symbols remain plain text.
+pub fn is_formula(text: &str) -> bool {
+    let text = text.trim();
+    if text.is_empty() || text.len() > 512 {
+        return false;
+    }
+    let mut chars = text.chars().peekable();
+    let mut groups: Vec<char> = vec![];
+    let mut item = false;
+    let mut number = false;
+    let mut elements = 0;
+    while let Some(c) = chars.next() {
+        match c {
+            'A'..='Z' => {
+                let mut symbol = c.to_string();
+                if chars.peek().is_some_and(char::is_ascii_lowercase)
+                    && let Some(c) = chars.next()
+                {
+                    symbol.push(c);
+                }
+                if !crate::editing::ELEMENTS.contains(&symbol.as_str()) {
+                    return false;
+                }
+                elements += 1;
+                item = true;
+            }
+            '(' | '[' => {
+                if groups.len() >= 16 {
+                    return false;
+                }
+                groups.push(c);
+                item = false;
+            }
+            ')' | ']' => {
+                if !item || groups.pop() != Some(if c == ')' { '(' } else { '[' }) {
+                    return false;
+                }
+                item = true;
+            }
+            '1'..='9' if item => {
+                while chars.peek().is_some_and(char::is_ascii_digit) {
+                    chars.next();
+                }
+                number = true;
+            }
+            _ => return false,
+        }
+    }
+    item && groups.is_empty() && number && elements > 0
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Script {

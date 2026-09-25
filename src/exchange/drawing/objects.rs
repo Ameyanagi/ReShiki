@@ -434,7 +434,7 @@ impl Writer<'_> {
         Ok(middle)
     }
     #[allow(clippy::too_many_arguments)]
-    fn curve(
+    pub(super) fn curve(
         &mut self,
         parent: Key,
         points: &[P],
@@ -522,7 +522,7 @@ impl Writer<'_> {
     }
 }
 
-fn curve_points(commands: &[PathCommand]) -> Result<Vec<(Vec<P>, bool)>> {
+pub(super) fn curve_points(commands: &[PathCommand]) -> Result<Vec<(Vec<P>, bool)>> {
     let mut groups = Vec::new();
     let mut current = Vec::new();
     let mut closed = false;
@@ -559,6 +559,32 @@ fn curve_points(commands: &[PathCommand]) -> Result<Vec<(Vec<P>, bool)>> {
     }
     if !current.is_empty() {
         groups.push((current, closed));
+    }
+    // A closed CDX curve stores one incoming/anchor/outgoing triple per
+    // anchor. An explicit final cubic back to the first anchor must wrap its
+    // incoming control into the first triple, not duplicate that anchor.
+    // Native readers use this canonical form to recognize delocalized rings.
+    for (points, closed) in &mut groups {
+        if *closed && points.len() >= 9 {
+            let first = points
+                .get(1)
+                .copied()
+                .ok_or_else(|| invalid("Missing curve anchor"))?;
+            let last = points
+                .get(points.len() - 2)
+                .copied()
+                .ok_or_else(|| invalid("Missing curve anchor"))?;
+            if (first.x - last.x).abs() < 0.000001 && (first.y - last.y).abs() < 0.000001 {
+                let incoming = points
+                    .get(points.len() - 3)
+                    .copied()
+                    .ok_or_else(|| invalid("Missing curve control"))?;
+                if let Some(start) = points.first_mut() {
+                    *start = incoming;
+                }
+                points.truncate(points.len() - 3);
+            }
+        }
     }
     if groups
         .iter()

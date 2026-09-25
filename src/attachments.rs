@@ -139,6 +139,66 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Vec<u64> {
     selected
 }
 
+/// Moving a centroid moves its ligand, including covalent substituents, while
+/// atoms connected to the attachment point itself remain outside that ligand.
+/// This is an editor selection rule, not chemical graph connectivity.
+pub fn movement_selection(doc: &Document, ids: &[u64]) -> Vec<u64> {
+    use std::collections::{HashMap, HashSet};
+    let mut selected: HashSet<_> = doc.expand_abbreviation_selection(ids).into_iter().collect();
+    let points: Vec<_> = doc
+        .atoms
+        .iter()
+        .filter(|a| selected.contains(&a.id) && !a.centroid.is_empty())
+        .collect();
+    if points.is_empty() {
+        return ids.to_vec();
+    }
+    let anchors: HashSet<_> = points.iter().map(|a| a.id).collect();
+    let all_points: HashSet<_> = doc
+        .atoms
+        .iter()
+        .filter(|a| !a.centroid.is_empty())
+        .map(|a| a.id)
+        .collect();
+    let mut fixed = HashSet::new();
+    let mut adjacent = HashMap::<u64, Vec<u64>>::new();
+    for b in &doc.bonds {
+        if anchors.contains(&b.a) {
+            fixed.insert(b.b);
+        }
+        if anchors.contains(&b.b) {
+            fixed.insert(b.a);
+        }
+        if !all_points.contains(&b.a) && !all_points.contains(&b.b) {
+            adjacent.entry(b.a).or_default().push(b.b);
+            adjacent.entry(b.b).or_default().push(b.a);
+        }
+    }
+    let mut pending: Vec<_> = points
+        .iter()
+        .flat_map(|a| a.centroid.iter().copied())
+        .collect();
+    let mut visited = HashSet::new();
+    while let Some(id) = pending.pop() {
+        if fixed.contains(&id) || !visited.insert(id) {
+            continue;
+        }
+        selected.insert(id);
+        pending.extend(adjacent.get(&id).into_iter().flatten().copied());
+    }
+    // Carry any other points on this same ligand, without following their
+    // metal contacts into a second ligand or an entire coordination complex.
+    for a in doc.atoms.iter().filter(|a| !a.centroid.is_empty()) {
+        if a.centroid.iter().all(|id| selected.contains(id)) {
+            selected.insert(a.id);
+        }
+    }
+    doc.all_ids()
+        .into_iter()
+        .filter(|id| selected.contains(id))
+        .collect()
+}
+
 /// Count the explicitly defined ligands without treating anchors as atoms or
 /// inventing covalent metal–carbon bonds. No identifier or valence claim for
 /// the assembled coordination complex is made by this composition calculation.

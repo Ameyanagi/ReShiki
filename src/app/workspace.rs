@@ -643,6 +643,7 @@ impl App {
             );
         }
         let drawing: Element<'_, Edit> = canvas(MoleculeCanvas {
+            element: &self.element,
             joining: self.joining.as_ref().map(|s| &s.prepared),
             hidden_annotation: self.inline_label_id(),
             bond_drawing: self.bond_drawing,
@@ -742,20 +743,9 @@ impl App {
         } else {
             self.context_bar()
         };
-        let workspace = column![
-            context,
-            container(
-                container(paper)
-                    .style(sheet)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-            )
-            .padding(18)
-            .width(Length::Fill)
+        let workspace = column![context, paper]
             .height(Length::Fill)
-        ]
-        .height(Length::Fill)
-        .width(Length::Fill);
+            .width(Length::Fill);
         let mut body = row![self.tool_palette(), workspace].height(Length::Fill);
         if self.inspector_open {
             body = body.push(self.inspector());
@@ -768,12 +758,7 @@ impl App {
     }
 
     fn command_bar(&self) -> Element<'_, Message> {
-        let title = self
-            .path
-            .as_ref()
-            .and_then(|p| p.file_name())
-            .map(|p| p.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "Untitled".into());
+        let title = self.document_name();
         let bar = row![
             hover_hint(
                 button(crate::branding::wordmark(21.0))
@@ -994,7 +979,7 @@ impl App {
                         iced::widget::canvas(Glyph(Icon::Keyboard, true))
                             .width(24)
                             .height(24),
-                        text("Shortcuts").size(10),
+                        text("Help").size(10),
                     ]
                     .spacing(3)
                     .align_x(Alignment::Center)
@@ -1002,7 +987,7 @@ impl App {
                 .padding([5, 10])
                 .on_press(Message::ToggleHelp)
                 .style(control(self.help_open)),
-                "Keyboard shortcuts (F1)",
+                "Help, shortcuts and editable examples (F1)",
                 tooltip::Position::Right,
             )
         ]
@@ -1253,7 +1238,12 @@ impl App {
                             .padding(6)
                             .width(160),
                     )
-                    .push(command("Use", Message::ApplyElement));
+                    .push(command("Use", Message::ApplyElement))
+                    .push(
+                        text("Click to replace · Drag from an atom to add with a bond")
+                            .size(11)
+                            .color(muted()),
+                    );
             }
             Tool::Text => {
                 options = options.push(
@@ -2069,12 +2059,18 @@ impl App {
     }
 
     fn status_bar(&self) -> Element<'_, Message> {
-        let left = column![text(&self.status).size(11).color(if self.error {
+        let summary = self.status.lines().next().unwrap_or(&self.status);
+        let message = text(summary).size(11).color(if self.error {
             Color::from_rgb8(168, 52, 47)
         } else {
             muted()
-        })]
-        .width(Length::Fill);
+        });
+        let message: Element<'_, Message> = if self.status.contains('\n') {
+            hover_hint(message, self.status.as_str(), tooltip::Position::Top).into()
+        } else {
+            message.into()
+        };
+        let left = column![message].width(Length::Fill);
         let status = row![
             left,
             command(
@@ -2266,22 +2262,6 @@ pub(super) fn surface_shadow(shadow: iced::Shadow) -> iced::Shadow {
     }
 }
 
-fn sheet(_: &Theme) -> container::Style {
-    container::Style {
-        background: Some(Color::WHITE.into()),
-        border: Border {
-            color: Color::from_rgb8(215, 220, 226),
-            width: 1.,
-            radius: 1.0.into(),
-        },
-        shadow: surface_shadow(iced::Shadow {
-            color: Color::from_rgba8(35, 45, 57, 0.08),
-            offset: iced::Vector::new(0., 2.),
-            blur_radius: 8.,
-        }),
-        ..Default::default()
-    }
-}
 fn tip(_: &Theme) -> container::Style {
     container::Style {
         background: Some(Color::from_rgb8(40, 48, 57).into()),

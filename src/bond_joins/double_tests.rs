@@ -61,6 +61,251 @@ fn raster(doc: &Document) -> Result<(resvg::tiny_skia::Pixmap, Point, f32), Stri
 }
 
 #[test]
+fn colored_branches_join_the_same_ring_outline_without_changing_chemistry() -> anyhow::Result<()> {
+    use anyhow::Context;
+    let source: Document = serde_json::from_str(include_str!(
+        "../../docs/changes/fixtures/arene-bold-join.rsk"
+    ))?;
+    for rotation in (0..360).step_by(17).map(|r| r as f32).chain([47., 130.]) {
+        for reversed in [false, true] {
+            for color in [[43, 112, 97], [0, 0, 0], [180, 68, 32]] {
+                let mut doc = source.clone();
+                let fluorine = doc
+                    .atoms
+                    .iter()
+                    .find(|a| a.element == "F")
+                    .context("Fluorine")?
+                    .id;
+                let branch = doc
+                    .bonds
+                    .iter_mut()
+                    .find(|b| b.a == fluorine || b.b == fluorine)
+                    .context("Branch")?;
+                branch.color = color;
+                let carbon = if branch.a == fluorine {
+                    branch.b
+                } else {
+                    branch.a
+                };
+                if reversed {
+                    for bond in &mut doc.bonds {
+                        bond.reverse();
+                    }
+                    doc.bonds.reverse();
+                }
+                let ids = doc.all_ids();
+                editing::transform_about(&mut doc, &ids, Point::default(), 1., rotation);
+                let saved = doc.clone();
+                let (pixmap, origin, scale) = raster(&doc).map_err(anyhow::Error::msg)?;
+                let point = doc.atom(carbon).context("Carbon")?.position;
+                for bond in doc.bonds.iter().filter(|b| b.a == carbon || b.b == carbon) {
+                    let end = doc
+                        .atom(if bond.a == carbon { bond.b } else { bond.a })
+                        .context("Neighbor")?
+                        .position;
+                    for t in [0., 0.01, 0.03, 0.08, 0.15] {
+                        let sample = Point::new(
+                            point.x + (end.x - point.x) * t,
+                            point.y + (end.y - point.y) * t,
+                        );
+                        let pixel = pixmap
+                            .pixel(
+                                ((sample.x - origin.x) * scale).floor() as u32,
+                                ((sample.y - origin.y) * scale).floor() as u32,
+                            )
+                            .context("Pixel")?;
+                        anyhow::ensure!(
+                            pixel.alpha() >= 250,
+                            "Junction gap: {rotation}, {reversed}, {color:?}, {t}: {}",
+                            pixel.alpha()
+                        );
+                    }
+                }
+                assert_eq!(doc, saved);
+                let mut uniform = doc.clone();
+                for bond in &mut uniform.bonds {
+                    bond.color = [0, 0, 0];
+                }
+                for (colored, plain) in doc.bonds.iter().zip(&uniform.bonds) {
+                    let start = doc.atom(colored.a).context("Start")?.position;
+                    let end = doc.atom(colored.b).context("End")?.position;
+                    assert_eq!(
+                        bond_joins::polygon(&doc, colored, start, end),
+                        bond_joins::polygon(&uniform, plain, start, end),
+                        "Color must not change junction geometry"
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn substituted_bold_ring_matches_the_three_way_vector_junction() -> anyhow::Result<()> {
+    use anyhow::Context;
+    let source: Document = serde_json::from_str(include_str!(
+        "../../docs/changes/fixtures/arene-bold-join.rsk"
+    ))?;
+    // Independently exported vector intersections, in points relative to the
+    // substituted carbon. The source PDF rounds coordinates to 1/256 point.
+    // These describe thin/bold, bold/branch and branch/thin intersections.
+    let expected = [
+        Point::new(-0.554688, -0.886718),
+        Point::new(1.347656, -0.031250),
+        Point::new(0.210937, -0.363281),
+    ];
+    for rotation in [0_f32, 47., 130., 271.] {
+        for reversed in [false, true] {
+            let mut doc = source.clone();
+            let ids = doc.all_ids();
+            editing::transform_about(&mut doc, &ids, Point::default(), 1., rotation);
+            if reversed {
+                for bond in &mut doc.bonds {
+                    bond.reverse();
+                }
+                doc.bonds.reverse();
+            }
+            let center = doc.atom(2).context("Substituted carbon")?.position;
+            let (sin, cos) = rotation.to_radians().sin_cos();
+            let expected = expected.map(|p| {
+                center.offset(
+                    doc.drawing_style.world(p.x * cos - p.y * sin),
+                    doc.drawing_style.world(p.x * sin + p.y * cos),
+                )
+            });
+            for (other, corners) in [(1, [0, 2]), (3, [0, 1]), (7, [1, 2])] {
+                let bond = doc
+                    .bonds
+                    .iter()
+                    .find(|b| (b.a == 2 && b.b == other) || (b.b == 2 && b.a == other))
+                    .context("Junction bond")?;
+                let outline = bond_joins::polygon(
+                    &doc,
+                    bond,
+                    doc.atom(bond.a).context("Start")?.position,
+                    doc.atom(bond.b).context("End")?.position,
+                );
+                anyhow::ensure!(
+                    outline.iter().any(|p| p.distance(center) < 0.001),
+                    "Three-way color boundary must pass through its atom"
+                );
+                for corner in corners {
+                    anyhow::ensure!(
+                        outline
+                            .iter()
+                            .any(|p| p.distance(expected[corner]) < doc.drawing_style.world(0.005)),
+                        "Wrong shared corner {corner}: rotation {rotation}, reversed {reversed}, neighbor {other}, outline {outline:?}, expected {:?}",
+                        expected[corner]
+                    );
+                }
+            }
+            // Check the actual scene, including seam underpainting: the notch
+            // above the branch must remain transparent, not become a triangle.
+            let (pixmap, origin, scale) = raster(&doc).map_err(anyhow::Error::msg)?;
+            let sample = center.offset(
+                doc.drawing_style.world(0.5 * cos + 0.55 * sin),
+                doc.drawing_style.world(0.5 * sin - 0.55 * cos),
+            );
+            let pixel = pixmap
+                .pixel(
+                    ((sample.x - origin.x) * scale).floor() as u32,
+                    ((sample.y - origin.y) * scale).floor() as u32,
+                )
+                .context("Notch pixel")?;
+            anyhow::ensure!(
+                pixel.alpha() < 20,
+                "Filled notch at rotation {rotation}, reversed {reversed}: {}",
+                pixel.alpha()
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn junction_underpainting_keeps_nearby_crossing_clearance() -> anyhow::Result<()> {
+    use anyhow::Context;
+    let mut doc = Document::default();
+    let joint = doc.add_atom("C", Point::default());
+    for (x, y, display) in [
+        (-36., -21., "plain"),
+        (-36., 21., "bold"),
+        (42., 0., "plain"),
+    ] {
+        let end = doc.add_atom("C", Point::new(x, y));
+        doc.add_bond(joint, end, 1, display);
+    }
+    doc.bonds.last_mut().context("Colored branch")?.color = [43, 112, 97];
+    let a = doc.add_atom("C", Point::new(5., -30.));
+    let b = doc.add_atom("C", Point::new(5., 30.));
+    doc.add_bond(a, b, 1, "plain");
+    doc.bonds.last_mut().context("Crossing")?.z_order = 1;
+    let (pixmap, origin, scale) = raster(&doc).map_err(anyhow::Error::msg)?;
+    let pixel = pixmap
+        .pixel(
+            ((2.5 - origin.x) * scale).floor() as u32,
+            ((0. - origin.y) * scale).floor() as u32,
+        )
+        .context("Crossing clearance pixel")?;
+    anyhow::ensure!(
+        pixel.alpha() == 0,
+        "Junction paint filled crossing clearance: {}",
+        pixel.alpha()
+    );
+    Ok(())
+}
+
+#[test]
+fn automatic_ring_double_lines_share_corners_with_a_bold_single_edge() -> Result<(), String> {
+    for angle in [0., 25., 55., 75.] {
+        for reversed in [false, true] {
+            let mut doc = crate::rings::Preset::Benzene.document(42., false);
+            let ids = doc.all_ids();
+            crate::projection::tilt(&mut doc, &ids, angle, false);
+            let bold = doc
+                .bonds
+                .iter_mut()
+                .find(|b| b.order == 1)
+                .ok_or("Single edge")?;
+            bold.display = "bold".into();
+            if reversed {
+                bold.reverse();
+            }
+            let bold = doc
+                .bonds
+                .iter()
+                .find(|b| b.display == "bold")
+                .ok_or("Bold edge")?;
+            let polygon = |b: &crate::document::Bond| -> Result<Vec<Point>, String> {
+                Ok(bond_joins::polygon(
+                    &doc,
+                    b,
+                    doc.atom(b.a).ok_or("Atom")?.position,
+                    doc.atom(b.b).ok_or("Atom")?.position,
+                ))
+            };
+            let corners = polygon(bold)?;
+            for double in doc.bonds.iter().filter(|b| {
+                b.order == 2 && [b.a, b.b].iter().any(|id| *id == bold.a || *id == bold.b)
+            }) {
+                assert_eq!(double.double_position, DoublePosition::Auto);
+                assert!(bond_joins::needed(&doc, double));
+                let adjacent = polygon(double)?;
+                assert_eq!(
+                    corners
+                        .iter()
+                        .filter(|p| adjacent.iter().any(|q| p.distance(*q) < 0.001))
+                        .count(),
+                    2,
+                    "Unjoined bold cap: tilt {angle}, reversed {reversed}"
+                );
+            }
+        }
+    }
+    Ok(())
+}
+#[test]
 fn automatic_bold_double_has_a_continuous_backbone_and_a_separate_thin_rail() -> Result<(), String>
 {
     for rotation in [0., 17., 83., 145.] {

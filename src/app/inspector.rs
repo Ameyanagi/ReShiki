@@ -50,7 +50,9 @@ impl FigureFormat {
         match self {
             Self::Pdf => "Vector figure at its physical publication size.",
             Self::Svg => "Editable vector artwork for layout and illustration.",
-            Self::Png => "High-resolution image at 1200 dpi.",
+            Self::Png => {
+                "Up to 1200 dpi. Large drawings use a lower resolution; physical size is preserved."
+            }
         }
     }
 }
@@ -59,7 +61,7 @@ impl std::fmt::Display for FigureFormat {
         f.write_str(match self {
             Self::Pdf => "PDF · vector",
             Self::Svg => "SVG · editable vector",
-            Self::Png => "PNG · 1200 dpi",
+            Self::Png => "PNG · automatic resolution",
         })
     }
 }
@@ -467,7 +469,7 @@ impl App {
                 text("Click to place. Drag to rotate or choose an attachment side. Click an atom to share it, or a bond to fuse.").size(12),
                 text("Alt/Option on an atom connects the ring with a new bond. Each placement is one Undo step.").size(11).color(muted()),
                 text(match preset {
-                    reshiki::rings::Preset::Cyclopentadiene => "Hold Shift to move the double bonds.",
+                    reshiki::rings::Preset::Benzene | reshiki::rings::Preset::Cyclopentadiene => "Hold Shift to move the double bonds.",
                     reshiki::rings::Preset::HaworthFive | reshiki::rings::Preset::HaworthSix => "Haworth outlines have a bold front edge. Templates → Carbohydrates contains oxygen scaffolds and defined α/β sugars. These blank outlines do not assign stereochemistry.",
                     _ => "Chair projections do not assign stereochemistry. Cleanup may redraw them as regular hexagons.",
                 }).size(11).color(muted()),
@@ -546,7 +548,7 @@ impl App {
                 false,
                 column![
                     text(format!(
-                        "{} {} pt\nBonds {} pt · Lines {} pt\nPNG 1200 dpi",
+                        "{} {} pt\nBonds {} pt · Lines {} pt\nPNG up to 1200 dpi",
                         self.doc.drawing_style.font_family,
                         self.doc.drawing_style.font_size_pt,
                         self.doc.drawing_style.bond_length_pt,
@@ -1162,10 +1164,19 @@ impl App {
             .padding(8)
             .width(Length::Fill),
             text(figure.description()).size(12).color(muted()),
-            button(text(format!("Export {}…", figure.code().to_uppercase())).size(13))
-                .padding(10)
-                .width(Length::Fill)
-                .on_press_maybe((!self.busy).then_some(Message::Export(figure.code()))),
+            button(
+                text(if self.figure_exporting {
+                    "Exporting…".into()
+                } else {
+                    format!("Export {}…", figure.code().to_uppercase())
+                })
+                .size(13)
+            )
+            .padding(10)
+            .width(Length::Fill)
+            .on_press_maybe(
+                (!self.busy && !self.figure_exporting).then_some(Message::Export(figure.code()))
+            ),
         ]
         .spacing(9);
         if reshiki::clipboard::available() {
@@ -1232,10 +1243,16 @@ impl App {
         )]
         .spacing(6);
         if self.doc.page_layout.is_some() {
-            pages = pages.push(command(
-                "PDF · all pages",
-                Message::Pages(super::pages::Action::Export),
-            ));
+            pages = pages.push(
+                command(
+                    "PDF · all pages",
+                    Message::Pages(super::pages::Action::Export),
+                )
+                .on_press_maybe(
+                    (!self.figure_exporting)
+                        .then_some(Message::Pages(super::pages::Action::Export)),
+                ),
+            );
         }
         if reshiki::printing::available() {
             pages = pages.push(

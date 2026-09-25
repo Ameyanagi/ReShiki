@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 pub enum Preset {
     #[default]
     Regular,
+    Benzene,
     ChairUp,
     ChairDown,
     Cyclopentadiene,
@@ -20,6 +21,7 @@ pub enum Preset {
 impl Preset {
     pub const ALL: &'static [Self] = &[
         Self::Regular,
+        Self::Benzene,
         Self::ChairUp,
         Self::ChairDown,
         Self::Cyclopentadiene,
@@ -78,7 +80,9 @@ impl Preset {
             .enumerate()
         {
             let phase = if alternate { 1 } else { 0 };
-            let order = if self == Self::Cyclopentadiene && [phase, phase + 2].contains(&i) {
+            let order = if (self == Self::Cyclopentadiene && [phase, phase + 2].contains(&i))
+                || (self == Self::Benzene && i % 2 == phase)
+            {
                 2
             } else {
                 1
@@ -92,6 +96,7 @@ impl std::fmt::Display for Preset {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Self::Regular => "Regular ring",
+            Self::Benzene => "Benzene",
             Self::ChairUp => "Chair A",
             Self::ChairDown => "Chair B",
             Self::Cyclopentadiene => "Cyclopentadiene",

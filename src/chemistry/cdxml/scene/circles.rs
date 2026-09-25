@@ -157,5 +157,6 @@ pub(super) fn remove(tree: &mut Tree, prepared: &PreparedCdxml) -> Result<Vec<us
             }
         }
     }
+    removed.extend(super::ellipses::remove(tree, prepared)?);
     Ok(removed)
 }
