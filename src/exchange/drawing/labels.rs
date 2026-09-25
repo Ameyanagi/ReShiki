@@ -166,14 +166,18 @@ impl Writer<'_> {
                 // or an abbreviation with an invented molecular definition.
                 self.tree.set(node, "NodeType", "Unspecified")?;
                 self.tree.set(node, "NumHydrogens", "0")?;
+                let mut style = a
+                    .text_style
+                    .clone()
+                    .unwrap_or_else(|| doc.drawing_style.text_style());
+                // Preserve the same chemical typography as the visible label.
+                // This does not assign elements or expand a named dummy.
+                style.formula |= crate::atom_labels::condensed_label(label).is_some();
                 self.text(
                     node,
                     label,
                     &TextFormat {
-                        style: a
-                            .text_style
-                            .clone()
-                            .unwrap_or_else(|| doc.drawing_style.text_style()),
+                        style,
                         ..Default::default()
                     },
                     [("p", self.position(a.position))],

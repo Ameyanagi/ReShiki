@@ -1,12 +1,13 @@
 # ReShiki 0.8.0
 
-ReShiki 0.8.0 adds contextual drawing shortcuts, one editable shortcut gallery, Haworth templates, ring fills, and improved ligand drawing and interchange. It also fixes large PNG exports and figure exports of drawings with unresolved chemical assignments. This release includes the reviewed changes from PRs #22–#32. [Download](https://github.com/Ameyanagi/ReShiki/releases/tag/v0.8.0) · [Release validation](release-0.8.0-validation.md).
+ReShiki 0.8.0 adds contextual drawing shortcuts, one editable shortcut gallery, Haworth templates, ring fills, and improved ligand drawing and interchange. It also fixes large PNG exports and figure exports of drawings with unresolved chemical assignments. This release includes the reviewed changes from PRs #22–#34 and the internal-label corrections described below. [Download](https://github.com/Ameyanagi/ReShiki/releases/tag/v0.8.0) · [Release validation](release-0.8.0-validation.md).
 
 ## Drawing and chemistry
 
 - **Haworth projections:** carbohydrate templates with defined stereochemistry, plus five- and six-member outlines. Native, figure and checked editable exports retain supported depictions. Blank scaffolds do not infer stereochemistry. [Usage and tested scope](haworth-projections.md).
 - **Contextual shortcuts:** element replacement, complete groups, atom growth, ring attachment and fusion, bond styles, arrangement and joining. Geometry fixes include linear triple bonds, ring attachment angles, branching and bold-bond junctions. [Complete shortcut list](contextual-shortcuts.md).
 - **Explicit labels and composition:** NH3 keeps its three hydrogens at a donor contact; supported formula labels such as C2H5 and OCH3 create real groups. Enter can name a selected fragment. Label anchoring, reverse-label fallback and clipping were corrected. [Labels and abbreviations](abbreviations.md).
+- **Internal atom-label placement:** NH, CH₂ and condensed labels such as CCl₂, CF₂ and NMe use the open space between bonds. The attachment element stays at the vertex, subscripts stay with their label, and molecular composition stays unchanged. [Before and after](changes/automatic-hydrogen.md).
 - **Independent resizing:** side handles change width or height; corner handles preserve proportions. Atom-owned circles and curves transform with the structure while fonts and stroke widths retain their sizes. [Selection transforms](selection-transforms.md).
 - **Ring interior colors:** fill selected cycles, remove a fill, and retain ownership through copying, movement and resizing. Native, figure and supported editable exports preserve fills. [Visual examples](changes/pr-27.md).
 - **Templates and groups:** 105 built-in templates, including macrocycles and ligands; MgBr and N3 shortcuts; Cp and arene multi-center attachments. [Library](template-library.md).

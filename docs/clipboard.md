@@ -53,6 +53,12 @@ Copy reports any applied simplifications. File export stays strict. Unsupported 
 - Linux uses the earlier text clipboard path; picture file import is available in the app. Windows Copy Image supplies CF_DIB alongside PNG, PDF and SVG. Only ReShiki's own OLE objects are read as editable native documents; arbitrary embedded objects are not activated or imported. See the [Windows guide](windows.md).
 - CDX is exposed through the clipboard and internal Rust chemistry interface; the file Open/Export UI does not yet offer it.
 
+Internal condensed labels such as CCl₂, CF₂ and NMe retain formula typography.
+When the receiving editor returns an explicit chemical group definition with
+ordered connections on one attachment atom, ReShiki preserves that definition
+and both outside bonds. Plain named dummy labels remain uninterpreted text;
+formatting alone does not assign chemistry.
+
 ## Verification
 
 Native desktop tests copied a 13-atom, 13-bond aspirin drawing with red bonds and teal labels into another drawing editor, then copied it back into ReShiki. The returned binary data retained the molecular identity, counts and colors. A separate image paste retained the publication dimensions instead of expanding to the PNG's pixel dimensions. The standalone worker was launched outside the checkout.

@@ -76,7 +76,7 @@ fn labels_follow_orientation_preserve_font_and_exclude_hidden_extents() {
 fn invalid_fragments_are_atomic_and_chemical_changes_reveal_the_group() {
     let (mut doc, [a, b, c]) = ether();
     let original = doc.clone();
-    for ids in [vec![a, c], vec![b], vec![999]] {
+    for ids in [vec![a, c], vec![999]] {
         assert!(doc.contract(&ids, "X", "").is_err());
         assert_eq!(doc, original);
     }
@@ -95,6 +95,26 @@ fn invalid_fragments_are_atomic_and_chemical_changes_reveal_the_group() {
     doc.version = 10;
     doc.abbreviations[0].members.push(999);
     assert!(doc.validate().is_err());
+}
+
+#[test]
+fn contracting_an_internal_group_keeps_all_connections_on_its_anchor() {
+    let (mut doc, [a, b, c]) = ether();
+    let original_atoms = doc.atoms.clone();
+    let original_bonds = doc.bonds.clone();
+    doc.contract(&[b], "O", "").unwrap();
+    doc.validate().unwrap();
+    assert_eq!(doc.abbreviations[0].anchor, b);
+    assert_eq!(doc.atoms, original_atoms);
+    assert_eq!(doc.bonds, original_bonds);
+    assert!(doc.bond_visible(a, b) && doc.bond_visible(b, c));
+
+    // Connections on different members of a group are still ambiguous.
+    let d = doc.add_atom("C", Point::new(150., 30.));
+    doc.add_bond(c, d, 1, "plain");
+    let before = doc.clone();
+    assert!(doc.contract(&[b, c], "OC", "").is_err());
+    assert_eq!(doc, before);
 }
 #[tokio::test]
 async fn checked_chemistry_cleanup_and_editable_exchange_keep_full_identity() {

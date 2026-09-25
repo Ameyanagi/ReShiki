@@ -203,7 +203,7 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
                     .restore(&prepared, &mut document)
                     .map_err(|e| Error::Binary(e.to_string()))?;
                 return Ok(Preparation::Drawing(Box::new(document),
-                    "Drawing imported with R/X labels as uninterpreted atom text; query semantics and molecular properties are unavailable".into()));
+                    "Drawing imported with variable labels as uninterpreted atom text; query semantics and molecular properties are unavailable".into()));
             }
             let prepared = match cdxml::prepare_cdxml(&xml) {
                 Ok(prepared) => prepared,

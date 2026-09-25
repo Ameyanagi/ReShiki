@@ -58,6 +58,87 @@ impl std::fmt::Display for HydrogenPosition {
         })
     }
 }
+
+/// Resolve the side of an atom-label appendage without changing chemistry or
+/// saved preferences. Terminal labels retain the usual inline form.
+pub(crate) fn appendage_position(atom: &Atom, doc: &Document) -> HydrogenPosition {
+    use HydrogenPosition as H;
+    if atom.display.hydrogen_position != H::Auto {
+        return atom.display.hydrogen_position;
+    }
+    let directions: Vec<_> = doc
+        .bonds
+        .iter()
+        .filter_map(|bond| {
+            let id = if bond.a == atom.id {
+                bond.b
+            } else if bond.b == atom.id {
+                bond.a
+            } else {
+                return None;
+            };
+            if !doc.bond_visible(atom.id, id) {
+                return None;
+            }
+            let other = doc.atom(id)?;
+            let dx = other.position.x - atom.position.x;
+            let dy = other.position.y - atom.position.y;
+            let length = dx.hypot(dy);
+            (length > 0.001).then(|| Point::new(dx / length, dy / length))
+        })
+        .collect();
+    let sum_x = directions.iter().map(|p| p.x).sum::<f32>();
+    let sum_y = directions.iter().map(|p| p.y).sum::<f32>();
+    let left = sum_x > 0.1;
+    let preferred = if left { H::Left } else { H::Right };
+    if directions.len() < 2 {
+        return preferred;
+    }
+    if let [first, second] = directions.as_slice() {
+        // Two bonds define an angular bisector. Keep text inline except when
+        // that open bisector is within 22.5 degrees of vertical. This avoids
+        // unnecessary stacking on oblique chains, while symmetric horizontal
+        // chains and shallow peaks get the vertical clearance they need.
+        let vertical_cone = (22.5_f32).to_radians().tan();
+        if sum_x.hypot(sum_y) > 0.001 {
+            if sum_x.abs() < sum_y.abs() * vertical_cone - 0.0001 {
+                return if sum_y > 0. { H::Above } else { H::Below };
+            }
+            return if sum_x > 0. { H::Left } else { H::Right };
+        }
+        // Opposing bonds have two equal open sectors. Above is the stable tie
+        // choice for horizontal bonds; otherwise use the downward bond's side
+        // so upright label ink clears the upward bond. Atom ordering is irrelevant.
+        let axis = first;
+        if axis.y.abs() < axis.x.abs() * vertical_cone - 0.0001 {
+            return H::Above;
+        }
+        let lower = if first.y > second.y { first } else { second };
+        return if lower.x < -0.0001 { H::Left } else { H::Right };
+    }
+    let candidates = if left {
+        [(H::Left, -1., 0.), (H::Right, 1., 0.)]
+    } else {
+        [(H::Right, 1., 0.), (H::Left, -1., 0.)]
+    };
+    // Minimize the closest bond's cosine: the chosen cardinal direction has
+    // the greatest angular clearance. Normalization makes this independent of
+    // bond length. Ties retain inline labels, then prefer above over below.
+    let mut best = (preferred, f32::INFINITY);
+    for (position, x, y) in candidates
+        .into_iter()
+        .chain([(H::Above, 0., -1.), (H::Below, 0., 1.)])
+    {
+        let score = directions
+            .iter()
+            .map(|p| p.x * x + p.y * y)
+            .fold(f32::NEG_INFINITY, f32::max);
+        if score < best.1 - 0.0001 {
+            best = (position, score);
+        }
+    }
+    best.0
+}
 fn yes() -> bool {
     true
 }
@@ -513,4 +594,57 @@ fn segment_hits_rect(a: Point, b: Point, lo: Point, hi: Point) -> bool {
         }
     }
     true
+}
+
+/// Split a condensed display label at its attachment element. This is a layout
+/// decision only: a named dummy remains a dummy, with its original label intact.
+/// Unknown words and nicknames stay together rather than guessing an attachment.
+pub(crate) fn condensed_label(text: &str) -> Option<(&str, &str)> {
+    let first = text.chars().next()?;
+    if !first.is_ascii_uppercase() {
+        return None;
+    }
+    let end = if text.as_bytes().get(1).is_some_and(u8::is_ascii_lowercase) {
+        2
+    } else {
+        1
+    };
+    let (core, suffix) = text.split_at(end);
+    if !crate::editing::ELEMENTS.contains(&core) || suffix.is_empty() {
+        return None;
+    }
+    let mut rest = suffix;
+    let mut groups = Vec::new();
+    let mut item = false;
+    while let Some(c) = rest.chars().next() {
+        match c {
+            '(' | '[' => {
+                groups.push(c);
+                item = false;
+                rest = &rest[c.len_utf8()..];
+            }
+            ')' | ']' if item => {
+                if groups.pop() != Some(if c == ')' { '(' } else { '[' }) {
+                    return None;
+                }
+                rest = &rest[c.len_utf8()..];
+            }
+            '0'..='9' | '₀'..='₉' if item => rest = &rest[c.len_utf8()..],
+            '+' | '-' | '−' | '⁺' | '⁻' if item && groups.is_empty() => {
+                return (rest[c.len_utf8()..].chars().all(|v| v.is_ascii_digit()))
+                    .then_some((core, suffix));
+            }
+            'A'..='Z' => {
+                let token = crate::editing::ELEMENTS
+                    .iter()
+                    .chain(crate::abbreviations::PRESETS)
+                    .filter(|token| rest.starts_with(**token))
+                    .max_by_key(|token| token.len())?;
+                rest = &rest[token.len()..];
+                item = true;
+            }
+            _ => return None,
+        }
+    }
+    (item && groups.is_empty()).then_some((core, suffix))
 }

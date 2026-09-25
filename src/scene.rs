@@ -31,7 +31,19 @@ fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
     if !doc.atom_visible(a.id) || crate::attachments::hidden(a, doc) {
         return vec![];
     }
-    if let Some(group) = doc.abbreviation(a.id) {
+    let internal_group = doc.abbreviation(a.id).filter(|group| {
+        group.alignment.is_auto()
+            && crate::atom_labels::condensed_label(&group.label).is_some()
+            && doc
+                .bonds
+                .iter()
+                .filter(|bond| {
+                    (bond.a == a.id || bond.b == a.id) && doc.bond_visible(bond.a, bond.b)
+                })
+                .count()
+                > 1
+    });
+    if let Some(group) = doc.abbreviation(a.id).filter(|_| internal_group.is_none()) {
         let style = crate::typography::TextStyle {
             formula: true,
             ..a.text_style
@@ -86,7 +98,7 @@ fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
             })
             .collect();
     }
-    let show_element = visible(a, doc);
+    let show_element = internal_group.is_some() || visible(a, doc);
     if !show_element && a.charge == 0 {
         return vec![];
     }
@@ -104,12 +116,14 @@ fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
     };
     let size = STYLE.world(style.size_pt);
     let small = size * 0.7;
-    let label = a
-        .display
-        .variable
-        .as_deref()
-        .filter(|_| a.element == "*")
+    let label = internal_group
+        .map(|group| group.label.as_str())
+        .or_else(|| a.display.variable.as_deref().filter(|_| a.element == "*"))
         .unwrap_or(&a.element);
+    let condensed = (internal_group.is_some() || a.element == "*")
+        .then(|| crate::atom_labels::condensed_label(label))
+        .flatten();
+    let label = condensed.map_or(label, |(core, _)| core);
     let element_width = text_width(label, size);
     let origin = a.position.offset(-element_width / 2.0, -size * 0.58);
     let mut runs = if show_element {
@@ -118,11 +132,51 @@ fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
         vec![]
     };
     let mut right = origin.x + element_width;
+    let mut mark_y = origin.y;
     let isotope_width = if a.isotope > 0 {
         text_width(&a.isotope.to_string(), small)
     } else {
         0.0
     };
+    if let Some((_, suffix)) = condensed {
+        let layout = crate::typography::layout(
+            suffix,
+            &crate::typography::TextFormat {
+                style: crate::typography::TextStyle {
+                    formula: true,
+                    ..style.clone()
+                },
+                ..Default::default()
+            },
+        );
+        let mut parts: Vec<_> = layout
+            .fragments
+            .into_iter()
+            .map(|run| Primitive::Text {
+                position: run.position,
+                text: run.text,
+                size: run.style.size(),
+                color: run.style.color,
+                style: run.style,
+            })
+            .collect();
+        let side = crate::atom_labels::appendage_position(a, doc);
+        place_appendage(
+            &runs,
+            &mut parts,
+            (origin, element_width),
+            (layout.width, isotope_width),
+            size,
+            side,
+        );
+        runs.extend(parts);
+        if side == crate::atom_labels::HydrogenPosition::Right {
+            right += layout.width;
+        }
+    }
+    if internal_group.is_some() {
+        return runs;
+    }
     let label_h = if a.no_implicit {
         a.explicit_h
     } else {
@@ -136,47 +190,28 @@ fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
         };
         let h_width = text_width("H", size);
         let width = h_width + text_width(&count, small);
-        let neighbors: Vec<_> = doc
-            .bonds
-            .iter()
-            .filter_map(|b| {
-                if b.a == a.id {
-                    doc.atom(b.b)
-                } else if b.b == a.id {
-                    doc.atom(b.a)
-                } else {
-                    None
-                }
-            })
-            .collect();
-        let auto_left = !neighbors.is_empty()
-            && neighbors
-                .iter()
-                .map(|n| n.position.x - a.position.x)
-                .sum::<f32>()
-                > 0.1;
         use crate::atom_labels::HydrogenPosition as H;
-        let left = a.display.hydrogen_position == H::Left
-            || (a.display.hydrogen_position == H::Auto && auto_left);
-        let vertical = matches!(a.display.hydrogen_position, H::Above | H::Below);
-        let x = if vertical {
-            a.position.x - width / 2.
-        } else if left {
-            origin.x - isotope_width - width
-        } else {
-            right
-        };
-        let y = origin.y
-            + match a.display.hydrogen_position {
-                H::Above => -size * 1.1,
-                H::Below => size * 1.1,
-                _ => 0.,
-            };
-        runs.push(text(Point::new(x, y), "H".into(), size));
+        let position = crate::atom_labels::appendage_position(a, doc);
+        let mut parts = vec![text(Point::default(), "H".into(), size)];
         if !count.is_empty() {
-            runs.push(text(Point::new(x + h_width, y + size * 0.40), count, small));
+            parts.push(text(Point::new(h_width, size * 0.40), count, small));
         }
-        if !left && !vertical {
+        place_appendage(
+            &runs,
+            &mut parts,
+            (origin, element_width),
+            (width, isotope_width),
+            size,
+            position,
+        );
+        if matches!(position, H::Above | H::Below) {
+            if let Some(Primitive::Text { position, .. }) = parts.first() {
+                mark_y = position.y;
+            }
+            right = origin.x + width;
+        }
+        runs.extend(parts);
+        if position == H::Right {
             right += width;
         }
     }
@@ -202,11 +237,7 @@ fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
         };
         let label = format!("{amount}{}", if a.charge > 0 { "+" } else { "−" });
         let width = text_width(&label, small);
-        runs.push(text(
-            Point::new(right, origin.y - size * 0.25),
-            label,
-            small,
-        ));
+        runs.push(text(Point::new(right, mark_y - size * 0.25), label, small));
         right += width;
     }
     if a.radical_electrons > 0
@@ -215,12 +246,48 @@ fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
         })
     {
         runs.push(text(
-            Point::new(right, origin.y - size * 0.25),
+            Point::new(right, mark_y - size * 0.25),
             "•".repeat(a.radical_electrons as usize),
             small,
         ));
     }
     runs
+}
+
+/// Stack using actual glyph ink, including subscripts, so H₂/Cl₂ clear the core.
+/// A stacked appendage shares the core's left edge; its subscript is not centered
+/// over the attachment point. Bond clipping consumes these same positioned runs.
+fn place_appendage(
+    core: &[Primitive],
+    parts: &mut [Primitive],
+    (origin, core_width): (Point, f32),
+    (width, isotope_width): (f32, f32),
+    size: f32,
+    side: crate::atom_labels::HydrogenPosition,
+) {
+    use crate::atom_labels::HydrogenPosition as H;
+    let ink_y = |runs: &[Primitive]| {
+        label_ink_boxes(runs).into_iter().fold(
+            (f32::INFINITY, f32::NEG_INFINITY),
+            |(top, bottom), (lo, hi)| (top.min(lo.y), bottom.max(hi.y)),
+        )
+    };
+    let x = match side {
+        H::Left => origin.x - isotope_width - width,
+        H::Above | H::Below => origin.x,
+        _ => origin.x + core_width,
+    };
+    let y = match side {
+        H::Above => ink_y(core).0 - ink_y(parts).1 - size * 0.12,
+        H::Below => ink_y(core).1 - ink_y(parts).0 + size * 0.12,
+        _ => origin.y,
+    };
+    let y = if y.is_finite() { y } else { origin.y };
+    for part in parts {
+        if let Primitive::Text { position, .. } = part {
+            *position = position.offset(x, y);
+        }
+    }
 }
 
 fn text_bounds(runs: &[Primitive]) -> Option<(Point, Point)> {
@@ -1086,6 +1153,127 @@ pub fn svg(doc: &Document) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn stacked_hydrogens_keep_charge_isotope_and_subscript_ink_separate() {
+        for size in [8., 10., 18.] {
+            for degrees in (0..360).step_by(15) {
+                let mut doc = Document::default();
+                let n = doc.add_atom("N", Point::default());
+                for x in [-60., 60.] {
+                    let c = doc.add_atom("C", Point::new(x, 35.));
+                    doc.add_bond(n, c, 1, "plain");
+                }
+                let atom = doc.atom_mut(n).unwrap();
+                atom.explicit_h = 2;
+                atom.no_implicit = true;
+                atom.charge = 1;
+                atom.isotope = 15;
+                atom.text_style = Some(crate::typography::TextStyle {
+                    size_pt: size,
+                    ..Default::default()
+                });
+                let ids = doc.all_ids();
+                crate::editing::transform_about(
+                    &mut doc,
+                    &ids,
+                    Point::default(),
+                    1.,
+                    degrees as f32,
+                );
+                let boxes = label_ink_boxes(&atom_label(doc.atom(n).unwrap(), &doc));
+                for (i, (a, b)) in boxes.iter().enumerate() {
+                    for (c, d) in &boxes[i + 1..] {
+                        assert!(
+                            b.x <= c.x || a.x >= d.x || b.y <= c.y || a.y >= d.y,
+                            "Overlapping label glyphs at {degrees} degrees, {size} pt"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn internal_label_bonds_clear_every_glyph_through_rotation() -> Result<(), String> {
+        for label in ["NH", "CH2", "CCl2", "CF2", "NMe", "SiH2", "C(OH)2"] {
+            for degrees in (0..360).step_by(15) {
+                let mut doc = Document::default();
+                let center = doc.add_atom("C", Point::default());
+                for x in [-60., 60.] {
+                    let end = doc.add_atom("C", Point::new(x, 35.));
+                    doc.add_bond(center, end, 1, "plain");
+                }
+                doc = crate::atom_text::apply(&doc, center, label, crate::atom_text::Mode::Auto)?;
+                let ids = doc.all_ids();
+                crate::editing::transform_about(
+                    &mut doc,
+                    &ids,
+                    Point::default(),
+                    1.,
+                    degrees as f32,
+                );
+                let boxes = label_ink_boxes(&atom_label(doc.atom(center).ok_or("Atom")?, &doc));
+                let mut edges = Vec::new();
+                for primitive in primitives(&doc) {
+                    match primitive {
+                        Primitive::Line(a, b, width) => edges.push((a, b, width)),
+                        Primitive::Polygon(points) => {
+                            for i in 0..points.len() {
+                                edges.push((points[i], points[(i + 1) % points.len()], 0.));
+                            }
+                        }
+                        Primitive::Path {
+                            commands, style, ..
+                        } => {
+                            use crate::graphics::PathCommand as P;
+                            let mut first = Point::default();
+                            let mut last = first;
+                            for command in commands {
+                                match command {
+                                    P::Move(p) => {
+                                        first = p;
+                                        last = p;
+                                    }
+                                    P::Line(p) => {
+                                        edges.push((last, p, style.width()));
+                                        last = p;
+                                    }
+                                    P::Close => {
+                                        edges.push((last, first, style.width()));
+                                        last = first;
+                                    }
+                                    P::Cubic(..) => panic!("Unexpected curved bond"),
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                assert!(
+                    !edges.is_empty(),
+                    "The test must inspect actual rendered bonds"
+                );
+                for (from, to, width) in edges {
+                    for step in 0..=100 {
+                        let f = step as f32 / 100.;
+                        let point =
+                            Point::new(from.x + (to.x - from.x) * f, from.y + (to.y - from.y) * f);
+                        for (lo, hi) in &boxes {
+                            assert!(
+                                point.x + width / 2. <= lo.x
+                                    || point.x - width / 2. >= hi.x
+                                    || point.y + width / 2. <= lo.y
+                                    || point.y - width / 2. >= hi.y,
+                                "{label} at {degrees} crosses label ink"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     #[test]
     fn rotated_group_bonds_do_not_cross_label_ink() -> Result<(), String> {
         use crate::abbreviations::LabelAlignment;

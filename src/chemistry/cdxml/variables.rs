@@ -1,4 +1,4 @@
-//! Drawing-only R/X labels; query chemistry remains unsupported.
+//! Drawing-only labels on unspecified atoms; query chemistry remains unsupported.
 use super::{PreparedCdxml, Result, tree::Tree};
 use std::collections::HashMap;
 
@@ -9,7 +9,29 @@ pub(crate) fn drawing_variables(xml: &str) -> Result<(String, Variables)> {
     let mut labels = HashMap::new();
     for index in tree.descendants(0)? {
         let node = tree.node(index)?;
-        if node.tag != "n" || node.attr("NodeType") != Some("GenericNickname") {
+        if node.tag != "n" {
+            continue;
+        }
+        if node.attr("NodeType") == Some("Unspecified") && node.attr("Element") == Some("0") {
+            let mut label = String::new();
+            for text in tree.children(index, "t")? {
+                for run in tree.children(text, "s")? {
+                    label.push_str(&tree.node(run)?.text);
+                }
+            }
+            if !label.trim().is_empty() && label != "*" {
+                if label.chars().count() > 32 || label.chars().any(char::is_control) {
+                    return Err(super::Error::Invalid(
+                        "Unsupported unspecified atom label".into(),
+                    ));
+                }
+                if let Some(id) = node.attr("id").and_then(|s| s.parse::<u32>().ok()) {
+                    labels.insert(id, label);
+                }
+            }
+            continue;
+        }
+        if node.attr("NodeType") != Some("GenericNickname") {
             continue;
         }
         let label = node.attr("GenericNickname").unwrap_or("");

@@ -345,11 +345,6 @@ impl Writer<'_> {
                     external.push(n);
                 }
             }
-            if external.len() > 1 {
-                return Err(invalid(
-                    "Multiple abbreviation attachments are not supported",
-                ));
-            }
             let id = self.id()?;
             let position = self.tree.value(anchor, "p")?;
             let z = self.tree.get(anchor, "Z")?.unwrap_or("0").to_owned();
@@ -372,7 +367,9 @@ impl Writer<'_> {
                 self.tree.attach(inner, n)?;
             }
             let mut left = false;
-            if let Some(&bond) = external.first() {
+            let mut connection_ids = Vec::new();
+            let mut bond_ids = Vec::new();
+            for &bond in &external {
                 let side = if self
                     .tree
                     .get(bond, "B")?
@@ -427,10 +424,14 @@ impl Writer<'_> {
                         ("Order", order),
                     ],
                 )?;
-                self.tree.set(inner, "ConnectionOrder", connection)?;
-                self.tree
-                    .set(outer, "BondOrdering", self.tree.value(bond, "id")?)?;
+                connection_ids.push(connection);
+                bond_ids.push(self.tree.value(bond, "id")?);
                 self.tree.set(bond, side, self.tree.value(outer, "id")?)?;
+            }
+            if !connection_ids.is_empty() {
+                self.tree
+                    .set(inner, "ConnectionOrder", connection_ids.join(" "))?;
+                self.tree.set(outer, "BondOrdering", bond_ids.join(" "))?;
             }
             let mut style = self
                 .atom(group.anchor)?
@@ -444,7 +445,13 @@ impl Writer<'_> {
                 (
                     "LabelAlignment",
                     if group.alignment.is_auto() {
-                        if left { "Right" } else { "Left" }
+                        if external.len() > 1 {
+                            "Auto"
+                        } else if left {
+                            "Right"
+                        } else {
+                            "Left"
+                        }
                     } else {
                         group.alignment.cdxml()
                     }
