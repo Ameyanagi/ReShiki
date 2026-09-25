@@ -44,14 +44,42 @@ pub async fn checked_document(
     Ok(doc)
 }
 
-/// Render at the style's physical size. PDF stays vector; PNG uses line-art resolution.
+/// Figure export needs valid drawing geometry, not a resolved molecular identity.
+/// Refresh computed labels when possible, otherwise preserve the visible snapshot.
+pub async fn figure_document(
+    engine: &crate::engine::LocalEngine,
+    doc: Document,
+) -> Result<(Document, Option<String>), String> {
+    doc.validate()?;
+    match checked_document(engine, doc.clone()).await {
+        Ok(checked) => Ok((checked, None)),
+        Err(error) => Ok((
+            doc,
+            Some(format!(
+                "Drawing preserved; chemistry needs review: {error}"
+            )),
+        )),
+    }
+}
+
+pub struct Figure {
+    pub bytes: Vec<u8>,
+    pub detail: Option<String>,
+}
+
+/// Render at the style's physical size. Large PNG files use a bounded resolution.
 pub fn drawing(doc: &Document, format: &str) -> Result<Vec<u8>, String> {
+    Ok(figure(doc, format)?.bytes)
+}
+
+/// Include the actual raster dimensions and resolution for the export receipt.
+pub fn figure(doc: &Document, format: &str) -> Result<Figure, String> {
     render_drawing(doc, format, false)
 }
 
 /// Clipboard figures overlay the destination page or slide without a white box.
 pub fn clipboard_png(doc: &Document) -> Result<Vec<u8>, String> {
-    render_drawing(doc, "png", true)
+    Ok(render_drawing(doc, "png", true)?.bytes)
 }
 
 #[cfg(windows)]
@@ -62,11 +90,14 @@ pub fn office_preview(doc: &Document) -> Result<reshiki_windows::OfficePreview, 
     })
 }
 
-fn render_drawing(doc: &Document, format: &str, transparent: bool) -> Result<Vec<u8>, String> {
+fn render_drawing(doc: &Document, format: &str, transparent: bool) -> Result<Figure, String> {
     doc.validate()?;
     let svg = scene::svg(doc);
     if format == "svg" {
-        return Ok(svg.into_bytes());
+        return Ok(Figure {
+            bytes: svg.into_bytes(),
+            detail: None,
+        });
     }
     let mut options = resvg::usvg::Options::default();
     options.fontdb_mut().load_system_fonts();
@@ -78,17 +109,15 @@ fn render_drawing(doc: &Document, format: &str, transparent: bool) -> Result<Vec
             // usvg resolves CSS physical units at 96 px/in.
             svg2pdf::PageOptions { dpi: 96.0 },
         )
+        .map(|bytes| Figure {
+            bytes,
+            detail: None,
+        })
         .map_err(|e| e.to_string()),
         "png" => {
-            let dpi = crate::style::DEFAULT.png_dpi;
+            let (width, height, dpi) =
+                png_dimensions(tree.size().width(), tree.size().height(), !transparent)?;
             let scale = dpi as f32 / 96.0;
-            let width = (tree.size().width() * scale).ceil() as u32;
-            let height = (tree.size().height() * scale).ceil() as u32;
-            if u64::from(width) * u64::from(height) > 80_000_000 {
-                return Err(format!(
-                    "Drawing is too large for a {dpi} dpi PNG; use SVG or PDF."
-                ));
-            }
             let mut pixmap =
                 resvg::tiny_skia::Pixmap::new(width, height).ok_or("Could not allocate image")?;
             if !transparent {
@@ -124,10 +153,39 @@ fn render_drawing(doc: &Document, format: &str, transparent: bool) -> Result<Vec
                     .write_image_data(&pixels)
                     .map_err(|e| e.to_string())?;
             }
-            Ok(bytes)
+            Ok(Figure {
+                bytes,
+                detail: Some(format!("PNG: {width} × {height} pixels at {dpi} dpi")),
+            })
         }
         _ => Err("Unsupported drawing export".into()),
     }
+}
+
+/// Bound both allocation and encoded pixel work. The clipboard keeps its fixed
+/// resolution because its native picture bounds use that resolution too.
+fn png_dimensions(width: f32, height: f32, adaptive: bool) -> Result<(u32, u32, u32), String> {
+    if !width.is_finite() || !height.is_finite() || width <= 0. || height <= 0. {
+        return Err("Invalid PNG dimensions".into());
+    }
+    let preferred = crate::style::DEFAULT.png_dpi;
+    for dpi in [preferred, 600, 300, 150, 96, 72] {
+        if !adaptive && dpi != preferred {
+            break;
+        }
+        let scale = dpi as f32 / 96.;
+        let w = (width * scale).ceil() as u32;
+        let h = (height * scale).ceil() as u32;
+        if u64::from(w) * u64::from(h) <= 80_000_000 {
+            return Ok((w, h, dpi));
+        }
+    }
+    Err(if adaptive {
+        "Drawing is too large for a PNG even at 72 dpi; use SVG or PDF."
+    } else {
+        "Drawing is too large for a 1200 dpi PNG; use SVG or PDF."
+    }
+    .into())
 }
 /// Export all physical sheets without scaling the drawing. Page gaps and margin
 /// guides belong to the editor only; marks beyond a sheet edge are clipped.
@@ -201,6 +259,21 @@ pub fn pages_pdf(doc: &Document) -> Result<Vec<u8>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn raster_budget_rejects_invalid_and_extreme_sizes_without_allocating() {
+        for (width, height) in [
+            (0., 10.),
+            (10., -1.),
+            (f32::NAN, 10.),
+            (10., f32::INFINITY),
+            (f32::MAX, f32::MAX),
+        ] {
+            assert!(png_dimensions(width, height, true).is_err());
+        }
+        assert_eq!(png_dimensions(100., 100., true), Ok((1250, 1250, 1200)));
+        assert_eq!(png_dimensions(800., 800., true), Ok((5000, 5000, 600)));
+        assert!(png_dimensions(800., 800., false).is_err());
+    }
     #[test]
     fn clipboard_png_has_clear_background_and_straight_alpha_on_colored_edges() {
         use crate::{

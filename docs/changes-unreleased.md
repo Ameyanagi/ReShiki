@@ -24,6 +24,8 @@ The approved stack, PRs #22–#31, was merged on 25 September 2026 after passing
 
 ## Shortcut help and direct drawing gestures
 
+Figure export now preserves visible drawings when molecular analysis fails, with a review notice. Large PNG files automatically use a lower resolution while keeping physical size; the saved-file status reports their actual dimensions and DPI. PDF and SVG remain vector formats. [Before/after export evidence](changes/figure-export.md).
+
 New standalone text formulas such as **C₂H₂** and **Ca(OH)₂** acquire subscripts automatically. Ordinary prose stays unchanged, and manual formula/script controls remain available. This formats captions without changing molecular composition. [Before and after](changes/shortcut-help.md#automatic-formula-text).
 
 Bold aromatic ring edges now join automatic double-bond outlines and differently colored branches without protruding caps. The tested bold arene also supports editable CDX/CDXML copy, preserving double-bond placement on reimport. Unsupported appearances retain native editing and an external picture fallback, with concise copy status and hover details. [Matched examples and interchange scope](changes/shortcut-help.md#bold-edges-meet-alternating-ring-bonds).

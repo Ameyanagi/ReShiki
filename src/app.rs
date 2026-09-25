@@ -17,6 +17,7 @@ mod cleanup;
 mod clipboard;
 mod context_menu;
 mod document_styles;
+mod figure_export;
 mod file_shortcuts;
 mod files;
 #[cfg(target_os = "macos")]
@@ -208,6 +209,7 @@ pub enum Message {
     MacFiles(macos_files::Action),
     Saved(u64, Box<Document>, Result<Option<PathBuf>, String>),
     Exported(Result<Option<PathBuf>, String>),
+    FigureExported(Result<Option<figure_export::Saved>, String>),
     Close(iced::window::Id),
     Discard,
     Cancel,
@@ -303,6 +305,7 @@ pub struct App {
     revision: u64,
     busy: bool,
     clipboard_busy: bool,
+    figure_exporting: bool,
     status: String,
     error: bool,
     path: Option<PathBuf>,
@@ -411,6 +414,7 @@ impl App {
             revision: 0,
             busy: false,
             clipboard_busy: false,
+            figure_exporting: false,
             status: "Ready · Choose a tool to start drawing".into(),
             error: false,
             path: None,
@@ -918,6 +922,7 @@ impl App {
                     | Message::Cancel
                     | Message::Saved(..)
                     | Message::Exported(_)
+                    | Message::FigureExported(_)
                     | Message::Printing(
                         printing::Action::Prepared(..) | printing::Action::Finished(..)
                     )
@@ -2293,25 +2298,13 @@ impl App {
             },
             Message::Export(format) => {
                 if ["svg", "pdf", "png"].contains(&format) {
-                    let doc = self.doc.clone();
-                    let engine = self.engine.clone();
-                    return Task::perform(
-                        async move {
-                            let doc = reshiki::export::checked_document(&engine, doc).await?;
-                            let bytes = tokio::task::spawn_blocking(move || {
-                                reshiki::export::drawing(&doc, format)
-                            })
-                            .await
-                            .map_err(|e| e.to_string())??;
-                            save_export(bytes, format).await
-                        },
-                        Message::Exported,
-                    );
+                    return self.export_figure(format, false);
                 }
                 let mut request = Request::molecule("export", self.doc.clone());
                 request.format = Some(format.into());
                 return self.run(request, Job::Export(format));
             }
+            Message::FigureExported(result) => self.figure_exported(result),
             Message::Exported(result) => match result {
                 Ok(Some(path)) => {
                     self.status = format!(

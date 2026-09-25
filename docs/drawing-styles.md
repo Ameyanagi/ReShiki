@@ -6,7 +6,7 @@ Choose **JACS / ACS**, **Presentation**, or edit a custom style. The panel previ
 
 ## Settings
 
-The main controls set the label font, label size, nominal bond length, and line width. **Advanced stroke settings** exposes bold/wedge width, label clearance, hash spacing, and multiple-bond spacing as a percentage of nominal bond length. Dimensions are publication points, independent of screen zoom. PNG output remains 1200 dpi.
+The main controls set the label font, label size, nominal bond length, and line width. **Advanced stroke settings** exposes bold/wedge width, label clearance, hash spacing, and multiple-bond spacing as a percentage of nominal bond length. Dimensions are publication points, independent of screen zoom. [PNG file export](figure-export.md) uses up to 1200 dpi, reducing resolution for large drawings while retaining physical size.
 
 Atom labels without individual font overrides inherit the document style. **Update matching text and strokes** also updates existing captions, atom font overrides, arrows, and graphics whose settings match the old style. Different font families, sizes, and line widths remain unchanged. Colors, bold/italic formatting, and chemical connectivity are retained.
 

@@ -307,6 +307,7 @@ pub(super) fn background(message: &Message) -> bool {
             | Message::Saved(..)
             | Message::Opened(_)
             | Message::Exported(_)
+            | Message::FigureExported(_)
             | Message::ClipboardRead { .. }
             | Message::ClipboardWritten { .. }
             | Message::Pictures(super::pictures::Action::Loaded(..))

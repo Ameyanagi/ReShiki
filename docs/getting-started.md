@@ -37,7 +37,7 @@ New documents use JACS / ACS defaults: 10 pt Arial labels, 14.4 pt bonds, and 0.
 
 ## Export and share
 
-Use SVG or PDF for vector figures and PNG for an image. Editable copy and CDXML exchange preserve supported drawing objects; see [clipboard support](clipboard.md) for platform and format limits. Use [publication pages](publication-pages.md) to prepare page layouts.
+Use SVG or PDF for vector figures and PNG for an image. PNG export uses up to 1200 dpi, automatically lowering resolution for large drawings while preserving physical size. The export status reports the saved pixel dimensions and DPI. Figures can be exported even when molecular assignments need review; the drawing is preserved and a notice is shown. See [figure export](figure-export.md) for details. Editable copy and CDXML exchange preserve supported drawing objects; see [clipboard support](clipboard.md) for platform and format limits. Use [publication pages](publication-pages.md) to prepare page layouts.
 
 ## Run from source
 
