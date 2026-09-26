@@ -220,11 +220,7 @@ static GLYPH_INK: LazyLock<Mutex<HashMap<GlyphKey, Option<InkBox>>>> =
 
 /// Ink boxes relative to the text's top-left origin, excluding blank line height.
 /// Keep individual glyphs separate so superscripts do not mask empty corners.
-pub(crate) fn text_ink_boxes(
-    text: &str,
-    size: f32,
-    style: &crate::typography::TextStyle,
-) -> Vec<InkBox> {
+pub fn text_ink_boxes(text: &str, size: f32, style: &crate::typography::TextStyle) -> Vec<InkBox> {
     use crate::document::Point;
     use resvg::usvg::fontdb::{Family, Query};
     let mut x = 0.;
@@ -291,6 +287,19 @@ pub(crate) fn text_ink_boxes(
         x += advance * size;
     }
     boxes
+}
+
+/// Center the visible chemical symbol, rather than its line-height box.
+pub fn label_vertical_center(text: &str, size: f32, style: &crate::typography::TextStyle) -> f32 {
+    let mut font = style.clone();
+    font.underline = false;
+    let boxes = text_ink_boxes(text, size, &font);
+    let top = boxes.iter().map(|(lo, _)| lo.y).reduce(f32::min);
+    let bottom = boxes.iter().map(|(_, hi)| hi.y).reduce(f32::max);
+    match (top, bottom) {
+        (Some(top), Some(bottom)) => (top + bottom) / 2.,
+        _ => size / 2.,
+    }
 }
 
 static FONT_NAMES: LazyLock<Vec<&'static str>> = LazyLock::new(|| {

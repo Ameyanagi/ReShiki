@@ -1,6 +1,88 @@
 use super::{values::*, *};
 use std::collections::HashSet;
 
+/// Read only document-level style properties from stationery. Unlike a drawing
+/// import, template artwork may contain arbitrary objects: traverse their binary
+/// framing, but do not interpret or import them. Older CDS files omit the root
+/// object header after their 28-byte file header.
+pub(crate) fn style_from_cdx(data: &[u8]) -> Result<String> {
+    if data.len() > LIMIT || !data.starts_with(b"VjCD0100\x04\x03\x02\x01") {
+        return Err("Invalid or oversized ChemDraw stationery".into());
+    }
+    let mut r = Reader::new(data);
+    if data.get(22..24) == Some(&[0, 0x80]) {
+        r.take(28)?;
+    } else if data.get(28..30) == Some(&[0, 0x80]) {
+        r.take(34)?;
+    } else {
+        r.take(28)?;
+    }
+    let schema = Schema::new();
+    let mut tree = Tree {
+        name: "CDXML",
+        id: 0,
+        raw: Vec::new(),
+        children: Vec::new(),
+    };
+    let (mut depth, mut objects, mut properties) = (0usize, 0usize, 0usize);
+    let mut seen = HashSet::new();
+    loop {
+        let tag = r.u16()?;
+        if tag == 0 {
+            if depth == 0 {
+                break;
+            }
+            depth -= 1;
+        } else if tag >= 0x8000 {
+            r.u32()?;
+            depth += 1;
+            objects += 1;
+            if depth > 64 || objects > MAX_OBJECTS {
+                return Err("Stationery object limit exceeded".into());
+            }
+        } else {
+            properties += 1;
+            if properties > MAX_PROPERTIES {
+                return Err("Stationery property limit exceeded".into());
+            }
+            let size = r.u16()?;
+            let size = if size == u16::MAX {
+                r.u32()? as usize
+            } else {
+                usize::from(size)
+            };
+            let value = r.take(size)?;
+            let selected = matches!(tag, 0x100 | 0x80a)
+                || schema.codes.get(&tag).is_some_and(|p| {
+                    matches!(
+                        p.name,
+                        "BondLength"
+                            | "BondSpacing"
+                            | "LineWidth"
+                            | "BoldWidth"
+                            | "MarginWidth"
+                            | "HashSpacing"
+                            | "LabelFont"
+                            | "LabelSize"
+                    )
+                });
+            if depth == 0 && selected {
+                if !seen.insert(tag) {
+                    return Err("Duplicate stationery style property".into());
+                }
+                tree.raw.push((tag, value));
+            }
+        }
+    }
+    if !matches!(r.remaining, [] | [0, 0]) {
+        return Err("Unexpected trailing stationery data".into());
+    }
+    let root = convert(&tree, &schema, &mut HashMap::new())?;
+    let mut xml = String::new();
+    root.write(&mut xml)?;
+    Ok(xml)
+}
+
 /// Decode the supported binary drawing subset. Unknown drawing features fail
 /// explicitly rather than silently yielding a chemically different structure.
 pub fn from_cdx(data: &[u8]) -> Result<String> {

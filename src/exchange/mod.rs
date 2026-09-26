@@ -8,6 +8,7 @@ mod schema;
 mod values;
 
 pub use decode::from_cdx;
+pub(crate) use decode::style_from_cdx;
 pub use encode::to_cdx;
 use std::collections::HashMap;
 
@@ -37,6 +38,9 @@ const OBJECTS: &[(u16, &str)] = &[
     (0x8009, "embeddedobject"),
     (0x8011, "objecttag"),
     (0x8027, "arrow"),
+    (0x802b, "annotation"),
+    // ChemDraw 26 native ring fill, verified against a ChemDraw-saved CDX.
+    (0x8032, "ColoredMolecularArea"),
 ];
 
 struct Schema {

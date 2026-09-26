@@ -1938,4 +1938,16 @@ pub(super) const PROPERTIES: &[Property] = &[
         kind: "CDXBooleanImplied",
         variants: &[],
     },
+    Property {
+        code: 0x1500,
+        name: "Keyword",
+        kind: "CDXString",
+        variants: &[],
+    },
+    Property {
+        code: 0x1501,
+        name: "Content",
+        kind: "CDXString",
+        variants: &[],
+    },
 ];

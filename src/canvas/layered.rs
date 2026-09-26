@@ -151,6 +151,7 @@ pub struct Frame<'a> {
     offset: Vector,
     current: canvas::Frame,
     layers: Vec<canvas::Geometry>,
+    dark: bool,
 }
 impl<'a> Frame<'a> {
     pub fn new(renderer: &'a Renderer, size: Size) -> Self {
@@ -165,7 +166,42 @@ impl<'a> Frame<'a> {
             offset,
             current,
             layers: vec![],
+            dark: false,
         }
+    }
+    pub fn with_theme(mut self, theme: &Theme) -> Self {
+        self.dark = crate::appearance::is_dark(theme);
+        self
+    }
+    pub fn with_canvas(mut self, theme: reshiki::canvas_theme::CanvasTheme) -> Self {
+        self.dark = theme.is_dark();
+        self
+    }
+    fn display_style(&self, style: canvas::Style) -> canvas::Style {
+        match style {
+            canvas::Style::Solid(color) => crate::appearance::color(self.dark, color).into(),
+            gradient => gradient,
+        }
+    }
+    pub fn fill(&mut self, path: &canvas::Path, fill: impl Into<canvas::Fill>) {
+        let mut fill = fill.into();
+        fill.style = self.display_style(fill.style);
+        self.current.fill(path, fill);
+    }
+    pub fn fill_rectangle(&mut self, at: iced::Point, size: Size, fill: impl Into<canvas::Fill>) {
+        let mut fill = fill.into();
+        fill.style = self.display_style(fill.style);
+        self.current.fill_rectangle(at, size, fill);
+    }
+    pub fn stroke<'s>(&mut self, path: &canvas::Path, stroke: impl Into<canvas::Stroke<'s>>) {
+        let mut stroke = stroke.into();
+        stroke.style = self.display_style(stroke.style);
+        self.current.stroke(path, stroke);
+    }
+    pub fn fill_text(&mut self, text: impl Into<canvas::Text>) {
+        let mut text = text.into();
+        text.color = crate::appearance::color(self.dark, text.color);
+        self.current.fill_text(text);
     }
     pub fn split(&mut self) {
         let mut next = canvas::Frame::with_bounds(self.renderer, self.clip);

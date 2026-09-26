@@ -144,6 +144,16 @@ fn forward() -> String {
 pub struct Document {
     #[serde(
         default,
+        skip_serializing_if = "crate::canvas_theme::CanvasTheme::is_light"
+    )]
+    pub canvas_theme: crate::canvas_theme::CanvasTheme,
+    #[serde(
+        default,
+        skip_serializing_if = "crate::canvas_theme::ColorTheme::is_publication"
+    )]
+    pub color_theme: crate::canvas_theme::ColorTheme,
+    #[serde(
+        default,
         skip_serializing_if = "crate::style::DrawingStyle::is_default"
     )]
     pub drawing_style: crate::style::DrawingStyle,
@@ -175,6 +185,8 @@ impl Default for Document {
             ring_fills: vec![],
             version: 15,
             drawing_style: Default::default(),
+            canvas_theme: Default::default(),
+            color_theme: Default::default(),
             page_layout: None,
             abbreviations: vec![],
             atom_labels: Default::default(),

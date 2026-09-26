@@ -1,0 +1,13 @@
+{
+  "name": "Angewandte",
+  "font_family": "Arial",
+  "bond_length_world": 49.583335876464844,
+  "bond_length_pt": 17.0,
+  "font_size_pt": 12.0,
+  "line_width_pt": 0.75,
+  "bold_width_pt": 2.6015625,
+  "margin_width_pt": 2.0,
+  "hash_spacing_pt": 2.6015625,
+  "bond_spacing_ratio": 0.18,
+  "png_dpi": 1200
+}

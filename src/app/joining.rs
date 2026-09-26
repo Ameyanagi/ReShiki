@@ -1,7 +1,7 @@
 use super::{App, InspectorTab, Message};
 use crate::canvas::layered::canvas;
 use crate::canvas::{TemplateAnchorPreview, Tool};
-use iced::widget::{button, column, container, pick_list, row, text};
+use iced::widget::{button, column, container, row, text};
 use iced::{Element, Length, Task};
 use reshiki::{
     joining::Prepared,
@@ -114,16 +114,16 @@ impl App {
         .into();
         column![
             text("Move & attach").size(18),
-            text("Choose the atom or bond on this fragment to use as its attachment point.").size(12).color(super::workspace::muted()),
-            pick_list([Connection::Connect,Connection::ShareAtom,Connection::FuseBond], Some(state.mode), |mode| Message::Join(Action::Mode(mode))).text_size(12).width(Length::Fill),
+            text("Choose the atom or bond on this fragment to use as its attachment point.").size(12).style(super::workspace::muted_text),
+            crate::appearance::pick_list([Connection::Connect,Connection::ShareAtom,Connection::FuseBond], Some(state.mode), |mode| Message::Join(Action::Mode(mode))).text_size(12).width(Length::Fill),
             preview.map(|anchor| Message::Join(Action::Anchor(anchor))),
-            text(state.anchor.to_string()).size(11).color(super::workspace::muted()),
+            text(state.anchor.to_string()).size(11).style(super::workspace::muted_text),
             text(match state.mode {
                 Connection::Connect | Connection::Auto => "Click a destination atom to add a single bond. Drag from that atom to set the direction.",
                 Connection::ShareAtom => "Click a matching destination atom to merge the two atoms. Drag from it to choose the orientation.",
                 Connection::FuseBond => "Click a matching destination bond to share its two atoms. Drag from it to choose the side."
             }).size(12),
-            text("Shift/Ctrl drag snaps the direction. Escape cancels. Joining is one Undo step.").size(11).color(super::workspace::muted()),
+            text("Shift/Ctrl drag snaps the direction. Escape cancels. Joining is one Undo step.").size(11).style(super::workspace::muted_text),
             button("Cancel move").on_press(Message::Join(Action::Cancel)).style(super::workspace::control(false))
         ].spacing(12).into()
     }
@@ -133,7 +133,7 @@ impl App {
                 text("Move & attach").size(12),
                 text("Choose a destination · Drag to orient")
                     .size(11)
-                    .color(super::workspace::muted()),
+                    .style(super::workspace::muted_text),
                 button("Cancel")
                     .on_press(Message::Join(Action::Cancel))
                     .style(super::workspace::control(false))

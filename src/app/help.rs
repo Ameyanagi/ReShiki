@@ -1,6 +1,6 @@
 use super::{
     App, Message, platform_shortcut,
-    workspace::{control, muted},
+    workspace::{control, muted_text},
 };
 use iced::widget::{
     Space, button, column, container, mouse_area, opaque, row, scrollable, stack, text,
@@ -88,7 +88,7 @@ impl App {
             shortcut("v / 4–8 / a / z / 9 / 0", "Bond: fuse rings / benzene / diene / chairs"),
             shortcut("g / ? / Enter", "Select / Properties / Edit atom label"),
             text("Uppercase means Shift-letter. Repeat 2 on a double bond to cycle its line placement.")
-                .size(12).color(muted()),
+                .size(12).style(muted_text),
         ].spacing(8);
         let files = group(
             "Files",
@@ -144,7 +144,7 @@ impl App {
                 .on_press(Message::OpenShortcutExamples)
                 .style(control(true)),
             text("One editable ReShiki file with labeled examples. Opens in a separate window; double-click a structure to select it, then copy and paste into your drawing.")
-                .size(12).color(muted()),
+                .size(12).style(muted_text),
         ].spacing(8);
         let body = column![examples, drawing, context, editing, files]
             .spacing(24)
@@ -157,7 +157,7 @@ impl App {
                         text("Help & shortcuts").size(22),
                         text("Quick reference for drawing and editing")
                             .size(12)
-                            .color(muted())
+                            .style(muted_text)
                     ]
                     .spacing(5),
                     Space::new().width(Length::Fill),
@@ -174,7 +174,7 @@ impl App {
                 row![
                     text("Hold a tool or click its corner for more options.")
                         .size(12)
-                        .color(muted()),
+                        .style(muted_text),
                     Space::new().width(Length::Fill),
                     button(text("Done").size(13))
                         .padding([7, 18])
@@ -190,19 +190,24 @@ impl App {
         .width(720)
         .height(650)
         .max_height(650)
-        .style(|_| container::Style {
-            background: Some(Color::WHITE.into()),
-            border: Border {
-                radius: 14.into(),
-                width: 1.,
-                color: Color::from_rgb8(207, 216, 216),
-            },
-            shadow: super::workspace::surface_shadow(iced::Shadow {
-                color: Color::from_rgba8(20, 40, 35, 0.18),
-                offset: iced::Vector::new(0., 8.),
-                blur_radius: 30.,
-            }),
-            ..Default::default()
+        .style(|theme| {
+            crate::appearance::container(
+                theme,
+                container::Style {
+                    background: Some(Color::WHITE.into()),
+                    border: Border {
+                        radius: 14.into(),
+                        width: 1.,
+                        color: Color::from_rgb8(207, 216, 216),
+                    },
+                    shadow: super::workspace::surface_shadow(iced::Shadow {
+                        color: Color::from_rgba8(20, 40, 35, 0.18),
+                        offset: iced::Vector::new(0., 8.),
+                        blur_radius: 30.,
+                    }),
+                    ..Default::default()
+                },
+            )
         });
         stack![
             base,
@@ -211,10 +216,13 @@ impl App {
                     container(Space::new())
                         .width(Length::Fill)
                         .height(Length::Fill)
-                        .style(|_| container::Style {
-                            background: Some(Color::from_rgba8(25, 35, 40, 0.18).into()),
-                            ..Default::default()
-                        })
+                        .style(|theme| crate::appearance::container(
+                            theme,
+                            container::Style {
+                                background: Some(Color::from_rgba8(25, 35, 40, 0.18).into()),
+                                ..Default::default()
+                            }
+                        ))
                 )
                 .on_press(Message::ToggleHelp)
             ),
@@ -232,15 +240,18 @@ fn shortcut(keys: &'static str, label: &'static str) -> Element<'static, Message
         text(label).size(12).width(Length::Fill),
         container(text(keys).size(11))
             .padding([3, 6])
-            .style(|_| container::Style {
-                background: Some(Color::from_rgb8(245, 247, 249).into()),
-                border: Border {
-                    radius: 4.into(),
-                    width: 1.,
-                    color: Color::from_rgb8(224, 228, 233)
-                },
-                ..Default::default()
-            }),
+            .style(|theme| crate::appearance::container(
+                theme,
+                container::Style {
+                    background: Some(Color::from_rgb8(245, 247, 249).into()),
+                    border: Border {
+                        radius: 4.into(),
+                        width: 1.,
+                        color: Color::from_rgb8(224, 228, 233)
+                    },
+                    ..Default::default()
+                }
+            )),
     ]
     .spacing(8)
     .align_y(Alignment::Center)

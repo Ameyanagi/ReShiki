@@ -290,43 +290,48 @@ impl Writer<'_> {
         }
         Ok(())
     }
-    pub(super) fn ring_fills(&mut self, z: usize) -> Result<()> {
-        let doc = self.doc;
-        for fill in &doc.ring_fills {
-            let commands = fill.commands(doc);
-            if commands.is_empty() {
+    pub(super) fn ring_fills(&mut self) -> Result<()> {
+        let edges: HashMap<_, _> = self
+            .doc
+            .bonds
+            .iter()
+            .zip(&self.bond_nodes)
+            .map(|(b, &node)| ((b.a.min(b.b), b.a.max(b.b)), node))
+            .collect();
+        for fill in &self.doc.ring_fills {
+            if fill.commands(self.doc).is_empty() {
                 continue;
             }
-            let basis = fill
-                .atoms
-                .iter()
-                .map(|id| {
-                    let index = self
-                        .atom_indices
-                        .get(id)
-                        .ok_or_else(|| invalid("Missing ring atom"))?;
-                    let node = self
-                        .atom_nodes
-                        .get(*index)
-                        .ok_or_else(|| invalid("Missing ring node"))?;
-                    self.tree.value(*node, "id")
-                })
-                .collect::<Result<Vec<_>>>()?
-                .join(" ");
-            for (points, closed) in curve_points(&commands)? {
-                let node =
-                    self.curve(self.page, &points, closed, fill.color, true, 0., false, z)?;
-                // Standard filled curves remain visible to other editors. These
-                // references let ReShiki recover ownership when still intact.
-                // CurveType already encodes closure. A redundant binary Closed
-                // property changes filled-curve rendering in external readers.
-                self.tree
-                    .node_mut(node)?
-                    .attrs
-                    .retain(|(name, _)| *name != "Closed");
-                self.tree.set(node, "Name", "ReShiki ring fill")?;
-                self.tree.set(node, "BasisObjects", basis.clone())?;
+            let mut basis = Vec::new();
+            let mut parent = None;
+            for (&a, &b) in fill.atoms.iter().zip(fill.atoms.iter().cycle().skip(1)) {
+                let node = *edges
+                    .get(&(a.min(b), a.max(b)))
+                    .ok_or_else(|| invalid("Missing ring bond"))?;
+                let fragment = self
+                    .tree
+                    .node(node)?
+                    .parent
+                    .ok_or_else(|| invalid("Missing ring fragment"))?;
+                if parent.is_some_and(|p| p != fragment) {
+                    return Err(invalid("Ring fill spans molecular fragments"));
+                }
+                parent = Some(fragment);
+                basis.push(self.tree.value(node, "id")?);
             }
+            // ChemDraw's own ring-fill representation: the area belongs to the
+            // fragment and references bonds, so atom edits reshape its fill.
+            let id = self.id()?;
+            let color = self.color(fill.color)?;
+            self.tree.add(
+                parent,
+                "ColoredMolecularArea",
+                [
+                    ("id", id),
+                    ("bgcolor", color),
+                    ("BasisObjects", basis.join(" ")),
+                ],
+            )?;
         }
         Ok(())
     }

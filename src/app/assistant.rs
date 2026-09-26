@@ -2,7 +2,7 @@ use super::{App, InspectorTab, Message};
 use crate::canvas::layered::canvas;
 use iced::widget::{
     Space, button, checkbox, column, container, mouse_area, opaque, row, scrollable, stack, text,
-    text_editor, text_input, tooltip,
+    text_editor, tooltip,
 };
 use iced::{Alignment, Border, Color, Element, Length, Task};
 use reshiki::assistant::settings::{Preferences, effort_label};
@@ -229,14 +229,14 @@ impl App {
                     source.height()
                 ))
                 .size(12)
-                .color(super::workspace::muted())
+                .style(super::workspace::muted_text)
             ]
             .spacing(12),
         )
         .padding(18)
         .width(Length::Fill)
         .height(Length::Fill)
-        .style(|_| card());
+        .style(|theme| crate::appearance::container(theme, card()));
         stack![
             base,
             opaque(
@@ -1032,7 +1032,7 @@ impl App {
             .as_ref()
             .filter(|s| labels.contains(s));
         let mut controls = column![
-            iced::widget::pick_list(
+            crate::appearance::pick_list(
                 labels.clone(),
                 Some(selected.cloned().unwrap_or_else(|| "Overview".into())),
                 |s| Message::Assistant(Action::PreviewTarget(s))
@@ -1122,10 +1122,10 @@ impl App {
         if state.messages.is_empty() {
             chat = chat.push(Space::new().height(20))
                 .push(text("What would you like to draw?").size(19))
-                .push(text("Molecules, reactions, or a starting point for your next scheme.").size(13).color(super::workspace::muted()))
+                .push(text("Molecules, reactions, or a starting point for your next scheme.").size(13).style(super::workspace::muted_text))
                 .push(action("Draw a molecule", Action::Example("Draw caffeine.")))
                 .push(action("Build a reaction", Action::Example("Draw the esterification of acetic acid with ethanol to ethyl acetate. Put H₂SO₄ and heat above the arrow.")))
-                .push(text("Review each proposal before applying. Changes stay editable and can be undone.").size(11).color(super::workspace::muted()));
+                .push(text("Review each proposal before applying. Changes stay editable and can be undone.").size(11).style(super::workspace::muted_text));
         }
         for message in &state.messages {
             let role = &message.role;
@@ -1151,25 +1151,32 @@ impl App {
                         .push(
                             text("Sent image · Click to enlarge")
                                 .size(11)
-                                .color(super::workspace::muted()),
+                                .style(super::workspace::muted_text),
                         );
                 }
                 chat = chat.push(
                     container(content)
                         .padding([10, 12])
                         .width(Length::Fill)
-                        .style(|_| surface(Color::from_rgb8(234, 241, 239), 12.)),
+                        .style(|theme| {
+                            crate::appearance::container(
+                                theme,
+                                surface(Color::from_rgb8(234, 241, 239), 12.),
+                            )
+                        }),
                 );
             } else if role == "ReShiki" {
                 chat = chat.push(
                     text(&message.text)
                         .size(11)
-                        .color(super::workspace::muted()),
+                        .style(super::workspace::muted_text),
                 );
             } else {
                 chat = chat.push(
                     column![
-                        text("Codex").size(11).color(Color::from_rgb8(17, 126, 108)),
+                        text("Codex").size(11).style(crate::appearance::text_color(
+                            Color::from_rgb8(17, 126, 108)
+                        )),
                         text(&message.text).size(13).width(Length::Fill)
                     ]
                     .spacing(6),
@@ -1177,13 +1184,16 @@ impl App {
             }
         }
         if !state.reply.is_empty() && state.busy {
-            chat = chat.push(
-                column![
-                    text("Codex").size(11).color(Color::from_rgb8(17, 126, 108)),
-                    text(&state.reply).size(13).width(Length::Fill)
-                ]
-                .spacing(6),
-            );
+            chat =
+                chat.push(
+                    column![
+                        text("Codex").size(11).style(crate::appearance::text_color(
+                            Color::from_rgb8(17, 126, 108)
+                        )),
+                        text(&state.reply).size(13).width(Length::Fill)
+                    ]
+                    .spacing(6),
+                );
         }
         if state.busy {
             let seconds = state.started.map(|t| t.elapsed().as_secs()).unwrap_or(0);
@@ -1198,14 +1208,14 @@ impl App {
                     "Elapsed {seconds}s · You can keep drawing or close this panel"
                 ))
                 .size(11)
-                .color(super::workspace::muted()),
+                .style(super::workspace::muted_text),
             ]
             .spacing(10);
             if !state.running_model.is_empty() {
                 activity = activity.push(
                     text(&state.running_model)
                         .size(10)
-                        .color(super::workspace::muted()),
+                        .style(super::workspace::muted_text),
                 );
             }
             if !state.plan.is_empty() {
@@ -1227,7 +1237,7 @@ impl App {
                 activity = activity.push(
                     text("Generation is still running. Waiting for the next completed step…")
                         .size(11)
-                        .color(super::workspace::muted()),
+                        .style(super::workspace::muted_text),
                 );
             }
             if let Some(doc) = &state.preview {
@@ -1242,7 +1252,7 @@ impl App {
                 container(activity)
                     .padding(12)
                     .width(Length::Fill)
-                    .style(|_| card()),
+                    .style(|theme| crate::appearance::container(theme, card())),
             );
         } else if state.draft.is_none()
             && let Some(doc) = &state.preview
@@ -1254,7 +1264,7 @@ impl App {
                     text("Review did not finish. The completed preview is retained.").size(11)
                 ])
                 .padding(12)
-                .style(|_| card()),
+                .style(|theme| crate::appearance::container(theme, card())),
             );
         }
         if let Some(draft) = &state.draft {
@@ -1274,7 +1284,7 @@ impl App {
                     "Replaces the targeted objects; keeps the rest of your drawing"
                 })
                 .size(11)
-                .color(super::workspace::muted())
+                .style(super::workspace::muted_text)
             ]
             .spacing(10);
             for change in &draft.review.changes {
@@ -1285,7 +1295,7 @@ impl App {
                 proposal = proposal.push(
                     text(format!("• {issue}"))
                         .size(11)
-                        .color(Color::from_rgb8(151, 86, 24)),
+                        .style(crate::appearance::text_color(Color::from_rgb8(151, 86, 24))),
                 );
             }
             proposal = proposal.push(self.assistant_preview_controls(&draft.fragment));
@@ -1302,7 +1312,7 @@ impl App {
                             (current && !state.busy && self.cleanup.is_none())
                                 .then_some(Message::Assistant(Action::Apply))
                         )
-                        .style(button::primary),
+                        .style(crate::appearance::primary),
                     action("Improve layout", Action::Improve).on_press_maybe(
                         (current && !state.busy).then_some(Message::Assistant(Action::Improve))
                     ),
@@ -1312,7 +1322,11 @@ impl App {
                 ]
                 .spacing(6),
             );
-            chat = chat.push(container(proposal).padding(12).style(|_| card()));
+            chat = chat.push(
+                container(proposal)
+                    .padding(12)
+                    .style(|theme| crate::appearance::container(theme, card())),
+            );
         }
         if let Some((doc, report)) = &state.completed {
             let mut result = column![
@@ -1333,7 +1347,7 @@ impl App {
                 container(result)
                     .padding(12)
                     .width(Length::Fill)
-                    .style(|_| card()),
+                    .style(|theme| crate::appearance::container(theme, card())),
             );
         }
         if !state.busy && state.draft.is_none() && !self.doc.all_ids().is_empty() {
@@ -1388,14 +1402,14 @@ impl App {
                     }
                 ))
                 .size(11)
-                .color(super::workspace::muted()),
+                .style(super::workspace::muted_text),
             );
         }
         if state.error {
             activity = activity.push(
                 text(&state.status)
                     .size(11)
-                    .color(Color::from_rgb8(175, 54, 54)),
+                    .style(crate::appearance::text_color(Color::from_rgb8(175, 54, 54))),
             );
         }
         let model_label = match state.model() {
@@ -1433,12 +1447,12 @@ impl App {
             .size(13)
             .height(64)
             .padding(4)
-            .style(|_, _| text_editor::Style {
+            .style(|theme, _| text_editor::Style {
                 background: Color::TRANSPARENT.into(),
                 border: Border::default(),
-                placeholder: super::workspace::muted(),
-                value: Color::from_rgb8(37, 46, 48),
-                selection: Color::from_rgb8(198, 223, 215),
+                placeholder: crate::appearance::themed(theme, super::workspace::muted()),
+                value: crate::appearance::themed(theme, Color::from_rgb8(37, 46, 48)),
+                selection: crate::appearance::themed(theme, Color::from_rgb8(198, 223, 215)),
             });
         let mut input_row = row![editor].spacing(8).align_y(Alignment::Center);
         if let Some(source) = &state.source_image
@@ -1466,7 +1480,7 @@ impl App {
             action("■ Stop", Action::Stop)
         } else {
             action("↑ Send", Action::Send)
-                .style(button::primary)
+                .style(crate::appearance::primary)
                 .on_press_maybe(
                     ((!state.input.text().trim().is_empty() || state.source_image.is_some())
                         && !state.reading_image
@@ -1512,7 +1526,7 @@ impl App {
             .spacing(4),
         )
         .padding(8)
-        .style(|_| card());
+        .style(|theme| crate::appearance::container(theme, card()));
         let footer = column![
             activity,
             composer,
@@ -1577,14 +1591,14 @@ impl App {
         let popup = container(self.assistant_menu(menu))
             .padding(10)
             .width(340)
-            .style(|_| {
+            .style(|theme| {
                 let mut style = card();
                 style.shadow = super::workspace::surface_shadow(iced::Shadow {
                     color: Color::from_rgba8(25, 40, 36, 0.16),
                     offset: iced::Vector::new(0., 4.),
                     blur_radius: 18.,
                 });
-                style
+                crate::appearance::container(theme, style)
             });
         layers
             .push(
@@ -1660,7 +1674,7 @@ impl App {
                 options = options.push(
                     text("Assistant edits")
                         .size(12)
-                        .color(super::workspace::muted()),
+                        .style(super::workspace::muted_text),
                 );
                 for (label, description, auto) in [
                     (
@@ -1678,7 +1692,9 @@ impl App {
                         button(
                             column![
                                 text(label).size(13),
-                                text(description).size(11).color(super::workspace::muted())
+                                text(description)
+                                    .size(11)
+                                    .style(super::workspace::muted_text)
                             ]
                             .spacing(4),
                         )
@@ -1693,7 +1709,7 @@ impl App {
             }
             Menu::Models => {
                 options = options.push(
-                    text_input("Search models…", &state.search)
+                    crate::appearance::text_input("Search models…", &state.search)
                         .on_input(|s| Message::Assistant(Action::Search(s)))
                         .size(13)
                         .padding(9),
@@ -1706,7 +1722,7 @@ impl App {
                 options = options.push(
                     text("Uses GPT-6 Astra when available; otherwise your account default")
                         .size(10)
-                        .color(super::workspace::muted()),
+                        .style(super::workspace::muted_text),
                 );
                 if let Some(account) = &state.account {
                     let search = state.search.to_lowercase();
@@ -1733,7 +1749,7 @@ impl App {
                                     ],
                                     text(&model.description)
                                         .size(10)
-                                        .color(super::workspace::muted())
+                                        .style(super::workspace::muted_text)
                                 ]
                                 .spacing(4),
                             )
@@ -1748,7 +1764,11 @@ impl App {
                 }
             }
             Menu::Effort => {
-                options = options.push(text("Reasoning").size(12).color(super::workspace::muted()));
+                options = options.push(
+                    text("Reasoning")
+                        .size(12)
+                        .style(super::workspace::muted_text),
+                );
                 if let Some(model) = state.model() {
                     for effort in &model.efforts {
                         let label = if effort.id == model.initial_effort() {
@@ -1769,7 +1789,7 @@ impl App {
                     options = options.push(iced::widget::rule::horizontal(1)).push(
                         text("Service tier")
                             .size(12)
-                            .color(super::workspace::muted()),
+                            .style(super::workspace::muted_text),
                     );
                     options = options.push(
                         action("Standard · Default", Action::Tier("default".into()))

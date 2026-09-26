@@ -14,6 +14,7 @@
 )]
 
 mod app;
+mod appearance;
 mod branding;
 mod canvas;
 

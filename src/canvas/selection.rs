@@ -1,5 +1,5 @@
 use super::{Camera, World, rgb};
-use iced::widget::canvas::{Frame, Path, Stroke};
+use iced::widget::canvas::{Path, Stroke};
 use iced::{Color, Point, Rectangle, Size, mouse};
 use reshiki::{document::Document, editing, scene};
 
@@ -110,7 +110,7 @@ impl SelectionBox {
     }
 
     /// During rotation the box and its handle rotate with the preview.
-    pub fn draw(self, frame: &mut Frame, rotation: f32) {
+    pub fn draw(self, frame: &mut super::layered::Frame<'_>, rotation: f32) {
         let pivot = self.camera.screen(self.pivot, self.bounds);
         let (s, c) = rotation.to_radians().sin_cos();
         let rotate = |p: Point| {

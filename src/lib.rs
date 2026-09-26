@@ -21,6 +21,7 @@ pub mod atom_text;
 pub mod attachments;
 mod bond_joins;
 pub mod bonds;
+pub mod canvas_theme;
 pub mod chains;
 pub mod chemistry;
 pub mod cleanup;

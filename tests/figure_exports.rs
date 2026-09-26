@@ -30,7 +30,10 @@ async fn unresolved_aromatic_drawing_exports_without_assigning_chemistry() -> an
         let bytes = export::drawing(&prepared, format).map_err(anyhow::Error::msg)?;
         assert!(!bytes.is_empty(), "{format}");
         if format == "svg" {
-            assert_eq!(String::from_utf8(bytes)?, reshiki::scene::svg(&doc));
+            assert_eq!(
+                String::from_utf8(bytes)?,
+                reshiki::scene::svg_with_background(&doc)
+            );
         } else if format == "pdf" {
             assert!(bytes.starts_with(b"%PDF-"));
             assert!(String::from_utf8_lossy(&bytes).contains("/MediaBox"));
@@ -78,7 +81,7 @@ fn whole_gallery_png_is_bounded_and_preserves_publication_size() -> anyhow::Resu
             .context("resolution receipt")?
             .contains("300 dpi")
     );
-    let svg = reshiki::scene::svg(&doc);
+    let svg = reshiki::scene::svg_with_background(&doc);
     let xml = roxmltree::Document::parse(&svg)?;
     for (attr, pixels) in [("width", info.width), ("height", info.height)] {
         let pt = xml

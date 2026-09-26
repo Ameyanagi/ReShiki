@@ -1,9 +1,11 @@
 use crate::canvas::Tool;
-use iced::widget::canvas::{self, Frame, Geometry, Path, Stroke};
+use iced::widget::canvas::{self, Geometry, Path, Stroke};
 use iced::{Color, Point, Rectangle, Renderer, Theme, mouse};
 
 #[derive(Clone, Copy)]
 pub(super) enum Icon {
+    Sun,
+    Moon,
     TextAlign(reshiki::typography::TextAlign),
     Tool(Tool),
     Ring(u8, bool),
@@ -26,23 +28,23 @@ impl<Message> canvas::Program<Message> for Glyph {
         &self,
         _: &(),
         renderer: &Renderer,
-        _: &Theme,
+        theme: &Theme,
         bounds: Rectangle,
         _: mouse::Cursor,
     ) -> Vec<Geometry> {
-        let mut f = Frame::new(renderer, bounds.size());
+        let mut f = crate::canvas::layered::Frame::new(renderer, bounds.size()).with_theme(theme);
         self.paint(&mut f);
-        vec![f.into_geometry()]
+        f.finish()
     }
 }
 impl Glyph {
-    pub(super) fn paint(&self, f: &mut Frame) {
+    pub(super) fn paint(&self, f: &mut crate::canvas::layered::Frame<'_>) {
         let ink = if self.1 {
             Color::from_rgb8(51, 62, 72)
         } else {
             Color::from_rgb8(187, 193, 199)
         };
-        let line = |f: &mut Frame, points: &[(f32, f32)]| {
+        let line = |f: &mut crate::canvas::layered::Frame<'_>, points: &[(f32, f32)]| {
             let path = Path::new(|p| {
                 if let Some((x, y)) = points.first() {
                     p.move_to(Point::new(*x, *y));
@@ -53,7 +55,7 @@ impl Glyph {
             });
             f.stroke(&path, Stroke::default().with_width(1.6).with_color(ink));
         };
-        let polygon = |f: &mut Frame, points: &[(f32, f32)]| {
+        let polygon = |f: &mut crate::canvas::layered::Frame<'_>, points: &[(f32, f32)]| {
             let path = Path::new(|p| {
                 if let Some((x, y)) = points.first() {
                     p.move_to(Point::new(*x, *y));
@@ -66,6 +68,45 @@ impl Glyph {
             f.fill(&path, ink);
         };
         match self.0 {
+            Icon::Sun => {
+                f.stroke(
+                    &Path::circle(Point::new(12., 12.), 4.2),
+                    Stroke::default().with_width(1.6).with_color(ink),
+                );
+                for i in 0..8 {
+                    let a = i as f32 * std::f32::consts::FRAC_PI_4;
+                    line(
+                        f,
+                        &[
+                            (12. + 7. * a.cos(), 12. + 7. * a.sin()),
+                            (12. + 10. * a.cos(), 12. + 10. * a.sin()),
+                        ],
+                    );
+                }
+            }
+            Icon::Moon => {
+                let path = Path::new(|p| {
+                    p.move_to(Point::new(17., 3.));
+                    p.bezier_curve_to(
+                        Point::new(0., 0.),
+                        Point::new(0., 23.),
+                        Point::new(16., 21.),
+                    );
+                    p.bezier_curve_to(
+                        Point::new(20., 20.),
+                        Point::new(22., 17.),
+                        Point::new(22., 14.),
+                    );
+                    p.bezier_curve_to(
+                        Point::new(12., 19.),
+                        Point::new(9., 7.),
+                        Point::new(17., 3.),
+                    );
+                    p.close();
+                });
+                f.stroke(&path, Stroke::default().with_width(1.6).with_color(ink));
+            }
+
             Icon::Keyboard => {
                 let outline = Path::rounded_rectangle(
                     Point::new(1., 5.),

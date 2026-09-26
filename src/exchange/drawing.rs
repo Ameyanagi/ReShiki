@@ -126,6 +126,8 @@ fn write_impl(
     preserve_drawing: bool,
     variable_labels: bool,
 ) -> Result<String> {
+    let resolved = crate::canvas_theme::resolved_document(document);
+    let document = resolved.as_ref();
     document.validate().map_err(invalid)?;
     if document
         .atoms
@@ -200,7 +202,6 @@ fn write_impl(
     w.hidden_charges()?;
     w.arrows()?;
     let middle = w.graphics()?;
-    w.ring_fills(middle.saturating_sub(1))?;
     let arrow_nodes: std::collections::HashSet<_> = document
         .arrows
         .iter()
@@ -222,8 +223,9 @@ fn write_impl(
     }
     w.crossings(middle)?;
     w.groups()?;
+    w.ring_fills()?;
     w.abbreviations()?;
-    if !document.ring_fills.is_empty() {
+    if !document.ring_fills.is_empty() || document.canvas_theme.is_dark() {
         // Editable readers need a distinct stacking ordinal for every object.
         // Equal Z values on atoms/bonds can make an opaque fill cover them.
         let mut layers = Vec::new();
@@ -240,6 +242,44 @@ fn write_impl(
         for (rank, (_, key)) in layers.into_iter().enumerate() {
             w.tree.set(key, "Z", (rank + 1).to_string())?;
         }
+    }
+    if document.canvas_theme.is_dark() {
+        // A real filled object survives paste into another ChemDraw document;
+        // a document background setting alone does not travel with a selection.
+        let (lo, hi) = crate::scene::bounds(&crate::scene::primitives(document));
+        let background = w.color([255; 3])?;
+        w.tree.set(0, "bgcolor", background.clone())?;
+        let id = w.id()?;
+        // ChemDraw treats Z=0 as unspecified. Reserve a positive backmost rank.
+        for key in w.tree.descendants(w.page)? {
+            if let Some(z) = w.tree.get(key, "Z")? {
+                let z = z
+                    .parse::<usize>()
+                    .map_err(|_| invalid("Invalid stacking order"))?;
+                w.tree.set(key, "Z", (z + 1).to_string())?;
+            }
+        }
+        let rectangle = w.tree.add(
+            Some(w.page),
+            "graphic",
+            [
+                ("id", id),
+                ("Z", "1".into()),
+                ("GraphicType", "Rectangle".into()),
+                ("RectangleType", "Filled".into()),
+                ("FillType", "Solid".into()),
+                ("LineType", "Solid".into()),
+                ("LineWidth", "0".into()),
+                ("color", background),
+                (
+                    "BoundingBox",
+                    format!("{} {}", w.position(lo), w.position(hi)),
+                ),
+            ],
+        )?;
+        let children = &mut w.tree.node_mut(w.page)?.children;
+        children.retain(|key| *key != rectangle);
+        children.insert(0, rectangle);
     }
     w.tree.serialize()
 }
@@ -335,7 +375,10 @@ impl<'a> Writer<'a> {
         tree.set(
             0,
             "BondSpacing",
-            number(style_real(style.bond_spacing_ratio) * 100.),
+            // Keep the shortest decimal percentage. Widening the f32 ratio
+            // first produces 11.9999997 for 12%; ChemDraw truncates that to
+            // 11.9% when it stores the value in its binary format.
+            number(default_real(style.bond_spacing_ratio * 100.)),
         )?;
         tree.set(0, "ChainAngle", "120")?;
         let fonts = tree.add(Some(0), "fonttable", [])?;
@@ -372,8 +415,10 @@ impl<'a> Writer<'a> {
             variable_labels: false,
         };
         w.font(&style.font_family)?;
-        w.color([255; 3])?;
-        w.color([0; 3])?;
+        // ChemDraw requires the first two explicit entries to remain white and
+        // black, even when the drawing uses a dark page. Bypass theme mapping.
+        w.raw_color([255; 3])?;
+        w.raw_color([0; 3])?;
         Ok(w)
     }
     fn position(&self, p: impl Into<P>) -> String {
@@ -402,6 +447,9 @@ impl<'a> Writer<'a> {
         Ok(id.to_string())
     }
     fn color(&mut self, rgb: [u8; 3]) -> Result<String> {
+        self.raw_color(self.doc.canvas_theme.color(rgb))
+    }
+    fn raw_color(&mut self, rgb: [u8; 3]) -> Result<String> {
         if let Some(id) = self.color_ids.get(&rgb) {
             return Ok(id.to_string());
         }

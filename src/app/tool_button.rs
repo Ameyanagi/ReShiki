@@ -1,7 +1,7 @@
 //! Direct selection with a delayed flyout and an explicit corner target.
 use super::{Message, icons::Glyph, icons::Icon, palettes};
 use crate::canvas::Tool;
-use iced::widget::canvas::{self, Action, Frame, Geometry, Path, Stroke};
+use iced::widget::canvas::{self, Action, Geometry, Path, Stroke};
 use iced::{Color, Event, Point, Rectangle, Renderer, Theme, Vector, mouse};
 use std::time::{Duration, Instant};
 
@@ -102,11 +102,12 @@ impl canvas::Program<Message> for ToolButton {
         &self,
         state: &State,
         renderer: &Renderer,
-        _: &Theme,
+        theme: &Theme,
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
-        let mut frame = Frame::new(renderer, bounds.size());
+        let mut frame =
+            crate::canvas::layered::Frame::new(renderer, bounds.size()).with_theme(theme);
         let hovered = cursor.is_over(bounds);
         if self.active || hovered || state.pressed.is_some() {
             let path = Path::rounded_rectangle(
@@ -131,10 +132,9 @@ impl canvas::Program<Message> for ToolButton {
                 );
             }
         }
-        frame.with_save(|frame| {
-            frame.translate(Vector::new(6., 6.));
-            Glyph(self.icon, true).paint(frame);
-        });
+        frame.translate(Vector::new(6., 6.));
+        Glyph(self.icon, true).paint(&mut frame);
+        frame.translate(Vector::new(-6., -6.));
         if palettes::family(self.tool).is_some() {
             let triangle = Path::new(|p| {
                 p.move_to(Point::new(29., 33.));
@@ -144,7 +144,7 @@ impl canvas::Program<Message> for ToolButton {
             });
             frame.fill(&triangle, Color::from_rgb8(51, 62, 72));
         }
-        vec![frame.into_geometry()]
+        frame.finish()
     }
     fn mouse_interaction(
         &self,

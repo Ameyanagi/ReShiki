@@ -134,7 +134,11 @@ impl App {
                             fill.atoms.len() == atoms.len()
                                 && fill.atoms.iter().all(|id| atoms.contains(id))
                         })
-                        .map(|f| f.color)
+                        .map(|f| {
+                            self.doc
+                                .canvas_theme
+                                .color(f.visible_color(self.doc.canvas_theme))
+                        })
                 })
                 .collect();
             let colors = colors?;
@@ -158,7 +162,7 @@ impl App {
                     .atoms
                     .iter()
                     .filter(|a| self.selected.contains(&a.id))
-                    .map(|a| a.text_style.as_ref().map_or([0; 3], |s| s.color)),
+                    .map(|a| reshiki::canvas_theme::atom_color(&self.doc, a)),
             );
             for a in self
                 .doc
@@ -208,6 +212,7 @@ impl App {
     pub(super) fn sync_color_input(&mut self) {
         self.text_color_input = self
             .current_selection_color()
+            .map(|color| self.doc.canvas_theme.color(color))
             .map(|[r, g, b]| format!("#{r:02X}{g:02X}{b:02X}"))
             .unwrap_or_default();
     }
@@ -384,8 +389,21 @@ impl App {
         self.sync_style_inputs();
     }
     pub(super) fn apply_ring_color(&mut self, color: Option<[u8; 3]>) {
+        self.apply_ring_color_kind(color, false);
+    }
+    pub(super) fn apply_ring_color_kind(&mut self, color: Option<[u8; 3]>, fixed: bool) {
         let before = self.doc.clone();
         let count = reshiki::ring_fills::apply(&mut self.doc, &self.selected, color);
+        if fixed {
+            let cycles = reshiki::ring_fills::selected_cycles(&self.doc, &self.selected);
+            for fill in &mut self.doc.ring_fills {
+                if cycles.iter().any(|ids| {
+                    ids.len() == fill.atoms.len() && ids.iter().all(|id| fill.atoms.contains(id))
+                }) {
+                    fill.fixed_color = true;
+                }
+            }
+        }
         self.changed(before);
         self.sync_color_input();
         self.status = if count == 0 {
@@ -439,6 +457,7 @@ impl App {
             }
             for atom in &mut self.doc.atoms {
                 if self.selected.contains(&atom.id) && !text_only {
+                    atom.display.color_override = true;
                     atom.text_style
                         .get_or_insert_with(|| self.doc.drawing_style.text_style())
                         .color = color;
@@ -486,7 +505,8 @@ impl App {
         self.sync_graphics();
         self.sync_arrows();
         self.sync_bonds();
-        self.text_color_input = format!("#{:02X}{:02X}{:02X}", color[0], color[1], color[2]);
+        let [r, g, b] = self.doc.canvas_theme.color(color);
+        self.text_color_input = format!("#{r:02X}{g:02X}{b:02X}");
         self.status = if text_only {
             "Text range recolored".into()
         } else if changed {

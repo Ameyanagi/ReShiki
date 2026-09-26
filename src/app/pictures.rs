@@ -299,9 +299,9 @@ impl App {
         self.sync_pictures();
     }
     pub(super) fn picture_panel(&self) -> Element<'_, Message> {
-        use super::workspace::{command, muted, section};
+        use super::workspace::{command, muted_text, section};
         use iced::Alignment;
-        use iced::widget::{checkbox, column, row, text, text_input};
+        use iced::widget::{checkbox, column, row, text};
         let message = Message::Pictures;
         let mut panel = column![section("PICTURE")].spacing(9);
         if let Some(g) = self.selected_picture() {
@@ -309,14 +309,14 @@ impl App {
                 panel = panel.push(
                     text(format!("{} × {} pixels", p.width(), p.height()))
                         .size(12)
-                        .color(muted()),
+                        .style(muted_text),
                 );
             }
             panel = panel
                 .push(
                     row![
                         text("Width").size(12).width(45),
-                        text_input("mm", &self.pictures.width)
+                        crate::appearance::text_input("mm", &self.pictures.width)
                             .on_input(move |v| message(Action::Width(v)))
                             .on_submit(message(Action::Resize(true)))
                             .padding(6)
@@ -329,7 +329,7 @@ impl App {
                 .push(
                     row![
                         text("Height").size(12).width(45),
-                        text_input("mm", &self.pictures.height)
+                        crate::appearance::text_input("mm", &self.pictures.height)
                             .on_input(move |v| message(Action::Height(v)))
                             .on_submit(message(Action::Resize(false)))
                             .padding(6)
@@ -362,7 +362,7 @@ impl App {
             panel = panel.push(text("Multiple pictures selected").size(12));
         }
         panel.push(row![command("Send to back", Message::GraphicLayer(false)), command("Bring to front", Message::GraphicLayer(true))].spacing(4))
-            .push(text("Drag the corner handles to resize; use the handle above to rotate. Enter applies dimensions. Pictures are saved inside your drawing.").size(11).color(muted())).into()
+            .push(text("Drag the corner handles to resize; use the handle above to rotate. Enter applies dimensions. Pictures are saved inside your drawing.").size(11).style(muted_text)).into()
     }
 }
 

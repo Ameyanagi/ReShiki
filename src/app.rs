@@ -152,6 +152,10 @@ pub enum Message {
     AddFrame(reshiki::graphics::GraphicKind),
     Grid,
     ToggleView,
+    Appearance(crate::appearance::Mode),
+    CanvasTheme(reshiki::canvas_theme::CanvasTheme),
+    ColorTheme(reshiki::canvas_theme::ColorTheme),
+    QuickDrawingStyle(document_styles::Choice),
     Rulers(bool),
     Crosshair(bool),
     RulerUnit(canvas::guides::Unit),
@@ -300,6 +304,7 @@ pub struct App {
     grid: bool,
     guides: canvas::guides::Guides,
     view_open: bool,
+    appearance: crate::appearance::Settings,
     analysis: Option<Analysis>,
     engine: LocalEngine,
     revision: u64,
@@ -409,6 +414,7 @@ impl App {
             grid: false,
             guides: Default::default(),
             view_open: false,
+            appearance: crate::appearance::Settings::load(),
             analysis: None,
             engine: LocalEngine::default(),
             revision: 0,
@@ -498,6 +504,19 @@ impl App {
             .unwrap_or_else(|| self.untitled_name.unwrap_or("Untitled").into())
     }
     pub fn theme(&self) -> Theme {
+        if self.appearance.mode.is_dark(self.doc.canvas_theme) {
+            return Theme::custom(
+                "ReShiki Dark",
+                iced::theme::Palette {
+                    background: Color::from_rgb8(20, 23, 28),
+                    text: Color::from_rgb8(231, 236, 241),
+                    primary: Color::from_rgb8(82, 193, 163),
+                    success: Color::from_rgb8(82, 193, 163),
+                    danger: Color::from_rgb8(239, 119, 111),
+                    warning: Color::from_rgb8(225, 176, 86),
+                },
+            );
+        }
         Theme::custom(
             "ReShiki",
             iced::theme::Palette {
@@ -915,6 +934,7 @@ impl App {
                     | Message::Zoom(_)
                     | Message::ToggleInspector
                     | Message::Inspector(_)
+                    | Message::Appearance(_)
                     | Message::ToggleView
                     | Message::Grid
                     | Message::Rulers(_)
@@ -1500,11 +1520,16 @@ impl App {
                 if hex.len() == 6
                     && let Ok(value) = u32::from_str_radix(hex, 16)
                 {
-                    self.apply_text_style(reshiki::typography::StyleChange::Color([
+                    let color = self.doc.canvas_theme.color([
                         (value >> 16) as u8,
                         (value >> 8) as u8,
                         value as u8,
-                    ]));
+                    ]);
+                    if self.color_scope == typography::ColorScope::Rings {
+                        self.apply_ring_color_kind(Some(color), true);
+                    } else {
+                        self.apply_text_style(reshiki::typography::StyleChange::Color(color));
+                    }
                 } else {
                     self.error = true;
                     self.status = "Enter a color such as #174A7E".into();
@@ -1806,6 +1831,41 @@ impl App {
                 self.recovered.clear();
             }
             Message::Canvas(edit) => self.edit(edit),
+            Message::Appearance(mode) => {
+                self.appearance.mode = mode;
+                if let Err(error) = self.appearance.save() {
+                    self.status =
+                        format!("Appearance changed, but could not save preference: {error}");
+                    self.error = true;
+                }
+            }
+            Message::ColorTheme(theme) => {
+                if !self.finish_inline(true) {
+                    return Task::none();
+                }
+                let before = self.doc.clone();
+                theme.apply(&mut self.doc);
+                self.changed(before);
+                self.sync_color_input();
+                self.status = format!(
+                    "{theme} colors · Journal dimensions unchanged · Undo restores previous colors"
+                );
+            }
+            Message::CanvasTheme(theme) => {
+                if !self.finish_inline(true) {
+                    return Task::none();
+                }
+                if self.doc.canvas_theme != theme {
+                    let before = self.doc.clone();
+                    self.doc.canvas_theme = theme;
+                    self.changed(before);
+                    self.sync_color_input();
+                    self.status = format!(
+                        "{theme} canvas · Copies retain ink colors on a transparent background"
+                    );
+                }
+            }
+            Message::QuickDrawingStyle(choice) => return self.quick_drawing_style(choice),
             Message::Grid => self.grid = !self.grid,
             Message::ToggleView => self.view_open = !self.view_open,
             Message::Rulers(enabled) => {
@@ -2995,6 +3055,8 @@ impl App {
 /// Hydrogen labels are a computed display cache, not unsaved drawing edits.
 fn same_drawing(a: &Document, b: &Document) -> bool {
     a.version == b.version
+        && a.canvas_theme == b.canvas_theme
+        && a.color_theme == b.color_theme
         && a.drawing_style == b.drawing_style
         && a.page_layout == b.page_layout
         && a.atom_labels == b.atom_labels
@@ -3598,7 +3660,13 @@ mod tests {
         assert_eq!(app.doc.ring_fills.len(), 1);
         assert_eq!(app.doc.atoms, original.atoms);
         assert_eq!(app.doc.bonds, original.bonds);
-        assert_eq!(app.current_selection_color(), Some([201, 224, 248]));
+        assert_eq!(
+            app.current_selection_color(),
+            Some(reshiki::ring_fills::palette_color(
+                [201, 224, 248],
+                app.doc.canvas_theme
+            ))
+        );
         let colored = app.doc.clone();
         let _ = app.update(Message::ClearRingFill);
         assert!(app.doc.ring_fills.is_empty());
@@ -3608,6 +3676,23 @@ mod tests {
         assert_eq!(app.doc, original);
         app.doc.validate()?;
         Ok(())
+    }
+
+    #[test]
+    fn custom_ring_hex_is_exact_in_dark_mode_and_undoable() {
+        let (mut app, _) = App::new();
+        app.selected = editing::ring(&mut app.doc, Point::default(), 6, false, 0.);
+        app.doc.canvas_theme = reshiki::canvas_theme::CanvasTheme::Dark;
+        let _ = app.update(Message::ColorScope(typography::ColorScope::Rings));
+        let original = app.doc.clone();
+        let _ = app.update(Message::TextColor("#C9E0F8".into()));
+        let _ = app.update(Message::ApplyTextColor);
+        let fill = app.doc.ring_fills.first().unwrap();
+        assert!(fill.fixed_color);
+        assert_eq!(fill.visible_color(app.doc.canvas_theme), [201, 224, 248]);
+        assert_eq!(app.text_color_input, "#C9E0F8");
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, original);
     }
 
     #[test]
