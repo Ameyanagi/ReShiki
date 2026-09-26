@@ -283,7 +283,11 @@ async fn prepare_copy(
             NATIVE,
             &serde_json::to_vec(&doc).map_err(|e| e.to_string())?,
         ));
-        let mut request = Request::molecule("export", doc.clone());
+        // External editors receive explicit visible ink colors, without the
+        // source page background. Native data above retains the original theme.
+        let exchange_doc =
+            crate::canvas_theme::for_paste(doc.clone(), crate::canvas_theme::CanvasTheme::Light);
+        let mut request = Request::molecule("export", exchange_doc.clone());
         request.format = Some("cdx".into());
         let direct = engine.request(request).await.and_then(|response| {
             response
@@ -293,7 +297,7 @@ async fn prepare_copy(
         let editable = match direct {
             Ok(data) => Ok(data),
             Err(original_error) => {
-                let snapshot = doc.clone();
+                let snapshot = exchange_doc;
                 let compatible = tokio::task::spawn_blocking(move || {
                     let (xml, notices) = crate::exchange::drawing::write_clipboard(&snapshot)
                         .map_err(|e| e.to_string())?;
@@ -384,13 +388,13 @@ fn copy_images(
         let image = match format {
             "svg" => export::clipboard_svg(doc),
             "png" => export::clipboard_png(doc),
-            _ => export::drawing(doc, format),
+            _ => export::clipboard_drawing(doc, format),
         };
         #[cfg(not(windows))]
         let image = if format == "png" {
             export::clipboard_png(doc)
         } else {
-            export::drawing(doc, format)
+            export::clipboard_drawing(doc, format)
         };
         (format, image.map(|bytes| Representation::new(kind, &bytes)))
     })
@@ -567,6 +571,69 @@ async fn paste_packet_with_warnings(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn both_canvas_modes_copy_visible_ink_without_background_objects() {
+        use crate::{canvas_theme::CanvasTheme, document::Point};
+        for theme in CanvasTheme::ALL {
+            let mut doc = Document {
+                canvas_theme: theme,
+                ..Default::default()
+            };
+            let c = doc.add_atom("C", Point::default());
+            let o = doc.add_atom("O", Point::new(42., 0.));
+            doc.add_bond(c, o, 2, "plain");
+            let (outcome, representations) = prepare_copy(Default::default(), doc.clone(), false)
+                .await
+                .unwrap();
+            assert!(outcome.external_editable, "{:?}", outcome.notices);
+            let native = representations.iter().find(|r| r.kind == NATIVE).unwrap();
+            let original: Document = serde_json::from_slice(&native.bytes().unwrap()).unwrap();
+            assert_eq!(original.canvas_theme, theme);
+            assert_eq!(original.drawing_style, doc.drawing_style);
+            assert!(original.graphics.is_empty());
+            let binary = representations
+                .iter()
+                .find(|r| r.kind == CDX_TYPES[0])
+                .unwrap()
+                .clone();
+            let back = paste_packet(
+                Default::default(),
+                Packet {
+                    representations: vec![binary],
+                },
+            )
+            .await
+            .unwrap();
+            assert_eq!(back.atoms.len(), 2);
+            assert_eq!(back.bonds.len(), 1);
+            assert!(
+                back.graphics.is_empty(),
+                "Editable copies must not add a canvas rectangle"
+            );
+            assert_eq!(back.bonds[0].color, theme.color([0; 3]));
+            for (_, image) in copy_images(&doc, true) {
+                let image = image.unwrap();
+                if image.kind == "public.png" {
+                    let raster = image::load_from_memory(&image.bytes().unwrap())
+                        .unwrap()
+                        .into_rgba8();
+                    assert_eq!(raster.get_pixel(0, 0)[3], 0);
+                    let ink = theme.color([0; 3]);
+                    assert!(
+                        raster
+                            .pixels()
+                            .any(|p| p.0 == [ink[0], ink[1], ink[2], 255])
+                    );
+                } else if image.kind == "public.svg-image" {
+                    let bytes = image.bytes().unwrap();
+                    let tree =
+                        roxmltree::Document::parse(std::str::from_utf8(&bytes).unwrap()).unwrap();
+                    assert!(!tree.descendants().any(|n| n.has_tag_name("rect")));
+                }
+            }
+        }
+    }
 
     #[tokio::test]
     async fn internal_condensed_labels_keep_editable_text_and_formula_formatting()

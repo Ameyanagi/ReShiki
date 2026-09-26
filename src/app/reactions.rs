@@ -276,7 +276,7 @@ impl App {
         Task::none()
     }
     pub(super) fn reactions_inspector(&self) -> Element<'_, Message> {
-        use super::workspace::{command, muted, panel};
+        use super::workspace::{command, muted_text, panel};
         let ready = self
             .reaction_arrow()
             .and_then(|arrow| self.doc.reactions.iter().find(|r| r.arrow == arrow))
@@ -314,7 +314,7 @@ impl App {
                     exports,
                     text("Save .rsk to retain the complete scheme and captions.")
                         .size(11)
-                        .color(muted())
+                        .style(muted_text)
                 ]
                 .spacing(7)
             )
@@ -326,11 +326,11 @@ impl App {
         .into()
     }
     pub(super) fn reactions_panel(&self) -> Element<'_, Message> {
-        use super::workspace::{command, control, muted};
+        use super::workspace::{command, control, muted_text};
         let mut body = column![
             text("Choose an arrow, then assign molecules from the canvas.")
                 .size(12)
-                .color(muted()),
+                .style(muted_text),
         ]
         .spacing(12);
         let active = self.reaction_arrow();
@@ -372,7 +372,7 @@ impl App {
             let parts = reaction.participants(role);
             let mut card = column![row![
                 text(role.label()).size(13).width(Length::Fill),
-                text(parts.len().to_string()).size(12).color(muted())
+                text(parts.len().to_string()).size(12).style(muted_text)
             ]]
             .spacing(5);
             for (index, part) in parts.iter().enumerate() {
@@ -412,7 +412,7 @@ impl App {
                 );
             }
             if parts.is_empty() {
-                card = card.push(text("No molecules assigned").size(11).color(muted()));
+                card = card.push(text("No molecules assigned").size(11).style(muted_text));
             }
             card = card.push(
                 command(
@@ -422,19 +422,27 @@ impl App {
                 .on_press_maybe(has_atoms.then_some(Message::Reaction(Action::Assign(role))))
                 .width(Length::Fill),
             );
-            body = body.push(container(card).padding(10).width(Length::Fill).style(|_| {
-                container::Style {
-                    background: Some(iced::Color::WHITE.into()),
-                    border: iced::Border {
-                        color: iced::Color::from_rgb8(218, 228, 225),
-                        width: 1.,
-                        radius: 8.into(),
-                    },
-                    ..Default::default()
-                }
-            }));
+            body = body.push(
+                container(card)
+                    .padding(10)
+                    .width(Length::Fill)
+                    .style(|theme| {
+                        crate::appearance::container(
+                            theme,
+                            container::Style {
+                                background: Some(iced::Color::WHITE.into()),
+                                border: iced::Border {
+                                    color: iced::Color::from_rgb8(218, 228, 225),
+                                    width: 1.,
+                                    radius: 8.into(),
+                                },
+                                ..Default::default()
+                            },
+                        )
+                    }),
+            );
         }
-        body = body.push(text("Selecting any atom assigns its whole molecule. Reassigning moves it to the new role.").size(11).color(muted()));
+        body = body.push(text("Selecting any atom assigns its whole molecule. Reassigning moves it to the new role.").size(11).style(muted_text));
         body = body.push(
             row![
                 command("Select reaction", Message::Reaction(Action::SelectAll)),

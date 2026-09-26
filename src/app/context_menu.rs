@@ -657,7 +657,7 @@ impl App {
             let destructive = matches!(&action, Action::Run(message) if matches!(message.as_ref(), Message::Delete));
             let label = text(label).size(12);
             let label = if destructive {
-                label.color(Color::from_rgb8(167, 59, 51))
+                label.style(crate::appearance::text_color(Color::from_rgb8(167, 59, 51)))
             } else {
                 label
             };
@@ -673,7 +673,7 @@ impl App {
                 container(
                     text(self.selection_summary())
                         .size(11)
-                        .color(super::workspace::muted()),
+                        .style(super::workspace::muted_text),
                 )
                 .padding([5, 10]),
             );
@@ -687,7 +687,7 @@ impl App {
                 } => entries.push(item(label.into(), action, enabled)),
                 Entry::Separator => entries.push(horizontal_line()),
                 Entry::Hint(label) => entries.push(
-                    container(text(label).size(11).color(super::workspace::muted()))
+                    container(text(label).size(11).style(super::workspace::muted_text))
                         .padding([5, 10]),
                 ),
             };
@@ -697,19 +697,24 @@ impl App {
             .padding(5)
             .width(width)
             .max_height(height)
-            .style(|_| container::Style {
-                background: Some(Color::WHITE.into()),
-                border: Border {
-                    color: Color::from_rgb8(192, 204, 201),
-                    width: 1.,
-                    radius: 7.into(),
-                },
-                shadow: super::workspace::surface_shadow(iced::Shadow {
-                    color: Color::from_rgba8(20, 40, 35, 0.18),
-                    offset: iced::Vector::new(0., 4.),
-                    blur_radius: 12.,
-                }),
-                ..Default::default()
+            .style(|theme| {
+                crate::appearance::container(
+                    theme,
+                    container::Style {
+                        background: Some(Color::WHITE.into()),
+                        border: Border {
+                            color: Color::from_rgb8(192, 204, 201),
+                            width: 1.,
+                            radius: 7.into(),
+                        },
+                        shadow: super::workspace::surface_shadow(iced::Shadow {
+                            color: Color::from_rgba8(20, 40, 35, 0.18),
+                            offset: iced::Vector::new(0., 4.),
+                            blur_radius: 12.,
+                        }),
+                        ..Default::default()
+                    },
+                )
             });
         stack![
             base,

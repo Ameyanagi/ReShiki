@@ -1,4 +1,4 @@
-use iced::widget::canvas::{self, Action, Frame, Geometry, Path, Stroke};
+use iced::widget::canvas::{self, Action, Geometry, Path, Stroke};
 use iced::{Color, Event, Point, Rectangle, Renderer, Theme, Vector, mouse};
 use reshiki::{
     chains::{self, BondDrawing, ChainDrawing, ChainMode},
@@ -1103,7 +1103,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
         &self,
         state: &State,
         renderer: &Renderer,
-        _theme: &Theme,
+        theme: &Theme,
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
@@ -1117,16 +1117,17 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                 ..paper
             },
             offset,
-        );
+        )
+        .with_canvas(self.doc.canvas_theme);
         self.draw_paper(&mut frame, state, paper, cursor);
         let mut layers = frame.finish();
-        let mut frame = Frame::new(renderer, bounds.size());
+        let mut frame = layered::Frame::new(renderer, bounds.size()).with_theme(theme);
         let pointer = state
             .cursor
             .filter(|p| paper.contains(*p))
             .map(|p| Point::new(p.x - paper.x, p.y - paper.y));
         self.guides.draw_rulers(&mut frame, self.camera, pointer);
-        layers.push(frame.into_geometry());
+        layers.extend(frame.finish());
         layers
     }
     fn mouse_interaction(
@@ -1201,11 +1202,7 @@ impl MoleculeCanvas<'_> {
         bounds: Rectangle,
         cursor: mouse::Cursor,
     ) {
-        frame.fill_rectangle(
-            Point::ORIGIN,
-            bounds.size(),
-            Color::from_rgb8(253, 253, 250),
-        );
+        frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::WHITE);
         if let Some(layout) = &self.doc.page_layout {
             pages::draw(frame, layout, self.camera, bounds);
         }
@@ -2091,7 +2088,7 @@ fn region_selection(
 }
 
 fn draw_atom_markers(
-    frame: &mut Frame,
+    frame: &mut layered::Frame<'_>,
     doc: &Document,
     ids: &[u64],
     camera: Camera,
@@ -2418,7 +2415,60 @@ fn draw_document_with_minimum_stroke(
                     shaping: iced::widget::text::Shaping::Advanced,
                     ..Default::default()
                 };
-                t.draw_with(|path, color| frame.fill(&path, color));
+                // Iced centers its font metrics within line height, whereas
+                // SVG's text-before-edge uses the font ascent. Align actual ink
+                // to our shared font metrics so screen and export agree.
+                let mut paths = Vec::new();
+                t.draw_with(|path, color| paths.push((path, color)));
+                let actual_top = paths
+                    .iter()
+                    .flat_map(|(path, _)| path.raw().iter())
+                    .map(|event| {
+                        use iced::widget::canvas::path::lyon_path::{Event, geom};
+                        match event {
+                            Event::Begin { at } => at.y,
+                            Event::Line { from, to } => from.y.min(to.y),
+                            Event::Quadratic { from, ctrl, to } => {
+                                geom::QuadraticBezierSegment { from, ctrl, to }
+                                    .bounding_box()
+                                    .min
+                                    .y
+                            }
+                            Event::Cubic {
+                                from,
+                                ctrl1,
+                                ctrl2,
+                                to,
+                            } => {
+                                geom::CubicBezierSegment {
+                                    from,
+                                    ctrl1,
+                                    ctrl2,
+                                    to,
+                                }
+                                .bounding_box()
+                                .min
+                                .y
+                            }
+                            Event::End { last, first, .. } => last.y.min(first.y),
+                        }
+                    })
+                    .reduce(f32::min);
+                let mut metrics_style = style.clone();
+                metrics_style.underline = false;
+                let expected_top = reshiki::style::text_ink_boxes(&t.content, size, &metrics_style)
+                    .iter()
+                    .map(|(lo, _)| lo.y)
+                    .reduce(f32::min)
+                    .map(|top| camera.screen(position.offset(0., top), bounds).y);
+                let offset = actual_top
+                    .zip(expected_top)
+                    .map_or(0., |(actual, expected)| expected - actual);
+                let transform =
+                    iced::widget::canvas::path::lyon_path::math::Transform::translation(0., offset);
+                for (path, color) in paths {
+                    frame.fill(&path.transform(&transform), color);
+                }
                 if style.underline {
                     let width = reshiki::style::styled_text_width(&t.content, size, &style);
                     frame.stroke(
@@ -2444,11 +2494,13 @@ impl<Message> canvas::Program<Message> for TemplateThumbnail<'_> {
         &self,
         _: &(),
         renderer: &Renderer,
-        _: &Theme,
+        _theme: &Theme,
         bounds: Rectangle,
         _: mouse::Cursor,
     ) -> Vec<Geometry> {
-        let mut frame = layered::Frame::new(renderer, bounds.size());
+        let mut frame =
+            layered::Frame::new(renderer, bounds.size()).with_canvas(self.0.canvas_theme);
+        frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::WHITE);
         let (lo, hi) = reshiki::scene::selection_bounds(self.0, &self.0.all_ids())
             .unwrap_or_else(|| self.0.bounds());
         let camera = Camera {
@@ -2567,11 +2619,12 @@ impl canvas::Program<reshiki::templates::Anchor> for TemplateAnchorPreview<'_> {
         &self,
         state: &Self::State,
         renderer: &Renderer,
-        _: &Theme,
+        _theme: &Theme,
         bounds: Rectangle,
         _: mouse::Cursor,
     ) -> Vec<Geometry> {
-        let mut frame = layered::Frame::new(renderer, bounds.size());
+        let mut frame =
+            layered::Frame::new(renderer, bounds.size()).with_canvas(self.document.canvas_theme);
         let camera = self.camera(bounds);
         frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::WHITE);
         draw_document(&mut frame, self.document, camera, bounds);
@@ -2625,11 +2678,11 @@ impl canvas::Program<crate::app::Message> for ArrowPreview {
         &self,
         _: &(),
         renderer: &Renderer,
-        _: &Theme,
+        theme: &Theme,
         bounds: Rectangle,
         _: mouse::Cursor,
     ) -> Vec<Geometry> {
-        let mut frame = layered::Frame::new(renderer, bounds.size());
+        let mut frame = layered::Frame::new(renderer, bounds.size()).with_theme(theme);
         let mut doc = Document::default();
         doc.arrows.push(self.arrow.clone());
         let (lo, hi) = self.arrow.bounds();
@@ -2652,11 +2705,11 @@ impl canvas::Program<crate::app::Message> for ScientificPreview {
         &self,
         _: &(),
         renderer: &Renderer,
-        _: &Theme,
+        theme: &Theme,
         bounds: Rectangle,
         _: mouse::Cursor,
     ) -> Vec<Geometry> {
-        let mut frame = layered::Frame::new(renderer, bounds.size());
+        let mut frame = layered::Frame::new(renderer, bounds.size()).with_theme(theme);
         let (lo, hi) = self.0.bounds();
         let camera = Camera {
             center: World::new((lo.x + hi.x) * 0.5, (lo.y + hi.y) * 0.5),
@@ -2678,6 +2731,7 @@ impl canvas::Program<crate::app::Message> for ScientificPreview {
 pub struct PreviewState(std::cell::RefCell<Option<PreviewCache>>);
 struct PreviewCache {
     document: Document,
+    dark: bool,
     size: iced::Size,
     geometry: Vec<<Geometry as iced::advanced::graphics::cache::Cached>::Cache>,
 }
@@ -2688,19 +2742,21 @@ impl canvas::Program<crate::app::Message> for DrawingPreview<'_> {
         &self,
         state: &PreviewState,
         renderer: &Renderer,
-        _: &Theme,
+        _theme: &Theme,
         bounds: Rectangle,
         _: mouse::Cursor,
     ) -> Vec<Geometry> {
         use iced::advanced::graphics::cache::Cached;
         let mut cache = state.0.borrow_mut();
         if let Some(cached) = cache.as_ref()
+            && cached.dark == self.0.canvas_theme.is_dark()
             && cached.size == bounds.size()
             && &cached.document == self.0
         {
             return cached.geometry.iter().map(Cached::load).collect();
         }
-        let mut frame = layered::Frame::new(renderer, bounds.size());
+        let mut frame =
+            layered::Frame::new(renderer, bounds.size()).with_canvas(self.0.canvas_theme);
         frame.fill_rectangle(Point::ORIGIN, bounds.size(), Color::WHITE);
         let (lo, hi) =
             reshiki::scene::selection_bounds(self.0, &self.0.all_ids()).unwrap_or_default();
@@ -2719,6 +2775,7 @@ impl canvas::Program<crate::app::Message> for DrawingPreview<'_> {
         let result = geometry.iter().map(Cached::load).collect();
         *cache = Some(PreviewCache {
             document: self.0.clone(),
+            dark: self.0.canvas_theme.is_dark(),
             size: bounds.size(),
             geometry,
         });
@@ -2734,11 +2791,11 @@ impl canvas::Program<crate::app::Message> for PalettePreview {
         &self,
         _: &(),
         renderer: &Renderer,
-        _: &Theme,
+        theme: &Theme,
         bounds: Rectangle,
         _: mouse::Cursor,
     ) -> Vec<Geometry> {
-        let mut frame = layered::Frame::new(renderer, bounds.size());
+        let mut frame = layered::Frame::new(renderer, bounds.size()).with_theme(theme);
         let (lo, hi) =
             reshiki::scene::selection_bounds(&self.0, &self.0.all_ids()).unwrap_or_default();
         let camera = Camera {

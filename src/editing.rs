@@ -240,7 +240,7 @@ pub fn append(doc: &mut Document, source: &Document, offset: Point) -> Vec<u64> 
     doc.reactions.extend(part.reactions);
     doc.ring_fills.extend(part.ring_fills);
     if !doc.reactions.is_empty() {
-        doc.version = 15;
+        doc.version = doc.version.max(15);
     }
     if !doc.abbreviations.is_empty() {
         doc.version = doc.version.max(11);

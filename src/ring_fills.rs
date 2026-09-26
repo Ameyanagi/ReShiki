@@ -12,6 +12,49 @@ pub struct RingFill {
     /// Consecutive vertices of a closed molecular cycle.
     pub atoms: Vec<u64>,
     pub color: [u8; 3],
+    /// Imported/pasted colors retain their exact appearance instead of palette adaptation.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub fixed_color: bool,
+}
+
+/// Stable palette keys preserve existing files. Light paper uses pastel tints;
+/// dark paper uses medium tones with similar perceptual lightness across hues.
+pub const PALETTE: [(&str, [u8; 3]); 5] = [
+    ("Sky", [201, 224, 248]),
+    ("Mint", [198, 233, 220]),
+    ("Rose", [249, 207, 209]),
+    ("Lilac", [226, 211, 245]),
+    ("Sand", [255, 241, 174]),
+];
+pub fn palette_color(color: [u8; 3], canvas: crate::canvas_theme::CanvasTheme) -> [u8; 3] {
+    if canvas.is_dark() {
+        return match color {
+            [201, 224, 248] => [67, 99, 132],
+            [198, 233, 220] => [58, 108, 87],
+            [249, 207, 209] => [129, 81, 88],
+            [226, 211, 245] => [102, 88, 128],
+            [255, 241, 174] => [116, 92, 52],
+            _ => canvas.color(color),
+        };
+    }
+    match color {
+        [201, 224, 248] => [227, 237, 249],
+        [198, 233, 220] => [222, 242, 232],
+        [249, 207, 209] => [249, 230, 234],
+        [226, 211, 245] => [238, 231, 249],
+        [255, 241, 174] => [248, 241, 213],
+        _ => canvas.color(color),
+    }
+}
+
+impl RingFill {
+    pub fn visible_color(&self, canvas: crate::canvas_theme::CanvasTheme) -> [u8; 3] {
+        if self.fixed_color {
+            canvas.color(self.color)
+        } else {
+            palette_color(self.color, canvas)
+        }
+    }
 }
 
 fn key(atoms: &[u64]) -> Vec<u64> {
@@ -184,9 +227,10 @@ pub fn apply(doc: &mut Document, selected: &[u64], color: Option<[u8; 3]>) -> us
         match (index, color) {
             (Some(i), Some(color)) => {
                 if let Some(fill) = doc.ring_fills.get_mut(i)
-                    && fill.color != color
+                    && (fill.color != color || fill.fixed_color)
                 {
                     fill.color = color;
+                    fill.fixed_color = false;
                     changed += 1;
                 }
             }
@@ -195,7 +239,11 @@ pub fn apply(doc: &mut Document, selected: &[u64], color: Option<[u8; 3]>) -> us
                 changed += 1;
             }
             (None, Some(color)) => {
-                doc.ring_fills.push(RingFill { atoms, color });
+                doc.ring_fills.push(RingFill {
+                    atoms,
+                    color,
+                    fixed_color: false,
+                });
                 changed += 1;
             }
             _ => (),

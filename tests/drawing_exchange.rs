@@ -92,6 +92,18 @@ fn compare_xml(actual: &str, expected: &str, name: &str) -> anyhow::Result<()> {
                 );
                 continue;
             }
+            if attr.name() == "BondSpacing" {
+                // The legacy writer widens f32 before converting to percent:
+                // 12% becomes 11.9999997, which ChemDraw stores as 11.9%.
+                // Native export now uses the shortest f32 percentage decimal.
+                let percent = (attr.value().parse::<f64>()? as f32).to_string();
+                assert_eq!(
+                    value.parse::<f64>()?,
+                    percent.parse::<f64>()?,
+                    "{name}: BondSpacing"
+                );
+                continue;
+            }
             // Geometry has six decimal places. Other numeric attributes must
             // be exactly equal after parsing; references and labels are text.
             let geometry = matches!(

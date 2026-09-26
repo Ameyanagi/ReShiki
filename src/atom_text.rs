@@ -230,7 +230,16 @@ mod tests {
                 Some(label)
             );
             assert!(named.atom(metal).ok_or("Missing atom")?.no_implicit);
-            assert!(crate::scene::svg(&named).contains(label));
+            // A label such as R₁ can span multiple font runs when the requested
+            // face lacks a glyph. Check visible text, not contiguous XML bytes.
+            let svg = crate::scene::svg(&named);
+            let xml = roxmltree::Document::parse(&svg)?;
+            let rendered: String = xml
+                .descendants()
+                .filter(|node| node.has_tag_name("text"))
+                .filter_map(|node| node.text())
+                .collect();
+            assert!(rendered.contains(label), "Missing label {label}: {svg}");
             let saved = serde_json::to_string(&named)?;
             let loaded: Document = serde_json::from_str(&saved)?;
             loaded.validate()?;

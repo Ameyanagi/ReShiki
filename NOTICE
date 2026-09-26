@@ -13,6 +13,7 @@ of adaptations, copyright notices, and license texts are recorded in:
   licenses/cpython/        Numerical algorithm adaptations
   licenses/stdlib/         Standard-library algorithm adaptations
   licenses/amd-win-libm/   Windows numerical algorithm adaptations
+  licenses/oklab/          Public-domain perceptual color conversion matrices
   licenses/rust/           Notices omitted from published dependency archives
   vendor/zune-jpeg/        Modified JPEG dependency and its upstream notices
 

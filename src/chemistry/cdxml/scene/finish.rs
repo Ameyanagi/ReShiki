@@ -17,6 +17,8 @@ fn indicator(value: NativeStereo) -> Result<StereoDisplay> {
 }
 fn display(value: NativeAtomDisplay) -> Result<AtomDisplay> {
     Ok(AtomDisplay {
+        hydrogen_color: None,
+        color_override: false,
         hide_charge: false,
         variable: None,
         carbons: Some(value.carbons),
@@ -230,6 +232,7 @@ impl CdxmlScene {
                     atom.display = display(value)?;
                 }
                 atom.display.hide_charge = hidden_charge;
+                atom.display.hydrogen_color = old.hydrogen_color;
             }
         }
         if !previous.is_empty() {

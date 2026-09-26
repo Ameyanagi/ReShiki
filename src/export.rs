@@ -77,9 +77,13 @@ pub fn figure(doc: &Document, format: &str) -> Result<Figure, String> {
     render_drawing(doc, format, false)
 }
 
-/// Clipboard figures overlay the destination page or slide without a white box.
+/// Clipboard figures retain visible canvas ink with a transparent background.
 pub fn clipboard_png(doc: &Document) -> Result<Vec<u8>, String> {
-    Ok(render_drawing(doc, "png", true)?.bytes)
+    clipboard_drawing(doc, "png")
+}
+
+pub fn clipboard_drawing(doc: &Document, format: &str) -> Result<Vec<u8>, String> {
+    Ok(render_drawing(doc, format, true)?.bytes)
 }
 
 #[cfg(windows)]
@@ -90,9 +94,13 @@ pub fn office_preview(doc: &Document) -> Result<reshiki_windows::OfficePreview, 
     })
 }
 
-fn render_drawing(doc: &Document, format: &str, transparent: bool) -> Result<Figure, String> {
+fn render_drawing(doc: &Document, format: &str, clipboard: bool) -> Result<Figure, String> {
     doc.validate()?;
-    let svg = scene::svg(doc);
+    let svg = if clipboard {
+        scene::svg(doc)
+    } else {
+        scene::svg_with_background(doc)
+    };
     if format == "svg" {
         return Ok(Figure {
             bytes: svg.into_bytes(),
@@ -116,12 +124,13 @@ fn render_drawing(doc: &Document, format: &str, transparent: bool) -> Result<Fig
         .map_err(|e| e.to_string()),
         "png" => {
             let (width, height, dpi) =
-                png_dimensions(tree.size().width(), tree.size().height(), !transparent)?;
+                png_dimensions(tree.size().width(), tree.size().height(), !clipboard)?;
             let scale = dpi as f32 / 96.0;
             let mut pixmap =
                 resvg::tiny_skia::Pixmap::new(width, height).ok_or("Could not allocate image")?;
-            if !transparent {
-                pixmap.fill(resvg::tiny_skia::Color::WHITE);
+            if !clipboard {
+                let [r, g, b] = doc.canvas_theme.background();
+                pixmap.fill(resvg::tiny_skia::Color::from_rgba8(r, g, b, 255));
             }
             resvg::render(
                 &tree,
@@ -197,7 +206,7 @@ pub fn pages_pdf(doc: &Document) -> Result<Vec<u8>, String> {
         .page_layout
         .as_ref()
         .ok_or("Set up publication pages before exporting a page PDF.")?;
-    let svg = scene::svg(doc);
+    let svg = scene::svg_with_background(doc);
     let mut options = resvg::usvg::Options::default();
     options.fontdb_mut().load_system_fonts();
     let tree = resvg::usvg::Tree::from_str(&svg, &options).map_err(|e| e.to_string())?;
@@ -234,6 +243,11 @@ pub fn pages_pdf(doc: &Document) -> Result<Vec<u8>, String> {
         page.resources().x_objects().pair(name, root);
         page.finish();
         let mut content = Content::new();
+        let [r, g, b] = doc.canvas_theme.background().map(|c| f32::from(c) / 255.);
+        content
+            .set_fill_rgb(r, g, b)
+            .rect(0., 0., layout.width_pt, layout.height_pt)
+            .fill_nonzero();
         content
             .save_state()
             .rect(0., 0., layout.width_pt, layout.height_pt)
@@ -275,8 +289,9 @@ mod tests {
         assert!(png_dimensions(800., 800., false).is_err());
     }
     #[test]
-    fn clipboard_png_has_clear_background_and_straight_alpha_on_colored_edges() {
+    fn clipboard_is_transparent_and_files_keep_canvas_background() {
         use crate::{
+            canvas_theme::CanvasTheme,
             document::{Annotation, Point},
             typography::TextFormat,
         };
@@ -289,37 +304,35 @@ mod tests {
             text: "O".into(),
             format,
         });
-        let bytes = clipboard_png(&doc).unwrap();
-        let mut reader = png::Decoder::new(std::io::Cursor::new(bytes))
-            .read_info()
-            .unwrap();
-        assert_eq!(reader.info().pixel_dims.unwrap().xppu, 47244);
-        let mut pixels = vec![0; reader.output_buffer_size()];
-        let frame = reader.next_frame(&mut pixels).unwrap();
-        let pixels = &pixels[..frame.buffer_size()];
-        assert_eq!(&pixels[..4], &[0, 0, 0, 0]);
-        assert!(
-            pixels
-                .chunks_exact(4)
-                .any(|p| p[3] == 255 && p[..3] == [180, 50, 55])
-        );
-        let edges: Vec<_> = pixels
-            .chunks_exact(4)
-            .filter(|p| (64..192).contains(&p[3]))
-            .collect();
-        assert!(!edges.is_empty());
-        assert!(edges.iter().all(|p| {
-            p[..3]
-                .iter()
-                .zip([180u8, 50, 55])
-                .all(|(a, b)| a.abs_diff(b) <= 3)
-        }));
-        let opaque = drawing(&doc, "png").unwrap();
-        let image = image::load_from_memory(&opaque).unwrap().into_rgba8();
-        assert!(
-            image.pixels().all(|pixel| pixel[3] == 255),
-            "file export remains opaque"
-        );
+        for theme in CanvasTheme::ALL {
+            doc.canvas_theme = theme;
+            for clipboard in [false, true] {
+                let bytes = if clipboard {
+                    clipboard_png(&doc).unwrap()
+                } else {
+                    drawing(&doc, "png").unwrap()
+                };
+                let mut reader = png::Decoder::new(std::io::Cursor::new(bytes))
+                    .read_info()
+                    .unwrap();
+                assert_eq!(reader.info().pixel_dims.unwrap().xppu, 47244);
+                let mut pixels = vec![0; reader.output_buffer_size()];
+                let frame = reader.next_frame(&mut pixels).unwrap();
+                let pixels = &pixels[..frame.buffer_size()];
+                if clipboard {
+                    assert_eq!(pixels[3], 0, "Clipboard surround must be transparent");
+                    assert!(pixels.chunks_exact(4).any(|p| p[3] > 0 && p[3] < 255));
+                } else {
+                    assert_eq!(&pixels[..3], &theme.background());
+                    assert!(pixels.chunks_exact(4).all(|p| p[3] == 255));
+                }
+                assert!(
+                    pixels
+                        .chunks_exact(4)
+                        .any(|p| p[..3] == theme.color([180, 50, 55]))
+                );
+            }
+        }
     }
     #[test]
     fn office_clipboard_svg_outlines_text_without_moving_or_resizing_it() {

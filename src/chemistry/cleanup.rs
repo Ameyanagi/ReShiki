@@ -464,7 +464,7 @@ impl Prepared {
         if let Some(error) = self.deferred_error {
             return Err(error.into());
         }
-        result.version = 15;
+        result.version = result.version.max(15);
         result.validate().map_err(Error::Document)?;
         let mut warnings = if crossed != 0 {
             vec![format!(

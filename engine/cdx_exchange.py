@@ -29,6 +29,8 @@ OBJECTS = {
     0x8009: "embeddedobject",
     0x8011: "objecttag",
     0x8027: "arrow",
+    0x802B: "annotation",
+    0x8032: "ColoredMolecularArea",
 }
 PROPERTIES = dict(PUBLISHED)
 # The overview predates these enumerations. Numeric values are cross-checked
@@ -48,6 +50,9 @@ PROPERTIES[0x13] = ("SupersededBy", "CDXObjectID", {})
 # 0xA39 with an empty payload; 0xA38 is the numeric CurveSpacing property.
 PROPERTIES[0xA38] = ("CurveSpacing", "UINT16", {})
 PROPERTIES[0xA39] = ("Closed", "CDXBooleanImplied", {})
+# Native ChemDraw document annotations accompany clipboard ring-fill drawings.
+PROPERTIES[0x1500] = ("Keyword", "CDXString", {})
+PROPERTIES[0x1501] = ("Content", "CDXString", {})
 BY_NAME = {v[0]: (k, v[1], v[2]) for k, v in PROPERTIES.items()}
 INTS = {
     "INT8": "b",

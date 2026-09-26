@@ -136,7 +136,7 @@ impl App {
                 return;
             }
         };
-        let part = outcome.document;
+        let part = reshiki::canvas_theme::for_paste(outcome.document, self.doc.canvas_theme);
         let center = editing::center(&part, &part.all_ids());
         let before = self.doc.clone();
         let selected = editing::append(

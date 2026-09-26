@@ -1,6 +1,6 @@
 //! Canvas-only measuring aids; coordinates share the drawing/export scale.
 use super::{Camera, rgb};
-use iced::widget::canvas::{self, Frame, Path, Stroke};
+use iced::widget::canvas::{self, Path, Stroke};
 use iced::{Point, Rectangle, Size};
 
 pub const RULER_WIDTH: f32 = 38.;
@@ -71,7 +71,12 @@ impl Guides {
         }
     }
 
-    pub fn draw_crosshair(self, frame: &mut Frame, camera: Camera, pointer: Option<Point>) {
+    pub fn draw_crosshair(
+        self,
+        frame: &mut super::layered::Frame<'_>,
+        camera: Camera,
+        pointer: Option<Point>,
+    ) {
         let Some(p) = pointer.filter(|_| self.crosshair) else {
             return;
         };
@@ -120,7 +125,12 @@ impl Guides {
         });
     }
 
-    pub fn draw_rulers(self, frame: &mut Frame, camera: Camera, pointer: Option<Point>) {
+    pub fn draw_rulers(
+        self,
+        frame: &mut super::layered::Frame<'_>,
+        camera: Camera,
+        pointer: Option<Point>,
+    ) {
         if !self.rulers {
             return;
         }
