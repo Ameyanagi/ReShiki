@@ -965,18 +965,15 @@ impl App {
             let mut line = row![].spacing(4);
             for symbol in pair {
                 line = line.push(
-                    button(text(symbol).size(13).center().font(iced::Font {
-                        weight: iced::font::Weight::Bold,
-                        ..iced::Font::with_name(reshiki::style::ui_font_family())
-                    }))
-                    .width(36)
-                    .height(30)
-                    .on_press(Message::Element(symbol.into()))
-                    .style(element_control(
-                        self.tool == Tool::Atom && self.element == symbol,
-                        self.doc.color_theme,
-                        symbol,
-                    )),
+                    button(text(symbol).size(13).center())
+                        .width(36)
+                        .height(30)
+                        .on_press(Message::Element(symbol.into()))
+                        .style(element_control(
+                            self.tool == Tool::Atom && self.element == symbol,
+                            self.doc.color_theme,
+                            symbol,
+                        )),
                 );
             }
             palette = palette.push(line);
