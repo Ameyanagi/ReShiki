@@ -8,6 +8,8 @@ Open **Export → Figure**, choose PDF, SVG or PNG, then click **Export** and ch
 | SVG    | Vector artwork for illustration and layout applications. Text remains text. |
 | PNG    | An opaque image, normally at 1200 dpi, with physical resolution metadata.   |
 
+File exports in all three formats include the document’s canvas colors and background. **Copy image** instead uses a transparent background, preserving the visible ink for slides and other documents. **Canvas: Dark** exports white bonds and labels on black paper; **View → Interface** changes only the surrounding UI.
+
 Canvas zoom, rulers, grid and crosshair do not affect the exported figure. **Export pages as PDF** uses an explicitly configured publication layout; ordinary figure export crops to the artwork. See [publication pages](publication-pages.md).
 
 ## Large PNG drawings

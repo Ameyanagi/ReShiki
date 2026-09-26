@@ -6,7 +6,7 @@ use crate::canvas::layered::canvas;
 use crate::canvas::{Edit, MoleculeCanvas, Tool};
 use iced::widget::{
     Space, button, checkbox, column, combo_box, container, pick_list, row, scrollable, sensor,
-    text, text_editor, text_input, tooltip,
+    text, text_editor, tooltip,
 };
 use iced::{Alignment, Border, Color, Element, Length, Theme};
 use reshiki::bonds::BondPreset;
@@ -116,13 +116,13 @@ impl App {
             text(kind.to_string()).size(14),
             row![
                 text("Line (pt)").size(11),
-                text_input("0.6", &self.graphic_width_input)
+                crate::appearance::text_input("0.6", &self.graphic_width_input)
                     .on_input(Message::GraphicWidth)
                     .on_submit(Message::ApplyGraphicWidth)
                     .size(12)
                     .padding(5)
                     .width(48),
-                pick_list(
+                crate::appearance::pick_list(
                     [LinePattern::Solid, LinePattern::Dashed, LinePattern::Dotted],
                     Some(self.graphic_style.pattern),
                     |p| Message::GraphicStyle(GraphicChange::Pattern(p))
@@ -132,7 +132,7 @@ impl App {
             ]
             .spacing(6)
             .align_y(Alignment::Center),
-            text("Stroke color").size(11).color(muted()),
+            text("Stroke color").size(11).style(muted_text),
             row![
                 swatch([0, 0, 0], false),
                 swatch([32, 80, 145], false),
@@ -141,7 +141,7 @@ impl App {
                 swatch([116, 65, 147], false)
             ]
             .spacing(6),
-            text_input("#RRGGBB", &self.graphic_stroke_input)
+            crate::appearance::text_input("#RRGGBB", &self.graphic_stroke_input)
                 .on_input(Message::GraphicStroke)
                 .on_submit(Message::ApplyGraphicStroke)
                 .size(12)
@@ -170,15 +170,15 @@ impl App {
         }
         match kind {
             GraphicKind::Symbol(kind) => {
-                panel=panel.push(pick_list(reshiki::scientific::SymbolKind::ALL,Some(kind),|k|Message::ScientificKind(GraphicKind::Symbol(k))).text_size(12).padding(6).width(Length::Fill))
+                panel=panel.push(crate::appearance::pick_list(reshiki::scientific::SymbolKind::ALL,Some(kind),|k|Message::ScientificKind(GraphicKind::Symbol(k))).text_size(12).padding(6).width(Length::Fill))
                     .push(checkbox(self.attach_symbols).label("Attach to atoms").on_toggle(Message::AttachSymbols).size(14).text_size(12))
-                    .push(text("Attached charges and radicals update chemistry. Lone pairs annotate the atom. H and attachment symbols use free placement.").size(11).color(muted()));
+                    .push(text("Attached charges and radicals update chemistry. Lone pairs annotate the atom. H and attachment symbols use free placement.").size(11).style(muted_text));
             }
             GraphicKind::Orbital(kind) => {
-                panel=panel.push(pick_list(reshiki::scientific::OrbitalKind::ALL,Some(kind),|k|Message::ScientificKind(GraphicKind::Orbital(k))).text_size(12).padding(6).width(Length::Fill))
-                    .push(pick_list(reshiki::scientific::Phase::ALL,Some(self.orbital_phase),Message::OrbitalPhase).text_size(12).padding(6).width(Length::Fill))
+                panel=panel.push(crate::appearance::pick_list(reshiki::scientific::OrbitalKind::ALL,Some(kind),|k|Message::ScientificKind(GraphicKind::Orbital(k))).text_size(12).padding(6).width(Length::Fill))
+                    .push(crate::appearance::pick_list(reshiki::scientific::Phase::ALL,Some(self.orbital_phase),Message::OrbitalPhase).text_size(12).padding(6).width(Length::Fill))
                     .push(checkbox(self.phase_flipped).label("Reverse phases").on_toggle_maybe((!matches!(kind, reshiki::scientific::OrbitalKind::S | reshiki::scientific::OrbitalKind::Sigma | reshiki::scientific::OrbitalKind::Lobe)).then_some(Message::FlipPhase)).size(14).text_size(12))
-                    .push(text("Drag from the orbital node to set direction and size. Click uses one bond length. Shift snaps to 15°. Group with a molecule to move them together.").size(11).color(muted()));
+                    .push(text("Drag from the orbital node to set direction and size. Click uses one bond length. Shift snaps to 15°. Group with a molecule to move them together.").size(11).style(muted_text));
             }
             _ => {}
         }
@@ -214,7 +214,7 @@ impl App {
                     .spacing(6),
                 )
                 .push(
-                    text_input("#RRGGBB", &self.graphic_fill_input)
+                    crate::appearance::text_input("#RRGGBB", &self.graphic_fill_input)
                         .on_input(Message::GraphicFill)
                         .on_submit(Message::ApplyGraphicFill)
                         .size(12)
@@ -223,7 +223,7 @@ impl App {
         }
         if kind.brackets() {
             panel = panel.push(
-                pick_list(
+                crate::appearance::pick_list(
                     [BracketSides::Both, BracketSides::Left, BracketSides::Right],
                     Some(self.bracket_sides),
                     Message::GraphicSides,
@@ -256,7 +256,7 @@ impl App {
                 }),
             ));
         }
-        panel.push(text("Drag to size. Select to move, rotate or resize. Enter applies numeric and color fields.").size(11).color(muted())).into()
+        panel.push(text("Drag to size. Select to move, rotate or resize. Enter applies numeric and color fields.").size(11).style(muted_text)).into()
     }
 
     fn style_bar(&self) -> Element<'_, Message> {
@@ -277,7 +277,7 @@ impl App {
             .into()
         };
         let mut tools = row![
-            text("STYLE").size(10).color(muted()),
+            text("STYLE").size(10).style(muted_text),
             combo_box(
                 &self.font_options,
                 "Search fonts…",
@@ -285,10 +285,12 @@ impl App {
                 |family| Message::TextStyle(StyleChange::Family(family))
             )
             .width(152)
+            .input_style(crate::appearance::input_style)
+            .menu_style(crate::appearance::dropdown_menu)
             .size(12)
             .padding(6),
             hover_hint(
-                text_input("pt", &self.font_size_input)
+                crate::appearance::text_input("pt", &self.font_size_input)
                     .on_input(Message::FontSize)
                     .on_submit(Message::ApplyFontSize)
                     .width(46)
@@ -297,7 +299,7 @@ impl App {
                 "Font size in points · Enter to apply",
                 tooltip::Position::Bottom
             ),
-            text("pt").size(11).color(muted()),
+            text("pt").size(11).style(muted_text),
             divider(),
             toggle("B", "Bold", style.bold, StyleChange::Bold(!style.bold)),
             toggle(
@@ -375,7 +377,7 @@ impl App {
         if let Some(alignment) = group_alignment {
             use reshiki::abbreviations::LabelAlignment;
             tools = tools.push(hover_hint(
-                pick_list(
+                crate::appearance::pick_list(
                     [LabelAlignment::Auto, LabelAlignment::Above],
                     alignment.filter(|a| matches!(a, LabelAlignment::Auto | LabelAlignment::Above)),
                     Message::GroupLabelAlign,
@@ -390,9 +392,9 @@ impl App {
         }
         tools = tools
             .push(divider())
-            .push(text("Color").size(11).color(muted()))
+            .push(text("Color").size(11).style(muted_text))
             .push(
-                pick_list(
+                crate::appearance::pick_list(
                     super::typography::ColorScope::ALL,
                     Some(self.color_scope),
                     Message::ColorScope,
@@ -402,36 +404,49 @@ impl App {
                 .padding(6),
             );
         let ring_colors = self.color_scope == super::typography::ColorScope::Rings;
-        let palette = if ring_colors {
-            [
-                ("Yellow", [255, 241, 174]),
-                ("Blue", [201, 224, 248]),
-                ("Teal", [198, 233, 220]),
-                ("Pink", [249, 207, 209]),
-                ("Purple", [226, 211, 245]),
-            ]
+        let mut palette = if ring_colors {
+            reshiki::ring_fills::PALETTE
         } else {
             [
-                ("Black", [0, 0, 0]),
+                ("Neutral", [0, 0, 0]),
                 ("Blue", [32, 80, 145]),
                 ("Teal", [17, 126, 108]),
                 ("Red", [180, 50, 55]),
                 ("Purple", [116, 65, 147]),
             ]
         };
+        if !ring_colors
+            && (self.doc.custom_theme.is_some() || !self.doc.color_theme.is_publication())
+        {
+            for ((_, color), element) in palette.iter_mut().zip(["C", "N", "Cl", "O", "I"]) {
+                *color = self
+                    .doc
+                    .canvas_theme
+                    .color(reshiki::canvas_theme::element_color(
+                        &self.doc,
+                        element,
+                        self.doc.canvas_theme,
+                    ));
+            }
+        }
         let current_color = self.current_selection_color();
         for (name, c) in palette {
-            let active = current_color == Some(c);
+            let shown = if ring_colors {
+                reshiki::canvas_theme::ring_color(&self.doc, c)
+            } else {
+                self.doc.canvas_theme.color(c)
+            };
+            let active = current_color == Some(self.doc.canvas_theme.color(shown));
             tools = tools.push(hover_hint(
                 button(Space::new().width(12).height(12))
                     .padding(4)
-                    .style(move |_, _| button::Style {
-                        background: Some(Color::from_rgb8(c[0], c[1], c[2]).into()),
+                    .style(move |theme: &Theme, _| button::Style {
+                        background: Some(Color::from_rgb8(shown[0], shown[1], shown[2]).into()),
                         border: Border {
                             color: if active {
                                 Color::from_rgb8(132, 166, 159)
                             } else {
-                                Color::WHITE
+                                theme.palette().background
                             },
                             width: if active { 3.0 } else { 1.0 },
                             radius: 5.0.into(),
@@ -444,7 +459,7 @@ impl App {
             ));
         }
         tools = tools.push(hover_hint(
-            text_input("Mixed / hex", &self.text_color_input)
+            crate::appearance::text_input("Mixed / hex", &self.text_color_input)
                 .on_input(Message::TextColor)
                 .on_submit(Message::ApplyTextColor)
                 .width(76)
@@ -460,10 +475,6 @@ impl App {
                 tooltip::Position::Bottom,
             ));
         }
-        tools = tools.push(command(
-            "Atoms…",
-            Message::InspectorAction(super::inspector::Action::OpenAtomColors),
-        ));
         container(tools)
             .padding([7, 14])
             .width(Length::Fill)
@@ -477,7 +488,7 @@ impl App {
                 section("EDITING ON CANVAS"),
                 text("Select text in the canvas editor, then use the Style toolbar to format it.")
                     .size(12)
-                    .color(muted()),
+                    .style(muted_text),
                 row![
                     command(
                         "Cancel",
@@ -491,7 +502,7 @@ impl App {
                 .spacing(8),
                 row![
                     text("Line spacing").size(11).width(Length::Fill),
-                    pick_list(
+                    crate::appearance::pick_list(
                         [1.0_f32, 1.2, 1.5, 2.0],
                         Some(self.caption_format.line_spacing),
                         Message::TextSpacing
@@ -501,7 +512,7 @@ impl App {
                 ],
                 row![
                     text("Wrap width (pt)").size(11).width(Length::Fill),
-                    text_input("Auto", &self.text_width_input)
+                    crate::appearance::text_input("Auto", &self.text_width_input)
                         .on_input(Message::TextWidth)
                         .on_submit(Message::ApplyTextWidth)
                         .size(12)
@@ -519,10 +530,10 @@ impl App {
                     "Click the canvas to type a new label, or click an existing label to edit it."
                 )
                 .size(12)
-                .color(muted()),
+                .style(muted_text),
                 text("Use the Style toolbar for fonts, colors and chemical formulas.")
                     .size(11)
-                    .color(muted()),
+                    .style(muted_text),
             ]
             .spacing(9)
             .into();
@@ -538,7 +549,7 @@ impl App {
                 "Write a label, choose its style, then click to place."
             })
             .size(11)
-            .color(muted()),
+            .style(muted_text),
             text_editor(&self.caption_editor)
                 .on_action(Message::CaptionAction)
                 .placeholder("Reaction conditions, labels, notes…")
@@ -573,10 +584,10 @@ impl App {
                 }),
             text("Select part of the text to format it with the Style toolbar.")
                 .size(11)
-                .color(muted()),
+                .style(muted_text),
             row![
                 text("Line spacing").size(11).width(Length::Fill),
-                pick_list(
+                crate::appearance::pick_list(
                     [1.0_f32, 1.2, 1.5, 2.0],
                     Some(self.caption_format.line_spacing),
                     Message::TextSpacing
@@ -587,7 +598,7 @@ impl App {
             .align_y(Alignment::Center),
             row![
                 text("Wrap width (pt)").size(11).width(Length::Fill),
-                text_input("Auto", &self.text_width_input)
+                crate::appearance::text_input("Auto", &self.text_width_input)
                     .on_input(Message::TextWidth)
                     .on_submit(Message::ApplyTextWidth)
                     .size(12)
@@ -601,6 +612,10 @@ impl App {
     }
 
     pub(super) fn workspace(&self) -> Element<'_, Message> {
+        if self.inspector_tab == InspectorTab::ThemeGenerator && self.theme_library.editor.is_some()
+        {
+            return self.theme_generator_workspace();
+        }
         let mut content = column![self.command_bar(), self.style_bar()];
         if self.import_open {
             content = content.push(self.import_drawer());
@@ -631,7 +646,7 @@ impl App {
                     row![
                         text("This drawing has unsaved changes.").size(12),
                         Space::new().width(Length::Fill),
-                        command("Save", Message::Save).style(button::primary),
+                        command("Save", Message::Save).style(crate::appearance::primary),
                         command("Discard & continue", Message::Discard).style(button::danger),
                         command("Cancel", Message::Cancel)
                     ]
@@ -702,7 +717,7 @@ impl App {
             let mut bar = column![
                 row![
                     text("Cleanup preview").size(13),
-                    pick_list(
+                    crate::appearance::pick_list(
                         scopes,
                         Some(preview.job.options.scope),
                         Message::CleanupScope
@@ -718,7 +733,7 @@ impl App {
                     command("Cancel", Message::CancelCleanup),
                     button(text("Apply").size(12))
                         .on_press_maybe((!self.busy).then_some(Message::ApplyCleanup))
-                        .style(button::primary),
+                        .style(crate::appearance::primary),
                 ]
                 .spacing(10)
                 .align_y(Alignment::Center),
@@ -730,14 +745,14 @@ impl App {
                         .on_toggle(Message::CleanupOrientation),
                     text(preview.job.options.scope.hint())
                         .size(11)
-                        .color(muted()),
+                        .style(muted_text),
                 ]
                 .spacing(16)
                 .align_y(Alignment::Center),
             ]
             .spacing(6);
             for warning in &preview.warnings {
-                bar = bar.push(text(warning).size(11).color(muted()));
+                bar = bar.push(text(warning).size(11).style(muted_text));
             }
             container(bar).padding([8, 12]).style(panel).into()
         } else {
@@ -820,7 +835,7 @@ impl App {
                     }
                 })
                 .size(10)
-                .color(muted())
+                .style(muted_text)
             ]
             .spacing(2)
             .width(Length::Fill),
@@ -959,7 +974,11 @@ impl App {
                         .width(36)
                         .height(30)
                         .on_press(Message::Element(symbol.into()))
-                        .style(control(self.tool == Tool::Atom && self.element == symbol)),
+                        .style(element_control(
+                            self.tool == Tool::Atom && self.element == symbol,
+                            &self.doc,
+                            symbol,
+                        )),
                 );
             }
             palette = palette.push(line);
@@ -1008,12 +1027,12 @@ impl App {
                 .on_toggle(Message::FixedLength)
                 .size(13)
                 .text_size(11),
-            text_input("14.4", &self.drawing_length_input)
+            crate::appearance::text_input("14.4", &self.drawing_length_input)
                 .on_input(Message::DrawingLength)
                 .width(48)
                 .size(12)
                 .padding(5),
-            text("pt").size(11).color(muted()),
+            text("pt").size(11).style(muted_text),
             checkbox(self.bond_drawing.fixed_angles)
                 .label("Angles")
                 .on_toggle(Message::FixedAngles)
@@ -1029,24 +1048,33 @@ impl App {
         if self.joining.is_some() {
             return self.join_bar();
         }
-        let mut options = row![text(tool_name(self.tool)).size(12).color(ink()), divider()]
-            .spacing(10)
-            .align_y(Alignment::Center);
+        let mut options = row![
+            text(tool_name(self.tool))
+                .size(12)
+                .style(crate::appearance::text_color(ink())),
+            divider()
+        ]
+        .spacing(10)
+        .align_y(Alignment::Center);
         match self.tool {
             tool if tool.bond_preset().is_some() => {
                 options = options
                     .push(
-                        pick_list(BondPreset::ALL, tool.bond_preset(), |preset| {
-                            Message::Tool(match preset {
-                                BondPreset::Single => Tool::Bond(1),
-                                BondPreset::Double => Tool::Bond(2),
-                                BondPreset::Triple => Tool::Bond(3),
-                                BondPreset::Wedge => Tool::Wedge,
-                                BondPreset::HashedWedge => Tool::Hash,
-                                BondPreset::Wavy => Tool::Wavy,
-                                other => Tool::StyledBond(other),
-                            })
-                        })
+                        crate::appearance::pick_list(
+                            BondPreset::ALL,
+                            tool.bond_preset(),
+                            |preset| {
+                                Message::Tool(match preset {
+                                    BondPreset::Single => Tool::Bond(1),
+                                    BondPreset::Double => Tool::Bond(2),
+                                    BondPreset::Triple => Tool::Bond(3),
+                                    BondPreset::Wedge => Tool::Wedge,
+                                    BondPreset::HashedWedge => Tool::Hash,
+                                    BondPreset::Wavy => Tool::Wavy,
+                                    other => Tool::StyledBond(other),
+                                })
+                            },
+                        )
                         .text_size(12)
                         .padding(5),
                     )
@@ -1055,7 +1083,7 @@ impl App {
             Tool::Chain(mode) => {
                 options = options
                     .push(
-                        pick_list(
+                        crate::appearance::pick_list(
                             [
                                 reshiki::chains::ChainMode::Straight,
                                 reshiki::chains::ChainMode::Snaking,
@@ -1075,7 +1103,7 @@ impl App {
                         .size(11),
                     )
                     .push(
-                        text_input("Auto", &self.chain_atoms_input)
+                        crate::appearance::text_input("Auto", &self.chain_atoms_input)
                             .on_input(Message::ChainAtoms)
                             .width(49)
                             .size(12)
@@ -1083,34 +1111,34 @@ impl App {
                     )
                     .push(text("Angle").size(11))
                     .push(
-                        text_input("120", &self.chain_angle_input)
+                        crate::appearance::text_input("120", &self.chain_angle_input)
                             .on_input(Message::ChainAngle)
                             .width(44)
                             .size(12)
                             .padding(5),
                     )
                     .push(text("°").size(11))
-                    .push(text("Includes attachment atoms").size(10).color(muted()));
+                    .push(text("Includes attachment atoms").size(10).style(muted_text));
             }
             Tool::Graphic(kind) => {
                 let chooser: Element<'_, Message> = match kind {
-                    reshiki::graphics::GraphicKind::Symbol(k) => {
-                        pick_list(reshiki::scientific::SymbolKind::ALL, Some(k), |k| {
-                            Message::ScientificKind(reshiki::graphics::GraphicKind::Symbol(k))
-                        })
-                        .text_size(12)
-                        .padding(5)
-                        .into()
-                    }
-                    reshiki::graphics::GraphicKind::Orbital(k) => {
-                        pick_list(reshiki::scientific::OrbitalKind::ALL, Some(k), |k| {
-                            Message::ScientificKind(reshiki::graphics::GraphicKind::Orbital(k))
-                        })
-                        .text_size(12)
-                        .padding(5)
-                        .into()
-                    }
-                    _ => pick_list(
+                    reshiki::graphics::GraphicKind::Symbol(k) => crate::appearance::pick_list(
+                        reshiki::scientific::SymbolKind::ALL,
+                        Some(k),
+                        |k| Message::ScientificKind(reshiki::graphics::GraphicKind::Symbol(k)),
+                    )
+                    .text_size(12)
+                    .padding(5)
+                    .into(),
+                    reshiki::graphics::GraphicKind::Orbital(k) => crate::appearance::pick_list(
+                        reshiki::scientific::OrbitalKind::ALL,
+                        Some(k),
+                        |k| Message::ScientificKind(reshiki::graphics::GraphicKind::Orbital(k)),
+                    )
+                    .text_size(12)
+                    .padding(5)
+                    .into(),
+                    _ => crate::appearance::pick_list(
                         reshiki::graphics::GraphicKind::DRAWABLE,
                         Some(kind),
                         |kind| Message::Tool(Tool::Graphic(kind)),
@@ -1130,7 +1158,7 @@ impl App {
                         _ => "Drag to draw · Shift constrains · Escape cancels",
                     })
                     .size(11)
-                    .color(muted()),
+                    .style(muted_text),
                 );
             }
             Tool::EditPoints => {
@@ -1153,7 +1181,7 @@ impl App {
                     .push(
                         text("Click to place / attach · Drag to orient")
                             .size(11)
-                            .color(muted()),
+                            .style(muted_text),
                     )
                     .push(command("Cancel", Message::Tool(Tool::Select)));
             }
@@ -1164,7 +1192,7 @@ impl App {
                     reshiki::rings::Preset::Regular
                 };
                 options = options.push(
-                    pick_list(reshiki::rings::Preset::ALL, Some(preset), |p| {
+                    crate::appearance::pick_list(reshiki::rings::Preset::ALL, Some(preset), |p| {
                         Message::Tool(if p == reshiki::rings::Preset::Regular {
                             Tool::Ring
                         } else {
@@ -1176,9 +1204,9 @@ impl App {
                 );
                 if preset == reshiki::rings::Preset::Regular {
                     options = options
-                        .push(text("Size").size(11).color(muted()))
+                        .push(text("Size").size(11).style(muted_text))
                         .push(
-                            pick_list(
+                            crate::appearance::pick_list(
                                 [3_u8, 4, 5, 6, 7, 8],
                                 Some(self.ring_size),
                                 Message::RingSize,
@@ -1196,7 +1224,7 @@ impl App {
                         .push(
                             text("Click / drag to attach · Shift+R keeps ring size")
                                 .size(11)
-                                .color(muted()),
+                                .style(muted_text),
                         );
                 } else {
                     options = options.push(
@@ -1206,14 +1234,14 @@ impl App {
                             "Click / drag · Alt connects by a bond"
                         })
                         .size(11)
-                        .color(muted()),
+                        .style(muted_text),
                     );
                 }
             }
             Tool::Arrow => {
                 options = options
                     .push(
-                        pick_list(
+                        crate::appearance::pick_list(
                             reshiki::arrows::Preset::ALL,
                             Some(self.arrow_style),
                             Message::ArrowStyle,
@@ -1224,14 +1252,14 @@ impl App {
                     .push(
                         text("Click to place / change · Click again to switch · Drag to draw")
                             .size(11)
-                            .color(muted()),
+                            .style(muted_text),
                     );
             }
             Tool::Atom => {
                 options = options
                     .push(text(format!("Element: {}", self.element)).size(12))
                     .push(
-                        text_input("Symbol: Si, Na, Fe…", &self.custom_element)
+                        crate::appearance::text_input("Symbol: Si, Na, Fe…", &self.custom_element)
                             .on_input(Message::CustomElement)
                             .on_submit(Message::ApplyElement)
                             .size(12)
@@ -1242,14 +1270,14 @@ impl App {
                     .push(
                         text("Click to replace · Drag from an atom to add with a bond")
                             .size(11)
-                            .color(muted()),
+                            .style(muted_text),
                     );
             }
             Tool::Text => {
                 options = options.push(
                     text("Click an atom to name it · Click empty space for a caption · Escape cancels")
                         .size(11)
-                        .color(muted()),
+                        .style(muted_text),
                 );
             }
             Tool::Tilt => {
@@ -1278,13 +1306,13 @@ impl App {
                         "Emphasize front bonds using the retained projection depth",
                         tooltip::Position::Bottom,
                     ))
-                    .push(text("Drag to tilt · Shift: 15°").size(11).color(muted()))
+                    .push(text("Drag to tilt · Shift: 15°").size(11).style(muted_text))
                     .push(command("Done", Message::Tool(Tool::Select)));
             }
             Tool::Select | Tool::Lasso if !self.selected.is_empty() => {
                 options = options
                     .push(hover_hint(
-                        text(self.selection_summary()).size(11).color(muted()),
+                        text(self.selection_summary()).size(11).style(muted_text),
                         "Click a bond's middle to select it; Shift-click adds. Cmd/Ctrl+A selects the whole drawing.",
                         tooltip::Position::Bottom,
                     ))
@@ -1310,25 +1338,87 @@ impl App {
                         "Double-click selects molecule · Shift-click adds"
                     })
                     .size(11)
-                    .color(muted()),
+                    .style(muted_text),
                 );
                 options = options.push(command("Paste", Message::Paste));
             }
             _ => {
-                options = options.push(text(self.tool.hint()).size(11).color(muted()));
+                options = options.push(text(self.tool.hint()).size(11).style(muted_text));
             }
         }
-        if self.tool != Tool::Text {
-            options = options.push(Space::new().width(Length::Fill));
-        }
-        options = options.push(hover_hint(
-            button(text(&self.doc.drawing_style.name).size(10))
+        use super::document_styles::Choice;
+        use reshiki::document_styles::Preset;
+        let current = Preset::ALL
+            .into_iter()
+            .find(|p| p.style() == self.doc.drawing_style)
+            .map(Choice::Journal)
+            .unwrap_or(Choice::Custom);
+        let presets = row![]
+            .spacing(10)
+            .align_y(Alignment::Center)
+            .push(
+                crate::appearance::pick_list(
+                    Preset::ALL
+                        .into_iter()
+                        .map(Choice::Journal)
+                        .chain([Choice::Details])
+                        .collect::<Vec<_>>(),
+                    Some(current),
+                    Message::QuickDrawingStyle,
+                )
+                .text_size(11)
                 .padding([5, 8])
-                .style(control(self.inspector_tab == InspectorTab::DrawingStyle))
-                .on_press(Message::DrawingStyle(super::document_styles::Action::Open)),
-            "Edit document fonts, bond dimensions and publication style",
-            tooltip::Position::Bottom,
-        ));
+                .handle(pick_list::Handle::Arrow {
+                    size: Some(iced::Pixels(9.)),
+                })
+                .style(|theme, status| {
+                    let status = match status {
+                        pick_list::Status::Active => button::Status::Active,
+                        pick_list::Status::Hovered => button::Status::Hovered,
+                        pick_list::Status::Opened { .. } => button::Status::Pressed,
+                    };
+                    let style = control(true)(theme, status);
+                    pick_list::Style {
+                        text_color: style.text_color,
+                        placeholder_color: style.text_color,
+                        handle_color: style.text_color,
+                        background: style.background.unwrap_or(Color::TRANSPARENT.into()),
+                        border: style.border,
+                    }
+                }),
+            )
+            .push(
+                crate::appearance::pick_list(
+                    self.theme_choices().0,
+                    Some(self.theme_choices().1),
+                    |choice| Message::ThemeFile(super::theme_files::Action::Choose(choice)),
+                )
+                .text_size(11)
+                .padding([5, 8]),
+            )
+            .push(hover_hint(
+                button(
+                    iced::widget::canvas(Glyph(
+                        if self.doc.canvas_theme.is_dark() {
+                            Icon::Moon
+                        } else {
+                            Icon::Sun
+                        },
+                        true,
+                    ))
+                    .width(24)
+                    .height(24),
+                )
+                .padding(3)
+                .style(control(false))
+                .on_press(Message::CanvasTheme(self.doc.canvas_theme.toggled())),
+                if self.doc.canvas_theme.is_dark() {
+                    "Dark canvas · Switch to light"
+                } else {
+                    "Light canvas · Switch to dark"
+                },
+                tooltip::Position::Bottom,
+            ));
         let moving_bonded_selection = matches!(self.tool, Tool::Select | Tool::Lasso) && {
             let selected = self.doc.expand_abbreviation_selection(&self.selected);
             self.doc
@@ -1350,6 +1440,17 @@ impl App {
                 tooltip::Position::Bottom,
             ));
         }
+        // Keep page controls visible even when selection/tool actions overflow.
+        let options = row![
+            scrollable(options)
+                .direction(scrollable::Direction::Horizontal(
+                    scrollable::Scrollbar::new().width(3).scroller_width(3),
+                ))
+                .width(Length::Fill),
+            presets,
+        ]
+        .spacing(12)
+        .align_y(Alignment::Center);
         if matches!(self.tool, Tool::Chain(_)) || moving_bonded_selection {
             return container(
                 column![
@@ -1362,7 +1463,7 @@ impl App {
                             "Ctrl bends · Shift flips start · Alt frees · Auto click: 6 atoms"
                         })
                         .size(10)
-                        .color(muted()),
+                        .style(muted_text),
                     ]
                     .spacing(14)
                     .align_y(Alignment::Center)
@@ -1428,6 +1529,7 @@ impl App {
             InspectorTab::Assistant => self.assistant_panel(),
             InspectorTab::Pages => self.pages_panel(),
             InspectorTab::DrawingStyle => self.drawing_style_panel(),
+            InspectorTab::ThemeGenerator => self.theme_generator_panel(),
             InspectorTab::Properties if self.joining.is_some() => self.join_panel(),
             InspectorTab::Properties => self.properties_panel(),
             InspectorTab::Labels => self.atom_labels_panel(),
@@ -1473,11 +1575,11 @@ impl App {
         if !state.active {
             body = body.push(
                 column![
-                    text_input("Search names, collections…", &state.query)
+                    crate::appearance::text_input("Search names, collections…", &state.query)
                         .on_input(|s| Message::Templates(A::Search(s)))
                         .size(12)
                         .padding(8),
-                    pick_list(
+                    crate::appearance::pick_list(
                         [Filter::All, Filter::Mine, Filter::Favorites],
                         Some(state.filter),
                         |f| Message::Templates(A::Filter(f))
@@ -1515,7 +1617,11 @@ impl App {
             body = body.push(command("← Browse templates", action(A::Browse)));
         }
         if let Some(error) = &state.notice {
-            body = body.push(text(error).size(11).color(Color::from_rgb8(182, 66, 61)));
+            body = body.push(
+                text(error)
+                    .size(11)
+                    .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61))),
+            );
         }
         if state.editing {
             body = body
@@ -1525,20 +1631,20 @@ impl App {
                     "EDIT TEMPLATE"
                 }))
                 .push(
-                    text_input("Template name", &state.name)
+                    crate::appearance::text_input("Template name", &state.name)
                         .on_input(|s| Message::Templates(A::Name(s)))
                         .size(12)
                         .padding(7),
                 )
                 .push(
-                    text_input("Collection", &state.category)
+                    crate::appearance::text_input("Collection", &state.category)
                         .on_input(|s| Message::Templates(A::Category(s)))
                         .size(12)
                         .padding(7),
                 )
                 .push(
                     row![
-                        command("Save", action(A::SaveDetails)).style(button::primary),
+                        command("Save", action(A::SaveDetails)).style(crate::appearance::primary),
                         command("Cancel", action(A::CancelDetails))
                     ]
                     .spacing(6),
@@ -1559,7 +1665,7 @@ impl App {
                 .push(horizontal_line())
                 .push(text(&t.name).size(14))
                 .push(
-                    pick_list(
+                    crate::appearance::pick_list(
                         [
                             reshiki::templates::Connection::Connect,
                             reshiki::templates::Connection::ShareAtom,
@@ -1572,7 +1678,7 @@ impl App {
                     .width(Length::Fill),
                 )
                 .push(preview.map(|a| Message::Templates(A::Anchor(a))))
-                .push(text(state.connection.hint()).size(11).color(muted()))
+                .push(text(state.connection.hint()).size(11).style(muted_text))
                 .push(
                     row![
                         text(state.anchor.to_string()).size(11).width(Length::Fill),
@@ -1608,10 +1714,10 @@ impl App {
                         "Returns to Select after one placement."
                     })
                     .size(11)
-                    .color(muted()),
+                    .style(muted_text),
                 );
             if !t.note.is_empty() {
-                body = body.push(text(&t.note).size(11).color(muted()));
+                body = body.push(text(&t.note).size(11).style(muted_text));
             }
             if self.template_index >= reshiki::templates::LIBRARY.len() {
                 body = body
@@ -1651,7 +1757,7 @@ impl App {
                 }
                 body = body
                     .push(horizontal_line())
-                    .push(text("CATEGORIES").size(10).color(muted()));
+                    .push(text("CATEGORIES").size(10).style(muted_text));
                 for (name, (count, sample)) in categories {
                     let preview: Element<'_, Message> =
                         canvas(crate::canvas::TemplateThumbnail(&sample.document))
@@ -1663,7 +1769,7 @@ impl App {
                             row![
                                 preview,
                                 text(name).size(12).width(Length::Fill),
-                                text(count.to_string()).size(11).color(muted()),
+                                text(count.to_string()).size(11).style(muted_text),
                                 text("›").size(15)
                             ]
                             .spacing(7)
@@ -1696,7 +1802,7 @@ impl App {
                     matches.len()
                 ))
                 .size(11)
-                .color(muted()),
+                .style(muted_text),
             );
             for tiles in matches.chunks(4) {
                 let mut line = row![].spacing(4);
@@ -1723,7 +1829,7 @@ impl App {
                 body = body.push(
                     text("No matching templates. Try another search or save a selection.")
                         .size(12)
-                        .color(muted()),
+                        .style(muted_text),
                 );
             }
         }
@@ -1748,22 +1854,22 @@ impl App {
         let mut body = column![
             command("‹ Properties", Message::Inspector(InspectorTab::Properties)),
             text("Chemical abbreviations").size(18),
-            text("Compact labels with the complete molecule inside.").size(12).color(muted()),
+            text("Compact labels with the complete molecule inside.").size(12).style(muted_text),
             row![command("Expand selected", action(A::Expand)).on_press_maybe((!selected.is_empty()).then_some(action(A::Expand))), command("Expand all", action(A::ExpandAll)).on_press_maybe((!self.doc.abbreviations.is_empty()).then_some(action(A::ExpandAll)))].spacing(6),
             horizontal_line(),
-            text("COMMON GROUP").size(11).color(muted()),
-            pick_list(choices, Some(self.abbreviations.preset.clone()), move |s| action(A::Preset(s))).width(Length::Fill).text_size(14),
+            text("COMMON GROUP").size(11).style(muted_text),
+            crate::appearance::pick_list(choices, Some(self.abbreviations.preset.clone()), move |s| action(A::Preset(s))).width(Length::Fill).text_size(14),
             command("Replace selected endpoint", action(A::Replace)).on_press_maybe((!self.busy && !self.selected.is_empty()).then_some(action(A::Replace))),
-            text("Select one terminal atom or an existing abbreviation. Its connecting bond stays in place.").size(11).color(muted()),
+            text("Select one terminal atom or an existing abbreviation. Its connecting bond stays in place.").size(11).style(muted_text),
             horizontal_line(),
             command("Contract common groups", action(A::Find)).on_press_maybe((!self.busy && !self.doc.atoms.is_empty()).then_some(action(A::Find))),
-            text(if self.selected.is_empty() { "Searches the whole drawing." } else { "Only complete groups within the selection are contracted." }).size(11).color(muted()),
+            text(if self.selected.is_empty() { "Searches the whole drawing." } else { "Only complete groups within the selection are contracted." }).size(11).style(muted_text),
             horizontal_line(),
-            text("NAME A SELECTED FRAGMENT").size(11).color(muted()),
-            text_input("Label, e.g. Ar", &self.abbreviations.label).on_input(move |s| action(A::Label(s))).on_submit(action(A::Contract)).size(13),
-            text_input("From the right (optional)", &self.abbreviations.reverse_label).on_input(move |s| action(A::ReverseLabel(s))).on_submit(action(A::Contract)).size(13),
+            text("NAME A SELECTED FRAGMENT").size(11).style(muted_text),
+            crate::appearance::text_input("Label, e.g. Ar", &self.abbreviations.label).on_input(move |s| action(A::Label(s))).on_submit(action(A::Contract)).size(13),
+            crate::appearance::text_input("From the right (optional)", &self.abbreviations.reverse_label).on_input(move |s| action(A::ReverseLabel(s))).on_submit(action(A::Contract)).size(13),
             command("Contract selection", action(A::Contract)).on_press_maybe((!self.selected.is_empty() && !self.abbreviations.label.trim().is_empty()).then_some(action(A::Contract))),
-            text("Select a connected fragment whose outside bonds meet one selected atom. A custom name does not change its chemistry.").size(11).color(muted()),
+            text("Select a connected fragment whose outside bonds meet one selected atom. A custom name does not change its chemistry.").size(11).style(muted_text),
             horizontal_line(),
         ].spacing(10);
         for group in selected {
@@ -1780,7 +1886,9 @@ impl App {
                     if atoms == 1 { "" } else { "s" }
                 ))
                 .size(12)
-                .color(Color::from_rgb8(17, 126, 108)),
+                .style(crate::appearance::text_color(Color::from_rgb8(
+                    17, 126, 108,
+                ))),
             );
         }
         body.into()
@@ -1832,7 +1940,7 @@ impl App {
                 Message::Inspector(InspectorTab::Properties)
             ),
             section("ATOM LABELS"),
-            pick_list(
+            crate::appearance::pick_list(
                 [Scope::Drawing, Scope::Selection],
                 Some(self.labels.scope),
                 |s| Message::Labels(A::Scope(s))
@@ -1841,9 +1949,9 @@ impl App {
             .width(Length::Fill),
             text(format!("{} atoms in scope", ids.len()))
                 .size(11)
-                .color(muted()),
+                .style(muted_text),
             text("Carbon labels").size(12),
-            pick_list(Carbons::ALL, carbons, |v| Message::Labels(A::Carbons(v)))
+            crate::appearance::pick_list(Carbons::ALL, carbons, |v| Message::Labels(A::Carbons(v)))
                 .placeholder("Mixed")
                 .text_size(12)
                 .width(Length::Fill),
@@ -1856,7 +1964,7 @@ impl App {
                 .text_size(12)
                 .on_toggle(|v| Message::Labels(A::Charges(v))),
             text("Hydrogen position").size(12),
-            pick_list(HydrogenPosition::ALL, position, |v| Message::Labels(
+            crate::appearance::pick_list(HydrogenPosition::ALL, position, |v| Message::Labels(
                 A::Position(v)
             ))
             .placeholder("Mixed")
@@ -1864,11 +1972,11 @@ impl App {
             .width(Length::Fill),
             text("Display settings keep the molecular composition intact.")
                 .size(11)
-                .color(muted()),
+                .style(muted_text),
             horizontal_line(),
             section("ATOM NUMBERS"),
             row![
-                text_input("1, atom1, a, α…", &self.labels.seed)
+                crate::appearance::text_input("1, atom1, a, α…", &self.labels.seed)
                     .on_input(|s| Message::Labels(A::Seed(s)))
                     .on_submit(Message::Labels(A::Number))
                     .size(12)
@@ -1879,14 +1987,14 @@ impl App {
             .spacing(5),
             text("Sequence follows atom creation/import order.")
                 .size(11)
-                .color(muted()),
+                .style(muted_text),
             command("Clear numbers", Message::Labels(A::ClearNumbers)),
         ]
         .spacing(9);
         if ids.len() == 1 {
             body = body.push(text("Custom atom number").size(12)).push(
                 row![
-                    text_input("e.g. Cα or 12a", &self.labels.number)
+                    crate::appearance::text_input("e.g. Cα or 12a", &self.labels.number)
                         .on_input(|s| Message::Labels(A::Text(s)))
                         .on_submit(Message::Labels(A::ApplyText))
                         .size(12)
@@ -1908,16 +2016,20 @@ impl App {
             .push(
                 text("Labels update after chemical edits. Unassigned centers have no R/S label.")
                     .size(11)
-                    .color(muted()),
+                    .style(muted_text),
             );
         if let Some(error) = &self.chemistry_notice {
-            body = body.push(text(error).size(11).color(Color::from_rgb8(182, 66, 61)));
+            body = body.push(
+                text(error)
+                    .size(11)
+                    .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61))),
+            );
         }
         body.push(horizontal_line())
             .push(section("INDICATOR APPEARANCE"))
             .push(
                 row![
-                    text_input("Size in pt", &self.labels.size)
+                    crate::appearance::text_input("Size in pt", &self.labels.size)
                         .on_input(|s| Message::Labels(A::Size(s)))
                         .on_submit(Message::Labels(A::ApplySize))
                         .size(12)
@@ -1962,7 +2074,7 @@ impl App {
                 ]
                 .align_y(Alignment::Center),
                 row![
-                    text_input(
+                    crate::appearance::text_input(
                         "SMILES, reaction SMILES, RXN, InChI, MOL or CDXML",
                         &self.smiles
                     )
@@ -1971,7 +2083,7 @@ impl App {
                     .size(13)
                     .padding(9),
                     command("Insert", Message::InsertInput)
-                        .style(button::primary)
+                        .style(crate::appearance::primary)
                         .on_press_maybe((!self.busy).then_some(Message::InsertInput)),
                     command("Replace drawing", Message::Import)
                         .on_press_maybe((!self.busy).then_some(Message::Import))
@@ -1989,7 +2101,7 @@ impl App {
                             .is_none()
                             .then_some(Message::Pictures(super::pictures::Action::Import))
                     ),
-                    text("PNG · JPEG · TIFF · WebP").size(11).color(muted()),
+                    text("PNG · JPEG · TIFF · WebP").size(11).style(muted_text),
                     command("Paste picture", Message::PastePicture).on_press_maybe(
                         (reshiki::clipboard::available() && !self.clipboard_busy)
                             .then_some(Message::PastePicture)
@@ -1998,14 +2110,14 @@ impl App {
                 .spacing(6)
                 .align_y(Alignment::Center),
                 row![
-                    text("Insert example").size(11).color(muted()),
+                    text("Insert example").size(11).style(muted_text),
                     command("Ethanol", Message::Example("CCO")),
                     command("Benzene", Message::Example("c1ccccc1")),
                     command("Aspirin", Message::Example("CC(=O)Oc1ccccc1C(=O)O")),
                     command("Caffeine", Message::Example("Cn1c(=O)c2c(ncn2C)n(C)c1=O")),
                     text("Drag to position · Delete or Undo to remove")
                         .size(11)
-                        .color(muted())
+                        .style(muted_text)
                 ]
                 .spacing(6)
                 .align_y(Alignment::Center)
@@ -2020,7 +2132,16 @@ impl App {
     fn view_options(&self) -> Element<'_, Message> {
         container(
             row![
-                text("View").size(12).color(muted()),
+                text("View").size(12).style(muted_text),
+                text("Interface").size(12).style(muted_text),
+                crate::appearance::pick_list(
+                    crate::appearance::Mode::ALL,
+                    Some(self.appearance.mode),
+                    Message::Appearance
+                )
+                .text_size(12)
+                .padding(5)
+                .width(132),
                 checkbox(self.grid)
                     .label("Grid")
                     .on_toggle(|_| Message::Grid)
@@ -2037,8 +2158,8 @@ impl App {
                     .size(14)
                     .text_size(12),
                 divider(),
-                text("Units").size(12).color(muted()),
-                pick_list(
+                text("Units").size(12).style(muted_text),
+                crate::appearance::pick_list(
                     crate::canvas::guides::Unit::ALL,
                     Some(self.guides.unit),
                     Message::RulerUnit
@@ -2060,11 +2181,19 @@ impl App {
 
     fn status_bar(&self) -> Element<'_, Message> {
         let summary = self.status.lines().next().unwrap_or(&self.status);
-        let message = text(summary).size(11).color(if self.error {
-            Color::from_rgb8(168, 52, 47)
-        } else {
-            muted()
-        });
+        let message = text(summary)
+            .size(11)
+            .style(|theme| iced::widget::text::Style {
+                color: Some(if self.error {
+                    crate::appearance::readable(
+                        crate::appearance::themed(theme, Color::from_rgb8(168, 52, 47)),
+                        &[theme.palette().background],
+                        reshiki::color_contrast::TEXT_TARGET,
+                    )
+                } else {
+                    crate::appearance::muted(theme)
+                }),
+            });
         let message: Element<'_, Message> = if self.status.contains('\n') {
             hover_hint(message, self.status.as_str(), tooltip::Position::Top).into()
         } else {
@@ -2081,8 +2210,8 @@ impl App {
                 },
                 Message::Updates(super::updates::Action::Show(true))
             ),
-            text(&self.autosave_status).size(10).color(muted()),
-            text(self.selection_summary()).size(11).color(muted()),
+            text(&self.autosave_status).size(10).style(muted_text),
+            text(self.selection_summary()).size(11).style(muted_text),
             divider(),
             command("View", Message::ToggleView).style(control(self.view_open)),
             command("−", Message::Zoom(0.8)),
@@ -2177,79 +2306,165 @@ fn action(
     .into()
 }
 pub(super) fn section(label: &str) -> iced::widget::Text<'_> {
-    text(label).size(10).color(muted())
+    text(label).size(10).style(muted_text)
 }
 fn ink() -> Color {
     Color::from_rgb8(37, 43, 51)
+}
+pub(super) fn muted_text(theme: &Theme) -> iced::widget::text::Style {
+    iced::widget::text::Style {
+        color: Some(crate::appearance::muted(theme)),
+    }
 }
 pub(super) fn muted() -> Color {
     Color::from_rgb8(107, 116, 127)
 }
 fn divider() -> Element<'static, Message> {
-    container(
-        container(Space::new().width(1).height(20)).style(|_| container::Style {
-            background: Some(Color::from_rgb8(223, 227, 232).into()),
-            ..Default::default()
-        }),
-    )
+    container(container(Space::new().width(1).height(20)).style(|theme| {
+        crate::appearance::container(
+            theme,
+            container::Style {
+                background: Some(Color::from_rgb8(223, 227, 232).into()),
+                ..Default::default()
+            },
+        )
+    }))
     .padding([0, 5])
     .into()
 }
 pub(super) fn horizontal_line() -> Element<'static, Message> {
     container(
-        container(Space::new().height(1).width(Length::Fill)).style(|_| container::Style {
-            background: Some(Color::from_rgb8(230, 233, 237).into()),
-            ..Default::default()
+        container(Space::new().height(1).width(Length::Fill)).style(|theme| {
+            crate::appearance::container(
+                theme,
+                container::Style {
+                    background: Some(Color::from_rgb8(230, 233, 237).into()),
+                    ..Default::default()
+                },
+            )
         }),
     )
     .padding([7, 0])
     .into()
 }
-pub(super) fn control(active: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
-    move |_, status| {
-        let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
-        let disabled = matches!(status, button::Status::Disabled);
-        button::Style {
-            background: Some(
-                if active {
-                    Color::from_rgb8(222, 240, 234)
-                } else if hovered {
-                    Color::from_rgb8(233, 237, 241)
-                } else {
-                    Color::TRANSPARENT
-                }
-                .into(),
-            ),
-            text_color: if disabled {
-                Color::from_rgb8(183, 189, 195)
-            } else if active {
-                Color::from_rgb8(15, 103, 85)
-            } else {
-                ink()
-            },
-            border: Border {
-                color: if active {
-                    Color::from_rgb8(113, 181, 161)
-                } else {
-                    Color::TRANSPARENT
-                },
-                width: 1.,
-                radius: 5.0.into(),
-            },
-            ..Default::default()
+/// Theme colors belong on the tile; symbols retain strong interface contrast.
+/// Use the interface's palette lightness when canvas and chrome modes differ.
+pub(super) fn element_control<'a>(
+    active: bool,
+    doc: &'a reshiki::document::Document,
+    symbol: &'a str,
+) -> impl Fn(&Theme, button::Status) -> button::Style + 'a {
+    move |theme, status| {
+        use reshiki::canvas_theme::CanvasTheme;
+        let mut style = control(active)(theme, status);
+        if active {
+            style.border.width = 2.;
         }
+        let mode = if crate::appearance::is_dark(theme) {
+            CanvasTheme::Dark
+        } else {
+            CanvasTheme::Light
+        };
+        if let Some(rgb) = reshiki::canvas_theme::element_swatch(doc, symbol, mode)
+            .filter(|_| status != button::Status::Disabled)
+        {
+            let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
+            let background = crate::appearance::from_rgb(reshiki::color_contrast::tile(
+                rgb,
+                mode.is_dark(),
+                active,
+                hovered,
+            ));
+            style.background = Some(background.into());
+            if active {
+                style.border.color = crate::appearance::focus_border(theme, background);
+            }
+            style.text_color = theme.palette().text;
+        }
+        style
     }
 }
-pub(super) fn panel(_: &Theme) -> container::Style {
-    container::Style {
-        background: Some(Color::from_rgb8(250, 251, 252).into()),
-        border: Border {
-            color: Color::from_rgb8(224, 228, 233),
-            width: 1.,
-            radius: 0.0.into(),
-        },
-        ..Default::default()
+
+pub(super) fn control(active: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |theme, status| {
+        let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
+        let disabled = matches!(status, button::Status::Disabled);
+        if crate::appearance::is_dark(theme) && !disabled {
+            return button::Style {
+                background: Some(
+                    if active {
+                        Color::from_rgb8(29, 64, 55)
+                    } else if hovered {
+                        Color::from_rgb8(38, 46, 52)
+                    } else {
+                        Color::TRANSPARENT
+                    }
+                    .into(),
+                ),
+                text_color: if active {
+                    Color::from_rgb8(162, 230, 207)
+                } else {
+                    theme.palette().text
+                },
+                border: Border {
+                    color: if active {
+                        Color::from_rgb8(82, 193, 163)
+                    } else {
+                        Color::TRANSPARENT
+                    },
+                    width: 1.,
+                    radius: 6.0.into(),
+                },
+                ..Default::default()
+            };
+        }
+        crate::appearance::button(
+            theme,
+            button::Style {
+                background: Some(
+                    if active {
+                        Color::from_rgb8(222, 240, 234)
+                    } else if hovered {
+                        Color::from_rgb8(233, 237, 241)
+                    } else {
+                        Color::TRANSPARENT
+                    }
+                    .into(),
+                ),
+                text_color: if disabled {
+                    Color::from_rgb8(183, 189, 195)
+                } else if active {
+                    Color::from_rgb8(15, 103, 85)
+                } else {
+                    ink()
+                },
+                border: Border {
+                    color: if active {
+                        crate::appearance::focus_border(theme, Color::from_rgb8(222, 240, 234))
+                    } else {
+                        Color::TRANSPARENT
+                    },
+                    width: 1.,
+                    radius: 5.0.into(),
+                },
+                ..Default::default()
+            },
+        )
     }
+}
+pub(super) fn panel(theme: &Theme) -> container::Style {
+    crate::appearance::container(
+        theme,
+        container::Style {
+            background: Some(Color::from_rgb8(250, 251, 252).into()),
+            border: Border {
+                color: Color::from_rgb8(224, 228, 233),
+                width: 1.,
+                radius: 0.0.into(),
+            },
+            ..Default::default()
+        },
+    )
 }
 pub(super) fn surface_shadow(shadow: iced::Shadow) -> iced::Shadow {
     // Windows uses Tiny Skia. Its shadow pass ignores the damage clip and

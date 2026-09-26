@@ -429,7 +429,7 @@ pub fn replace_with_policy(
         anchor: target,
         members,
     });
-    result.version = 15;
+    result.version = result.version.max(15);
     crate::ring_fills::prune(&mut result);
     validate_with_policy(&result, policy)?;
     Ok(result)

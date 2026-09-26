@@ -283,7 +283,14 @@ impl App {
             .placeholder("Type a label…")
             .on_action(Message::CaptionAction)
             .highlight_with::<CaptionHighlighter>(
-                (self.caption.clone(), self.caption_format.clone()),
+                {
+                    let mut format = self.caption_format.clone();
+                    format.style.color = self.doc.canvas_theme.color(format.style.color);
+                    for span in &mut format.spans {
+                        span.style.color = self.doc.canvas_theme.color(span.style.color);
+                    }
+                    (self.caption.clone(), format)
+                },
                 |style, _| {
                     let [r, g, b] = style.color;
                     iced::advanced::text::highlighter::Format {
@@ -359,16 +366,25 @@ impl App {
                     .map(text_editor::Binding::Custom)
                     .or_else(|| text_editor::Binding::from_key_press(key))
             })
-            .style(|_, _| text_editor::Style {
-                background: Color::WHITE.into(),
+            .style(move |_, _| text_editor::Style {
+                background: crate::appearance::color(self.doc.canvas_theme.is_dark(), Color::WHITE)
+                    .into(),
                 border: Border::default(),
-                placeholder: super::workspace::muted(),
-                value: Color::BLACK,
-                selection: Color::from_rgb8(193, 224, 216),
+                placeholder: crate::appearance::color(
+                    self.doc.canvas_theme.is_dark(),
+                    super::workspace::muted(),
+                ),
+                value: crate::appearance::color(self.doc.canvas_theme.is_dark(), Color::BLACK),
+                selection: crate::appearance::color(
+                    self.doc.canvas_theme.is_dark(),
+                    Color::from_rgb8(193, 224, 216),
+                ),
             });
         let mut body = column![editor].spacing(5);
         if complex {
             let preview = Document {
+                canvas_theme: self.doc.canvas_theme,
+                color_theme: self.doc.color_theme,
                 annotations: vec![Annotation {
                     id: 1,
                     position: Point::default(),
@@ -378,7 +394,11 @@ impl App {
                 ..Default::default()
             };
             body = body
-                .push(text("Appearance").size(10).color(super::workspace::muted()))
+                .push(
+                    text("Appearance")
+                        .size(10)
+                        .style(super::workspace::muted_text),
+                )
                 .push(
                     canvas(crate::canvas::OwnedDrawingPreview(preview))
                         .width(Length::Fill)
@@ -389,7 +409,7 @@ impl App {
             row![
                 text("Esc to cancel")
                     .size(10)
-                    .color(super::workspace::muted()),
+                    .style(super::workspace::muted_text),
                 Space::new().width(Length::Fill),
                 iced::widget::tooltip(
                     button(text("Done ↵").size(11))
@@ -406,23 +426,25 @@ impl App {
             .align_y(Alignment::Center)
             .padding([2, 7]),
         );
-        let popup = container(body)
-            .width(width)
-            .padding(2)
-            .style(|_| container::Style {
-                background: Some(Color::WHITE.into()),
-                border: Border {
-                    color: Color::from_rgb8(93, 158, 140),
-                    width: 1.,
-                    radius: 5.into(),
+        let popup = container(body).width(width).padding(2).style(|theme| {
+            crate::appearance::container(
+                theme,
+                container::Style {
+                    background: Some(Color::WHITE.into()),
+                    border: Border {
+                        color: Color::from_rgb8(93, 158, 140),
+                        width: 1.,
+                        radius: 5.into(),
+                    },
+                    shadow: super::workspace::surface_shadow(iced::Shadow {
+                        color: Color::from_rgba8(20, 40, 35, 0.1),
+                        offset: iced::Vector::new(0., 3.),
+                        blur_radius: 12.,
+                    }),
+                    ..Default::default()
                 },
-                shadow: super::workspace::surface_shadow(iced::Shadow {
-                    color: Color::from_rgba8(20, 40, 35, 0.1),
-                    offset: iced::Vector::new(0., 3.),
-                    blur_radius: 12.,
-                }),
-                ..Default::default()
-            });
+            )
+        });
         stack![
             base,
             mouse_area(

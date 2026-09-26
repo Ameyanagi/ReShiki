@@ -95,34 +95,31 @@ async fn colors_survive_native_clean_and_editable_roundtrip()
             let output = engine.request(request).await?.output.ok_or("export")?;
             if format == "cdxml" {
                 let xml = roxmltree::Document::parse(&output)?;
-                for curve in xml
-                    .descendants()
-                    .filter(|n| n.attribute("Name") == Some("ReShiki ring fill"))
-                {
-                    assert_eq!(curve.attribute("CurveType"), Some("129"));
-                    assert!(
-                        curve.attribute("Closed").is_none(),
-                        "Closure is encoded in CurveType for binary-reader compatibility"
-                    );
-                }
-                let z: Vec<usize> = xml
-                    .descendants()
-                    .filter_map(|n| n.attribute("Z"))
-                    .map(str::parse)
-                    .collect::<Result<_, _>>()?;
                 assert_eq!(
-                    z.len(),
-                    z.iter().collect::<std::collections::HashSet<_>>().len(),
-                    "Stacking ordinals must be unique for opaque fills"
+                    xml.descendants()
+                        .filter(|n| n.has_tag_name("curve"))
+                        .count(),
+                    0
                 );
-                let fill_z = xml
+                let area = xml
                     .descendants()
-                    .find(|n| n.attribute("Name") == Some("ReShiki ring fill"))
-                    .and_then(|n| n.attribute("Z"))
-                    .ok_or("fill z")?
-                    .parse::<usize>()?;
-                for bond in xml.descendants().filter(|n| n.has_tag_name("b")) {
-                    assert!(bond.attribute("Z").ok_or("bond z")?.parse::<usize>()? > fill_z);
+                    .find(|n| n.has_tag_name("ColoredMolecularArea"))
+                    .ok_or("native fill")?;
+                let fragment = area.parent().ok_or("fragment")?;
+                assert!(fragment.has_tag_name("fragment"));
+                let basis: Vec<_> = area
+                    .attribute("BasisObjects")
+                    .ok_or("basis")?
+                    .split_whitespace()
+                    .collect();
+                assert_eq!(basis.len(), 6);
+                for id in basis {
+                    assert!(
+                        fragment
+                            .children()
+                            .any(|n| n.has_tag_name("b") && n.attribute("id") == Some(id)),
+                        "Native ring fills must reference bonds in their own fragment"
+                    );
                 }
             }
             let back = engine
@@ -134,7 +131,7 @@ async fn colors_survive_native_clean_and_editable_roundtrip()
             assert_eq!(back.ring_fills.len(), 1, "{format}");
             assert_eq!(
                 back.ring_fills.first().ok_or("fill")?.color,
-                [198, 233, 220]
+                ring_fills::palette_color([198, 233, 220], doc.canvas_theme)
             );
             assert!(
                 back.graphics.is_empty(),
@@ -175,5 +172,221 @@ fn fused_rings_are_independently_colored_and_partial_selections_do_nothing()
         ring_fills::apply(&mut chair, &ids, Some([226, 211, 245])),
         1
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn reads_chemdraw_created_native_fill() -> Result<(), Box<dyn std::error::Error>> {
+    let xml = include_str!("fixtures/ring-fills/chemdraw-native.cdxml");
+    let binary =
+        reshiki::exchange::from_cdx(include_bytes!("fixtures/ring-fills/chemdraw-native.cdx"))?;
+    let engine = LocalEngine::default();
+    for source in [xml, binary.as_str()] {
+        let doc = engine
+            .request(Request::import("cdxml", source))
+            .await?
+            .document
+            .ok_or("import")?;
+        assert_eq!(
+            (doc.atoms.len(), doc.bonds.len(), doc.ring_fills.len()),
+            (6, 6, 1)
+        );
+        assert!(doc.graphics.is_empty());
+        let fill = &doc.ring_fills[0];
+        assert_eq!(fill.color, [29, 139, 39]);
+        assert!(fill.fixed_color);
+        let before = fill.commands(&doc);
+        let id = fill.atoms[0];
+        let mut moved = doc.clone();
+        moved.translate(&[id], 20., -10.);
+        assert_eq!(moved.ring_fills, doc.ring_fills);
+        assert_ne!(moved.ring_fills[0].commands(&moved), before);
+    }
+    // ChemDraw need not write the bond references in geometric order.
+    let shuffled = xml.replace(
+        "6494 6495 6496 6497 6498 6499",
+        "6497 6494 6499 6495 6498 6496",
+    );
+    assert_eq!(
+        engine
+            .request(Request::import("cdxml", &shuffled))
+            .await?
+            .document
+            .ok_or("shuffled")?
+            .ring_fills
+            .len(),
+        1
+    );
+    for invalid in [
+        "6494 6495 6496",
+        "6494 6495 6496 6497 6498 6498",
+        "6482 6484 6486 6488 6490 6492",
+    ] {
+        let broken = xml.replace("6494 6495 6496 6497 6498 6499", invalid);
+        assert!(
+            engine
+                .request(Request::import("cdxml", &broken))
+                .await
+                .is_err(),
+            "Reject invalid native fill: {invalid}"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn native_fills_follow_grouped_fragments() -> Result<(), Box<dyn std::error::Error>> {
+    let mut doc = ring();
+    let second = editing::ring(&mut doc, Point::new(200., 0.), 5, false, 0.);
+    let ids = doc.all_ids();
+    ring_fills::apply(&mut doc, &ids, Some([198, 233, 220]));
+    doc.groups.push(reshiki::grouping::Group {
+        id: 1000,
+        members: second,
+        integral: false,
+    });
+    let xml = reshiki::exchange::drawing::write(&doc, Default::default())?;
+    let parsed = roxmltree::Document::parse(&xml)?;
+    let areas: Vec<_> = parsed
+        .descendants()
+        .filter(|n| n.has_tag_name("ColoredMolecularArea"))
+        .collect();
+    assert_eq!(areas.len(), 2);
+    assert_ne!(areas[0].parent(), areas[1].parent());
+    for area in areas {
+        for id in area
+            .attribute("BasisObjects")
+            .ok_or("basis")?
+            .split_whitespace()
+        {
+            assert!(
+                area.parent()
+                    .ok_or("fragment")?
+                    .children()
+                    .any(|n| n.has_tag_name("b") && n.attribute("id") == Some(id))
+            );
+        }
+    }
+    let back = LocalEngine::default()
+        .request(Request::import("cdxml", &xml))
+        .await?
+        .document
+        .ok_or("import")?;
+    assert_eq!(back.ring_fills.len(), 2);
+    assert_eq!(back.groups.len(), 1);
+    Ok(())
+}
+
+#[tokio::test]
+async fn filled_abbreviations_expand_for_editable_exchange()
+-> Result<(), Box<dyn std::error::Error>> {
+    let engine = LocalEngine::default();
+    use reshiki::canvas_theme::{self, CanvasTheme};
+    for (mode, transparent_copy) in [
+        (CanvasTheme::Light, false),
+        (CanvasTheme::Dark, false),
+        (CanvasTheme::Dark, true),
+    ] {
+        let mut doc = ring();
+        doc.canvas_theme = mode;
+        let members = doc.all_ids();
+        ring_fills::apply(&mut doc, &members, Some([198, 233, 220]));
+        let anchor = members[0];
+        let outside = doc.add_atom(
+            "O",
+            doc.atom(anchor).ok_or("anchor")?.position.offset(0., -42.),
+        );
+        doc.add_bond(anchor, outside, 1, "plain");
+        doc.contract(&members, "Cy", "Cy")?;
+        doc.contract(&[outside], "OH", "HO")?;
+        doc.validate()?;
+        for format in ["cdxml", "cdx"] {
+            let source = if transparent_copy {
+                canvas_theme::for_paste(doc.clone(), CanvasTheme::Light)
+            } else {
+                doc.clone()
+            };
+            let mut request = Request::molecule("export", source);
+            request.format = Some(format.into());
+            let output = engine.request(request).await?.output.ok_or("export")?;
+            if format == "cdxml" {
+                let xml = roxmltree::Document::parse(&output)?;
+                let area = xml
+                    .descendants()
+                    .find(|n| n.has_tag_name("ColoredMolecularArea"))
+                    .ok_or("native fill")?;
+                let fragment = area.parent().ok_or("fill fragment")?;
+                assert!(fragment.has_tag_name("fragment"));
+                assert!(
+                    fragment
+                        .parent()
+                        .ok_or("fragment parent")?
+                        .has_tag_name("page")
+                );
+                let basis = area.attribute("BasisObjects").ok_or("basis")?;
+                for id in basis.split_whitespace() {
+                    assert!(
+                        fragment
+                            .children()
+                            .any(|n| n.has_tag_name("b") && n.attribute("id") == Some(id))
+                    );
+                }
+            }
+            let restored = engine
+                .request(Request::import(format, &output))
+                .await?
+                .document
+                .ok_or("import")?;
+            restored.validate()?;
+            assert_eq!((restored.atoms.len(), restored.bonds.len()), (7, 7));
+            assert_eq!(restored.abbreviations.len(), 1);
+            assert_eq!(restored.abbreviations[0].label, "OH");
+            assert_eq!(
+                doc.abbreviations.len(),
+                2,
+                "Export leaves the source contracted"
+            );
+            assert_eq!(restored.ring_fills.len(), 1);
+            let fill = &restored.ring_fills[0];
+            assert!(
+                fill.atoms
+                    .iter()
+                    .all(|id| !restored.abbreviations[0].members.contains(id))
+            );
+            assert_eq!(fill.color, ring_fills::palette_color([198, 233, 220], mode));
+            // File exports retain the dark page; clipboard copies contain no background.
+            assert_eq!(
+                restored.graphics.len(),
+                usize::from(mode.is_dark() && !transparent_copy)
+            );
+            let mut expanded = restored.clone();
+            let before = expanded.ring_fills[0].commands(&expanded);
+            expanded.translate(&[expanded.ring_fills[0].atoms[0]], 10., 5.);
+            assert_ne!(expanded.ring_fills[0].commands(&expanded), before);
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn imports_actual_chemdraw_return_clipboard() -> Result<(), Box<dyn std::error::Error>> {
+    let xml =
+        reshiki::exchange::from_cdx(include_bytes!("fixtures/ring-fills/chemdraw-return.cdx"))?;
+    let doc = LocalEngine::default()
+        .request(Request::import("cdxml", &xml))
+        .await?
+        .document
+        .ok_or("return paste")?;
+    assert_eq!(
+        (doc.atoms.len(), doc.bonds.len(), doc.ring_fills.len()),
+        (14, 15, 2)
+    );
+    assert!(doc.graphics.is_empty());
+    assert!(
+        doc.ring_fills
+            .iter()
+            .all(|f| f.color == [67, 99, 132] && f.fixed_color)
+    );
+    doc.validate()?;
     Ok(())
 }

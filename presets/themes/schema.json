@@ -1,0 +1,435 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReShiki color theme v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "id", "name", "base", "light", "dark"],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]{1,64}$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "author": {
+      "type": "string",
+      "maxLength": 2048
+    },
+    "source": {
+      "type": "string",
+      "maxLength": 2048
+    },
+    "license": {
+      "type": "string",
+      "maxLength": 2048
+    },
+    "base": {
+      "enum": ["publication", "presentation", "pastel", "jmol"]
+    },
+    "light": {
+      "$ref": "#/$defs/palette"
+    },
+    "dark": {
+      "$ref": "#/$defs/palette"
+    },
+    "generator": {
+      "$ref": "#/$defs/generator"
+    }
+  },
+  "$defs": {
+    "tone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lightness", "chroma"],
+      "properties": {
+        "lightness": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "chroma": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2
+        }
+      }
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["light", "dark"],
+      "properties": {
+        "light": {
+          "$ref": "#/$defs/tone"
+        },
+        "dark": {
+          "$ref": "#/$defs/tone"
+        },
+        "reference": {
+          "$ref": "#/$defs/reference"
+        }
+      }
+    },
+    "color": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 255
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["oklch"],
+          "properties": {
+            "oklch": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 0.4
+                },
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 360
+                }
+              ],
+              "items": false,
+              "minItems": 3,
+              "maxItems": 3
+            }
+          }
+        }
+      ]
+    },
+    "palette": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "elements": {
+          "type": "object",
+          "propertyNames": {
+            "enum": [
+              "H",
+              "He",
+              "Li",
+              "Be",
+              "B",
+              "C",
+              "N",
+              "O",
+              "F",
+              "Ne",
+              "Na",
+              "Mg",
+              "Al",
+              "Si",
+              "P",
+              "S",
+              "Cl",
+              "Ar",
+              "K",
+              "Ca",
+              "Sc",
+              "Ti",
+              "V",
+              "Cr",
+              "Mn",
+              "Fe",
+              "Co",
+              "Ni",
+              "Cu",
+              "Zn",
+              "Ga",
+              "Ge",
+              "As",
+              "Se",
+              "Br",
+              "Kr",
+              "Rb",
+              "Sr",
+              "Y",
+              "Zr",
+              "Nb",
+              "Mo",
+              "Tc",
+              "Ru",
+              "Rh",
+              "Pd",
+              "Ag",
+              "Cd",
+              "In",
+              "Sn",
+              "Sb",
+              "Te",
+              "I",
+              "Xe",
+              "Cs",
+              "Ba",
+              "La",
+              "Ce",
+              "Pr",
+              "Nd",
+              "Pm",
+              "Sm",
+              "Eu",
+              "Gd",
+              "Tb",
+              "Dy",
+              "Ho",
+              "Er",
+              "Tm",
+              "Yb",
+              "Lu",
+              "Hf",
+              "Ta",
+              "W",
+              "Re",
+              "Os",
+              "Ir",
+              "Pt",
+              "Au",
+              "Hg",
+              "Tl",
+              "Pb",
+              "Bi",
+              "Po",
+              "At",
+              "Rn",
+              "Fr",
+              "Ra",
+              "Ac",
+              "Th",
+              "Pa",
+              "U",
+              "Np",
+              "Pu",
+              "Am",
+              "Cm",
+              "Bk",
+              "Cf",
+              "Es",
+              "Fm",
+              "Md",
+              "No",
+              "Lr",
+              "Rf",
+              "Db",
+              "Sg",
+              "Bh",
+              "Hs",
+              "Mt",
+              "Ds",
+              "Rg",
+              "Cn",
+              "Nh",
+              "Fl",
+              "Mc",
+              "Lv",
+              "Ts",
+              "Og"
+            ]
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/color"
+          },
+          "maxProperties": 118
+        },
+        "tile_seeds": {
+          "type": "object",
+          "propertyNames": {
+            "enum": [
+              "H",
+              "He",
+              "Li",
+              "Be",
+              "B",
+              "C",
+              "N",
+              "O",
+              "F",
+              "Ne",
+              "Na",
+              "Mg",
+              "Al",
+              "Si",
+              "P",
+              "S",
+              "Cl",
+              "Ar",
+              "K",
+              "Ca",
+              "Sc",
+              "Ti",
+              "V",
+              "Cr",
+              "Mn",
+              "Fe",
+              "Co",
+              "Ni",
+              "Cu",
+              "Zn",
+              "Ga",
+              "Ge",
+              "As",
+              "Se",
+              "Br",
+              "Kr",
+              "Rb",
+              "Sr",
+              "Y",
+              "Zr",
+              "Nb",
+              "Mo",
+              "Tc",
+              "Ru",
+              "Rh",
+              "Pd",
+              "Ag",
+              "Cd",
+              "In",
+              "Sn",
+              "Sb",
+              "Te",
+              "I",
+              "Xe",
+              "Cs",
+              "Ba",
+              "La",
+              "Ce",
+              "Pr",
+              "Nd",
+              "Pm",
+              "Sm",
+              "Eu",
+              "Gd",
+              "Tb",
+              "Dy",
+              "Ho",
+              "Er",
+              "Tm",
+              "Yb",
+              "Lu",
+              "Hf",
+              "Ta",
+              "W",
+              "Re",
+              "Os",
+              "Ir",
+              "Pt",
+              "Au",
+              "Hg",
+              "Tl",
+              "Pb",
+              "Bi",
+              "Po",
+              "At",
+              "Rn",
+              "Fr",
+              "Ra",
+              "Ac",
+              "Th",
+              "Pa",
+              "U",
+              "Np",
+              "Pu",
+              "Am",
+              "Cm",
+              "Bk",
+              "Cf",
+              "Es",
+              "Fm",
+              "Md",
+              "No",
+              "Lr",
+              "Rf",
+              "Db",
+              "Sg",
+              "Bh",
+              "Hs",
+              "Mt",
+              "Ds",
+              "Rg",
+              "Cn",
+              "Nh",
+              "Fl",
+              "Mc",
+              "Lv",
+              "Ts",
+              "Og"
+            ]
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/color"
+          },
+          "maxProperties": 118
+        },
+        "ring_fills": {
+          "type": "object",
+          "propertyNames": {
+            "enum": ["Sky", "Mint", "Rose", "Lilac", "Sand"]
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/color"
+          }
+        }
+      }
+    },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "light", "dark"],
+      "properties": {
+        "id": {
+          "$ref": "#/properties/id"
+        },
+        "name": {
+          "$ref": "#/properties/name"
+        },
+        "author": {
+          "$ref": "#/properties/author"
+        },
+        "source": {
+          "$ref": "#/properties/source"
+        },
+        "license": {
+          "$ref": "#/properties/license"
+        },
+        "light": {
+          "$ref": "#/$defs/palette/properties/elements",
+          "minProperties": 118,
+          "maxProperties": 118
+        },
+        "dark": {
+          "$ref": "#/$defs/palette/properties/elements",
+          "minProperties": 118,
+          "maxProperties": 118
+        },
+        "light_tile_seeds": {
+          "$ref": "#/$defs/palette/properties/tile_seeds"
+        },
+        "dark_tile_seeds": {
+          "$ref": "#/$defs/palette/properties/tile_seeds"
+        }
+      }
+    }
+  }
+}

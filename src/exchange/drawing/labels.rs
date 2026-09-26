@@ -235,7 +235,19 @@ impl Writer<'_> {
             }
             let show = a.display.hydrogens.unwrap_or(doc.atom_labels.hydrogens);
             if label_h != 0 && show && a.element != "H" {
+                let hydrogen_style = TextStyle {
+                    color: a.display.hydrogen_color.unwrap_or(s.color),
+                    ..s.clone()
+                };
+                let start = label.len();
                 label.push('H');
+                if hydrogen_style.color != s.color {
+                    spans.push(TextSpan {
+                        start,
+                        end: label.len(),
+                        style: hydrogen_style.clone(),
+                    });
+                }
                 if label_h > 1 {
                     let start = label.len();
                     label.push_str(&label_h.to_string());
@@ -244,7 +256,7 @@ impl Writer<'_> {
                         end: label.len(),
                         style: TextStyle {
                             script: Script::Subscript,
-                            ..s.clone()
+                            ..hydrogen_style
                         },
                     });
                 }

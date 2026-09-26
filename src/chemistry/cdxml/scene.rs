@@ -64,6 +64,8 @@ pub struct SceneAtom {
     pub id: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub text_style: Option<NativeTextStyle>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hydrogen_color: Option<[u8; 3]>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub marks: Vec<NativeMark>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -166,6 +168,7 @@ fn atom_slot(
     atoms.push(SceneAtom {
         id,
         text_style: None,
+        hydrogen_color: None,
         marks: Vec::new(),
         display: None,
     });
@@ -359,18 +362,65 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
             Some(&attributes(*node)),
             true,
         )?;
-        let style = plain(text.format.style);
-        if text
-            .format
-            .spans
-            .into_iter()
-            .any(|span| plain(span.style) != style)
-        {
-            return Err(SceneError::Invalid(
-                "Mixed fonts within a CDXML atom label are not supported yet",
-            ));
+        let style = plain(text.format.style.clone());
+        // Only the attached H/count may carry a second color. It remains part
+        // of one chemical atom label, with unchanged geometry and chemistry.
+        let isotope = text.text.bytes().take_while(u8::is_ascii_digit).count();
+        let core = text.text.get(isotope..).unwrap_or_default();
+        let core_len = 1 + core
+            .bytes()
+            .skip(1)
+            .take_while(u8::is_ascii_lowercase)
+            .count();
+        let h_start = isotope + core_len;
+        let h_range = text
+            .text
+            .get(h_start..)
+            .filter(|s| s.starts_with('H'))
+            .map(|s| {
+                h_start..h_start + 1 + s.bytes().skip(1).take_while(u8::is_ascii_digit).count()
+            });
+        let mut hydrogen_color = None;
+        for span in &text.format.spans {
+            let mut run = plain(span.style.clone());
+            if run == style {
+                continue;
+            }
+            let color = run.color;
+            run.color = style.color;
+            if run != style
+                || !h_range
+                    .as_ref()
+                    .is_some_and(|r| r.start <= span.start && span.end <= r.end)
+            {
+                return Err(SceneError::Invalid(
+                    "Mixed fonts within a CDXML atom label are not supported yet",
+                ));
+            }
+            if hydrogen_color.is_some_and(|previous| previous != color) {
+                return Err(SceneError::Invalid(
+                    "Mixed colors within attached hydrogen text are not supported",
+                ));
+            }
+            hydrogen_color = Some(color);
         }
-        if style == default_style() {
+        if let (Some(color), Some(range)) = (hydrogen_color, h_range) {
+            for index in range {
+                let actual = text
+                    .format
+                    .spans
+                    .iter()
+                    .find(|s| s.start <= index && index < s.end)
+                    .map_or(style.color, |s| s.style.color);
+                if actual != color {
+                    return Err(SceneError::Invalid(
+                        "Mixed colors within attached hydrogen text are not supported",
+                    ));
+                }
+            }
+        }
+        let hydrogen_color = hydrogen_color.map(|c| c.into_document()).transpose()?;
+        if style == default_style() && hydrogen_color.is_none() {
             continue;
         }
         let p = point(
@@ -393,6 +443,7 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
         base.atoms.push(SceneAtom {
             id,
             text_style: Some(style),
+            hydrogen_color,
             marks: Vec::new(),
             display: None,
         });

@@ -267,7 +267,7 @@ impl App {
             .align_y(Alignment::Center),
             text(format!("Version {}", updates::CURRENT_VERSION))
                 .size(13)
-                .color(super::workspace::muted()),
+                .style(super::workspace::muted_text),
             text(status).size(15),
             row![
                 button("Check for updates")
@@ -289,28 +289,38 @@ impl App {
             button("Release notes ↗").on_press(msg(Action::Download)).style(button::text),
             text("Checks once a day. Updates are verified before installation. Your saved drawing reopens after restarting.")
                 .size(12)
-                .color(super::workspace::muted()),
+                .style(super::workspace::muted_text),
         ]
         .spacing(18);
         let backdrop = mouse_area(
             container(Space::new())
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .style(|_| container::Style {
-                    background: Some(iced::Color::from_rgba(0., 0., 0., 0.18).into()),
-                    ..Default::default()
+                .style(|theme| {
+                    crate::appearance::container(
+                        theme,
+                        container::Style {
+                            background: Some(iced::Color::from_rgba(0., 0., 0., 0.18).into()),
+                            ..Default::default()
+                        },
+                    )
                 }),
         )
         .on_press(msg(Action::Show(false)));
         let dialog = container(opaque(container(panel).padding(24).width(460).style(
-            |_| container::Style {
-                background: Some(Color::WHITE.into()),
-                border: Border {
-                    color: Color::from_rgb8(201, 212, 207),
-                    width: 1.,
-                    radius: 12.0.into(),
-                },
-                ..Default::default()
+            |theme| {
+                crate::appearance::container(
+                    theme,
+                    container::Style {
+                        background: Some(Color::WHITE.into()),
+                        border: Border {
+                            color: Color::from_rgb8(201, 212, 207),
+                            width: 1.,
+                            radius: 12.0.into(),
+                        },
+                        ..Default::default()
+                    },
+                )
             },
         )))
         .center_x(Length::Fill)
