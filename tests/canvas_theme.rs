@@ -322,9 +322,7 @@ fn element_palettes_keep_legible_contrast_on_their_canvas() {
     };
     for theme in ColorTheme::ALL {
         for mode in CanvasTheme::ALL {
-            for element in [
-                "C", "H", "N", "O", "F", "Cl", "S", "P", "Br", "I", "B", "Si", "Fe", "Rh",
-            ] {
+            for element in reshiki::editing::ELEMENTS {
                 let ink = luminance(theme.element_color(element, mode));
                 let paper = luminance(mode.background());
                 let contrast = (ink.max(paper) + 0.05) / (ink.min(paper) + 0.05);

@@ -2353,8 +2353,10 @@ pub(super) fn element_control(
         } else {
             CanvasTheme::Light
         };
-        let rgb = palette.element_color(symbol, mode);
-        if rgb != mode.color([0; 3]) && status != button::Status::Disabled {
+        if let Some(rgb) = palette
+            .element_swatch(symbol, mode)
+            .filter(|_| status != button::Status::Disabled)
+        {
             let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
             let amount = if active {
                 0.34

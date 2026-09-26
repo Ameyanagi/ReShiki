@@ -45,8 +45,11 @@ The color theme offers:
 - **Publication**: neutral black labels on light paper, white labels on dark paper.
 - **Presentation**: balanced conventional element colors, including blue nitrogen and red oxygen. Carbon, hydrogen, and bonds stay neutral unless individually recolored.
 - **Pastel**: softer element colors, with enough contrast to remain legible on light paper.
+- **Jmol**: the [Jmol CPK palette](https://jmol.sourceforge.net/jscolors/), using the published [element color table](https://jmol.sourceforge.net/jscolors/jmol_constants.js) for H through Mt. Later elements retain neutral colors. Canvas labels adjust brightness only when necessary for at least 3:1 contrast against the paper, including white hydrogen and yellow sulfur on light canvases.
 
 Presentation and Pastel have separate light and dark palettes. Selecting a theme replaces atom color overrides, including pasted atom colors, while preserving typography and geometry. You can assign individual colors afterward; choosing a theme again resets them. New atoms automatically follow the theme. Manually colored vector objects retain their hue while their lightness adapts to canvas brightness; raster pictures keep their original pixels. The toolbar swatches and hex field show visible canvas colors.
+
+The periodic table and quick atom buttons use colored tile backgrounds with regular-weight, high-contrast symbols. Jmol tiles tint their backgrounds with its published element colors; canvas label brightness adjustments do not change those tile hues. A thicker outline identifies the selected element.
 
 Canvas colors are saved with the document and participate in Undo/Redo. File exports (PNG, SVG, PDF and ChemDraw) and printing include the canvas background and visible colors. Copies always have a transparent background: Copy Image retains the visible ink in PDF/PNG/SVG, and editable ChemDraw copies retain those object colors without adding a page rectangle. Pasting between different canvas modes in ReShiki likewise retains the source ink without adding a background.
 

@@ -1,5 +1,6 @@
 //! Document page colors, independent of journal dimensions and application chrome.
 use serde::{Deserialize, Serialize};
+mod jmol;
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CanvasTheme {
@@ -93,14 +94,25 @@ pub enum ColorTheme {
     Publication,
     Presentation,
     Pastel,
+    Jmol,
 }
 impl ColorTheme {
-    pub const ALL: [Self; 3] = [Self::Publication, Self::Presentation, Self::Pastel];
+    pub const ALL: [Self; 4] = [
+        Self::Publication,
+        Self::Presentation,
+        Self::Pastel,
+        Self::Jmol,
+    ];
     pub fn is_publication(&self) -> bool {
         *self == Self::Publication
     }
-    /// Visible RGB, with muted conventional element hues and neutral carbon/hydrogen.
+    /// Visible label RGB with enough contrast against the document's paper.
     pub fn element_color(self, element: &str, canvas: CanvasTheme) -> [u8; 3] {
+        if self == Self::Jmol {
+            return jmol::swatch(element)
+                .map(|rgb| jmol::label_ink(rgb, canvas))
+                .unwrap_or_else(|| canvas.color([0; 3]));
+        }
         let index = match element {
             "N" => 0,
             "O" => 1,
@@ -115,7 +127,9 @@ impl ColorTheme {
             _ => return canvas.color([0; 3]),
         };
         let colors = match (self, canvas) {
-            (Self::Publication, _) => return canvas.color([0; 3]),
+            (Self::Publication | Self::Jmol, _) => {
+                return canvas.color([0; 3]);
+            }
             (Self::Presentation, CanvasTheme::Light) => [
                 [55, 94, 158],
                 [190, 67, 76],
@@ -166,6 +180,16 @@ impl ColorTheme {
             .copied()
             .unwrap_or_else(|| canvas.color([0; 3]))
     }
+    /// Original CPK hues remain available for tiles; label brightness is adjusted
+    /// separately so white hydrogen and yellow sulfur can be read on white paper.
+    pub fn element_swatch(self, element: &str, canvas: CanvasTheme) -> Option<[u8; 3]> {
+        if self == Self::Jmol {
+            jmol::swatch(element)
+        } else {
+            let color = self.element_color(element, canvas);
+            (color != canvas.color([0; 3])).then_some(color)
+        }
+    }
     /// Selecting a theme resets atom color overrides, but preserves all typography.
     pub fn apply(self, doc: &mut crate::document::Document) {
         doc.color_theme = self;
@@ -187,6 +211,7 @@ impl std::fmt::Display for ColorTheme {
             Self::Publication => "Publication",
             Self::Presentation => "Presentation",
             Self::Pastel => "Pastel",
+            Self::Jmol => "Jmol",
         })
     }
 }
