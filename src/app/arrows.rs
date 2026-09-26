@@ -201,8 +201,8 @@ impl App {
         self.status = "Arrow updated · Drag the middle handle to bend".into();
     }
     pub(super) fn arrow_panel(&self) -> Element<'_, Message> {
-        use super::workspace::{muted, section};
-        use iced::widget::{button, checkbox, column, pick_list, row, text, text_input};
+        use super::workspace::{muted_text, section};
+        use iced::widget::{button, checkbox, column, row, text};
         use iced::{Alignment, Length};
         let s = &self.arrows.style;
         let has_selection = self
@@ -213,7 +213,7 @@ impl App {
         let number = |label: &'static str, field: Field| {
             row![
                 text(label).size(11).width(Length::Fill),
-                text_input(
+                crate::appearance::text_input(
                     "",
                     self.arrows
                         .numbers
@@ -253,13 +253,13 @@ impl App {
             })
             .width(Length::Fill)
             .height(70),
-            pick_list(Preset::ALL, Some(self.arrow_style), Message::ArrowStyle)
+            crate::appearance::pick_list(Preset::ALL, Some(self.arrow_style), Message::ArrowStyle)
                 .text_size(12)
                 .padding(6)
                 .width(Length::Fill),
             row![
                 text("End").size(11).width(44),
-                pick_list(Head::ALL, Some(s.head), |v| Message::ArrowAction(
+                crate::appearance::pick_list(Head::ALL, Some(s.head), |v| Message::ArrowAction(
                     Action::Head(v)
                 ))
                 .text_size(12)
@@ -269,7 +269,7 @@ impl App {
             .align_y(Alignment::Center),
             row![
                 text("Start").size(11).width(44),
-                pick_list(Head::ALL, Some(s.tail), |v| Message::ArrowAction(
+                crate::appearance::pick_list(Head::ALL, Some(s.tail), |v| Message::ArrowAction(
                     Action::Tail(v)
                 ))
                 .text_size(12)
@@ -278,14 +278,14 @@ impl App {
             ]
             .align_y(Alignment::Center),
             row![
-                pick_list(
+                crate::appearance::pick_list(
                     [LinePattern::Solid, LinePattern::Dashed, LinePattern::Dotted],
                     Some(s.pattern),
                     |v| Message::ArrowAction(Action::Pattern(v))
                 )
                 .text_size(12)
                 .padding(5),
-                text_input("#RRGGBB", &self.arrows.color)
+                crate::appearance::text_input("#RRGGBB", &self.arrows.color)
                     .on_input(|v| Message::ArrowAction(Action::Color(v)))
                     .on_submit(Message::ArrowAction(Action::ApplyColor))
                     .size(12)
@@ -297,8 +297,8 @@ impl App {
         ]
         .spacing(8);
         let mut geometry = column![
-            text("Arrowhead shape").size(11).color(muted()),
-            pick_list(HeadShape::ALL, Some(s.shape), |v| Message::ArrowAction(
+            text("Arrowhead shape").size(11).style(muted_text),
+            crate::appearance::pick_list(HeadShape::ALL, Some(s.shape), |v| Message::ArrowAction(
                 Action::Shape(v)
             ))
             .text_size(12)
@@ -319,9 +319,9 @@ impl App {
             .push(
                 row![
                     text("No reaction").size(11),
-                    pick_list(NoGo::ALL, Some(s.no_go), |v| Message::ArrowAction(
-                        Action::NoGo(v)
-                    ))
+                    crate::appearance::pick_list(NoGo::ALL, Some(s.no_go), |v| {
+                        Message::ArrowAction(Action::NoGo(v))
+                    })
                     .text_size(12)
                     .padding(5)
                 ]
@@ -352,6 +352,6 @@ impl App {
                 .on_press(Message::ArrowAction(Action::Reset)),
         );
         panel.push(self.inspector_section(super::inspector::Section::ArrowGeometry, "Arrowhead & markers", "", false, geometry))
-            .push(text("Drag endpoints to resize; drag the square handle to bend. Return applies numeric and color fields.").size(11).color(muted())).into()
+            .push(text("Drag endpoints to resize; drag the square handle to bend. Return applies numeric and color fields.").size(11).style(muted_text)).into()
     }
 }

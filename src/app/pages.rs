@@ -1,6 +1,6 @@
 use super::workspace::horizontal_line;
 use super::{App, InspectorTab, Message};
-use iced::widget::{button, column, pick_list, row, text, text_input};
+use iced::widget::{button, column, row, text};
 use iced::{Element, Length, Task};
 use reshiki::{
     document::Point,
@@ -247,7 +247,7 @@ impl App {
                     Ok(layout) => {
                         let before = self.doc.clone();
                         self.doc.page_layout = Some(layout);
-                        self.doc.version = 15;
+                        self.doc.version = self.doc.version.max(15);
                         self.changed(before);
                         self.pages.editor = None;
                         self.pages.active = self.pages.active.min(
@@ -365,11 +365,11 @@ impl App {
                         "Centering keeps whole molecules together and preserves the drawing scale.",
                     )
                     .size(11)
-                    .color(super::workspace::muted()),
+                    .style(super::workspace::muted_text),
                 )
                 .push(
                     command("Export pages as PDF…")
-                        .style(button::primary)
+                        .style(crate::appearance::primary)
                         .on_press_maybe(
                             (!self.figure_exporting).then_some(Message::Pages(Action::Export)),
                         )
@@ -388,10 +388,10 @@ impl App {
             }
             let overflow = layout.overflow(&self.doc);
             if overflow > 0 {
-                body = body.push(text(format!("{overflow} items cross a page edge or sit outside the pages. PDF pages clip at paper edges.")).size(11).color(iced::Color::from_rgb8(168,91,36)));
+                body = body.push(text(format!("{overflow} items cross a page edge or sit outside the pages. PDF pages clip at paper edges.")).size(11).style(crate::appearance::text_color(iced::Color::from_rgb8(168,91,36))));
             }
             body = body.push(horizontal_line())
-                .push(text("Margins are guides and do not print. Use cropped drawing exports for figures that will be placed in another document.").size(11).color(super::workspace::muted()))
+                .push(text("Margins are guides and do not print. Use cropped drawing exports for figures that will be placed in another document.").size(11).style(super::workspace::muted_text))
                 .push(command("Remove page layout").on_press(Message::Pages(Action::Remove)).style(button::text));
         } else {
             body = body.push(text("Choose a paper size and margins to prepare a publication or a multipage PDF.").size(12))
@@ -410,8 +410,8 @@ impl App {
         };
         let input = |label: &'static str, value: &str, field| {
             column![
-                text(label).size(11).color(super::workspace::muted()),
-                text_input("", value)
+                text(label).size(11).style(super::workspace::muted_text),
+                crate::appearance::text_input("", value)
                     .on_input(move |v| Message::Pages(Action::Input(field, v)))
                     .on_submit(Message::Pages(Action::Apply))
                     .size(12)
@@ -434,10 +434,26 @@ impl App {
                     .on_press(Message::Pages(Action::Cancel))
             ]
             .spacing(5),
-            text("Physical size · JACS / ACS drawing scale")
+            text("Physical size · Document drawing scale")
                 .size(11)
-                .color(super::workspace::muted()),
-            pick_list(Preset::ALL, Some(preset), |p| Message::Pages(
+                .style(super::workspace::muted_text),
+            text("Canvas theme").size(11),
+            crate::appearance::pick_list(
+                self.theme_choices().0,
+                Some(self.theme_choices().1),
+                |choice| Message::ThemeFile(super::theme_files::Action::Choose(choice)),
+            )
+            .width(Length::Fill)
+            .text_size(12),
+            text("Canvas brightness · copies have transparent backgrounds").size(11),
+            crate::appearance::pick_list(
+                reshiki::canvas_theme::CanvasTheme::ALL,
+                Some(self.doc.canvas_theme),
+                Message::CanvasTheme
+            )
+            .width(Length::Fill)
+            .text_size(12),
+            crate::appearance::pick_list(Preset::ALL, Some(preset), |p| Message::Pages(
                 Action::Preset(p)
             ))
             .width(Length::Fill)
@@ -476,17 +492,15 @@ impl App {
             ]
             .spacing(8),
             command("Apply page setup")
-                .style(button::primary)
+                .style(crate::appearance::primary)
                 .on_press_maybe(candidate.is_ok().then_some(Message::Pages(Action::Apply)))
                 .width(Length::Fill),
         ]
         .spacing(12);
         if let Err(error) = candidate {
-            body = body.push(
-                text(error)
-                    .size(11)
-                    .color(iced::Color::from_rgb8(168, 52, 47)),
-            );
+            body = body.push(text(error).size(11).style(crate::appearance::text_color(
+                iced::Color::from_rgb8(168, 52, 47),
+            )));
         }
         if let Some(layout) = &self.doc.page_layout {
             let active = self.pages.active.min(layout.count().saturating_sub(1));
@@ -526,7 +540,7 @@ impl App {
                 )
                 .push(
                     command("Export pages as PDF…")
-                        .style(button::primary)
+                        .style(crate::appearance::primary)
                         .on_press_maybe(
                             (!self.figure_exporting).then_some(Message::Pages(Action::Export)),
                         )
@@ -545,7 +559,7 @@ impl App {
             }
             let overflow = layout.overflow(&self.doc);
             if overflow > 0 {
-                body=body.push(text(format!("{overflow} objects cross a page edge or sit outside the pages. PDF pages clip at paper edges.")).size(11).color(iced::Color::from_rgb8(168,91,36)));
+                body=body.push(text(format!("{overflow} objects cross a page edge or sit outside the pages. PDF pages clip at paper edges.")).size(11).style(crate::appearance::text_color(iced::Color::from_rgb8(168,91,36))));
             }
             body = body.push(
                 command("Remove page layout")
@@ -553,7 +567,7 @@ impl App {
                     .style(button::text),
             );
         }
-        body.push(text("Page setup does not move or resize objects. Margin guides do not appear in exports. Drawing exports remain cropped to the artwork.").size(11).color(super::workspace::muted())).into()
+        body.push(text("Page setup does not move or resize objects. Margin guides do not appear in exports. Drawing exports remain cropped to the artwork.").size(11).style(super::workspace::muted_text)).into()
     }
 }
 

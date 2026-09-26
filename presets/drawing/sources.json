@@ -1,0 +1,103 @@
+[
+  {
+    "variant": "Jacs",
+    "id": "acs-guidance",
+    "name": "JACS / ACS",
+    "description": "ACS published values; existing ReShiki default.",
+    "kind": "published guidance",
+    "url": "https://pubsapp.acs.org/paragonplus/submission/general/graphics_prep.html",
+    "retrieved": "2026-09-26",
+    "settings": {
+      "font_family": "Arial",
+      "font_size_pt": 10.0,
+      "bond_length_pt": 14.4,
+      "line_width_pt": 0.6,
+      "bold_width_pt": 2.0,
+      "margin_width_pt": 1.6,
+      "hash_spacing_pt": 2.5,
+      "bond_spacing_ratio": 0.18
+    }
+  },
+  {
+    "variant": "Nature",
+    "id": "nature-publisher",
+    "name": "Nature",
+    "description": "Official Nature stylesheet: Helvetica, 6 pt labels.",
+    "kind": "publisher template",
+    "url": "https://www.nature.com/nature/for-authors/formatting-guide",
+    "retrieved": "2026-09-26",
+    "settings": {
+      "font_family": "Helvetica",
+      "font_size_pt": 6.0,
+      "bond_length_pt": 10.798828,
+      "line_width_pt": 0.59526062,
+      "bold_width_pt": 1.5590515,
+      "margin_width_pt": 1.1905365,
+      "hash_spacing_pt": 1.7007751,
+      "bond_spacing_ratio": 0.18
+    },
+    "source_file": "nature.cds",
+    "sha256": "22a9855c10b9ff21821471034b7f97496debd39c97df5bdba9345ed23859a9fe",
+    "download_url": "https://www.nature.com/documents/nr-chemdraw-stylesheet.cds"
+  },
+  {
+    "variant": "Rsc",
+    "id": "rsc-guidance",
+    "name": "RSC",
+    "description": "RSC written pt values; label margin retained from its download. The downloaded template differs.",
+    "kind": "published guidance",
+    "url": "https://www.rsc.org/publishing/publish-with-us/publish-a-journal-article/analytical-methods",
+    "retrieved": "2026-09-26",
+    "settings": {
+      "font_family": "Arial",
+      "font_size_pt": 7,
+      "bond_length_pt": 12.2,
+      "line_width_pt": 0.5,
+      "bold_width_pt": 1.6,
+      "margin_width_pt": 1.25,
+      "hash_spacing_pt": 1.8,
+      "bond_spacing_ratio": 0.2
+    }
+  },
+  {
+    "variant": "Angewandte",
+    "id": "angewandte-publisher",
+    "name": "Angewandte",
+    "description": "Official Angewandte download (legacy ChemDraw 4.5 stationery).",
+    "kind": "publisher template",
+    "url": "https://onlinelibrary.wiley.com/page/journal/15213773/homepage/notice-to-authors",
+    "retrieved": "2026-09-26",
+    "settings": {
+      "font_family": "Arial",
+      "font_size_pt": 12.0,
+      "bond_length_pt": 17.0,
+      "line_width_pt": 0.75,
+      "bold_width_pt": 2.6015625,
+      "margin_width_pt": 2.0,
+      "hash_spacing_pt": 2.6015625,
+      "bond_spacing_ratio": 0.18
+    },
+    "source_file": "angew.cds",
+    "sha256": "fc27087c9a6e2c770970a7a156c112fd414a2f503e5a8985940c57bacd099a18",
+    "download_url": "https://wol-prod-cdn.literatumonline.com/pb-assets/assets/15213773/angew-cds.zip"
+  },
+  {
+    "variant": "Synthesis",
+    "id": "synthesis-guidance",
+    "name": "SYNLETT / SYNTHESIS",
+    "description": "Final-size dimensions from the 2026 instructions. Arial retained from bundled stationery; 6 pt labels.",
+    "kind": "published guidance",
+    "url": "https://www.thieme.de/statics/dokumente/thieme/final/de/dokumente/zw_synthesis/Instr_SS_26_feb.pdf",
+    "retrieved": "2026-09-26",
+    "settings": {
+      "font_family": "Arial",
+      "font_size_pt": 6,
+      "bond_length_pt": 10.11968503937008,
+      "line_width_pt": 0.5669291338582677,
+      "bold_width_pt": 1.388976377952756,
+      "margin_width_pt": 0.9070866141732284,
+      "hash_spacing_pt": 1.75748031496063,
+      "bond_spacing_ratio": 0.18
+    }
+  }
+]

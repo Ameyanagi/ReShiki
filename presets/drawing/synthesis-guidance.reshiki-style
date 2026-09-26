@@ -1,0 +1,13 @@
+{
+  "name": "SYNLETT / SYNTHESIS",
+  "font_family": "Arial",
+  "bond_length_world": 29.515750885009766,
+  "bond_length_pt": 10.11968503937008,
+  "font_size_pt": 6,
+  "line_width_pt": 0.5669291338582677,
+  "bold_width_pt": 1.388976377952756,
+  "margin_width_pt": 0.9070866141732284,
+  "hash_spacing_pt": 1.75748031496063,
+  "bond_spacing_ratio": 0.18,
+  "png_dpi": 1200
+}

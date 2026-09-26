@@ -1,0 +1,13 @@
+{
+  "name": "Nature",
+  "font_family": "Helvetica",
+  "bond_length_world": 31.496583938598633,
+  "bond_length_pt": 10.798828,
+  "font_size_pt": 6.0,
+  "line_width_pt": 0.59526062,
+  "bold_width_pt": 1.5590515,
+  "margin_width_pt": 1.1905365,
+  "hash_spacing_pt": 1.7007751,
+  "bond_spacing_ratio": 0.18,
+  "png_dpi": 1200
+}

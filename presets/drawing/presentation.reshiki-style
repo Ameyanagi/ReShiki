@@ -1,0 +1,13 @@
+{
+  "name": "Presentation",
+  "font_family": "Arial",
+  "bond_length_world": 70.00000762939453,
+  "bond_length_pt": 24,
+  "font_size_pt": 16,
+  "line_width_pt": 1,
+  "bold_width_pt": 3,
+  "margin_width_pt": 2,
+  "hash_spacing_pt": 3,
+  "bond_spacing_ratio": 0.18,
+  "png_dpi": 1200
+}

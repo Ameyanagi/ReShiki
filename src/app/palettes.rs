@@ -313,7 +313,11 @@ impl App {
                                     .width(29)
                                     .height(29)
                                     .padding(1)
-                                    .style(super::workspace::control(self.element == symbol))
+                                    .style(super::workspace::element_control(
+                                        self.element == symbol,
+                                        &self.doc,
+                                        symbol,
+                                    ))
                                     .on_press(Message::Palette(Action::Atom(symbol.into()))),
                                 format!("{symbol} · Atomic number {number}"),
                                 tooltip::Position::Bottom,
@@ -600,19 +604,24 @@ impl App {
         let popup = container(body)
             .width(if family == Family::Atoms { 590 } else { 360 })
             .padding(14)
-            .style(|_| container::Style {
-                background: Some(Color::WHITE.into()),
-                border: Border {
-                    color: Color::from_rgb8(192, 204, 201),
-                    width: 1.,
-                    radius: 10.into(),
-                },
-                shadow: super::workspace::surface_shadow(iced::Shadow {
-                    color: Color::from_rgba8(20, 40, 35, 0.18),
-                    offset: iced::Vector::new(0., 5.),
-                    blur_radius: 18.,
-                }),
-                ..Default::default()
+            .style(|theme| {
+                crate::appearance::container(
+                    theme,
+                    container::Style {
+                        background: Some(Color::WHITE.into()),
+                        border: Border {
+                            color: Color::from_rgb8(192, 204, 201),
+                            width: 1.,
+                            radius: 10.into(),
+                        },
+                        shadow: super::workspace::surface_shadow(iced::Shadow {
+                            color: Color::from_rgba8(20, 40, 35, 0.18),
+                            offset: iced::Vector::new(0., 5.),
+                            blur_radius: 18.,
+                        }),
+                        ..Default::default()
+                    },
+                )
             });
         stack![
             base,

@@ -87,14 +87,27 @@ pub(crate) fn print_snapshot(doc: &Document) -> Result<Vec<u8>, String> {
         .page_layout
         .as_ref()
         .ok_or("Missing print page layout")?;
-    let svg = scene::svg(doc);
+    let svg = scene::svg_with_background(doc);
     let mut options = usvg::Options::default();
     options.fontdb_mut().load_system_fonts();
     let tree = usvg::Tree::from_str(&svg, &options).map_err(|error| error.to_string())?;
-    let mut primitives = Vec::new();
-    collect(tree.root(), usvg::Transform::identity(), &mut primitives)?;
     let (drawing_lo, _) = scene::bounds(&scene::primitives(doc));
     let scale = crate::style::DEFAULT.points_per_world();
+    let mut primitives = Vec::new();
+    for index in 0..layout.count() {
+        let (lo, _) = layout.bounds(index).ok_or("Invalid print page")?;
+        let x = (lo.x - drawing_lo.x) * scale;
+        let y = (lo.y - drawing_lo.y) * scale;
+        let right = x + layout.width_pt;
+        let bottom = y + layout.height_pt;
+        let [r, g, b] = doc.canvas_theme.background();
+        primitives.push(json!({
+            "kind": "path", "transform": [4. / 3., 0., 0., 4. / 3., 0., 0.],
+            "commands": [[0., x, y], [1., right, y], [1., right, bottom], [1., x, bottom], [4.]],
+            "fill": [r, g, b, 255], "stroke": null, "even_odd": false
+        }));
+    }
+    collect(tree.root(), usvg::Transform::identity(), &mut primitives)?;
     let pages: Result<Vec<_>, String> = (0..layout.count())
         .map(|index| {
             let (lo, _) = layout.bounds(index).ok_or("Invalid print page")?;

@@ -162,6 +162,8 @@ fn validate(text: &str) -> Result<Tree> {
                 | "represent"
                 | "objecttag"
                 | "embeddedobject"
+                | "ColoredMolecularArea"
+                | "annotation"
         ) {
             return Err(error(Validation, PreparationCause::Objects));
         }

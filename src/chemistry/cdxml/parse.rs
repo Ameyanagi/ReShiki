@@ -117,9 +117,24 @@ pub(super) fn read(text: &str) -> Result<Parsed> {
                 predicates(node)?;
                 chemical_bonds += 1;
             }
-            "CDXML" | "page" | "fragment" | "group" | "t" | "s" | "fonttable" | "font"
-            | "colortable" | "color" | "arrow" | "graphic" | "curve" | "represent"
-            | "objecttag" | "embeddedobject" => (),
+            "CDXML"
+            | "page"
+            | "fragment"
+            | "group"
+            | "t"
+            | "s"
+            | "fonttable"
+            | "font"
+            | "colortable"
+            | "color"
+            | "arrow"
+            | "graphic"
+            | "curve"
+            | "represent"
+            | "objecttag"
+            | "embeddedobject"
+            | "ColoredMolecularArea"
+            | "annotation" => (),
             _ => return Err(Error::Unsupported("drawing object")),
         }
         if matches!(node.tag_name().name(), "fragment" | "n" | "b") {

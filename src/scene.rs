@@ -28,6 +28,52 @@ pub(crate) fn atom_label_bounds(a: &Atom, doc: &Document) -> Option<(Point, Poin
 }
 
 fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
+    atom_label_runs(a, doc)
+        .into_iter()
+        .flat_map(resolve_label_fonts)
+        .collect()
+}
+
+/// Rendering must use the same fallback face that supplied the ink bounds.
+/// Keep the requested family in the document, and split only when glyphs need
+/// different faces (for example a custom label mixing Latin and Japanese).
+fn resolve_label_fonts(primitive: Primitive) -> Vec<Primitive> {
+    let Primitive::Text {
+        position,
+        text,
+        size,
+        color,
+        style,
+    } = primitive
+    else {
+        return vec![primitive];
+    };
+    let mut runs = Vec::new();
+    let mut x = position.x;
+    for c in text.chars() {
+        let (family, advance) = crate::style::glyph_metrics(c, &style);
+        if let Some(Primitive::Text { text, style, .. }) = runs.last_mut()
+            && style.family == family
+        {
+            text.push(c);
+        } else {
+            runs.push(Primitive::Text {
+                position: Point::new(x, position.y),
+                text: c.to_string(),
+                size,
+                color,
+                style: crate::typography::TextStyle {
+                    family: family.into(),
+                    ..style.clone()
+                },
+            });
+        }
+        x += advance * size;
+    }
+    runs
+}
+
+fn atom_label_runs(a: &Atom, doc: &Document) -> Vec<Primitive> {
     if !doc.atom_visible(a.id) || crate::attachments::hidden(a, doc) {
         return vec![];
     }
@@ -83,7 +129,11 @@ fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
             if group.alignment == crate::abbreviations::LabelAlignment::Above {
                 -layout.height - size * 0.35
             } else {
-                -size * 0.58
+                -crate::style::label_vertical_center(
+                    content.get(range.clone()).unwrap_or(content),
+                    size,
+                    &style,
+                )
             },
         );
         return layout
@@ -125,7 +175,10 @@ fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
         .flatten();
     let label = condensed.map_or(label, |(core, _)| core);
     let element_width = text_width(label, size);
-    let origin = a.position.offset(-element_width / 2.0, -size * 0.58);
+    let origin = a.position.offset(
+        -element_width / 2.0,
+        -crate::style::label_vertical_center(label, size, &style),
+    );
     let mut runs = if show_element {
         vec![text(origin, label.to_string(), size)]
     } else {
@@ -195,6 +248,14 @@ fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
         let mut parts = vec![text(Point::default(), "H".into(), size)];
         if !count.is_empty() {
             parts.push(text(Point::new(h_width, size * 0.40), count, small));
+        }
+        if let Some(hydrogen_color) = a.display.hydrogen_color {
+            for part in &mut parts {
+                if let Primitive::Text { color, style, .. } = part {
+                    *color = hydrogen_color;
+                    style.color = hydrogen_color;
+                }
+            }
         }
         place_appendage(
             &runs,
@@ -504,6 +565,8 @@ fn ring_center(doc: &Document, from: u64, to: u64) -> Option<Point> {
 }
 
 pub fn primitives(doc: &Document) -> Vec<Primitive> {
+    let resolved = crate::canvas_theme::resolved_document(doc);
+    let doc = resolved.as_ref();
     let style = &doc.drawing_style;
     let mut out = vec![];
     let mut graphics: Vec<_> = doc.graphics.iter().collect();
@@ -1062,7 +1125,15 @@ pub(crate) fn bounds(drawing: &[Primitive]) -> (Point, Point) {
     let pad = STYLE.world(4.0);
     (lo.offset(-pad, -pad), hi.offset(pad, pad))
 }
+/// The themed drawing with a transparent surround, for compositing and geometry checks.
 pub fn svg(doc: &Document) -> String {
+    render_svg(doc, false)
+}
+/// A figure carries the canvas background when exported or copied.
+pub fn svg_with_background(doc: &Document) -> String {
+    render_svg(doc, true)
+}
+fn render_svg(doc: &Document, background: bool) -> String {
     let drawing = primitives(doc);
     let (lo, hi) = bounds(&drawing);
     let mut s = format!(
@@ -1074,6 +1145,19 @@ pub fn svg(doc: &Document) -> String {
         (hi.x - lo.x) * STYLE.points_per_world(),
         (hi.y - lo.y) * STYLE.points_per_world()
     );
+    let theme = doc.canvas_theme;
+    if background {
+        let [r, g, b] = theme.background();
+        s.push_str(&format!(
+            "<rect x=\"{}\" y=\"{}\" width=\"{}\" height=\"{}\" fill=\"rgb({r},{g},{b})\"/>\n",
+            lo.x,
+            lo.y,
+            hi.x - lo.x,
+            hi.y - lo.y
+        ));
+    }
+    let [r, g, b] = theme.color([0; 3]);
+    let ink = format!("rgb({r},{g},{b})");
     for p in drawing {
         match p {
             Primitive::Picture(g) => {
@@ -1085,9 +1169,11 @@ pub fn svg(doc: &Document) -> String {
             }
             Primitive::Path {
                 commands,
-                style,
+                mut style,
                 filled,
             } => {
+                style.stroke = theme.color(style.stroke);
+                style.fill = style.fill.map(|color| theme.color(color));
                 use crate::graphics::PathCommand;
                 let mut path = String::new();
                 for c in commands {
@@ -1123,11 +1209,11 @@ pub fn svg(doc: &Document) -> String {
                 s.push_str(&format!("<path d=\"{path}\" fill=\"{fill}\" stroke=\"rgb({},{},{})\" stroke-width=\"{}\" stroke-linecap=\"round\" stroke-linejoin=\"round\"{dash}/>",style.stroke[0],style.stroke[1],style.stroke[2],style.width()));
             }
             Primitive::Line(a, b, w) => {
-                s.push_str(&format!("<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"#000000\" stroke-width=\"{w}\" stroke-linecap=\"round\"/>",a.x,a.y,b.x,b.y));
+                s.push_str(&format!("<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"{ink}\" stroke-width=\"{w}\" stroke-linecap=\"round\"/>",a.x,a.y,b.x,b.y));
             }
             Primitive::Polygon(points) => {
                 s.push_str(&format!(
-                    "<polygon points=\"{}\" fill=\"#000000\"/>",
+                    "<polygon points=\"{}\" fill=\"{ink}\"/>",
                     points
                         .iter()
                         .map(|p| format!("{},{}", p.x, p.y))
@@ -1142,6 +1228,7 @@ pub fn svg(doc: &Document) -> String {
                 color,
                 style,
             } => {
+                let color = theme.color(color);
                 s.push_str(&format!("<text xml:space=\"preserve\" x=\"{}\" y=\"{}\" font-family=\"{}\" font-size=\"{size}\" font-weight=\"{}\" font-style=\"{}\" text-decoration=\"{}\" fill=\"rgb({},{},{})\" dominant-baseline=\"text-before-edge\">{}</text>",position.x,position.y,escape(&style.family),if style.bold {"bold"} else {"normal"},if style.italic {"italic"} else {"normal"},if style.underline {"underline"} else {"none"},color[0],color[1],color[2],escape(&text)));
             }
         }

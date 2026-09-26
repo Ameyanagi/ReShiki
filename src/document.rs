@@ -144,6 +144,18 @@ fn forward() -> String {
 pub struct Document {
     #[serde(
         default,
+        skip_serializing_if = "crate::canvas_theme::CanvasTheme::is_light"
+    )]
+    pub canvas_theme: crate::canvas_theme::CanvasTheme,
+    #[serde(
+        default,
+        skip_serializing_if = "crate::canvas_theme::ColorTheme::is_publication"
+    )]
+    pub color_theme: crate::canvas_theme::ColorTheme,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub custom_theme: Option<Box<crate::theme_files::ThemeFile>>,
+    #[serde(
+        default,
         skip_serializing_if = "crate::style::DrawingStyle::is_default"
     )]
     pub drawing_style: crate::style::DrawingStyle,
@@ -175,6 +187,9 @@ impl Default for Document {
             ring_fills: vec![],
             version: 15,
             drawing_style: Default::default(),
+            canvas_theme: Default::default(),
+            color_theme: Default::default(),
+            custom_theme: None,
             page_layout: None,
             abbreviations: vec![],
             atom_labels: Default::default(),
@@ -370,6 +385,9 @@ impl Document {
         crate::ring_fills::validate(self)?;
         crate::attachments::validate(self)?;
         self.drawing_style.validate()?;
+        if let Some(theme) = &self.custom_theme {
+            theme.validate()?;
+        }
         let mut picture_bytes = 0_usize;
         let mut picture_pixels = 0_u64;
         for picture in self.graphics.iter().filter_map(|g| g.picture.as_ref()) {
@@ -380,7 +398,7 @@ impl Document {
                 return Err("Drawing pictures exceed 64 MB or 64 million pixels".into());
             }
         }
-        if !(1..=15).contains(&self.version) {
+        if !(1..=16).contains(&self.version) {
             return Err(format!("Unsupported document version {}", self.version));
         }
         if let Some(layout) = &self.page_layout {

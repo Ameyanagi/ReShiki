@@ -1,8 +1,8 @@
 //! Selection-focused properties and task-based export controls.
-use super::workspace::{command, muted};
+use super::workspace::{command, muted_text};
 use super::{App, InspectorTab, Message};
 use crate::canvas::Tool;
-use iced::widget::{button, checkbox, column, container, pick_list, row, text, text_input};
+use iced::widget::{button, checkbox, column, container, row, text};
 use iced::{Alignment, Border, Color, Element, Length, Subscription, Task};
 use reshiki::{
     bonds::{BondPreset, DoublePosition},
@@ -17,7 +17,6 @@ pub enum Section {
     Bonds,
     BondDirection,
     Atoms,
-    AtomColors,
     Arrange,
     Groups,
     Molecule,
@@ -112,11 +111,6 @@ pub enum Action {
     Attachment(reshiki::attachments::Kind),
     DepthBonds,
     RingArc,
-    OpenAtomColors,
-    ColorElement(String),
-    ColorWholeDrawing(bool),
-    ColorHex(String),
-    ApplyAtomColor,
     PropertiesCalculated(PropertyKey, Box<Result<Analysis, String>>),
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -132,9 +126,6 @@ pub(super) struct State {
     chemical: ChemicalFormat,
     pending: Option<PropertyKey>,
     properties: Option<(PropertyKey, Result<Analysis, String>)>,
-    color_element: Option<String>,
-    color_whole_drawing: bool,
-    color_hex: String,
 }
 impl State {
     pub(super) fn update(&mut self, action: Action) {
@@ -144,16 +135,11 @@ impl State {
             }
             Action::Figure(format) => self.figure = format,
             Action::Chemical(format) => self.chemical = format,
-            Action::ColorElement(element) => self.color_element = Some(element),
-            Action::ColorWholeDrawing(value) => self.color_whole_drawing = value,
-            Action::ColorHex(value) => self.color_hex = value,
             Action::RefreshProperties
             | Action::PropertiesCalculated(..)
             | Action::Centroid
             | Action::Attachment(_)
             | Action::RingArc
-            | Action::OpenAtomColors
-            | Action::ApplyAtomColor
             | Action::DepthBonds => {}
         }
     }
@@ -161,14 +147,19 @@ impl State {
 fn card<'a>(body: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
     container(body)
         .width(Length::Fill)
-        .style(|_| container::Style {
-            background: Some(Color::WHITE.into()),
-            border: Border {
-                color: Color::from_rgb8(218, 225, 224),
-                width: 1.,
-                radius: 8.into(),
-            },
-            ..Default::default()
+        .style(|theme| {
+            crate::appearance::container(
+                theme,
+                container::Style {
+                    background: Some(Color::WHITE.into()),
+                    border: Border {
+                        color: Color::from_rgb8(218, 225, 224),
+                        width: 1.,
+                        radius: 8.into(),
+                    },
+                    ..Default::default()
+                },
+            )
         })
         .into()
 }
@@ -242,35 +233,6 @@ impl App {
 
     pub(super) fn inspector_action(&mut self, action: Action) -> Task<Message> {
         match action {
-            Action::OpenAtomColors => {
-                self.inspector_open = true;
-                self.inspector_tab = InspectorTab::Properties;
-                self.inspector_ui.expanded.insert(Section::AtomColors, true);
-                self.inspector_ui.color_whole_drawing = self.selected.is_empty();
-                if self.inspector_ui.color_hex.is_empty() {
-                    self.inspector_ui.color_hex = "#205091".into();
-                }
-                Task::none()
-            }
-            Action::ApplyAtomColor => {
-                let Some(color) = super::graphics::parse_color(&self.inspector_ui.color_hex) else {
-                    self.status = "Enter a six-digit hex color, for example #205091".into();
-                    self.error = true;
-                    return Task::none();
-                };
-                let before = self.doc.clone();
-                let ids = self.atom_color_targets();
-                let style = self.doc.drawing_style.text_style();
-                for atom in &mut self.doc.atoms {
-                    if ids.contains(&atom.id) {
-                        atom.text_style.get_or_insert_with(|| style.clone()).color = color;
-                    }
-                }
-                self.changed(before);
-                self.status = format!("Colored {} atom labels", ids.len());
-                self.error = false;
-                Task::none()
-            }
             Action::RingArc => {
                 let before = self.doc.clone();
                 match reshiki::ring_arcs::toggle(&mut self.doc, &self.selected) {
@@ -408,13 +370,13 @@ impl App {
                 text(title).size(13).width(Length::Fill),
                 text(if expanded { "−" } else { "+" })
                     .size(16)
-                    .color(muted())
+                    .style(muted_text)
             ]
             .align_y(Alignment::Center)
         ]
         .spacing(3);
         if !summary.is_empty() {
-            heading = heading.push(text(summary).size(11).color(muted()));
+            heading = heading.push(text(summary).size(11).style(muted_text));
         }
         let mut body = column![
             button(heading)
@@ -450,10 +412,15 @@ impl App {
                 self.selection_summary()
             })
             .size(12)
-            .color(muted())
+            .style(muted_text)
         ]
         .spacing(10);
-        body = body.push(self.atom_colors_panel());
+        let color_issues = reshiki::canvas_theme::label_contrast_issues(&self.doc);
+        if !color_issues.is_empty() {
+            body = body.push(text(format!(
+                "{} atom label(s) have low contrast against the canvas or a ring fill. Adjust the label or fill color.", color_issues.len()
+            )).size(11).style(muted_text));
+        }
         let molecular_first = self.selected.is_empty()
             || self.property_key().is_some_and(|key| !key.atoms.is_empty());
         if molecular_first {
@@ -467,12 +434,12 @@ impl App {
                 text(preset.to_string()).size(14),
                 crate::canvas::layered::canvas(crate::canvas::DrawingThumbnail(preset.document(self.bond_drawing.length, false))).width(Length::Fill).height(90),
                 text("Click to place. Drag to rotate or choose an attachment side. Click an atom to share it, or a bond to fuse.").size(12),
-                text("Alt/Option on an atom connects the ring with a new bond. Each placement is one Undo step.").size(11).color(muted()),
+                text("Alt/Option on an atom connects the ring with a new bond. Each placement is one Undo step.").size(11).style(muted_text),
                 text(match preset {
                     reshiki::rings::Preset::Benzene | reshiki::rings::Preset::Cyclopentadiene => "Hold Shift to move the double bonds.",
                     reshiki::rings::Preset::HaworthFive | reshiki::rings::Preset::HaworthSix => "Haworth outlines have a bold front edge. Templates → Carbohydrates contains oxygen scaffolds and defined α/β sugars. These blank outlines do not assign stereochemistry.",
                     _ => "Chair projections do not assign stereochemistry. Cleanup may redraw them as regular hexagons.",
-                }).size(11).color(muted()),
+                }).size(11).style(muted_text),
             ].spacing(8)).padding(12)));
         }
         if matches!(self.tool, Tool::Graphic(_))
@@ -513,7 +480,11 @@ impl App {
             body = body.push(self.selection_panel());
         }
         if let Some(error) = &self.chemistry_notice {
-            body = body.push(text(error).size(12).color(Color::from_rgb8(182, 66, 61)));
+            body = body.push(
+                text(error)
+                    .size(12)
+                    .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61))),
+            );
         }
         if !molecular_first {
             body = body.push(self.molecular_section());
@@ -555,7 +526,7 @@ impl App {
                         self.doc.drawing_style.line_width_pt
                     ))
                     .size(12)
-                    .color(muted()),
+                    .style(muted_text),
                     command(
                         "Edit drawing style…",
                         Message::DrawingStyle(super::document_styles::Action::Open)
@@ -577,87 +548,6 @@ impl App {
         )
     }
 
-    fn color_elements(&self) -> Vec<String> {
-        self.doc
-            .atoms
-            .iter()
-            .filter(|a| a.centroid.is_empty())
-            .filter(|a| self.inspector_ui.color_whole_drawing || self.selected.contains(&a.id))
-            .map(|a| a.element.clone())
-            .collect::<std::collections::BTreeSet<_>>()
-            .into_iter()
-            .collect()
-    }
-
-    fn atom_color_targets(&self) -> Vec<u64> {
-        let elements = self.color_elements();
-        let element = self
-            .inspector_ui
-            .color_element
-            .as_ref()
-            .filter(|e| elements.contains(e))
-            .or(elements.first());
-        self.doc
-            .atoms
-            .iter()
-            .filter(|a| a.centroid.is_empty() && Some(&a.element) == element)
-            .filter(|a| self.inspector_ui.color_whole_drawing || self.selected.contains(&a.id))
-            .map(|a| a.id)
-            .collect()
-    }
-
-    fn atom_colors_panel(&self) -> Element<'_, Message> {
-        let elements = self.color_elements();
-        let element = self
-            .inspector_ui
-            .color_element
-            .clone()
-            .filter(|e| elements.contains(e))
-            .or_else(|| elements.first().cloned());
-        let count = self.atom_color_targets().len();
-        let body = column![
-            checkbox(self.inspector_ui.color_whole_drawing)
-                .label("Whole drawing")
-                .on_toggle(|v| Message::InspectorAction(Action::ColorWholeDrawing(v))),
-            text(if self.inspector_ui.color_whole_drawing {
-                "Choose an element to color throughout the drawing."
-            } else {
-                "Only matching atoms in the selection are colored."
-            })
-            .size(11)
-            .color(muted()),
-            pick_list(elements, element, |e| Message::InspectorAction(
-                Action::ColorElement(e)
-            ))
-            .placeholder("Select atoms first")
-            .width(Length::Fill)
-            .text_size(12)
-            .padding(7),
-            row![
-                text_input("#205091", &self.inspector_ui.color_hex)
-                    .on_input(|s| Message::InspectorAction(Action::ColorHex(s)))
-                    .on_submit(Message::InspectorAction(Action::ApplyAtomColor))
-                    .size(12)
-                    .padding(7),
-                command("Apply", Message::InspectorAction(Action::ApplyAtomColor)).on_press_maybe(
-                    (count > 0).then_some(Message::InspectorAction(Action::ApplyAtomColor))
-                ),
-            ]
-            .spacing(6),
-            text(format!("{count} matching atoms"))
-                .size(11)
-                .color(muted()),
-        ]
-        .spacing(8);
-        self.inspector_section(
-            Section::AtomColors,
-            "Color atoms by element",
-            "",
-            false,
-            body,
-        )
-    }
-
     fn molecular_properties(&self) -> Element<'_, Message> {
         if reshiki::attachments::present(&self.doc) {
             let selected = (!self.selected.is_empty())
@@ -666,7 +556,7 @@ impl App {
             let mut body = column![
                 text(reshiki::attachments::ANALYSIS_NOTICE)
                     .size(11)
-                    .color(muted())
+                    .style(muted_text)
             ]
             .spacing(8);
             if let Ok(composition) = reshiki::attachments::composition(doc) {
@@ -684,7 +574,7 @@ impl App {
                             doc.atoms.iter().filter(|a| a.element != "*").count()
                         ))
                         .size(11)
-                        .color(muted()),
+                        .style(muted_text),
                     );
             }
             return container(body).padding(10).into();
@@ -709,7 +599,7 @@ impl App {
         let mut body = column![
             text(format!("{} atoms · {} bonds", atoms, bonds))
                 .size(11)
-                .color(muted())
+                .style(muted_text)
         ]
         .spacing(8);
         if key.is_some()
@@ -722,7 +612,7 @@ impl App {
             body = body.push(
                 text("Selected fragment: implicit hydrogens are recalculated at cut bonds.")
                     .size(11)
-                    .color(muted()),
+                    .style(muted_text),
             );
         }
         if let Some(a) = self.property_analysis() {
@@ -738,7 +628,7 @@ impl App {
             ] {
                 body = body.push(
                     row![
-                        text(label).size(11).color(muted()).width(Length::Fill),
+                        text(label).size(11).style(muted_text).width(Length::Fill),
                         text(value).size(12)
                     ]
                     .align_y(Alignment::Center),
@@ -760,14 +650,18 @@ impl App {
                         .on_press_maybe((!a.smiles.is_empty()).then_some(Message::CopySmiles)),
                 );
         } else if atoms == 0 {
-            return body.push(text(if key.is_some() { "Select atoms or bonds to calculate their properties. Clear the selection to use the whole drawing." } else { "Draw or import a molecule to calculate its properties." }).size(12).color(muted())).into();
+            return body.push(text(if key.is_some() { "Select atoms or bonds to calculate their properties. Clear the selection to use the whole drawing." } else { "Draw or import a molecule to calculate its properties." }).size(12).style(muted_text)).into();
         } else if let Some((_, Err(error))) = self
             .inspector_ui
             .properties
             .as_ref()
             .filter(|(saved, _)| Some(saved) == key.as_ref())
         {
-            body = body.push(text(error).size(12).color(Color::from_rgb8(182, 66, 61)));
+            body = body.push(
+                text(error)
+                    .size(12)
+                    .style(crate::appearance::text_color(Color::from_rgb8(182, 66, 61))),
+            );
         } else {
             body = body.push(
                 text(if key.is_some() {
@@ -776,7 +670,7 @@ impl App {
                     "Check the structure to calculate its formula and properties."
                 })
                 .size(12)
-                .color(muted()),
+                .style(muted_text),
             );
         }
         body.push(
@@ -802,7 +696,7 @@ impl App {
 
     fn arrangement_panel(&self, multiple: bool) -> Element<'_, Message> {
         let mut arrange = column![
-            text("Rotate & reflect").size(11).color(muted()),
+            text("Rotate & reflect").size(11).style(muted_text),
             row![
                 command("↶ 30°", Message::Transform(Transform::Rotate(-30.))).width(Length::Fill),
                 command("↷ 30°", Message::Transform(Transform::Rotate(30.))).width(Length::Fill)
@@ -814,7 +708,7 @@ impl App {
                 command("Flip V", Message::Transform(Transform::FlipVertical)).width(Length::Fill)
             ]
             .spacing(6),
-            text("3D tilt").size(11).color(muted()),
+            text("3D tilt").size(11).style(muted_text),
             row![
                 command("X −15°", Message::Transform(Transform::TiltX(-15.))).width(Length::Fill),
                 command("X +15°", Message::Transform(Transform::TiltX(15.))).width(Length::Fill),
@@ -842,22 +736,22 @@ impl App {
                 .width(Length::Fill),
             text("Select the target atoms, then add a point. Multi-center attaches to all; variable attaches to one of the selected positions.")
                 .size(11)
-                .color(muted()),
-            text("Align horizontally").size(11).color(muted()),
+                .style(muted_text),
+            text("Align horizontally").size(11).style(muted_text),
             row![
                 command("Left", Message::Arrange(Arrange::AlignLeft)).width(Length::Fill),
                 command("Center", Message::Arrange(Arrange::AlignHorizontal)).width(Length::Fill),
                 command("Right", Message::Arrange(Arrange::AlignRight)).width(Length::Fill)
             ]
             .spacing(2),
-            text("Align vertically").size(11).color(muted()),
+            text("Align vertically").size(11).style(muted_text),
             row![
                 command("Top", Message::Arrange(Arrange::AlignTop)).width(Length::Fill),
                 command("Middles", Message::Arrange(Arrange::AlignVertical)).width(Length::Fill),
                 command("Bottom", Message::Arrange(Arrange::AlignBottom)).width(Length::Fill)
             ]
             .spacing(2),
-            text("Distribute").size(11).color(muted()),
+            text("Distribute").size(11).style(muted_text),
             row![
                 command(
                     "Horizontally",
@@ -870,7 +764,7 @@ impl App {
             .spacing(2),
             text("Drag a box corner to resize. Drag the top handle to rotate; Shift snaps to 15°.")
                 .size(11)
-                .color(muted()),
+                .style(muted_text),
         ]
         .spacing(6);
         if reshiki::rings::selected_cycle(&self.doc, &self.selected).is_some() {
@@ -923,8 +817,8 @@ impl App {
             let preset = BondPreset::of(first)
                 .filter(|p| bonds.iter().all(|b| BondPreset::of(b) == Some(*p)));
             let mut controls = column![
-                text("Style").size(11).color(muted()),
-                pick_list(BondPreset::ALL, preset, Message::ApplyBondPreset)
+                text("Style").size(11).style(muted_text),
+                crate::appearance::pick_list(BondPreset::ALL, preset, Message::ApplyBondPreset)
                     .placeholder("Mixed bond styles")
                     .text_size(12)
                     .padding(7)
@@ -943,33 +837,39 @@ impl App {
                             .all(|b| b.double_position == *p)
                     });
                 controls = controls
-                    .push(text("Second line placement").size(11).color(muted()))
+                    .push(text("Second line placement").size(11).style(muted_text))
                     .push(
-                        pick_list(DoublePosition::ALL, position, Message::BondPosition)
-                            .placeholder("Mixed positions")
-                            .text_size(12)
-                            .padding(7)
-                            .width(Length::Fill),
+                        crate::appearance::pick_list(
+                            DoublePosition::ALL,
+                            position,
+                            Message::BondPosition,
+                        )
+                        .placeholder("Mixed positions")
+                        .text_size(12)
+                        .padding(7)
+                        .width(Length::Fill),
                     );
             }
-            controls = controls.push(text("Color").size(11).color(muted())).push(
-                row![
-                    text_input("#000000", &self.bond_color_input)
-                        .on_input(Message::BondColor)
-                        .on_submit(Message::ApplyBondColor)
-                        .size(12)
-                        .padding(7),
-                    command("Apply", Message::ApplyBondColor),
-                ]
-                .spacing(6),
-            );
+            controls = controls
+                .push(text("Color").size(11).style(muted_text))
+                .push(
+                    row![
+                        crate::appearance::text_input("#000000", &self.bond_color_input)
+                            .on_input(Message::BondColor)
+                            .on_submit(Message::ApplyBondColor)
+                            .size(12)
+                            .padding(7),
+                        command("Apply", Message::ApplyBondColor),
+                    ]
+                    .spacing(6),
+                );
             if atoms.len() >= 3 {
                 controls = controls.push(
                     command("Toggle aromatic circle", Message::AromaticDisplay)
                         .on_press_maybe((!self.busy).then_some(Message::AromaticDisplay)),
                 );
                 controls = controls.push(command("Toggle inner ring curve", Message::InspectorAction(Action::RingArc)))
-                    .push(text("Select consecutive ring atoms for a partial curve, or the whole ring for a circle. Bond orders stay unchanged.").size(11).color(muted()));
+                    .push(text("Select consecutive ring atoms for a partial curve, or the whole ring for a circle. Bond orders stay unchanged.").size(11).style(muted_text));
             }
             body = body.push(self.inspector_section(
                 Section::Bonds,
@@ -1011,7 +911,7 @@ impl App {
                 .spacing(6)
                 .align_y(Alignment::Center),
                 row![
-                    text_input("Isotope mass", &self.isotope)
+                    crate::appearance::text_input("Isotope mass", &self.isotope)
                         .on_input(Message::Isotope)
                         .on_submit(Message::ApplyIsotope)
                         .size(12)
@@ -1021,7 +921,7 @@ impl App {
                 .spacing(6),
                 row![
                     text("Unpaired electrons").size(11).width(Length::Fill),
-                    pick_list([0u8, 1, 2], count, Message::AtomRadical)
+                    crate::appearance::pick_list([0u8, 1, 2], count, Message::AtomRadical)
                         .placeholder("Mixed")
                         .text_size(12)
                         .padding(6)
@@ -1093,7 +993,7 @@ impl App {
             ]
             .spacing(6),
             command("Invert selection", Message::InvertSelection),
-            pick_list(
+            crate::appearance::pick_list(
                 [
                     reshiki::graphics::GraphicKind::Brackets,
                     reshiki::graphics::GraphicKind::Parentheses,
@@ -1130,7 +1030,7 @@ impl App {
                         "Integral groups stay whole with Option/Alt-click. Ungroup releases them.",
                     )
                     .size(11)
-                    .color(muted()),
+                    .style(muted_text),
                 );
         }
         body = body.push(self.inspector_section(
@@ -1144,7 +1044,7 @@ impl App {
             button(
                 text("Delete selection")
                     .size(12)
-                    .color(Color::from_rgb8(174, 57, 52)),
+                    .style(crate::appearance::text_color(Color::from_rgb8(174, 57, 52))),
             )
             .style(button::text)
             .padding(7)
@@ -1157,13 +1057,13 @@ impl App {
         let figure = self.inspector_ui.figure;
         let chemical = self.inspector_ui.chemical;
         let mut figures = column![
-            pick_list(FigureFormat::ALL, Some(figure), |f| {
+            crate::appearance::pick_list(FigureFormat::ALL, Some(figure), |f| {
                 Message::InspectorAction(Action::Figure(f))
             })
             .text_size(12)
             .padding(8)
             .width(Length::Fill),
-            text(figure.description()).size(12).color(muted()),
+            text(figure.description()).size(12).style(muted_text),
             button(
                 text(if self.figure_exporting {
                     "Exporting…".into()
@@ -1196,14 +1096,14 @@ impl App {
                         "Copy image uses the selected objects."
                     })
                     .size(11)
-                    .color(muted()),
+                    .style(muted_text),
                 );
         }
         let mut body = column![
             text("Export").size(18),
             text("File exports use the full drawing.")
                 .size(12)
-                .color(muted()),
+                .style(muted_text),
             self.inspector_section(
                 Section::ExportFigure,
                 "Figure",
@@ -1217,13 +1117,13 @@ impl App {
                 "MOL · SMILES · InChI · CDXML",
                 false,
                 column![
-                    pick_list(ChemicalFormat::ALL, Some(chemical), |f| {
+                    crate::appearance::pick_list(ChemicalFormat::ALL, Some(chemical), |f| {
                         Message::InspectorAction(Action::Chemical(f))
                     })
                     .text_size(12)
                     .padding(8)
                     .width(Length::Fill),
-                    text(chemical.description()).size(12).color(muted()),
+                    text(chemical.description()).size(12).style(muted_text),
                     button(text(format!("Export {}…", chemical.code().to_uppercase())).size(13))
                         .padding(10)
                         .width(Length::Fill)
@@ -1315,55 +1215,6 @@ mod tests {
             .analysis
             .unwrap();
         let _ = app.inspector_action(Action::PropertiesCalculated(key, Box::new(Ok(result))));
-    }
-
-    #[test]
-    fn element_colors_respect_scope_and_undo_without_touching_bonds() {
-        let (mut app, _) = App::new();
-        let a = app.doc.add_atom("Cu", reshiki::document::Point::default());
-        let b = app
-            .doc
-            .add_atom("Cu", reshiki::document::Point::new(40., 0.));
-        let n = app
-            .doc
-            .add_atom("N", reshiki::document::Point::new(80., 0.));
-        app.doc.add_bond(b, n, 5, "plain");
-        app.doc.atom_mut(a).unwrap().text_style = Some(reshiki::typography::TextStyle {
-            italic: true,
-            ..Default::default()
-        });
-        app.selected = vec![a, n];
-        let original = app.doc.clone();
-        for action in [
-            Action::OpenAtomColors,
-            Action::ColorElement("Cu".into()),
-            Action::ColorHex("#205091".into()),
-            Action::ApplyAtomColor,
-        ] {
-            let _ = app.inspector_action(action);
-        }
-        assert_eq!(
-            app.doc.atom(a).unwrap().text_style.as_ref().unwrap().color,
-            [32, 80, 145]
-        );
-        assert!(app.doc.atom(a).unwrap().text_style.as_ref().unwrap().italic);
-        assert_eq!(app.doc.atom(b), original.atom(b));
-        assert_eq!(app.doc.atom(n), original.atom(n));
-        assert_eq!(app.doc.bonds, original.bonds);
-        assert_eq!(app.selected, vec![a, n]);
-        assert!(app.history.undo(&mut app.doc));
-        assert_eq!(app.doc, original);
-        let _ = app.inspector_action(Action::ColorWholeDrawing(true));
-        let _ = app.inspector_action(Action::ApplyAtomColor);
-        assert_eq!(
-            app.doc.atom(b).unwrap().text_style.as_ref().unwrap().color,
-            [32, 80, 145]
-        );
-        assert_eq!(app.doc.atom(n), original.atom(n));
-        let colored = app.doc.clone();
-        let _ = app.inspector_action(Action::ColorHex("bad".into()));
-        let _ = app.inspector_action(Action::ApplyAtomColor);
-        assert_eq!(app.doc, colored);
     }
 
     #[test]

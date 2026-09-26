@@ -1,0 +1,13 @@
+{
+  "name": "RSC",
+  "font_family": "Arial",
+  "bond_length_world": 35.583335876464844,
+  "bond_length_pt": 12.2,
+  "font_size_pt": 7,
+  "line_width_pt": 0.5,
+  "bold_width_pt": 1.6,
+  "margin_width_pt": 1.25,
+  "hash_spacing_pt": 1.8,
+  "bond_spacing_ratio": 0.2,
+  "png_dpi": 1200
+}

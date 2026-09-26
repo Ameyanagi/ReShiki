@@ -181,6 +181,12 @@ pub struct Number {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AtomDisplay {
+    /// Separate attached-H ink when preserving a themed label across paste/export.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hydrogen_color: Option<[u8; 3]>,
+    /// Explicit atom ink, including black, takes precedence over the element theme.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub color_override: bool,
     /// Suppress the printed charge only; the chemical charge is retained.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub hide_charge: bool,

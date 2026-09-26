@@ -10,7 +10,9 @@ On Windows, normal Copy supplies an editable Office object with the full drawing
 
 Windows desktop Office supports ReShiki OLE objects. Copy the object back into ReShiki to recover its native drawing; Paste picture explicitly reads its preview. Copy Image remains the command for applications that only accept pictures. Normal Copy omits standalone PNG/SVG/bitmap formats because Word prefers them over the editable object; it retains the metafile presentation required by Office.
 
-Clipboard PNG figures have a transparent background on Windows and macOS. The Windows editable object's EMF+ dual preview keeps bonds and outlined text as vectors, preserving smooth edges when enlarged. It also preserves transparency, including partially transparent imported pictures. The standard Windows bitmap fallback and PNG file export have a white background. Open an older embedded ReShiki object and press Ctrl+S to refresh its preview, then save the Office document.
+Clipboard PNG, PDF and SVG figures always have transparent backgrounds. They retain the visible ink: black bonds and labels from a light canvas, white bonds and labels from a dark canvas. The Windows editable object's EMF+ dual preview keeps bonds and outlined text as vectors. Imported pictures retain their own pixels and transparency. Open an older embedded ReShiki object and press Ctrl+S to refresh its preview, then save the Office document.
+
+Dark editable ChemDraw copies use white bonds and labels without a background rectangle. Pasting between different canvas modes in ReShiki also keeps source ink colors without adding a page background. **View → Interface** affects only the app controls; it never changes clipboard output.
 
 macOS retains its existing native drawing/CDX and PDF/PNG/SVG clipboard representations. Mac Office does not provide this Windows OLE activation workflow. Keep the `.rsk` original, edit it in ReShiki and replace the Office figure. A pasted picture alone cannot restore native atoms and bonds. Mac Office round-trip behavior has not been verified by this Windows test run.
 
@@ -43,6 +45,12 @@ Styled metal contacts are also retained when chemical normalization would otherw
 
 Copy reports any applied simplifications. File export stays strict. Unsupported content beyond these conversions uses the explicitly reported picture fallback. These limits do not change the source drawing.
 
+Ring interiors copy as ChemDraw native `ColoredMolecularArea` objects linked to
+their ring bonds. The fill stays attached when atoms move, and imported fills
+retain their visible RGB colors. Clipboard images still have transparent space
+outside the drawing. Older ReShiki-owned filled curves remain readable when
+their ownership metadata survives.
+
 ## Boundaries
 
 - Picture paste creates one embedded object and one Undo step. Native ReShiki Copy/Paste preserves a picture’s frame, orientation and transparency. Copy Image also supplies a native raster object so normal Paste retains its publication size; PNG paste honors resolution metadata. [Picture controls and limits](pictures.md).
@@ -64,5 +72,7 @@ formatting alone does not assign chemistry.
 Native desktop tests copied a 13-atom, 13-bond aspirin drawing with red bonds and teal labels into another drawing editor, then copied it back into ReShiki. The returned binary data retained the molecular identity, counts and colors. A separate image paste retained the publication dimensions instead of expanding to the PNG's pixel dimensions. The standalone worker was launched outside the checkout.
 
 A seven-atom, six-bond aromatic drawing that fails chemical validation was also copied into ReShiki, back into the source editor, and returned through the native clipboard as editable objects. Both binary captures are regression fixtures. Variable labels now copy as editable uninterpreted atom text; query semantics are not assigned.
+
+A ChemDraw 26 test copied a caffeine drawing with two filled rings into ChemDraw, moved a ring atom, and copied it back. Both fills remained bond-linked native areas with the same visible colors, with no loose curves or pictures. The ChemDraw-created ring and return clipboard captures are regression fixtures in `tests/fixtures/ring-fills/`.
 
 Automated tests cover independent native clipboard data, supported exchange fixtures, Unicode font runs, large property lengths, truncation, duplicate identifiers, invalid base64, query rejection, stale asynchronous completion and failed Cut. The raster wrapper is checked for image-only contents, unchanged PNG bytes and physical bounds. Local desktop artifacts are under `artifacts/clipboard-qa-20260920/` and are ignored by Git. These examples establish the tested subset, not universal external-document compatibility.

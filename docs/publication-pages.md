@@ -5,7 +5,7 @@ US Letter, US Legal or a custom size. Width, height and the four margins use
 millimetres. Portrait/landscape and a 1–10 by 1–10 page grid are available.
 Apply creates one Undo step; editing the fields alone does not change the drawing.
 
-The canvas shows white sheets, margin guides and page numbers on a gray background.
+The canvas shows sheets in the document’s light or dark canvas colors, with margin guides and page numbers. Page colors are also used when exporting or printing.
 Atom selection markers shrink at page-fit zoom to keep small structures readable.
 Page order runs left to right, then down. The page panel offers Previous/Next,
 Fit page and Fit all pages. The ordinary Fit command still fits the artwork.

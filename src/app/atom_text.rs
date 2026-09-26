@@ -1,10 +1,8 @@
 use super::{
     App, Message,
-    workspace::{control, muted},
+    workspace::{control, muted_text},
 };
-use iced::widget::{
-    Space, button, column, container, mouse_area, opaque, pick_list, row, stack, text, text_input,
-};
+use iced::widget::{Space, button, column, container, mouse_area, opaque, row, stack, text};
 use iced::{Element, Length, Task};
 use reshiki::abbreviations::LabelAlignment;
 use reshiki::atom_text::{self, Mode};
@@ -207,7 +205,7 @@ impl App {
                 "Edit atom label"
             })
             .size(20),
-            text_input("N, NH3, C2H5, Boc, Cp*, M…", &state.input)
+            crate::appearance::text_input("N, NH3, C2H5, Boc, Cp*, M…", &state.input)
                 .id("atom-text")
                 .padding(10)
                 .size(18)
@@ -217,7 +215,7 @@ impl App {
         .spacing(12);
         if state.members.is_none() {
             content = content.push(
-                pick_list(
+                crate::appearance::pick_list(
                     [Mode::Auto, Mode::Text, Mode::Group],
                     Some(state.mode),
                     |mode| Message::AtomText(Action::Mode(mode)),
@@ -229,21 +227,19 @@ impl App {
                 "The selected atoms define this group. Its formula and bonds are retained; expand it to edit the structure."
             } else { atom_text::description(&state.input, state.mode) })
                 .size(12)
-                .color(muted()));
+                .style(muted_text));
         if state.members.is_some() || self.doc.abbreviation(state.id).is_some() {
             content = content.push(
-                text_input("Label when facing left (optional)", &state.reverse)
+                crate::appearance::text_input("Label when facing left (optional)", &state.reverse)
                     .on_input(|s| Message::AtomText(Action::ReverseInput(s)))
                     .on_submit(Message::AtomText(Action::Apply))
                     .padding(8),
             );
         }
         if let Some(error) = &state.error {
-            content = content.push(
-                text(error)
-                    .size(12)
-                    .color(iced::Color::from_rgb8(175, 54, 54)),
-            );
+            content = content.push(text(error).size(12).style(crate::appearance::text_color(
+                iced::Color::from_rgb8(175, 54, 54),
+            )));
         }
         let popup = container(
             content.push(
@@ -254,21 +250,26 @@ impl App {
                         .style(control(false)),
                     button("Apply · Enter")
                         .on_press(Message::AtomText(Action::Apply))
-                        .style(button::primary),
+                        .style(crate::appearance::primary),
                 ]
                 .spacing(8),
             ),
         )
         .padding(22)
         .width(430)
-        .style(|_| container::Style {
-            background: Some(iced::Color::WHITE.into()),
-            border: iced::Border {
-                radius: 12.into(),
-                width: 1.,
-                color: iced::Color::from_rgb8(213, 224, 220),
-            },
-            ..Default::default()
+        .style(|theme| {
+            crate::appearance::container(
+                theme,
+                container::Style {
+                    background: Some(iced::Color::WHITE.into()),
+                    border: iced::Border {
+                        radius: 12.into(),
+                        width: 1.,
+                        color: iced::Color::from_rgb8(213, 224, 220),
+                    },
+                    ..Default::default()
+                },
+            )
         });
         stack![
             base,
@@ -277,10 +278,13 @@ impl App {
                     container(Space::new())
                         .width(Length::Fill)
                         .height(Length::Fill)
-                        .style(|_| container::Style {
-                            background: Some(iced::Color::from_rgba8(20, 30, 30, 0.3).into()),
-                            ..Default::default()
-                        })
+                        .style(|theme| crate::appearance::container(
+                            theme,
+                            container::Style {
+                                background: Some(iced::Color::from_rgba8(20, 30, 30, 0.3).into()),
+                                ..Default::default()
+                            }
+                        ))
                 )
                 .on_press(Message::AtomText(Action::Cancel))
             ),
