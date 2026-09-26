@@ -247,7 +247,7 @@ impl App {
                     Ok(layout) => {
                         let before = self.doc.clone();
                         self.doc.page_layout = Some(layout);
-                        self.doc.version = 15;
+                        self.doc.version = self.doc.version.max(15);
                         self.changed(before);
                         self.pages.editor = None;
                         self.pages.active = self.pages.active.min(
@@ -439,9 +439,9 @@ impl App {
                 .style(super::workspace::muted_text),
             text("Canvas theme").size(11),
             crate::appearance::pick_list(
-                reshiki::canvas_theme::ColorTheme::ALL,
-                Some(self.doc.color_theme),
-                Message::ColorTheme,
+                self.theme_choices().0,
+                Some(self.theme_choices().1),
+                |choice| Message::ThemeFile(super::theme_files::Action::Choose(choice)),
             )
             .width(Length::Fill)
             .text_size(12),

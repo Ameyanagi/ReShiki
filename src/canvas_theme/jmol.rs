@@ -123,64 +123,29 @@ pub(super) fn swatch(element: &str) -> Option<[u8; 3]> {
     Some([(color >> 16) as u8, (color >> 8) as u8, color as u8])
 }
 
-/// Preserve Jmol's hue and relative lightness while reducing HSL saturation.
-/// Dark variants lift toward light tints rather than mixing colors with black.
+/// Keep Jmol's perceptual hue; softer themes reduce chroma independently of tone.
 pub(super) fn soften(rgb: [u8; 3], canvas: CanvasTheme, pastel: bool) -> [u8; 3] {
-    let values = rgb.map(|v| f64::from(v) / 255.);
-    let low = values.into_iter().fold(1., f64::min);
-    let high = values.into_iter().fold(0., f64::max);
-    let chroma = high - low;
-    let lightness = (high + low) / 2.;
-    // Saturation scale, midpoint lightness, retained source-lightness range.
-    let (saturation_scale, midpoint, range) = match (pastel, canvas) {
-        (false, CanvasTheme::Light) => (0.50, 0.48, 0.32),
-        (false, CanvasTheme::Dark) => (0.60, 0.70, 0.20),
-        (true, CanvasTheme::Light) => (0.32, 0.55, 0.22),
-        (true, CanvasTheme::Dark) => (0.50, 0.80, 0.15),
+    use crate::color_contrast::Oklch;
+    let source = Oklch::from_rgb(rgb);
+    let (tone, chroma_scale) = match (pastel, canvas) {
+        (false, CanvasTheme::Light) => (0.52, 0.65),
+        (false, CanvasTheme::Dark) => (0.76, 0.65),
+        (true, CanvasTheme::Light) => (0.55, 0.35),
+        (true, CanvasTheme::Dark) => (0.83, 0.40),
     };
-    let toned_lightness = midpoint + (lightness - 0.5) * range;
-    if chroma == 0. {
-        return [(toned_lightness * 255.).round() as u8; 3];
+    Oklch {
+        l: tone + (source.l - 0.65) * 0.08,
+        c: source.c * chroma_scale,
+        ..source
     }
-    let saturation = chroma / (1. - (2. * lightness - 1.).abs());
-    let toned_chroma = (1. - (2. * toned_lightness - 1.).abs()) * saturation * saturation_scale;
-    values.map(|v| {
-        let value = toned_lightness + ((v - low) / chroma - 0.5) * toned_chroma;
-        (value * 255.).round().clamp(0., 255.) as u8
-    })
+    .to_rgb()
 }
 
-/// Keep the published hue while adjusting luminance only when necessary for
-/// small 2D labels. The 3.2:1 target leaves room for 8-bit rounding above 3:1.
 pub(super) fn label_ink(rgb: [u8; 3], canvas: CanvasTheme) -> [u8; 3] {
-    let linear = rgb.map(|value| {
-        let value = f64::from(value) / 255.;
-        if value <= 0.04045 {
-            value / 12.92
-        } else {
-            ((value + 0.055) / 1.055).powf(2.4)
-        }
-    });
-    let luminance = linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722;
-    let target = if canvas.is_dark() {
-        0.05 * 3.2 - 0.05
-    } else {
-        1.05 / 3.2 - 0.05
-    };
-    if (canvas.is_dark() && luminance >= target) || (canvas.is_light() && luminance <= target) {
-        return rgb;
-    }
-    linear.map(|value| {
-        let adjusted = if canvas.is_dark() {
-            value + (1. - value) * (target - luminance) / (1. - luminance)
-        } else {
-            value * target / luminance
-        };
-        let encoded = if adjusted <= 0.0031308 {
-            adjusted * 12.92
-        } else {
-            1.055 * adjusted.powf(1. / 2.4) - 0.055
-        };
-        (encoded * 255.).round().clamp(0., 255.) as u8
-    })
+    crate::color_contrast::ensure_contrast(
+        rgb,
+        &[canvas.background()],
+        crate::color_contrast::TEXT_TARGET,
+    )
+    .unwrap_or_else(|| canvas.color([0; 3]))
 }

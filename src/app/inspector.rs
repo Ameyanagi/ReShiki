@@ -460,6 +460,12 @@ impl App {
             .style(muted_text)
         ]
         .spacing(10);
+        let color_issues = reshiki::canvas_theme::label_contrast_issues(&self.doc);
+        if !color_issues.is_empty() {
+            body = body.push(text(format!(
+                "{} atom label(s) have low contrast against the canvas or a ring fill. Adjust the label or fill color.", color_issues.len()
+            )).size(11).style(muted_text));
+        }
         body = body.push(self.atom_colors_panel());
         let molecular_first = self.selected.is_empty()
             || self.property_key().is_some_and(|key| !key.atoms.is_empty());

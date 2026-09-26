@@ -315,7 +315,7 @@ impl App {
                                     .padding(1)
                                     .style(super::workspace::element_control(
                                         self.element == symbol,
-                                        self.doc.color_theme,
+                                        &self.doc,
                                         symbol,
                                     ))
                                     .on_press(Message::Palette(Action::Atom(symbol.into()))),

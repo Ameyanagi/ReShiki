@@ -415,19 +415,24 @@ impl App {
                 ("Purple", [116, 65, 147]),
             ]
         };
-        if !ring_colors && !self.doc.color_theme.is_publication() {
+        if !ring_colors
+            && (self.doc.custom_theme.is_some() || !self.doc.color_theme.is_publication())
+        {
             for ((_, color), element) in palette.iter_mut().zip(["C", "N", "Cl", "O", "I"]) {
-                *color = self.doc.canvas_theme.color(
-                    self.doc
-                        .color_theme
-                        .element_color(element, self.doc.canvas_theme),
-                );
+                *color = self
+                    .doc
+                    .canvas_theme
+                    .color(reshiki::canvas_theme::element_color(
+                        &self.doc,
+                        element,
+                        self.doc.canvas_theme,
+                    ));
             }
         }
         let current_color = self.current_selection_color();
         for (name, c) in palette {
             let shown = if ring_colors {
-                reshiki::ring_fills::palette_color(c, self.doc.canvas_theme)
+                reshiki::canvas_theme::ring_color(&self.doc, c)
             } else {
                 self.doc.canvas_theme.color(c)
             };
@@ -971,7 +976,7 @@ impl App {
                         .on_press(Message::Element(symbol.into()))
                         .style(element_control(
                             self.tool == Tool::Atom && self.element == symbol,
-                            self.doc.color_theme,
+                            &self.doc,
                             symbol,
                         )),
                 );
@@ -1384,9 +1389,9 @@ impl App {
             )
             .push(
                 crate::appearance::pick_list(
-                    reshiki::canvas_theme::ColorTheme::ALL,
-                    Some(self.doc.color_theme),
-                    Message::ColorTheme,
+                    self.theme_choices().0,
+                    Some(self.theme_choices().1),
+                    |choice| Message::ThemeFile(super::theme_files::Action::Choose(choice)),
                 )
                 .text_size(11)
                 .padding([5, 8]),
@@ -2177,11 +2182,17 @@ impl App {
         let summary = self.status.lines().next().unwrap_or(&self.status);
         let message = text(summary)
             .size(11)
-            .style(crate::appearance::text_color(if self.error {
-                Color::from_rgb8(168, 52, 47)
-            } else {
-                muted()
-            }));
+            .style(|theme| iced::widget::text::Style {
+                color: Some(if self.error {
+                    crate::appearance::readable(
+                        crate::appearance::themed(theme, Color::from_rgb8(168, 52, 47)),
+                        &[theme.palette().background],
+                        reshiki::color_contrast::TEXT_TARGET,
+                    )
+                } else {
+                    crate::appearance::muted(theme)
+                }),
+            });
         let message: Element<'_, Message> = if self.status.contains('\n') {
             hover_hint(message, self.status.as_str(), tooltip::Position::Top).into()
         } else {
@@ -2301,7 +2312,7 @@ fn ink() -> Color {
 }
 pub(super) fn muted_text(theme: &Theme) -> iced::widget::text::Style {
     iced::widget::text::Style {
-        color: Some(crate::appearance::themed(theme, muted())),
+        color: Some(crate::appearance::muted(theme)),
     }
 }
 pub(super) fn muted() -> Color {
@@ -2337,11 +2348,11 @@ pub(super) fn horizontal_line() -> Element<'static, Message> {
 }
 /// Theme colors belong on the tile; symbols retain strong interface contrast.
 /// Use the interface's palette lightness when canvas and chrome modes differ.
-pub(super) fn element_control(
+pub(super) fn element_control<'a>(
     active: bool,
-    palette: reshiki::canvas_theme::ColorTheme,
-    symbol: &str,
-) -> impl Fn(&Theme, button::Status) -> button::Style + '_ {
+    doc: &'a reshiki::document::Document,
+    symbol: &'a str,
+) -> impl Fn(&Theme, button::Status) -> button::Style + 'a {
     move |theme, status| {
         use reshiki::canvas_theme::CanvasTheme;
         let mut style = control(active)(theme, status);
@@ -2353,28 +2364,20 @@ pub(super) fn element_control(
         } else {
             CanvasTheme::Light
         };
-        if let Some(rgb) = palette
-            .element_swatch(symbol, mode)
+        if let Some(rgb) = reshiki::canvas_theme::element_swatch(doc, symbol, mode)
             .filter(|_| status != button::Status::Disabled)
         {
             let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
-            let amount = if active {
-                0.34
-            } else if hovered {
-                0.28
-            } else {
-                0.20
-            };
-            let tint = Color::from_rgb8(rgb[0], rgb[1], rgb[2]);
-            let base = theme.palette().background;
-            style.background = Some(
-                Color::from_rgb(
-                    base.r + (tint.r - base.r) * amount,
-                    base.g + (tint.g - base.g) * amount,
-                    base.b + (tint.b - base.b) * amount,
-                )
-                .into(),
-            );
+            let background = crate::appearance::from_rgb(reshiki::color_contrast::tile(
+                rgb,
+                mode.is_dark(),
+                active,
+                hovered,
+            ));
+            style.background = Some(background.into());
+            if active {
+                style.border.color = crate::appearance::focus_border(theme, background);
+            }
             style.text_color = theme.palette().text;
         }
         style
@@ -2436,7 +2439,7 @@ pub(super) fn control(active: bool) -> impl Fn(&Theme, button::Status) -> button
                 },
                 border: Border {
                     color: if active {
-                        Color::from_rgb8(113, 181, 161)
+                        crate::appearance::focus_border(theme, Color::from_rgb8(222, 240, 234))
                     } else {
                         Color::TRANSPARENT
                     },

@@ -130,6 +130,7 @@ impl ColorTheme {
     /// Selecting a theme resets atom color overrides, but preserves all typography.
     pub fn apply(self, doc: &mut crate::document::Document) {
         doc.color_theme = self;
+        doc.custom_theme = None;
         for atom in &mut doc.atoms {
             if let Some(style) = &mut atom.text_style {
                 style.color = [0; 3];
@@ -159,55 +160,60 @@ pub fn atom_color(doc: &crate::document::Document, atom: &crate::document::Atom)
     if atom.display.color_override || explicit != [0; 3] {
         explicit
     } else {
-        let mut ink = doc
-            .color_theme
-            .element_color(&atom.element, doc.canvas_theme);
-        if doc.canvas_theme.is_dark() && !doc.color_theme.is_publication() {
-            let backgrounds: Vec<_> = doc
-                .ring_fills
-                .iter()
-                .filter(|fill| fill.atoms.contains(&atom.id))
-                .map(|fill| fill.visible_color(doc.canvas_theme))
-                .collect();
-            ink = ring_label_ink(ink, &backgrounds);
+        let mut ink = element_color(doc, &atom.element, doc.canvas_theme);
+        if !doc.ring_fills.is_empty() {
+            let backgrounds = label_backgrounds(doc, atom);
+            ink = crate::color_contrast::ensure_contrast(
+                ink,
+                &backgrounds,
+                crate::color_contrast::TEXT_TARGET,
+            )
+            .or_else(|| {
+                crate::color_contrast::ensure_contrast(
+                    ink,
+                    &backgrounds,
+                    crate::color_contrast::TEXT_MIN,
+                )
+            })
+            .unwrap_or(ink);
         }
         doc.canvas_theme.color(ink)
     }
 }
 
-/// Lift automatic element colors just enough to read over a ring highlight.
-/// Explicit colors remain untouched. The same resolved ink reaches the canvas,
-/// clipboard and editable exchange, without changing stored atom typography.
-fn ring_label_ink(ink: [u8; 3], backgrounds: &[[u8; 3]]) -> [u8; 3] {
-    let luminance = |rgb: [u8; 3]| {
-        rgb.into_iter()
-            .zip([0.2126, 0.7152, 0.0722])
-            .map(|(v, w)| {
-                let v = f32::from(v) / 255.;
-                w * if v <= 0.04045 {
-                    v / 12.92
-                } else {
-                    ((v + 0.055) / 1.055).powf(2.4)
-                }
-            })
-            .sum::<f32>()
-    };
-    let legible = |rgb| {
-        let foreground = luminance(rgb);
-        backgrounds.iter().all(|&background| {
-            let background = luminance(background);
-            (foreground.max(background) + 0.05) / (foreground.min(background) + 0.05) >= 4.5
+fn label_backgrounds(
+    doc: &crate::document::Document,
+    atom: &crate::document::Atom,
+) -> Vec<[u8; 3]> {
+    std::iter::once(doc.canvas_theme.background())
+        .chain(
+            doc.ring_fills
+                .iter()
+                .filter(|fill| fill.atoms.contains(&atom.id))
+                .map(|fill| fill_color(doc, fill)),
+        )
+        .collect()
+}
+
+/// Atom IDs whose visible ink cannot meet the text minimum on the paper and
+/// associated ring fills. Explicit user colors are checked but never rewritten.
+/// Arbitrary overlapping artwork and unknown paste destinations are not covered.
+pub fn label_contrast_issues(doc: &crate::document::Document) -> Vec<u64> {
+    doc.atoms
+        .iter()
+        .filter(|atom| {
+            if !crate::atom_labels::visible(atom, doc) {
+                return false;
+            }
+            let ink = doc.canvas_theme.color(atom_color(doc, atom));
+            !crate::color_contrast::meets(
+                ink,
+                &label_backgrounds(doc, atom),
+                crate::color_contrast::TEXT_MIN,
+            )
         })
-    };
-    for step in 0..=100 {
-        let tint =
-            ink.map(|v| (f32::from(v) + (255. - f32::from(v)) * step as f32 / 100.).round() as u8);
-        if legible(tint) {
-            return tint;
-        }
-    }
-    // A custom pale fill may not admit lighter ink; preserve its chosen theme.
-    ink
+        .map(|atom| atom.id)
+        .collect()
 }
 
 /// Materialize a theme for renderers and editable exchange. Colors are stored in
@@ -215,12 +221,12 @@ fn ring_label_ink(ink: [u8; 3], backgrounds: &[[u8; 3]]) -> [u8; 3] {
 pub fn resolved_document(
     doc: &crate::document::Document,
 ) -> std::borrow::Cow<'_, crate::document::Document> {
-    if doc.color_theme.is_publication() && doc.ring_fills.iter().all(|fill| fill.fixed_color) {
+    if doc.custom_theme.is_none() && doc.color_theme.is_publication() && doc.ring_fills.is_empty() {
         return std::borrow::Cow::Borrowed(doc);
     }
     let mut resolved = doc.clone();
     for fill in &mut resolved.ring_fills {
-        fill.color = doc.canvas_theme.color(fill.visible_color(doc.canvas_theme));
+        fill.color = doc.canvas_theme.color(fill_color(doc, fill));
         fill.fixed_color = true;
     }
     for atom in &mut resolved.atoms {
@@ -236,7 +242,40 @@ pub fn resolved_document(
             .text_style
             .get_or_insert_with(|| doc.drawing_style.text_style());
         style.color = ink;
+        atom.display.color_override = true;
     }
     resolved.color_theme = ColorTheme::Publication;
+    resolved.custom_theme = None;
     std::borrow::Cow::Owned(resolved)
+}
+
+/// The document's selected palette, including an embedded user theme.
+pub fn element_color(doc: &crate::document::Document, element: &str, mode: CanvasTheme) -> [u8; 3] {
+    doc.custom_theme.as_ref().map_or_else(
+        || doc.color_theme.element_color(element, mode),
+        |t| t.element_color(element, mode),
+    )
+}
+pub fn element_swatch(
+    doc: &crate::document::Document,
+    element: &str,
+    mode: CanvasTheme,
+) -> Option<[u8; 3]> {
+    doc.custom_theme.as_ref().map_or_else(
+        || doc.color_theme.element_swatch(element, mode),
+        |t| t.element_swatch(element, mode),
+    )
+}
+pub fn ring_color(doc: &crate::document::Document, key: [u8; 3]) -> [u8; 3] {
+    doc.custom_theme
+        .as_ref()
+        .and_then(|t| t.fill_color(key, doc.canvas_theme))
+        .unwrap_or_else(|| crate::ring_fills::palette_color(key, doc.canvas_theme))
+}
+pub fn fill_color(doc: &crate::document::Document, fill: &crate::ring_fills::RingFill) -> [u8; 3] {
+    if fill.fixed_color {
+        fill.visible_color(doc.canvas_theme)
+    } else {
+        ring_color(doc, fill.color)
+    }
 }

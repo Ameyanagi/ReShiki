@@ -104,7 +104,7 @@ pub fn snapshot(doc: &Document, ids: &[u64], scope: Scope) -> Result<Document, S
         }
         result.page_layout = Some(layout);
     }
-    result.version = 15;
+    result.version = result.version.max(15);
     result.validate()?;
     Ok(result)
 }

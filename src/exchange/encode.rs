@@ -4,6 +4,14 @@ use std::collections::HashSet;
 
 /// Convert checked drawing XML into its binary representation without RDKit.
 pub fn to_cdx(xml: &str) -> Result<Vec<u8>> {
+    encode(xml, false)
+}
+/// ChemDraw stationery also requires packed document font defaults; individual
+/// LabelFont/CaptionFont properties alone are ignored when opening a CDS file.
+pub fn to_cds(xml: &str) -> Result<Vec<u8>> {
+    encode(xml, true)
+}
+fn encode(xml: &str, stationery: bool) -> Result<Vec<u8>> {
     if xml.len() > LIMIT {
         return Err("Drawing exceeds the 16 MB structure limit".into());
     }
@@ -27,6 +35,7 @@ pub fn to_cdx(xml: &str) -> Result<Vec<u8>> {
     }
     let mut encoder = Encoder {
         schema: Schema::new(),
+        stationery,
         next_id,
         count: 0,
         properties: 0,
@@ -38,6 +47,7 @@ pub fn to_cdx(xml: &str) -> Result<Vec<u8>> {
     Ok(encoder.out)
 }
 struct Encoder {
+    stationery: bool,
     schema: Schema,
     next_id: u64,
     count: usize,
@@ -94,6 +104,22 @@ impl Encoder {
             let code = p.code;
             let data = encode_value(p, attr.value(), name)?;
             self.property(code, &data)?;
+        }
+        if self.stationery && name == "CDXML" {
+            for (prefix, code) in [("Label", 0x080a), ("Caption", 0x080b)] {
+                let mut data = Vec::new();
+                for (suffix, default, scale) in [
+                    ("Font", "3", 1.),
+                    ("Face", "0", 1.),
+                    ("Size", "10", 20.),
+                    ("Color", "3", 1.),
+                ] {
+                    let key = format!("{prefix}{suffix}");
+                    let value = finite(el.attribute(key.as_str()).unwrap_or(default))?;
+                    data.extend(pack_number("UINT16", (value * scale).round())?);
+                }
+                self.property(code, &data)?;
+            }
         }
         if name == "t" {
             self.property(0x700, &encode_text(el)?)?;

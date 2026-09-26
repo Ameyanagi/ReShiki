@@ -13,6 +13,85 @@ mod tests {
     use super::*;
 
     #[test]
+    fn element_tile_contrast_covers_all_themes_modes_and_states() {
+        use iced::{Background, widget::button};
+        use reshiki::{
+            canvas_theme::{CanvasTheme, ColorTheme},
+            color_contrast::{OUTLINE_TARGET, TEXT_TARGET, contrast},
+        };
+        let (mut app, _) = super::super::App::new();
+        let mut pairs = 0;
+        let mut text_min = 21_f64;
+        let mut outline_min = 21_f64;
+        for canvas in CanvasTheme::ALL {
+            app.doc.canvas_theme = canvas;
+            for mode in crate::appearance::Mode::ALL {
+                app.appearance.mode = mode;
+                let theme = app.theme();
+                let palettes = ColorTheme::ALL
+                    .into_iter()
+                    .map(|p| (p.to_string(), p, None))
+                    .chain(
+                        reshiki::theme_files::bundled()
+                            .unwrap()
+                            .into_iter()
+                            .map(|t| (t.name.clone(), t.base, Some(t))),
+                    );
+                for (palette, base, custom) in palettes {
+                    base.apply(&mut app.doc);
+                    if let Some(custom) = custom {
+                        custom.apply(&mut app.doc).unwrap();
+                    }
+                    for element in reshiki::editing::ELEMENTS {
+                        for selected in [false, true] {
+                            for state in [
+                                button::Status::Active,
+                                button::Status::Hovered,
+                                button::Status::Pressed,
+                            ] {
+                                let style = super::super::workspace::element_control(
+                                    selected, &app.doc, element,
+                                )(&theme, state);
+                                let outer = theme.palette().background;
+                                let inner = match style.background {
+                                    Some(Background::Color(c)) if c.a == 1. => c,
+                                    _ => outer,
+                                };
+                                let ratio = contrast(
+                                    crate::appearance::rgb(style.text_color),
+                                    crate::appearance::rgb(inner),
+                                );
+                                text_min = text_min.min(ratio);
+                                pairs += 1;
+                                assert!(
+                                    ratio >= TEXT_TARGET,
+                                    "{palette}/{canvas}/{mode}/{element}/{selected}/{state:?}: {ratio}"
+                                );
+                                if selected {
+                                    for background in [inner, outer] {
+                                        let ratio = contrast(
+                                            crate::appearance::rgb(style.border.color),
+                                            crate::appearance::rgb(background),
+                                        );
+                                        outline_min = outline_min.min(ratio);
+                                        assert!(
+                                            ratio >= OUTLINE_TARGET,
+                                            "outline {palette}/{canvas}/{mode}/{element}: {ratio}"
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        eprintln!(
+            "Tiles: {pairs} text pairs, minimum {text_min:.4}:1; selected outline minimum {outline_min:.4}:1"
+        );
+    }
+
+    #[test]
     fn custom_keeps_current_dimensions_and_can_be_saved() {
         let (mut app, _) = App::new();
         let _ = app.update(Message::DrawingStyle(Action::Open));
@@ -402,6 +481,27 @@ impl std::fmt::Display for Choice {
         }
     }
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SaveFormat {
+    Native,
+    Cds,
+}
+impl SaveFormat {
+    fn extension(self) -> &'static str {
+        match self {
+            Self::Native => "reshiki-style",
+            Self::Cds => "cds",
+        }
+    }
+}
+impl std::fmt::Display for SaveFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Native => "ReShiki style",
+            Self::Cds => "ChemDraw CDS",
+        })
+    }
+}
 #[derive(Debug, Clone)]
 pub enum Action {
     Open,
@@ -417,7 +517,7 @@ pub enum Action {
     Matching(bool),
     Scale(bool),
     Load,
-    Save,
+    Save(SaveFormat),
     Loaded(u64, u64, Result<Option<DrawingStyle>, String>),
     Saved(Result<bool, String>),
 }
@@ -668,28 +768,26 @@ impl App {
                     }
                 }
             }
-            Action::Save => {
+            Action::Save(format) => {
                 let Some(editor) = &self.styles.editor else {
                     return Task::none();
                 };
-                let result = editor
-                    .candidate()
-                    .and_then(|style| serde_json::to_vec_pretty(&style).map_err(|e| e.to_string()));
+                let result = editor.candidate();
                 match result {
-                    Ok(bytes) => {
+                    Ok(style) => {
                         return Task::perform(
                             async move {
                                 let Some(path) = super::files::save_path(
                                     "Save drawing style",
-                                    "Drawing.reshiki-style",
-                                    "reshiki-style",
+                                    &format!("Drawing.{}", format.extension()),
+                                    format.extension(),
                                 )
                                 .await
                                 else {
                                     return Ok(false);
                                 };
                                 tokio::task::spawn_blocking(move || {
-                                    reshiki::storage::write_atomic(&path, &bytes)
+                                    reshiki::document_styles::save(&path, &style)
                                 })
                                 .await
                                 .map_err(|e| e.to_string())??;
@@ -827,6 +925,7 @@ impl App {
             preview.drawing_style = style.clone();
             preview.canvas_theme = self.doc.canvas_theme;
             preview.color_theme = self.doc.color_theme;
+            preview.custom_theme = self.doc.custom_theme.clone();
             body = body.push(
                 container(
                     canvas(DrawingThumbnail(preview))
@@ -921,9 +1020,14 @@ impl App {
                     command("Load…")
                         .on_press(action(Action::Load))
                         .style(button::text),
-                    command("Save style…")
-                        .on_press_maybe(candidate.is_ok().then_some(action(Action::Save)))
-                        .style(button::text)
+                    crate::appearance::pick_list(
+                        [SaveFormat::Native, SaveFormat::Cds],
+                        None::<SaveFormat>,
+                        move |format| action(Action::Save(format))
+                    )
+                    .placeholder("Export style…")
+                    .text_size(12)
+                    .padding([7, 9])
                 ]
                 .spacing(6),
             )

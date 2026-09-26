@@ -137,7 +137,7 @@ impl App {
                         .map(|f| {
                             self.doc
                                 .canvas_theme
-                                .color(f.visible_color(self.doc.canvas_theme))
+                                .color(reshiki::canvas_theme::fill_color(&self.doc, f))
                         })
                 })
                 .collect();

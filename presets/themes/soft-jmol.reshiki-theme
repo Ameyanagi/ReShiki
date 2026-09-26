@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "id": "soft-jmol",
+  "name": "Soft Jmol",
+  "author": "ReShiki contributors",
+  "source": "https://jmol.sourceforge.net/jscolors/",
+  "license": "MIT OR Apache-2.0 (original theme adjustments; Jmol reference colors credited separately)",
+  "base": "pastel",
+  "light": {
+    "elements": {
+      "N": { "oklch": [0.51, 0.09, 270] },
+      "O": { "oklch": [0.51, 0.09, 27] }
+    },
+    "tile_seeds": { "N": [119, 150, 210], "O": [211, 132, 133] },
+    "ring_fills": {}
+  },
+  "dark": {
+    "elements": {
+      "N": { "oklch": [0.83, 0.065, 270] },
+      "O": { "oklch": [0.83, 0.065, 27] }
+    },
+    "tile_seeds": { "N": [119, 150, 210], "O": [211, 132, 133] },
+    "ring_fills": {}
+  }
+}

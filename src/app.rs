@@ -38,6 +38,7 @@ mod reactions;
 mod shortcut_examples;
 mod shortcuts;
 mod template_library;
+mod theme_files;
 mod tool_button;
 mod typography;
 mod updates;
@@ -156,6 +157,7 @@ pub enum Message {
     CanvasTheme(reshiki::canvas_theme::CanvasTheme),
     ColorTheme(reshiki::canvas_theme::ColorTheme),
     QuickDrawingStyle(document_styles::Choice),
+    ThemeFile(theme_files::Action),
     Rulers(bool),
     Crosshair(bool),
     RulerUnit(canvas::guides::Unit),
@@ -251,6 +253,7 @@ pub struct App {
     context_menu: Option<context_menu::State>,
     updates: updates::State,
     styles: document_styles::State,
+    theme_library: theme_files::State,
     palette: Option<palettes::Family>,
     toolbar: palettes::Memory,
     erase_stroke: bool,
@@ -355,6 +358,7 @@ impl App {
         let mut app = Self {
             updates: updates::State::new(),
             styles: Default::default(),
+            theme_library: theme_files::State::load(),
             reactions: Default::default(),
             palette: None,
             toolbar: palettes::Memory::default(),
@@ -1807,7 +1811,7 @@ impl App {
                 if let Some(candidate) = self.recovered.first().cloned() {
                     let before = self.doc.clone();
                     self.doc = candidate.snapshot.document;
-                    self.doc.version = 15;
+                    self.doc.version = self.doc.version.max(15);
                     self.sync_drawing_defaults();
                     self.styles.editor = None;
                     self.path = None;
@@ -1865,6 +1869,7 @@ impl App {
                     );
                 }
             }
+            Message::ThemeFile(action) => return self.theme_file_action(action),
             Message::QuickDrawingStyle(choice) => return self.quick_drawing_style(choice),
             Message::Grid => self.grid = !self.grid,
             Message::ToggleView => self.view_open = !self.view_open,
@@ -2225,7 +2230,7 @@ impl App {
                                         Ok(doc)
                                     }) {
                                     Ok(mut doc) => {
-                                        doc.version = 15;
+                                        doc.version = doc.version.max(15);
                                         reshiki::atom_labels::clear_computed(&mut doc);
                                         self.clear_recovery();
                                         self.file_epoch = self.file_epoch.wrapping_add(1);
@@ -3057,6 +3062,7 @@ fn same_drawing(a: &Document, b: &Document) -> bool {
     a.version == b.version
         && a.canvas_theme == b.canvas_theme
         && a.color_theme == b.color_theme
+        && a.custom_theme == b.custom_theme
         && a.drawing_style == b.drawing_style
         && a.page_layout == b.page_layout
         && a.atom_labels == b.atom_labels

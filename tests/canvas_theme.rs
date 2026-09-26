@@ -326,7 +326,10 @@ fn element_palettes_keep_legible_contrast_on_their_canvas() {
                 let ink = luminance(theme.element_color(element, mode));
                 let paper = luminance(mode.background());
                 let contrast = (ink.max(paper) + 0.05) / (ink.min(paper) + 0.05);
-                assert!(contrast >= 3., "{theme}/{mode}/{element}: {contrast}");
+                assert!(
+                    contrast >= reshiki::color_contrast::TEXT_TARGET,
+                    "{theme}/{mode}/{element}: {contrast}"
+                );
             }
         }
     }
@@ -423,12 +426,93 @@ fn dark_ring_highlights_keep_automatic_atom_labels_legible() {
         assert_eq!(canvas_theme::atom_color(&pasted, &pasted.atoms[0]), ink);
         assert_eq!(doc, original);
         doc.canvas_theme = CanvasTheme::Light;
-        assert_eq!(
-            canvas_theme::atom_color(&doc, &doc.atoms[0]),
-            ColorTheme::Presentation.element_color("N", CanvasTheme::Light)
+        assert!(
+            reshiki::color_contrast::contrast(
+                canvas_theme::atom_color(&doc, &doc.atoms[0]),
+                ring_fills::palette_color(key, CanvasTheme::Light)
+            ) >= reshiki::color_contrast::TEXT_TARGET
         );
         doc.canvas_theme = CanvasTheme::Dark;
         doc.atoms[0].display.color_override = true;
         assert_eq!(canvas_theme::atom_color(&doc, &doc.atoms[0]), [0; 3]);
     }
+}
+
+#[test]
+fn all_elements_meet_text_target_over_every_builtin_fill_and_overlaps() {
+    use reshiki::{
+        color_contrast::{TEXT_TARGET, contrast},
+        ring_fills::{self, RingFill},
+    };
+    let mut measured = 0;
+    let mut minimum = 21_f64;
+    for theme in canvas_theme::ColorTheme::ALL {
+        for mode in CanvasTheme::ALL {
+            for element in reshiki::editing::ELEMENTS {
+                let mut doc = Document {
+                    color_theme: theme,
+                    canvas_theme: mode,
+                    ..Default::default()
+                };
+                let id = doc.add_atom(element, Point::default());
+                for (_, key) in ring_fills::PALETTE {
+                    doc.ring_fills.push(RingFill {
+                        atoms: vec![id],
+                        color: key,
+                        fixed_color: false,
+                    });
+                    let ink = mode.color(canvas_theme::atom_color(&doc, &doc.atoms[0]));
+                    for background in std::iter::once(mode.background())
+                        .chain(doc.ring_fills.iter().map(|f| f.visible_color(mode)))
+                    {
+                        let ratio = contrast(ink, background);
+                        minimum = minimum.min(ratio);
+                        measured += 1;
+                        assert!(
+                            ratio >= TEXT_TARGET,
+                            "{theme}/{mode}/{element}: {ink:?} on {background:?} = {ratio}"
+                        );
+                    }
+                    assert!(canvas_theme::label_contrast_issues(&doc).is_empty());
+                    let resolved = canvas_theme::resolved_document(&doc).into_owned();
+                    assert_eq!(
+                        mode.color(canvas_theme::atom_color(&resolved, &resolved.atoms[0])),
+                        ink
+                    );
+                }
+            }
+        }
+    }
+    eprintln!("Canvas contrast: {measured} paper/fill/overlap pairs, minimum {minimum:.4}:1");
+}
+
+#[test]
+fn custom_contrast_conflicts_are_reported_without_recoloring_user_ink_or_fills() {
+    use reshiki::{canvas_theme::ColorTheme, ring_fills::RingFill};
+    let mut doc = sample();
+    doc.color_theme = ColorTheme::Presentation;
+    let id = doc.atoms[1].id;
+    doc.ring_fills = vec![
+        RingFill {
+            atoms: vec![id],
+            color: [0; 3],
+            fixed_color: true,
+        },
+        RingFill {
+            atoms: vec![id],
+            color: [120; 3],
+            fixed_color: true,
+        },
+    ];
+    let before = doc.clone();
+    assert!(canvas_theme::label_contrast_issues(&doc).contains(&id));
+    assert_eq!(doc, before);
+    doc.atoms[1].text_style = Some(doc.drawing_style.text_style());
+    doc.atoms[1].text_style.as_mut().unwrap().color = [255, 255, 0];
+    doc.atoms[1].display.color_override = true;
+    assert_eq!(canvas_theme::atom_color(&doc, &doc.atoms[1]), [255, 255, 0]);
+    assert!(canvas_theme::label_contrast_issues(&doc).contains(&id));
+    let resolved = canvas_theme::resolved_document(&doc).into_owned();
+    assert_eq!(resolved.ring_fills, doc.ring_fills);
+    assert_eq!(resolved.atoms[1].text_style, doc.atoms[1].text_style);
 }

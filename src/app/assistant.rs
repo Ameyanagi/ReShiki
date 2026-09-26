@@ -1450,7 +1450,7 @@ impl App {
             .style(|theme, _| text_editor::Style {
                 background: Color::TRANSPARENT.into(),
                 border: Border::default(),
-                placeholder: crate::appearance::themed(theme, super::workspace::muted()),
+                placeholder: crate::appearance::muted(theme),
                 value: crate::appearance::themed(theme, Color::from_rgb8(37, 46, 48)),
                 selection: crate::appearance::themed(theme, Color::from_rgb8(198, 223, 215)),
             });

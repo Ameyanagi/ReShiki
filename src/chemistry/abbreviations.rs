@@ -310,7 +310,7 @@ pub fn find_with_policy(
             members,
         });
     }
-    result.version = 15;
+    result.version = result.version.max(15);
     validate_with_policy(&result, policy)?;
     Ok(result)
 }

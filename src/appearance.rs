@@ -100,6 +100,39 @@ pub fn themed(theme: &Theme, c: Color) -> Color {
     color(is_dark(theme), c)
 }
 
+pub fn rgb(color: Color) -> [u8; 3] {
+    [color.r, color.g, color.b].map(|v| (v * 255.).round().clamp(0., 255.) as u8)
+}
+pub fn from_rgb([r, g, b]: [u8; 3]) -> Color {
+    Color::from_rgb8(r, g, b)
+}
+
+/// Semantic ink and indicator roles are checked against the actual surfaces.
+pub fn readable(seed: Color, backgrounds: &[Color], target: f64) -> Color {
+    let backgrounds: Vec<_> = backgrounds.iter().map(|&c| rgb(c)).collect();
+    reshiki::color_contrast::ensure_contrast(rgb(seed), &backgrounds, target)
+        .map(from_rgb)
+        .unwrap_or(seed)
+}
+pub fn muted(theme: &Theme) -> Color {
+    readable(
+        themed(theme, Color::from_rgb8(107, 116, 127)),
+        &[theme.palette().background, surface(theme, Color::WHITE)],
+        reshiki::color_contrast::TEXT_TARGET,
+    )
+}
+pub fn focus_border(theme: &Theme, inner: Color) -> Color {
+    readable(
+        theme.palette().primary,
+        &[
+            inner,
+            theme.palette().background,
+            surface(theme, Color::WHITE),
+        ],
+        reshiki::color_contrast::OUTLINE_TARGET,
+    )
+}
+
 /// Shared dropdown styling for toolbar controls and inspector fields.
 pub fn pick_list<'a, T, L, V, Message>(
     options: L,
@@ -130,23 +163,27 @@ fn dropdown(
         let [r, g, b] = if dark { night } else { light };
         Color::from_rgb8(r, g, b)
     };
+    let background = if active {
+        rgb([242, 248, 246], [29, 43, 41])
+    } else {
+        rgb([247, 249, 250], [32, 37, 43])
+    };
     iced::widget::pick_list::Style {
         text_color: theme.palette().text,
-        placeholder_color: rgb([107, 116, 127], [162, 173, 183]),
+        placeholder_color: readable(
+            muted(theme),
+            &[background],
+            reshiki::color_contrast::TEXT_TARGET,
+        ),
         handle_color: rgb([90, 109, 115], [163, 187, 181]),
-        background: if active {
-            rgb([242, 248, 246], [29, 43, 41])
-        } else {
-            rgb([247, 249, 250], [32, 37, 43])
-        }
-        .into(),
+        background: background.into(),
         border: iced::Border {
             color: if active {
-                rgb([113, 181, 161], [82, 193, 163])
+                focus_border(theme, background)
             } else {
                 rgb([210, 219, 224], [67, 78, 87])
             },
-            width: 1.,
+            width: if active { 2. } else { 1. },
             radius: 6.0.into(),
         },
     }
@@ -298,6 +335,50 @@ pub fn secondary(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn field_and_menu_roles_pass_on_both_interface_surfaces() {
+        use iced::widget::pick_list;
+        use reshiki::color_contrast::{OUTLINE_TARGET, TEXT_TARGET, contrast};
+        let (mut app, _) = crate::app::App::new();
+        for mode in Mode::ALL {
+            for canvas in reshiki::canvas_theme::CanvasTheme::ALL {
+                let _ = app.update(crate::app::Message::CanvasTheme(canvas));
+                let _ = app.update(crate::app::Message::Appearance(mode));
+                let theme = app.theme();
+                for background in [theme.palette().background, surface(&theme, Color::WHITE)] {
+                    assert!(contrast(rgb(muted(&theme)), rgb(background)) >= TEXT_TARGET);
+                }
+                for status in [pick_list::Status::Active, pick_list::Status::Hovered] {
+                    let style = dropdown(&theme, status);
+                    let iced::Background::Color(bg) = style.background else {
+                        panic!("solid field");
+                    };
+                    for ink in [style.text_color, style.placeholder_color] {
+                        assert!(contrast(rgb(ink), rgb(bg)) >= TEXT_TARGET);
+                    }
+                    assert!(contrast(rgb(style.handle_color), rgb(bg)) >= 3.);
+                    if matches!(status, pick_list::Status::Hovered) {
+                        for background in [bg, theme.palette().background] {
+                            assert!(
+                                contrast(rgb(style.border.color), rgb(background))
+                                    >= OUTLINE_TARGET
+                            );
+                        }
+                    }
+                }
+                let menu = dropdown_menu(&theme);
+                let iced::Background::Color(bg) = menu.background else {
+                    panic!("solid menu");
+                };
+                let iced::Background::Color(selected) = menu.selected_background else {
+                    panic!("solid selection");
+                };
+                assert!(contrast(rgb(menu.text_color), rgb(bg)) >= TEXT_TARGET);
+                assert!(contrast(rgb(menu.selected_text_color), rgb(selected)) >= TEXT_TARGET);
+            }
+        }
+    }
+
     #[test]
     fn display_colors_preserve_hue_and_alpha() {
         assert_eq!(color(true, Color::BLACK), Color::WHITE);

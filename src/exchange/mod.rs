@@ -9,7 +9,7 @@ mod values;
 
 pub use decode::from_cdx;
 pub(crate) use decode::style_from_cdx;
-pub use encode::to_cdx;
+pub use encode::{to_cds, to_cdx};
 use std::collections::HashMap;
 
 pub const LIMIT: usize = 16 * 1024 * 1024;

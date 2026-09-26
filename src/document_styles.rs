@@ -44,6 +44,28 @@ pub fn load(path: &std::path::Path) -> Result<DrawingStyle, String> {
     Ok(style)
 }
 
+/// Export dimension/font settings without carrying canvas colors or artwork.
+/// CDS uses ChemDraw's binary document framing; native JSON retains ReShiki's
+/// world-coordinate scale and PNG preference as well as physical dimensions.
+pub fn save(path: &std::path::Path, style: &DrawingStyle) -> Result<(), String> {
+    style.validate()?;
+    let bytes = if path
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("cds"))
+    {
+        let doc = Document {
+            drawing_style: style.clone(),
+            ..Default::default()
+        };
+        let xml =
+            crate::exchange::drawing::write(&doc, Default::default()).map_err(|e| e.to_string())?;
+        crate::exchange::to_cds(&xml)?
+    } else {
+        serde_json::to_vec_pretty(style).map_err(|e| e.to_string())?
+    };
+    crate::storage::write_atomic(path, &bytes)
+}
+
 /// Stationery supplies label typography and bond dimensions. Page layout,
 /// artwork, colors and independent caption styles are outside DrawingStyle.
 fn from_chemdraw_xml(xml: &str, name: &str) -> Result<DrawingStyle, String> {
@@ -242,7 +264,7 @@ pub fn apply(
             }
         }
     }
-    doc.version = 15;
+    doc.version = doc.version.max(15);
     doc.drawing_style = style;
     doc.validate()?;
     Ok(doc)
