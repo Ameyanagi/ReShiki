@@ -128,14 +128,21 @@ impl Drawing {
             return Err("The drawing is invalid.");
         }
         let part = self.preset.document(self.length, self.alternate);
+        let attach = |part: &Document| {
+            if self.preset == Preset::Benzene {
+                self.place_benzene(doc, point, direction, radius)
+            } else {
+                templates::place(doc, part, point, direction, radius)
+            }
+        };
         if !self.connect {
-            return templates::place(doc, &part, point, direction, radius);
+            return attach(&part);
         }
         let Some(target_id) = doc.nearest(point, radius) else {
             if editing::nearest_bond(doc, point, radius).is_some() {
                 return Err("Start on an atom to connect a ring with a new bond.");
             }
-            return templates::place(doc, &part, point, direction, radius);
+            return attach(&part);
         };
         let target = doc
             .atom(target_id)
@@ -219,6 +226,224 @@ impl Drawing {
         selected.push(target_id);
         Ok((result, selected))
     }
+
+    fn place_benzene(
+        self,
+        doc: &Document,
+        point: Point,
+        direction: Option<Point>,
+        radius: f32,
+    ) -> Result<(Document, Vec<u64>), &'static str> {
+        let hexagon = Preset::Regular.document(self.length, false);
+        let (mut result, mut ring) = templates::place(doc, &hexagon, point, direction, radius)?;
+        if ring.len() != 6 || ring.iter().any(|id| result.atom(*id).is_none()) {
+            return Err("The ring could not be inserted.");
+        }
+        for k in 0..6 {
+            let pair = edge(&ring, k);
+            if find(doc, pair).is_none()
+                && let Some(index) = result.bonds.iter().position(|b| joins(b, pair))
+            {
+                result.bonds.remove(index);
+            }
+        }
+        let length = hexagon
+            .atoms
+            .first()
+            .zip(hexagon.atoms.get(1))
+            .map(|(a, b)| a.position.distance(b.position))
+            .unwrap_or(self.length);
+        let (first, second) = edge(&ring, 0);
+        let scale = result
+            .atom(first)
+            .zip(result.atom(second))
+            .map(|(a, b)| a.position.distance(b.position) / length)
+            .filter(|s| s.is_finite() && *s > 0.)
+            .unwrap_or(1.);
+        let tolerance = FUSE_DISTANCE * self.length * scale;
+        for k in 0..6 {
+            let id = vertex(&ring, k);
+            if doc.atom(id).is_some() {
+                continue;
+            }
+            let Some(position) = result.atom(id).map(|a| a.position) else {
+                continue;
+            };
+            let nearby = doc
+                .atoms
+                .iter()
+                .filter(|a| !ring.contains(&a.id) && doc.atom_visible(a.id))
+                .map(|a| (a.position.distance(position), a.id))
+                .filter(|(d, _)| *d <= tolerance)
+                .min_by(|a, b| a.0.total_cmp(&b.0));
+            if let Some((_, existing)) = nearby
+                && let Some(slot) = ring.get_mut(k)
+            {
+                result.delete(&[id]);
+                *slot = existing;
+            }
+        }
+        if let Some(first) = (0..6).find(|k| doc.atom(vertex(&ring, *k)).is_some()) {
+            ring.rotate_left(first);
+            if doc.atom(vertex(&ring, 1)).is_none()
+                && doc.atom(vertex(&ring, 5)).is_some()
+                && let Some(rest) = ring.get_mut(1..)
+            {
+                rest.reverse();
+            }
+        }
+        let existing: Vec<_> = (0..6)
+            .map(|k| find(&result, edge(&ring, k)).map(|b| b.order))
+            .collect();
+        let rotation = kekule_rotation(&existing) + usize::from(self.alternate);
+        let orders: Vec<_> = (0..6).map(|k| kekule(k + rotation)).collect();
+        let planned = plan_orders(&result, &ring, &orders);
+        for (k, order) in planned.into_iter().enumerate() {
+            let (a, b) = edge(&ring, k);
+            if find(&result, (a, b)).is_none_or(|bond| bond.order != order) {
+                result.add_bond(a, b, order, "plain");
+            }
+        }
+        result.invalidate_chemistry(&ring);
+        result.reconcile_molecule_groups();
+        if crate::reactions::reconcile(&mut result).is_err() || result.validate().is_err() {
+            return Err("The ring could not be inserted.");
+        }
+        Ok((result, ring))
+    }
+}
+
+const FUSE_DISTANCE: f32 = 5. / 75.;
+
+fn kekule(k: usize) -> u8 {
+    if k.is_multiple_of(2) { 2 } else { 1 }
+}
+fn vertex(ring: &[u64], k: usize) -> u64 {
+    ring.get(k % ring.len().max(1)).copied().unwrap_or_default()
+}
+fn edge(ring: &[u64], k: usize) -> (u64, u64) {
+    (vertex(ring, k), vertex(ring, k + 1))
+}
+fn joins(bond: &crate::document::Bond, (a, b): (u64, u64)) -> bool {
+    (bond.a == a && bond.b == b) || (bond.a == b && bond.b == a)
+}
+fn find(doc: &Document, pair: (u64, u64)) -> Option<&crate::document::Bond> {
+    doc.bonds.iter().find(|b| joins(b, pair))
+}
+
+fn kekule_rotation(existing: &[Option<u8>]) -> usize {
+    let n = existing.len();
+    let fused: Vec<(usize, u8)> = existing
+        .iter()
+        .enumerate()
+        .filter_map(|(k, o)| o.map(|o| (k, o)))
+        .collect();
+    let mut best = (0, i32::MIN);
+    match fused.as_slice() {
+        [] => return 0,
+        &[(k, order)] => {
+            for rotation in 0..n {
+                let mut score = 0;
+                if matches!((order, kekule(k + rotation)), (1, 2) | (2, 1) | (2, 2)) {
+                    score += 100;
+                }
+                for adjacent in [k + n - 1 + rotation, k + 1 + rotation] {
+                    let adjacent = kekule(adjacent);
+                    if (order == 1 && adjacent == 2) || (order == 2 && adjacent == 1) {
+                        score += 50;
+                    }
+                }
+                if score > best.1 {
+                    best = (rotation, score);
+                }
+            }
+        }
+        _ => {
+            for rotation in 0..n {
+                let used: Vec<usize> = fused.iter().map(|(k, _)| (k + rotation) % n).collect();
+                let mut score = 0;
+                for &t in &used {
+                    for adjacent in [(t + n - 1) % n, (t + 1) % n] {
+                        if !used.contains(&adjacent) && kekule(adjacent) == 1 {
+                            score += 5000;
+                        }
+                    }
+                }
+                for &(k, order) in &fused {
+                    if kekule(k + rotation) == order {
+                        score += if order == 2 { 1100 } else { 100 };
+                    } else {
+                        score -= 50;
+                    }
+                }
+                if score > best.1 {
+                    best = (rotation, score);
+                }
+            }
+        }
+    }
+    best.0
+}
+
+fn plan_orders(doc: &Document, ring: &[u64], orders: &[u8]) -> Vec<u8> {
+    use std::collections::HashMap;
+    let edges: Vec<_> = (0..ring.len()).map(|k| edge(ring, k)).collect();
+    let mut load: HashMap<u64, i64> = ring
+        .iter()
+        .map(|id| (*id, i64::from(templates::valence(doc, *id))))
+        .collect();
+    let fits = |load: &HashMap<u64, i64>, id: u64, extra: i64| {
+        extra <= 0
+            || doc.atom(id).is_none_or(|atom| {
+                let capacity = i64::from(templates::capacity(atom));
+                capacity == 0 || load.get(&id).copied().unwrap_or(0) + 2 * extra <= capacity
+            })
+    };
+    let mut incoming: HashMap<u64, i64> = HashMap::new();
+    for &(a, b) in edges.iter().filter(|pair| find(doc, **pair).is_none()) {
+        *incoming.entry(a).or_default() += 1;
+        *incoming.entry(b).or_default() += 1;
+    }
+    let mut planned: Vec<Option<u8>> = Vec::with_capacity(edges.len());
+    for (&(a, b), &order) in edges.iter().zip(orders) {
+        let Some(existing) = find(doc, (a, b)) else {
+            planned.push(None);
+            continue;
+        };
+        let extra = i64::from(order) - i64::from(existing.order);
+        let other_double = |id: u64| {
+            doc.bonds
+                .iter()
+                .any(|x| (x.a == id || x.b == id) && x.order == 2 && !std::ptr::eq(x, existing))
+        };
+        let overwrite = existing.order == 1
+            && existing.display == "plain"
+            && existing.stereo.is_none()
+            && !other_double(a)
+            && !other_double(b)
+            && fits(&load, a, extra + incoming.get(&a).copied().unwrap_or(0))
+            && fits(&load, b, extra + incoming.get(&b).copied().unwrap_or(0));
+        if overwrite {
+            *load.entry(a).or_default() += 2 * extra;
+            *load.entry(b).or_default() += 2 * extra;
+            planned.push(Some(order));
+        } else {
+            planned.push(Some(existing.order));
+        }
+    }
+    for ((&(a, b), &order), slot) in edges.iter().zip(orders).zip(&mut planned) {
+        if slot.is_some() {
+            continue;
+        }
+        let mut order = order;
+        while order > 1 && !(fits(&load, a, i64::from(order)) && fits(&load, b, i64::from(order))) {
+            order -= 1;
+        }
+        *load.entry(a).or_default() += 2 * i64::from(order);
+        *load.entry(b).or_default() += 2 * i64::from(order);
+        *slot = Some(order);
+    }
+    planned.into_iter().map(|o| o.unwrap_or(1)).collect()
 }
 
 /// A selected simple cycle, excluding exocyclic bonds and nonchemical anchors.
@@ -290,6 +515,110 @@ pub fn toggle_selected_aromatic(doc: &mut Document, selected: &[u64]) -> Result<
     }
     Ok(aromatic)
 }
+#[cfg(test)]
+mod benzene_rotation_tests {
+    use super::*;
+    fn benzene() -> Drawing {
+        Drawing {
+            preset: Preset::Benzene,
+            length: 42.,
+            alternate: false,
+            connect: false,
+        }
+    }
+    fn fuse(doc: &Document, order: u8) -> (Document, Vec<u64>) {
+        let bond = doc.bonds.iter().find(|b| b.order == order).unwrap();
+        let (a, b) = (doc.atom(bond.a).unwrap(), doc.atom(bond.b).unwrap());
+        let mid = Point::new(
+            (a.position.x + b.position.x) / 2.,
+            (a.position.y + b.position.y) / 2.,
+        );
+        benzene().place(doc, mid, None, 5.).unwrap()
+    }
+    fn doubles(doc: &Document, id: u64) -> usize {
+        doc.bonds
+            .iter()
+            .filter(|b| (b.a == id || b.b == id) && b.order == 2)
+            .count()
+    }
+    fn ring_orders(doc: &Document, ring: &[u64]) -> Vec<u8> {
+        (0..6)
+            .map(|k| {
+                let (a, b) = (ring[k], ring[(k + 1) % 6]);
+                doc.bonds
+                    .iter()
+                    .find(|x| (x.a == a && x.b == b) || (x.a == b && x.b == a))
+                    .unwrap()
+                    .order
+            })
+            .collect()
+    }
+
+    #[test]
+    fn free_benzene_is_unchanged() {
+        let (doc, ring) = benzene()
+            .place(&Document::default(), Point::default(), None, 5.)
+            .unwrap();
+        assert_eq!(ring.len(), 6);
+        assert_eq!(doc.bonds.iter().filter(|b| b.order == 2).count(), 3);
+        assert!(ring.iter().all(|id| doubles(&doc, *id) == 1));
+    }
+
+    #[test]
+    fn kekule_single_bond_fuses_into_naphthalene() {
+        let base = Preset::Benzene.document(42., false);
+        let (doc, ring) = fuse(&base, 1);
+        assert_eq!(doc.atoms.len(), 10);
+        assert_eq!(doc.bonds.len(), 11);
+        assert!(doc.atoms.iter().all(|a| doubles(&doc, a.id) == 1));
+        assert_eq!(ring_orders(&doc, &ring), vec![1, 1, 2, 1, 2, 1]);
+    }
+
+    #[test]
+    fn kekule_double_bond_fuses_into_naphthalene() {
+        let base = Preset::Benzene.document(42., false);
+        let (doc, ring) = fuse(&base, 2);
+        assert_eq!(doc.atoms.len(), 10);
+        assert!(doc.atoms.iter().all(|a| doubles(&doc, a.id) == 1));
+        assert_eq!(ring_orders(&doc, &ring), vec![2, 1, 2, 1, 2, 1]);
+    }
+
+    #[test]
+    fn saturated_single_bond_is_upgraded() {
+        let base = Preset::Regular.document(42., false);
+        let (doc, ring) = fuse(&base, 1);
+        assert_eq!(ring_orders(&doc, &ring), vec![2, 1, 2, 1, 2, 1]);
+        assert_eq!(doc.bonds.iter().filter(|b| b.order == 2).count(), 3);
+    }
+
+    #[test]
+    fn crowded_single_bond_lowers_new_doubles() {
+        let mut base = Document::default();
+        let a = base.add_atom("C", Point::new(0., 0.));
+        let b = base.add_atom("C", Point::new(42., 0.));
+        let c = base.add_atom("C", Point::new(-21., -36.4));
+        let d = base.add_atom("C", Point::new(63., -36.4));
+        base.add_bond(a, b, 1, "plain");
+        base.add_bond(a, c, 2, "plain");
+        base.add_bond(b, d, 2, "plain");
+        let (doc, ring) = fuse(&base, 1);
+        assert_eq!(ring_orders(&doc, &ring)[0], 1);
+        assert!(doc.atoms.iter().all(|x| doubles(&doc, x.id) <= 1));
+    }
+
+    #[test]
+    fn rotation_scoring() {
+        assert_eq!(kekule_rotation(&[None; 6]), 0);
+        assert_eq!(kekule_rotation(&[Some(1), None, None, None, None, None]), 0);
+        assert_eq!(kekule_rotation(&[Some(2), None, None, None, None, None]), 0);
+        assert_eq!(kekule_rotation(&[None, Some(2), None, None, None, None]), 1);
+        assert_eq!(
+            kekule_rotation(&[Some(1), Some(2), None, None, None, None]),
+            1
+        );
+    }
+}
+
 #[cfg(test)]
 mod aromatic_toggle_tests {
     use super::*;
