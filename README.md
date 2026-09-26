@@ -59,6 +59,8 @@ and confirm it in your pull request.
 
 ### Development
 
+Thanks to our [contributors](docs/contributors.md) for their code, testing, and feedback.
+
 ReShiki uses Rust, Iced, and a bundled native InChI helper. See the [developer guide](https://reshiki.com/developer/development/) for setup, checks, and contribution instructions.
 
 ReShiki is under active development. [Report a problem](https://github.com/Ameyanagi/ReShiki/issues).

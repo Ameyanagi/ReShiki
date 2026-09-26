@@ -35,3 +35,15 @@ Include [visual review evidence](docs/visual-review.md): example images for new
 features, labeled examples for each new shortcut, and matched before/after
 images for visible bug fixes. Provide a reusable caption and image link for the
 release changelog. Explain the evidence used for changes with no visible output.
+
+## Contributor credit
+
+When preparing a contribution for merge, preserve the original author's commit
+attribution. If changes are squashed together with maintainer work, retain the
+original author or add an accurate `Co-authored-by` trailer using the author's
+existing commit identity.
+
+Add the contributor and pull-request link to [the contributor list](docs/contributors.md)
+and credit them beside the change in [the next release notes](docs/changes-unreleased.md).
+Keep that credit when moving an entry into a versioned changelog. Mark work still
+under review explicitly; update its status when it merges.

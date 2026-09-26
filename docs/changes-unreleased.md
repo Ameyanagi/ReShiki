@@ -13,3 +13,7 @@ New drawings start at **100%**, leaving more room for molecules and reaction sch
 Both captures use optimized Apple Silicon macOS builds, the same window size and the same ring tool placement on a new drawing. The zoom differs intentionally to demonstrate the starting view. The earlier build is `1a67b36`; neither capture uses Fit or manual zoom.
 
 For development, macOS Cargo builds now default C/C++ dependencies to Apple Clang, avoiding accidental selection of GCC from `PATH`. See [development setup](development.md).
+
+## Contributor acknowledgements
+
+Thank you to [Hiromichi Yokoyama (@HiroYokoyama)](https://github.com/HiroYokoyama) for proposing improved benzene fusion and Kekulé-pattern selection, adding regression tests, and addressing review feedback in [PR #40](https://github.com/Ameyanagi/ReShiki/pull/40), currently under review. See the [contributor list](contributors.md).
