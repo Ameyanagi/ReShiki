@@ -11,31 +11,31 @@ use std::path::PathBuf;
 pub enum Choice {
     Builtin(ColorTheme),
     Library { id: String, name: String },
-    Load,
-    Save,
+    Manage,
 }
 impl std::fmt::Display for Choice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Builtin(theme) => theme.fmt(f),
             Self::Library { name, .. } => f.write_str(name),
-            Self::Load => f.write_str("Import theme…"),
-            Self::Save => f.write_str("Export theme…"),
+            Self::Manage => f.write_str("Manage themes…"),
         }
     }
 }
 #[derive(Debug, Clone)]
 pub enum Action {
     Choose(Choice),
+    Import,
     Loaded(u64, u64, Result<Option<Box<ThemeFile>>, String>),
     Saved(Result<bool, String>),
 }
 #[derive(Default)]
 pub struct State {
     themes: Vec<ThemeFile>,
-    serial: u64,
+    pub(super) serial: u64,
+    pub(super) editor: Option<super::theme_generator::Editor>,
 }
-fn directory() -> Result<PathBuf, String> {
+pub(super) fn directory() -> Result<PathBuf, String> {
     let root = std::env::var_os("RESHIKI_DATA_DIR")
         .map(PathBuf::from)
         .or_else(|| {
@@ -46,29 +46,90 @@ fn directory() -> Result<PathBuf, String> {
     Ok(root.join("themes"))
 }
 impl State {
+    pub(super) fn themes(&self) -> &[ThemeFile] {
+        &self.themes
+    }
     pub fn load() -> Self {
-        let mut state = Self {
-            themes: theme_files::bundled().unwrap_or_default(),
-            serial: 0,
-        };
+        let mut state = Self::default();
         if !cfg!(test)
-            && let Ok(dir) =
-                directory().and_then(|d| std::fs::read_dir(d).map_err(|e| e.to_string()))
+            && let Ok(dir) = directory()
         {
-            for entry in dir.flatten().take(256) {
-                if entry
-                    .path()
-                    .extension()
-                    .is_some_and(|e| e == "reshiki-theme")
-                    && let Ok(theme) = theme_files::load(&entry.path())
-                {
-                    state.insert(theme);
-                }
-            }
+            state.load_from(&dir);
         }
         state
     }
-    fn insert(&mut self, theme: ThemeFile) {
+    fn load_from(&mut self, dir: &std::path::Path) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        let mut themes: Vec<_> = entries
+            .flatten()
+            .take(256)
+            .filter(|e| e.path().extension().is_some_and(|x| x == "reshiki-theme"))
+            .filter_map(|e| theme_files::load(&e.path()).ok().map(|t| (e.path(), t)))
+            .collect();
+        // Canonical app saves win over older, manually named files with the same ID.
+        themes.sort_by_key(|(p, t)| (p.file_stem().is_some_and(|s| s == t.id.as_str()), p.clone()));
+        for (_, theme) in themes {
+            self.insert(theme);
+        }
+    }
+    pub(super) fn persist(&mut self, theme: ThemeFile) -> Result<(), String> {
+        if !cfg!(test) {
+            let dir = directory()?;
+            std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+            theme_files::save(&dir.join(format!("{}.reshiki-theme", theme.id)), &theme)?;
+        }
+        self.insert(theme);
+        Ok(())
+    }
+    pub(super) fn remove(&mut self, id: &str) -> Result<(), String> {
+        if !self.themes.iter().any(|t| t.id == id) {
+            return Err("Theme is not in the library".into());
+        }
+        if !cfg!(test) {
+            self.archive_from(&directory()?, id)?;
+        }
+        self.themes.retain(|t| t.id != id);
+        Ok(())
+    }
+    /// Archive only validated library files with the selected ID. Original imports
+    /// and embedded document snapshots are never touched. Keep a recoverable copy.
+    fn archive_from(&self, dir: &std::path::Path, id: &str) -> Result<(), String> {
+        let entries = match std::fs::read_dir(dir) {
+            Ok(entries) => entries,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => return Err(e.to_string()),
+        };
+        let paths: Vec<_> = entries
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().is_some_and(|x| x == "reshiki-theme"))
+            .filter(|p| theme_files::load(p).is_ok_and(|t| t.id == id))
+            .collect();
+        if paths.is_empty() {
+            return Ok(());
+        }
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let archive = dir.join(".deleted").join(stamp.to_string());
+        std::fs::create_dir_all(&archive).map_err(|e| e.to_string())?;
+        let mut moved = Vec::new();
+        for path in paths {
+            let dest = archive.join(path.file_name().ok_or("Invalid library filename")?);
+            if let Err(e) = std::fs::rename(&path, &dest) {
+                for (old, new) in moved.iter().rev() {
+                    let _ = std::fs::rename(new, old);
+                }
+                return Err(format!("Could not remove theme: {e}"));
+            }
+            moved.push((path, dest));
+        }
+        Ok(())
+    }
+    pub(super) fn insert(&mut self, theme: ThemeFile) {
         self.themes.retain(|t| t.id != theme.id);
         self.themes.push(theme);
         self.themes
@@ -90,14 +151,16 @@ impl App {
                     id: t.id.clone(),
                     name: t.name.clone(),
                 });
-        if !choices.contains(&selected) {
-            choices.push(selected.clone());
-        }
-        choices.extend([Choice::Load, Choice::Save]);
+        // A document may retain a deleted theme; show its name as selected,
+        // without adding that embedded snapshot back to the saved library menu.
+        choices.push(Choice::Manage);
         (choices, selected)
     }
     pub(super) fn theme_file_action(&mut self, action: Action) -> Task<Message> {
         match action {
+            Action::Choose(Choice::Manage) => {
+                return self.theme_generator_action(super::theme_generator::Action::Open);
+            }
             Action::Choose(Choice::Builtin(theme)) => {
                 return self.update(Message::ColorTheme(theme));
             }
@@ -119,7 +182,10 @@ impl App {
                     self.apply_theme_file(theme);
                 }
             }
-            Action::Choose(Choice::Load) => {
+            Action::Import => {
+                if self.theme_library.editor.is_none() {
+                    return Task::none();
+                }
                 self.theme_library.serial = self.theme_library.serial.wrapping_add(1);
                 let (epoch, serial) = (self.file_epoch, self.theme_library.serial);
                 return Task::perform(
@@ -147,28 +213,7 @@ impl App {
                 }
                 match result {
                     Ok(Some(theme)) => {
-                        let theme = *theme;
-                        if !self.apply_theme_file(theme.clone()) {
-                            return Task::none();
-                        }
-                        let saved = if cfg!(test) {
-                            Ok(())
-                        } else {
-                            directory().and_then(|dir| {
-                                std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-                                theme_files::save(
-                                    &dir.join(format!("{}.reshiki-theme", theme.id)),
-                                    &theme,
-                                )
-                            })
-                        };
-                        self.theme_library.insert(theme);
-                        if let Err(e) = saved {
-                            self.status = format!(
-                                "Theme applied to drawing, but could not save to library: {e}"
-                            );
-                            self.error = true;
-                        }
+                        self.review_imported_theme(*theme);
                     }
                     Ok(None) => {}
                     Err(e) => {
@@ -176,27 +221,6 @@ impl App {
                         self.error = true;
                     }
                 }
-            }
-            Action::Choose(Choice::Save) => {
-                let theme = ThemeFile::capture(&self.doc);
-                return Task::perform(
-                    async move {
-                        let Some(path) = super::files::save_path(
-                            "Export color theme (light and dark)",
-                            &format!("{}.reshiki-theme", theme.id),
-                            "reshiki-theme",
-                        )
-                        .await
-                        else {
-                            return Ok(false);
-                        };
-                        tokio::task::spawn_blocking(move || theme_files::save(&path, &theme))
-                            .await
-                            .map_err(|e| e.to_string())??;
-                        Ok(true)
-                    },
-                    |r| Message::ThemeFile(Action::Saved(r)),
-                );
             }
             Action::Saved(result) => match result {
                 Ok(true) => {
@@ -212,7 +236,7 @@ impl App {
         }
         Task::none()
     }
-    fn apply_theme_file(&mut self, theme: ThemeFile) -> bool {
+    pub(super) fn apply_theme_file(&mut self, theme: ThemeFile) -> bool {
         if !self.finish_inline(true) {
             return false;
         }
@@ -243,21 +267,64 @@ impl App {
 mod tests {
     use super::*;
     #[test]
-    fn importing_a_theme_is_undoable_and_stale_dialogs_do_not_change_drawings() {
+    fn deletion_survives_reload_and_archives_all_copies_of_only_the_selected_theme() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = tempfile::tempdir().unwrap();
+        let mut theme = theme_files::bundled().unwrap().remove(0);
+        theme_files::save(&source.path().join("original.reshiki-theme"), &theme).unwrap();
+        theme_files::save(&dir.path().join("manual-name.reshiki-theme"), &theme).unwrap();
+        theme.name = "Latest saved name".into();
+        theme_files::save(
+            &dir.path().join(format!("{}.reshiki-theme", theme.id)),
+            &theme,
+        )
+        .unwrap();
+        let mut other = theme.clone();
+        other.id = "other".into();
+        theme_files::save(&dir.path().join("other.reshiki-theme"), &other).unwrap();
+        std::fs::write(dir.path().join("broken.reshiki-theme"), b"not a theme").unwrap();
+        let mut state = State::default();
+        state.load_from(dir.path());
+        assert_eq!(state.themes().len(), 2);
+        assert_eq!(
+            state.themes().iter().find(|t| t.id == theme.id).unwrap(),
+            &theme
+        );
+        state.archive_from(dir.path(), &theme.id).unwrap();
+        let mut reloaded = State::default();
+        reloaded.load_from(dir.path());
+        assert_eq!(reloaded.themes(), &[other]);
+        assert!(source.path().join("original.reshiki-theme").exists());
+        assert!(dir.path().join("broken.reshiki-theme").exists());
+        let archive = std::fs::read_dir(dir.path().join(".deleted"))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        assert_eq!(std::fs::read_dir(archive).unwrap().count(), 2);
+    }
+    #[test]
+    fn importing_previews_until_saved_and_stale_dialogs_do_not_change_drawings() {
         let (mut app, _) = App::new();
         let original = app.doc.clone();
+        let _ = app.theme_generator_action(super::super::theme_generator::Action::Open);
+        let serial = app.theme_library.serial;
         let theme = theme_files::bundled().unwrap().remove(0);
         let _ = app.theme_file_action(Action::Loaded(
             app.file_epoch + 1,
-            0,
+            serial,
             Ok(Some(Box::new(theme.clone()))),
         ));
         assert_eq!(app.doc, original);
         let _ = app.theme_file_action(Action::Loaded(
             app.file_epoch,
-            0,
+            serial,
             Ok(Some(Box::new(theme.clone()))),
         ));
+        assert_eq!(app.doc, original);
+        assert!(app.theme_library.themes().is_empty());
+        let _ = app.theme_generator_action(super::super::theme_generator::Action::Apply);
         let themed = app.doc.clone();
         assert!(themed.custom_theme.is_some());
         assert_eq!(themed.drawing_style, original.drawing_style);

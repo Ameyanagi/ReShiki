@@ -458,6 +458,7 @@ impl App {
             for atom in &mut self.doc.atoms {
                 if self.selected.contains(&atom.id) && !text_only {
                     atom.display.color_override = true;
+                    atom.display.hydrogen_color = None;
                     atom.text_style
                         .get_or_insert_with(|| self.doc.drawing_style.text_style())
                         .color = color;

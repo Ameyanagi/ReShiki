@@ -1,6 +1,11 @@
-use super::{App, InspectorTab, Message};
+use super::{
+    App, InspectorTab, Message,
+    icons::{Glyph, Icon},
+};
 use crate::canvas::{DrawingThumbnail, layered::canvas};
-use iced::widget::{button, checkbox, column, combo_box, container, row, scrollable, text};
+use iced::widget::{
+    Space, button, checkbox, column, combo_box, container, row, scrollable, text, tooltip,
+};
 use iced::{Alignment, Element, Length, Task};
 use reshiki::{document_styles::Preset, style::DrawingStyle};
 
@@ -261,8 +266,8 @@ mod tests {
         let oxygen = app.doc.add_atom("O", p.offset(42., 0.));
         app.doc.add_bond(carbon, oxygen, 2, "plain");
         app.doc.atoms[3].element = "N".into();
-        let directory = std::path::Path::new("artifacts/document-style-qa");
-        std::fs::create_dir_all(directory).unwrap();
+        let directory = std::env::temp_dir().join("reshiki-document-style-qa");
+        std::fs::create_dir_all(&directory).unwrap();
         for (name, width, height, dark, mode) in [
             (
                 "desktop",
@@ -415,7 +420,7 @@ mod tests {
             )
             .unwrap();
             let cursor = mouse::Cursor::Available(iced::Point::new(
-                width as f32 - 170.,
+                width as f32 - 36.,
                 height as f32 - 73. - if dark { 44. } else { 0. },
             ));
             for event in [
@@ -437,7 +442,7 @@ mod tests {
                 messages
                     .iter()
                     .any(|m| matches!(m, Message::DrawingStyle(Action::Apply))),
-                "Apply stays visible and clickable at {width}×{height}"
+                "Save icon stays visible and clickable at {width}×{height}"
             );
         }
     }
@@ -477,7 +482,7 @@ impl std::fmt::Display for Choice {
         match self {
             Self::Journal(preset) => preset.fmt(f),
             Self::Custom => f.write_str("Custom"),
-            Self::Details => f.write_str("Drawing style…"),
+            Self::Details => f.write_str("Manage styles…"),
         }
     }
 }
@@ -518,6 +523,7 @@ pub enum Action {
     Scale(bool),
     Load,
     Save(SaveFormat),
+    ExportMenu(bool),
     Loaded(u64, u64, Result<Option<DrawingStyle>, String>),
     Saved(Result<bool, String>),
 }
@@ -534,6 +540,7 @@ pub struct Editor {
     font: String,
     inputs: Vec<(Field, String)>,
     advanced: bool,
+    export_menu: bool,
     matching: bool,
     scale: bool,
 }
@@ -552,6 +559,7 @@ impl Editor {
             font: String::new(),
             inputs: vec![],
             advanced: false,
+            export_menu: false,
             matching: true,
             scale: false,
         };
@@ -769,9 +777,10 @@ impl App {
                 }
             }
             Action::Save(format) => {
-                let Some(editor) = &self.styles.editor else {
+                let Some(editor) = &mut self.styles.editor else {
                     return Task::none();
                 };
+                editor.export_menu = false;
                 let result = editor.candidate();
                 match result {
                     Ok(style) => {
@@ -840,6 +849,7 @@ impl App {
                             }
                         }
                         Action::Advanced(value) => editor.advanced = value,
+                        Action::ExportMenu(value) => editor.export_menu = value,
                         Action::Matching(value) => editor.matching = value,
                         Action::Scale(value) => editor.scale = value,
                         _ => {}
@@ -874,7 +884,6 @@ impl App {
                 Preset::ALL
                     .into_iter()
                     .map(Choice::Journal)
-                    .chain([Choice::Custom])
                     .collect::<Vec<_>>(),
                 Some(preset.map(Choice::Journal).unwrap_or(Choice::Custom)),
                 move |choice| action(match choice {
@@ -1014,34 +1023,64 @@ impl App {
                 crate::appearance::text_color(iced::Color::from_rgb8(164, 54, 47)),
             ));
         }
-        footer = footer
-            .push(
-                row![
-                    command("Load…")
-                        .on_press(action(Action::Load))
-                        .style(button::text),
-                    crate::appearance::pick_list(
-                        [SaveFormat::Native, SaveFormat::Cds],
-                        None::<SaveFormat>,
-                        move |format| action(Action::Save(format))
-                    )
-                    .placeholder("Export style…")
-                    .text_size(12)
-                    .padding([7, 9])
-                ]
-                .spacing(6),
-            )
-            .push(
-                row![
-                    command("Cancel")
-                        .on_press(action(Action::Cancel))
-                        .style(crate::appearance::secondary),
-                    command("Apply to document")
-                        .on_press_maybe(candidate.is_ok().then_some(action(Action::Apply)))
-                        .style(crate::appearance::primary)
-                ]
-                .spacing(8),
+        if editor.export_menu {
+            footer = footer.push(
+                container(
+                    column![
+                        command("ReShiki style (.reshiki-style)")
+                            .on_press(action(Action::Save(SaveFormat::Native)))
+                            .style(crate::appearance::secondary)
+                            .width(Length::Fill),
+                        command("ChemDraw stationery (.cds)")
+                            .on_press(action(Action::Save(SaveFormat::Cds)))
+                            .style(crate::appearance::secondary)
+                            .width(Length::Fill),
+                    ]
+                    .spacing(5),
+                )
+                .padding(5),
             );
+        }
+        let icon = |glyph, hint, message, enabled, active| {
+            super::workspace::hover_hint(
+                button(canvas(Glyph(glyph, enabled)).width(24).height(24))
+                    .padding(7)
+                    .width(40)
+                    .height(38)
+                    .style(super::workspace::control(active))
+                    .on_press_maybe(enabled.then_some(action(message))),
+                hint,
+                tooltip::Position::Top,
+            )
+        };
+        footer = footer.push(
+            row![
+                icon(
+                    Icon::Import,
+                    "Import drawing style…",
+                    Action::Load,
+                    true,
+                    false
+                ),
+                icon(
+                    Icon::Export,
+                    "Export as ReShiki style or ChemDraw CDS",
+                    Action::ExportMenu(!editor.export_menu),
+                    candidate.is_ok(),
+                    editor.export_menu
+                ),
+                Space::new().width(Length::Fill),
+                icon(
+                    Icon::Save,
+                    "Save style to this drawing",
+                    Action::Apply,
+                    candidate.is_ok(),
+                    true
+                ),
+            ]
+            .spacing(8)
+            .align_y(Alignment::Center),
+        );
         container(
             column![
                 scrollable(container(body).padding(iced::Padding {

@@ -249,6 +249,14 @@ fn atom_label_runs(a: &Atom, doc: &Document) -> Vec<Primitive> {
         if !count.is_empty() {
             parts.push(text(Point::new(h_width, size * 0.40), count, small));
         }
+        if let Some(hydrogen_color) = a.display.hydrogen_color {
+            for part in &mut parts {
+                if let Primitive::Text { color, style, .. } = part {
+                    *color = hydrogen_color;
+                    style.color = hydrogen_color;
+                }
+            }
+        }
         place_appendage(
             &runs,
             &mut parts,

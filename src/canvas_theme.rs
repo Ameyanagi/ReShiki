@@ -1,6 +1,6 @@
 //! Document page colors, independent of journal dimensions and application chrome.
 use serde::{Deserialize, Serialize};
-mod jmol;
+pub(crate) mod jmol;
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CanvasTheme {
@@ -49,6 +49,7 @@ pub fn for_paste(doc: crate::document::Document, target: CanvasTheme) -> crate::
     let source = doc.canvas_theme;
     let color = |rgb| target.color(source.color(rgb));
     for atom in &mut doc.atoms {
+        atom.display.hydrogen_color = atom.display.hydrogen_color.map(color);
         let style = atom
             .text_style
             .get_or_insert_with(|| doc.drawing_style.text_style());
@@ -116,7 +117,7 @@ impl ColorTheme {
             .unwrap_or_else(|| canvas.color([0; 3]))
     }
     /// Tiles show the palette's hues separately from canvas-label contrast.
-    /// Presentation and Pastel share Jmol's element mapping with softer tones.
+    /// Presentation and Pastel share Jmol's element mapping with different tones.
     pub fn element_swatch(self, element: &str, canvas: CanvasTheme) -> Option<[u8; 3]> {
         let rgb = jmol::swatch(element)?;
         match self {
@@ -136,6 +137,7 @@ impl ColorTheme {
                 style.color = [0; 3];
             }
             atom.display.color_override = false;
+            atom.display.hydrogen_color = None;
             atom.display.stereo.style.color = [0; 3];
             if let Some(number) = &mut atom.display.number {
                 number.style.color = [0; 3];
@@ -179,6 +181,15 @@ pub fn atom_color(doc: &crate::document::Document, atom: &crate::document::Atom)
         }
         doc.canvas_theme.color(ink)
     }
+}
+
+/// Attached hydrogen follows the H palette, with the parent's explicit label overrides.
+pub fn hydrogen_color(doc: &crate::document::Document, atom: &crate::document::Atom) -> [u8; 3] {
+    atom.display.hydrogen_color.unwrap_or_else(|| {
+        let mut hydrogen = atom.clone();
+        hydrogen.element = "H".into();
+        atom_color(doc, &hydrogen)
+    })
 }
 
 fn label_backgrounds(
@@ -230,6 +241,7 @@ pub fn resolved_document(
         fill.fixed_color = true;
     }
     for atom in &mut resolved.atoms {
+        let hydrogen = hydrogen_color(doc, atom);
         // Existing colored files remain explicit overrides, including old files
         // that predate the override flag. The flag also supports explicit black.
         if atom.display.color_override
@@ -242,6 +254,7 @@ pub fn resolved_document(
             .text_style
             .get_or_insert_with(|| doc.drawing_style.text_style());
         style.color = ink;
+        atom.display.hydrogen_color = Some(hydrogen);
         atom.display.color_override = true;
     }
     resolved.color_theme = ColorTheme::Publication;

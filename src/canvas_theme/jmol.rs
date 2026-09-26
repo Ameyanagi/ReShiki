@@ -115,7 +115,7 @@ const JMOL: [u32; 109] = [
     0xEB0026, // Mt
 ];
 
-pub(super) fn swatch(element: &str) -> Option<[u8; 3]> {
+pub(crate) fn swatch(element: &str) -> Option<[u8; 3]> {
     let index = crate::editing::ELEMENTS
         .iter()
         .position(|&name| name == element)?;
@@ -125,20 +125,12 @@ pub(super) fn swatch(element: &str) -> Option<[u8; 3]> {
 
 /// Keep Jmol's perceptual hue; softer themes reduce chroma independently of tone.
 pub(super) fn soften(rgb: [u8; 3], canvas: CanvasTheme, pastel: bool) -> [u8; 3] {
-    use crate::color_contrast::Oklch;
-    let source = Oklch::from_rgb(rgb);
-    let (tone, chroma_scale) = match (pastel, canvas) {
-        (false, CanvasTheme::Light) => (0.52, 0.65),
-        (false, CanvasTheme::Dark) => (0.76, 0.65),
-        (true, CanvasTheme::Light) => (0.55, 0.35),
-        (true, CanvasTheme::Dark) => (0.83, 0.40),
+    let recipe = if pastel {
+        crate::theme_generator::Recipe::PASTEL
+    } else {
+        crate::theme_generator::Recipe::PRESENTATION
     };
-    Oklch {
-        l: tone + (source.l - 0.65) * 0.08,
-        c: source.c * chroma_scale,
-        ..source
-    }
-    .to_rgb()
+    recipe.tone(canvas).swatch(rgb)
 }
 
 pub(super) fn label_ink(rgb: [u8; 3], canvas: CanvasTheme) -> [u8; 3] {

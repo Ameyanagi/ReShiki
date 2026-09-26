@@ -17,7 +17,6 @@ pub enum Section {
     Bonds,
     BondDirection,
     Atoms,
-    AtomColors,
     Arrange,
     Groups,
     Molecule,
@@ -112,11 +111,6 @@ pub enum Action {
     Attachment(reshiki::attachments::Kind),
     DepthBonds,
     RingArc,
-    OpenAtomColors,
-    ColorElement(String),
-    ColorWholeDrawing(bool),
-    ColorHex(String),
-    ApplyAtomColor,
     PropertiesCalculated(PropertyKey, Box<Result<Analysis, String>>),
 }
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -132,9 +126,6 @@ pub(super) struct State {
     chemical: ChemicalFormat,
     pending: Option<PropertyKey>,
     properties: Option<(PropertyKey, Result<Analysis, String>)>,
-    color_element: Option<String>,
-    color_whole_drawing: bool,
-    color_hex: String,
 }
 impl State {
     pub(super) fn update(&mut self, action: Action) {
@@ -144,16 +135,11 @@ impl State {
             }
             Action::Figure(format) => self.figure = format,
             Action::Chemical(format) => self.chemical = format,
-            Action::ColorElement(element) => self.color_element = Some(element),
-            Action::ColorWholeDrawing(value) => self.color_whole_drawing = value,
-            Action::ColorHex(value) => self.color_hex = value,
             Action::RefreshProperties
             | Action::PropertiesCalculated(..)
             | Action::Centroid
             | Action::Attachment(_)
             | Action::RingArc
-            | Action::OpenAtomColors
-            | Action::ApplyAtomColor
             | Action::DepthBonds => {}
         }
     }
@@ -247,37 +233,6 @@ impl App {
 
     pub(super) fn inspector_action(&mut self, action: Action) -> Task<Message> {
         match action {
-            Action::OpenAtomColors => {
-                self.inspector_open = true;
-                self.inspector_tab = InspectorTab::Properties;
-                self.inspector_ui.expanded.insert(Section::AtomColors, true);
-                self.inspector_ui.color_whole_drawing = self.selected.is_empty();
-                if self.inspector_ui.color_hex.is_empty() {
-                    self.inspector_ui.color_hex = "#205091".into();
-                }
-                Task::none()
-            }
-            Action::ApplyAtomColor => {
-                let Some(color) = super::graphics::parse_color(&self.inspector_ui.color_hex) else {
-                    self.status = "Enter a six-digit hex color, for example #205091".into();
-                    self.error = true;
-                    return Task::none();
-                };
-                let color = self.doc.canvas_theme.color(color);
-                let before = self.doc.clone();
-                let ids = self.atom_color_targets();
-                let style = self.doc.drawing_style.text_style();
-                for atom in &mut self.doc.atoms {
-                    if ids.contains(&atom.id) {
-                        atom.display.color_override = true;
-                        atom.text_style.get_or_insert_with(|| style.clone()).color = color;
-                    }
-                }
-                self.changed(before);
-                self.status = format!("Colored {} atom labels", ids.len());
-                self.error = false;
-                Task::none()
-            }
             Action::RingArc => {
                 let before = self.doc.clone();
                 match reshiki::ring_arcs::toggle(&mut self.doc, &self.selected) {
@@ -466,7 +421,6 @@ impl App {
                 "{} atom label(s) have low contrast against the canvas or a ring fill. Adjust the label or fill color.", color_issues.len()
             )).size(11).style(muted_text));
         }
-        body = body.push(self.atom_colors_panel());
         let molecular_first = self.selected.is_empty()
             || self.property_key().is_some_and(|key| !key.atoms.is_empty());
         if molecular_first {
@@ -591,87 +545,6 @@ impl App {
             self.property_summary(),
             self.selected.is_empty() && self.tool == Tool::Select && !self.doc.atoms.is_empty(),
             self.molecular_properties(),
-        )
-    }
-
-    fn color_elements(&self) -> Vec<String> {
-        self.doc
-            .atoms
-            .iter()
-            .filter(|a| a.centroid.is_empty())
-            .filter(|a| self.inspector_ui.color_whole_drawing || self.selected.contains(&a.id))
-            .map(|a| a.element.clone())
-            .collect::<std::collections::BTreeSet<_>>()
-            .into_iter()
-            .collect()
-    }
-
-    fn atom_color_targets(&self) -> Vec<u64> {
-        let elements = self.color_elements();
-        let element = self
-            .inspector_ui
-            .color_element
-            .as_ref()
-            .filter(|e| elements.contains(e))
-            .or(elements.first());
-        self.doc
-            .atoms
-            .iter()
-            .filter(|a| a.centroid.is_empty() && Some(&a.element) == element)
-            .filter(|a| self.inspector_ui.color_whole_drawing || self.selected.contains(&a.id))
-            .map(|a| a.id)
-            .collect()
-    }
-
-    fn atom_colors_panel(&self) -> Element<'_, Message> {
-        let elements = self.color_elements();
-        let element = self
-            .inspector_ui
-            .color_element
-            .clone()
-            .filter(|e| elements.contains(e))
-            .or_else(|| elements.first().cloned());
-        let count = self.atom_color_targets().len();
-        let body = column![
-            checkbox(self.inspector_ui.color_whole_drawing)
-                .label("Whole drawing")
-                .on_toggle(|v| Message::InspectorAction(Action::ColorWholeDrawing(v))),
-            text(if self.inspector_ui.color_whole_drawing {
-                "Choose an element to color throughout the drawing."
-            } else {
-                "Only matching atoms in the selection are colored."
-            })
-            .size(11)
-            .style(muted_text),
-            crate::appearance::pick_list(elements, element, |e| Message::InspectorAction(
-                Action::ColorElement(e)
-            ))
-            .placeholder("Select atoms first")
-            .width(Length::Fill)
-            .text_size(12)
-            .padding(7),
-            row![
-                crate::appearance::text_input("#205091", &self.inspector_ui.color_hex)
-                    .on_input(|s| Message::InspectorAction(Action::ColorHex(s)))
-                    .on_submit(Message::InspectorAction(Action::ApplyAtomColor))
-                    .size(12)
-                    .padding(7),
-                command("Apply", Message::InspectorAction(Action::ApplyAtomColor)).on_press_maybe(
-                    (count > 0).then_some(Message::InspectorAction(Action::ApplyAtomColor))
-                ),
-            ]
-            .spacing(6),
-            text(format!("{count} matching atoms"))
-                .size(11)
-                .style(muted_text),
-        ]
-        .spacing(8);
-        self.inspector_section(
-            Section::AtomColors,
-            "Color atoms by element",
-            "",
-            false,
-            body,
         )
     }
 
@@ -1342,55 +1215,6 @@ mod tests {
             .analysis
             .unwrap();
         let _ = app.inspector_action(Action::PropertiesCalculated(key, Box::new(Ok(result))));
-    }
-
-    #[test]
-    fn element_colors_respect_scope_and_undo_without_touching_bonds() {
-        let (mut app, _) = App::new();
-        let a = app.doc.add_atom("Cu", reshiki::document::Point::default());
-        let b = app
-            .doc
-            .add_atom("Cu", reshiki::document::Point::new(40., 0.));
-        let n = app
-            .doc
-            .add_atom("N", reshiki::document::Point::new(80., 0.));
-        app.doc.add_bond(b, n, 5, "plain");
-        app.doc.atom_mut(a).unwrap().text_style = Some(reshiki::typography::TextStyle {
-            italic: true,
-            ..Default::default()
-        });
-        app.selected = vec![a, n];
-        let original = app.doc.clone();
-        for action in [
-            Action::OpenAtomColors,
-            Action::ColorElement("Cu".into()),
-            Action::ColorHex("#205091".into()),
-            Action::ApplyAtomColor,
-        ] {
-            let _ = app.inspector_action(action);
-        }
-        assert_eq!(
-            app.doc.atom(a).unwrap().text_style.as_ref().unwrap().color,
-            [32, 80, 145]
-        );
-        assert!(app.doc.atom(a).unwrap().text_style.as_ref().unwrap().italic);
-        assert_eq!(app.doc.atom(b), original.atom(b));
-        assert_eq!(app.doc.atom(n), original.atom(n));
-        assert_eq!(app.doc.bonds, original.bonds);
-        assert_eq!(app.selected, vec![a, n]);
-        assert!(app.history.undo(&mut app.doc));
-        assert_eq!(app.doc, original);
-        let _ = app.inspector_action(Action::ColorWholeDrawing(true));
-        let _ = app.inspector_action(Action::ApplyAtomColor);
-        assert_eq!(
-            app.doc.atom(b).unwrap().text_style.as_ref().unwrap().color,
-            [32, 80, 145]
-        );
-        assert_eq!(app.doc.atom(n), original.atom(n));
-        let colored = app.doc.clone();
-        let _ = app.inspector_action(Action::ColorHex("bad".into()));
-        let _ = app.inspector_action(Action::ApplyAtomColor);
-        assert_eq!(app.doc, colored);
     }
 
     #[test]

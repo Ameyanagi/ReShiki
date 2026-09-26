@@ -475,10 +475,6 @@ impl App {
                 tooltip::Position::Bottom,
             ));
         }
-        tools = tools.push(command(
-            "Atoms…",
-            Message::InspectorAction(super::inspector::Action::OpenAtomColors),
-        ));
         container(tools)
             .padding([7, 14])
             .width(Length::Fill)
@@ -616,6 +612,10 @@ impl App {
     }
 
     pub(super) fn workspace(&self) -> Element<'_, Message> {
+        if self.inspector_tab == InspectorTab::ThemeGenerator && self.theme_library.editor.is_some()
+        {
+            return self.theme_generator_workspace();
+        }
         let mut content = column![self.command_bar(), self.style_bar()];
         if self.import_open {
             content = content.push(self.import_drawer());
@@ -1361,7 +1361,7 @@ impl App {
                     Preset::ALL
                         .into_iter()
                         .map(Choice::Journal)
-                        .chain([Choice::Custom, Choice::Details])
+                        .chain([Choice::Details])
                         .collect::<Vec<_>>(),
                     Some(current),
                     Message::QuickDrawingStyle,
@@ -1529,6 +1529,7 @@ impl App {
             InspectorTab::Assistant => self.assistant_panel(),
             InspectorTab::Pages => self.pages_panel(),
             InspectorTab::DrawingStyle => self.drawing_style_panel(),
+            InspectorTab::ThemeGenerator => self.theme_generator_panel(),
             InspectorTab::Properties if self.joining.is_some() => self.join_panel(),
             InspectorTab::Properties => self.properties_panel(),
             InspectorTab::Labels => self.atom_labels_panel(),

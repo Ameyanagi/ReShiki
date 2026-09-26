@@ -14,6 +14,77 @@ fn sample() -> Document {
 }
 
 #[test]
+fn attached_hydrogens_follow_h_palette_in_figures_clipboard_and_chemdraw() {
+    use reshiki::canvas_theme::ColorTheme;
+    let mut doc = Document::default();
+    let c = doc.add_atom("C", Point::default());
+    let n = doc.add_atom("N", Point::new(42., 0.));
+    doc.add_bond(c, n, 1, "plain");
+    doc.atom_mut(n).unwrap().label_h = 2;
+    for theme in [
+        ColorTheme::Presentation,
+        ColorTheme::Pastel,
+        ColorTheme::Jmol,
+    ] {
+        theme.apply(&mut doc);
+        for mode in CanvasTheme::ALL {
+            doc.canvas_theme = mode;
+            let h_color = theme.element_color("H", mode);
+            let n_color = theme.element_color("N", mode);
+            let verify = |drawing: &Document| {
+                let colors: Vec<_> = scene::primitives(drawing)
+                    .into_iter()
+                    .filter_map(|p| match p {
+                        scene::Primitive::Text { text, color, .. } => {
+                            Some((text, drawing.canvas_theme.color(color)))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                for symbol in ["H", "2"] {
+                    assert!(
+                        colors.iter().any(|(s, rgb)| s == symbol && *rgb == h_color),
+                        "{theme}/{mode}/{symbol}: {colors:?}"
+                    );
+                }
+                assert!(colors.iter().any(|(s, rgb)| s == "N" && *rgb == n_color));
+            };
+            verify(&doc);
+            verify(&canvas_theme::for_paste(doc.clone(), mode.toggled()));
+            let xml = exchange::drawing::write(&doc, Default::default()).unwrap();
+            for xml in [
+                xml.clone(),
+                exchange::from_cdx(&exchange::to_cdx(&xml).unwrap()).unwrap(),
+            ] {
+                let imported = reshiki::chemistry::cdxml::import_cdxml(&xml)
+                    .unwrap()
+                    .document;
+                verify(&imported);
+                assert_eq!(
+                    imported
+                        .atoms
+                        .iter()
+                        .find(|a| a.element == "N")
+                        .unwrap()
+                        .label_h,
+                    2
+                );
+            }
+        }
+    }
+    doc.atom_mut(n).unwrap().display.color_override = true;
+    doc.atom_mut(n).unwrap().text_style = Some(reshiki::typography::TextStyle {
+        color: [130, 30, 100],
+        ..Default::default()
+    });
+    let atom = doc.atom(n).unwrap();
+    assert_eq!(
+        canvas_theme::hydrogen_color(&doc, atom),
+        canvas_theme::atom_color(&doc, atom)
+    );
+}
+
+#[test]
 fn theme_survives_native_storage_selection_and_printing_without_changing_style() {
     let mut doc = sample();
     let original = doc.clone();

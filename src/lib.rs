@@ -62,5 +62,6 @@ pub mod style;
 pub mod template_library;
 pub mod templates;
 pub mod theme_files;
+pub mod theme_generator;
 pub mod typography;
 pub mod updates;

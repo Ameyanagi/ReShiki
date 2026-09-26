@@ -37,9 +37,45 @@
     },
     "dark": {
       "$ref": "#/$defs/palette"
+    },
+    "generator": {
+      "$ref": "#/$defs/generator"
     }
   },
   "$defs": {
+    "tone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lightness", "chroma"],
+      "properties": {
+        "lightness": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "chroma": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2
+        }
+      }
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["light", "dark"],
+      "properties": {
+        "light": {
+          "$ref": "#/$defs/tone"
+        },
+        "dark": {
+          "$ref": "#/$defs/tone"
+        },
+        "reference": {
+          "$ref": "#/$defs/reference"
+        }
+      }
+    },
     "color": {
       "oneOf": [
         {
@@ -354,6 +390,38 @@
           "additionalProperties": {
             "$ref": "#/$defs/color"
           }
+        }
+      }
+    },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "light", "dark"],
+      "properties": {
+        "id": {
+          "$ref": "#/properties/id"
+        },
+        "name": {
+          "$ref": "#/properties/name"
+        },
+        "author": {
+          "$ref": "#/properties/author"
+        },
+        "source": {
+          "$ref": "#/properties/source"
+        },
+        "license": {
+          "$ref": "#/properties/license"
+        },
+        "light": {
+          "$ref": "#/$defs/palette/properties/elements",
+          "minProperties": 118,
+          "maxProperties": 118
+        },
+        "dark": {
+          "$ref": "#/$defs/palette/properties/elements",
+          "minProperties": 118,
+          "maxProperties": 118
         }
       }
     }

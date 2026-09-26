@@ -39,6 +39,7 @@ mod shortcut_examples;
 mod shortcuts;
 mod template_library;
 mod theme_files;
+mod theme_generator;
 mod tool_button;
 mod typography;
 mod updates;
@@ -48,6 +49,7 @@ mod workspace;
 pub enum InspectorTab {
     Reactions,
     DrawingStyle,
+    ThemeGenerator,
     Assistant,
     Pages,
     Abbreviations,
@@ -158,6 +160,7 @@ pub enum Message {
     ColorTheme(reshiki::canvas_theme::ColorTheme),
     QuickDrawingStyle(document_styles::Choice),
     ThemeFile(theme_files::Action),
+    ThemeGenerator(theme_generator::Action),
     Rulers(bool),
     Crosshair(bool),
     RulerUnit(canvas::guides::Unit),
@@ -731,6 +734,7 @@ impl App {
                 self.camera = Camera::default();
                 self.pages = pages::State::default();
                 self.styles.editor = None;
+                self.theme_library.editor = None;
                 self.fit_to_view = false;
                 self.analysis = None;
                 self.error = false;
@@ -871,6 +875,10 @@ impl App {
         }
         if let Message::InlineText(action) = message {
             return self.inline_action(action);
+        }
+        if matches!(message, Message::Escape) && self.inspector_tab == InspectorTab::ThemeGenerator
+        {
+            return self.theme_generator_action(theme_generator::Action::Back);
         }
         if matches!(message, Message::Escape)
             && self.inspector_tab == InspectorTab::DrawingStyle
@@ -1408,6 +1416,9 @@ impl App {
                 }
             }
             Message::Inspector(tab) => {
+                if tab != InspectorTab::ThemeGenerator {
+                    self.theme_library.editor = None;
+                }
                 if tab != InspectorTab::DrawingStyle {
                     self.styles.editor = None;
                 }
@@ -1814,6 +1825,7 @@ impl App {
                     self.doc.version = self.doc.version.max(15);
                     self.sync_drawing_defaults();
                     self.styles.editor = None;
+                    self.theme_library.editor = None;
                     self.path = None;
                     self.untitled_name = None;
                     self.saved = Document::default();
@@ -1870,6 +1882,7 @@ impl App {
                 }
             }
             Message::ThemeFile(action) => return self.theme_file_action(action),
+            Message::ThemeGenerator(action) => return self.theme_generator_action(action),
             Message::QuickDrawingStyle(choice) => return self.quick_drawing_style(choice),
             Message::Grid => self.grid = !self.grid,
             Message::ToggleView => self.view_open = !self.view_open,
@@ -2237,6 +2250,7 @@ impl App {
                                         self.doc = doc;
                                         self.sync_drawing_defaults();
                                         self.styles.editor = None;
+                                        self.theme_library.editor = None;
                                         self.saved = self.doc.clone();
                                         self.path = Some(path);
                                         self.untitled_name = None;

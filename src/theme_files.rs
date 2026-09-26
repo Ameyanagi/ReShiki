@@ -72,6 +72,9 @@ pub struct ThemeFile {
     pub base: ColorTheme,
     pub light: Palette,
     pub dark: Palette,
+    /// Optional editor recipe. Explicit palette values remain authoritative.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub generator: Option<crate::theme_generator::Recipe>,
 }
 impl ThemeFile {
     pub fn palette(&self, mode: CanvasTheme) -> &Palette {
@@ -106,6 +109,9 @@ impl ThemeFile {
         self.palette(mode).ring_fills.get(name).map(ColorValue::rgb)
     }
     pub fn validate(&self) -> Result<(), String> {
+        if let Some(recipe) = &self.generator {
+            recipe.validate()?;
+        }
         if self.version != 1 {
             return Err(format!("Unsupported theme version {}", self.version));
         }
@@ -238,6 +244,7 @@ impl ThemeFile {
             base,
             light: palette(CanvasTheme::Light),
             dark: palette(CanvasTheme::Dark),
+            generator: None,
         }
     }
 }
