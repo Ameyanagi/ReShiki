@@ -224,6 +224,28 @@ pub fn text_color(color: Color) -> impl Fn(&Theme) -> iced::widget::text::Style 
     }
 }
 
+/// Element controls share the document's palette, with lightness suited to the
+/// interface surface even when the canvas and interface use opposite modes.
+pub fn element_text(
+    palette: reshiki::canvas_theme::ColorTheme,
+    symbol: &str,
+) -> impl Fn(&Theme) -> iced::widget::text::Style + '_ {
+    move |theme| {
+        use reshiki::canvas_theme::CanvasTheme;
+        let mode = if is_dark(theme) {
+            CanvasTheme::Dark
+        } else {
+            CanvasTheme::Light
+        };
+        let color = palette.element_color(symbol, mode);
+        iced::widget::text::Style {
+            // Neutral symbols inherit the control's normal/selected text color.
+            color: (color != mode.color([0; 3]))
+                .then(|| Color::from_rgb8(color[0], color[1], color[2])),
+        }
+    }
+}
+
 /// Neutral rounded inputs share surfaces and focus accents with dropdowns.
 pub fn text_input<'a, Message: Clone + 'a>(
     placeholder: &str,

@@ -309,12 +309,14 @@ impl App {
                                 .map(|n| n + 1)
                                 .unwrap_or(0);
                             line = line.push(super::workspace::hover_hint(
-                                button(text(symbol).size(12).center())
-                                    .width(29)
-                                    .height(29)
-                                    .padding(1)
-                                    .style(super::workspace::control(self.element == symbol))
-                                    .on_press(Message::Palette(Action::Atom(symbol.into()))),
+                                button(text(symbol).size(12).center().style(
+                                    crate::appearance::element_text(self.doc.color_theme, symbol),
+                                ))
+                                .width(29)
+                                .height(29)
+                                .padding(1)
+                                .style(super::workspace::control(self.element == symbol))
+                                .on_press(Message::Palette(Action::Atom(symbol.into()))),
                                 format!("{symbol} · Atomic number {number}"),
                                 tooltip::Position::Bottom,
                             ));

@@ -964,13 +964,16 @@ impl App {
         ] {
             let mut line = row![].spacing(4);
             for symbol in pair {
-                line = line.push(
-                    button(text(symbol).size(13).center())
+                line =
+                    line.push(
+                        button(text(symbol).size(13).center().style(
+                            crate::appearance::element_text(self.doc.color_theme, symbol),
+                        ))
                         .width(36)
                         .height(30)
                         .on_press(Message::Element(symbol.into()))
                         .style(control(self.tool == Tool::Atom && self.element == symbol)),
-                );
+                    );
             }
             palette = palette.push(line);
         }
