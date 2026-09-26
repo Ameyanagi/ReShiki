@@ -123,6 +123,33 @@ pub(super) fn swatch(element: &str) -> Option<[u8; 3]> {
     Some([(color >> 16) as u8, (color >> 8) as u8, color as u8])
 }
 
+/// Preserve Jmol's hue and relative lightness while reducing HSL saturation.
+/// Dark variants lift toward light tints rather than mixing colors with black.
+pub(super) fn soften(rgb: [u8; 3], canvas: CanvasTheme, pastel: bool) -> [u8; 3] {
+    let values = rgb.map(|v| f64::from(v) / 255.);
+    let low = values.into_iter().fold(1., f64::min);
+    let high = values.into_iter().fold(0., f64::max);
+    let chroma = high - low;
+    let lightness = (high + low) / 2.;
+    // Saturation scale, midpoint lightness, retained source-lightness range.
+    let (saturation_scale, midpoint, range) = match (pastel, canvas) {
+        (false, CanvasTheme::Light) => (0.50, 0.48, 0.32),
+        (false, CanvasTheme::Dark) => (0.60, 0.70, 0.20),
+        (true, CanvasTheme::Light) => (0.32, 0.55, 0.22),
+        (true, CanvasTheme::Dark) => (0.50, 0.80, 0.15),
+    };
+    let toned_lightness = midpoint + (lightness - 0.5) * range;
+    if chroma == 0. {
+        return [(toned_lightness * 255.).round() as u8; 3];
+    }
+    let saturation = chroma / (1. - (2. * lightness - 1.).abs());
+    let toned_chroma = (1. - (2. * toned_lightness - 1.).abs()) * saturation * saturation_scale;
+    values.map(|v| {
+        let value = toned_lightness + ((v - low) / chroma - 0.5) * toned_chroma;
+        (value * 255.).round().clamp(0., 255.) as u8
+    })
+}
+
 /// Keep the published hue while adjusting luminance only when necessary for
 /// small 2D labels. The 3.2:1 target leaves room for 8-bit rounding above 3:1.
 pub(super) fn label_ink(rgb: [u8; 3], canvas: CanvasTheme) -> [u8; 3] {

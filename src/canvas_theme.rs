@@ -108,86 +108,23 @@ impl ColorTheme {
     }
     /// Visible label RGB with enough contrast against the document's paper.
     pub fn element_color(self, element: &str, canvas: CanvasTheme) -> [u8; 3] {
-        if self == Self::Jmol {
-            return jmol::swatch(element)
-                .map(|rgb| jmol::label_ink(rgb, canvas))
-                .unwrap_or_else(|| canvas.color([0; 3]));
+        if matches!(self, Self::Presentation | Self::Pastel) && matches!(element, "C" | "H") {
+            return canvas.color([0; 3]);
         }
-        let index = match element {
-            "N" => 0,
-            "O" => 1,
-            "F" | "Cl" => 2,
-            "S" => 3,
-            "P" => 4,
-            "Br" => 5,
-            "I" => 6,
-            "B" | "Si" => 7,
-            "Li" | "Na" | "K" | "Mg" | "Ca" | "Fe" | "Co" | "Ni" | "Cu" | "Zn" | "Ru" | "Rh"
-            | "Pd" | "Ag" | "Ir" | "Pt" | "Au" => 8,
-            _ => return canvas.color([0; 3]),
-        };
-        let colors = match (self, canvas) {
-            (Self::Publication | Self::Jmol, _) => {
-                return canvas.color([0; 3]);
-            }
-            (Self::Presentation, CanvasTheme::Light) => [
-                [55, 94, 158],
-                [190, 67, 76],
-                [49, 126, 86],
-                [145, 116, 27],
-                [174, 99, 37],
-                [147, 77, 59],
-                [125, 81, 157],
-                [123, 109, 86],
-                [54, 119, 132],
-            ],
-            (Self::Presentation, CanvasTheme::Dark) => [
-                [122, 163, 219],
-                [230, 128, 134],
-                [116, 191, 146],
-                [212, 186, 105],
-                [217, 165, 114],
-                [203, 145, 123],
-                [180, 143, 211],
-                [190, 178, 154],
-                [120, 185, 198],
-            ],
-            (Self::Pastel, CanvasTheme::Light) => [
-                [94, 126, 170],
-                [170, 100, 113],
-                [89, 135, 110],
-                [141, 124, 64],
-                [166, 117, 78],
-                [157, 111, 98],
-                [137, 112, 167],
-                [137, 126, 105],
-                [88, 132, 145],
-            ],
-            (Self::Pastel, CanvasTheme::Dark) => [
-                [168, 191, 223],
-                [231, 174, 181],
-                [164, 209, 182],
-                [223, 207, 155],
-                [230, 192, 159],
-                [216, 178, 164],
-                [203, 180, 226],
-                [211, 200, 180],
-                [163, 207, 215],
-            ],
-        };
-        colors
-            .get(index)
-            .copied()
+        self.element_swatch(element, canvas)
+            .map(|rgb| jmol::label_ink(rgb, canvas))
             .unwrap_or_else(|| canvas.color([0; 3]))
     }
-    /// Original CPK hues remain available for tiles; label brightness is adjusted
-    /// separately so white hydrogen and yellow sulfur can be read on white paper.
+    /// Tiles show the palette's hues separately from canvas-label contrast.
+    /// Presentation and Pastel share Jmol's element mapping with softer tones.
     pub fn element_swatch(self, element: &str, canvas: CanvasTheme) -> Option<[u8; 3]> {
-        if self == Self::Jmol {
-            jmol::swatch(element)
-        } else {
-            let color = self.element_color(element, canvas);
-            (color != canvas.color([0; 3])).then_some(color)
+        let rgb = jmol::swatch(element)?;
+        match self {
+            Self::Publication => None,
+            Self::Jmol => Some(rgb),
+            Self::Presentation | Self::Pastel => {
+                Some(jmol::soften(rgb, canvas, self == Self::Pastel))
+            }
         }
     }
     /// Selecting a theme resets atom color overrides, but preserves all typography.

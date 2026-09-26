@@ -43,11 +43,11 @@ The top-right controls separate **journal style**, **canvas color theme**, and *
 The color theme offers:
 
 - **Publication**: neutral black labels on light paper, white labels on dark paper.
-- **Presentation**: balanced conventional element colors, including blue nitrogen and red oxygen. Carbon, hydrogen, and bonds stay neutral unless individually recolored.
-- **Pastel**: softer element colors, with enough contrast to remain legible on light paper.
+- **Presentation**: a muted version of Jmol, preserving each element's hue while reducing saturation. Light canvases use deeper tones; dark canvases use brighter tints. Carbon, hydrogen, and bonds stay neutral unless individually recolored.
+- **Pastel**: a softer, lighter version of the same Jmol hues, with label contrast maintained on light paper and gentle tints on dark paper. Carbon, hydrogen, and bonds stay neutral.
 - **Jmol**: the [Jmol CPK palette](https://jmol.sourceforge.net/jscolors/), using the published [element color table](https://jmol.sourceforge.net/jscolors/jmol_constants.js) for H through Mt. Later elements retain neutral colors. Canvas labels adjust brightness only when necessary for at least 3:1 contrast against the paper, including white hydrogen and yellow sulfur on light canvases.
 
-Presentation and Pastel have separate light and dark palettes. Selecting a theme replaces atom color overrides, including pasted atom colors, while preserving typography and geometry. You can assign individual colors afterward; choosing a theme again resets them. New atoms automatically follow the theme. Manually colored vector objects retain their hue while their lightness adapts to canvas brightness; raster pictures keep their original pixels. The toolbar swatches and hex field show visible canvas colors.
+Presentation and Pastel derive their light and dark palettes from the same Jmol table, covering H through Mt. Their tiles include the corresponding neutral carbon and hydrogen shades; canvas labels keep those two elements black or white. Elements beyond the source table retain neutral colors. Selecting a theme replaces atom color overrides, including pasted atom colors, while preserving typography and geometry. You can assign individual colors afterward; choosing a theme again resets them. New atoms automatically follow the theme. Manually colored vector objects retain their hue while their lightness adapts to canvas brightness; raster pictures keep their original pixels. The toolbar swatches and hex field show visible canvas colors.
 
 The periodic table and quick atom buttons use colored tile backgrounds with regular-weight, high-contrast symbols. Jmol tiles tint their backgrounds with its published element colors; canvas label brightness adjustments do not change those tile hues. A thicker outline identifies the selected element.
 
