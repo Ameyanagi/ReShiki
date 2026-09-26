@@ -130,6 +130,25 @@ impl Drawing {
         let part = self.preset.document(self.length, self.alternate);
         let attach = |part: &Document| templates::place(doc, part, point, direction, radius);
         if !self.connect {
+            // Like the atom shortcut, share a terminal carbon when it has room
+            // for the ring. Otherwise attach the complete phenyl by one bond.
+            // In particular, an aromatic carbon cannot be shared by two rings
+            // meeting at just that atom, but can accept a phenyl substituent.
+            if self.preset == Preset::Benzene
+                && let Some(target) = doc.nearest(point, radius).and_then(|id| doc.atom(id))
+                && (target.element != "C"
+                    || templates::valence(doc, target.id) + 6 > templates::capacity(target))
+            {
+                return templates::place_with_mode(
+                    doc,
+                    &part,
+                    point,
+                    direction,
+                    radius,
+                    templates::Anchor::Auto,
+                    templates::Connection::Connect,
+                );
+            }
             return attach(&part);
         }
         let Some(target_id) = doc.nearest(point, radius) else {

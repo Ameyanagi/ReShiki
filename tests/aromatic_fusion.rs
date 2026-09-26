@@ -212,10 +212,60 @@ fn crowded_carbon_reserves_both_new_single_bonds() {
         no_duplicates(&placed);
         assert!(toward_vertex(&crowded(3), alternate).is_err());
     }
-    let regular = Preset::Regular.document(42., false);
+}
+
+#[test]
+fn clicking_ring_carbons_attaches_phenyl_without_changing_existing_bonds() {
+    for circular in [false, true] {
+        let mut host = Preset::Benzene.document(42., false);
+        if circular {
+            for b in &mut host.bonds {
+                b.order = 4;
+            }
+        }
+        for atom in &host.atoms {
+            for alternate in [false, true] {
+                let (placed, selected) = tool(alternate)
+                    .place(&host, atom.position, None, 5.)
+                    .unwrap();
+                assert_eq!((placed.atoms.len(), placed.bonds.len()), (12, 13));
+                assert_eq!(identity(&placed), "c1ccc(-c2ccccc2)cc1");
+                assert_eq!(selected.len(), 6);
+                assert!(placed.bonds.starts_with(&host.bonds));
+                keeps_positions(&host, &placed);
+                no_duplicates(&placed);
+                let (template, _) = templates::place_with_mode(
+                    &host,
+                    &Preset::Benzene.document(42., alternate),
+                    atom.position,
+                    None,
+                    5.,
+                    Anchor::Auto,
+                    Connection::Connect,
+                )
+                .unwrap();
+                assert_eq!(placed, template);
+                // The ipso carbon has no further valence. Another click must
+                // fail without toggling either ring or changing its bonds.
+                assert!(
+                    tool(alternate)
+                        .place(&placed, atom.position, None, 5.)
+                        .is_err()
+                );
+            }
+        }
+    }
+    let saturated = Preset::Regular.document(42., false);
+    let (placed, _) = tool(false)
+        .place(&saturated, saturated.atoms[0].position, None, 5.)
+        .unwrap();
+    assert_eq!(identity(&placed), "c1ccc(C2CCCCC2)cc1");
+    assert!(placed.bonds.starts_with(&saturated.bonds));
+    let mut protected = Preset::Benzene.document(42., false);
+    protected.atoms[0].explicit_h = 1;
     assert!(
         tool(false)
-            .place(&regular, regular.atoms[0].position, None, 5.)
+            .place(&protected, protected.atoms[0].position, None, 5.)
             .is_err()
     );
 }

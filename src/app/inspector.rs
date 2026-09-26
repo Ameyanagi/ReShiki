@@ -433,7 +433,11 @@ impl App {
             body = body.push(card(container(column![
                 text(preset.to_string()).size(14),
                 crate::canvas::layered::canvas(crate::canvas::DrawingThumbnail(preset.document(self.bond_drawing.length, false))).width(Length::Fill).height(90),
-                text("Click to place. Drag to rotate or choose an attachment side. Click an atom to share it, or a bond to fuse.").size(12),
+                text(if preset == reshiki::rings::Preset::Benzene {
+                    "Click an aromatic carbon to attach a phenyl group, or a bond to fuse. Terminal carbons become part of the ring. Drag to choose the direction."
+                } else {
+                    "Click to place. Drag to rotate or choose an attachment side. Click an atom to share it, or a bond to fuse."
+                }).size(12),
                 text("Alt/Option on an atom connects the ring with a new bond. Each placement is one Undo step.").size(11).style(muted_text),
                 text(match preset {
                     reshiki::rings::Preset::Benzene | reshiki::rings::Preset::Cyclopentadiene => "Hold Shift to move the double bonds.",
