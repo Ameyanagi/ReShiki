@@ -134,15 +134,30 @@ fn pasting_across_canvas_modes_keeps_visible_colors_and_editable_atoms() {
 
 #[test]
 fn oxygen_glyph_is_centered_on_the_bond_axis_in_published_figures() {
-    for preset in Preset::ALL {
+    let mut styles: Vec<_> = Preset::ALL.into_iter().map(Preset::style).collect();
+    let mut missing_font = styles[0].clone();
+    missing_font.name = "Unavailable font".into();
+    missing_font.font_family = "ReShiki deliberately unavailable test font".into();
+    styles.push(missing_font);
+    for drawing_style in styles {
         for bold in [false, true] {
             let mut doc = sample();
-            doc.drawing_style = preset.style();
+            doc.drawing_style = drawing_style.clone();
             let mut font = doc.drawing_style.text_style();
             font.bold = bold;
-            doc.atoms[1].text_style = Some(font);
+            doc.atoms[1].text_style = Some(font.clone());
             let svg = scene::svg(&doc);
             let xml = roxmltree::Document::parse(&svg).unwrap();
+            let label = xml
+                .descendants()
+                .find(|node| node.has_tag_name("text") && node.text() == Some("O"))
+                .unwrap();
+            assert_eq!(
+                label.attribute("font-family"),
+                Some(reshiki::style::glyph_metrics('O', &font).0)
+            );
+            assert_eq!(doc.atoms[1].text_style.as_ref(), Some(&font));
+            assert_eq!(doc.drawing_style, drawing_style);
             let view: Vec<f32> = xml
                 .root_element()
                 .attribute("viewBox")
@@ -166,7 +181,8 @@ fn oxygen_glyph_is_centered_on_the_bond_axis_in_published_figures() {
             let center = (top + bottom + 1) as f32 / 2.;
             assert!(
                 (center - expected_y).abs() < 0.8,
-                "{preset}, bold={bold}: O center {center}, bond axis {expected_y}"
+                "{}, bold={bold}: O center {center}, bond axis {expected_y}",
+                drawing_style.name
             );
         }
     }

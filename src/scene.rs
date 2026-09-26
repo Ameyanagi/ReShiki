@@ -28,6 +28,52 @@ pub(crate) fn atom_label_bounds(a: &Atom, doc: &Document) -> Option<(Point, Poin
 }
 
 fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
+    atom_label_runs(a, doc)
+        .into_iter()
+        .flat_map(resolve_label_fonts)
+        .collect()
+}
+
+/// Rendering must use the same fallback face that supplied the ink bounds.
+/// Keep the requested family in the document, and split only when glyphs need
+/// different faces (for example a custom label mixing Latin and Japanese).
+fn resolve_label_fonts(primitive: Primitive) -> Vec<Primitive> {
+    let Primitive::Text {
+        position,
+        text,
+        size,
+        color,
+        style,
+    } = primitive
+    else {
+        return vec![primitive];
+    };
+    let mut runs = Vec::new();
+    let mut x = position.x;
+    for c in text.chars() {
+        let (family, advance) = crate::style::glyph_metrics(c, &style);
+        if let Some(Primitive::Text { text, style, .. }) = runs.last_mut()
+            && style.family == family
+        {
+            text.push(c);
+        } else {
+            runs.push(Primitive::Text {
+                position: Point::new(x, position.y),
+                text: c.to_string(),
+                size,
+                color,
+                style: crate::typography::TextStyle {
+                    family: family.into(),
+                    ..style.clone()
+                },
+            });
+        }
+        x += advance * size;
+    }
+    runs
+}
+
+fn atom_label_runs(a: &Atom, doc: &Document) -> Vec<Primitive> {
     if !doc.atom_visible(a.id) || crate::attachments::hidden(a, doc) {
         return vec![];
     }
