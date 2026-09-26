@@ -261,6 +261,7 @@ impl Drawing {
             .filter(|s| s.is_finite() && *s > 0.)
             .unwrap_or(1.);
         let tolerance = FUSE_DISTANCE * self.length * scale;
+        let mut merged = Vec::new();
         for k in 0..6 {
             let id = vertex(&ring, k);
             if doc.atom(id).is_some() {
@@ -281,6 +282,23 @@ impl Drawing {
             {
                 result.delete(&[id]);
                 *slot = existing;
+                merged.push(k);
+            }
+        }
+        for &k in &merged {
+            let id = vertex(&ring, k);
+            let new = [k + 5, k + 1]
+                .into_iter()
+                .filter(|j| find(doc, (id, vertex(&ring, *j))).is_none())
+                .count();
+            let room = doc.atom(id).is_none_or(|atom| {
+                let capacity = templates::capacity(atom);
+                capacity == 0 || templates::valence(doc, id) + 2 * new as u32 <= capacity
+            });
+            if !room {
+                return Err(
+                    "No compatible attachment: match elements and an eligible bond, with room for the new bonds.",
+                );
             }
         }
         if let Some(first) = (0..6).find(|k| doc.atom(vertex(&ring, *k)).is_some()) {
@@ -295,9 +313,21 @@ impl Drawing {
         let existing: Vec<_> = (0..6)
             .map(|k| find(&result, edge(&ring, k)).map(|b| b.order))
             .collect();
-        let rotation = kekule_rotation(&existing) + usize::from(self.alternate);
-        let orders: Vec<_> = (0..6).map(|k| kekule(k + rotation)).collect();
-        let planned = plan_orders(&result, &ring, &orders);
+        // Shift asks for the other Kekule pattern, but only where it keeps every
+        // double bond; around a Kekule fusion only one pattern fits the shared edge.
+        let rotation = kekule_rotation(&existing);
+        let plan = |rotation: usize| {
+            let orders: Vec<_> = (0..6).map(|k| kekule(k + rotation)).collect();
+            plan_orders(&result, &ring, &orders)
+        };
+        let doubles = |planned: &[u8]| planned.iter().filter(|o| **o == 2).count();
+        let mut planned = plan(rotation);
+        if self.alternate {
+            let alternate = plan(rotation + 1);
+            if doubles(&alternate) >= doubles(&planned) {
+                planned = alternate;
+            }
+        }
         for (k, order) in planned.into_iter().enumerate() {
             let (a, b) = edge(&ring, k);
             if find(&result, (a, b)).is_none_or(|bond| bond.order != order) {
@@ -604,6 +634,81 @@ mod benzene_rotation_tests {
         let (doc, ring) = fuse(&base, 1);
         assert_eq!(ring_orders(&doc, &ring)[0], 1);
         assert!(doc.atoms.iter().all(|x| doubles(&doc, x.id) <= 1));
+    }
+
+    fn shifted() -> Drawing {
+        Drawing {
+            alternate: true,
+            ..benzene()
+        }
+    }
+    fn fuse_with(drawing: Drawing, doc: &Document, order: u8) -> (Document, Vec<u64>) {
+        let bond = doc.bonds.iter().find(|b| b.order == order).unwrap();
+        let (a, b) = (doc.atom(bond.a).unwrap(), doc.atom(bond.b).unwrap());
+        let mid = Point::new(
+            (a.position.x + b.position.x) / 2.,
+            (a.position.y + b.position.y) / 2.,
+        );
+        drawing.place(doc, mid, None, 5.).unwrap()
+    }
+
+    #[test]
+    fn shift_keeps_kekule_fusion_intact() {
+        let base = Preset::Benzene.document(42., false);
+        for order in [1, 2] {
+            let (doc, _) = fuse_with(shifted(), &base, order);
+            assert_eq!(doc.bonds.iter().filter(|b| b.order == 2).count(), 5);
+            assert!(doc.atoms.iter().all(|a| doubles(&doc, a.id) == 1));
+        }
+    }
+
+    #[test]
+    fn shift_still_alternates_where_both_patterns_fit() {
+        let base = Preset::Regular.document(42., false);
+        let (doc, ring) = fuse_with(shifted(), &base, 1);
+        assert_eq!(ring_orders(&doc, &ring), vec![1, 2, 1, 2, 1, 2]);
+        let (doc, ring) = shifted()
+            .place(&Document::default(), Point::default(), None, 5.)
+            .unwrap();
+        let (plain, plain_ring) = benzene()
+            .place(&Document::default(), Point::default(), None, 5.)
+            .unwrap();
+        assert_ne!(ring_orders(&doc, &ring), ring_orders(&plain, &plain_ring));
+    }
+
+    /// A single bond a-b plus a carbon sitting on a vertex of the ring fused onto it,
+    /// carrying `substituents` single bonds that point away from the ring.
+    fn crowded_vertex(substituents: usize) -> Document {
+        let mut base = Document::default();
+        let a = base.add_atom("C", Point::new(0., 0.));
+        let b = base.add_atom("C", Point::new(42., 0.));
+        base.add_bond(a, b, 1, "plain");
+        let x = base.add_atom("C", Point::new(0., 72.746));
+        for (dx, dy) in [(-36.4, 21.), (36.4, 21.), (0., 42.)]
+            .into_iter()
+            .take(substituents)
+        {
+            let s = base.add_atom("C", Point::new(dx, 72.746 + dy));
+            base.add_bond(x, s, 1, "plain");
+        }
+        base
+    }
+    /// Drags from the a-b bond toward the crowded carbon, forcing the ring onto its side.
+    fn fuse_toward_vertex(base: &Document) -> Result<(Document, Vec<u64>), &'static str> {
+        benzene().place(base, Point::new(21., 0.), Some(Point::new(21., 60.)), 5.)
+    }
+
+    #[test]
+    fn nearby_atom_with_room_is_merged() {
+        let base = crowded_vertex(1);
+        let (doc, ring) = fuse_toward_vertex(&base).unwrap();
+        assert_eq!(doc.atoms.len(), base.atoms.len() + 3);
+        assert!(ring.contains(&3));
+    }
+
+    #[test]
+    fn nearby_saturated_atom_is_rejected() {
+        assert!(fuse_toward_vertex(&crowded_vertex(3)).is_err());
     }
 
     #[test]
