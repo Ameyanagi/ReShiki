@@ -964,16 +964,20 @@ impl App {
         ] {
             let mut line = row![].spacing(4);
             for symbol in pair {
-                line =
-                    line.push(
-                        button(text(symbol).size(13).center().style(
-                            crate::appearance::element_text(self.doc.color_theme, symbol),
-                        ))
-                        .width(36)
-                        .height(30)
-                        .on_press(Message::Element(symbol.into()))
-                        .style(control(self.tool == Tool::Atom && self.element == symbol)),
-                    );
+                line = line.push(
+                    button(text(symbol).size(13).center().font(iced::Font {
+                        weight: iced::font::Weight::Bold,
+                        ..iced::Font::with_name(reshiki::style::ui_font_family())
+                    }))
+                    .width(36)
+                    .height(30)
+                    .on_press(Message::Element(symbol.into()))
+                    .style(element_control(
+                        self.tool == Tool::Atom && self.element == symbol,
+                        self.doc.color_theme,
+                        symbol,
+                    )),
+                );
             }
             palette = palette.push(line);
         }
@@ -2334,6 +2338,50 @@ pub(super) fn horizontal_line() -> Element<'static, Message> {
     .padding([7, 0])
     .into()
 }
+/// Theme colors belong on the tile; symbols retain strong interface contrast.
+/// Use the interface's palette lightness when canvas and chrome modes differ.
+pub(super) fn element_control(
+    active: bool,
+    palette: reshiki::canvas_theme::ColorTheme,
+    symbol: &str,
+) -> impl Fn(&Theme, button::Status) -> button::Style + '_ {
+    move |theme, status| {
+        use reshiki::canvas_theme::CanvasTheme;
+        let mut style = control(active)(theme, status);
+        if active {
+            style.border.width = 2.;
+        }
+        let mode = if crate::appearance::is_dark(theme) {
+            CanvasTheme::Dark
+        } else {
+            CanvasTheme::Light
+        };
+        let rgb = palette.element_color(symbol, mode);
+        if rgb != mode.color([0; 3]) && status != button::Status::Disabled {
+            let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
+            let amount = if active {
+                0.34
+            } else if hovered {
+                0.28
+            } else {
+                0.20
+            };
+            let tint = Color::from_rgb8(rgb[0], rgb[1], rgb[2]);
+            let base = theme.palette().background;
+            style.background = Some(
+                Color::from_rgb(
+                    base.r + (tint.r - base.r) * amount,
+                    base.g + (tint.g - base.g) * amount,
+                    base.b + (tint.b - base.b) * amount,
+                )
+                .into(),
+            );
+            style.text_color = theme.palette().text;
+        }
+        style
+    }
+}
+
 pub(super) fn control(active: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
     move |theme, status| {
         let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
