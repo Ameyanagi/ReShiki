@@ -250,9 +250,17 @@ impl Fusion {
                 shared.insert(id, old.id);
             }
         }
-        // An overlapping copy of the entire aromatic ring is not a fusion.
-        // With no drag, let placement choose the outward candidate instead.
-        nodes(&component).iter().any(|id| !shared.contains_key(id))
+        // All vertices may already exist when closing a bay between pendant
+        // rings. Reject only a complete duplicate: at least one edge must be
+        // new. With no drag, an already closed ring still chooses the outside.
+        component.iter().any(|(a, b)| {
+            let (Some(a), Some(b)) = (shared.get(a), shared.get(b)) else {
+                return true;
+            };
+            !doc.bonds
+                .iter()
+                .any(|bond| edge(bond.a, bond.b) == edge(*a, *b))
+        })
     }
 
     pub(super) fn assign(

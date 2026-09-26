@@ -431,6 +431,80 @@ fn phenanthrene_bay_closes_to_pyrene_with_four_shared_vertices() {
 }
 
 #[test]
+fn gap_between_two_phenyls_closes_with_six_existing_atoms_and_one_new_bond() {
+    // The user's anthracene with phenyls on its two adjacent outer carbons.
+    // Every vertex of the middle hexagon exists; only its outer edge is absent.
+    let centers = [(0, 0), (2, 0), (4, 0), (7, -3), (7, 3)];
+    let mut circular = hexagons(&centers);
+    let at = |d: &Document, x: i32, y: i32| {
+        d.nearest(
+            Point::new(x as f32 * 21. * 3_f32.sqrt(), y as f32 * 21.),
+            0.01,
+        )
+        .unwrap()
+    };
+    for (a, b) in [((5, -1), (6, -2)), ((5, 1), (6, 2))] {
+        circular.add_bond(at(&circular, a.0, a.1), at(&circular, b.0, b.1), 1, "plain");
+    }
+    let mut full = centers.to_vec();
+    full.push((6, 0));
+    let expected = hexagons(&full);
+    let mut mixed = circular.clone();
+    let molecule = prepare(&circular).unwrap();
+    let drawing = reshiki::chemistry::document::for_drawing(&molecule, &circular).unwrap();
+    for b in &drawing.molecule().state.graph.bonds {
+        let a = molecule.ids[b.a];
+        let z = molecule.ids[b.b];
+        mixed.add_bond(a, z, b.order, "plain");
+    }
+    let kekule = mixed.clone();
+    // Match the screenshot: only the lower pendant phenyl has a circle.
+    let lower: std::collections::BTreeSet<_> = circular
+        .atoms
+        .iter()
+        .filter(|a| a.position.y > 0. && a.position.x > 5.5 * 21. * 3_f32.sqrt())
+        .map(|a| a.id)
+        .collect();
+    assert_eq!(lower.len(), 6);
+    for b in &mut mixed.bonds {
+        if lower.contains(&b.a) && lower.contains(&b.b) {
+            b.order = 4;
+        }
+    }
+    for base in [circular, kekule, mixed] {
+        assert_eq!((base.atoms.len(), base.bonds.len()), (26, 30));
+        let point = midpoint(&base, at(&base, 5, -1), at(&base, 5, 1));
+        let direction = Some(Point::new(6. * 21. * 3_f32.sqrt(), 0.));
+        for alternate in [false, true] {
+            let (result, selected) = tool(alternate).place(&base, point, direction, 5.).unwrap();
+            assert_eq!((result.atoms.len(), result.bonds.len()), (26, 31));
+            assert!(selected.iter().all(|id| base.atom(*id).is_some()));
+            assert_eq!(identity(&result), identity(&expected));
+            no_duplicates(&result);
+            keeps_positions(&base, &result);
+            let (template, _) = templates::place_with_mode(
+                &base,
+                &Preset::Benzene.document(42., alternate),
+                point,
+                direction,
+                5.,
+                Anchor::Auto,
+                Connection::FuseBond,
+            )
+            .unwrap();
+            assert_eq!(result, template);
+            // Dragging back over the now-complete middle ring is a no-op, not
+            // another successful fusion or an unexpected ring on the far side.
+            assert!(
+                tool(alternate)
+                    .place(&result, point, direction, 5.)
+                    .is_err()
+            );
+        }
+    }
+}
+
+#[test]
 fn heterocyclic_donor_hydrogen_and_nitrogen_identity_survive_fusion() {
     let benzene = Preset::Benzene.document(42., false);
     let point = midpoint(&benzene, 1, 2);
