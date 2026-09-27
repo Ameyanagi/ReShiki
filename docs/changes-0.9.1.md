@@ -4,6 +4,20 @@ ReShiki 0.9.1 fixes dark bands accumulating over the drawing-style and canvas-th
 
 [Release downloads](https://github.com/Ameyanagi/ReShiki/releases/tag/v0.9.1) · [Previous release](changes-0.9.md)
 
+## Release highlights
+
+Watch the 0.9 release highlights: canvas themes, the theme manager, publisher drawing styles, transparent copies, aromatic ring fusion, and Intel Mac support. The video covers the broader [0.9 features](changes-0.9.md); the Windows dropdown fix in 0.9.1 is described below.
+
+<figure class="release-video">
+  <video controls playsinline preload="none" poster="/media/reshiki-0.9.1-poster.png" width="1920" height="1080" aria-label="ReShiki 0.9.1 release highlights, 2 minutes 10 seconds. English captions are included in the video." aria-describedby="release-video-caption">
+    <source src="/media/reshiki-0.9.1.mp4" type="video/mp4">
+    <a href="https://reshiki.com/media/reshiki-0.9.1.mp4">Download the release highlights video</a>.
+  </video>
+  <figcaption id="release-video-caption">Release highlights · 0.9.1 · 2:10 · English captions · <a href="https://reshiki.com/media/reshiki-0.9.1.mp4" download>Download video</a></figcaption>
+</figure>
+
+[Watch the full ReShiki tour · 2:46](https://reshiki.com/#promo-video)
+
 ## Windows dropdowns
 
 Moving the pointer between menu items could repeatedly darken the first row and the area around a dropdown. The Windows software renderer painted shadows outside the region being redrawn. The earlier popup fix covered dialogs and palettes, but the newer dropdown styling did not use it.

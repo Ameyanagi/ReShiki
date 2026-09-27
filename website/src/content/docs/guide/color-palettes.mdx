@@ -1,0 +1,64 @@
+---
+title: Color palettes
+template: splash
+tableOfContents: false
+prev: false
+next: false
+description: Reuse ReShiki’s Presentation, Pastel and Jmol colors. Compare every element in light and dark mode, and download RGB, OKLCH, CSS and theme files.
+---
+
+import ColorReference from "../../../components/ColorReference.astro";
+
+<ColorReference />
+
+## Using the colors
+
+Use the **Light / Dark** toggle to see the colors ReShiki draws on white or black paper. Each element has one color for each mode, including neutral ink for elements 110–118.
+
+**RGB is the exact, final 8-bit sRGB value used by the app.** HEX and `rgb()` express the same color. The OKLCH values are calculated from that final RGB and rounded to six decimals. They describe the displayed color, not the original generator settings.
+
+In `oklch(L C h)`, **L** is lightness from 0 to 1, **C** is chroma (color intensity), and **h** is the hue angle in degrees. You can copy these values directly into CSS. Neutral colors have effectively zero chroma, so their hue angle has no visible effect.
+
+The JSON, CSV, and CSS downloads contain every theme, both modes, element colors, paper, ink, and ring fills. Native `.reshiki-theme` files contain both modes and can be reviewed through **Manage themes → Import** in ReShiki.
+
+The CSS download defines variables under a theme and mode selector. Apply both attributes to the same element:
+
+```html
+<link rel="stylesheet" href="palettes.css" />
+<div data-reshiki-theme="presentation" data-reshiki-mode="dark">
+  <span class="nitrogen">N</span>
+</div>
+```
+
+```css
+[data-reshiki-theme] {
+  color: var(--reshiki-ink);
+  background: var(--reshiki-paper);
+}
+.nitrogen {
+  color: var(--reshiki-element-N);
+  /* Or: var(--reshiki-element-N-oklch) */
+}
+```
+
+## How the themes are made
+
+Presentation and Pastel preserve the [Jmol reference hues](https://jmol.sourceforge.net/jscolors/), set a target OKLCH lightness, and multiply the reference chroma:
+
+| Theme        | Light: L / chroma multiplier | Dark: L / chroma multiplier |
+| ------------ | ---------------------------- | --------------------------- |
+| Presentation | 0.50 / 2.00×                 | 0.70 / 1.00×                |
+| Pastel       | 0.55 / 0.35×                 | 0.83 / 0.40×                |
+| Jmol         | Jmol reference colors        | Jmol reference colors       |
+
+The generated color is converted to sRGB, reducing chroma when needed to fit the display gamut. Carbon and hydrogen stay neutral in Presentation and Pastel. For **canvas labels**, ReShiki then adjusts lightness as needed to target a **5:1 contrast ratio** against the paper. The values on this page include that contrast adjustment.
+
+These values describe automatic labels on plain paper. Ring fills can trigger further label contrast adjustment, and explicit object colors override the theme. Interface controls derive their own interaction colors. [Use themes in ReShiki →](/guide/figures/#choose-canvas-colors)
+
+## Sources and reuse
+
+Element reference colors come from [Jmol’s published color table](https://jmol.sourceforge.net/jscolors/). The perceptual conversion follows [Björn Ottosson’s Oklab color space](https://bottosson.github.io/posts/oklab/). ReShiki’s [theme implementation](https://github.com/Ameyanagi/ReShiki/blob/main/src/canvas_theme.rs), [contrast code](https://github.com/Ameyanagi/ReShiki/blob/main/src/color_contrast.rs), and [theme format guide](https://github.com/Ameyanagi/ReShiki/tree/main/presets/themes) document the transformations and file format.
+
+ReShiki’s original code and contributions are available under [MIT or Apache-2.0](https://github.com/Ameyanagi/ReShiki/blob/main/CONTRIBUTING.md); the Jmol reference palette is credited separately above. Please retain source attribution when redistributing the collection.
+
+Contributors can regenerate this reference with `cargo run --locked --example theme_colors`. The `theme_reference` regression test checks every exported RGB and OKLCH value and the portable theme files against the application.

@@ -16,13 +16,15 @@ Draw molecules, build reaction schemes, and prepare figures on an editable canva
 [![Sponsor this work](website/public/badges/sponsor.svg)](https://github.com/sponsors/Ameyanagi)
 [![Star on GitHub](website/public/badges/star.svg)](https://github.com/Ameyanagi/ReShiki)
 
-[![ReShiki's molecular drawing workspace](website/public/manual/workspace.png)](https://reshiki.com/)
+[![Watch the ReShiki full tour — chemical drawing, free and in color](website/public/media/reshiki-promo-poster.png)](https://reshiki.com/#promo-video)
 
-[Watch the 83-second introduction](https://reshiki.com/#promo-video) · [Download the promo video](website/public/media/reshiki-promo.mp4) · [Logo assets and usage guide](assets/branding/README.md)
+[Watch the full tour · 2:46](https://reshiki.com/#promo-video) · [Release highlights · 0.9.1 · 2:10](https://reshiki.com/developer/changes-0.9.1/#release-highlights) · [Download the full video](https://reshiki.com/media/reshiki-promo.mp4) · [Logo assets and usage guide](assets/branding/README.md)
 
 Start with JACS / ACS styling. Attach templates, refine selected structures, or ask the assistant to propose a drawing. Review edits and undo changes. Copy editable structures or export SVG, PDF, and PNG.
 
 Version 0.9 adds publisher drawing presets, separate light/dark canvas themes, a theme manager and generator, reusable style/theme files, and improved ChemDraw color and ring-fill transfer. Aromatic rings and templates share validated fusion, including phenyl attachment and supported gap closure. [Release notes](docs/changes-0.9.md) · [Styles and themes](docs/drawing-styles.md) · [Shortcut gallery and reference](docs/contextual-shortcuts.md).
+
+[Explore the color palettes](https://reshiki.com/guide/color-palettes/): every Presentation, Pastel and Jmol element color in light and dark mode, with RGB, OKLCH, CSS variables and reusable theme downloads.
 
 New drawings use `.rsk`; existing `.reshiki` and `.moruno` drawings remain supported. Groups and templates are available now and may be extended or revised in future releases.
 

@@ -1,5 +1,7 @@
 # ReShiki theme library
 
+[Browse and download the built-in color palettes](https://reshiki.com/guide/color-palettes/): all 118 elements in Presentation, Pastel and Jmol, with exact RGB and derived OKLCH values for both canvas modes. Regenerate the public data and native theme downloads with `cargo run --locked --example theme_colors`, then run `bun run --bun oxfmt website/src/data/theme-colors.json` and `cargo test --locked --test theme_reference`.
+
 A theme controls canvas element colors, periodic-table tile seeds, and five ring-highlight slots. It is independent of a journal's drawing style (fonts, bond lengths, stroke widths). The interface's Match canvas / Light / Dark preference remains independent. In v1, canvas paper stays white or black and neutral bonds stay black or white.
 
 Open **Theme → Manage themes…**. The top-right **Import**, **Save**, and **Export** icons sit beside **B**. Import validates a file and opens both palettes for preview without changing the drawing or library. Save stores it under `themes/<id>.reshiki-theme` in the application's data directory and applies it with Undo. Export writes the preview without applying or adding it to the library. The drawing embeds a snapshot, including inherited values, so a library update does not change saved drawings. Explicit pasted/object colors remain independent; choosing a theme deliberately resets atom overrides.
