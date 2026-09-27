@@ -26,8 +26,9 @@ export function paletteTiles(theme: Theme, selected: Selection, mode: Mode) {
     .map((element, index) => {
       const [row, col] = position(element.number);
       const active = selected.kind === "element" && selected.index === index;
+      const tabStop = active || (selected.kind === "role" && index === 0);
       const color = hex(element.label);
-      return `<button class="cr-tile" type="button" data-element="${index}" data-symbol="${element.symbol.toLowerCase()}" data-number="${element.number}" style="grid-row:${row};grid-column:${col};--element-color:${color}" aria-label="${element.symbol}, element ${element.number}" aria-pressed="${active}"><span class="cr-number">${element.number}</span><span class="cr-symbol">${element.symbol}</span><span class="cr-color-swatch" style="background:${color}" aria-hidden="true"></span></button>`;
+      return `<button class="cr-tile" type="button" tabindex="${tabStop ? 0 : -1}" data-element="${index}" data-symbol="${element.symbol.toLowerCase()}" data-number="${element.number}" style="grid-row:${row};grid-column:${col};--element-color:${color}" aria-label="${element.symbol}, element ${element.number}" aria-pressed="${active}"><span class="cr-number">${element.number}</span><span class="cr-symbol">${element.symbol}</span><span class="cr-color-swatch" style="background:${color}" aria-hidden="true"></span></button>`;
     })
     .join("");
 }

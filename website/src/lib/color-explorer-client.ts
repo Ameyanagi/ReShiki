@@ -19,6 +19,17 @@ export function initExplorer() {
   let selected: Selection = { kind: "element", index: 6 };
   let copyTimer: ReturnType<typeof setTimeout>;
 
+  function setTabStop(preferred?: HTMLButtonElement) {
+    const buttons = [...elements.querySelectorAll<HTMLButtonElement>(".cr-tile")];
+    const enabled = buttons.filter((button) => !button.disabled);
+    const stop =
+      (preferred && enabled.includes(preferred) ? preferred : undefined) ||
+      enabled.find((button) => button.tabIndex === 0) ||
+      enabled.find((button) => button.getAttribute("aria-pressed") === "true") ||
+      enabled[0];
+    for (const button of buttons) button.tabIndex = button === stop ? 0 : -1;
+  }
+
   function filter() {
     const query = search.value.trim().toLowerCase();
     let count = 0;
@@ -31,6 +42,7 @@ export function initExplorer() {
       tile.disabled = !matches;
       if (matches) count++;
     }
+    setTabStop();
     root!.querySelector("#cr-count")!.textContent = count
       ? `${count} element${count === 1 ? "" : "s"}${query ? " found" : ""}`
       : "No matches. Try N or 7.";
@@ -128,6 +140,9 @@ export function initExplorer() {
     }
   });
   // Move through the palette without tabbing through all 118 tiles.
+  elements.addEventListener("focusin", (event) => {
+    if (event.target instanceof HTMLButtonElement) setTabStop(event.target);
+  });
   elements.addEventListener("keydown", (event) => {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
     const buttons = [...elements.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
