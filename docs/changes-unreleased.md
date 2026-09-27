@@ -20,6 +20,8 @@ Clicking an aromatic carbon with the Benzene tool attaches a phenyl group by a s
 
 The six-membered **Aromatic circle** tool and Cmd/Ctrl placement now use the same validated fusion path. Phenyl attachment preserves carbon valence, inward fusion reuses shared vertices, and duplicate or protected-atom collisions leave the drawing unchanged. Nonaromatic closures keep their bond pattern instead of receiving a misleading circle.
 
+Fused drawings can mix circles and alternating bonds without blocking subsequent ring or template fusion.
+
 ## Contributor acknowledgements
 
 The local aromatic-fusion follow-up to [PR #40](https://github.com/Ameyanagi/ReShiki/pull/40) shares placement and chemistry checks between the Benzene tool and aromatic templates. It closes supported fused-ring bays, including phenanthrene to pyrene and a gap whose six atoms already exist, and prevents nearby protected atoms or insufficient valence from producing an invalid structure. The original contribution and these follow-up changes remain under review.

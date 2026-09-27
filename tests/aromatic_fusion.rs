@@ -352,6 +352,47 @@ fn circle_tool_attaches_phenyl_and_fuses_every_benzene_edge() {
 }
 
 #[test]
+fn mixed_circle_and_kekule_rings_support_subsequent_fusion() {
+    let base = Preset::Benzene.document(42., false);
+    for first in &base.bonds[..2] {
+        let point = midpoint(&base, first.a, first.b);
+        let (kekule, _) = tool(false).place(&base, point, None, 5.).unwrap();
+        let mut mixed = base.clone();
+        editing::ring_oriented(&mut mixed, point, 6, true, 5., None).unwrap();
+        assert_eq!(reshiki::aromatic::circles(&mixed).len(), 1);
+        assert_eq!(identity(&mixed), identity(&kekule));
+        for next in base.bonds.iter().filter(|b| b != &first) {
+            let point = midpoint(&base, next.a, next.b);
+            let (expected, _) = tool(false).place(&kekule, point, None, 5.).unwrap();
+            for mode in 0..3 {
+                let result = match mode {
+                    0 => tool(false).place(&mixed, point, None, 5.).map(|r| r.0),
+                    1 => templates::place_with_mode(
+                        &mixed,
+                        &base,
+                        point,
+                        None,
+                        5.,
+                        Anchor::Auto,
+                        Connection::FuseBond,
+                    )
+                    .map(|r| r.0),
+                    _ => {
+                        let mut result = mixed.clone();
+                        editing::ring_oriented(&mut result, point, 6, true, 5., None)
+                            .map(|_| result)
+                    }
+                }
+                .unwrap_or_else(|e| panic!("first={first:?}, next={next:?}, mode={mode}: {e}"));
+                assert_eq!(identity(&result), identity(&expected));
+                keeps_positions(&mixed, &result);
+                no_duplicates(&result);
+            }
+        }
+    }
+}
+
+#[test]
 fn circle_tool_keeps_nonaromatic_notch_closure_kekule() {
     for circular in [false, true] {
         let mut base = naphthalene();

@@ -59,7 +59,8 @@ fn connected(edges: &BTreeSet<Edge>, seeds: &BTreeSet<u64>) -> BTreeSet<Edge> {
 }
 
 /// Recognize neutral conjugated five/six-membered cycles, including fused cycles
-/// whose Kekule double lies in the adjacent ring. Do not guess from shape alone.
+/// whose Kekule double lies in the adjacent ring or shares a circle-displayed
+/// edge. Do not guess from shape alone.
 fn regions(doc: &Document) -> Option<BTreeSet<Edge>> {
     if doc.atoms.len() > 2048 {
         return None;
@@ -99,15 +100,7 @@ fn regions(doc: &Document) -> Option<BTreeSet<Edge>> {
                         .take(path.len())
                         .map(|(&a, &b)| edge(a, b))
                         .collect();
-                    let orders: Vec<_> = doc
-                        .bonds
-                        .iter()
-                        .filter(|b| cycle.contains(&edge(b.a, b.b)))
-                        .map(|b| b.order)
-                        .collect();
-                    if orders.iter().all(|o| *o == 4) || orders.iter().all(|o| matches!(o, 1 | 2)) {
-                        cycles.insert(cycle);
-                    }
+                    cycles.insert(cycle);
                 } else if path.len() < 6 && next > start && !path.contains(&next) {
                     let mut extended = path.clone();
                     extended.push(next);
@@ -129,28 +122,23 @@ fn regions(doc: &Document) -> Option<BTreeSet<Edge>> {
                     .iter()
                     .filter(|b| (b.a == *id || b.b == *id) && edges.contains(&edge(b.a, b.b)))
                     .collect();
-                let circular = inside.iter().all(|b| b.order == 4);
+                let circular = inside.iter().filter(|b| b.order == 4).count();
                 let pi = inside.iter().filter(|b| b.order == 2).count();
+                let needed = usize::from(!donor(doc, a));
                 let outside_pi = doc.bonds.iter().any(|b| {
                     (b.a == *id || b.b == *id)
                         && !edges.contains(&edge(b.a, b.b))
                         && !matches!(b.order, 0 | 1)
                 });
-                // An aromatic junction has three sigma bonds and one pi bond,
-                // not three times 1.5. The latter would incorrectly reject every
-                // degree-three junction in a circle-displayed fused system.
-                let load = if circular {
-                    valence(doc, *id) - inside.len() as u32 + 2 * u32::from(!donor(doc, a))
-                } else {
-                    valence(doc, *id)
-                };
+                // Count each aromatic edge as sigma, then reserve one pi bond
+                // unless an explicit double already supplies it. A junction
+                // can share circular and Kekule rings; treating order 4 as 1.5
+                // would overcount that atom and discard both aromatic regions.
+                let load = valence(doc, *id) - circular as u32 + 2 * u32::from(pi < needed);
                 outside_pi
                     || load.saturating_add(a.explicit_h.saturating_mul(2)) > capacity(a)
-                    || if circular {
-                        inside.len() < 2
-                    } else {
-                        inside.iter().any(|b| b.order == 4) || pi != usize::from(!donor(doc, a))
-                    }
+                    || pi > needed
+                    || (pi < needed && circular < 2)
             })
             .collect();
         if invalid.is_empty() {
