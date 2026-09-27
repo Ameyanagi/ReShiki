@@ -20,7 +20,7 @@ Each archive is extracted into a temporary directory with spaces outside the che
 
 Before the native-runtime cutover, the [2026-09-20 release validation](https://github.com/Ameyanagi/ReShiki/actions/runs/35510386732) passed all five package checks, including native ARM Windows/Linux applications, fresh chemistry setup, and offline reuse. Apple Silicon also passed Developer ID signing, notarization, stapling, and Gatekeeper assessment. This manual run did not publish a release.
 
-The [0.9.0 validation record](release-0.9.0-validation.md) tracks the current review, documentation, package and publication checks. The [0.8.0 record](release-0.8.0-validation.md) retains the previous release’s evidence.
+The [0.9.0 validation record](release-0.9.0-validation.md) records the completed source review, documentation validation, package checks and public-download verification. The [0.8.0 record](release-0.8.0-validation.md) retains the previous release’s evidence.
 
 ## Publish a version
 
