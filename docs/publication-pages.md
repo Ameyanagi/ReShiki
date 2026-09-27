@@ -24,7 +24,7 @@ an edge or lie outside the sheets. Margins are guides, not clipping boundaries.
 Page numbers, margin lines and the gray canvas do not print. Ordinary drawing
 PDF/SVG/PNG exports and clipboard images remain cropped to the artwork.
 
-Native documents have stored the optional layout since document version 12 (current version: 13). Existing
+Native documents have stored the optional layout since document version 12. ReShiki 0.9.0 reads document versions 1–16; drawings with embedded custom themes use version 16. Existing
 version 1–11 documents open without pages. Save, recovery, Undo/Redo and chemistry
 analysis/cleanup retain page settings. Removing pages restores an unbounded
 canvas without deleting objects.

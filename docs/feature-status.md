@@ -3,18 +3,22 @@
 This inventory retains earlier workflow checks. For current packages and setup, see [installation](getting-started.md) and [release signing](releasing.md).
 
 Workflow checks began on 2026-09-20 for version 0.2.0. Runtime descriptions
-reflect the 0.8.0 release candidate; dated validation records describe their original milestones.
+reflect the 0.9.0 release candidate; dated validation records describe their original milestones.
 This inventory records supported workflows, explicit limitations and planned work. A supported subset is not a claim of
 complete coverage for every chemical structure or document.
 
-The largest remaining everyday gaps include reusable stationery and broader
-clipboard interchange. Canvas text editing supports drafts and a
+The remaining gaps include full stationery page-layout import and broader
+clipboard interchange. Drawing styles and light/dark color themes can already be saved and shared. Canvas text editing supports drafts and a
 caret; full rich-text caret layout remains partial. Advanced reaction, query,
 polymer and spectroscopy workflows also remain incomplete.
 
 Evidence comes from ReShiki source, regression tests, saved interchange fixtures
 and desktop editing checks. Detailed feature documents record the tests and
 applicable boundaries.
+
+## Styles, themes and aromatic fusion — 0.9
+
+Publisher-based journal presets, native/CDS style exchange, independent canvas and interface appearance, and a light/dark theme manager are available. Themes use Jmol-derived or custom reference colors, with live previews and RGB/OKLCH files. Clipboard backgrounds are transparent, and supported ChemDraw exchange preserves visible colors and native ring fills. Benzene, Aromatic circle, and aromatic templates share validated fusion, phenyl attachment, and supported bay/gap closure. See the [0.9 release notes](changes-0.9.md), [drawing-style guide](drawing-styles.md), and [publisher sources](journal-drawing-presets.md).
 
 ## Drawing and sharing updates — 0.8
 
@@ -26,23 +30,23 @@ Typed multi-center and variable attachment nodes preserve target IDs through nat
 
 ## Workspace and typography
 
-| Feature                                     | ReShiki status   | Behavior and remaining work                                                                                                                                                                                  |
-| ------------------------------------------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Main toolbar with persistent drawing tools  | Supported subset | Direct bond and chain buttons; remembered presets, hold-to-open palettes, corner indicators, and labeled shortcuts. Further specialist tool families remain incomplete.                                      |
-| General toolbar                             | Partial          | New/open/save/undo/redo/check/cleanup exist. Windows/macOS Print is available; recent documents and broader native commands are missing.                                                                     |
-| Style toolbar                               | Supported        | Persistent formatting row; applied through stored style data and shared rendering. Desktop tested.                                                                                                           |
-| Font family selector                        | Supported        | Searchable installed fonts; label and atom-label overrides.                                                                                                                                                  |
-| Font size selector                          | Supported        | 4–144 pt, selected labels/ranges/atom labels.                                                                                                                                                                |
-| Bold / italic / underline                   | Supported        | Whole labels and UTF-8 text ranges; keyboard shortcuts in text editor.                                                                                                                                       |
-| Formula formatting                          | Supported subset | New formula captions automatically format subscripts; manual formula/script controls override detection. Explicit atom labels retain entered hydrogen counts; supported formula labels create real groups.   |
-| Editable subscript / superscript            | Supported        | Range or whole-label formatting; atom scripts remain chemistry-derived.                                                                                                                                      |
-| Left / center / right / justified text      | Supported        | Paragraph alignment and wrapping width, shared canvas/export layout.                                                                                                                                         |
-| Line spacing                                | Supported        | 1, 1.2, 1.5 and 2 UI choices; stored per annotation.                                                                                                                                                         |
-| Text color and custom color picker          | Supported subset | Five swatches and RGB hex input with All selected / Text / Bonds / Ring interiors scope; no spectrum/wheel picker.                                                                                           |
-| Object/bond colors and color by element     | Partial          | The shared palette recolors selected labels, bonds, arrows and graphics in one Undo step; stroke/fill and per-bond controls also exist; Atoms… recolors matching elements in the selection or whole drawing. |
-| Character map and special-character palette | Missing          | Unicode can be entered as plain text, but there is no picker.                                                                                                                                                |
-| Floating/show-hide toolbars                 | Missing          | Inspector can hide; no independent Main/General/Style/Object palettes.                                                                                                                                       |
-| Native menus and accessible commands        | Missing          | ReShiki has an app menu; no native File/Edit/Object/Structure/Text menus or semantic canvas accessibility.                                                                                                   |
+| Feature                                     | ReShiki status   | Behavior and remaining work                                                                                                                                                                                |
+| ------------------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Main toolbar with persistent drawing tools  | Supported subset | Direct bond and chain buttons; remembered presets, hold-to-open palettes, corner indicators, and labeled shortcuts. Further specialist tool families remain incomplete.                                    |
+| General toolbar                             | Partial          | New/open/save/undo/redo/check/cleanup exist. Windows/macOS Print is available; recent documents and broader native commands are missing.                                                                   |
+| Style toolbar                               | Supported        | Persistent formatting row; applied through stored style data and shared rendering. Desktop tested.                                                                                                         |
+| Font family selector                        | Supported        | Searchable installed fonts; label and atom-label overrides.                                                                                                                                                |
+| Font size selector                          | Supported        | 4–144 pt, selected labels/ranges/atom labels.                                                                                                                                                              |
+| Bold / italic / underline                   | Supported        | Whole labels and UTF-8 text ranges; keyboard shortcuts in text editor.                                                                                                                                     |
+| Formula formatting                          | Supported subset | New formula captions automatically format subscripts; manual formula/script controls override detection. Explicit atom labels retain entered hydrogen counts; supported formula labels create real groups. |
+| Editable subscript / superscript            | Supported        | Range or whole-label formatting; atom scripts remain chemistry-derived.                                                                                                                                    |
+| Left / center / right / justified text      | Supported        | Paragraph alignment and wrapping width, shared canvas/export layout.                                                                                                                                       |
+| Line spacing                                | Supported        | 1, 1.2, 1.5 and 2 UI choices; stored per annotation.                                                                                                                                                       |
+| Text color and custom color picker          | Supported subset | Five swatches and RGB hex input with All selected / Text / Bonds / Ring interiors scope; no spectrum/wheel picker.                                                                                         |
+| Object/bond colors and color by element     | Partial          | The shared palette recolors selected labels, bonds, arrows and graphics in one Undo step; stroke/fill and per-bond controls also exist. Element-wide color palettes are managed in themes.                 |
+| Character map and special-character palette | Missing          | Unicode can be entered as plain text, but there is no picker.                                                                                                                                              |
+| Floating/show-hide toolbars                 | Missing          | Inspector can hide; no independent Main/General/Style/Object palettes.                                                                                                                                     |
+| Native menus and accessible commands        | Missing          | ReShiki has an app menu; no native File/Edit/Object/Structure/Text menus or semantic canvas accessibility.                                                                                                 |
 
 Typography includes stored styles, selection-aware editing, text measurement and shared canvas/export layout. See the [desktop workflow, interchange checks and remaining limits](typography.md). Relevant files: `src/typography.rs`, `src/app/typography.rs`, `src/document.rs`, `src/style.rs`, `src/scene.rs`, `src/app/workspace.rs`, `src/chemistry/cdxml/presentation.rs`, `src/exchange/drawing.rs`.
 
@@ -167,7 +171,7 @@ Template placement offers explicit new-bond connection, shared-atom and fused-bo
 | AppleScript / public scripting interface       | Missing                        | The internal Rust chemistry interface is not a public document scripting interface.                                                                                                                                                                                                                                                                                                                                         |
 | Plugin/add-in integration                      | Missing                        | No stable extension interface.                                                                                                                                                                                                                                                                                                                                                                                              |
 | Accessibility / keyboard-only drawing          | Incomplete                     | Iced workspace lacks semantic native controls for most drawing operations.                                                                                                                                                                                                                                                                                                                                                  |
-| Release distribution                           | Supported five-target workflow | Packages the Rust app and native InChI helper for five targets without Python or uv at runtime. Windows installers and signed/notarized macOS ZIP/DMG are included. Full graphical acceptance is separate from packaging checks. See [release validation](release-0.8.0-validation.md).                                                                                                                                     |
+| Release distribution                           | Supported five-target workflow | Packages the Rust app and native InChI helper for five targets without Python or uv at runtime. Windows installers and signed/notarized macOS ZIP/DMG are included. Full graphical acceptance is separate from packaging checks. See [release validation](release-0.9.0-validation.md).                                                                                                                                     |
 
 ## Next work
 
