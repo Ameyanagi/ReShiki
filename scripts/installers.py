@@ -150,6 +150,10 @@ def verify_windows_installer(installer, source):
 
 
 def mac_disk_image(folder, output_dir, signed=False):
+    metadata = json.loads((folder / "build.json").read_text(encoding="utf-8"))
+    architecture = metadata["architecture"]
+    if metadata["platform"] != "macos" or architecture not in {"x64", "arm64"}:
+        raise ValueError("A macOS x64 or ARM64 build is required")
     output_dir.mkdir(parents=True, exist_ok=True)
     output = output_dir / f"{folder.name}.dmg"
     with tempfile.TemporaryDirectory(prefix="ReShiki disk image ") as temporary:
@@ -181,12 +185,12 @@ def mac_disk_image(folder, output_dir, signed=False):
         from sign_macos import sign_disk_image
 
         sign_disk_image(output)
-    verify_mac_disk_image(output, signed)
+    verify_mac_disk_image(output, signed, architecture=architecture)
     checksum(output)
     return output
 
 
-def verify_mac_disk_image(output, signed):
+def verify_mac_disk_image(output, signed, *, architecture):
     with tempfile.TemporaryDirectory(prefix="ReShiki mount check ") as temporary:
         root = Path(temporary)
         mount = root / "mounted"
@@ -201,9 +205,9 @@ def verify_mac_disk_image(output, signed):
             run(["ditto", mount / "ReShiki.app", installed])
         finally:
             run(["hdiutil", "detach", mount])
-        verify_binary(installed / "Contents/MacOS/reshiki", "macos", "arm64")
+        verify_binary(installed / "Contents/MacOS/reshiki", "macos", architecture)
         helper = installed / "Contents/MacOS/reshiki-inchi-helper"
-        verify_binary(helper, "macos", "arm64")
+        verify_binary(helper, "macos", architecture)
         verify_inchi_helper(helper, manifest()["inchi_version"])
         verify_runtime(installed / "Contents/MacOS/reshiki", installed)
         run(["codesign", "--verify", "--deep", "--strict", installed])

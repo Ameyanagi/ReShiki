@@ -528,37 +528,49 @@ class HelperTests(unittest.TestCase):
             self.assertIn(copied, signed)
             self.assertLess(signed.index(copied), signed.index(app))
 
-    def test_mac_drag_to_install_verifies_the_relocated_helper(self):
+    def test_mac_drag_to_install_verifies_both_architectures(self):
         import installers
 
-        def run(command, **_kwargs):
-            if command[:2] == ["hdiutil", "attach"]:
-                mount = Path(command[command.index("-mountpoint") + 1])
-                executable = mount / "ReShiki.app/Contents/MacOS/reshiki"
-                executable.parent.mkdir(parents=True)
-                header = b"\xcf\xfa\xed\xfe" + (0x0100000C).to_bytes(4, "little")
-                executable.write_bytes(header)
-                executable.with_name("reshiki-inchi-helper").write_bytes(header)
-                (mount / "Applications").symlink_to("/Applications")
-            elif command[0] == "ditto":
-                shutil.copytree(command[1], command[2])
+        for architecture, machine in (("arm64", 0x0100000C), ("x64", 0x01000007)):
+            with self.subTest(architecture=architecture):
 
-        checked = []
+                def run(command, **_kwargs):
+                    if command[:2] == ["hdiutil", "attach"]:
+                        mount = Path(command[command.index("-mountpoint") + 1])
+                        executable = mount / "ReShiki.app/Contents/MacOS/reshiki"
+                        executable.parent.mkdir(parents=True)
+                        header = b"\xcf\xfa\xed\xfe" + machine.to_bytes(4, "little")
+                        executable.write_bytes(header)
+                        executable.with_name("reshiki-inchi-helper").write_bytes(header)
+                        (mount / "Applications").symlink_to("/Applications")
+                    elif command[0] == "ditto":
+                        shutil.copytree(command[1], command[2])
 
-        def helper(binary, version):
-            self.assertTrue(binary.is_file())
-            self.assertIn("Installed/ReShiki.app/Contents/MacOS", binary.as_posix())
-            self.assertEqual(version, "1.07.3")
-            checked.append(binary)
+                checked = []
 
-        with (
-            patch("installers.run", side_effect=run),
-            patch("installers.verify_inchi_helper", side_effect=helper),
-            patch("installers.verify_runtime") as runtime,
-        ):
-            installers.verify_mac_disk_image(Path("fixture.dmg"), False)
-        self.assertEqual(len(checked), 1)
-        runtime.assert_called_once_with(checked[0].with_name("reshiki"), checked[0].parents[2])
+                def helper(binary, version):
+                    self.assertTrue(binary.is_file())
+                    self.assertIn("Installed/ReShiki.app/Contents/MacOS", binary.as_posix())
+                    self.assertEqual(version, "1.07.3")
+                    checked.append(binary)
+
+                with (
+                    patch("installers.run", side_effect=run),
+                    patch("installers.verify_inchi_helper", side_effect=helper),
+                    patch("installers.verify_runtime") as runtime,
+                ):
+                    installers.verify_mac_disk_image(
+                        Path("fixture.dmg"), False, architecture=architecture
+                    )
+                    other = "x64" if architecture == "arm64" else "arm64"
+                    with self.assertRaisesRegex(ValueError, "Expected macos"):
+                        installers.verify_mac_disk_image(
+                            Path("fixture.dmg"), False, architecture=other
+                        )
+                self.assertEqual(len(checked), 1)
+                runtime.assert_called_once_with(
+                    checked[0].with_name("reshiki"), checked[0].parents[2]
+                )
 
     def test_windows_setup_and_upgrade_verify_the_relocated_helper(self):
         import installers
