@@ -22,7 +22,7 @@ Draw molecules, build reaction schemes, and prepare figures on an editable canva
 
 Start with JACS / ACS styling. Attach templates, refine selected structures, or ask the assistant to propose a drawing. Review edits and undo changes. Copy editable structures or export SVG, PDF, and PNG.
 
-Version 0.8 adds contextual shortcuts and one editable example gallery, Haworth templates, ring interior colors, independent resizing, and improved tilted Cp/arene editing and editable clipboard transfer. Large PNG exports adapt their resolution, and PNG/PDF/SVG figure export remains available for drawings with unresolved chemistry. [Illustrated release notes](docs/changes-0.8.md) · [Shortcut gallery and reference](docs/contextual-shortcuts.md).
+Version 0.9 adds publisher drawing presets, separate light/dark canvas themes, a theme manager and generator, reusable style/theme files, and improved ChemDraw color and ring-fill transfer. Aromatic rings and templates share validated fusion, including phenyl attachment and supported gap closure. [Release notes](docs/changes-0.9.md) · [Styles and themes](docs/drawing-styles.md) · [Shortcut gallery and reference](docs/contextual-shortcuts.md).
 
 New drawings use `.rsk`; existing `.reshiki` and `.moruno` drawings remain supported. Groups and templates are available now and may be extended or revised in future releases.
 
@@ -73,4 +73,4 @@ ReShiki uses Rust, Iced, and a bundled native InChI helper. See the [developer g
 
 ReShiki is under active development. [Report a problem](https://github.com/Ameyanagi/ReShiki/issues).
 
-See the [release notes](docs/changes-0.8.md) and the [shortcut list with one editable example document](docs/contextual-shortcuts.md). Group and template definitions may be extended or revised in future releases.
+See the [release notes](docs/changes-0.9.md) and the [shortcut list with one editable example document](docs/contextual-shortcuts.md). Group and template definitions may be extended or revised in future releases.

@@ -7,16 +7,19 @@ import Screenshot from "../../../components/Screenshot.astro";
 
 ## Set the drawing style
 
-New documents use **JACS / ACS**. Click the style badge to change fonts, bond lengths, and line widths. Review the preview, then **Apply to document**.
+New documents use **JACS / ACS**. The style selector beside the drawing controls switches directly between **JACS / ACS**, **Nature**, **RSC**, **Angewandte**, and **SYNLETT / SYNTHESIS**. These presets follow publisher instructions or official stationery; the editor links to each publisher. Direct selection updates matching text/strokes and scales the geometry in one Undo step. [Settings and publisher sources](/developer/journal-drawing-presets/).
 
-The preset menu also includes **Nature**, **RSC**, and **Presentation**. Nature uses 6 pt atom labels with 10.8 pt bonds; RSC uses 7 pt labels with 12.2 pt bonds. Page width and column layout are set separately. See the [Nature structure guide](https://www.nature.com/documents/nr-chemical-structures-guide.pdf) and [RSC author guidelines](https://www.rsc.org/publishing/publish-with-us/publish-a-journal-article/green-chemistry).
+Choose **Manage styles…** to edit fonts, label size, bond length and stroke settings with a live sample preview. The fixed footer has **Import**, **Export**, and **Save** icons. Save applies the draft; returning to Properties leaves it unapplied. Export offers a native `.reshiki-style` file or ChemDraw `.cds`. Import accepts those files plus document settings from `.cdx` and `.cdxml`; template artwork and page layout are not imported. **Scale layout with bond length** is off by default in this editor; enable it when existing geometry should resize.
 
-<Screenshot
-  src="/manual/drawing-style.png"
-  alt="Drawing style panel with a structure preview and Apply to document."
-/>
+## Choose canvas colors
 
-**Save style…** and **Load…** reuse settings. **Scale layout with bond length** also resizes existing geometry; leave it off to keep current positions.
+The adjacent theme selector offers **Publication**, **Presentation**, **Pastel**, **Jmol**, and your saved themes. The **sun/moon** button changes the canvas between white and black paper, independently of journal dimensions. Publication uses neutral ink; the other themes color elements and provide ring-highlight palettes. **View → Interface → Match canvas / Light / Dark** changes only the surrounding interface.
+
+Choose **Manage themes…** to preview, import, export, edit or delete custom themes. Built-ins are protected. **New theme…** lets you choose a reference palette and adjust lightness and color intensity separately for both modes. The periodic tables and molecule previews update live; use the preview icons for labels, solid tiles, interface tiles or ring-fill examples. **B** toggles bold preview symbols. Import opens a draft for review, Save stores and applies it, and Export writes both palettes without applying them. [Theme file format and contribution guide](https://github.com/Ameyanagi/ReShiki/tree/main/presets/themes).
+
+Styles and themes are separate files. A theme can use RGB or OKLCH colors and includes both light and dark palettes. Saved drawings embed their custom theme, so editing the library does not change previous figures. These drawings use document format 16 and cannot be opened by older ReShiki versions that do not support it.
+
+File exports and printing include the visible canvas colors and background. Clipboard images and editable ChemDraw copies use a **transparent background** while retaining the visible ink and ring fills. White ink copied from a dark canvas needs a suitably dark destination. [Style, color and contrast details](/developer/drawing-styles/).
 
 ## Add artwork
 

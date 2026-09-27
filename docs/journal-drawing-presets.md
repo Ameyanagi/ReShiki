@@ -26,17 +26,17 @@ The settings cover label typography and bond dimensions. Page layout, independen
 
 ## Custom styles and downloaded stationery
 
-**Custom** starts from the current draft without resetting its dimensions. Edit the name, font, sizes and advanced stroke settings; **Save style…** creates a reusable `.reshiki-style` file. **Load…** restores one into the preview. Editing a journal’s settings switches to Custom. Applying changes creates one Undo step; Cancel discards the draft.
+Open **Manage styles…** from the style selector to edit the current dimensions. Custom settings appear as **Custom** in the selector. The fixed footer has **Import**, **Export**, and **Save** icons: Save applies the draft in one Undo step; returning to Properties leaves it unapplied. Export offers `.reshiki-style` or ChemDraw `.cds`.
 
-Load publisher `.cds`, `.cdx` or `.cdxml` files directly in **Drawing style → Load…**. Modern CDX and the legacy implicit-root Angewandte CDS format are supported. Only document font and bond settings are read; embedded artwork is skipped. Invalid or incomplete settings are rejected. Native JSON is limited to 64 KB and ChemDraw stationery to 16 MB.
+Import publisher `.cds`, `.cdx` or `.cdxml` files directly in the style editor. Modern CDX and the legacy implicit-root Angewandte CDS format are supported. Only document font and bond settings are read; embedded artwork is skipped. Invalid or incomplete settings are rejected. Native JSON is limited to 64 KB and ChemDraw stationery to 16 MB.
 
-Enable **Scale layout with bond length** when applying a journal preset to resize existing geometry. With it disabled, existing positions remain fixed and new bonds use the chosen length.
+Direct journal selection scales existing geometry with its bond length. In the detailed editor, **Scale layout with bond length** is off by default; enable it to resize existing geometry as well as setting the dimensions of new bonds.
 
 ## Canvas colors and interface appearance
 
 The **sun/moon toggle** beside the preset and color theme selectors changes document page colors independently of its journal dimensions. The same setting is available in **Page setup**. Dark canvas displays and exports black paper with white bonds and labels. Colored vectors adapt in lightness while retaining their hue; raster pictures retain their original pixels. The canvas choice is saved in the document and can be undone.
 
-**Publication**, **Presentation**, **Pastel**, and **Jmol** control atom colors independently of the journal preset and light/dark canvas. Presentation and Pastel derive from the [Jmol element color reference](https://jmol.sourceforge.net/jscolors/): Presentation reduces OKLCH chroma for balanced colors, while Pastel uses softer, lighter tones. Both brighten on dark canvases and retain neutral carbon/hydrogen labels. Jmol keeps the reference palette, with label brightness adjusted for readable contrast. All three use colored element-picker tiles with regular-weight symbols. Ring interiors use a separate palette adapted to each canvas, and automatic atom labels stay legible over light and dark fills.
+**Publication**, **Presentation**, **Pastel**, and **Jmol** control atom colors independently of the journal preset and light/dark canvas. Presentation and Pastel derive from the [Jmol element color reference](https://jmol.sourceforge.net/jscolors/): Presentation uses lightness 50% and Jmol chroma × 2 on light paper, and lightness 70% with chroma × 1 on dark paper; Pastel uses softer tones. Gamut mapping and automatic-label contrast checks can adjust the displayed colors. Both brighten on dark canvases and retain neutral carbon/hydrogen labels. Jmol keeps the reference palette, with label brightness adjusted for readable contrast. All three use colored element-picker tiles with regular-weight symbols. Ring interiors use a separate palette adapted to each canvas, and automatic atom labels stay legible over light and dark fills.
 
 File exports and printing carry the visible canvas colors and background. Clipboard images and editable copies always have transparent backgrounds, retaining the visible bond and label colors. Dark drawings therefore copy as white ink without a black page rectangle. No separate dark preset is needed.
 

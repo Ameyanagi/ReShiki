@@ -1,10 +1,12 @@
 # Ring presets and expanded template catalog
 
-The later [Haworth update](haworth-projections.md) adds five/six-member perspective outlines and 12 carbohydrate templates, bringing the current library to 93 entries. The original 81-entry milestone is described below.
+The current library contains 105 built-in templates, including the [Haworth carbohydrates](haworth-projections.md), macrocycles and ligands. The original 81-entry milestone is described below.
 
 JACS / ACS remains the default. The new chair and cyclopentadiene tools use 14.4 pt edges (42 world units), Arial 10 pt labels and 0.6 pt lines unless the user changes the preferred bond length.
 
 ## Ring workflow
+
+In 0.9.0, **Benzene**, six-membered **Aromatic circle**, and aromatic templates share validated fusion. An aromatic-carbon click attaches a phenyl group by a new single bond. Eligible edge gestures reuse shared vertices, including supported inward bays and gaps whose atoms already exist. Mixed circular and Kekulé drawing styles remain usable for subsequent fusion. Invalid valence and duplicate overlays leave the drawing unchanged; nonaromatic closures keep their valid bond pattern. [Release details](changes-0.9.md#aromatic-fusion-and-phenyl-attachment).
 
 The main palette has separate **Chair A**, **Chair B** and **Cyclopentadiene** tools. Their contextual picker switches between these and the existing regular ring tool. Properties shows a fitted molecular preview. The canvas previews transient bonds in green; committed bonds use black JACS styling.
 
