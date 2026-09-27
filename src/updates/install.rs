@@ -37,7 +37,7 @@ pub fn asset_name(version: &str, os: &str, arch: &str) -> Result<String, String>
         _ => return Err("No update is available for this architecture".into()),
     };
     let suffix = match (os, arch) {
-        ("macos", "arm64") => "macos-arm64.dmg".into(),
+        ("macos", _) => format!("macos-{arch}.dmg"),
         ("windows", _) => format!("windows-{arch}-setup.exe"),
         ("linux", _) => format!("linux-{arch}.tar.gz"),
         _ => return Err("No installer is available for this platform".into()),
@@ -494,7 +494,11 @@ mod tests {
             asset_name("1.2.3", "macos", "aarch64").unwrap(),
             "reshiki-1.2.3-macos-arm64.dmg"
         );
-        assert!(asset_name("1.2.3", "macos", "x86_64").is_err());
+        assert_eq!(
+            asset_name("1.2.3", "macos", "x86_64").unwrap(),
+            "reshiki-1.2.3-macos-x64.dmg"
+        );
+        assert!(asset_name("1.2.3", "macos", "riscv64").is_err());
         assert!(asset_name("../bad", "linux", "x86_64").is_err());
         assert!(asset_name("1.2.3-beta", "windows", "aarch64").is_err());
         assert_eq!(
