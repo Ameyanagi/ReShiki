@@ -417,7 +417,9 @@ class HelperTests(unittest.TestCase):
                             2, "little"
                         )
                     else:
-                        image[:8] = b"\xcf\xfa\xed\xfe" + (0x0100000C).to_bytes(4, "little")
+                        image[:8] = b"\xcf\xfa\xed\xfe" + (
+                            0x0100000C if architecture == "arm64" else 0x01000007
+                        ).to_bytes(4, "little")
                     binary = root / build_release.inchi_helper_name(system)
                     binary.write_bytes(image)
                     metadata = {

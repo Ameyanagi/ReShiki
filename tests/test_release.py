@@ -84,6 +84,8 @@ class ReleaseTests(unittest.TestCase):
             run.assert_called_once_with(
                 ["cargo", "build", "--release", "--locked", "--target", target], cwd=root
             )
+            self.assertTrue((root / "build/release-bundles/reshiki-1.2.3-windows-arm64").is_dir())
+            self.assertFalse((root / "target/release-bundles").exists())
             package = root / "dist/releases/reshiki-1.2.3-windows-arm64.zip"
             checksum = Path(str(package) + ".sha256").read_bytes()
             digest = hashlib.sha256(package.read_bytes()).hexdigest()
@@ -130,11 +132,26 @@ class ReleaseTests(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         verify_binary(binary, system, "arm64")
 
-    def test_release_targets_do_not_include_intel_mac_or_guess_unknown_architectures(self):
+    def test_release_targets_include_intel_mac_and_reject_unknown_architectures(self):
         self.assertEqual(release_platform("aarch64-unknown-linux-gnu"), ("linux", "arm64"))
-        for target in ["x86_64-apple-darwin", "riscv64gc-unknown-linux-gnu"]:
-            with self.assertRaisesRegex(ValueError, "Unsupported release target"):
-                release_platform(target)
+        self.assertEqual(release_platform("x86_64-apple-darwin"), ("macos", "x64"))
+        with self.assertRaisesRegex(ValueError, "Unsupported release target"):
+            release_platform("riscv64gc-unknown-linux-gnu")
+
+    def test_intel_macos_app_and_helper_headers_reject_arm64(self):
+        from build_inchi_helper import verify_executable
+
+        with tempfile.TemporaryDirectory() as temporary:
+            binary = Path(temporary) / "native"
+            binary.write_bytes(b"\xcf\xfa\xed\xfe" + (0x01000007).to_bytes(4, "little"))
+            verify_binary(binary, "macos", "x64")
+            self.assertEqual(
+                verify_executable(binary, "x86_64-apple-darwin"), "x86_64-apple-darwin"
+            )
+            with self.assertRaisesRegex(ValueError, "architecture mismatch"):
+                verify_executable(binary, "aarch64-apple-darwin")
+            with self.assertRaisesRegex(ValueError, "Expected macos arm64"):
+                verify_binary(binary, "macos", "arm64")
 
     def test_tag_must_match_package_version(self):
         check_tag(f"v{version()}")

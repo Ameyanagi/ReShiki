@@ -1,10 +1,10 @@
 # Release builds and macOS signing
 
-The Release builds workflow produces a signed macOS disk image, Windows x64/ARM64 setup programs, and portable packages for all five platforms. Linux supports x64 and ARM64; macOS supports Apple Silicon only. Packages include the Rust application and native InChI helper. Drawing and chemistry work offline without Python, RDKit or uv.
+The Release builds workflow produces signed macOS disk images, Windows x64/ARM64 setup programs, and portable packages for all six targets. macOS supports Apple Silicon and Intel; Windows and Linux support x64 and ARM64. Packages include the Rust application and native InChI helper. Drawing and chemistry work offline without Python, RDKit or uv.
 
 Windows setup uses Inno Setup 6.7.3, downloaded with a pinned SHA-256 checksum. It installs per user, adds a Start menu shortcut, and offers a desktop shortcut and `.rsk` file association. Setup and uninstall preserve user data. CI installs twice to check upgrades, runs native chemistry, and checks uninstallation. Upgrades remove the old app-owned worker while preserving user drawings and caches.
 
-The macOS disk image contains the signed app and an Applications shortcut. Both the app and disk image are notarized and stapled. CI mounts the image, copies the app out, and verifies chemistry, its signature and Gatekeeper status. The release has eight downloads plus `SHA256SUMS`.
+The macOS disk image contains the signed app and an Applications shortcut. Both the app and disk image are notarized and stapled. CI mounts the image, copies the app out, and verifies chemistry, its signature and Gatekeeper status. The release has ten downloads plus `SHA256SUMS`.
 
 ## Test a build
 
@@ -33,7 +33,9 @@ git tag -a v0.9.0 -m "ReShiki 0.9.0"
 git push origin v0.9.0
 ```
 
-A `v*` tag triggers builds. A mismatched version fails before packaging. The macOS archive must be signed, notarized, stapled and verified before the release publishes; missing credentials fail the job instead of silently publishing an unsigned macOS download. All five packages and the complete live reference tests on macOS ARM64, Linux x64, and Windows x64 must pass before publication. Windows and Linux packages remain unsigned. Tags containing a prerelease suffix create a GitHub prerelease. Manual builds never publish a release.
+A `v*` tag triggers builds. A mismatched version fails before packaging. The macOS archive must be signed, notarized, stapled and verified before the release publishes; missing credentials fail the job instead of silently publishing an unsigned macOS download. All six packages and the complete live reference tests on macOS ARM64, Linux x64, and Windows x64 must pass before publication. Windows and Linux packages remain unsigned. Tags containing a prerelease suffix create a GitHub prerelease. Manual builds never publish a release.
+
+Package staging uses `build/release-bundles`, outside Cargo’s `target` directory, so cache pruning cannot traverse bundled dependency license sources.
 
 ## Configure macOS signing
 
@@ -84,7 +86,7 @@ or downloads this helper. Developers can select an existing helper with an absol
 
 The application and InChI helper must match the selected CPU architecture, including ARM64 on Windows and Linux. Packaging checks both executable headers. Python is used for build scripts and optional reference tests only; it is not copied into the package.
 
-Build runners are macOS 14, Windows Server 2022 x64, Windows 11 ARM, Ubuntu 22.04 x64, and Ubuntu 24.04 ARM. Pass `--target` to `scripts/build_release.py` to select the explicit Rust target; package names derive from that target, including when packaging Python uses a different architecture.
+Build runners are macOS 14 on Apple Silicon, macOS 15 on Intel, Windows Server 2022 x64, Windows 11 ARM, Ubuntu 22.04 x64, and Ubuntu 24.04 ARM. Pass `--target` to `scripts/build_release.py` to select the explicit Rust target; package names derive from that target, including when packaging Python uses a different architecture.
 
 Build on the target operating system with Rust 1.95, a C/C++ compiler and Python 3.12. On Windows, use `python` instead of `python3`. Archives are written to `dist/releases/`.
 

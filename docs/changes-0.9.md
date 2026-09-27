@@ -56,6 +56,10 @@ The README and [User Guide](https://reshiki.com/guide/acknowledgments/) now incl
 
 Both screenshots show the existing controls in ReShiki v0.8.0 on macOS. Only the selected oxygen's hydrogen placement changes. [Capture details](images/hydrogen-placement/README.md).
 
+## Intel Mac packages
+
+0.9.0 adds native Intel Mac (`macos-x64`) DMG and ZIP downloads alongside Apple Silicon. Both require macOS 14+ and follow the Developer ID signing, notarization, stapling and extracted-package runtime checks. Intel builds and runtime checks run on a dedicated Intel Mac runner.
+
 ## Compatibility and tested scope
 
 ReShiki reads native document versions 1–16. Drawings with embedded custom themes use version 16; older releases that do not support that format cannot open them. Style files and theme files are separate formats. Original `.reshiki` and `.moruno` document extensions remain supported.
