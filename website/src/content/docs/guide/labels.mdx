@@ -25,6 +25,37 @@ Adding a charge to a skeletal carbon leaves the carbon label implicit. The charg
   alt="Atom numbering, hydrogen labels, and stereochemistry controls."
 />
 
+## Change OH to HO
+
+You can choose which side of an oxygen atom displays its hydrogen—for example, to change **OH** to **HO**.
+
+1. With **Select / move**, click the oxygen atom you want to adjust.
+2. Open **Properties → Labels & chemistry → Atom labels & numbering…**.
+3. Set the scope to **Selected atoms** and check that only one atom is in scope.
+4. Under **Hydrogen position**, choose **Left** for **HO** or **Right** for **OH**.
+
+Choose **Automatic** to let ReShiki determine the placement from the surrounding bonds. Keep **Show implied hydrogens** enabled to display the hydrogen.
+
+This changes the label's appearance only. The bonds and stereochemistry stay the same. Use **Selected atoms** to adjust one hydroxyl; **Whole drawing** applies the setting throughout the drawing. **Cmd/Ctrl+Z** undoes a placement change.
+
+The screenshots show the same sugar drawing with only the selected hydroxyl's hydrogen placement changed. Click or tap either screenshot to view the controls at full size.
+
+**Right: OH**
+
+<Screenshot
+  src="/doc-images/hydrogen-placement/oh-right.png"
+  alt="A sugar drawing with one hydroxyl oxygen selected, Selected atoms scope, and Hydrogen position set to Right, displaying OH."
+/>
+
+**Left: HO**
+
+<Screenshot
+  src="/doc-images/hydrogen-placement/ho-left.png"
+  alt="The same sugar drawing and selected oxygen with Hydrogen position set to Left, displaying HO while the other hydroxyl labels remain unchanged."
+/>
+
+[Open the editable example](/examples/hydrogen-placement.rsk) to try Left, Right, and Automatic.
+
 ## Shorten a group
 
 Select an atom and press **Enter** to edit its label. **Automatic** recognizes elements and defined groups; **Chemical abbreviation** chooses a nickname explicitly, including names that conflict with element symbols. **Text label** keeps literal text such as M, L or X on a wildcard atom. Text labels do not imply an element, query or molecular formula.

@@ -38,6 +38,14 @@ Open **Help → Open shortcut examples** for a single editable reference file. D
 
 The AI assistant is optional and uses your local Codex sign-in. [Install Codex and connect the assistant](docs/assistant-setup.md) for text and image requests; ordinary drawing and chemistry work offline without it.
 
+## Acknowledging ReShiki
+
+ReShiki does not require a citation. If you would like to acknowledge its use, please include the following in the Acknowledgments section:
+
+> Chemical structures and reaction schemes were drawn using ReShiki (https://reshiki.com/).
+
+[Acknowledgment wording in the User Guide](https://reshiki.com/guide/acknowledgments/)
+
 ## Contribute
 
 ### License

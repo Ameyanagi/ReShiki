@@ -2,6 +2,16 @@
 
 The reviewed drawing, shortcut, Haworth and export updates are recorded in [ReShiki 0.8.0](changes-0.8.md).
 
+## Acknowledgments and hydroxyl labels
+
+The README and [User Guide](https://reshiki.com/guide/acknowledgments/) now include optional acknowledgment wording for figures drawn using ReShiki; a citation is not required. The [OH/HO walkthrough](https://reshiki.com/guide/labels/#change-oh-to-ho) shows how to change hydrogen placement for one oxygen and restore Automatic, with an editable sugar example.
+
+| Hydrogen on the right: OH                                                                                   | Hydrogen on the left: HO                                                                                                              |
+| ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| ![One hydroxyl oxygen selected with Hydrogen position set to Right](images/hydrogen-placement/oh-right.png) | ![The same oxygen with Hydrogen position set to Left; the other hydroxyl labels are unchanged](images/hydrogen-placement/ho-left.png) |
+
+Both screenshots show the existing controls in ReShiki v0.8.0 on macOS. Only the selected oxygen's hydrogen placement changes. [Capture details](images/hydrogen-placement/README.md).
+
 ## Comfortable starting zoom
 
 New drawings start at **100%**, leaving more room for molecules and reaction schemes. Resizing the window preserves that view, and **Fit** on an empty drawing returns to 100%. Opening an existing drawing still fits its contents; the maximum fit zoom remains 250%. [PR #39](https://github.com/Ameyanagi/ReShiki/pull/39).
