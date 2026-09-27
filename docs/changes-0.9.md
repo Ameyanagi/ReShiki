@@ -32,7 +32,7 @@ Invalid valence, protected-atom collisions and duplicate overlays leave the draw
 
 Hovered atom/bond shortcuts take precedence over the selection left by the last insertion, so repeated **a** attachment does not unexpectedly switch that ring's display. Explicit aromatic-display commands remain available. [Ring and template workflow](https://reshiki.com/guide/templates/) · [PR #40 and its regression evidence](https://github.com/Ameyanagi/ReShiki/pull/40).
 
-Thank you to **[Hiromichi Yokoyama (@HiroYokoyama)](https://github.com/HiroYokoyama)** for the benzene-fusion proposal, Kekulé-pattern selection, tests and review fixes. His original commits are retained. Thank you to **[@Enurta2308](https://x.com/Enurta2308)** for reporting repeated-shortcut display switching. [Contributor list](contributors.md).
+The original contributor commits are retained. See [Contributor credits](#contributor-credits) below.
 
 ## Comfortable starting zoom
 
@@ -63,3 +63,13 @@ ReShiki reads native document versions 1–16. Drawings with embedded custom the
 Aromatic fusion covers eligible neutral five- and six-membered conjugated regions with bounded planning. General regular-ring placement issues remain tracked in [#43](https://github.com/Ameyanagi/ReShiki/issues/43) and [#44](https://github.com/Ameyanagi/ReShiki/issues/44). Not every shape can be made aromatic without changing its chemistry. Clipboard support and explicit conversions remain documented in the [compatibility table](clipboard.md#changes-made-for-an-external-copy).
 
 Automated checks run on macOS, Windows and Linux; desktop interaction checks were performed on macOS. The [release validation record](release-0.9.0-validation.md) distinguishes source checks, package verification and publication status.
+
+## Contributor credits
+
+Thank you to everyone who contributed code, testing, and feedback to this release:
+
+- **Hiromichi Yokoyama (@HiroYokoyama)** — benzene-fusion proposal, Kekulé-pattern selection, regression tests and review fixes in [PR #40](https://github.com/Ameyanagi/ReShiki/pull/40).
+- **Ameyanagi (@Ameyanagi)** — publisher styles, canvas themes, ChemDraw exchange, additional aromatic-placement fixes, release testing and documentation.
+- **えぬるた ([@Enurta2308 on X](https://x.com/Enurta2308))** — reported unexpected aromatic-display switching during repeated ring shortcuts.
+
+[Contributor list](contributors.md) · [Merged contribution history](https://github.com/Ameyanagi/ReShiki/graphs/contributors).
