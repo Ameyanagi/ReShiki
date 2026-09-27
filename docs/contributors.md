@@ -1,5 +1,7 @@
 # Contributors
 
+Thank you to all the contributors who have helped improve ReShiki. Your contributions are greatly appreciated.
+
 This list credits authors of merged pull requests to ReShiki.
 
 - @Ameyanagi — project creator and maintainer.
