@@ -53,12 +53,26 @@ export default defineConfig({
           tag: "meta",
           attrs: { property: "og:image", content: "https://reshiki.com/brand/promotion-light.png" },
         },
+        { tag: "meta", attrs: { property: "og:image:type", content: "image/png" } },
+        { tag: "meta", attrs: { property: "og:image:width", content: "1200" } },
+        { tag: "meta", attrs: { property: "og:image:height", content: "630" } },
         {
           tag: "meta",
           attrs: {
             property: "og:image:alt",
             content: "ReShiki — Chemical drawing, reinvented.",
           },
+        },
+        {
+          tag: "meta",
+          attrs: {
+            name: "twitter:image",
+            content: "https://reshiki.com/brand/promotion-light.png",
+          },
+        },
+        {
+          tag: "meta",
+          attrs: { name: "twitter:image:alt", content: "ReShiki — Chemical drawing, reinvented." },
         },
       ],
       description: "Draw molecules, build reaction schemes, and prepare publication figures.",

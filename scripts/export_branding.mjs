@@ -70,6 +70,13 @@ try {
   resize(join(brand, "mark-light.png"), join(brand, "runtime/mark.png"), 128);
   copyFileSync(join(brand, "exports/light/icon-256.png"), join(brand, "runtime/icon.png"));
   copyFileSync(join(brand, "exports/light/icon-64.png"), join(website, "favicon.png"));
+  copyFileSync(join(brand, "reshiki.ico"), join(website, "favicon.ico"));
+  // Keep the original favicon URL consistent for clients that cached it.
+  const favicon = readFileSync(join(brand, "exports/light/icon-64.png")).toString("base64");
+  writeFileSync(
+    join(website, "favicon.svg"),
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><image width="64" height="64" href="data:image/png;base64,${favicon}"/></svg>\n`,
+  );
   resize(join(brand, "app-icon-light.png"), join(website, "apple-touch-icon.png"), 180);
   copyFileSync(
     join(brand, "exports/light/social-1200x630.png"),
