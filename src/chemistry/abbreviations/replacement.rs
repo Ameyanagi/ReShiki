@@ -104,7 +104,10 @@ struct Geometries {
 }
 fn geometry_json() -> &'static str {
     match (std::env::consts::OS, std::env::consts::ARCH) {
-        ("macos", "aarch64") => include_str!("geometry-macos-aarch64.json"),
+        // Both Mac builds use these fixed drawing templates. Intel has no
+        // pinned RDKit wheel; this reuses the recorded Apple Silicon positions,
+        // not a claimed independent Intel reference capture.
+        ("macos", "aarch64" | "x86_64") => include_str!("geometry-macos-aarch64.json"),
         ("linux", "x86_64") => include_str!("geometry-linux-x86_64.json"),
         ("linux", "aarch64") => include_str!("geometry-linux-aarch64.json"),
         ("windows", "x86_64") => include_str!("geometry-windows-x86_64.json"),
@@ -433,4 +436,45 @@ pub fn replace_with_policy(
     crate::ring_fills::prune(&mut result);
     validate_with_policy(&result, policy)?;
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::document::Point;
+
+    #[test]
+    fn every_preset_can_replace_an_isolated_or_attached_atom() {
+        for preset in presets().unwrap() {
+            for outside in [
+                None,
+                Some(Point::new(42.0, 0.0)),
+                Some(Point::new(-30.0, 30.0)),
+            ] {
+                let mut input = Document::default();
+                let anchor = input.add_atom("C", Point::new(0.0, 0.0));
+                if let Some(position) = outside {
+                    let neighbor = input.add_atom("C", position);
+                    input.add_bond(anchor, neighbor, 1, "plain");
+                }
+                let output = replace(&input, &[anchor], &preset.label)
+                    .unwrap_or_else(|error| panic!("{} at {outside:?}: {error}", preset.label));
+                document::prepare(&output)
+                    .unwrap_or_else(|error| panic!("{} chemistry: {error}", preset.label));
+                assert_eq!(output.abbreviations.len(), 1);
+                assert_eq!(output.abbreviations[0].anchor, anchor);
+                assert_eq!(output.atom(anchor).unwrap().position, Point::new(0.0, 0.0));
+                assert_eq!(
+                    output.atoms.len(),
+                    preset.atoms.len() - 1 + usize::from(outside.is_some())
+                );
+                assert!(
+                    output
+                        .atoms
+                        .iter()
+                        .all(|atom| atom.position.x.is_finite() && atom.position.y.is_finite())
+                );
+            }
+        }
+    }
 }
