@@ -66,10 +66,9 @@ Automated checks run on macOS, Windows and Linux; desktop interaction checks wer
 
 ## Contributor credits
 
-Thank you to everyone who contributed code, testing, and feedback to this release:
+Thank you to the pull-request contributors to this release:
 
-- **Hiromichi Yokoyama (@HiroYokoyama)** — benzene-fusion proposal, Kekulé-pattern selection, regression tests and review fixes in [PR #40](https://github.com/Ameyanagi/ReShiki/pull/40).
-- **Ameyanagi (@Ameyanagi)** — publisher styles, canvas themes, ChemDraw exchange, additional aromatic-placement fixes, release testing and documentation.
-- **えぬるた ([@Enurta2308 on X](https://x.com/Enurta2308))** — reported unexpected aromatic-display switching during repeated ring shortcuts.
+- @HiroYokoyama — benzene-fusion proposal, Kekulé-pattern selection, regression tests and review fixes in [PR #40](https://github.com/Ameyanagi/ReShiki/pull/40).
+- @Ameyanagi — publisher styles, canvas themes, ChemDraw exchange, additional aromatic-placement fixes, release testing and documentation.
 
 [Contributor list](contributors.md) · [Merged contribution history](https://github.com/Ameyanagi/ReShiki/graphs/contributors).
