@@ -37,6 +37,9 @@ fn helper(name: &str) -> anyhow::Result<Option<PathBuf>> {
     Ok(None)
 }
 
+#[path = "support/reference_annotations.rs"]
+mod reference_annotations;
+
 #[derive(Deserialize)]
 struct Case {
     name: String,
@@ -45,6 +48,7 @@ struct Case {
     expected: Option<Value>,
     failure: Option<String>,
     restriction: Option<String>,
+    molecular_extension: Option<Value>,
 }
 
 fn compare(actual: Response, expected: Response) -> anyhow::Result<()> {
@@ -136,6 +140,25 @@ async fn reference_cases(format: &str, script: &str) -> anyhow::Result<()> {
             "{} request changed",
             case.name
         );
+        if let Some(expected) = &case.molecular_extension {
+            anyhow::ensure!(
+                case.expected.is_none(),
+                "Legacy importer unexpectedly accepted extension"
+            );
+            let Outcome::Complete(response) = actual? else {
+                anyhow::bail!("Missing complete annotated import");
+            };
+            let analysis = response
+                .analysis
+                .context("Missing validated annotation chemistry")?;
+            assert_eq!(analysis.smiles, expected["smiles"].as_str().unwrap());
+            reference_annotations::check(
+                &response.document.context("Missing annotated document")?,
+                expected,
+            )?;
+            accepted += 1;
+            continue;
+        }
         if case.restriction.is_some() {
             anyhow::ensure!(
                 actual.is_err(),

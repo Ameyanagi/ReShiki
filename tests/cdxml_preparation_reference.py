@@ -21,6 +21,7 @@ from kekulize_reference import directions
 from perception_reference import snapshot
 from ranking_reference import metadata
 from rdkit import Chem, RDConfig, RDLogger, rdBase
+from reference_annotations import legacy_preparation_input, molecular_extension
 from valence_reference import graph
 
 from engine import worker
@@ -144,7 +145,7 @@ def emit(name, text, restriction=None, application=False):
         text = ET.tostring(text, encoding="unicode")
     expected = failure = failure_stage = None
     try:
-        expected = capture(PREPARE(text))
+        expected = capture(PREPARE(legacy_preparation_input(name, text)))
     except (ValueError, RuntimeError, KeyError, IndexError, OverflowError, ET.ParseError) as error:
         failure = str(error)
         tb = error.__traceback__
@@ -181,6 +182,7 @@ def emit(name, text, restriction=None, application=False):
                 failure=failure,
                 failure_stage=failure_stage,
                 restriction=restriction,
+                molecular_extension=molecular_extension("preparation/" + name, text),
                 application_checked=application,
                 application_document=application_document,
                 application_failure=application_failure,

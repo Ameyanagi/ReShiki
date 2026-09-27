@@ -17,6 +17,7 @@ from inchi_source_patch import PATCHES, patch_manifest, stage_source
 
 SUPPORTED_TARGETS = (
     "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
     "x86_64-pc-windows-msvc",
     "aarch64-pc-windows-msvc",
     "x86_64-unknown-linux-gnu",
@@ -32,7 +33,9 @@ def verify_executable(path, target):
             actual = {62: "x86_64-unknown-linux-gnu", 183: "aarch64-unknown-linux-gnu"}.get(machine)
         elif header[:4] == b"\xcf\xfa\xed\xfe":
             machine = int.from_bytes(header[4:8], "little")
-            actual = "aarch64-apple-darwin" if machine == 0x100000C else None
+            actual = {0x100000C: "aarch64-apple-darwin", 0x1000007: "x86_64-apple-darwin"}.get(
+                machine
+            )
         elif header[:2] == b"MZ" and len(header) == 64:
             offset = int.from_bytes(header[60:64], "little")
             if offset > 1024 * 1024:
@@ -71,7 +74,8 @@ def main():
         )
         if sys.platform != expected_os:
             raise ValueError(f"Build target {args.target} requires a {expected_os} host")
-    architecture_flags = ["-arch", "arm64"] if args.target == "aarch64-apple-darwin" else []
+    mac_arch = {"aarch64-apple-darwin": "arm64", "x86_64-apple-darwin": "x86_64"}.get(args.target)
+    architecture_flags = ["-arch", mac_arch] if mac_arch else []
     root = Path(__file__).resolve().parents[1]
     manifest = json.loads((root / "tools/inchi-helper/source-manifest.json").read_text())
     output = args.output.resolve() if args.output else root / "artifacts/inchi-helper"

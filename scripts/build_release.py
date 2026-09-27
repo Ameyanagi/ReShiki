@@ -22,6 +22,7 @@ from license_notices import copy_notices
 ROOT = Path(__file__).resolve().parents[1]
 RELEASE_TARGETS = {
     "aarch64-apple-darwin": ("macos", "arm64"),
+    "x86_64-apple-darwin": ("macos", "x64"),
     "x86_64-pc-windows-msvc": ("windows", "x64"),
     "aarch64-pc-windows-msvc": ("windows", "arm64"),
     "x86_64-unknown-linux-gnu": ("linux", "x64"),
@@ -227,10 +228,16 @@ def mac_bundle(destination, profile, *, target=None, inchi_helper=None):
     for name, binary in helpers:
         binary.parent.mkdir(parents=True, exist_ok=True)
         staged = binary.with_suffix(".new")
+        swift_target = []
+        if target:
+            architecture = target.split("-", 1)[0].replace("aarch64", "arm64")
+            minimum = os.environ.get("MACOSX_DEPLOYMENT_TARGET", "14.0")
+            swift_target = ["-target", f"{architecture}-apple-macosx{minimum}"]
         run(
             [
                 "swiftc",
                 "-O",
+                *swift_target,
                 ROOT / f"native/macos/{name}Support.swift",
                 ROOT / f"native/macos/{name}.swift",
                 "-o",
@@ -342,6 +349,12 @@ def verify_archive(archive_path, signed=False):
         verify_binary(binary, metadata["platform"], metadata["architecture"])
         helper = binary.with_name(inchi_helper_name(metadata["platform"]))
         verify_binary(helper, metadata["platform"], metadata["architecture"])
+        if platform.system() == "Darwin":
+            for companion in (
+                app / "Contents/MacOS/reshiki-clipboard",
+                app / "Contents/Helpers/ReShiki Print.app/Contents/MacOS/reshiki-print",
+            ):
+                verify_binary(companion, metadata["platform"], metadata["architecture"])
         verify_inchi_helper(helper, metadata["inchi_helper"]["version"])
         verify_runtime(binary, folder)
         if platform.system() == "Darwin":
@@ -394,8 +407,10 @@ def main():
         prebuilt=args.inchi_helper,
     )
     name = f"reshiki-{version()}-{system}-{arch}"
-    # This staging tree is separate from the app a developer may have open in dist/.
-    folder = ROOT / "target/release-bundles" / name
+    # Keep dependency notices outside Cargo's target tree: rust-cache treats
+    # nested crate sources as build output and removes their test directories.
+    # This also stays separate from the development app in dist/ReShiki.app.
+    folder = ROOT / "build/release-bundles" / name
     if folder.exists():
         shutil.rmtree(folder)
     folder.mkdir(parents=True)

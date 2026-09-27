@@ -8,6 +8,9 @@ use std::{
     process::{Command, Stdio},
 };
 
+#[path = "support/reference_annotations.rs"]
+mod reference_annotations;
+
 #[derive(Deserialize)]
 struct Case {
     name: String,
@@ -16,6 +19,7 @@ struct Case {
     failure: Option<String>,
     failure_stage: Option<String>,
     restriction: Option<String>,
+    molecular_extension: Option<Value>,
     application_checked: bool,
     application_document: Option<Value>,
     application_failure: Option<String>,
@@ -116,6 +120,7 @@ fn chemical_prefix_matches_original_worker_capture() -> anyhow::Result<()> {
     assert_eq!(header["rdkit_version"], reshiki::chemistry::RDKIT_VERSION);
     let (mut accepted, mut errors, mut restricted, mut stages) = (0, 0, 0, 0);
     let mut failures = Vec::new();
+    let mut extensions = 0;
     let (mut application_accepted, mut application_rejected) = (0, 0);
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
@@ -136,6 +141,13 @@ fn chemical_prefix_matches_original_worker_capture() -> anyhow::Result<()> {
         let before = case.text.clone();
         let actual = cdxml::prepare_cdxml(&case.text);
         assert_eq!(before, case.text);
+        if let Some(expected) = &case.molecular_extension {
+            assert!(case.expected.is_none());
+            let imported = cdxml::assemble_cdxml(&actual?)?.into_document()?;
+            reference_annotations::check(&imported.document, expected)?;
+            extensions += 1;
+            continue;
+        }
         if case.restriction.is_some() {
             restricted += 1;
             if !(case.expected.is_some() && actual.is_err()) {
@@ -216,6 +228,7 @@ fn chemical_prefix_matches_original_worker_capture() -> anyhow::Result<()> {
     );
     assert!(accepted > 2000 && errors > 160 && restricted == 4 && stages == 6);
     assert_eq!((application_accepted, application_rejected), (6, 5));
+    assert_eq!(extensions, 1);
     Ok(())
 }
 #[test]

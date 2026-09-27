@@ -14,8 +14,8 @@ Publisher settings were compared with downloaded stationery and ChemDraw output 
 
 ## Release gates
 
-Before publication, verify the 0.9.0 version/tag match, documentation links and build, a relocated local package, all five platform builds, macOS Developer ID signing/notarization/stapling, and the full live-reference workflow on macOS, Windows and Linux. The tagged workflow publishes only after its build, signing and reference dependencies pass.
+Before publication, verify the 0.9.0 version/tag match, documentation links and build, a relocated local package, all six platform builds, macOS Developer ID signing/notarization/stapling, and the full live-reference workflow on macOS, Windows and Linux. The tagged workflow publishes only after its build, signing and reference dependencies pass.
 
-After publication, download all eight packages and `SHA256SUMS`; check every hash and the portable manifests' version, source commit, platform and architecture. Recheck the public Mac package's signature, Gatekeeper status, notarization ticket and native chemistry outside the checkout, and confirm the stable release and public documentation links.
+After publication, download all ten packages and `SHA256SUMS`; check every hash and the six portable manifests' version, source commit, platform and architecture. Recheck the public Mac packages' signatures, Gatekeeper status, notarization tickets and native chemistry outside the checkout, and confirm the stable release and public documentation links.
 
 Publication and package-verification results will be recorded here when those checks complete.

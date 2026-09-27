@@ -45,6 +45,10 @@ jobs:
             artifact: macos-arm64
             target: aarch64-apple-darwin
             python: "3.12"
+          - os: macos-15-intel
+            artifact: macos-x64
+            target: x86_64-apple-darwin
+            python: "3.12"
           - os: windows-2022
             artifact: windows-x64
             target: x86_64-pc-windows-msvc
@@ -75,6 +79,8 @@ jobs:
           python-version: ${{ matrix.python }}
       - uses: Swatinem/rust-cache@63fed3e2fecf6f7b51dc6f043341b79ef82a9ae7 # v2.9.2
         with:
+          # Previous release caches included packaged license sources in target/.
+          prefix-key: v1-release-staging
           cache-on-failure: true
       - name: Install Linux libraries
         if: runner.os == 'Linux'
@@ -106,6 +112,13 @@ jobs:
         env:
           MACOSX_DEPLOYMENT_TARGET: "14.0"
         run: uv run --locked python scripts/build_release.py --target ${{ matrix.target }} --fetch-inchi-source --installer
+      - name: Test native chemistry on Intel macOS
+        if: matrix.artifact == 'macos-x64'
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "14.0"
+          RESHIKI_REQUIRE_INCHI_HELPER: "1"
+          RESHIKI_INCHI_HELPER: ${{ github.workspace }}/target/x86_64-apple-darwin/inchi-helper/reshiki-inchi-helper
+        run: cargo test --release --locked --no-default-features --lib --target x86_64-apple-darwin
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: unsigned-${{ matrix.artifact }}
@@ -122,6 +135,8 @@ jobs:
         include:
           - os: macos-14
             artifact: macos-arm64
+          - os: macos-15-intel
+            artifact: macos-x64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -184,7 +199,7 @@ jobs:
         run: |
           cat *.sha256 | tr -d '\r' > SHA256SUMS
           sha256sum --check SHA256SUMS
-          test "$(wc -l < SHA256SUMS)" -eq 8
+          test "$(wc -l < SHA256SUMS)" -eq 10
           args=()
           if [[ "$RELEASE_TAG" == *-* ]]; then args+=(--prerelease); fi
           gh release create "$RELEASE_TAG" --verify-tag --generate-notes "${args[@]}" *.zip *.tar.gz *.dmg *-setup.exe SHA256SUMS
