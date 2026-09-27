@@ -2466,17 +2466,6 @@ pub(super) fn panel(theme: &Theme) -> container::Style {
         },
     )
 }
-pub(super) fn surface_shadow(shadow: iced::Shadow) -> iced::Shadow {
-    // Windows uses Tiny Skia. Its shadow pass ignores the damage clip and
-    // repeatedly blends over retained pixels during partial redraws, darkening
-    // even the inside of dialogs. Keep the surface borders on this backend.
-    if cfg!(windows) {
-        iced::Shadow::default()
-    } else {
-        shadow
-    }
-}
-
 fn tip(_: &Theme) -> container::Style {
     container::Style {
         background: Some(Color::from_rgb8(40, 48, 57).into()),
