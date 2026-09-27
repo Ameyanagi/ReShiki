@@ -2,7 +2,7 @@
 
 ReShiki 0.9.0 adds publisher drawing styles, editable light/dark color themes, and consistent aromatic ring fusion. It includes [PR #39](https://github.com/Ameyanagi/ReShiki/pull/39), [PR #40](https://github.com/Ameyanagi/ReShiki/pull/40), [PR #41](https://github.com/Ameyanagi/ReShiki/pull/41), and the documentation in [PR #51](https://github.com/Ameyanagi/ReShiki/pull/51).
 
-[Download 0.9.0](https://github.com/Ameyanagi/ReShiki/releases/tag/v0.9.0) · [Release validation](release-0.9.0-validation.md) · [Previous release](changes-0.8.md)
+**Release preparation:** 0.9.0 packages are pending publication and verification. [Available downloads](https://github.com/Ameyanagi/ReShiki/releases/latest) · [Release validation](release-0.9.0-validation.md) · [Previous release](changes-0.8.md)
 
 ## Publisher drawing styles
 
