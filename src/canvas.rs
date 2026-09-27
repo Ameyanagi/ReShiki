@@ -1423,7 +1423,7 @@ impl MoleculeCanvas<'_> {
                 .camera
                 .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
             let (anchor, direction) = ring_gesture(*start, end, *attached, 10.0 / self.camera.zoom);
-            ring_selection = Some(reshiki::editing::ring_oriented(
+            ring_selection = reshiki::editing::ring_oriented(
                 &mut preview,
                 anchor,
                 self.ring_size,
@@ -1431,7 +1431,8 @@ impl MoleculeCanvas<'_> {
                     || delocalized_ring_size(self.tool, self.ring_size, state.modifiers).is_some(),
                 10.0 / self.camera.zoom,
                 direction,
-            ));
+            )
+            .ok();
         }
         if let Tool::RingPreset(preset) = self.tool
             && let Some(p) = state.cursor.filter(|p| bounds.contains(*p))
@@ -1630,14 +1631,15 @@ impl MoleculeCanvas<'_> {
             } else {
                 (end, None)
             };
-            ring_selection = Some(reshiki::editing::ring_oriented(
+            ring_selection = reshiki::editing::ring_oriented(
                 &mut preview,
                 anchor,
                 size,
                 true,
                 10. / self.camera.zoom,
                 direction,
-            ));
+            )
+            .ok();
         }
         if let (
             Some(Gesture::Draw {

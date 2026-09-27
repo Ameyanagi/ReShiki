@@ -26,7 +26,7 @@ Text fields keep ordinary typing. **Cmd** means Command on macOS; **Ctrl** is th
 ## Two quick ring gestures
 
 - Choose **Benzene** in Rings (or press **j** over empty canvas). A normal click places alternating bonds. Hold **Cmd** on Mac or **Ctrl** on Windows/Linux while clicking or dragging to place the circle form. This modifier also works with regular rings and cyclopentadiene; it leaves chairs and Haworth projections unchanged.
-- With Select, click inside an existing aromatic ring (or select all its atoms), then press lowercase **a** to toggle circle / alternating bonds. The modifier shortcut **Cmd/Ctrl+Alt+K** remains available. The display change preserves molecular identity.
+- With Select, click inside an existing aromatic ring (or select all its atoms), move the pointer off its atoms and bonds, then press lowercase **a** to toggle circle / alternating bonds. Over an atom or bond, **a** attaches a ring even if the previous ring was automatically selected. The modifier shortcut **Cmd/Ctrl+Alt+K** remains available. The display change preserves molecular identity.
 
 ## Add an element with a bond
 

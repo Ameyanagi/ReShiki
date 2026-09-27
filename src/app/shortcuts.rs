@@ -324,11 +324,11 @@ impl App {
                 None
             }
         });
-        // A selected ring gives `a` a display action; atom/bond attachment keys keep priority.
+        // Hover attachment wins even when placement automatically selected the
+        // previous ring. Only an unpointed selection gives `a` a display action.
         if key == "a"
-            && hovered_atom.is_none_or(|id| self.selected.contains(&id))
-            && hovered_bond
-                .is_none_or(|(a, b)| self.selected.contains(&a) && self.selected.contains(&b))
+            && hovered_atom.is_none()
+            && hovered_bond.is_none()
             && reshiki::rings::selected_cycle(&self.doc, &self.selected).is_some()
             && self.doc.bonds.iter().any(|b| {
                 self.selected.contains(&b.a)
@@ -567,20 +567,79 @@ mod tests {
     }
 
     #[test]
-    fn a_toggles_a_selected_ring_even_with_the_pointer_on_its_atom() -> Result<(), String> {
+    fn a_toggles_a_selected_ring_when_the_pointer_is_off_the_structure() {
         let (mut app, _) = App::new();
         app.doc = reshiki::rings::Preset::Benzene.document(42., false);
         app.selected = app.doc.all_ids();
-        let p = app.doc.atoms.first().ok_or("Ring atom")?.position;
-        app.edit(Edit::Hover(Some(p)));
+        app.edit(Edit::Hover(Some(Point::new(200., 200.))));
         let before = app.doc.clone();
         let _ = app.context_key("a");
         assert!(
             app.busy,
-            "Must start display conversion, not attach another phenyl"
+            "The selection-only display shortcut remains available"
         );
         assert_eq!(app.doc, before);
-        Ok(())
+    }
+
+    #[test]
+    fn repeated_phenyl_shortcuts_ignore_the_automatic_ring_selection() {
+        let (mut app, _) = App::new();
+        app.doc = Document::default();
+        let start = app.doc.add_atom("C", Point::default());
+        let end = app.doc.add_atom("C", Point::new(42., 0.));
+        app.doc.add_bond(start, end, 1, "plain");
+        app.edit(Edit::Hover(Some(Point::new(42., 0.))));
+        let _ = app.context_key("a");
+        assert!(!app.error);
+        assert_eq!(app.selected.len(), 6);
+        let mut steps = vec![app.doc.clone()];
+        for expected_atoms in [13, 19] {
+            let original = app.doc.clone();
+            let target = app
+                .selected
+                .iter()
+                .filter_map(|id| app.doc.atom(*id))
+                .max_by(|a, b| a.position.x.total_cmp(&b.position.x))
+                .unwrap()
+                .position;
+            app.edit(Edit::Hover(Some(target)));
+            let _ = app.context_key("a");
+            assert!(
+                !app.busy,
+                "Hovering a selected atom must not start aromatic display conversion"
+            );
+            assert!(!app.error, "{}", app.status);
+            assert_eq!(app.doc.atoms.len(), expected_atoms);
+            assert!(app.doc.bonds.starts_with(&original.bonds));
+            reshiki::chemistry::document::prepare(&app.doc).unwrap();
+            steps.push(app.doc.clone());
+        }
+        for original in steps.iter().rev().skip(1) {
+            let _ = app.update(Message::Undo);
+            assert_eq!(&app.doc, original);
+        }
+        for added in steps.iter().skip(1) {
+            let _ = app.update(Message::Redo);
+            assert_eq!(&app.doc, added);
+        }
+    }
+
+    #[test]
+    fn a_fuses_at_a_hovered_bond_even_when_its_ring_is_selected() {
+        let (mut app, _) = App::new();
+        app.doc = reshiki::rings::Preset::Benzene.document(42., false);
+        app.selected = app.doc.all_ids();
+        let a = app.doc.atoms[0].position;
+        let b = app.doc.atoms[1].position;
+        app.edit(Edit::Hover(Some(Point::new(
+            (a.x + b.x) / 2.,
+            (a.y + b.y) / 2.,
+        ))));
+        let _ = app.context_key("a");
+        assert!(!app.busy);
+        assert!(!app.error, "{}", app.status);
+        assert_eq!((app.doc.atoms.len(), app.doc.bonds.len()), (10, 11));
+        reshiki::chemistry::document::prepare(&app.doc).unwrap();
     }
 
     use super::*;

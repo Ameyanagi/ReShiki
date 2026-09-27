@@ -2,6 +2,7 @@
 mod aromatic;
 use crate::document::{Atom, Document, Point};
 use crate::editing;
+pub(crate) use aromatic::show_circles;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::LazyLock;
@@ -130,14 +131,7 @@ pub fn place_with_mode(
             return Err("Connect with a bond: choose a template atom and point to a drawing atom.");
         }
         Connection::ShareAtom | Connection::FuseBond => {
-            let placed = place_anchored(doc, part, point, direction, radius, anchor);
-            if placed.is_err()
-                && mode == Connection::FuseBond
-                && let Some(result) = aromatic::fuse(doc, part, point, direction, radius, anchor)
-            {
-                return Ok(result);
-            }
-            return placed;
+            return place_anchored(doc, part, point, direction, radius, anchor);
         }
         _ => {}
     }
@@ -427,8 +421,9 @@ pub(crate) fn capacity(atom: &Atom) -> u32 {
 }
 
 /// Pure operation: incompatible targets return an error without changing the drawing.
-/// Bond attachment shares two atoms; atom attachment shares one. The destination's
-/// bond order, atom identity, and all existing coordinates are retained.
+/// Bond attachment shares an edge; aromatic fusion also maps other coincident
+/// vertices before validation. Eligible aromatic regions may be re-Kekulized;
+/// other bond orders, atom identity, and existing coordinates are retained.
 pub fn place(
     doc: &Document,
     part: &Document,
@@ -501,6 +496,9 @@ pub fn place_anchored(
         return Err("Match the chosen source atom to an atom, or source bond to a bond.");
     }
 
+    // Aromatic placement uses the same geometry and atom mapping as every other
+    // template. Only eligible source edges opt into final-graph reassignment.
+    let aromatic = aromatic::Fusion::new(doc, part);
     let mut best: Option<(f32, Document, Vec<u64>)> = None;
     let mut consider =
         |source: &[u64], target: &[u64], origin: Point, dest: Point, scale: f32, angle: f32| {
@@ -508,12 +506,39 @@ pub fn place_anchored(
             let all = positioned.all_ids();
             editing::transform_about(&mut positioned, &all, origin, scale, angle.to_degrees());
             positioned.translate(&all, dest.x - origin.x, dest.y - origin.y);
+            let fuse = matches!(source, [a,b] if aromatic.source_edge(*a,*b));
+            if fuse && let Some(aim) = direction.filter(|p| p.distance(dest) > radius) {
+                let ([seed, _], [ta, tb]) = (source, target) else {
+                    return;
+                };
+                let Some(a) = doc.atom(*ta) else {
+                    return;
+                };
+                let Some(b) = doc.atom(*tb) else {
+                    return;
+                };
+                let center = aromatic.center(&positioned, *seed);
+                let cross = |p: Point| {
+                    (b.position.x - a.position.x) * (p.y - dest.y)
+                        - (b.position.y - a.position.y) * (p.x - dest.x)
+                };
+                if cross(aim).abs() > radius * a.position.distance(b.position)
+                    && cross(aim) * cross(center) < 0.
+                {
+                    return;
+                }
+            }
+            let mut shared: HashMap<_, _> =
+                source.iter().copied().zip(target.iter().copied()).collect();
+            if fuse && !aromatic.map_vertices(doc, &positioned, source, target, &mut shared) {
+                return;
+            }
             let length = crate::style::DEFAULT.bond_length_world * scale;
             let mut score = 0.0;
             let mut center = Point::default();
             let mut count = 0;
             for a in &positioned.atoms {
-                if source.contains(&a.id) {
+                if shared.contains_key(&a.id) {
                     continue;
                 }
                 center = center.offset(a.position.x, a.position.y);
@@ -553,9 +578,8 @@ pub fn place_anchored(
                 .into_iter()
                 .zip(ids.iter().copied())
                 .collect();
-            let mapping: HashMap<_, _> = source
+            let mapping: HashMap<_, _> = shared
                 .iter()
-                .zip(target)
                 .filter_map(|(a, b)| added.get(a).map(|id| (*id, *b)))
                 .collect();
             let mapped = |id: u64| mapping.get(&id).copied().unwrap_or(id);
@@ -564,13 +588,20 @@ pub fn place_anchored(
                     *id = mapped(*id);
                 }
             }
-            let mut affected = target.to_vec();
+            let mut affected: Vec<_> = shared.values().copied().collect();
             affected.extend(mapping.keys());
             result.invalidate_chemistry(&affected);
             result.atoms.retain(|a| !mapping.contains_key(&a.id));
-            result
-                .bonds
-                .retain(|b| !(mapping.contains_key(&b.a) && mapping.contains_key(&b.b)));
+            // A multi-edge fusion may map both endpoints of a genuinely new
+            // edge. Remove only duplicate edges, not every mapped-to-mapped edge.
+            result.bonds.retain(|b| {
+                !(mapping.contains_key(&b.a)
+                    && mapping.contains_key(&b.b)
+                    && doc.bonds.iter().any(|old| {
+                        (old.a == mapped(b.a) && old.b == mapped(b.b))
+                            || (old.b == mapped(b.a) && old.a == mapped(b.b))
+                    }))
+            });
             for b in &mut result.bonds {
                 b.a = mapped(b.a);
                 b.b = mapped(b.b);
@@ -604,6 +635,13 @@ pub fn place_anchored(
                 group.members.sort_unstable();
                 group.members.dedup();
             }
+            if fuse {
+                let source_ids: HashMap<_, _> =
+                    added.iter().map(|(a, b)| (*a, mapped(*b))).collect();
+                if !aromatic.assign(doc, part, &mut result, &source_ids, source) {
+                    return;
+                }
+            }
             result.reconcile_molecule_groups();
             if crate::reactions::reconcile(&mut result).is_err() || result.validate().is_err() {
                 return;
@@ -616,7 +654,11 @@ pub fn place_anchored(
             .bonds
             .get(index)
             .ok_or("The target bond is unavailable")?;
-        if target.display != "plain" || target.stereo.is_some() || !matches!(target.order, 1 | 2) {
+        if target.display != "plain"
+            || target.stereo.is_some()
+            || !(matches!(target.order, 1 | 2)
+                || (target.order == 4 && aromatic.target_edge(target.a, target.b)))
+        {
             return Err("Choose a plain single/double bond or a compatible aromatic ring edge.");
         }
         let saturated = part
@@ -638,7 +680,8 @@ pub fn place_anchored(
             // A saturated ring may inherit an existing double edge, creating a
             // cycloalkene. Unsaturated fragments require the same source order
             // to avoid silently adding/removing unsaturation elsewhere.
-            if (source.order != target.order && !(saturated && target.order == 2))
+            let fuse = aromatic.source_edge(source.a, source.b);
+            if (!fuse && source.order != target.order && !(saturated && target.order == 2))
                 || source.display != "plain"
                 || source.stereo.is_some()
             {
@@ -650,8 +693,9 @@ pub fn place_anchored(
                 let shared = 2 * source.order as u32;
                 if !compatible(sa, ta)
                     || !compatible(sb, tb)
-                    || valence(part, a) + valence(doc, ta.id) - shared > capacity(ta)
-                    || valence(part, b) + valence(doc, tb.id) - shared > capacity(tb)
+                    || (!fuse
+                        && (valence(part, a) + valence(doc, ta.id) - shared > capacity(ta)
+                            || valence(part, b) + valence(doc, tb.id) - shared > capacity(tb)))
                 {
                     continue;
                 }
