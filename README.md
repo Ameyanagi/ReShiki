@@ -73,4 +73,4 @@ ReShiki uses Rust, Iced, and a bundled native InChI helper. See the [developer g
 
 ReShiki is under active development. [Report a problem](https://github.com/Ameyanagi/ReShiki/issues).
 
-See the [release notes](docs/changes-0.9.md) and the [shortcut list with one editable example document](docs/contextual-shortcuts.md). Group and template definitions may be extended or revised in future releases.
+See the [latest release notes](docs/changes-0.9.1.md) and the [shortcut list with one editable example document](docs/contextual-shortcuts.md). Group and template definitions may be extended or revised in future releases.

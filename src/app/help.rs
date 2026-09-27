@@ -200,7 +200,7 @@ impl App {
                         width: 1.,
                         color: Color::from_rgb8(207, 216, 216),
                     },
-                    shadow: super::workspace::surface_shadow(iced::Shadow {
+                    shadow: crate::appearance::surface_shadow(iced::Shadow {
                         color: Color::from_rgba8(20, 40, 35, 0.18),
                         offset: iced::Vector::new(0., 8.),
                         blur_radius: 30.,
