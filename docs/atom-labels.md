@@ -8,6 +8,13 @@ settings: changing them does not change the molecular graph or its formula.
 Drawing carbon/H/stereo defaults apply to newly added atoms. Hydrogen placement
 is a per-atom choice applied to the current scope.
 
+To switch a hydroxyl label between **OH** and **HO**, select its oxygen and open
+**Properties → Labels & chemistry → Atom labels & numbering…**. With
+**Selected atoms** as the scope, choose **Right** for OH or **Left** for HO under
+**Hydrogen position**. Restore **Automatic** to follow the surrounding bonds.
+See the [illustrated OH/HO walkthrough](https://reshiki.com/guide/labels/#change-oh-to-ho)
+for the controls and an editable example.
+
 Automatic placement uses the internal bond angles to choose an inline or stacked
 label. With two bonds it uses their angle bisector, including a stable choice
 for straight bonds. Terminal labels keep the usual inline

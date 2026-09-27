@@ -88,6 +88,7 @@ export default defineConfig({
             { label: "Draw with the assistant", slug: "guide/assistant" },
             { label: "Prepare a figure", slug: "guide/figures" },
             { label: "Save and share", slug: "guide/sharing" },
+            { label: "Acknowledging ReShiki", slug: "guide/acknowledgments" },
           ],
         },
         {
