@@ -6,7 +6,7 @@
   "scripts": {
     "sync": "bun scripts/sync-docs.mjs",
     "dev": "bun run sync && bun --bun astro dev",
-    "build": "bun run sync && bun --bun astro build && bun scripts/check-links.mjs",
+    "build": "bun run sync && bun --bun astro build && bun scripts/check-links.mjs && bun scripts/check-palette-downloads.mjs",
     "check": "bun run sync && bun --bun astro check"
   },
   "dependencies": {

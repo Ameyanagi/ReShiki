@@ -101,6 +101,7 @@ export default defineConfig({
             { label: "Set up Codex", slug: "guide/assistant-setup" },
             { label: "Draw with the assistant", slug: "guide/assistant" },
             { label: "Prepare a figure", slug: "guide/figures" },
+            { label: "Color palettes", slug: "guide/color-palettes" },
             { label: "Save and share", slug: "guide/sharing" },
             { label: "Acknowledging ReShiki", slug: "guide/acknowledgments" },
           ],

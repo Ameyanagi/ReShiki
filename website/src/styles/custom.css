@@ -267,6 +267,33 @@
   text-underline-offset: 0.2em;
 }
 
+.home-workspace .home-video-update a {
+  gap: 0.5rem;
+  color: var(--sl-color-text-accent);
+  font-size: 0.875rem;
+  font-weight: 550;
+}
+
+.release-video {
+  margin: 1.5rem 0;
+}
+
+.release-video video {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 0.75rem;
+  background: #101310;
+}
+
+.release-video figcaption {
+  margin-top: 0.75rem;
+  color: var(--sl-color-gray-2);
+  font-size: 0.875rem;
+}
+
 .home-manual {
   margin-top: clamp(2.5rem, 5vw, 4rem);
 }
