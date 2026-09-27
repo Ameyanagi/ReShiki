@@ -164,6 +164,43 @@ fn regions(doc: &Document) -> Option<BTreeSet<Edge>> {
     }
 }
 
+/// Circle display is allowed only for a complete conjugated cycle recognized
+/// by the same bounded analysis as fusion. A constrained bay may instead form
+/// a methylene-containing ring; keep its valid Kekule drawing in that case.
+pub(crate) fn show_circles(doc: &mut Document, rings: &[Vec<u64>]) {
+    let Some(aromatic) = regions(doc) else {
+        return;
+    };
+    let mut visible = BTreeSet::new();
+    // Inspect the complete Kekule result before converting any ring. Looking
+    // again after each conversion would see a partially circular fused region.
+    for selected in rings {
+        let Some(ids) = crate::rings::selected_cycle(doc, selected) else {
+            continue;
+        };
+        let edges: BTreeSet<_> = doc
+            .bonds
+            .iter()
+            .filter(|b| ids.contains(&b.a) && ids.contains(&b.b))
+            .map(|b| edge(b.a, b.b))
+            .collect();
+        if edges.is_subset(&aromatic) {
+            visible.extend(edges);
+        }
+    }
+    for b in &mut doc.bonds {
+        if visible.contains(&edge(b.a, b.b)) {
+            b.order = 4;
+        }
+    }
+    let ids = nodes(&visible);
+    for a in &mut doc.atoms {
+        if ids.contains(&a.id) {
+            a.aromatic = true;
+        }
+    }
+}
+
 pub(super) struct Fusion {
     source: BTreeSet<Edge>,
     target: Option<BTreeSet<Edge>>,

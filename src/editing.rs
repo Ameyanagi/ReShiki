@@ -698,7 +698,7 @@ fn segment_distance(p: Point, a: Point, b: Point) -> f32 {
 }
 
 pub fn ring(doc: &mut Document, p: Point, size: u8, aromatic: bool, radius: f32) -> Vec<u64> {
-    ring_oriented(doc, p, size, aromatic, radius, None)
+    ring_oriented(doc, p, size, aromatic, radius, None).unwrap_or_default()
 }
 
 /// Attach at an atom/bond, optionally using a drag to choose the ring's side.
@@ -709,8 +709,35 @@ pub fn ring_oriented(
     aromatic: bool,
     radius: f32,
     direction: Option<Point>,
-) -> Vec<u64> {
+) -> Result<Vec<u64>, &'static str> {
     let n = size.clamp(3, 8) as usize;
+    if aromatic && n == 6 {
+        let drawing = crate::rings::Drawing {
+            preset: crate::rings::Preset::Benzene,
+            length: crate::style::DEFAULT.bond_length_world,
+            alternate: false,
+            connect: false,
+        };
+        // Ring construction historically accepts zero to disable snapping.
+        // Keep that convention here without relaxing the template API's
+        // positive-radius contract or accidentally hitting an existing label.
+        let empty = Document::default();
+        let base = if radius == 0. { &empty } else { &*doc };
+        let (mut result, ids) =
+            drawing.place(base, p, direction, if radius == 0. { 1. } else { radius })?;
+        let mut circles: Vec<_> = crate::aromatic::circles(base)
+            .into_iter()
+            .map(|c| c.atoms)
+            .collect();
+        circles.push(ids.clone());
+        crate::templates::show_circles(&mut result, &circles);
+        return if radius == 0. {
+            Ok(append(doc, &result, Point::default()))
+        } else {
+            *doc = result;
+            Ok(ids)
+        };
+    }
     let atom = doc.nearest(p, radius);
     let bond = if atom.is_none() {
         nearest_bond(doc, p, radius)
@@ -720,10 +747,10 @@ pub fn ring_oriented(
     let mut ids = vec![];
     if let Some(index) = bond {
         let Some(b) = doc.bonds.get(index).cloned() else {
-            return vec![];
+            return Err("The attachment bond is no longer available.");
         };
         let (Some(a), Some(z)) = (doc.atom(b.a), doc.atom(b.b)) else {
-            return vec![];
+            return Err("The attachment bond has missing atoms.");
         };
         let (a, z) = (a.position, z.position);
         let positions = |sign: f32| {
@@ -830,7 +857,7 @@ pub fn ring_oriented(
             }
         }
     }
-    ids
+    Ok(ids)
 }
 
 pub(crate) fn open_angle(anchor: Point, neighbors: &[Point]) -> f32 {
@@ -1179,7 +1206,8 @@ mod tests {
                 false,
                 5.0,
                 Some(Point::new(30.0, side * 50.0)),
-            );
+            )
+            .unwrap();
             assert_eq!(&ids[..2], &[a, b]);
             assert_eq!((doc.atoms.len(), doc.bonds.len()), (5, 5));
             for id in &ids[2..] {

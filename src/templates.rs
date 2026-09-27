@@ -2,6 +2,7 @@
 mod aromatic;
 use crate::document::{Atom, Document, Point};
 use crate::editing;
+pub(crate) use aromatic::show_circles;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::LazyLock;

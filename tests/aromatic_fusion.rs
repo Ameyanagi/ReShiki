@@ -303,6 +303,124 @@ fn nearby_protected_or_incompatible_atoms_are_not_merged_or_evaded() {
     assert!(toward_vertex(&d, false).is_err());
 }
 
+#[test]
+fn circle_tool_attaches_phenyl_and_fuses_every_benzene_edge() {
+    for circular in [false, true] {
+        let mut base = Preset::Benzene.document(42., false);
+        if circular {
+            for bond in &mut base.bonds {
+                bond.order = 4;
+            }
+        }
+        for atom in &base.atoms {
+            let mut result = base.clone();
+            editing::ring_oriented(&mut result, atom.position, 6, true, 5., None).unwrap();
+            assert_eq!((result.atoms.len(), result.bonds.len()), (12, 13));
+            assert_eq!(identity(&result), "c1ccc(-c2ccccc2)cc1");
+            assert!(result.bonds.starts_with(&base.bonds));
+            assert!(!reshiki::aromatic::circles(&result).is_empty());
+            no_duplicates(&result);
+        }
+        for bond in &base.bonds {
+            let mut result = base.clone();
+            let selected = editing::ring_oriented(
+                &mut result,
+                midpoint(&base, bond.a, bond.b),
+                6,
+                true,
+                5.,
+                None,
+            )
+            .unwrap();
+            assert_eq!((result.atoms.len(), result.bonds.len()), (10, 11));
+            assert_eq!(identity(&result), "c1ccc2ccccc2c1");
+            if circular {
+                assert_eq!(reshiki::aromatic::circles(&result).len(), 2);
+                assert!(result.bonds.iter().all(|b| b.order == 4));
+            }
+            assert!(
+                result
+                    .bonds
+                    .iter()
+                    .filter(|b| selected.contains(&b.a) && selected.contains(&b.b))
+                    .all(|b| b.order == 4)
+            );
+            keeps_positions(&base, &result);
+            no_duplicates(&result);
+        }
+    }
+}
+
+#[test]
+fn circle_tool_keeps_nonaromatic_notch_closure_kekule() {
+    for circular in [false, true] {
+        let mut base = naphthalene();
+        if circular {
+            for bond in &mut base.bonds {
+                bond.order = 4;
+            }
+        }
+        for (a, b) in [(1, 2), (2, 10)] {
+            let mut result = base.clone();
+            editing::ring_oriented(
+                &mut result,
+                midpoint(&base, a, b),
+                6,
+                true,
+                5.,
+                Some(Point::new(21. * 3_f32.sqrt(), -70.)),
+            )
+            .unwrap();
+            assert_eq!((result.atoms.len(), result.bonds.len()), (13, 15));
+            assert_eq!(identity(&result), "C1=Cc2cccc3cccc(c23)C1");
+            assert_eq!(
+                reshiki::aromatic::circles(&result).len(),
+                if circular { 2 } else { 0 }
+            );
+            keeps_positions(&base, &result);
+            no_duplicates(&result);
+        }
+    }
+}
+
+#[test]
+fn circle_tool_rejects_protected_atoms_and_overlaid_duplicates_atomically() {
+    let mut protected = crowded(0);
+    protected.atom_mut(3).unwrap().explicit_h = 4;
+    let before = protected.clone();
+    let position = protected.atom(3).unwrap().position;
+    assert!(editing::ring_oriented(&mut protected, position, 6, true, 5., None).is_err());
+    assert_eq!(protected, before);
+    assert!(
+        editing::ring_oriented(
+            &mut protected,
+            Point::new(21., 0.),
+            6,
+            true,
+            5.,
+            Some(Point::new(21., 60.)),
+        )
+        .is_err()
+    );
+    assert_eq!(protected, before);
+    let base = Preset::Benzene.document(42., false);
+    for bond in &base.bonds {
+        let mut result = base.clone();
+        assert!(
+            editing::ring_oriented(
+                &mut result,
+                midpoint(&base, bond.a, bond.b),
+                6,
+                true,
+                5.,
+                Some(Point::default()),
+            )
+            .is_err()
+        );
+        assert_eq!(result, base);
+    }
+}
+
 #[tokio::test]
 async fn fused_history_native_and_cdxml_roundtrip_preserve_the_graph() {
     let original = naphthalene();
@@ -475,6 +593,12 @@ fn gap_between_two_phenyls_closes_with_six_existing_atoms_and_one_new_bond() {
         assert_eq!((base.atoms.len(), base.bonds.len()), (26, 30));
         let point = midpoint(&base, at(&base, 5, -1), at(&base, 5, 1));
         let direction = Some(Point::new(6. * 21. * 3_f32.sqrt(), 0.));
+        let mut circled = base.clone();
+        editing::ring_oriented(&mut circled, point, 6, true, 5., direction).unwrap();
+        assert_eq!((circled.atoms.len(), circled.bonds.len()), (26, 31));
+        assert_eq!(identity(&circled), identity(&expected));
+        assert!(!reshiki::aromatic::circles(&circled).is_empty());
+        no_duplicates(&circled);
         for alternate in [false, true] {
             let (result, selected) = tool(alternate).place(&base, point, direction, 5.).unwrap();
             assert_eq!((result.atoms.len(), result.bonds.len()), (26, 31));

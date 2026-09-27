@@ -2674,25 +2674,26 @@ impl App {
                     }
                 }
             }
-            Edit::DelocalizedRing(anchor, direction, size) => {
-                self.selected = editing::ring_oriented(
+            Edit::Ring(anchor, direction) | Edit::DelocalizedRing(anchor, direction, _) => {
+                let (size, aromatic) = match edit {
+                    Edit::DelocalizedRing(_, _, size) => (size, true),
+                    _ => (self.ring_size, self.aromatic_ring),
+                };
+                match editing::ring_oriented(
                     &mut self.doc,
                     anchor,
                     size,
-                    true,
-                    10. / self.camera.zoom,
-                    direction,
-                );
-            }
-            Edit::Ring(anchor, direction) => {
-                self.selected = editing::ring_oriented(
-                    &mut self.doc,
-                    anchor,
-                    self.ring_size,
-                    self.aromatic_ring,
+                    aromatic,
                     10.0 / self.camera.zoom,
                     direction,
-                );
+                ) {
+                    Ok(ids) => self.selected = ids,
+                    Err(error) => {
+                        self.status = error.into();
+                        self.error = true;
+                        return;
+                    }
+                }
             }
             Edit::Select(ids) => {
                 self.selected = ids;
@@ -3731,6 +3732,40 @@ mod tests {
         app.doc = app.saved.clone();
         app.doc.atoms[0].position.x += 1.;
         assert!(app.dirty());
+    }
+
+    #[test]
+    fn circle_palette_and_modifier_share_atomic_attachment_and_history() {
+        for modifier in [false, true] {
+            let (mut app, _) = App::new();
+            app.doc = reshiki::rings::Preset::Benzene.document(42., false);
+            app.aromatic_ring = true;
+            app.ring_size = 6;
+            let anchor = app.doc.atoms[0].position;
+            let edit = if modifier {
+                Edit::DelocalizedRing(anchor, None, 6)
+            } else {
+                Edit::Ring(anchor, None)
+            };
+            let original = app.doc.clone();
+            app.edit(edit.clone());
+            assert!(!app.error, "{}", app.status);
+            assert_eq!((app.doc.atoms.len(), app.doc.bonds.len()), (12, 13));
+            assert!(!reshiki::aromatic::circles(&app.doc).is_empty());
+            reshiki::chemistry::document::prepare(&app.doc).unwrap();
+            let placed = app.doc.clone();
+            let selected = app.selected.clone();
+            let revision = app.revision;
+            app.edit(edit); // The same host carbon has no remaining valence.
+            assert!(app.error);
+            assert_eq!(app.doc, placed);
+            assert_eq!(app.selected, selected);
+            assert_eq!(app.revision, revision);
+            let _ = app.update(Message::Undo);
+            assert_eq!(app.doc, original);
+            let _ = app.update(Message::Redo);
+            assert_eq!(app.doc, placed);
+        }
     }
 
     #[test]
