@@ -1,5 +1,7 @@
 import unittest
+import xml.etree.ElementTree as ET
 
+from reference_annotations import legacy_preparation_input
 from reference_presentation import compare
 
 
@@ -15,3 +17,16 @@ class ReferenceContractTests(unittest.TestCase):
         ):
             with self.assertRaises(ValueError):
                 compare(changed, expected, "cdxml")
+
+    def test_only_named_fixture_metadata_is_removed_for_legacy_preparation(self):
+        name = "molecular-fixture/geometry-tetrahedral-4.cdxml"
+        text = (
+            '<CDXML><page><fragment><n id="1" Element="8" p="1 2"/></fragment>'
+            '<annotation Keyword="Name" Content="example"/></page></CDXML>'
+        )
+        self.assertEqual(legacy_preparation_input("another fixture", text), text)
+        adapted = ET.fromstring(legacy_preparation_input(name, text))
+        self.assertEqual(list(adapted.iter("annotation")), [])
+        self.assertEqual(next(adapted.iter("n")).attrib, {"id": "1", "Element": "8", "p": "1 2"})
+        with self.assertRaises(AssertionError):
+            legacy_preparation_input(name, text.replace('Keyword="Name"', 'Keyword="Other"'))

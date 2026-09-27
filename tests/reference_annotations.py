@@ -25,3 +25,16 @@ def molecular_extension(name, text):
             for node in ET.fromstring(text).iter("n")
         ),
     )
+
+
+def legacy_preparation_input(name, text):
+    if name != "molecular-fixture/geometry-tetrahedral-4.cdxml":
+        return text
+    root = ET.fromstring(text)
+    for parent in root.iter():
+        for child in list(parent):
+            if child.tag == "annotation":
+                assert child.get("Keyword") == "Name"
+                assert set(child.attrib) == {"Keyword", "Content"} and len(child) == 0
+                parent.remove(child)
+    return ET.tostring(root, encoding="unicode")
