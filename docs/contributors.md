@@ -1,9 +1,8 @@
 # Contributors
 
-ReShiki is built and improved through code, bug reports, testing, and design feedback.
+This list credits authors of merged pull requests to ReShiki.
 
-- Ameyanagi (@Ameyanagi) — project creator and maintainer.
-- Hiromichi Yokoyama (@HiroYokoyama) — proposed improved benzene fusion and Kekulé-pattern selection, with regression tests and follow-up review fixes, in [PR #40](https://github.com/Ameyanagi/ReShiki/pull/40).
-- えぬるた ([@Enurta2308 on X](https://x.com/Enurta2308)) — reported unexpected aromatic-display switching during repeated ring shortcuts.
+- @Ameyanagi — project creator and maintainer.
+- @HiroYokoyama — proposed improved benzene fusion and Kekulé-pattern selection, with regression tests and follow-up review fixes, in [PR #40](https://github.com/Ameyanagi/ReShiki/pull/40).
 
 The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-unreleased.md) credit contributors alongside their changes.
