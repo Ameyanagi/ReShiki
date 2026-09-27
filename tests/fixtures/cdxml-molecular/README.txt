@@ -4,9 +4,16 @@ They exercise explicit hydrogen policy, radicals, tetrahedral drawing geometry,
 atropisomers, and the ChemDraw double-bond stereo override.
 
 The reference test calls `Chem.MolsFromCDXML` with `sanitize=False` and
-`removeHs=False`. `atom-to-fragment.cdxml` and `geometry-tetrahedral-4.cdxml`
-contain annotation objects that the current application rejects; the test
-records their rejection separately from native parity. The first also requires
-abbreviation expansion before this molecular-reader boundary.
+`removeHs=False`. `atom-to-fragment.cdxml` requires abbreviation expansion
+before this molecular-reader boundary, so its rejection is recorded separately
+from native parity. Annotation metadata is accepted by the molecular reader;
+`geometry-tetrahedral-4.cdxml` is compared directly against the native reader,
+including its atoms, bonds, positions and stereochemistry.
+
+The complete scene/import tests separately cover the newly accepted annotated
+`atom-to-fragment.cdxml` drawing using direct RDKit canonical SMILES, atom/bond
+counts, and retained abbreviation membership. The legacy Python importer rejects
+this annotation/multiple-attachment combination; it is not used as the oracle
+for that one accepted extension.
 
 RDKit source licensing: see `licenses/rdkit/LICENSE` and `licenses/rdkit/NOTICE`.

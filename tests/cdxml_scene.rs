@@ -16,6 +16,9 @@ use std::{
     process::{Command, Stdio},
 };
 
+#[path = "support/reference_annotations.rs"]
+mod reference_annotations;
+
 #[derive(Deserialize)]
 struct Case {
     name: String,
@@ -25,6 +28,7 @@ struct Case {
     document: Option<Value>,
     document_error: Option<String>,
     restriction: Option<String>,
+    molecular_extension: Option<Value>,
 }
 fn difference(actual: &Value, expected: &Value, path: &str) -> Option<String> {
     match (actual, expected) {
@@ -102,6 +106,7 @@ fn complete_original_scene_and_actual_document_transport() -> anyhow::Result<()>
     let lines = BufReader::new(child.stdout.take().context("oracle output")?).lines();
     let (mut accepted, mut rejected, mut converted, mut bounds, mut restrictions) = (0, 0, 0, 0, 0);
     let mut failures = Vec::new();
+    let mut extensions = 0;
     let (mut restricted_native, mut restricted_documents, mut final_only_rejected) = (0, 0, 0);
     for line in lines {
         let value: Value = serde_json::from_str(&line?)?;
@@ -125,6 +130,16 @@ fn complete_original_scene_and_actual_document_transport() -> anyhow::Result<()>
             }
             Err(error) => Err(error.into()),
         };
+        if let Some(expected) = &case.molecular_extension {
+            // The old importer rejects annotations and multiple abbreviation
+            // attachments. This newly accepted fixture uses direct RDKit
+            // chemistry instead; it is not a complete legacy scene comparison.
+            assert!(case.scene.is_none() && case.document.is_none());
+            let imported = actual?.into_document()?;
+            reference_annotations::check(&imported.document, expected)?;
+            extensions += 1;
+            continue;
+        }
         if case.restriction.is_some() {
             restrictions += 1;
             assert!(actual.is_err(), "{} restriction", case.name);
@@ -189,9 +204,10 @@ fn complete_original_scene_and_actual_document_transport() -> anyhow::Result<()>
     assert!(failures.is_empty());
     assert_eq!(
         (accepted, rejected, converted, bounds),
-        (2645, 287, 2344, 588)
+        (2645, 286, 2344, 587)
     );
     assert_eq!(final_only_rejected, 301);
+    assert_eq!(extensions, 1);
     assert_eq!(
         (restrictions, restricted_native, restricted_documents),
         (4, 2, 2)

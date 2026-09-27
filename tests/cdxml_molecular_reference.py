@@ -360,9 +360,7 @@ def main():
     for path in sorted((root / "fixtures" / "cdxml-molecular").glob("*.cdxml")):
         restriction = None
         if path.name == "atom-to-fragment.cdxml":
-            restriction = "abbreviation expansion precedes molecular parsing; annotation object also outside current drawing contract"
-        if path.name == "geometry-tetrahedral-4.cdxml":
-            restriction = "annotation presentation object outside current drawing contract"
+            restriction = "abbreviation expansion precedes molecular parsing"
         emit(f"native fixture/{path.name}", path.read_text(), restriction)
     for attrs in (
         dict(NodeType="GenericNickname", GenericNickname="R1"),

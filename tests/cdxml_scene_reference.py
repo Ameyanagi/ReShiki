@@ -19,6 +19,7 @@ from cdxml_molecular_reference import from_mol, xml
 from perception_reference import snapshot
 from PIL import Image
 from rdkit import Chem, RDConfig, RDLogger, rdBase
+from reference_annotations import molecular_extension
 
 from engine import worker
 
@@ -123,6 +124,7 @@ def emit(name, text, restriction=None):
                     document=document,
                     document_error=document_error,
                     restriction=restriction,
+                    molecular_extension=molecular_extension(name, text),
                 )
             )
         )

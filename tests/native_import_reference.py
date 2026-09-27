@@ -7,6 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from rdkit import RDLogger, rdBase
+from reference_annotations import molecular_extension
 
 from engine.worker import handle
 
@@ -31,6 +32,7 @@ def emit(name, text, restriction=None, *, format="cdxml"):
                 expected=expected,
                 failure=failure,
                 restriction=restriction,
+                molecular_extension=molecular_extension(name, text),
             )
         )
     )
