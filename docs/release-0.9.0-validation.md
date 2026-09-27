@@ -14,7 +14,9 @@ Publisher settings were compared with downloaded stationery and ChemDraw output 
 
 ## Published release and package verification
 
-The annotated `v0.9.0` tag points to `1fd2b6c4c2936007e6d36077b3b620e76f2047d5`. The [tagged release workflow](https://github.com/Ameyanagi/ReShiki/actions/runs/36292105416) passed all six platform builds, both Mac signing jobs, all twelve live-reference shards and the native/Python/documentation checks. GitHub published the release at 04:20 UTC on September 27 as a stable, non-draft release.
+The annotated `v0.9.0` tag points to `1fd2b6c4c2936007e6d36077b3b620e76f2047d5`. The [tagged release workflow](https://github.com/Ameyanagi/ReShiki/actions/runs/36292105416) passed all six platform builds, both Mac signing jobs, all twelve live-reference shards and the native/Python checks. GitHub published the release at 04:20 UTC on September 27 as a stable, non-draft release.
+
+Documentation validation runs separately from the tagged workflow. The publication update is reviewed in [PR #57](https://github.com/Ameyanagi/ReShiki/pull/57), whose documentation workflow checks and builds the site. Local `docs:check` passed without diagnostics; `docs:build` produced 78 pages and verified 6,270 local links and assets.
 
 All ten public packages and `SHA256SUMS` were downloaded after publication. Every SHA-256 matched. All six portable manifests identify version `0.9.0`, the tagged source commit, the expected architecture and Rust target, and InChI `1.07.3`.
 
