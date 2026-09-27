@@ -16,14 +16,37 @@ def molecular_extension(name, text):
     molecule = parts[0]
     for part in parts[1:]:
         molecule = Chem.CombineMols(molecule, part)
+    wrappers = [
+        node
+        for node in ET.fromstring(text).iter("n")
+        if node.get("NodeType") in ("Fragment", "Nickname")
+    ]
+    assert len(wrappers) == 1
+    wrapper = wrappers[0]
+    inner = wrapper.find("fragment")
+    label = wrapper.find("t")
+    assert inner is not None and label is not None
+    members = [n for n in inner.findall("n") if n.get("NodeType") != "ExternalConnectionPoint"]
+    # This source defines a single central carbon joined to both external
+    # attachment points by double bonds. That environment identifies the anchor.
+    assert len(members) == 1
+    anchor = members[0]
     return dict(
         smiles=Chem.MolToSmiles(molecule),
         atoms=molecule.GetNumAtoms(),
         bonds=molecule.GetNumBonds(),
-        abbreviations=sum(
-            node.get("NodeType") in ("Fragment", "Nickname")
-            for node in ET.fromstring(text).iter("n")
-        ),
+        abbreviations=[
+            dict(
+                label="".join(label.itertext()),
+                members=len(members),
+                element=Chem.GetPeriodicTable().GetElementSymbol(int(anchor.get("Element", "6"))),
+                bond_orders=sorted(
+                    int(b.get("Order", "1"))
+                    for b in inner.findall("b")
+                    if anchor.get("id") in (b.get("B"), b.get("E"))
+                ),
+            )
+        ],
     )
 
 
