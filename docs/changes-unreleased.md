@@ -4,7 +4,7 @@ The Windows dropdown fix is recorded in [ReShiki 0.9.1](changes-0.9.1.md). Publi
 
 ## Website videos and reusable color palettes
 
-By @Ameyanagi.
+By @Ameyanagi in [PR #59](https://github.com/Ameyanagi/ReShiki/pull/59).
 
 The home page now includes the full ReShiki tour, with a separate release-highlights video in the 0.9.1 notes. The README links to both videos.
 
