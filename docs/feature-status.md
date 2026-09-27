@@ -3,7 +3,7 @@
 This inventory retains earlier workflow checks. For current packages and setup, see [installation](getting-started.md) and [release signing](releasing.md).
 
 Workflow checks began on 2026-09-20 for version 0.2.0. Runtime descriptions
-reflect the 0.9.0 release candidate; dated validation records describe their original milestones.
+reflect the 0.9.0 release; dated validation records describe their original milestones.
 This inventory records supported workflows, explicit limitations and planned work. A supported subset is not a claim of
 complete coverage for every chemical structure or document.
 
