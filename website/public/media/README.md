@@ -17,4 +17,6 @@ The homepage features the full tour and links to the release-highlights player i
 
 Both players display their posters until playback starts. Native controls, inline playback, direct download links, and `preload="none"` let visitors choose when to load the videos. The full tour keeps its existing `/media/reshiki-promo.mp4` URL so older links continue to work. These static files are included in the existing GitHub Pages build.
 
+The homepage and download links include `?v=0.9.1` on the full tour and poster to avoid stale CDN or browser copies after replacing the files. Update this cache version when replacing those assets again.
+
 To refresh a video, copy the rendered MP4 and matching poster from the promo project, update its duration and checksum here and in the page captions, and run `bun run docs:check` and `bun run docs:build` from the ReShiki repository root. Verify playback and mobile layout before publishing.
