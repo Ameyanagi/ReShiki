@@ -18,7 +18,7 @@ Draw molecules, build reaction schemes, and prepare figures on an editable canva
 
 [![Watch the ReShiki full tour — chemical drawing, free and in color](website/public/media/reshiki-promo-poster.png)](https://reshiki.com/#promo-video)
 
-[Watch the full tour · 2:46](https://reshiki.com/#promo-video) · [Release highlights · 0.9.1 · 2:10](https://reshiki.com/developer/changes-0.9.1/#release-highlights) · [Download the full video](https://reshiki.com/media/reshiki-promo.mp4) · [Logo assets and usage guide](assets/branding/README.md)
+[Watch the full tour · 2:46](https://reshiki.com/#promo-video) · [Release highlights · 0.9.1 · 2:10](https://reshiki.com/developer/changes-0.9.1/#release-highlights) · [Download the full video](https://reshiki.com/media/reshiki-promo.mp4?v=0.9.1) · [Logo assets and usage guide](assets/branding/README.md)
 
 Start with JACS / ACS styling. Attach templates, refine selected structures, or ask the assistant to propose a drawing. Review edits and undo changes. Copy editable structures or export SVG, PDF, and PNG.
 
