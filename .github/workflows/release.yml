@@ -49,6 +49,8 @@ jobs:
             artifact: macos-x64
             target: x86_64-apple-darwin
             python: "3.12"
+            # The pinned RDKit reference has no Intel macOS wheel. Runtime is native.
+            native_only: true
           - os: windows-2022
             artifact: windows-x64
             target: x86_64-pc-windows-msvc
@@ -93,6 +95,7 @@ jobs:
         with:
           arch: ${{ matrix.msvc_arch }}
       - run: uv sync --locked
+        if: matrix.native_only != true
       - name: Install pinned Windows installer compiler
         if: runner.os == 'Windows'
         shell: pwsh
@@ -105,13 +108,18 @@ jobs:
           if ($installerProcess.ExitCode -ne 0) { throw 'Inno Setup installation failed' }
           "RESHIKI_ISCC=$compilerDir\ISCC.exe" >> $env:GITHUB_ENV
       - name: Test chemistry and packaging on this platform
+        if: matrix.native_only != true
         run: uv run --locked python -m unittest discover -s tests -p 'test_*.py'
+      - name: Test Intel Mac packaging without reference dependencies
+        if: matrix.native_only == true
+        run: uv run --no-project --isolated --python 3.12 python -m unittest tests.test_release tests.test_inchi_distribution tests.test_inchi_helper_builder tests.test_native_packaging tests.test_license_notices tests.test_native_clipboard tests.test_native_print
       - name: Verify reference dependencies
+        if: matrix.native_only != true
         run: uv run --locked python scripts/check_reference_dependencies.py
       - name: Build and test extracted portable archive
         env:
           MACOSX_DEPLOYMENT_TARGET: "14.0"
-        run: uv run --locked python scripts/build_release.py --target ${{ matrix.target }} --fetch-inchi-source --installer
+        run: uv run --no-project --isolated --python 3.12 python scripts/build_release.py --target ${{ matrix.target }} --fetch-inchi-source --installer
       - name: Test native chemistry on Intel macOS
         if: matrix.artifact == 'macos-x64'
         env:
@@ -156,7 +164,7 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
           MACOS_SIGNING_IDENTITY: ${{ vars.MACOS_SIGNING_IDENTITY }}
-        run: uv run --locked python scripts/sign_release.py
+        run: uv run --no-project --isolated --python 3.12 python scripts/sign_release.py
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: signed-${{ matrix.artifact }}

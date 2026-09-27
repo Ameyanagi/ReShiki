@@ -45,6 +45,8 @@ Archive and installer checks run the installed app twice with Python, uv and the
 
 Install [uv 0.12.3 or later](https://docs.astral.sh/uv/getting-started/installation/) and run `uv sync --locked --python 3.12`. On Windows, use `--python cpython-3.12-windows-x86_64-none`, including on ARM.
 
+The pinned RDKit reference provides wheels for Apple Silicon macOS, Windows x64 and Linux x64/ARM64, but not Intel macOS. Intel Mac development and packaging use the native checks above; run optional reference comparisons on a supported platform. The distributed Intel app needs no Python or RDKit.
+
 Live layout comparisons on Linux and Windows need fresh references for their installed math libraries. Setup downloads the pinned RDKit source and verified Boost headers; it only builds test tools.
 
 On Linux:
@@ -66,7 +68,7 @@ Then, in the tools shell matching your Rust target, load the reference paths:
 . ./artifacts/depict-live-windows/environment.ps1
 ```
 
-Run the comparisons on any platform:
+Run the comparisons on a supported reference platform:
 
 ```sh
 cargo test --workspace --locked --features rdkit-reference --no-fail-fast
