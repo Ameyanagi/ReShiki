@@ -140,7 +140,8 @@ fn original_worker_detection_and_validation_match() -> anyhow::Result<()> {
     assert!(errors.is_empty(), "{}", errors.join("\n"));
     assert!(count > 5_000, "Incomplete oracle: {count}");
     eprintln!(
-        "Verified {count} abbreviation detection/validation cases and all 29 native preset queries"
+        "Verified {count} abbreviation detection/validation cases and all {} native preset queries",
+        abbreviations::presets()?.len()
     );
     Ok(())
 }
