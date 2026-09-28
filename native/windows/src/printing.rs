@@ -427,7 +427,8 @@ pub(super) fn metafile(data: &[u8]) -> Result<Vec<u8>> {
         Height: snapshot.height_pt * 2540. / 72.,
     };
     // Record both GDI+ vectors and their GDI fallback for Office's default
-    // handler. No bitmap of the whole drawing or background fill is recorded.
+    // handler. No bitmap of the whole drawing is recorded; file snapshots supply
+    // their canvas background while Office clipboard snapshots are transparent.
     unsafe {
         let reference = GetDC(None);
         if reference.is_invalid() {
@@ -726,12 +727,28 @@ mod tests {
 
     #[test]
     fn office_metafile_keeps_vectors_transparency_and_physical_size() {
-        let snapshot = serde_json::json!({
+        assert_metafile_background(false);
+    }
+
+    #[test]
+    fn file_metafile_keeps_vector_background_and_physical_size() {
+        assert_metafile_background(true);
+    }
+
+    fn assert_metafile_background(opaque: bool) {
+        let mut snapshot = serde_json::json!({
             "version": 1, "width_pt": 75., "height_pt": 75., "pages": [[0., 0.]],
             "primitives": [{"kind": "path", "transform": [1., 0., 0., 1., 0., 0.],
                 "commands": [[0., 10., 10.], [1., 90., 10.], [1., 10., 90.], [4.]],
                 "fill": [20, 150, 220, 255]}]
         });
+        if opaque {
+            snapshot["primitives"].as_array_mut().unwrap().insert(0, serde_json::json!({
+                "kind": "path", "transform": [1., 0., 0., 1., 0., 0.],
+                "commands": [[0., 0., 0.], [1., 100., 0.], [1., 100., 100.], [1., 0., 100.], [4.]],
+                "fill": [40, 50, 60, 255]
+            }));
+        }
         let bytes = metafile(&serde_json::to_vec(&snapshot).unwrap()).unwrap();
         let int = |i| u32::from_le_bytes(bytes[i..i + 4].try_into().unwrap());
         assert!(
@@ -763,7 +780,7 @@ mod tests {
         }
         assert!(paths > 0, "missing vector path");
         // Exercise the same GDI fallback used by OLE's presentation cache at a
-        // much larger size. Empty space must keep the host's colored background.
+        // much larger size. Only file exports paint their canvas background.
         unsafe {
             let emf = SetEnhMetaFileBits(&bytes);
             assert!(!emf.is_invalid());
@@ -804,7 +821,11 @@ mod tests {
             let _ = DeleteDC(dc);
             let _ = DeleteEnhMetaFile(emf);
             assert!(played.as_bool());
-            assert_eq!(empty, [230; 3], "preview painted a background");
+            assert_eq!(
+                empty,
+                if opaque { [60, 50, 40] } else { [230; 3] },
+                "incorrect metafile background"
+            );
             assert_eq!(near_right, [220, 150, 20], "wrong horizontal scale");
             assert_eq!(near_bottom, [220, 150, 20], "wrong vertical scale");
         }

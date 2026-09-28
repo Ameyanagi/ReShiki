@@ -111,6 +111,11 @@ fn render_drawing(doc: &Document, format: &str, clipboard: bool) -> Result<Figur
     options.fontdb_mut().load_system_fonts();
     let tree = resvg::usvg::Tree::from_str(&svg, &options).map_err(|e| e.to_string())?;
     match format {
+        #[cfg(windows)]
+        "emf" => crate::native_windows::metafile(&tree).map(|bytes| Figure {
+            bytes,
+            detail: None,
+        }),
         "pdf" => svg2pdf::to_pdf(
             &tree,
             svg2pdf::ConversionOptions::default(),

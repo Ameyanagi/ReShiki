@@ -5,6 +5,109 @@ use reshiki::{
     printing::{self, Scope},
 };
 
+fn emf_u32(bytes: &[u8], offset: usize) -> u32 {
+    u32::from_le_bytes(bytes[offset..offset + 4].try_into().unwrap())
+}
+
+fn assert_vector_emf(bytes: &[u8], width_pt: f32, height_pt: f32) {
+    assert_eq!(emf_u32(bytes, 0), 1, "missing EMR_HEADER");
+    assert_eq!(emf_u32(bytes, 40), 0x464d4520, "missing EMF signature");
+    assert_eq!(emf_u32(bytes, 48) as usize, bytes.len());
+    for (lo, hi, points) in [(24, 32, width_pt), (28, 36, height_pt)] {
+        let physical = emf_u32(bytes, hi) as i32 - emf_u32(bytes, lo) as i32;
+        assert!(
+            (physical as f32 - points * 2540. / 72.).abs() <= 1.,
+            "physical EMF frame changed: {physical} vs {points} pt"
+        );
+    }
+    let (mut offset, mut paths) = (0, 0);
+    while offset < bytes.len() {
+        let kind = emf_u32(bytes, offset);
+        let size = emf_u32(bytes, offset + 4) as usize;
+        assert!(size >= 8 && offset + size <= bytes.len());
+        if [3, 8, 59, 86, 91].contains(&kind) {
+            paths += 1;
+        }
+        assert!(
+            ![77, 80, 81, 114, 116].contains(&kind),
+            "rasterized drawing"
+        );
+        if kind == 76 {
+            assert_eq!(emf_u32(bytes, offset + 84), 0);
+            assert_eq!(emf_u32(bytes, offset + 92), 0);
+        }
+        offset += size;
+    }
+    assert!(paths > 0, "missing vector outlines");
+}
+
+#[test]
+fn windows_emf_file_export_keeps_vectors_bounds_and_source_document() {
+    let mut doc: Document =
+        serde_json::from_str(include_str!("fixtures/ui-drawn-ethanol.reshiki")).unwrap();
+    // Ordinary figure export crops the whole drawing, independently of pages.
+    doc.page_layout = Some(reshiki::pages::Layout::default());
+    for theme in reshiki::canvas_theme::CanvasTheme::ALL {
+        doc.canvas_theme = theme;
+        let original = doc.clone();
+        let svg = reshiki::scene::svg_with_background(&doc);
+        let tree = resvg::usvg::Tree::from_str(&svg, &Default::default()).unwrap();
+        let file = reshiki::export::figure(&doc, "emf").unwrap();
+        let clipboard = reshiki::export::clipboard_drawing(&doc, "emf").unwrap();
+        assert_vector_emf(
+            &file.bytes,
+            tree.size().width() * 0.75,
+            tree.size().height() * 0.75,
+        );
+        assert_vector_emf(
+            &clipboard,
+            tree.size().width() * 0.75,
+            tree.size().height() * 0.75,
+        );
+        assert_ne!(
+            file.bytes, clipboard,
+            "file export lost its canvas background"
+        );
+        assert!(file.detail.is_none());
+        assert_eq!(doc, original);
+    }
+    let mut oversized = Document::default();
+    let a = oversized.add_atom("C", Point::default());
+    let b = oversized.add_atom("C", Point::new(10000., 0.));
+    oversized.add_bond(a, b, 1, "plain");
+    assert!(
+        reshiki::export::drawing(&oversized, "emf")
+            .unwrap_err()
+            .contains("40-inch")
+    );
+    doc.atoms[0].position.x = f32::NAN;
+    assert!(reshiki::export::drawing(&doc, "emf").is_err());
+}
+
+#[test]
+#[ignore = "writes real Windows EMF and PNG exports for visual review"]
+fn windows_emf_file_export_review() {
+    let output = std::path::PathBuf::from(
+        std::env::var_os("RESHIKI_EMF_REVIEW_DIR").expect("set RESHIKI_EMF_REVIEW_DIR"),
+    );
+    std::fs::create_dir_all(&output).unwrap();
+    let mut doc: Document =
+        serde_json::from_str(include_str!("../docs/changes/fixtures/emf-export.rsk")).unwrap();
+    for (name, theme) in [
+        ("light", reshiki::canvas_theme::CanvasTheme::Light),
+        ("dark", reshiki::canvas_theme::CanvasTheme::Dark),
+    ] {
+        doc.canvas_theme = theme;
+        for format in ["emf", "png"] {
+            std::fs::write(
+                output.join(format!("{name}.{format}")),
+                reshiki::export::drawing(&doc, format).unwrap(),
+            )
+            .unwrap();
+        }
+    }
+}
+
 #[test]
 fn windows_print_pipeline_preserves_bond_length_and_page_position() {
     let mut doc = Document::default();
