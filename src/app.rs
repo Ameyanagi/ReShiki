@@ -30,6 +30,7 @@ mod icons;
 mod inline_text;
 mod inspector;
 mod joining;
+mod molecule_shortcuts;
 mod pages;
 mod palettes;
 mod pictures;
@@ -284,6 +285,7 @@ pub struct App {
     bracket_sides: BracketSides,
     doc: Document,
     history: History,
+    recent_molecules: molecule_shortcuts::Recent,
     selected: Vec<u64>,
     camera: Camera,
     tool: Tool,
@@ -391,6 +393,7 @@ impl App {
             bracket_sides: BracketSides::Both,
             doc: Document::default(),
             history: History::default(),
+            recent_molecules: Default::default(),
             selected: vec![],
             camera: Camera::default(),
             tool: Tool::Select,
@@ -663,6 +666,8 @@ impl App {
             self.doc.reconcile_molecule_groups();
         }
         let drawing_style_changed = before.drawing_style != self.doc.drawing_style;
+        self.recent_molecules
+            .record(&before, &self.doc, self.file_epoch, continuing);
         let chemistry_changed = chemistry_changed(&before, &self.doc);
         if chemistry_changed {
             reshiki::atom_labels::clear_computed(&mut self.doc);
@@ -814,6 +819,9 @@ impl App {
     }
 
     fn update_inner(&mut self, message: Message) -> Task<Message> {
+        let Some(message) = self.prepare_molecule_shortcut(message) else {
+            return Task::none();
+        };
         if self.updates.restarting && !matches!(message, Message::Updates(_)) {
             return Task::none();
         }
@@ -2116,6 +2124,8 @@ impl App {
                     self.history.redo(&mut self.doc)
                 };
                 if changed {
+                    self.recent_molecules
+                        .restore(matches!(message, Message::Redo), self.file_epoch);
                     self.revision = self.revision.wrapping_add(1);
                     if chemistry_changed(&before, &self.doc) {
                         self.analysis = None;

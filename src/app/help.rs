@@ -61,6 +61,14 @@ impl App {
                 ),
                 (platform_shortcut("⇧ ⌘ D", "Ctrl Shift D"), "Duplicate"),
                 (
+                    platform_shortcut("⇧ ⌘ →", "Ctrl Shift →"),
+                    "Reaction arrow and molecule copy",
+                ),
+                (
+                    "Space with Select active",
+                    "Select the most recently edited molecule",
+                ),
+                (
                     platform_shortcut("⌘ Z / ⇧ ⌘ Z", "Ctrl Z / Ctrl Shift Z"),
                     "Undo / Redo",
                 ),
