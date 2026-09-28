@@ -710,6 +710,14 @@ pub fn ring_oriented(
     radius: f32,
     direction: Option<Point>,
 ) -> Result<Vec<u64>, &'static str> {
+    if !p.x.is_finite()
+        || !p.y.is_finite()
+        || !radius.is_finite()
+        || radius < 0.
+        || direction.is_some_and(|p| !p.x.is_finite() || !p.y.is_finite())
+    {
+        return Err("Invalid ring attachment geometry.");
+    }
     let n = size.clamp(3, 8) as usize;
     if aromatic && n == 6 {
         let drawing = crate::rings::Drawing {
@@ -744,6 +752,9 @@ pub fn ring_oriented(
     } else {
         None
     };
+    // Both the live preview and commit build the same candidate. Nothing is
+    // written back until its attachment chemistry and vertices are checked.
+    let mut result = doc.clone();
     let mut ids = vec![];
     if let Some(index) = bond {
         let Some(b) = doc.bonds.get(index).cloned() else {
@@ -752,6 +763,9 @@ pub fn ring_oriented(
         let (Some(a), Some(z)) = (doc.atom(b.a), doc.atom(b.b)) else {
             return Err("The attachment bond has missing atoms.");
         };
+        if b.display != "plain" || b.stereo.is_some() || !b.stereo_atoms.is_empty() {
+            return Err("Choose a plain bond without assigned stereochemistry.");
+        }
         let (a, z) = (a.position, z.position);
         let positions = |sign: f32| {
             let mut points = vec![a, z];
@@ -787,7 +801,7 @@ pub fn ring_oriented(
         let points = if first_side { first } else { second };
         ids.extend([b.a, b.b]);
         for p in points.iter().skip(2) {
-            ids.push(doc.add_atom("C", *p));
+            ids.push(result.add_atom("C", *p));
         }
     } else {
         let neighbors: Vec<_> = doc
@@ -835,7 +849,7 @@ pub fn ring_oriented(
             ids.push(if let Some(id) = atom.filter(|_| i == 0) {
                 id
             } else {
-                doc.add_atom("C", center.offset(angle.cos() * r, angle.sin() * r))
+                result.add_atom("C", center.offset(angle.cos() * r, angle.sin() * r))
             });
         }
     }
@@ -848,15 +862,88 @@ pub fn ring_oriented(
         if i == 0 && bond.is_some() && !aromatic {
             continue;
         }
-        doc.add_bond(a, b, if aromatic { 4 } else { 1 }, "plain");
+        result.add_bond(a, b, if aromatic { 4 } else { 1 }, "plain");
     }
     if aromatic {
         for id in &ids {
-            if let Some(atom) = doc.atom_mut(*id) {
+            if let Some(atom) = result.atom_mut(*id) {
                 atom.aromatic = true;
             }
         }
     }
+    for id in &ids {
+        if let Some(target) = doc.atom(*id)
+            && (target.stereo.is_some()
+                || target.radical_electrons != 0
+                || !target.marks.is_empty()
+                || target.explicit_h != 0
+                || target.no_implicit
+                || target.isotope != 0
+                || target.map_num != 0
+                || target.attachment.is_some()
+                || !target.centroid.is_empty()
+                || doc.abbreviation(*id).is_some()
+                || doc.atoms.iter().any(|a| {
+                    a.stereo
+                        .as_ref()
+                        .is_some_and(|stereo| stereo.neighbors.contains(id))
+                })
+                || doc.bonds.iter().any(|b| {
+                    b.stereo_atoms.contains(id)
+                        || (b.a == *id || b.b == *id)
+                            && (b.stereo.is_some()
+                                || !b.stereo_atoms.is_empty()
+                                || (!b.projection
+                                    && ((b.order == 1
+                                        && matches!(
+                                            b.display.as_str(),
+                                            "wedge"
+                                                | "hollow_wedge"
+                                                | "bold"
+                                                | "hash"
+                                                | "hashed"
+                                                | "wavy"
+                                        ))
+                                        || (b.order == 2 && b.display == "wavy"))))
+                })
+                || crate::templates::valence(&result, *id) > crate::templates::capacity(target))
+        {
+            return Err(
+                "This atom has no available valence, or has protected hydrogens, labels or stereochemistry.",
+            );
+        }
+    }
+    let [first, second, ..] = ids.as_slice() else {
+        return Err("The ring has a missing edge.");
+    };
+    let a = result.atom(*first).ok_or("The ring has a missing atom.")?;
+    let b = result.atom(*second).ok_or("The ring has a missing atom.")?;
+    let length = a.position.distance(b.position);
+    if !length.is_finite() || length < 0.001 {
+        return Err("Choose an attachment with nonzero bond lengths.");
+    }
+    // Use the aromatic fusion planner's scale-relative proximity threshold,
+    // independent of zoom/hit radius. Regular rings conservatively reject an
+    // unshared coincident vertex instead of merging arbitrary existing atoms.
+    let tolerance = (length * (5. / 75.)).max(0.01);
+    for added in result.atoms.iter().skip(doc.atoms.len()) {
+        if doc
+            .atoms
+            .iter()
+            .any(|old| added.position.distance(old.position) <= tolerance)
+        {
+            return Err(
+                "The ring would overlap an existing atom. Choose another position or side.",
+            );
+        }
+    }
+    result.reconcile_molecule_groups();
+    crate::reactions::reconcile(&mut result)
+        .map_err(|_| "The ring would create incompatible reaction participants.")?;
+    result
+        .validate()
+        .map_err(|_| "Invalid ring attachment geometry.")?;
+    *doc = result;
     Ok(ids)
 }
 
