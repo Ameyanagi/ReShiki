@@ -4,7 +4,7 @@ The Windows dropdown fix is recorded in [ReShiki 0.9.1](changes-0.9.1.md). Publi
 
 ## ChemDraw caption exchange (under review)
 
-By @Ameyanagi.
+By @Ameyanagi in [PR #79](https://github.com/Ameyanagi/ReShiki/pull/79).
 
 Formula captions remain editable text when copied into ChemDraw, and binary
 CDX preserves their line spacing. Actual macOS clipboard round trips retain
