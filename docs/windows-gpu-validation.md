@@ -1,4 +1,4 @@
-# Windows renderer validation — 2026-09-28
+# Windows renderer validation — 2026-09-28–29
 
 Windows GPU support is restored with a software fallback. This VM should keep
 using Tiny Skia: forcing WGPU selects Microsoft's CPU renderer and substantially
@@ -56,6 +56,47 @@ window. Its WGPU measurements were discarded. The table uses only the corrected
 run, whose raw JSON, logs and captures are retained locally under
 `artifacts/windows-gpu-20260928/verified/` and on the VM under
 `F:\reshiki-gpu-20260928\artifacts\gpu\verified\`.
+
+## GitHub nightly package verification — 2026-09-29
+
+The [manual nightly package run](https://github.com/Ameyanagi/ReShiki/actions/runs/36480533735)
+passed all six platform builds, extracted-package checks and application/renderer
+tests. This dispatch produced Actions artifacts; prerelease publication belongs
+to the nightly workflow after it is merged into `main`.
+
+The Windows x64 artifact was downloaded, its checksum verified locally and on
+`192.168.1.51`, and its extracted executable tested in the unlocked RDP session:
+
+- Version: `0.9.1-nightly.20260928.36480533735.1`.
+- Runtime commit: `360eb6186fe883b6a84ffe720794c7941d896beb`.
+- Archive SHA-256:
+  `32778c5fe9573bc01b4a0a4e6fb761aaf7492296f18979fdab44ccb76fcbc55f`.
+- `--engine-check` passed using the packaged native chemistry helper: ethanol
+  returned `CCO`, `C2H6O`, mass `46.069` and its expected InChI.
+- Both command-line and desktop diagnostics found only the Microsoft CPU adapter
+  and selected Tiny Skia as the automatic startup preference.
+
+The same five-trial workload completed with the editor focused in every trial:
+
+| Trial | Preference  | Idle CPU | Interaction CPU | Interaction wall time | Process CPU time | Working set |
+| ----- | ----------- | -------: | --------------: | --------------------: | ---------------: | ----------: |
+| 1     | Tiny Skia   |       0% |          12.46% |               14.28 s |          14.23 s |    43.4 MiB |
+| 2     | WGPU / WARP |       0% |          47.84% |               19.27 s |          73.75 s |   124.5 MiB |
+| 3     | Automatic   |       0% |          12.44% |               14.29 s |          14.22 s |    45.9 MiB |
+| 4     | WGPU / WARP |       0% |          47.67% |               19.36 s |          73.81 s |   120.4 MiB |
+| 5     | Tiny Skia   |       0% |          12.48% |               14.20 s |          14.17 s |    43.3 MiB |
+
+All five captures displayed the actual editor and the nightly version. WARP's
+captured text and strokes appeared thinner than Tiny Skia's; visual parity is
+not established. Final zoom and event timing again differed, so the table
+describes whole-application workload cost, not equal-frame throughput or latency.
+These results support retaining automatic Tiny Skia selection on this CPU-only
+VM; they do not predict hardware WGPU performance.
+
+Raw results, diagnostics and unretouched diagnostic captures are retained locally
+under `artifacts/nightly-36480533735/` and on the VM under
+`F:\rsk-n36480533735\`. The temporary scheduled task and its test processes were
+removed after completion; the existing installed application was left running.
 
 ## Selection and fallback checks
 
