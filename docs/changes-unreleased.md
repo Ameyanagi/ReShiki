@@ -2,6 +2,18 @@
 
 The Windows dropdown fix is recorded in [ReShiki 0.9.1](changes-0.9.1.md). Publisher-style, theme, clipboard and aromatic-fusion updates are recorded in [ReShiki 0.9.0](changes-0.9.md).
 
+## Reaction and recent-molecule shortcuts
+
+By @Ameyanagi in [PR #72](https://github.com/Ameyanagi/ReShiki/pull/72), **under review**. Desktop interaction QA is pending.
+
+Build reaction steps with **Cmd/Ctrl+Shift+Right**, and use **Space** in Select mode to return to the molecule you just edited. The reaction shortcut adds an arrow and selects a product copy in one Undo step, preserving groups, abbreviations and reaction roles. Space follows Undo/Redo; focused text retains its typing and caret keys.
+
+The examples below are application-renderer captures. Foreground objects occupying the reaction destination must be moved first; background graphics do not block copying. [Behavior, fixtures and validation](changes/reaction-selection-shortcuts.md).
+
+![Cmd/Ctrl+Shift+Right creates an arrow and selected product copy](images/reaction-selection-shortcuts/reaction-copy.png)
+
+![Space selects the most recently edited product after changing its terminal atom to N](images/reaction-selection-shortcuts/space-selection.png)
+
 ## Website videos and reusable color palettes
 
 By @Ameyanagi in [PR #59](https://github.com/Ameyanagi/ReShiki/pull/59).
