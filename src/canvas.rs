@@ -283,6 +283,7 @@ pub struct MoleculeCanvas<'a> {
     pub phase_flipped: bool,
     pub attach_symbols: bool,
     pub graphic_constrain: bool,
+    pub graphic_arc: reshiki::graphics::ArcGeometry,
     pub graphic_style: &'a GraphicStyle,
     pub bracket_sides: BracketSides,
 }
@@ -633,10 +634,10 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                         .filter(|g| self.selected.contains(&g.id))
                     {
                         if let Some((index, _)) = g
-                            .commands()
-                            .iter()
-                            .flat_map(PathCommand::points)
+                            .edit_points()
+                            .into_iter()
                             .enumerate()
+                            .rev()
                             .find(|(_, q)| q.distance(p) < 8.0 / self.camera.zoom)
                         {
                             state.gesture = Some(Gesture::GraphicPoint { id: g.id, index });
@@ -1344,15 +1345,18 @@ impl MoleculeCanvas<'_> {
                     }
                 } else {
                     let id = preview.next_id();
-                    preview.graphics.push(Graphic::dragged(
-                        id,
-                        kind,
-                        *start,
-                        end,
-                        self.graphic_style.clone(),
-                        self.bracket_sides,
-                        state.modifiers.shift() || self.graphic_constrain,
-                    ));
+                    preview.graphics.push(
+                        Graphic::dragged(
+                            id,
+                            kind,
+                            *start,
+                            end,
+                            self.graphic_style.clone(),
+                            self.bracket_sides,
+                            state.modifiers.shift() || self.graphic_constrain,
+                        )
+                        .with_arc(self.graphic_arc),
+                    );
                     ring_selection = Some(vec![id]);
                 }
             }
@@ -1896,6 +1900,19 @@ impl MoleculeCanvas<'_> {
         }
         if self.tool == Tool::EditPoints {
             for graphic in preview.graphics.iter().filter(|g| selected.contains(&g.id)) {
+                if graphic.kind == reshiki::graphics::GraphicKind::Arc {
+                    for p in graphic.edit_points() {
+                        let path = Path::circle(self.camera.screen(p, bounds), 5.0);
+                        frame.fill(&path, Color::WHITE);
+                        frame.stroke(
+                            &path,
+                            Stroke::default()
+                                .with_width(1.5)
+                                .with_color(rgb([19, 135, 116])),
+                        );
+                    }
+                    continue;
+                }
                 let mut anchor = World::default();
                 for c in graphic.commands() {
                     let points = c.points();
@@ -3374,6 +3391,7 @@ mod tests {
             phase_flipped: false,
             attach_symbols: true,
             graphic_constrain: false,
+            graphic_arc: Default::default(),
             graphic_style: &STYLE,
             bracket_sides: BracketSides::Both,
             bond_drawing: Default::default(),
@@ -4059,6 +4077,7 @@ mod tests {
             phase_flipped: false,
             attach_symbols: true,
             graphic_constrain: false,
+            graphic_arc: Default::default(),
             graphic_style: &style,
             bracket_sides: BracketSides::Both,
         };
@@ -4172,6 +4191,7 @@ mod tests {
             phase_flipped: false,
             attach_symbols: true,
             graphic_constrain: false,
+            graphic_arc: Default::default(),
             graphic_style: &style,
             bracket_sides: BracketSides::Both,
         };
@@ -4297,6 +4317,7 @@ mod tests {
             phase_flipped: false,
             attach_symbols: true,
             graphic_constrain: false,
+            graphic_arc: Default::default(),
             graphic_style: &style,
             bracket_sides: BracketSides::Both,
         };
@@ -4324,6 +4345,33 @@ mod tests {
             Edit::GraphicPoint(1, 1, _)
         ));
         assert_eq!(with_curve, original);
+
+        let mut with_arc = doc.clone();
+        with_arc.graphics.push(
+            Graphic::dragged(
+                1,
+                reshiki::graphics::GraphicKind::Arc,
+                World::new(-50., -50.),
+                World::new(50., 50.),
+                style.clone(),
+                BracketSides::Both,
+                false,
+            )
+            .with_arc(reshiki::graphics::ArcGeometry {
+                start_degrees: 180.,
+                sweep_degrees: 360.,
+            }),
+        );
+        canvas.doc = &with_arc;
+        let original = with_arc.clone();
+        assert!(
+            matches!(
+                pointer_gesture(&canvas, Point::new(150., 150.), Point::new(200., 100.)),
+                Edit::GraphicPoint(1, 1, _)
+            ),
+            "coincident full-circle endpoints must let the end be dragged open"
+        );
+        assert_eq!(with_arc, original);
     }
 
     #[test]
@@ -4364,6 +4412,7 @@ mod tests {
             phase_flipped: false,
             attach_symbols: true,
             graphic_constrain: false,
+            graphic_arc: Default::default(),
             graphic_style: &style,
             bracket_sides: BracketSides::Both,
         };
@@ -4460,6 +4509,7 @@ mod tests {
             phase_flipped: false,
             attach_symbols: true,
             graphic_constrain: false,
+            graphic_arc: Default::default(),
             graphic_style: &GraphicStyle::default(),
             bracket_sides: BracketSides::Both,
         };
@@ -4599,6 +4649,7 @@ mod tests {
             phase_flipped: false,
             attach_symbols: true,
             graphic_constrain: false,
+            graphic_arc: Default::default(),
             graphic_style: &GraphicStyle::default(),
             bracket_sides: BracketSides::Both,
         };
@@ -4698,6 +4749,7 @@ mod tests {
             phase_flipped: false,
             attach_symbols: true,
             graphic_constrain: false,
+            graphic_arc: Default::default(),
             graphic_style: &GraphicStyle::default(),
             bracket_sides: BracketSides::Both,
         };
@@ -4756,6 +4808,7 @@ mod tests {
             phase_flipped: false,
             attach_symbols: true,
             graphic_constrain: false,
+            graphic_arc: Default::default(),
             graphic_style: &GraphicStyle::default(),
             bracket_sides: BracketSides::Both,
         };
@@ -4792,6 +4845,7 @@ mod tests {
             phase_flipped: false,
             attach_symbols: true,
             graphic_constrain: false,
+            graphic_arc: Default::default(),
             graphic_style: &GraphicStyle::default(),
             bracket_sides: BracketSides::Both,
         };
@@ -4850,6 +4904,7 @@ mod tests {
             phase_flipped: false,
             attach_symbols: true,
             graphic_constrain: false,
+            graphic_arc: Default::default(),
             graphic_style: &GraphicStyle::default(),
             bracket_sides: BracketSides::Both,
         };
@@ -4922,6 +4977,7 @@ mod tests {
             phase_flipped: false,
             attach_symbols: true,
             graphic_constrain: false,
+            graphic_arc: Default::default(),
             graphic_style: &GraphicStyle::default(),
             bracket_sides: BracketSides::Both,
         };
