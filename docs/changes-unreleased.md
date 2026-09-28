@@ -10,8 +10,9 @@ Regular rings reject saturated/protected attachment sites and coincident duplica
 vertices without changing your drawing, selection, or Undo/Redo history. Extra
 overlapping vertices are rejected rather than merged; valid atom sharing and
 outward bond fusion remain available. See the [graph counts, saved fixtures, and
-capture details](changes/regular-ring-safety.md). Real desktop verification is
-pending review in the combined integration application.
+capture details](changes/regular-ring-safety.md). The three rejection cases,
+valid outward fusion, and Undo/Redo behavior were verified in the combined macOS
+integration application; capture provenance is recorded with the evidence.
 
 | Before                                                                                                                              | After                                                                                                                                           |
 | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
