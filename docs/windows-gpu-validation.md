@@ -103,14 +103,20 @@ access to `/dev/dri/renderD128`. The system has only the Radeon Vulkan ICD; the
 test used WGPU on that physical GPU. No desktop login or VM configuration change
 was needed.
 
-Representative captures were inspected for visible UI, text, molecular bonds and
-selection controls:
+On 2026-09-29, the synthetic fixture was corrected to point its carbonyl outward
+from the top ring vertex and show the nitrogen's hydrogen. The original fixture's
+crowded bond angle was an input problem, not evidence of a WGPU rendering defect.
+All 11 GPU cases passed again. The representative captures below use unselected
+desktop views and were inspected for molecular geometry, readable text and clean
+presentation. Selection-control captures remain in the full test artifacts.
 
-| Light desktop                                                                                                                                   | Dark compact with selection                                                                                                                    |
-| ----------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| ![WGPU rendering on the Radeon 780M: light desktop with a molecular drawing and drawing-style panel.](images/wgpu-validation/linux-desktop.png) | ![WGPU rendering on the Radeon 780M: dark compact layout with molecular selection handles.](images/wgpu-validation/linux-selected-compact.png) |
+| Light desktop                                                                                                                                         | Dark desktop                                                                                                                                        |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ![WGPU rendering on the Radeon 780M: light desktop with a piperidin-4-one drawing and drawing-style panel.](images/wgpu-validation/linux-desktop.png) | ![WGPU rendering on the Radeon 780M: dark desktop with the same unselected piperidin-4-one drawing.](images/wgpu-validation/linux-dark-desktop.png) |
 
 These are offscreen rendering checks in a debug test build, not measurements of
 window presentation, input latency or frame rate. They establish Linux hardware
 rendering and do not establish a Windows performance improvement. Captures, the
-test log and device trace are retained locally in `artifacts/wgpu-linux-20260928/`.
+original test log and device trace are retained locally in
+`artifacts/wgpu-linux-20260928/`. Corrected captures and their test log are in
+`artifacts/wgpu-linux-20260929/`.
