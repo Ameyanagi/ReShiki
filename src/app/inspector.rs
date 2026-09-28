@@ -700,6 +700,7 @@ impl App {
 
     fn arrangement_panel(&self, multiple: bool) -> Element<'_, Message> {
         let mut arrange = column![
+            self.numeric_transform_panel(),
             text("Rotate & reflect").size(11).style(muted_text),
             row![
                 command("↶ 30°", Message::Transform(Transform::Rotate(-30.))).width(Length::Fill),

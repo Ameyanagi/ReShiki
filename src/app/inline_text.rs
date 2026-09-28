@@ -608,6 +608,7 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::IntegralGroup(_)
             | Message::AddFrame(_)
             | Message::Transform(_)
+            | Message::NumericTransform(super::numeric_transforms::Action::Apply(_))
             | Message::Arrange(_)
             | Message::Clean
             | Message::Analyze
