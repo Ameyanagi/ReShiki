@@ -29,6 +29,11 @@ the original molecular objects, including all pi-ligand assertions. The fixture
 bytes are unchanged; no importer fallback guesses the intended spacing.
 Re-export `assets/examples/shortcut-examples.rsk` with the corrected build to
 produce a CDX with properly encoded caption heights.
+The complete current source also has a native clipboard CDX self-round-trip
+test in `src/clipboard.rs`, retaining all 483 atoms, 429 bonds, and 132 captions
+together. It verifies the pi-ligand charges, attachments, and aromatic bonds,
+as well as caption text, font styles, and spacing within CDX's 0.05-point
+quantization. This test does not claim a new external application capture.
 The [caption compatibility captures](../chemdraw-captions/README.md) verify a
 complete actual clipboard return using the corrected outgoing encoder.
 

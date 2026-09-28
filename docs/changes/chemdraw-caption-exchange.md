@@ -62,6 +62,10 @@ rejection regression. A separate diagnostic projection verifies the original
 molecular objects after explicitly excluding those standalone captions;
 the corrected complete gallery captures above cover captions and chemistry
 together.
+The current complete pi-ligand gallery additionally passes a native clipboard
+CDX self-round-trip with all 483 atoms, 429 bonds, and 132 captions. That test
+checks ligand charges and attachments together with caption text, styles, and
+spacing; it is separate from the actual external application captures.
 
 Release caption: **Keep formula captions as editable text and preserve their
 line spacing when copying drawings between ReShiki and ChemDraw.**
