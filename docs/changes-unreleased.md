@@ -2,6 +2,16 @@
 
 The Windows dropdown fix is recorded in [ReShiki 0.9.1](changes-0.9.1.md). Publisher-style, theme, clipboard and aromatic-fusion updates are recorded in [ReShiki 0.9.0](changes-0.9.md).
 
+## ChemDraw caption exchange (under review)
+
+By @Ameyanagi.
+
+Formula captions remain editable text when copied into ChemDraw, and binary
+CDX preserves their line spacing. Actual macOS clipboard round trips retain
+all six tested molecules and twelve captions. The
+[validation record](changes/chemdraw-caption-exchange.md) documents the captured
+files and the remaining caption-position and legacy-file limitations.
+
 ## Windows GPU rendering and nightly builds
 
 By @Ameyanagi in [PR #68](https://github.com/Ameyanagi/ReShiki/pull/68).

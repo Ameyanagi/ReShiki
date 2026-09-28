@@ -31,6 +31,7 @@ fn variants(p: &Property) -> &[(&str, i64)] {
             ("Variable", 0),
             ("Auto", 1),
             ("Automatic", 1),
+            ("automatic", 1),
         ]
     } else {
         p.variants
@@ -75,6 +76,11 @@ pub(super) fn encode_number(p: &Property, value: &str) -> Result<Vec<u8>> {
     }
     if p.name == "BondSpacing" {
         n *= 10.;
+    }
+    // ChemDraw's binary line heights use twentieths of a point. Zero and
+    // one remain the variable/automatic sentinels, not physical lengths.
+    if line_height(p.name) && n != 0. && n != 1. {
+        n *= 20.;
     }
     pack_number(kind(p), n)
 }
@@ -156,6 +162,9 @@ pub(super) fn decode_number(p: &Property, data: &[u8]) -> Result<String> {
     }
     if p.name == "BondSpacing" {
         n /= 10.;
+    }
+    if line_height(p.name) {
+        n /= 20.;
     }
     general(n)
 }

@@ -98,7 +98,12 @@ impl Encoder {
                 self.schema.names.get(attr.name()).ok_or_else(|| {
                     format!("Unsupported binary drawing property: {}", attr.name())
                 })?;
-            if p.kind == "CDXBooleanImplied" && attr.value() == "no" {
+            // Unlike ordinary implied flags, chemical interpretation defaults
+            // to true. An explicit false must survive the binary clipboard.
+            if p.kind == "CDXBooleanImplied"
+                && attr.value() == "no"
+                && p.name != "InterpretChemically"
+            {
                 continue;
             }
             let code = p.code;

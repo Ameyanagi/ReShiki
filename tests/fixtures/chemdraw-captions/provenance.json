@@ -1,0 +1,39 @@
+{
+  "application": "ChemDraw 26.0.0.6599",
+  "platform": "macOS 26.5.1 arm64",
+  "capture_date": "2026-09-29",
+  "source_gallery_sha256": "ff3389166fc74dbbd4bb7606a5b1042814770e0ae26c38124374e02a2ea0312d",
+  "files": [
+    {
+      "file": "clipboard-return.rsk",
+      "bytes": 226347,
+      "sha256": "3c8a563a0d28ab2f31a7d7f18f3ba55673edf2d49f8325fe666464933f24e52a"
+    },
+    {
+      "file": "gallery-before.cdxml",
+      "bytes": 38208,
+      "sha256": "13ecf9c37e253c634d4b23082c0070da175cdcdc36dea957dacd4a1d69464afb"
+    },
+    {
+      "file": "gallery.cdx",
+      "bytes": 12805,
+      "sha256": "27faa0b42480537e4ed0fa1673fa987c488ba67d927da3e852514e584c40ff67"
+    },
+    {
+      "file": "gallery.cdxml",
+      "bytes": 21831,
+      "sha256": "68c3547e9ca3ddd2def470cae279915d19dfa148096cb301edbe7d8f7e22f8e6"
+    },
+    {
+      "file": "source.rsk",
+      "bytes": 77245,
+      "sha256": "ff3389166fc74dbbd4bb7606a5b1042814770e0ae26c38124374e02a2ea0312d"
+    }
+  ],
+  "before": "Actual ReShiki clipboard paste into ChemDraw, then GUI Save As CDXML; complete failed gallery preserved unchanged.",
+  "after": "Actual patched ReShiki copy -> macOS clipboard -> ChemDraw paste -> GUI Save As CDXML/CDX, then immutable copies. Actual ChemDraw copy -> macOS clipboard -> patched ReShiki paste -> native .rsk save also passed; source drawings contain no synthesized expected output.",
+  "production_core_patch_sha256": "d36800430179b7c0d8b0cfb6fb2f4aae07ea48e574014876128eee97b0f7510e",
+  "native_return_sha256": "3c8a563a0d28ab2f31a7d7f18f3ba55673edf2d49f8325fe666464933f24e52a",
+  "combined_integration_base": "446331ec8ffdef3c852cccec8b13e2105d9e6737",
+  "application_build": "ReShiki0.9.1 debug; integration base plus the production core patch identified by hash; separate concurrent feature UI was present."
+}

@@ -1,4 +1,4 @@
-"""Check documented hidden-dummy and bond-spacing changes against legacy output.
+"""Check documented presentation corrections against legacy output.
 
 Chemistry and the rest of each response are still compared without modification.
 Binary drawings use the independent Python codec, not the Rust implementation.
@@ -51,9 +51,35 @@ def compare(actual, expected, format):
         if label.get("LabelAlignment") == "Auto":
             del label.attrib["LabelAlignment"]
         changed += 1
+    actual_nodes = list(actual.iter())
+    expected_nodes = list(expected.iter())
+    if len(actual_nodes) != len(expected_nodes):
+        raise ValueError("Drawing object counts changed")
+    parents = {child: parent for parent in expected.iter() for child in parent}
+    for a, e in zip(actual_nodes, expected_nodes, strict=True):
+        if e.tag == "t" and parents[e].tag in ("page", "group") and "CaptionLineHeight" in e.attrib:
+            if a.get("InterpretChemically") != "no" or "InterpretChemically" in e.attrib:
+                raise ValueError("Caption must explicitly disable chemical interpretation")
+            e.set("InterpretChemically", "no")
+            changed += 1
+        if format == "cdx":
+            for name in {"LineHeight", "CaptionLineHeight", "LabelLineHeight"} & e.attrib.keys():
+                try:
+                    legacy = float(e.attrib[name])
+                    fixed = float(a.attrib[name])
+                except ValueError:
+                    continue  # Special variable/automatic spellings compare unchanged.
+                # The legacy encoder rounded whole points, losing fractional
+                # precision. The new unit is 1/20pt: it must land in exactly
+                # the same legacy rounding bucket. Captured ChemDraw fixtures
+                # and dedicated byte tests verify the finer precision itself.
+                if round(fixed / 20) != legacy:
+                    raise ValueError("Line height changed beyond the unit/precision correction")
+                e.set(name, a.attrib[name])
+                changed += 1
     if not changed or tree(actual) != tree(expected):
         raise ValueError(
-            "Drawing differs beyond the explicit hidden-dummy and bond-spacing contracts"
+            "Drawing differs beyond hidden-dummy, bond-spacing, and caption compatibility contracts"
         )
 
 
