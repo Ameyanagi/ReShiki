@@ -221,6 +221,9 @@ impl App {
                         .padding(6),
                 );
         }
+        if kind == GraphicKind::Arc {
+            panel = panel.push(self.arc_controls());
+        }
         if kind.brackets() {
             panel = panel.push(
                 crate::appearance::pick_list(
@@ -241,11 +244,13 @@ impl App {
                 .spacing(4),
             );
         }
-        if matches!(selected.as_slice(), [g] if matches!(g.kind, GraphicKind::Curve | GraphicKind::Path))
+        if matches!(selected.as_slice(), [g] if matches!(g.kind, GraphicKind::Curve | GraphicKind::Path | GraphicKind::Arc))
         {
             panel = panel.push(command(
                 if self.tool == Tool::EditPoints {
                     "Finish editing points"
+                } else if kind == GraphicKind::Arc {
+                    "Edit arc endpoints"
                 } else {
                     "Edit curve points"
                 },
@@ -664,6 +669,7 @@ impl App {
             bond_drawing: self.bond_drawing,
             chain_drawing: self.chain_drawing,
             graphic_constrain: self.toolbar.graphic(self.tool).is_some_and(|p| p.constrain),
+            graphic_arc: self.arc_editor.geometry,
             graphic_style: &self.graphic_style,
             orbital_phase: self.orbital_phase,
             phase_flipped: self.phase_flipped,

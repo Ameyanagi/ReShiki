@@ -13,6 +13,7 @@ pub(super) fn parse_color(s: &str) -> Option<[u8; 3]> {
 impl App {
     pub(super) fn sync_graphics(&mut self) {
         self.sync_pictures();
+        self.sync_arc();
         if let Some(g) = self
             .doc
             .graphics
