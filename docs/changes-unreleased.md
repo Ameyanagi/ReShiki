@@ -4,7 +4,7 @@ The Windows dropdown fix is recorded in [ReShiki 0.9.1](changes-0.9.1.md). Publi
 
 ## Windows GPU rendering and nightly builds
 
-By @Ameyanagi in [PR #68](https://github.com/Ameyanagi/ReShiki/pull/68), under review.
+By @Ameyanagi in [PR #68](https://github.com/Ameyanagi/ReShiki/pull/68).
 
 Windows builds include WGPU with a Tiny Skia fallback. CPU-only environments keep
 the direct software renderer, and explicit renderer overrides remain available
@@ -12,9 +12,9 @@ for testing. The [validation record](windows-gpu-validation.md) includes Windows
 VM measurements and real Radeon GPU rendering on Linux; physical Windows GPU
 performance remains unmeasured.
 
-Development PRs target `main`. After the workflow merges, successful nightly builds
-publish unsigned portable prereleases for all six platforms, with unique versions
-and checksums. Stable releases use version tags on tested commits in `main`.
+Development PRs target `main`. Successful nightly builds publish unsigned portable
+prereleases for all six platforms, with unique versions and checksums. Stable
+releases use version tags on tested commits in `main`.
 
 ## Website videos and reusable color palettes
 
