@@ -3312,6 +3312,7 @@ dependencies = [
  "directories-next",
  "flate2",
  "iced",
+ "iced_tiny_skia",
  "image",
  "open",
  "pdf-writer",

@@ -17,10 +17,16 @@ mod app;
 mod appearance;
 mod branding;
 mod canvas;
+#[cfg(windows)]
+mod rendering;
 
 fn main() -> iced::Result {
     #[cfg(windows)]
     {
+        if std::env::args().any(|arg| arg == "--graphics-info") {
+            println!("{}", rendering::diagnostics());
+            return Ok(());
+        }
         if std::env::args().any(|arg| arg == "--ole-server") {
             let result = reshiki_windows::run_office_server(|bytes| {
                 let document: reshiki::document::Document =
@@ -76,6 +82,8 @@ fn main() -> iced::Result {
             }
         }
     }
+    #[cfg(windows)]
+    rendering::configure();
     #[cfg(target_os = "macos")]
     let _document_events = match reshiki_macos::install_document_events() {
         Ok((handler, events)) => {

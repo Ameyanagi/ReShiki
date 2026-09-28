@@ -27,6 +27,10 @@ the contribution cannot be merged under the default terms until it is resolved.
 
 ## Development
 
+Open feature and fix pull requests against **`main`**, the default and development
+branch. Nightly prereleases are built from `main`. Stable release tags identify
+tested commits already on `main`.
+
 See the [developer guide](https://reshiki.com/developer/development/) for setup
 and checks. Describe the problem your change solves and the relevant validation
 in your pull request.

@@ -263,9 +263,12 @@ mod tests {
         let _ = app.update(Message::DrawingStyle(Action::Preset(Preset::Nature)));
         let carbon = app.doc.atoms[0].id;
         let p = app.doc.atoms[0].position;
-        let oxygen = app.doc.add_atom("O", p.offset(42., 0.));
+        // The first ring atom is the top vertex. Point its carbonyl outward,
+        // leaving 120-degree bond angles instead of crowding a ring edge.
+        let oxygen = app.doc.add_atom("O", p.offset(0., -42.));
         app.doc.add_bond(carbon, oxygen, 2, "plain");
         app.doc.atoms[3].element = "N".into();
+        app.doc.atoms[3].label_h = 1;
         let directory = std::env::temp_dir().join("reshiki-document-style-qa");
         std::fs::create_dir_all(&directory).unwrap();
         for (name, width, height, dark, mode) in [
