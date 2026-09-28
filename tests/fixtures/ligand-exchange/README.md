@@ -15,10 +15,22 @@ image wrappers. They contain no external templates or source code.
   chemical assignment for a neutral complex.
 - `gallery-returned.cdx`: the complete `assets/examples/shortcut-examples.rsk`
   document, copied through the normal editable clipboard pipeline, pasted with
-  the copied drawing settings, selected and copied back. Import produces 483
+  the copied drawing settings, selected and copied back. It contains 483
   nodes (including five attachment points), 429 bonds and 132 captions. Its
   three hidden Cp charges, Fe2+ charge, NO2/N3 group definitions and R/X text
   are retained. There are 33 aromatic bonds and one partial double bond.
+
+The complete gallery capture inherited the old ReShiki CDX line-height unit
+bug: its caption heights decode correctly to 0.4, 0.5, and 1.1 points, not the
+8, 10, and 22 points the old decoder reported. Those paragraph values are
+unsupported, so the complete original remains an expected rejection. A
+separate diagnostic test excludes only the 132 standalone captions to verify
+the original molecular objects, including all pi-ligand assertions. The fixture
+bytes are unchanged; no importer fallback guesses the intended spacing.
+Re-export `assets/examples/shortcut-examples.rsk` with the corrected build to
+produce a CDX with properly encoded caption heights.
+The [caption compatibility captures](../chemdraw-captions/README.md) verify a
+complete actual clipboard return using the corrected outgoing encoder.
 
 `tests/pi_ligand_exchange.rs` checks the captures and the current outgoing
 writer, including topology, formal charges, attachment membership, aromatic

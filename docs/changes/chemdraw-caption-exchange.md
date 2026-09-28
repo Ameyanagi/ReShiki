@@ -56,5 +56,12 @@ still fail paragraph validation. Re-exporting the native drawing with this fix
 produces correctly encoded files; the importer does not guess or clamp those
 ambiguous old values.
 
+The existing pi-ligand gallery capture is one such legacy file: its 132 caption
+heights are actually 0.4, 0.5, or 1.1 points. Its original bytes remain a
+rejection regression. A separate diagnostic projection verifies the original
+molecular objects after explicitly excluding those standalone captions;
+the corrected complete gallery captures above cover captions and chemistry
+together.
+
 Release caption: **Keep formula captions as editable text and preserve their
 line spacing when copying drawings between ReShiki and ChemDraw.**
