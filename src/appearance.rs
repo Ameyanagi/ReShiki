@@ -33,6 +33,7 @@ impl std::fmt::Display for Mode {
 #[serde(default)]
 pub struct Settings {
     pub mode: Mode,
+    pub object_toolbar: bool,
 }
 impl Settings {
     fn path() -> Result<std::path::PathBuf, String> {
