@@ -12,9 +12,9 @@ for testing. The [validation record](windows-gpu-validation.md) includes Windows
 VM measurements and real Radeon GPU rendering on Linux; physical Windows GPU
 performance remains unmeasured.
 
-Development PRs target `dev`. After the workflow merges, successful nightly builds
+Development PRs target `main`. After the workflow merges, successful nightly builds
 publish unsigned portable prereleases for all six platforms, with unique versions
-and checksums. Stable releases continue through `dev` → `main` promotion.
+and checksums. Stable releases use version tags on tested commits in `main`.
 
 ## Website videos and reusable color palettes
 

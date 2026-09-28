@@ -2,7 +2,7 @@ name: Nightly builds
 
 on:
   schedule:
-    # 03:37 Japan time. Scheduled workflows run from the default branch, dev.
+    # 03:37 Japan time. Scheduled workflows run from the default branch, main.
     - cron: "37 18 * * *"
   workflow_dispatch:
 
@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   packages:
-    if: github.ref == 'refs/heads/dev'
+    if: github.ref == 'refs/heads/main'
     # The reused stable workflow declares a publication job, skipped for nightlies.
     # Its build jobs explicitly reduce this permission to contents: read.
     permissions:
@@ -52,7 +52,7 @@ jobs:
             test "$(find . -maxdepth 1 -name "reshiki-$NIGHTLY_VERSION-$platform.*.sha256" | wc -l)" -eq 1
           done
           cat > notes.md <<EOF
-          Development build from dev at [$NIGHTLY_COMMIT](https://github.com/$GH_REPO/commit/$NIGHTLY_COMMIT).
+          Development build from main at [$NIGHTLY_COMMIT](https://github.com/$GH_REPO/commit/$NIGHTLY_COMMIT).
 
           Download the portable archive for your platform and extract the entire folder. Packages include the native chemistry helper. These test builds are unsigned; macOS packages are not notarized. Keep your stable installation and use copies of drawings when testing.
 

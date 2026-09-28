@@ -8,11 +8,11 @@ The macOS disk image contains the signed app and an Applications shortcut. Both 
 
 ## Test a build
 
-Open development pull requests against `dev`, the default branch. Promote tested
-changes through a `dev` → `main` pull request before tagging a stable release.
+Open development pull requests against `main`, the default and development
+branch. Tag tested commits on `main` for stable releases.
 
-The **Nightly builds** workflow builds `dev` daily at 18:37 UTC (03:37 JST), or on
-manual dispatch with `dev` selected. Each successful run publishes a downloadable
+The **Nightly builds** workflow builds `main` daily at 18:37 UTC (03:37 JST), or on
+manual dispatch with `main` selected. Each successful run publishes a downloadable
 GitHub prerelease with six portable archives and `SHA256SUMS`. Nightlies use the
 same native helper, package tests and extracted-application verification as release
 builds. They omit installers, Developer ID signing and notarization. The complete
@@ -27,11 +27,11 @@ excluded from the stable updater. Keep the stable installation and test with cop
 of drawings. Nightlies are unsigned; macOS nightlies are not notarized.
 
 ```sh
-gh workflow run nightly.yml --ref dev
+gh workflow run nightly.yml --ref main
 ```
 
-GitHub schedules run from the repository's default branch, so `dev` must remain the
-default for nightly scheduling. The workflow publishes only runs from `dev` and only
+GitHub schedules run from the repository's default branch, `main`.
+The workflow publishes only runs from `main` and only
 after all six package jobs pass. Standard build runners do not establish hardware
 GPU performance: use the [Windows renderer checks](windows.md#release-performance-and-debugging)
 on the test machine and record its adapter separately.
@@ -59,14 +59,14 @@ The [0.9.0 validation record](release-0.9.0-validation.md) records the completed
 
 1. Update the package version in `Cargo.toml`, update `Cargo.lock`, and record release changes.
 2. Run the checks and a manual release build. Review the resulting packages.
-3. Merge the `dev` → `main` promotion pull request, then create and push a matching tag on `main`, for example `v0.9.0` for version `0.9.0`.
+3. Merge the release preparation pull request to `main`, then create and push a matching tag on its tested commit, for example `v0.9.0` for version `0.9.0`.
 
 ```sh
 git tag -a v0.9.0 -m "ReShiki 0.9.0"
 git push origin v0.9.0
 ```
 
-A `v*` tag triggers builds. A mismatched version or a tagged commit outside `main` fails before packaging. The macOS archive must be signed, notarized, stapled and verified before the release publishes; missing credentials fail the job instead of silently publishing an unsigned macOS download. All six packages and the complete live reference tests on macOS ARM64, Linux x64, and Windows x64 must pass before publication. Windows and Linux packages remain unsigned. Tags containing a prerelease suffix create a GitHub prerelease. Manual **Release builds** runs never publish a release; **Nightly builds** runs publish prereleases from `dev`.
+A `v*` tag triggers builds. A mismatched version or a tagged commit outside `main` fails before packaging. The macOS archive must be signed, notarized, stapled and verified before the release publishes; missing credentials fail the job instead of silently publishing an unsigned macOS download. All six packages and the complete live reference tests on macOS ARM64, Linux x64, and Windows x64 must pass before publication. Windows and Linux packages remain unsigned. Tags containing a prerelease suffix create a GitHub prerelease. Manual **Release builds** runs never publish a release; **Nightly builds** runs publish prereleases from `main`.
 
 Package staging uses `build/release-bundles`, outside Cargo’s `target` directory, so cache pruning cannot traverse bundled dependency license sources.
 
