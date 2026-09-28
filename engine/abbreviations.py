@@ -31,6 +31,8 @@ PRESETS = {
     "OMs": ("*OS(C)(=O)=O", "MsO"),
     "TMS": ("*[Si](C)(C)C", ""),
     "TBS": ("*[Si](C)(C)C(C)(C)C", ""),
+    "TBDPS": ("*[Si](c1ccccc1)(c1ccccc1)C(C)(C)C", ""),
+    "OTBDPS": ("*O[Si](c1ccccc1)(c1ccccc1)C(C)(C)C", "TBDPSO"),
     "CF3": ("*C(F)(F)F", "F3C"),
     "CN": ("*C#N", "NC"),
     "NO2": ("*[N+](=O)[O-]", "O2N"),
