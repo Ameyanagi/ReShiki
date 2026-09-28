@@ -47,8 +47,8 @@ with `RESHIKI_CANVAS_QA_BASELINE=1`; baseline assertions deliberately allow the
 known shifts. Both builds used separate Cargo targets with freshly compiled
 ReShiki crates, `CARGO_INCREMENTAL=0`, and the bundled InChI helper.
 
-Real desktop interaction and combined-feature integration checks are pending;
-the widget input checks and renderer captures below do not replace them.
+Real macOS desktop interaction also passed on the combined integration build
+described below. This PR remains under review while CI completes.
 
 ## Matched visual evidence
 
@@ -82,6 +82,34 @@ the base; the head selects all six atoms:
 | Double-click: before                                                                                                             | Double-click: after                                                                                                             |
 | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | ![The second click misses the shifted nitrogen and leaves no selection](../images/selection-canvas/before-1280-double-click.png) | ![Double-click selects the complete molecule without moving the target](../images/selection-canvas/after-1280-double-click.png) |
+
+## Real desktop integration check
+
+The real macOS application was checked on combined source
+`446331ec8ffdef3c852cccec8b13e2105d9e6737`, which includes all eight parallel
+feature PRs. This is additional combined-build evidence; the standalone base/head
+renderer comparison above uses source `ea8204e`.
+
+Platform: macOS 26.5.1, Apple Silicon, debug build. The original window captures
+retain 2× Retina pixels and title-bar chrome. Normal file opening and chemistry
+analysis display the ring's implicit hydrogen. No captures were retouched.
+
+- At 1280 × 820 content size and 250% zoom, clicking N kept it at the same pixel.
+  Clearing selection and double-clicking N selected six atoms and six bonds.
+- At 1040 × 680 content size and 204% zoom, the same checks passed. Both window
+  sizes were exercised with the inspector shown and hidden. Resize-driven Fit
+  also worked.
+- With the new optional object toolbar enabled, the inspector fixture was opened
+  at 1280 × 820 and 214% zoom. Clicking “Reaction conditions” revealed Properties
+  without moving the caption or ring.
+
+| 1280 × 820 desktop                                                                                                                         | 1040 × 680 desktop                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| ![Real desktop double-click selects six atoms and six bonds at 250 percent zoom](../images/selection-canvas/desktop-1280-double-click.png) | ![The same whole-molecule selection in the minimum desktop window at 204 percent zoom](../images/selection-canvas/desktop-1040-double-click.png) |
+
+| Before selecting the caption, inspector hidden                                                                                                 | After selecting the caption, Properties revealed                                                                                                  |
+| ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ![Combined desktop build with the caption and ring before automatic Properties opening](../images/selection-canvas/desktop-caption-hidden.png) | ![Caption and ring remain in place after Properties opens in the combined desktop build](../images/selection-canvas/desktop-caption-revealed.png) |
 
 ## Release-note caption
 

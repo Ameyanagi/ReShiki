@@ -8,7 +8,7 @@ By @Ameyanagi in [PR #74](https://github.com/Ameyanagi/ReShiki/pull/74), followi
 
 Selecting atoms and opening object properties keeps the drawing steady, making double-click molecule selection reliable. Bonded-movement controls stay in the existing scrolling context row. Explicit Fit, inspector toggles, window resizing, pan, and zoom keep their behavior.
 
-This change is under review and unreleased. Real desktop and combined-feature validation are pending; the matched examples come from actual application-renderer and pointer-event checks. [Reproduction steps, fixtures, and measurements](changes/selection-canvas-stability.md).
+This change is under review and unreleased. Matched examples come from application-renderer and pointer-event checks. Real macOS desktop checks also passed on combined source `446331e`, including the minimum window size, inspector visibility changes, and the optional object toolbar. [Reproduction steps, fixtures, measurements, and exact capture sources](changes/selection-canvas-stability.md).
 
 | Before                                                                                                              | After                                                                                                                         |
 | ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
