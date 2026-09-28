@@ -4,15 +4,15 @@ The Windows dropdown fix is recorded in [ReShiki 0.9.1](changes-0.9.1.md). Publi
 
 ## Reaction and recent-molecule shortcuts
 
-By @Ameyanagi in [PR #72](https://github.com/Ameyanagi/ReShiki/pull/72), **under review**. Desktop interaction QA is pending.
+By @Ameyanagi in [PR #72](https://github.com/Ameyanagi/ReShiki/pull/72), **under review**. Native macOS interaction checks passed in the combined integration build.
 
 Build reaction steps with **Cmd/Ctrl+Shift+Right**, and use **Space** in Select mode to return to the molecule you just edited. The reaction shortcut adds an arrow and selects a product copy in one Undo step, preserving groups, abbreviations and reaction roles. Space follows Undo/Redo; focused text retains its typing and caret keys.
 
-The examples below are application-renderer captures. Foreground objects occupying the reaction destination must be moved first; background graphics do not block copying. [Behavior, fixtures and validation](changes/reaction-selection-shortcuts.md).
+The unmodified native captures below show Cmd+Shift+Right creating a reaction copy, then Space recalling the edited product. They come from combined source `446331ec8ffdef3c852cccec8b13e2105d9e6737`; the visible object toolbar and inspector layout include other PRs under review. Foreground objects occupying the reaction destination must be moved first; background graphics do not block copying. [Behavior, fixtures, capture conditions and validation](changes/reaction-selection-shortcuts.md).
 
-![Cmd/Ctrl+Shift+Right creates an arrow and selected product copy](images/reaction-selection-shortcuts/reaction-copy.png)
+![Native desktop: Cmd+Shift+Right creates an arrow and selected product copy](images/reaction-selection-shortcuts/desktop-reaction-copy.png)
 
-![Space selects the most recently edited product after changing its terminal atom to N](images/reaction-selection-shortcuts/space-selection.png)
+![Native desktop: Space selects the most recently edited product after changing its terminal atom to N](images/reaction-selection-shortcuts/desktop-space-selection.png)
 
 ## Website videos and reusable color palettes
 
