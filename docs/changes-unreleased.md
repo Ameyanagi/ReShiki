@@ -2,6 +2,16 @@
 
 The Windows dropdown fix is recorded in [ReShiki 0.9.1](changes-0.9.1.md). Publisher-style, theme, clipboard and aromatic-fusion updates are recorded in [ReShiki 0.9.0](changes-0.9.md).
 
+## Adjustable arcs (under review)
+
+By @Ameyanagi in [PR #76](https://github.com/Ameyanagi/ReShiki/pull/76), requested by @rlavendomme in [#67](https://github.com/Ameyanagi/ReShiki/issues/67). This draft remains under review.
+
+Draw adjustable elliptical arcs with 90°, 120°, 180° and 270° presets, precise start/sweep controls and draggable endpoints. A 360° sweep completes the ellipse; Shift drawing creates circles. Existing native arcs keep their appearance, and CDXML retains editable curve paths. The general pen tool remains separate.
+
+![Four arc presets, a fractional sweep, a full circle, an affine transformed arc and a legacy half ellipse](images/adjustable-arcs.png)
+
+[Example drawing, compatibility notes and review checklist](changes/adjustable-arcs.md).
+
 ## Website videos and reusable color palettes
 
 By @Ameyanagi in [PR #59](https://github.com/Ameyanagi/ReShiki/pull/59).
