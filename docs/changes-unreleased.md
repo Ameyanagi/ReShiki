@@ -2,6 +2,16 @@
 
 The Windows dropdown fix is recorded in [ReShiki 0.9.1](changes-0.9.1.md). Publisher-style, theme, clipboard and aromatic-fusion updates are recorded in [ReShiki 0.9.0](changes-0.9.md).
 
+## Precise numeric transforms (under review)
+
+By @Ameyanagi in [PR #73](https://github.com/Ameyanagi/ReShiki/pull/73), under review.
+
+Enter exact rotation, tilt, dimensions, and scale in the selection inspector, with optional proportional resizing and one-step Undo. Fonts and line widths stay fixed. Width and height include labels; sizes that cannot be reached with fixed fonts show an error without changing the drawing.
+
+![Numeric rotation, tilt, physical dimensions, percentage scale, and proportion lock](images/pr-reviews/numeric-transforms-panel.png)
+
+This image uses the application's renderer at 1×. Desktop interaction validation remains pending; see the [reproduction and validation notes](changes/numeric-transforms.md).
+
 ## Website videos and reusable color palettes
 
 By @Ameyanagi in [PR #59](https://github.com/Ameyanagi/ReShiki/pull/59).
