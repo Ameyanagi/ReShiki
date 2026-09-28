@@ -25,6 +25,8 @@ class Abbreviations(unittest.TestCase):
             "Cbz": "CCC(=O)OCc1ccccc1",
             "TMS": "CC[Si](C)(C)C",
             "TBS": "CC[Si](C)(C)C(C)(C)C",
+            "TBDPS": "CC[Si](c1ccccc1)(c1ccccc1)C(C)(C)C",
+            "OTBDPS": "CCO[Si](c1ccccc1)(c1ccccc1)C(C)(C)C",
             "NO2": "CC[N+](=O)[O-]",
             "CN": "CCC#N",
             "CO2H": "CCC(=O)O",
