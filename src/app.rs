@@ -1470,11 +1470,13 @@ impl App {
                 };
             }
             Message::Viewport(size) => {
-                self.viewport = size;
-                if let Some(index) = self.pages.fit {
-                    self.fit_pages(index);
-                } else if self.fit_to_view {
-                    self.fit();
+                if self.viewport != size {
+                    self.viewport = size;
+                    if let Some(index) = self.pages.fit {
+                        self.fit_pages(index);
+                    } else if self.fit_to_view {
+                        self.fit();
+                    }
                 }
             }
             Message::InspectorAction(_) | Message::ContextMenu(_) => {}
@@ -2696,11 +2698,19 @@ impl App {
                 }
             }
             Edit::Select(ids) => {
+                let inspector_width = self.inspector_width();
                 self.selected = ids;
                 self.sync_typography();
                 self.sync_graphics();
                 self.sync_arrows();
                 self.sync_bonds();
+                // Auto-revealing object properties must not move the clicked
+                // target. The inspector occupies the right edge, so compensate
+                // for the centered camera's horizontal shift. Record the new
+                // size now so its sensor event does not also trigger Fit.
+                let width_change = inspector_width - self.inspector_width();
+                self.camera.center.x += width_change / (2. * self.camera.zoom);
+                self.viewport.width += width_change;
             }
             Edit::Move(ids, dx, dy) => {
                 if let Some(snapped) = editing::snap_ring(
