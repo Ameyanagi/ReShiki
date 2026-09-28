@@ -8,9 +8,9 @@ By @Ameyanagi in [PR #73](https://github.com/Ameyanagi/ReShiki/pull/73), under r
 
 Enter exact rotation, tilt, dimensions, and scale in the selection inspector, with optional proportional resizing and one-step Undo. Fonts and line widths stay fixed. Width and height include labels; sizes that cannot be reached with fixed fonts show an error without changing the drawing.
 
-![Numeric rotation, tilt, physical dimensions, percentage scale, and proportion lock](images/pr-reviews/numeric-transforms-panel.png)
+![A selected group resized independently to 80 pt height while its width stays 101.91 pt](images/pr-reviews/numeric-height80-unlocked.png)
 
-This image uses the application's renderer at 1×. Desktop interaction validation remains pending; see the [reproduction and validation notes](changes/numeric-transforms.md).
+This desktop capture comes from the combined integration build, with other parallel features including the object toolbar. Numeric input, validation, Undo/Redo, and saving were checked; see the [source disclosure and reproduction notes](changes/numeric-transforms.md).
 
 ## Website videos and reusable color palettes
 

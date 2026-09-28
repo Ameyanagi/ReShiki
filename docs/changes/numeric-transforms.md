@@ -31,22 +31,70 @@ existing boundary stereochemistry invalidation behavior.
 
 ## Evidence and reproduction
 
-Base: `0ae0fb6a21c5e5c5b90ae66730458fda4ea2a20d` (main). Head: the implementation
-commit containing this file. Platform: macOS arm64, Rust debug build, native
-chemistry engine with the packaged InChI helper. This is a new feature, so the
-image shows the new controls rather than a matched bug comparison.
+Base: `0ae0fb6a21c5e5c5b90ae66730458fda4ea2a20d` (main). Numeric implementation:
+`6b0edc1f85d1e5bd9949a64d23a0ddb5468e2147`.
+
+### Actual desktop interaction
+
+The desktop check used the **combined integration build** at
+`446331ec8ffdef3c852cccec8b13e2105d9e6737`, on macOS 26.5.1 arm64, Rust debug
+build, with 1280×820 logical content and 143% canvas zoom. These are unmodified
+2560×1704 PNG window captures including the title bar. Other parallel changes
+are present, including the visible object toolbar; this was not a standalone
+build of PR #73. The numeric module is identical to the implementation commit
+above (Git blob `2f8b05b11ff545d2ac941f81f888fcf6e424cdc5`).
+
+**Width 120 pt with proportions locked:**
+
+![A selected ring, arrow, rectangle, and caption resized to 120 pt width with proportions locked](../images/pr-reviews/numeric-width120-locked.png)
+
+**Height 80 pt with proportions unlocked:**
+
+![A selected group resized independently to 80 pt height while its width stays 101.91 pt](../images/pr-reviews/numeric-height80-unlocked.png)
+
+The [regression fixture helper](../../src/app/numeric_transforms.rs) creates a
+selected group containing a nitrogen ring, arrow, rectangle, and fixed-size
+caption, plus an unselected oxygen. On the desktop, background chemistry
+refresh adds the hydrogen labels and gives baseline bounds of
+**101.91 × 60.80 pt**.
+
+Open the generated `numeric-transforms.rsk`, select the group, and expand
+**Properties → Arrange & transform**. The checked actions were:
+
+- Enter `72` in Rotate and press Enter; Undo restores the baseline.
+- Apply Scale `125`; Undo restores the baseline.
+- With the lock enabled, Apply Width `120`; the height becomes `67.03`.
+  Undo restores the baseline.
+- Apply Tilt X `30`, Undo; Apply Tilt Y `-20`, Undo.
+- Clear the lock, enter Width `120`, and press Enter; height stays `60.80`.
+  Undo, then enter Height `80` and press Enter; width stays `101.91`.
+- Undo restores the baseline; Redo restores Height `80`.
+- From the restored baseline, Width `0` and `NaN` show errors without making
+  the drawing dirty or adding history. Redo still restores Height `80`.
+- Save the height-80 result with Cmd+S. The [saved native drawing](fixtures/numeric-height80-saved.rsk)
+  retains seven atoms, six bonds, the original group membership, caption
+  formatting, and shape/arrow styling. The unselected oxygen stays at its
+  original coordinates; its computed hydrogen label is refreshed.
+
+Desktop saving was checked; reopening that saved desktop file was not checked.
+The automated native JSON round-trip checks below are separate. A cross-feature
+check also deselected the group and pressed Space: the combined build selected
+only the last-edited six-atom, six-bond molecule, leaving the other objects out.
+
+All twelve supplied desktop captures were inspected for clipping, legibility,
+geometry, and error/history state. The two examples above are reused without
+cropping or retouching.
+
+### Standalone renderer and input checks
 
 ![Numeric rotation, tilt, physical dimensions, percentage scale, and proportion lock](../images/pr-reviews/numeric-transforms-panel.png)
 
-The [regression fixture and renderer check](../../src/app/numeric_transforms.rs)
-generate the image as an unmodified PNG from the application's Iced renderer at 1×,
-using the actual inspector content at its 246-pixel available width. The
-fixture is a selected group containing a nitrogen ring, arrow, rectangle, and
-fixed-size caption, plus an unselected oxygen. The renderer check clicks and
-types `72` into Rotate, verifies Enter submits rotation, and clicks all six
-Apply buttons at both 246- and 268-pixel content widths. The published image
-shows `72` entered in Rotate; the test verifies emitted widget messages
-separately from application updates.
+This earlier image is an unmodified PNG from the standalone implementation's
+Iced renderer at 1×, using the actual inspector content at its 246-pixel
+available width. The check clicks and types `72` into Rotate, verifies Enter
+submits rotation, and clicks all six Apply buttons at both 246- and 268-pixel
+content widths. It verifies widget messages separately from application
+updates, and does not run the desktop's background hydrogen-label refresh.
 
 Regenerate the fixture and renderer images with:
 
@@ -55,11 +103,7 @@ cargo test --bin reshiki numeric_transforms -- --include-ignored --nocapture
 ```
 
 Outputs are in the system temporary directory under
-`reshiki-numeric-transforms-qa/`. Open `numeric-transforms.rsk`, select the
-group, expand Arrange & transform, then apply Rotate `72`, Scale `125`, and a
-new width with the lock both on and off. Undo/Redo each step. Actual desktop
-input validation is tracked separately in the draft PR and remains pending
-until the combined integration build is checked.
+`reshiki-numeric-transforms-qa/`.
 
 ## Regression coverage
 
