@@ -10,7 +10,7 @@ Draw adjustable elliptical arcs with 90°, 120°, 180° and 270° presets, preci
 
 ![Four arc presets, a fractional sweep, a full circle, an affine transformed arc and a legacy half ellipse](images/adjustable-arcs.png)
 
-[Example drawing, compatibility notes and review checklist](changes/adjustable-arcs.md).
+[Example drawings, compatibility notes and completed desktop review](changes/adjustable-arcs.md).
 
 ## Website videos and reusable color palettes
 

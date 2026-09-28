@@ -58,10 +58,37 @@ cargo test --locked --bin reshiki app::arcs::tests
 cargo test --locked --bin reshiki graphic_and_curve_point_drags
 ```
 
-Desktop interaction review is pending in the combined integration build. Before
-marking the PR ready, check the Properties presets and numeric fields, drag each
-endpoint, open a full circle with its coincident endpoint, verify Shift drawing,
-then Undo/Redo and save/reopen.
+## Desktop interaction review
+
+Desktop checks passed on macOS 26.5.1 arm64 in the native debug application,
+using combined integration commit `446331ec8ffdef3c852cccec8b13e2105d9e6737`.
+This build includes the arc implementation from `81eb81691776cda0d6fed31eab34a16f597ab717`
+and sibling feature PRs; the screenshots are not captures of this standalone
+branch. In particular, the visible object toolbar belongs to the combined build.
+All screenshots were inspected without retouching; their native size is
+2560 × 1704 pixels.
+
+The existing gallery was exercised at 89% zoom: apply 120°, 180°, 270° and 90°
+presets; enter a 32° start and 234.5° sweep; drag an endpoint; Undo/Redo; and
+reflect the arc. Dragging the coincident endpoint of the 360° circle opened it
+to approximately 271.1697°. Undo restored 360°, and Redo restored the open arc.
+
+A separate blank drawing was used for the published screenshots:
+
+1. Choose Arc and the 120° preset, then drag a new ellipse frame at 100% zoom.
+2. Enter a 32° start and 234.5° sweep, apply, and choose **Edit arc endpoints**.
+3. Drag the end handle, producing a 256.3056° sweep; save the native drawing.
+4. Reopen and select it at Fit (161%): the Arc inspector, saved angles and both
+   endpoint handles remain available.
+
+![New arc with a 32-degree start, 234.5-degree sweep and two endpoint handles at 100 percent zoom](../images/adjustable-arcs-desktop.png)
+
+![Saved arc reopened at 161 percent zoom with its 32-degree start, 256.3056-degree sweep and editable endpoint handles retained](../images/adjustable-arcs-reopened.png)
+
+The [desktop-saved native fixture](../../tests/fixtures/adjustable-arc-desktop.rsk)
+contains a standard cubic path with the saved arc parameters. These two images
+show different steps and zoom levels in a feature walkthrough, not a matched
+before/after comparison.
 
 Release caption: **Draw adjustable elliptical arcs with common angle presets,
 precise sweep controls and draggable endpoints, including full circles.**
