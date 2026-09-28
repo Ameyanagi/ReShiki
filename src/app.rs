@@ -2937,13 +2937,7 @@ impl App {
                         }
                     }
                     Tool::Ring => {
-                        self.selected = editing::ring(
-                            &mut self.doc,
-                            p,
-                            self.ring_size,
-                            self.aromatic_ring,
-                            10.0 / self.camera.zoom,
-                        );
+                        return self.edit(Edit::Ring(p, None));
                     }
                     Tool::Text => {
                         if let Some(label) =
@@ -3747,6 +3741,68 @@ mod tests {
             let _ = app.update(Message::Redo);
             assert_eq!(app.doc, placed);
         }
+    }
+
+    #[test]
+    fn regular_ring_rejection_preserves_selection_history_and_redo() {
+        for legacy_click in [false, true] {
+            let (mut app, _) = App::new();
+            let _ = app.perform(Pending::New);
+            app.tool = Tool::Ring;
+            app.aromatic_ring = false;
+            app.ring_size = 6;
+            let carbon = app.doc.add_atom("C", Point::default());
+            app.doc.atom_mut(carbon).unwrap().explicit_h = 4;
+            let original = app.doc.clone();
+            // A valid placement is one history entry; an invalid attempt after
+            // Undo must leave that entry available to Redo.
+            app.edit(Edit::Ring(Point::new(300., 0.), None));
+            assert!(!app.error, "{}", app.status);
+            let placed = app.doc.clone();
+            let _ = app.update(Message::Undo);
+            assert_eq!(app.doc, original);
+            app.selected = vec![carbon];
+            let revision = app.revision;
+            app.edit(if legacy_click {
+                Edit::Click(Point::default())
+            } else {
+                Edit::Ring(Point::default(), None)
+            });
+            assert!(app.error);
+            assert_eq!(app.doc, original);
+            assert_eq!(app.selected, vec![carbon]);
+            assert_eq!(app.revision, revision);
+            assert!(!app.history.can_undo());
+            assert!(app.history.can_redo());
+            let _ = app.update(Message::Redo);
+            assert_eq!(app.doc, placed);
+        }
+
+        let (mut app, _) = App::new();
+        let _ = app.perform(Pending::New);
+        app.doc = reshiki::rings::Preset::Regular.document(42., false);
+        app.aromatic_ring = false;
+        app.ring_size = 6;
+        app.selected = app.doc.all_ids();
+        let original = app.doc.clone();
+        let selected = app.selected.clone();
+        let a = app.doc.atom(app.doc.bonds[0].a).unwrap().position;
+        let b = app.doc.atom(app.doc.bonds[0].b).unwrap().position;
+        let p = Point::new((a.x + b.x) / 2., (a.y + b.y) / 2.);
+        let revision = app.revision;
+        app.edit(Edit::Ring(p, Some(Point::default())));
+        assert!(app.error);
+        assert_eq!(app.doc, original);
+        assert_eq!(app.selected, selected);
+        assert_eq!(app.revision, revision);
+        assert!(!app.history.can_undo());
+        app.edit(Edit::Ring(p, Some(Point::new(p.x * 2., p.y * 2.))));
+        assert_eq!((app.doc.atoms.len(), app.doc.bonds.len()), (10, 11));
+        let placed = app.doc.clone();
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, original);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc, placed);
     }
 
     #[test]
