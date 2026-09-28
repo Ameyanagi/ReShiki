@@ -49,7 +49,8 @@ pub struct OfficePreview {
     pub metafile: Vec<u8>,
 }
 
-/// Record transparent vector paths and outlined text for Office's OLE cache.
+/// Record vector paths and outlined text as EMF+ dual, preserving any background
+/// supplied by the snapshot. Used by figure files and Office's OLE cache.
 pub fn metafile(snapshot: &[u8]) -> std::result::Result<Vec<u8>, String> {
     printing::metafile(snapshot).map_err(|e| e.to_string())
 }

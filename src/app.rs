@@ -2381,7 +2381,7 @@ impl App {
                 }
             },
             Message::Export(format) => {
-                if ["svg", "pdf", "png"].contains(&format) {
+                if ["svg", "pdf", "png"].contains(&format) || cfg!(windows) && format == "emf" {
                     return self.export_figure(format, false);
                 }
                 let mut request = Request::molecule("export", self.doc.clone());

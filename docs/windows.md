@@ -11,8 +11,13 @@ copy, cut and paste. Ctrl+Shift+G ungroups; Ctrl+G groups. Alt allows free bond
 drawing. Escape leaves the current tool or cancels a draft.
 
 Use `.rsk` for an editable original, including pages, pictures and styles.
-SVG/PDF/PNG export figures; chemical interchange formats retain their supported
+SVG/PDF/PNG and EMF export figures; chemical interchange formats retain their supported
 subset. Windows file dialogs support paths containing spaces and Unicode.
+
+**Export → Figure → EMF** saves a vector picture for Microsoft Office with
+outlined text, the canvas background and the drawing's physical dimensions.
+Keep the `.rsk` file to edit the original drawing. See [figure export](figure-export.md)
+for format details and limits.
 
 ## Clipboard
 
