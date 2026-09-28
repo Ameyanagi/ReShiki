@@ -37,6 +37,32 @@ Redo both. Repeat with TBDPS and with the preset's **Replace selected endpoint**
 action. The two group choices must appear in the preset list. Save/reopen the
 native drawing to check that its label remains a chemical abbreviation.
 
+Actual desktop checks passed using the combined integration build
+`446331ec8ffdef3c852cccec8b13e2105d9e6737`, ReShiki 0.9.1 debug on macOS 26.5.1
+arm64, with a 1280 × 820 window. From `CCC`, Enter → OTBDPS → Automatic → Apply,
+then reopening Enter showed **Chemical abbreviation** and reverse label
+**TBDPSO**. Expand selected revealed the C–O–Si connection; Undo restored the
+collapsed group. Editing the endpoint to TBDPS and expanding revealed C–Si.
+Both expanded native drawings were saved from the desktop. The initial view
+was 250%; Fit produced 209% for expanded OTBDPS and 182% for expanded TBDPS.
+
+![Reopening the entered OTBDPS label identifies it as a chemical abbreviation with reverse label TBDPSO.](../images/tbdps/desktop-chemical-label.png)
+
+![The desktop expands OTBDPS to the full oxygen–silicon protecting group.](../images/tbdps/desktop-otbdps-expanded.png)
+
+These are unretouched screenshots. The object toolbar and other concurrent UI
+changes visible here come from the combined test build. The molecular-properties
+panel in the label dialog describes the selected group; the table below refers
+to the entire molecule. Desktop verification covered entry, dialog reopening,
+expansion, Undo, and saving. Save/reopen and exchange round trips are verified
+separately by the automated tests.
+
+The actual desktop-saved [OTBDPS drawing](../images/tbdps/desktop-otbdps-expanded.rsk)
+contains 20 atoms including O–Si, while the
+[TBDPS drawing](../images/tbdps/desktop-tbdps-expanded.rsk) contains 19 atoms and
+no oxygen. Both are expanded, contain no wildcard atoms, and independently
+reproduce the formula and InChIKey below through the pinned Python/RDKit worker.
+
 The molecular checks use independently evaluated reference structures, rather
 than relying on the appearance of the collapsed labels:
 
