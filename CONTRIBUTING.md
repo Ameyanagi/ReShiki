@@ -51,3 +51,6 @@ Add the contributor and pull-request link to [the contributor list](docs/contrib
 and credit them beside the change in [the next release notes](docs/changes-unreleased.md).
 Keep that credit when moving an entry into a versioned changelog. Mark work still
 under review explicitly; update its status when it merges.
+
+Keep @Ameyanagi's contributor-list entry as "project creator and maintainer";
+credit individual changes in the release notes.
