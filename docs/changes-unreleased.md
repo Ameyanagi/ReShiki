@@ -8,9 +8,9 @@ By @Ameyanagi in [PR #70](https://github.com/Ameyanagi/ReShiki/pull/70) (under r
 
 Show the optional object toolbar for one-click alignment, distribution, reflection, rotation, and graphics/bond stacking. Enable **View → Object toolbar**; ReShiki remembers the preference between sessions. Controls stay in place when the selection changes, with unavailable commands disabled.
 
-Front/back changes graphics and bond depth; text and reaction arrows do not have editable stacking order. Mixed graphics/bond changes undo together. [Reproduction details](changes/object-toolbar.md) include renderer checks; desktop interaction review remains pending.
+Front/back changes graphics and bond depth; text and reaction arrows do not have editable stacking order. Mixed graphics/bond changes undo together. [Reproduction details](changes/object-toolbar.md) include standalone renderer checks and desktop interaction checks on the combined integration build.
 
-![Selected molecules with the optional object toolbar visible](images/object-toolbar/selected.png)
+![Three molecules aligned by clicking Align top edges in the desktop object toolbar](images/object-toolbar/desktop-align-top.png)
 
 ## Website videos and reusable color palettes
 
