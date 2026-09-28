@@ -31,13 +31,21 @@ The review test writes EMF and PNG exports for both canvas themes. The playback 
 - The Windows application tests verify that EMF uses the existing asynchronous figure snapshot/export state, preserves selection and drawing, and resets correctly after cancellation or an error.
 - The five shared exporter tests passed on macOS, covering PDF/PNG/SVG output, physical sizes, canvas backgrounds and outlined clipboard text.
 
-A separate desktop build opened the fixture correctly at 209% canvas zoom. The
-existing Windows session was disconnected: window capture worked, but Windows
-rejected keyboard injection and the controls did not respond to synthetic
-clicks. The real export picker/save-dialog interaction therefore remains
-unverified; native export, playback and application export state were checked
-as described above. No session unlock or changes to the user's documents were
-performed.
+## Desktop export and cancellation
+
+The Windows desktop build opened the fixture at **209% canvas zoom** in a
+1280 × 820 window. In the real **Export → Figure** dropdown, EMF was selected;
+**Export EMF** opened the native save dialog with `Molecule.emf` and the `.emf`
+file filter. Cancel returned to the unchanged drawing with **Export canceled**.
+A second export saved `desktop.emf` and reported **Exported desktop.emf**.
+
+The GUI-saved file is 10,100 bytes with the expected EMF signature and the same
+98.14 × 42.58 pt physical frame. Replaying this exact file through Windows GDI+
+produced a pixel-identical image to the light-canvas review export above. The
+application continued to report **All changes saved**. The screenshot captures
+only the test application's client area; the source drawing was not retouched.
+
+![Windows Export panel with EMF selected, the original drawing, and the successful desktop.emf save status.](../images/emf-file-export/export-panel.png)
 
 ## Release-note material
 
