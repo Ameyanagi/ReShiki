@@ -122,4 +122,4 @@ The Documentation workflow checks pull requests and deploys main to [GitHub Page
 
 ## Windows development
 
-Use the MSVC Rust toolchain with Visual Studio Build Tools and the Windows SDK. Measure performance with `cargo run --release --locked`. Windows uses Iced's Tiny Skia renderer to avoid costly GPU emulation; clipboard, printing and Office integration are Rust code linked into the app. See the [Windows guide](windows.md).
+Use the MSVC Rust toolchain with Visual Studio Build Tools and the Windows SDK. Measure performance with `cargo run --release --locked`. Windows includes WGPU with a Tiny Skia fallback and selects Tiny Skia directly when adapter discovery finds only CPU rendering or no adapters. `ICED_BACKEND` overrides the automatic choice; `--graphics-info` reports adapter discovery. Clipboard, printing and Office integration are Rust code linked into the app. See the [Windows guide](windows.md).

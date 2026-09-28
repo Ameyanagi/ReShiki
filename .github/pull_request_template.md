@@ -1,5 +1,7 @@
 ## Change
 
+<!-- Target dev for features and fixes. Use dev → main for release promotion. -->
+
 Describe the problem and resulting behavior.
 
 ## Validation

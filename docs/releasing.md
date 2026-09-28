@@ -8,10 +8,43 @@ The macOS disk image contains the signed app and an Applications shortcut. Both 
 
 ## Test a build
 
-Run **Actions → Release builds → Run workflow** on main. The default produces unsigned test artifacts without creating a release. Enable **Sign and notarize macOS test packages** to exercise the full signing path after configuring credentials.
+Open development pull requests against `dev`, the default branch. Promote tested
+changes through a `dev` → `main` pull request before tagging a stable release.
+
+The **Nightly builds** workflow builds `dev` daily at 18:37 UTC (03:37 JST), or on
+manual dispatch with `dev` selected. Each successful run publishes a downloadable
+GitHub prerelease with six portable archives and `SHA256SUMS`. Nightlies use the
+same native helper, package tests and extracted-application verification as release
+builds. They omit installers, Developer ID signing and notarization. The complete
+live reference suite remains a stable-release requirement; nightly package checks
+do not replace it.
+
+Each nightly has a unique `VERSION-nightly.YYYYMMDD.RUN_ID.ATTEMPT` package version,
+embedded in the executable and recorded with its source commit in `build.json`.
+The workflow stamps only its temporary checkout. Published nightly tags start with
+`nightly-`, so they do not trigger the stable `v*` release workflow. Prereleases are
+excluded from the stable updater. Keep the stable installation and test with copies
+of drawings. Nightlies are unsigned; macOS nightlies are not notarized.
 
 ```sh
-gh workflow run release.yml --ref main
+gh workflow run nightly.yml --ref dev
+```
+
+GitHub schedules run from the repository's default branch, so `dev` must remain the
+default for nightly scheduling. The workflow publishes only runs from `dev` and only
+after all six package jobs pass. Standard build runners do not establish hardware
+GPU performance: use the [Windows renderer checks](windows.md#release-performance-and-debugging)
+on the test machine and record its adapter separately.
+
+For an individual PR, run **Actions → Release builds → Run workflow** on its
+feature branch to produce unsigned test artifacts without publishing. Enable
+**Sign and notarize macOS test packages** on `main` to exercise the full signing
+path after configuring credentials.
+
+```sh
+gh workflow run release.yml --ref YOUR_FEATURE_BRANCH
+# Exercise nightly versioning and portable packages before merging the PR:
+gh workflow run release.yml --ref YOUR_FEATURE_BRANCH -f nightly=true
 # Includes Developer ID and Apple notarization checks:
 gh workflow run release.yml --ref main -f sign_macos=true
 ```
@@ -26,14 +59,14 @@ The [0.9.0 validation record](release-0.9.0-validation.md) records the completed
 
 1. Update the package version in `Cargo.toml`, update `Cargo.lock`, and record release changes.
 2. Run the checks and a manual release build. Review the resulting packages.
-3. Commit and push, then create and push a matching tag, for example `v0.9.0` for version `0.9.0`.
+3. Merge the `dev` → `main` promotion pull request, then create and push a matching tag on `main`, for example `v0.9.0` for version `0.9.0`.
 
 ```sh
 git tag -a v0.9.0 -m "ReShiki 0.9.0"
 git push origin v0.9.0
 ```
 
-A `v*` tag triggers builds. A mismatched version fails before packaging. The macOS archive must be signed, notarized, stapled and verified before the release publishes; missing credentials fail the job instead of silently publishing an unsigned macOS download. All six packages and the complete live reference tests on macOS ARM64, Linux x64, and Windows x64 must pass before publication. Windows and Linux packages remain unsigned. Tags containing a prerelease suffix create a GitHub prerelease. Manual builds never publish a release.
+A `v*` tag triggers builds. A mismatched version or a tagged commit outside `main` fails before packaging. The macOS archive must be signed, notarized, stapled and verified before the release publishes; missing credentials fail the job instead of silently publishing an unsigned macOS download. All six packages and the complete live reference tests on macOS ARM64, Linux x64, and Windows x64 must pass before publication. Windows and Linux packages remain unsigned. Tags containing a prerelease suffix create a GitHub prerelease. Manual **Release builds** runs never publish a release; **Nightly builds** runs publish prereleases from `dev`.
 
 Package staging uses `build/release-bundles`, outside Cargo’s `target` directory, so cache pruning cannot traverse bundled dependency license sources.
 
