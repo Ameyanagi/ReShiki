@@ -2,6 +2,28 @@
 
 The Windows dropdown fix is recorded in [ReShiki 0.9.1](changes-0.9.1.md). Publisher-style, theme, clipboard and aromatic-fusion updates are recorded in [ReShiki 0.9.0](changes-0.9.md).
 
+## Safe regular-ring placement
+
+By @Ameyanagi in [PR #75](https://github.com/Ameyanagi/ReShiki/pull/75).
+
+Regular rings reject saturated/protected attachment sites and coincident duplicate
+vertices without changing your drawing, selection, or Undo/Redo history. Extra
+overlapping vertices are rejected rather than merged; valid atom sharing and
+outward bond fusion remain available. See the [graph counts, saved fixtures, and
+capture details](changes/regular-ring-safety.md). The three rejection cases,
+valid outward fusion, and Undo/Redo behavior were verified in the combined macOS
+integration application; capture provenance is recorded with the evidence.
+
+Valid neutral-phosphorus attachment, including drawings with semantic attachment
+nodes, and fusion across supported styled shared edges remain available. Matched review-correction examples and their native
+valence/preserved-bond checks are included in the validation record.
+
+| Before                                                                                                                              | After                                                                                                                                           |
+| ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| ![Before: regular-ring placement creates carbon valence six and four coincident atom pairs.](images/regular-ring-safety/before.png) | ![After: invalid regular-ring placements are rejected while the original molecular graphs remain intact.](images/regular-ring-safety/after.png) |
+
+![Valid phosphorus attachment and bold double-bond fusion remain available; phosphorus bond valence is three and the original styled edge is retained.](images/regular-ring-safety/valid-attachments-after.png)
+
 ## Stable canvas during selection
 
 By @Ameyanagi in [PR #74](https://github.com/Ameyanagi/ReShiki/pull/74), following @HiroYokoyama's proposal in [issue #61](https://github.com/Ameyanagi/ReShiki/issues/61).
