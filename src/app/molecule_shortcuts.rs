@@ -13,6 +13,7 @@ use std::collections::{HashMap, HashSet};
 pub(super) struct Recent {
     epoch: u64,
     atoms: Vec<u64>,
+    edit_atoms: Vec<u64>,
     undo: Vec<Vec<u64>>,
     redo: Vec<Vec<u64>>,
 }
@@ -40,6 +41,7 @@ impl Recent {
         }
         // Mirror History, including nonmolecular edits and continuous gestures.
         if !continuing || self.undo.is_empty() {
+            self.edit_atoms.clear();
             self.undo.push(self.atoms.clone());
             if self.undo.len() > 100 {
                 self.undo.remove(0);
@@ -48,7 +50,12 @@ impl Recent {
         self.redo.clear();
         let changed = changed_atoms(before, after);
         if !changed.is_empty() {
-            self.atoms = changed;
+            // A drag is one edit even when successive segments touch different
+            // molecules. Keep only this edit's atoms, not the previous action's.
+            self.edit_atoms.extend(changed);
+            self.edit_atoms.sort_unstable();
+            self.edit_atoms.dedup();
+            self.atoms.clone_from(&self.edit_atoms);
         }
         let existing: HashSet<_> = after.atoms.iter().map(|a| a.id).collect();
         self.atoms.retain(|id| existing.contains(id));
@@ -56,6 +63,7 @@ impl Recent {
 
     pub(super) fn restore(&mut self, redo: bool, epoch: u64) {
         self.check_epoch(epoch);
+        self.edit_atoms.clear();
         let (source, target) = if redo {
             (&mut self.redo, &mut self.undo)
         } else {
@@ -545,6 +553,60 @@ mod tests {
         let _ = app.update(Message::Canvas(Edit::Select(second)));
         space(&mut app);
         assert_eq!(app.selected, first);
+    }
+
+    #[test]
+    fn erase_stroke_recalls_every_affected_molecule_without_previous_edits() {
+        for caption_first in [false, true] {
+            let mut app = app();
+            app.busy = false;
+            app.camera.zoom = 1.;
+            let first = chain(&mut app.doc, 0., 0.);
+            let second = chain(&mut app.doc, 0., 100.);
+            let unrelated = chain(&mut app.doc, 300., 0.);
+            let before = app.doc.clone();
+            app.doc.atom_mut(unrelated[2]).unwrap().element = "N".into();
+            app.changed(before);
+            if caption_first {
+                app.doc.annotations.push(reshiki::document::Annotation {
+                    id: app.doc.next_id(),
+                    position: Point::new(0., -100.),
+                    text: "Caption".into(),
+                    format: Default::default(),
+                });
+            }
+            let original = app.doc.clone();
+            let a = app.doc.atom(first[0]).unwrap().position;
+            let b = app.doc.atom(second[0]).unwrap().position;
+            let _ = app.update(Message::Tool(Tool::Erase));
+            if caption_first {
+                let p = Point::new(0., -100.);
+                let _ = app.update(Message::Canvas(Edit::EraseStart(p)));
+                assert!(app.doc.annotations.is_empty());
+                let _ = app.update(Message::Canvas(Edit::EraseTo(p, a)));
+            } else {
+                let _ = app.update(Message::Canvas(Edit::EraseStart(a)));
+            }
+            let _ = app.update(Message::Canvas(Edit::EraseTo(a, b)));
+            let _ = app.update(Message::Canvas(Edit::EraseEnd));
+            assert!(app.doc.atom(first[0]).is_none() && app.doc.atom(second[0]).is_none());
+            let expected = [first[1..].to_vec(), second[1..].to_vec()].concat();
+            let erased = app.doc.clone();
+            let _ = app.update(Message::Tool(Tool::Select));
+            space(&mut app);
+            assert_eq!(app.selected, expected);
+            let _ = app.update(Message::Undo);
+            assert_eq!(
+                app.doc, original,
+                "One Undo restores the complete erase stroke"
+            );
+            space(&mut app);
+            assert_eq!(app.selected, unrelated);
+            let _ = app.update(Message::Redo);
+            assert_eq!(app.doc, erased);
+            space(&mut app);
+            assert_eq!(app.selected, expected);
+        }
     }
 
     #[test]
