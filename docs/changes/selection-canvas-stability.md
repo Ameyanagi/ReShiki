@@ -48,7 +48,7 @@ known shifts. Both builds used separate Cargo targets with freshly compiled
 ReShiki crates, `CARGO_INCREMENTAL=0`, and the bundled InChI helper.
 
 Real macOS desktop interaction also passed on the combined integration build
-described below. This PR remains under review while CI completes.
+described below.
 
 ## Matched visual evidence
 

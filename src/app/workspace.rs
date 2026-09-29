@@ -761,7 +761,12 @@ impl App {
         } else {
             self.context_bar()
         };
-        let workspace = column![context, paper]
+        let mut workspace = column![context];
+        if self.appearance.object_toolbar {
+            workspace = workspace.push(self.object_toolbar());
+        }
+        let workspace = workspace
+            .push(paper)
             .height(Length::Fill)
             .width(Length::Fill);
         let mut body = row![self.tool_palette(), workspace].height(Length::Fill);
@@ -2149,6 +2154,13 @@ impl App {
                 .text_size(12)
                 .padding(5)
                 .width(132),
+                checkbox(self.appearance.object_toolbar)
+                    .label("Object toolbar")
+                    .on_toggle(|visible| Message::ObjectToolbar(
+                        super::object_toolbar::Action::Visible(visible)
+                    ))
+                    .size(14)
+                    .text_size(12),
                 checkbox(self.grid)
                     .label("Grid")
                     .on_toggle(|_| Message::Grid)
@@ -2178,7 +2190,7 @@ impl App {
                 Space::new().width(Length::Fill),
                 command("Done", Message::ToggleView),
             ]
-            .spacing(18)
+            .spacing(10)
             .align_y(Alignment::Center),
         )
         .padding([7, 14])
