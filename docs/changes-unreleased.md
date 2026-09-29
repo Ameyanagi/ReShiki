@@ -4,7 +4,8 @@ The Windows dropdown fix is recorded in [ReShiki 0.9.1](changes-0.9.1.md). Publi
 
 ## ChemDraw arrow exchange (under review)
 
-By @Ameyanagi. Keep arrows visible and editable when copying reaction drawings
+By @Ameyanagi in [PR #80](https://github.com/Ameyanagi/ReShiki/pull/80).
+Keep arrows visible and editable when copying reaction drawings
 between ReShiki and ChemDraw. The [verification record](changes/chemdraw-arrow-exchange.md)
 includes actual clipboard results, matched returned-file renders and the
 explicit limit on external reaction-role metadata.
