@@ -240,6 +240,7 @@ enum Gesture {
         start: World,
         ids: Vec<u64>,
         clicked: Vec<u64>,
+        copy: std::cell::OnceCell<Box<Document>>,
     },
     Select {
         start: World,
@@ -311,11 +312,10 @@ impl MoleculeCanvas<'_> {
         requested: World,
         modifiers: iced::keyboard::Modifiers,
     ) -> World {
-        let requested = if modifiers.shift() {
-            movement::axis_locked(requested)
-        } else {
-            requested
-        };
+        // Shift frees bond constraints like Option/Alt, so the move stays on its axis.
+        if modifiers.shift() {
+            return movement::axis_locked(requested);
+        }
         if command_held(modifiers) {
             return requested;
         }
@@ -658,6 +658,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                             start: p,
                             ids: vec![id],
                             clicked: vec![id],
+                            copy: Default::default(),
                         });
                         return Some(Action::request_redraw().and_capture());
                     }
@@ -750,6 +751,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                                 },
                             ),
                             clicked: hit,
+                            copy: Default::default(),
                         }
                     } else if self.tool == Tool::Lasso {
                         Gesture::Lasso { points: vec![p] }
@@ -1053,6 +1055,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                         start,
                         ids,
                         clicked,
+                        ..
                     } => {
                         if start.distance(p) < 1.0 / self.camera.zoom {
                             if !state.modifiers.shift()
@@ -1623,7 +1626,13 @@ impl MoleculeCanvas<'_> {
                 }
             }
         }
-        if let (Some(Gesture::Move { start, ids, .. }), Some(p)) = (&state.gesture, state.cursor) {
+        if let (
+            Some(Gesture::Move {
+                start, ids, copy, ..
+            }),
+            Some(p),
+        ) = (&state.gesture, state.cursor)
+        {
             let p = self
                 .camera
                 .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
@@ -1635,8 +1644,9 @@ impl MoleculeCanvas<'_> {
             if start.distance(p) < 1.0 / self.camera.zoom {
                 ring_selection = Some(ids.clone());
             } else if command_held(state.modifiers) {
-                let part = reshiki::editing::selection(&preview, ids);
-                ring_selection = Some(reshiki::editing::append(&mut preview, &part, delta));
+                let part =
+                    copy.get_or_init(|| Box::new(reshiki::editing::selection(self.doc, ids)));
+                ring_selection = Some(reshiki::editing::append(&mut preview, part, delta));
             } else if state.scene.borrow_mut().whole_document(self.doc, ids) {
                 // Moving every object cannot change their relative geometry,
                 // chemical labels, crossing gaps or ring attachment targets.
@@ -3769,6 +3779,7 @@ mod tests {
                     start: World::new(44., 1.),
                     ids: vec![b],
                     clicked: vec![b],
+                    copy: Default::default(),
                 }),
                 ..Default::default()
             };
@@ -4884,6 +4895,11 @@ mod tests {
         assert!(matches!(
             pointer_gesture_with(&canvas, Point::new(221.0, 171.0), Point::new(251.0, 201.0), Modifiers::COMMAND),
             Edit::Duplicate(ids, 30.0, 30.0) if ids == partial
+        ));
+        // A part still bonded to the rest stays on its axis despite Length/Angles.
+        assert!(matches!(
+            pointer_gesture_with(&canvas, Point::new(221.0, 171.0), Point::new(251.0, 181.0), Modifiers::SHIFT),
+            Edit::Move(ids, 30.0, 0.0) if ids == partial
         ));
     }
 
