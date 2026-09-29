@@ -4,10 +4,23 @@ on:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
+      nightly:
+        description: Test nightly versions and portable packages without publishing
+        type: boolean
+        default: false
       sign_macos:
         description: Sign and notarize macOS test packages (requires signing secrets)
         type: boolean
         default: false
+  workflow_call:
+    inputs:
+      nightly:
+        description: Build unsigned portable nightly packages with a unique version
+        type: boolean
+        default: false
+    outputs:
+      nightly_version:
+        value: ${{ jobs.validate.outputs.nightly_version }}
 permissions:
   contents: read
 concurrency:
@@ -22,6 +35,8 @@ jobs:
       live_reference: true
   validate:
     runs-on: ubuntu-22.04
+    outputs:
+      nightly_version: ${{ steps.nightly.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
@@ -29,6 +44,18 @@ jobs:
           version: "0.12.3"
           python-version: "3.12"
           enable-cache: false
+      - name: Prepare nightly version
+        if: inputs.nightly
+        id: nightly
+        run: |
+          uv run --no-project --python 3.12 python -m unittest tests.test_prepare_nightly
+          version=$(uv run --no-project --python 3.12 python scripts/prepare_nightly.py --identifier "$(date -u +%Y%m%d).${{ github.run_id }}.${{ github.run_attempt }}")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Require stable release tags to belong to main
+        if: github.event_name == 'push'
+        run: |
+          git fetch --no-tags --unshallow origin main
+          git merge-base --is-ancestor HEAD FETCH_HEAD
       - name: Require tag and package versions to match
         if: github.event_name == 'push'
         env:
@@ -79,6 +106,12 @@ jobs:
         with:
           version: "0.12.3"
           python-version: ${{ matrix.python }}
+      - name: Stamp nightly package version
+        if: inputs.nightly
+        shell: bash
+        env:
+          NIGHTLY_VERSION: ${{ needs.validate.outputs.nightly_version }}
+        run: uv run --no-project --python 3.12 python scripts/prepare_nightly.py --version "$NIGHTLY_VERSION"
       - uses: Swatinem/rust-cache@63fed3e2fecf6f7b51dc6f043341b79ef82a9ae7 # v2.9.2
         with:
           # Previous release caches included packaged license sources in target/.
@@ -97,7 +130,7 @@ jobs:
       - run: uv sync --locked
         if: matrix.native_only != true
       - name: Install pinned Windows installer compiler
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && !inputs.nightly
         shell: pwsh
         run: |
           $compilerInstaller = Join-Path $env:RUNNER_TEMP 'innosetup.exe'
@@ -124,7 +157,7 @@ jobs:
       - name: Build and test extracted portable archive
         env:
           MACOSX_DEPLOYMENT_TARGET: "14.0"
-        run: uv run --no-project --isolated --python 3.12 python scripts/build_release.py --target ${{ matrix.target }} --fetch-inchi-source --installer
+        run: uv run --no-project --isolated --python 3.12 python scripts/build_release.py --target ${{ matrix.target }} --fetch-inchi-source ${{ inputs.nightly != true && '--installer' || '' }}
       - name: Test native chemistry on Intel macOS
         if: matrix.artifact == 'macos-x64'
         env:
@@ -132,6 +165,13 @@ jobs:
           RESHIKI_REQUIRE_INCHI_HELPER: "1"
           RESHIKI_INCHI_HELPER: ${{ github.workspace }}/target/x86_64-apple-darwin/inchi-helper/reshiki-inchi-helper
         run: cargo test --release --locked --no-default-features --lib --target x86_64-apple-darwin
+      - name: Test the nightly application and renderer regressions
+        if: inputs.nightly
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "14.0"
+          RESHIKI_REQUIRE_INCHI_HELPER: "1"
+          RESHIKI_INCHI_HELPER: ${{ github.workspace }}/target/${{ matrix.target }}/inchi-helper/reshiki-inchi-helper${{ runner.os == 'Windows' && '.exe' || '' }}
+        run: cargo test --release --locked --no-default-features --bin reshiki --target ${{ matrix.target }}
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: unsigned-${{ matrix.artifact }}
@@ -139,7 +179,7 @@ jobs:
           if-no-files-found: error
   sign:
     needs: build
-    if: github.event_name == 'push' || inputs.sign_macos
+    if: ${{ !inputs.nightly && (github.event_name == 'push' || inputs.sign_macos) }}
     environment: macos-signing
     timeout-minutes: 75
     strategy:

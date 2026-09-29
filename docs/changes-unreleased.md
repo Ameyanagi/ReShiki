@@ -14,6 +14,20 @@ This change is under review and unreleased. Matched examples come from applicati
 | ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | ![A second click misses the nitrogen after the canvas shifts](images/selection-canvas/before-1280-double-click.png) | ![Double-click selects the whole molecule while the drawing stays fixed](images/selection-canvas/after-1280-double-click.png) |
 
+## Windows GPU rendering and nightly builds
+
+By @Ameyanagi in [PR #68](https://github.com/Ameyanagi/ReShiki/pull/68).
+
+Windows builds include WGPU with a Tiny Skia fallback. CPU-only environments keep
+the direct software renderer, and explicit renderer overrides remain available
+for testing. The [validation record](windows-gpu-validation.md) includes Windows
+VM measurements and real Radeon GPU rendering on Linux; physical Windows GPU
+performance remains unmeasured.
+
+Development PRs target `main`. Successful nightly builds publish unsigned portable
+prereleases for all six platforms, with unique versions and checksums. Stable
+releases use version tags on tested commits in `main`.
+
 ## Website videos and reusable color palettes
 
 By @Ameyanagi in [PR #59](https://github.com/Ameyanagi/ReShiki/pull/59).
