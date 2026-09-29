@@ -2,14 +2,6 @@
 
 The Windows dropdown fix is recorded in [ReShiki 0.9.1](changes-0.9.1.md). Publisher-style, theme, clipboard and aromatic-fusion updates are recorded in [ReShiki 0.9.0](changes-0.9.md).
 
-## Stable downloads and optional nightly builds
-
-By @Ameyanagi in [PR #81](https://github.com/Ameyanagi/ReShiki/pull/81); under review.
-
-The homepage, repository README, and installation guide now explicitly offer the latest stable release for everyday work. A smaller Nightly builds link leads to separate testing instructions. GitHub's all-releases list still includes newer prereleases; the primary download links go directly to stable. [Change and validation notes](changes/release-channels.md).
-
-![ReShiki homepage with an orange Download stable button, a Stable release version badge, and a smaller Nightly builds link beside the installation guide.](images/release-channels/homepage.jpg)
-
 ## Windows GPU rendering and nightly builds
 
 By @Ameyanagi in [PR #68](https://github.com/Ameyanagi/ReShiki/pull/68).
@@ -23,6 +15,14 @@ performance remains unmeasured.
 Development PRs target `main`. Successful nightly builds publish unsigned portable
 prereleases for all six platforms, with unique versions and checksums. Stable
 releases use version tags on tested commits in `main`.
+
+## Stable downloads and optional nightly builds
+
+By @Ameyanagi in [PR #81](https://github.com/Ameyanagi/ReShiki/pull/81); under review.
+
+The homepage, repository README, and installation guide now explicitly offer the latest stable release for everyday work. A smaller Nightly builds link leads to separate testing instructions. GitHub's all-releases list still includes newer prereleases; the primary download links go directly to stable. [Change and validation notes](changes/release-channels.md).
+
+![ReShiki homepage with an orange Download stable button, a Stable release version badge, and a smaller Nightly builds link beside the installation guide.](images/release-channels/homepage.jpg)
 
 ## Website videos and reusable color palettes
 
