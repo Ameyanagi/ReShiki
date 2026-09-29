@@ -229,10 +229,10 @@ pub enum Message {
         result: Box<Result<Response, String>>,
     },
     #[cfg_attr(
-        not(any(target_os = "macos", test)),
+        not(test),
         expect(
             dead_code,
-            reason = "Finder open callback; exercised by cross-platform tests"
+            reason = "Legacy open event retained for editor-boundary tests"
         )
     )]
     Opened(Option<(PathBuf, Result<String, String>)>),
@@ -2186,15 +2186,6 @@ impl App {
             Message::Opened(file) => {
                 if let Some((path, contents)) = file {
                     let key = self.file_request_key();
-                    #[cfg(target_os = "macos")]
-                    if self.native_opening {
-                        return Task::perform(
-                            files::prepare_contents(path, contents),
-                            move |opened| {
-                                Message::MacFiles(macos_files::Action::Prepared(key, opened))
-                            },
-                        );
-                    }
                     return Task::perform(files::prepare_contents(path, contents), move |opened| {
                         Message::FilePrepared(key, opened)
                     });

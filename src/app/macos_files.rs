@@ -9,7 +9,7 @@ static EVENTS: Mutex<Option<UnboundedReceiver<reshiki_macos::OpenRequest>>> = Mu
 #[derive(Debug, Clone)]
 pub enum Action {
     Open(reshiki_macos::OpenRequest),
-    Loaded(PathBuf, Result<String, String>),
+    Loaded(super::files::Key, PathBuf, Result<String, String>),
     Prepared(super::files::Key, super::files::Opened),
     Launched(Result<(), String>),
 }
@@ -65,12 +65,13 @@ impl App {
                 for path in paths {
                     if self.can_open_in_startup_window() {
                         self.native_opening = true;
+                        let key = self.file_request_key();
                         tasks.push(Task::perform(
                             async move {
                                 let contents = tokio::fs::read_to_string(&path)
                                     .await
                                     .map_err(|e| e.to_string());
-                                Action::Loaded(path, contents)
+                                Action::Loaded(key, path, contents)
                             },
                             Message::MacFiles,
                         ));
@@ -83,15 +84,18 @@ impl App {
                 }
                 Task::batch(tasks)
             }
-            Action::Loaded(path, contents) => {
+            Action::Loaded(key, path, contents) => {
                 self.native_opening = false;
-                if self.can_open_in_startup_window() {
-                    // Native validation now runs in a second worker stage.
-                    // Keep this window reserved until that stage completes.
+                if self.can_open_in_startup_window() && self.file_request_is_current(key) {
+                    // Reserve this window and preserve the original request's
+                    // ordering through both reading and native validation.
                     self.native_opening = true;
-                    self.update(Message::Opened(Some((path, contents))))
+                    Task::perform(
+                        super::files::prepare_contents(path, contents),
+                        move |opened| Message::MacFiles(Action::Prepared(key, opened)),
+                    )
                 } else {
-                    // A user may have started drawing while the file was read.
+                    // An edit or a newer menu open may have claimed this window.
                     launch(vec![path])
                 }
             }
@@ -167,15 +171,29 @@ mod tests {
     use super::*;
     use reshiki::document::{Document, Point};
 
+    fn begin_read(app: &mut App, path: &std::path::Path) -> super::super::files::Key {
+        // Dispatch the real Finder request but leave its worker unpolled, so
+        // tests can inject completion after a chosen intervening UI action.
+        let task = app.update(Message::MacFiles(Action::Open(Ok(vec![path.into()]))));
+        assert!(task.units() > 0);
+        assert!(app.native_opening);
+        super::super::files::dispatched_open_key(app)
+    }
+
     #[test]
     fn finder_loads_a_native_drawing_into_the_untouched_startup_window() -> Result<(), String> {
         let (mut app, _) = App::new();
         let mut doc = Document::default();
         doc.add_atom("N", Point::default());
         let path = PathBuf::from("/tmp/日本語 drawing.rsk");
-        app.native_opening = true;
+        let key = begin_read(&mut app, &path);
         let contents = serde_json::to_string(&doc).map_err(|e| e.to_string())?;
-        let task = app.mac_file_action(Action::Loaded(path.clone(), Ok(contents.clone())));
+        let task = app.mac_file_action(Action::Loaded(key, path.clone(), Ok(contents.clone())));
+        assert_eq!(
+            super::super::files::dispatched_open_key(&app),
+            key,
+            "Reading and parsing must retain the original request key"
+        );
         assert!(task.units() > 0);
         assert!(
             app.path.is_none(),
@@ -200,9 +218,8 @@ mod tests {
         let mut document = Document::default();
         document.add_atom("N", Point::default());
         let contents = serde_json::to_string(&document).map_err(|e| e.to_string())?;
-        app.native_opening = true;
-        let _ = app.mac_file_action(Action::Loaded(path.clone(), Ok(contents.clone())));
-        let key = super::super::files::dispatched_open_key(&app);
+        let key = begin_read(&mut app, &path);
+        let _ = app.mac_file_action(Action::Loaded(key, path.clone(), Ok(contents.clone())));
         assert!(!app.can_open_in_startup_window());
 
         // Dropping this task avoids launching a real process in the test.
@@ -226,9 +243,8 @@ mod tests {
             let mut document = Document::default();
             document.add_atom("O", Point::default());
             let contents = serde_json::to_string(&document).map_err(|e| e.to_string())?;
-            app.native_opening = true;
-            let _ = app.mac_file_action(Action::Loaded(path.clone(), Ok(contents.clone())));
-            let key = super::super::files::dispatched_open_key(&app);
+            let key = begin_read(&mut app, &path);
+            let _ = app.mac_file_action(Action::Loaded(key, path.clone(), Ok(contents.clone())));
             if edit {
                 let before = app.doc.clone();
                 app.doc.add_atom("C", Point::default());
@@ -256,15 +272,50 @@ mod tests {
     }
 
     #[test]
+    fn a_newer_menu_open_survives_finder_read_completion() -> Result<(), String> {
+        let (mut app, _) = App::new();
+        let finder_path = PathBuf::from("/tmp/finder.rsk");
+        let finder_key = begin_read(&mut app, &finder_path);
+        // Dispatch the real menu-open path without polling its native dialog.
+        let menu_task = app.perform(super::super::Pending::Open);
+        assert!(menu_task.units() > 0);
+        let menu_key = super::super::files::dispatched_open_key(&app);
+        assert_ne!(menu_key, finder_key);
+        let mut document = Document::default();
+        document.add_atom("N", Point::default());
+        let contents = serde_json::to_string(&document).map_err(|e| e.to_string())?;
+        let followup = app.update(Message::MacFiles(Action::Loaded(
+            finder_key,
+            finder_path,
+            Ok(contents.clone()),
+        )));
+        assert!(followup.units() > 0, "Dispatch a separate Finder window");
+        assert!(!app.native_opening);
+        assert!(app.file_request_is_current(menu_key));
+        assert!(app.doc.all_ids().is_empty());
+        let menu_path = PathBuf::from("/tmp/menu.rsk");
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let opened = runtime.block_on(super::super::files::prepare_contents(
+            menu_path.clone(),
+            Ok(contents),
+        ));
+        let _ = app.update(Message::FilePrepared(menu_key, opened));
+        assert_eq!(app.path, Some(menu_path));
+        assert_eq!(app.doc.atoms[0].element, "N");
+        assert!(!app.error);
+        Ok(())
+    }
+
+    #[test]
     fn pending_or_edited_windows_are_never_replaced_by_a_finder_request() {
         let (mut app, _) = App::new();
         assert!(app.can_open_in_startup_window());
-        app.native_opening = true;
+        let key = begin_read(&mut app, std::path::Path::new("/tmp/other.rsk"));
         assert!(!app.can_open_in_startup_window());
-        app.native_opening = false;
         app.doc.add_atom("C", Point::default());
         let original = app.doc.clone();
         let _ = app.mac_file_action(Action::Loaded(
+            key,
             PathBuf::from("/tmp/other.rsk"),
             Ok("{}".into()),
         ));
@@ -280,12 +331,12 @@ mod tests {
             let mut document = Document::default();
             document.add_atom("O", Point::default());
             let contents = serde_json::to_string(&document).map_err(|e| e.to_string())?;
-            app.native_opening = true;
+            let key = begin_read(&mut app, &path);
             let _ = app.update(Message::MacFiles(Action::Loaded(
+                key,
                 path.clone(),
                 Ok(contents.clone()),
             )));
-            let key = super::super::files::dispatched_open_key(&app);
             let dir = tempfile::tempdir().unwrap();
             match context {
                 "inline draft" => {
@@ -340,7 +391,8 @@ mod tests {
         let (mut app, _) = App::new();
         let original = app.doc.clone();
         let path = PathBuf::from("/tmp/bad.rsk");
-        let task = app.mac_file_action(Action::Loaded(path.clone(), Ok("not json".into())));
+        let key = begin_read(&mut app, &path);
+        let task = app.mac_file_action(Action::Loaded(key, path.clone(), Ok("not json".into())));
         assert!(task.units() > 0);
         assert_eq!(app.doc, original);
         assert!(!app.error, "Validation has not run on the event loop");
