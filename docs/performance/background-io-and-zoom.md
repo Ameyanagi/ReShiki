@@ -112,6 +112,44 @@ A separate trial indexed theme-library entries and sorted them once. For 300 fil
 it measured 6.36 ms versus 5.45 ms for the existing implementation. That change was
 removed; there is no claimed theme-loading improvement.
 
+## Windows measurements
+
+AMD Ryzen 9 7940HS test VM, Windows 11, MSVC release build, 2026-09-29.
+These are CPU measurements on the VM, not GPU usage or FPS on the physical Iris Xe.
+The baseline is the previously built `805b9fb` code; the candidate is `e9818f5`.
+The same canvas harness uses 20 iterations. Milliseconds, median / p95:
+
+| Workload            |        Baseline |       Updated |
+| ------------------- | --------------: | ------------: |
+| Zoom, 1× gallery    | 107.28 / 118.10 | 31.50 / 46.26 |
+| Zoom, 4× gallery    | 137.16 / 193.64 | 45.93 / 56.53 |
+| Selected redraw, 4× |   35.14 / 36.13 | 17.16 / 17.57 |
+| Drag all, 4×        |   23.97 / 25.52 |   6.86 / 7.62 |
+| Partial drag, 4×    |   39.11 / 41.12 | 38.72 / 40.28 |
+
+Updated full-view construction with all objects selected took 4.15 / 4.44 ms with
+collapsed sections and 7.71 / 8.15 ms expanded at four galleries. No Windows
+before/after inspector ratio is claimed because the old Windows executable did
+not include the new inspector workload.
+
+| Recovery operation                             |  1× gallery |   4× gallery |
+| ---------------------------------------------- | ----------: | -----------: |
+| Synchronous capture + validate/serialize/write | 3.52 / 4.16 | 8.20 / 10.48 |
+| Updated Tick dispatch, including snapshot      | 0.22 / 0.25 |  0.75 / 0.87 |
+| Updated worker round trip, including capture   | 3.78 / 4.55 | 8.10 / 10.04 |
+
+Native parse/validation took 1.16 ms median and serialization 0.67 ms for one
+gallery. A checked write of 512 small templates took 13.75 ms median. These bodies
+now run on workers; they do not measure the time to present a completed save.
+
+The final Windows application run passed 293 tests, with 16 explicitly ignored
+cases, including the exact Iced glyph parity matrix and cache eviction tests.
+Both the independent selection-marker and cached/fresh edit/drag pixel
+comparisons passed. The build initially
+hit a file lock from a test-listing process; the runner was corrected and the
+final source rebuilt successfully. Source archive extraction touched the crate
+roots so Cargo did not reuse a binary with older code.
+
 ## Validation and reproduction
 
 The macOS release regression run passed 579 tests, with 18 explicitly ignored
@@ -126,6 +164,15 @@ renderer checks compare cached/fresh edits and drag results, and new selection
 markers against the previous uncached implementation, including viewport edges.
 Both pixel comparisons passed. No drawing format or chemistry algorithm changes
 are introduced by this follow-up.
+
+The isolated macOS release app passed actual desktop checks for selecting and
+dragging the entire gallery, zoom, collapsed inspector controls, Undo/Redo,
+autosave, native Save, New and Open. The saved/reopened fixture contains 483 atoms
+(including five attachment points), 429 bonds and 132 captions. A recovery snapshot
+was observed after editing and removed after saving; existing user windows and
+preferences were preserved. All-target/all-feature compile checks, Clippy with
+warnings denied, Rust formatting and Markdown formatting passed through the
+normal pre-commit hooks.
 
 ```sh
 cargo test --release --locked --bin reshiki \
@@ -149,7 +196,7 @@ operations should not be added together and presented as measured input latency.
   geometry construction. These are findings, not implemented additional caches.
 - Partial-selection dragging still builds a changed scene. This pass measured
   31.31 → 33.19 ms at four galleries; it did not improve that path.
-- Document snapshot copying, publishing/fitting a loaded drawing and extracting a
+- Document snapshot copying, saved-state comparison, publishing/fitting a loaded drawing and extracting a
   template selection still run on the event loop. Very large drawings can make
   those operations material.
 - Initial recovery/library discovery and theme persistence/archive remain
