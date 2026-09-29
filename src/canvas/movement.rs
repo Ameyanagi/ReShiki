@@ -5,6 +5,15 @@ use reshiki::{
 };
 use std::collections::{HashMap, HashSet};
 
+/// Shift-drag keeps only the component the pointer has moved farther along.
+pub(super) fn axis_locked(requested: Point) -> Point {
+    if requested.x.abs() >= requested.y.abs() {
+        Point::new(requested.x, 0.)
+    } else {
+        Point::new(0., requested.y)
+    }
+}
+
 pub(super) fn delta(doc: &Document, ids: &[u64], requested: Point, drawing: BondDrawing) -> Point {
     if !requested.x.is_finite() || !requested.y.is_finite() {
         return Point::default();

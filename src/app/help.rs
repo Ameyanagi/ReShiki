@@ -61,6 +61,11 @@ impl App {
                 ),
                 (platform_shortcut("⇧ ⌘ D", "Ctrl Shift D"), "Duplicate"),
                 (
+                    platform_shortcut("⌘ drag", "Ctrl drag"),
+                    "Drag a copy, leaving the original in place",
+                ),
+                ("Shift drag", "Move horizontally or vertically only"),
+                (
                     platform_shortcut("⇧ ⌘ →", "Ctrl Shift →"),
                     "Reaction arrow and molecule copy",
                 ),
