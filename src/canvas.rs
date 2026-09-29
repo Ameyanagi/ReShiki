@@ -240,8 +240,6 @@ enum Gesture {
         start: World,
         ids: Vec<u64>,
         clicked: Vec<u64>,
-        /// The source document and the part copied from it, reused while it is unchanged.
-        copy: std::cell::RefCell<Option<Box<(Document, Document)>>>,
     },
     Select {
         start: World,
@@ -659,7 +657,6 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                             start: p,
                             ids: vec![id],
                             clicked: vec![id],
-                            copy: Default::default(),
                         });
                         return Some(Action::request_redraw().and_capture());
                     }
@@ -752,7 +749,6 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                                 },
                             ),
                             clicked: hit,
-                            copy: Default::default(),
                         }
                     } else if self.tool == Tool::Lasso {
                         Gesture::Lasso { points: vec![p] }
@@ -1056,7 +1052,6 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                         start,
                         ids,
                         clicked,
-                        ..
                     } => {
                         if start.distance(p) < 1.0 / self.camera.zoom {
                             if !state.modifiers.shift()
@@ -1627,13 +1622,7 @@ impl MoleculeCanvas<'_> {
                 }
             }
         }
-        if let (
-            Some(Gesture::Move {
-                start, ids, copy, ..
-            }),
-            Some(p),
-        ) = (&state.gesture, state.cursor)
-        {
+        if let (Some(Gesture::Move { start, ids, .. }), Some(p)) = (&state.gesture, state.cursor) {
             let p = self
                 .camera
                 .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
@@ -1645,14 +1634,8 @@ impl MoleculeCanvas<'_> {
             if start.distance(p) < 1.0 / self.camera.zoom {
                 ring_selection = Some(ids.clone());
             } else if command_held(state.modifiers) {
-                let mut copy = copy.borrow_mut();
-                if copy.as_ref().is_none_or(|c| c.0 != *self.doc) {
-                    let part = reshiki::editing::selection(self.doc, ids);
-                    *copy = Some(Box::new((self.doc.clone(), part)));
-                }
-                if let Some(c) = copy.as_ref() {
-                    ring_selection = Some(reshiki::editing::append(&mut preview, &c.1, delta));
-                }
+                let part = state.scene.borrow_mut().copy(self.doc, ids);
+                ring_selection = Some(reshiki::editing::append(&mut preview, &part, delta));
             } else if state.scene.borrow_mut().whole_document(self.doc, ids) {
                 // Moving every object cannot change their relative geometry,
                 // chemical labels, crossing gaps or ring attachment targets.
@@ -3785,7 +3768,6 @@ mod tests {
                     start: World::new(44., 1.),
                     ids: vec![b],
                     clicked: vec![b],
-                    copy: Default::default(),
                 }),
                 ..Default::default()
             };

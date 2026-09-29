@@ -93,7 +93,6 @@ async fn loaded_canvas_workloads() {
             start: canvas.camera.world(point, bounds),
             ids: ids.clone(),
             clicked: vec![ids[0]],
-            copy: Default::default(),
         });
         measure(&format!("gallery_{copies}x_drag_all"), iterations, |i| {
             state.cursor = Some(point + Vector::new(20. + i as f32, 15.));
@@ -106,7 +105,6 @@ async fn loaded_canvas_workloads() {
             start: canvas.camera.world(point, bounds),
             ids: partial.to_vec(),
             clicked: partial.to_vec(),
-            copy: Default::default(),
         });
         measure(
             &format!("gallery_{copies}x_drag_partial"),
@@ -206,7 +204,6 @@ async fn cached_canvas_matches_fresh_edits_and_committed_drag() {
             start: camera.world(point, bounds),
             ids: ids.clone(),
             clicked: vec![ids[0]],
-            copy: Default::default(),
         }),
         cursor: Some(point + Vector::new(delta.x * camera.zoom, delta.y * camera.zoom)),
         ..Default::default()
