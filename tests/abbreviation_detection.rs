@@ -1,4 +1,4 @@
-//! Exact original-worker detection, validation and native-query differential tests.
+//! Exact Python-reference detection, validation and native-query differential tests.
 use anyhow::Context;
 use reshiki::{
     chemistry::{
@@ -100,7 +100,7 @@ fn check(case: &Case) -> anyhow::Result<()> {
 }
 
 #[test]
-fn original_worker_detection_and_validation_match() -> anyhow::Result<()> {
+fn python_reference_detection_and_validation_match() -> anyhow::Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let python = root.join(if cfg!(windows) {
         ".venv/Scripts/python.exe"
@@ -140,7 +140,8 @@ fn original_worker_detection_and_validation_match() -> anyhow::Result<()> {
     assert!(errors.is_empty(), "{}", errors.join("\n"));
     assert!(count > 5_000, "Incomplete oracle: {count}");
     eprintln!(
-        "Verified {count} abbreviation detection/validation cases and all 29 native preset queries"
+        "Verified {count} abbreviation detection/validation cases and all {} native preset queries",
+        abbreviations::presets()?.len()
     );
     Ok(())
 }

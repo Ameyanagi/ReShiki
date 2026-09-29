@@ -12,6 +12,9 @@ use iced::{Alignment, Border, Color, Element, Length, Theme};
 use reshiki::bonds::BondPreset;
 use reshiki::typography::{Script, StyleChange, TextAlign};
 
+#[cfg(test)]
+mod selection_canvas_qa;
+
 impl App {
     pub(super) fn selection_summary(&self) -> String {
         let groups = self.doc.outer_selected_groups(&self.selected);
@@ -221,6 +224,9 @@ impl App {
                         .padding(6),
                 );
         }
+        if kind == GraphicKind::Arc {
+            panel = panel.push(self.arc_controls());
+        }
         if kind.brackets() {
             panel = panel.push(
                 crate::appearance::pick_list(
@@ -241,11 +247,13 @@ impl App {
                 .spacing(4),
             );
         }
-        if matches!(selected.as_slice(), [g] if matches!(g.kind, GraphicKind::Curve | GraphicKind::Path))
+        if matches!(selected.as_slice(), [g] if matches!(g.kind, GraphicKind::Curve | GraphicKind::Path | GraphicKind::Arc))
         {
             panel = panel.push(command(
                 if self.tool == Tool::EditPoints {
                     "Finish editing points"
+                } else if kind == GraphicKind::Arc {
+                    "Edit arc endpoints"
                 } else {
                     "Edit curve points"
                 },
@@ -664,6 +672,7 @@ impl App {
             bond_drawing: self.bond_drawing,
             chain_drawing: self.chain_drawing,
             graphic_constrain: self.toolbar.graphic(self.tool).is_some_and(|p| p.constrain),
+            graphic_arc: self.arc_editor.geometry,
             graphic_style: &self.graphic_style,
             orbital_phase: self.orbital_phase,
             phase_flipped: self.phase_flipped,
@@ -758,7 +767,12 @@ impl App {
         } else {
             self.context_bar()
         };
-        let workspace = column![context, paper]
+        let mut workspace = column![context];
+        if self.appearance.object_toolbar {
+            workspace = workspace.push(self.object_toolbar());
+        }
+        let workspace = workspace
+            .push(paper)
             .height(Length::Fill)
             .width(Length::Fill);
         let mut body = row![self.tool_palette(), workspace].height(Length::Fill);
@@ -1440,6 +1454,16 @@ impl App {
                 tooltip::Position::Bottom,
             ));
         }
+        // Selection can reveal bonded-movement controls. Keep them in the same
+        // fixed-height row: a second row moves the canvas between the two
+        // clicks used to select a molecule.
+        if moving_bonded_selection {
+            options = options.push(divider()).push(self.bond_constraints()).push(
+                text("Bonded movement follows Length / Angles · Option/Alt: free movement")
+                    .size(10)
+                    .style(muted_text),
+            );
+        }
         // Keep page controls visible even when selection/tool actions overflow.
         let options = row![
             scrollable(options)
@@ -1451,19 +1475,15 @@ impl App {
         ]
         .spacing(12)
         .align_y(Alignment::Center);
-        if matches!(self.tool, Tool::Chain(_)) || moving_bonded_selection {
+        if matches!(self.tool, Tool::Chain(_)) {
             return container(
                 column![
                     options,
                     row![
                         self.bond_constraints(),
-                        text(if moving_bonded_selection {
-                            "Bonded movement follows Length / Angles · Option/Alt: free movement"
-                        } else {
-                            "Ctrl bends · Shift flips start · Alt frees · Auto click: 6 atoms"
-                        })
-                        .size(10)
-                        .style(muted_text),
+                        text("Ctrl bends · Shift flips start · Alt frees · Auto click: 6 atoms")
+                            .size(10)
+                            .style(muted_text),
                     ]
                     .spacing(14)
                     .align_y(Alignment::Center)
@@ -1482,20 +1502,32 @@ impl App {
             .into()
     }
 
+    pub(super) fn inspector_width(&self) -> f32 {
+        if !self.inspector_open {
+            return 0.;
+        }
+        match self.inspector_tab {
+            InspectorTab::Assistant => 380.,
+            InspectorTab::DrawingStyle | InspectorTab::Reactions => 320.,
+            InspectorTab::Properties | InspectorTab::Export => 300.,
+            _ => 256.,
+        }
+    }
+
     fn inspector(&self) -> Element<'_, Message> {
         if self.inspector_tab == InspectorTab::Reactions {
             return self.reactions_inspector();
         }
         if self.inspector_tab == InspectorTab::DrawingStyle {
             return container(self.drawing_style_panel())
-                .width(320)
+                .width(self.inspector_width())
                 .height(Length::Fill)
                 .style(panel)
                 .into();
         }
         if self.inspector_tab == InspectorTab::Assistant {
             return container(self.assistant_panel())
-                .width(380)
+                .width(self.inspector_width())
                 .height(Length::Fill)
                 .style(panel)
                 .into();
@@ -1547,21 +1579,7 @@ impl App {
             ]
             .spacing(4),
         )
-        .width(
-            if matches!(
-                self.inspector_tab,
-                InspectorTab::DrawingStyle | InspectorTab::Reactions
-            ) {
-                320
-            } else if matches!(
-                self.inspector_tab,
-                InspectorTab::Properties | InspectorTab::Export
-            ) {
-                300
-            } else {
-                256
-            },
-        )
+        .width(self.inspector_width())
         .height(Length::Fill)
         .style(panel)
         .into()
@@ -2142,6 +2160,13 @@ impl App {
                 .text_size(12)
                 .padding(5)
                 .width(132),
+                checkbox(self.appearance.object_toolbar)
+                    .label("Object toolbar")
+                    .on_toggle(|visible| Message::ObjectToolbar(
+                        super::object_toolbar::Action::Visible(visible)
+                    ))
+                    .size(14)
+                    .text_size(12),
                 checkbox(self.grid)
                     .label("Grid")
                     .on_toggle(|_| Message::Grid)
@@ -2171,7 +2196,7 @@ impl App {
                 Space::new().width(Length::Fill),
                 command("Done", Message::ToggleView),
             ]
-            .spacing(18)
+            .spacing(10)
             .align_y(Alignment::Center),
         )
         .padding([7, 14])
@@ -2498,5 +2523,97 @@ fn tool_name(tool: Tool) -> &'static str {
         Tool::Erase => "Eraser",
         Tool::Graphic(_) => "Drawing object",
         Tool::EditPoints => "Edit points",
+    }
+}
+
+#[cfg(test)]
+mod selection_tests {
+    use super::*;
+    use reshiki::document::{Annotation, Point};
+
+    #[test]
+    fn selection_revealing_properties_keeps_targets_at_the_same_screen_position() {
+        for zoom in [0.5, 1., 2.] {
+            for (open, tab) in [
+                (false, InspectorTab::Properties),
+                (true, InspectorTab::Labels),
+                (true, InspectorTab::DrawingStyle),
+                (true, InspectorTab::Properties),
+                (true, InspectorTab::Templates),
+            ] {
+                let (mut app, _) = App::new();
+                app.inspector_open = open;
+                app.inspector_tab = tab;
+                app.viewport = iced::Size::new(1000. - app.inspector_width(), 600.);
+                app.camera.zoom = zoom;
+                app.camera.center = Point::new(42., -20.);
+                app.fit_to_view = true;
+                let at = Point::new(-120., 30.);
+                app.doc.annotations.push(Annotation {
+                    id: 1,
+                    position: at,
+                    text: "Conditions".into(),
+                    format: Default::default(),
+                });
+                let before = app.doc.clone();
+                let screen = app
+                    .camera
+                    .screen(at, iced::Rectangle::with_size(app.viewport));
+                let _ = app.update(Message::Canvas(Edit::Select(vec![1])));
+                let size = app.viewport;
+                let _ = app.update(Message::Viewport(size));
+                assert_eq!(app.camera.zoom, zoom, "Selection must not refit");
+                assert_eq!(
+                    app.camera.screen(at, iced::Rectangle::with_size(size)),
+                    screen,
+                    "Inspector {open:?}/{tab:?}, zoom {zoom}"
+                );
+                assert_eq!(app.doc, before);
+                assert!(!app.history.can_undo());
+                assert!(app.fit_to_view, "A real resize should still refit later");
+                let _ = app.update(Message::Viewport(iced::Size::new(500., 400.)));
+                assert_ne!(app.camera.zoom, zoom, "A real resize still refits");
+            }
+        }
+    }
+
+    #[test]
+    fn selection_preserves_manual_pan_and_zoom_then_inspector_toggle_resizes_normally() {
+        let (mut app, _) = App::new();
+        app.inspector_open = false;
+        app.viewport = iced::Size::new(1000., 600.);
+        app.doc.arrows.push(reshiki::document::Arrow::new(
+            1,
+            Point::new(-100., 0.),
+            Point::new(100., 0.),
+            Default::default(),
+            Default::default(),
+        ));
+        app.edit(Edit::Pan(60., -20.));
+        app.edit(Edit::Zoom(1.5, Point::new(-40., 10.)));
+        let at = app.doc.arrows[0].start;
+        let before = app
+            .camera
+            .screen(at, iced::Rectangle::with_size(app.viewport));
+        app.edit(Edit::Select(vec![1]));
+        assert_eq!(
+            app.camera
+                .screen(at, iced::Rectangle::with_size(app.viewport)),
+            before
+        );
+        let camera = app.camera;
+        let _ = app.update(Message::Viewport(app.viewport));
+        assert_eq!(app.camera.center, camera.center);
+        assert_eq!(app.camera.zoom, camera.zoom);
+        app.edit(Edit::Pan(10., 20.));
+        assert_eq!(app.camera.center, camera.center.offset(-10., -20.));
+        let _ = app.update(Message::Fit);
+        let zoom = app.camera.zoom;
+        let _ = app.update(Message::ToggleInspector);
+        let _ = app.update(Message::Viewport(iced::Size::new(1000., 600.)));
+        assert!(
+            app.camera.zoom > zoom,
+            "Explicit inspector toggle still refits"
+        );
     }
 }

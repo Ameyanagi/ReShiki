@@ -1,5 +1,7 @@
 //! Editable vector graphics in drawing coordinates. Shared by preview and export.
+mod arc;
 use crate::{document::Point, style};
+pub use arc::ArcGeometry;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -179,11 +181,16 @@ fn zero_depth(value: &[f32; 3]) -> bool {
 }
 
 /// An affine frame preserves rotated and reflected shapes without flattening them.
+// The remote derive supplies wire helpers; arc.rs adds the compatible path fallback.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(remote = "Graphic")]
 pub struct Graphic {
     /// Depth of origin, axis_x and axis_y for reversible 3D projection.
     #[serde(default, skip_serializing_if = "zero_depth")]
     pub depth: [f32; 3],
+    /// None retains the half-ellipse frame used by older native drawings.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arc: Option<ArcGeometry>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub picture: Option<crate::pictures::Picture>,
     pub id: u64,
@@ -245,6 +252,7 @@ impl Graphic {
             };
             return Self {
                 depth: [0.; 3],
+                arc: None,
                 picture: None,
                 id,
                 kind,
@@ -289,6 +297,7 @@ impl Graphic {
         };
         Self {
             depth: [0.; 3],
+            arc: None,
             picture: None,
             id,
             kind,
@@ -360,11 +369,17 @@ impl Graphic {
                 Close,
             ],
             GraphicKind::Line => vec![Move(p(0., 0.)), Line(p(1., 0.))],
-            GraphicKind::Arc => vec![
-                Move(p(0., 1.)),
-                Cubic(p(0., 1. - k), p(0.5 - k * 0.5, 0.), p(0.5, 0.)),
-                Cubic(p(0.5 + k * 0.5, 0.), p(1., 1. - k), p(1., 1.)),
-            ],
+            GraphicKind::Arc => {
+                if let Some(arc) = self.arc {
+                    arc.commands()
+                } else {
+                    vec![
+                        Move(p(0., 1.)),
+                        Cubic(p(0., 1. - k), p(0.5 - k * 0.5, 0.), p(0.5, 0.)),
+                        Cubic(p(0.5 + k * 0.5, 0.), p(1., 1. - k), p(1., 1.)),
+                    ]
+                }
+            }
             GraphicKind::Curve => {
                 vec![Move(p(0., 0.)), Cubic(p(0.33, -1.), p(0.67, 1.), p(1., 0.))]
             }
@@ -468,6 +483,10 @@ impl Graphic {
     }
 
     pub fn edit_point(&mut self, index: usize, p: Point) {
+        if self.kind == GraphicKind::Arc {
+            self.edit_arc_endpoint(index, p);
+            return;
+        }
         if self.kind == GraphicKind::Picture {
             return;
         }
@@ -488,6 +507,12 @@ impl Graphic {
     }
     pub fn validate(&self) -> Result<(), String> {
         self.style.validate()?;
+        if let Some(arc) = self.arc {
+            if self.kind != GraphicKind::Arc {
+                return Err("Arc parameters do not match the graphic kind".into());
+            }
+            arc.validate()?;
+        }
         if (self.kind == GraphicKind::Picture) != self.picture.is_some() {
             return Err("Picture data does not match the graphic kind".into());
         }

@@ -117,10 +117,51 @@ async fn exported_cp_retains_charge_and_closed_curve_without_forced_carbon_label
 }
 
 #[tokio::test]
-async fn external_gallery_pastes_back_with_all_pi_ligands() -> anyhow::Result<()> {
+async fn external_gallery_with_legacy_caption_heights_is_rejected() -> anyhow::Result<()> {
     let data = include_bytes!("fixtures/ligand-exchange/gallery-returned.cdx");
-    let response = LocalEngine::default()
+    let xml = reshiki::exchange::from_cdx(data).map_err(anyhow::Error::msg)?;
+    let tree = roxmltree::Document::parse(&xml)?;
+    // This historical capture inherited ReShiki's old CDX line-height unit
+    // bug. Preserve the bytes and reject their actual, unsupported spacing.
+    for (height, count) in [("0.5", 114), ("1.1", 9), ("0.4", 9)] {
+        ensure!(
+            tree.descendants()
+                .filter(|n| n.attribute("CaptionLineHeight") == Some(height))
+                .count()
+                == count
+        );
+    }
+    let error = LocalEngine::default()
         .request(Request::import("cdx", &STANDARD.encode(data)))
+        .await
+        .unwrap_err();
+    ensure!(error.contains("paragraph spacing or width"), "{error}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn external_gallery_chemistry_only_projection_keeps_pi_ligands() -> anyhow::Result<()> {
+    let data = include_bytes!("fixtures/ligand-exchange/gallery-returned.cdx");
+    let mut xml = reshiki::exchange::from_cdx(data).map_err(anyhow::Error::msg)?;
+    let tree = roxmltree::Document::parse(&xml)?;
+    // Explicit diagnostic projection: exclude only standalone captions with
+    // invalid historical spacing. Chemical labels and all molecular metadata
+    // remain intact. The complete unmodified drawing is rejected above.
+    let captions: Vec<_> = tree
+        .descendants()
+        .filter(|n| {
+            n.has_tag_name("t")
+                && n.parent()
+                    .is_some_and(|p| p.has_tag_name("page") || p.has_tag_name("group"))
+        })
+        .map(|n| n.range())
+        .collect();
+    ensure!(captions.len() == 132);
+    for range in captions.into_iter().rev() {
+        xml.replace_range(range, "");
+    }
+    let response = LocalEngine::default()
+        .request(Request::import("cdxml", &xml))
         .await
         .map_err(anyhow::Error::msg)?;
     let doc = response.document.context("Returned gallery drawing")?;
@@ -130,11 +171,7 @@ async fn external_gallery_pastes_back_with_all_pi_ligands() -> anyhow::Result<()
         doc.atoms.len(),
         doc.bonds.len()
     );
-    ensure!(
-        doc.annotations.len() == 132,
-        "Captions: {}",
-        doc.annotations.len()
-    );
+    ensure!(doc.annotations.is_empty());
     ensure!(doc.graphics.iter().all(|g| g.picture.is_none()));
     ensure!(doc.atoms.iter().filter(|a| a.attachment.is_some()).count() == 5);
     ensure!(doc.bonds.iter().filter(|b| b.order == 4).count() == 33);

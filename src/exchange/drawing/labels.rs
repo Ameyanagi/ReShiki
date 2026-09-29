@@ -692,6 +692,10 @@ impl Writer<'_> {
                 f,
                 [
                     ("id", id),
+                    // A caption is text even when it looks like a molecular
+                    // formula. ChemDraw otherwise converts it into an atom
+                    // label with its own inferred chemical graph on paste.
+                    ("InterpretChemically", "no".into()),
                     ("p", self.position(anchor)),
                     (
                         "BoundingBox",
