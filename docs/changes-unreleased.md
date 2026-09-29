@@ -4,16 +4,18 @@ The Windows dropdown fix is recorded in [ReShiki 0.9.1](changes-0.9.1.md). Publi
 
 ## Loaded canvas performance
 
-By @Ameyanagi in [PR #84](https://github.com/Ameyanagi/ReShiki/pull/84); draft, under review.
+By @Ameyanagi in [PR #84](https://github.com/Ameyanagi/ReShiki/pull/84).
 
 Dragging and selecting the shortcut gallery requires much less CPU work, with
 bounded text caching and checks that edits and undo/redo keep the drawing current.
-The Mac benchmark reduced whole-gallery drag preparation from 115 ms to 2.7 ms;
-a four-copy workload fell from 573 ms to 16 ms. These measure CPU preparation,
-not display FPS. The Windows test VM improved from 254 ms to 5.4 ms for the
-gallery and from 1182 ms to 23 ms for four copies. Larger partial drags and zoom
-changes remain more expensive. See the
-[profiling method, measurements, and validation](performance/loaded-canvas.md).
+The original pre-optimization Nightly required 573 ms for four-gallery drag
+preparation on the Mac and 1,182 ms on the Windows test VM. After the combined
+canvas changes, the same workloads took 4.11 ms and 6.86 ms in the follow-up
+measurement. These measure CPU preparation, not display FPS. Larger partial
+drags and zoom changes remain more expensive. See the
+[complete measurement history](performance/release-to-current.md), including a
+separate comparison against the actual stable v0.9.1 tag, and the original
+[profiling method and validation](performance/loaded-canvas.md).
 
 Atom shortcuts such as O → OH now start label calculation immediately, without
 the polling delay or unnecessary identifier/property calculations. Unchanged

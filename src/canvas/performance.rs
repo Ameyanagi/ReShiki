@@ -26,13 +26,15 @@ fn measure(name: &str, count: usize, mut run: impl FnMut(usize)) {
 #[tokio::test]
 #[ignore = "Release-mode canvas workload profiling; requires a headless renderer"]
 async fn loaded_canvas_workloads() {
+    let backend = std::env::var("RESHIKI_PERF_RENDERER").ok();
     let renderer = <Renderer as Headless>::new(
         iced::Font::with_name(reshiki::style::ui_font_family()),
         iced::Pixels(16.),
-        None,
+        backend.as_deref(),
     )
     .await
     .expect("Headless renderer");
+    println!("Renderer: {}", renderer.name());
     let original: Document =
         serde_json::from_str(include_str!("../../assets/examples/shortcut-examples.rsk")).unwrap();
     let iterations = std::env::var("RESHIKI_PERF_ITERATIONS")

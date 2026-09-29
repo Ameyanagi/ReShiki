@@ -1,0 +1,22 @@
+running 1 test
+workload,median_ms,p95_ms
+gallery_0x_validate,0.0008,0.0020
+gallery_0x_groups,0.0003,0.0015
+gallery_0x_oxygen_hotkey,0.0285,0.0333
+gallery_0x_idle_update,0.0000,0.0000
+gallery_0x_view,0.0351,0.0408
+methanol_full_analysis,1.9822,2.1792
+methanol_drawing_labels,0.0150,0.0156
+gallery_1x_validate,0.4189,0.4311
+gallery_1x_groups,0.3334,0.3367
+gallery_1x_oxygen_hotkey,3.0028,3.0670
+gallery_1x_idle_update,0.0000,0.0000
+gallery_1x_view,0.3150,0.3189
+gallery_4x_validate,5.2524,5.7876
+gallery_4x_groups,7.4676,7.4894
+gallery_4x_oxygen_hotkey,34.7809,35.4867
+gallery_4x_idle_update,0.0000,0.0000
+gallery_4x_view,3.0210,3.1155
+test app::performance::editing_workloads ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 227 filtered out; finished in 1.97s

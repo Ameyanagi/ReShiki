@@ -1,0 +1,20 @@
+running 1 test
+Renderer: tiny-skia
+PERF,workload,iterations,median_ms,p95_ms,mean_ms
+PERF,gallery_1x_unselected_draw,20,1.7609,1.8497,1.7682
+PERF,gallery_1x_selected_draw,20,1.8138,1.9368,1.8178
+PERF,gallery_1x_pointer_hit,20,0.0168,0.0232,0.0172
+PERF,gallery_1x_drag_all,20,0.8638,0.8819,0.8599
+PERF,gallery_1x_drag_partial,20,3.8252,4.1123,3.8365
+PERF,gallery_1x_pan,20,1.9585,2.0325,1.9173
+PERF,gallery_1x_zoom,20,30.2577,47.2463,28.4008
+PERF,gallery_4x_unselected_draw,20,14.1016,15.6511,14.1490
+PERF,gallery_4x_selected_draw,20,13.9921,14.9494,14.0043
+PERF,gallery_4x_pointer_hit,20,0.0702,0.0865,0.0718
+PERF,gallery_4x_drag_all,20,3.1294,3.3410,3.1393
+PERF,gallery_4x_drag_partial,20,36.7407,38.6789,36.4552
+PERF,gallery_4x_pan,20,13.9007,14.4554,13.8629
+PERF,gallery_4x_zoom,20,46.1935,54.1303,42.0566
+test canvas::performance::loaded_canvas_workloads ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 308 filtered out; finished in 3.98s

@@ -1,0 +1,29 @@
+running 1 test
+workload,median_ms,p95_ms
+gallery_1x_none_collapsed_panel,0.4671,0.4779
+gallery_1x_none_collapsed_view,0.4852,0.5177
+gallery_1x_none_expanded_panel,0.4977,0.5116
+gallery_1x_none_expanded_view,0.4828,0.4960
+gallery_1x_single_collapsed_panel,0.2695,0.2705
+gallery_1x_single_collapsed_view,0.3055,0.3074
+gallery_1x_single_expanded_panel,0.2687,0.2702
+gallery_1x_single_expanded_view,0.2827,0.2862
+gallery_1x_all_collapsed_panel,1.4210,1.5366
+gallery_1x_all_collapsed_view,1.6583,1.7797
+gallery_1x_all_expanded_panel,1.4192,1.5376
+gallery_1x_all_expanded_view,1.6482,1.7741
+gallery_4x_none_collapsed_panel,6.6463,6.7545
+gallery_4x_none_collapsed_view,6.6784,7.0552
+gallery_4x_none_expanded_panel,6.5949,6.6548
+gallery_4x_none_expanded_view,6.6226,6.7036
+gallery_4x_single_collapsed_panel,2.8456,2.8663
+gallery_4x_single_collapsed_view,2.9579,2.9806
+gallery_4x_single_expanded_panel,2.8090,3.0773
+gallery_4x_single_expanded_view,2.8796,3.1576
+gallery_4x_all_collapsed_panel,27.9083,30.8422
+gallery_4x_all_collapsed_view,28.4339,29.8972
+gallery_4x_all_expanded_panel,25.2134,27.7935
+gallery_4x_all_expanded_view,28.4765,28.8280
+test app::inspector::tests::inspector_workloads ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 227 filtered out; finished in 5.24s

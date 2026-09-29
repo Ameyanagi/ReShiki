@@ -1,0 +1,339 @@
+diff --git a/src/app.rs b/src/app.rs
+index 7482135..26f1c0a 100644
+--- a/src/app.rs
++++ b/src/app.rs
+@@ -1,3 +1,5 @@
++#[cfg(test)]
++mod performance;
+ use crate::canvas::{self, Camera, Edit, Tool};
+ use iced::{Color, Element, Subscription, Task, Theme};
+ use reshiki::{
+diff --git a/src/app/inspector.rs b/src/app/inspector.rs
+index 91ba4b3..2cf1ba0 100644
+--- a/src/app/inspector.rs
++++ b/src/app/inspector.rs
+@@ -1206,6 +1206,70 @@ impl App {
+ 
+ #[cfg(test)]
+ mod tests {
++    #[test]
++    #[ignore = "release-mode inspector benchmark"]
++    fn inspector_workloads() {
++        use std::{hint::black_box, time::Instant};
++        fn measure(name: &str, mut work: impl FnMut()) {
++            for _ in 0..3 {
++                work();
++            }
++            let mut samples = Vec::new();
++            for _ in 0..30 {
++                let start = Instant::now();
++                work();
++                samples.push(start.elapsed().as_secs_f64() * 1000.);
++            }
++            samples.sort_by(f64::total_cmp);
++            println!("{name},{:.4},{:.4}", samples[15], samples[28]);
++        }
++        println!("workload,median_ms,p95_ms");
++        let gallery: Document =
++            serde_json::from_str(include_str!("../../assets/examples/shortcut-examples.rsk"))
++                .unwrap();
++        for copies in [1, 4] {
++            let (mut app, _) = App::new();
++            app.doc = Document::default();
++            for copy in 0..copies {
++                reshiki::editing::append(
++                    &mut app.doc,
++                    &gallery,
++                    reshiki::document::Point::new(copy as f32 * 1800., 0.),
++                );
++            }
++            let endpoint = app
++                .doc
++                .add_atom("O", reshiki::document::Point::new(-100., -100.));
++            app.inspector_open = true;
++            app.inspector_tab = InspectorTab::Properties;
++            for selection in ["none", "single", "all"] {
++                app.selected = match selection {
++                    "none" => vec![],
++                    "single" => vec![endpoint],
++                    _ => app.doc.all_ids(),
++                };
++                for expanded in [false, true] {
++                    app.inspector_ui
++                        .expanded
++                        .insert(Section::Molecule, expanded);
++                    app.inspector_ui.expanded.insert(Section::Arrange, expanded);
++                    app.inspector_ui.expanded.insert(Section::Groups, expanded);
++                    let name = format!(
++                        "gallery_{copies}x_{selection}_{}",
++                        if expanded { "expanded" } else { "collapsed" }
++                    );
++                    measure(&format!("{name}_panel"), || {
++                        black_box(app.properties_panel());
++                    });
++                    measure(&format!("{name}_view"), || {
++                        black_box(app.view());
++                    });
++                }
++            }
++        }
++    }
++
++
+     use super::*;
+     async fn calculate(app: &mut App) {
+         let key = app.property_key().unwrap();
+diff --git a/src/canvas.rs b/src/canvas.rs
+index 57ca112..6930498 100644
+--- a/src/canvas.rs
++++ b/src/canvas.rs
+@@ -1,3 +1,5 @@
++#[cfg(test)]
++mod performance;
+ use iced::widget::canvas::{self, Action, Geometry, Path, Stroke};
+ use iced::{Color, Event, Point, Rectangle, Renderer, Theme, Vector, mouse};
+ use reshiki::{
+@@ -3289,7 +3291,7 @@ mod tests {
+         Ok(())
+     }
+ 
+-    fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_> {
++    pub(super) fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_> {
+         static STYLE: std::sync::LazyLock<GraphicStyle> =
+             std::sync::LazyLock::new(GraphicStyle::default);
+         MoleculeCanvas {
+diff --git a/src/app/performance.rs b/src/app/performance.rs
+new file mode 100644
+index 0000000..c7d2e36
+--- /dev/null
++++ b/src/app/performance.rs
+@@ -0,0 +1,93 @@
++//! Opt-in, release-mode timings of editing work on the event-loop thread.
++use super::*;
++use std::{hint::black_box, time::Instant};
++
++fn measure(name: &str, mut work: impl FnMut()) {
++    for _ in 0..3 {
++        work();
++    }
++    let mut samples = Vec::new();
++    for _ in 0..30 {
++        let start = Instant::now();
++        work();
++        samples.push(start.elapsed().as_secs_f64() * 1000.);
++    }
++    samples.sort_by(f64::total_cmp);
++    println!("{name},{:.4},{:.4}", samples[15], samples[28]);
++}
++
++#[test]
++#[ignore = "release-mode editing benchmark"]
++fn editing_workloads() {
++    println!("workload,median_ms,p95_ms");
++    let gallery: Document =
++        serde_json::from_str(include_str!("../../assets/examples/shortcut-examples.rsk")).unwrap();
++    for copies in [0, 1, 4] {
++        let mut doc = Document::default();
++        for copy in 0..copies {
++            editing::append(&mut doc, &gallery, Point::new(copy as f32 * 1800., 0.));
++        }
++        let start = doc.add_atom("C", Point::new(-100., -100.));
++        let endpoint = doc.add_atom("C", Point::new(-58., -100.));
++        doc.add_bond(start, endpoint, 1, "plain");
++        let ids = doc.all_ids();
++        measure(&format!("gallery_{copies}x_validate"), || {
++            black_box(doc.validate()).unwrap();
++        });
++        measure(&format!("gallery_{copies}x_groups"), || {
++            black_box(editing::groups(&doc, &ids));
++        });
++        let (mut app, _) = App::new();
++        app.doc = doc;
++        app.selected = vec![endpoint];
++        app.hover = None;
++        measure(&format!("gallery_{copies}x_oxygen_hotkey"), || {
++            let _ = black_box(app.update(Message::ContextKey("o".into())));
++            let _ = black_box(app.update(Message::ContextKey("c".into())));
++        });
++        measure(&format!("gallery_{copies}x_idle_update"), || {
++            let _ = black_box(app.update(Message::InspectorScroll(0.)));
++        });
++        measure(&format!("gallery_{copies}x_view"), || {
++            black_box(app.view());
++        });
++        if copies == 0 {
++            let _ = app.context_key("o");
++            let runtime = tokio::runtime::Runtime::new().unwrap();
++            measure("methanol_full_analysis", || {
++                black_box(
++                    runtime.block_on(
++                        app.engine
++                            .execute(Request::molecule("analyze", app.doc.clone())),
++                    ),
++                )
++                .unwrap();
++            });
++            measure("methanol_drawing_labels", || {
++                let molecule = reshiki::chemistry::document::prepare(&app.doc).unwrap();
++                let drawing =
++                    reshiki::chemistry::document::for_drawing(&molecule, &app.doc).unwrap();
++                black_box(drawing.labels()).unwrap();
++            });
++        }
++    }
++}
++
++#[test]
++#[ignore = "release-tag synchronous autosave benchmark"]
++fn historical_recovery_workloads() {
++    let gallery: Document = serde_json::from_str(include_str!("../../assets/examples/shortcut-examples.rsk")).unwrap();
++    println!("workload,median_ms,p95_ms");
++    for copies in [1,4] {
++        let (mut app, _) = App::new();
++        let directory = tempfile::tempdir().unwrap();
++        app.recovery = Some(Recovery::in_directory(directory.path()).unwrap());
++        app.doc = Document::default();
++        for copy in 0..copies { editing::append(&mut app.doc, &gallery, Point::new(copy as f32 * 1800.,0.)); }
++        measure(&format!("gallery_{copies}x_recovery_tick"), || {
++            app.autosaved_revision = None;
++            let _ = black_box(app.update(Message::Tick));
++            assert!(app.autosave_status.contains("saved"));
++        });
++    }
++}
+diff --git a/src/canvas/performance.rs b/src/canvas/performance.rs
+new file mode 100644
+index 0000000..87febad
+--- /dev/null
++++ b/src/canvas/performance.rs
+@@ -0,0 +1,130 @@
++//! Opt-in release-mode measurements of the actual canvas Program path.
++use super::*;
++use iced::advanced::renderer::Headless;
++use iced::widget::canvas::Program;
++use std::{hint::black_box, time::Instant};
++
++fn measure(name: &str, count: usize, mut run: impl FnMut(usize)) {
++    for i in 0..3 {
++        run(i);
++    }
++    let mut samples = Vec::new();
++    for i in 0..count {
++        let start = Instant::now();
++        run(i);
++        samples.push(start.elapsed().as_secs_f64() * 1_000.);
++    }
++    samples.sort_by(f64::total_cmp);
++    println!(
++        "PERF,{name},{count},{:.4},{:.4},{:.4}",
++        samples[count / 2],
++        samples[(count * 95 / 100).min(count - 1)],
++        samples.iter().sum::<f64>() / count as f64
++    );
++}
++
++#[tokio::test]
++#[ignore = "Release-mode canvas workload profiling; requires a headless renderer"]
++async fn loaded_canvas_workloads() {
++    let backend = std::env::var("RESHIKI_PERF_RENDERER").ok();
++    let renderer = <Renderer as Headless>::new(
++        iced::Font::with_name(reshiki::style::ui_font_family()),
++        iced::Pixels(16.),
++        backend.as_deref(),
++    )
++    .await
++    .expect("Headless renderer");
++    println!("Renderer: {}", renderer.name());
++    let original: Document =
++        serde_json::from_str(include_str!("../../assets/examples/shortcut-examples.rsk")).unwrap();
++    let iterations = std::env::var("RESHIKI_PERF_ITERATIONS")
++        .ok()
++        .and_then(|n| n.parse::<usize>().ok())
++        .unwrap_or(20)
++        .max(1);
++    let bounds = Rectangle::with_size(iced::Size::new(1066., 570.));
++    println!("PERF,workload,iterations,median_ms,p95_ms,mean_ms");
++    for copies in [1, 4] {
++        let mut doc = original.clone();
++        let (lo, hi) = original.bounds();
++        for copy in 1..copies {
++            reshiki::editing::append(
++                &mut doc,
++                &original,
++                World::new((hi.x - lo.x + 100.) * copy as f32, 0.),
++            );
++        }
++        let ids = doc.all_ids();
++        let mut canvas = tests::chain_canvas(&doc, ChainMode::Straight);
++        canvas.tool = Tool::Select;
++        canvas.camera = Camera {
++            center: World::new(378., 294.),
++            zoom: 0.5,
++        };
++        let point = Point::new(350., 250.);
++        let cursor = mouse::Cursor::Available(point);
++        let mut state = State {
++            cursor: Some(point),
++            ..Default::default()
++        };
++        measure(
++            &format!("gallery_{copies}x_unselected_draw"),
++            iterations,
++            |_| {
++                black_box(canvas.draw(&state, &renderer, &Theme::Light, bounds, cursor));
++            },
++        );
++        canvas.selected = &ids;
++        measure(
++            &format!("gallery_{copies}x_selected_draw"),
++            iterations,
++            |_| {
++                black_box(canvas.draw(&state, &renderer, &Theme::Light, bounds, cursor));
++            },
++        );
++        measure(
++            &format!("gallery_{copies}x_pointer_hit"),
++            iterations,
++            |_| {
++                black_box(canvas.mouse_interaction(&state, bounds, cursor));
++            },
++        );
++        state.gesture = Some(Gesture::Move {
++            start: canvas.camera.world(point, bounds),
++            ids: ids.clone(),
++            clicked: vec![ids[0]],
++        });
++        measure(&format!("gallery_{copies}x_drag_all"), iterations, |i| {
++            state.cursor = Some(point + Vector::new(20. + i as f32, 15.));
++            black_box(canvas.draw(&state, &renderer, &Theme::Light, bounds, cursor));
++            black_box(canvas.mouse_interaction(&state, bounds, cursor));
++        });
++        let partial = &ids[..2];
++        canvas.selected = partial;
++        state.gesture = Some(Gesture::Move {
++            start: canvas.camera.world(point, bounds),
++            ids: partial.to_vec(),
++            clicked: partial.to_vec(),
++        });
++        measure(
++            &format!("gallery_{copies}x_drag_partial"),
++            iterations,
++            |i| {
++                state.cursor = Some(point + Vector::new(20. + i as f32, 15.));
++                black_box(canvas.draw(&state, &renderer, &Theme::Light, bounds, cursor));
++            },
++        );
++        canvas.selected = &ids;
++        state.gesture = None;
++        measure(&format!("gallery_{copies}x_pan"), iterations, |i| {
++            canvas.camera.center.x = 378. + i as f32;
++            black_box(canvas.draw(&state, &renderer, &Theme::Light, bounds, cursor));
++        });
++        measure(&format!("gallery_{copies}x_zoom"), iterations, |i| {
++            canvas.camera.zoom = 0.45 + (i % 20) as f32 * 0.005;
++            black_box(canvas.draw(&state, &renderer, &Theme::Light, bounds, cursor));
++        });
++        assert_eq!(doc.atoms.len(), original.atoms.len() * copies);
++    }
++}
++

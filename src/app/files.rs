@@ -158,6 +158,10 @@ impl super::App {
         }
     }
 
+    pub(super) fn file_request_is_current(&self, key: Key) -> bool {
+        key.serial == self.file_io.serial && key.epoch == self.file_epoch
+    }
+
     pub(super) fn file_prepared(&mut self, key: Key, opened: Opened) -> iced::Task<super::Message> {
         if self.updates.restarting {
             return iced::Task::none();
@@ -165,7 +169,7 @@ impl super::App {
         let Some((path, result)) = opened else {
             return iced::Task::none();
         };
-        if key.serial != self.file_io.serial || key.epoch != self.file_epoch {
+        if !self.file_request_is_current(key) {
             return iced::Task::none();
         }
         // Opening is deliberately not a global busy state. An intervening edit,
@@ -221,6 +225,17 @@ impl super::App {
     }
 }
 
+/// Capture the request before testing changes while its worker is pending.
+#[cfg(test)]
+pub(super) fn dispatched_open_key(app: &super::App) -> Key {
+    assert_ne!(app.file_io.serial, 0, "An open must be dispatched first");
+    Key {
+        serial: app.file_io.serial,
+        epoch: app.file_epoch,
+        revision: app.revision,
+    }
+}
+
 /// Drive the real parse worker after a unit test dispatches a legacy/Finder
 /// Opened event. The request serial must already have been allocated by dispatch.
 #[cfg(test)]
@@ -229,17 +244,19 @@ pub(super) fn finish_dispatched_open(
     path: PathBuf,
     contents: Result<String, String>,
 ) {
-    assert_ne!(app.file_io.serial, 0, "An open must be dispatched first");
-    let key = Key {
-        serial: app.file_io.serial,
-        epoch: app.file_epoch,
-        revision: app.revision,
-    };
+    let key = dispatched_open_key(app);
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .unwrap();
     let opened = runtime.block_on(prepare_contents(path, contents));
+    #[cfg(target_os = "macos")]
+    if app.native_opening {
+        let _ = app.update(super::Message::MacFiles(
+            super::macos_files::Action::Prepared(key, opened),
+        ));
+        return;
+    }
     let _ = app.update(super::Message::FilePrepared(key, opened));
 }
 
