@@ -1,4 +1,5 @@
 //! Bounded, position-independent text outlines. Pan and translation reuse glyphs.
+mod glyphs;
 use super::{Point, Rectangle, rgb};
 use iced::{
     Color,
@@ -22,6 +23,7 @@ struct Key {
 pub(super) struct TextCache {
     entries: HashMap<Key, Rc<OutlinedText>>,
     cost: usize,
+    glyphs: glyphs::Glyphs,
 }
 
 impl TextCache {
@@ -45,7 +47,14 @@ impl TextCache {
         if let Some(paths) = self.entries.get(&key) {
             return paths.clone();
         }
-        let result = Rc::new(outline(text, size, zoom, color, style));
+        let result = Rc::new(outline_with_glyphs(
+            text,
+            size,
+            zoom,
+            color,
+            style,
+            Some(&mut self.glyphs),
+        ));
         // Bound both the entry count and the retained path data; large imported
         // captions may still render but cannot permanently fill this cache.
         const BUDGET: usize = 8 * 1024 * 1024;
@@ -119,6 +128,17 @@ pub(super) fn outline(
     color: [u8; 3],
     style: &TextStyle,
 ) -> OutlinedText {
+    outline_with_glyphs(text, size, zoom, color, style, None)
+}
+
+fn outline_with_glyphs(
+    text: &str,
+    size: f32,
+    zoom: f32,
+    color: [u8; 3],
+    style: &TextStyle,
+    glyphs: Option<&mut glyphs::Glyphs>,
+) -> OutlinedText {
     let t = canvas::Text {
         content: text.to_owned(),
         position: Point::ORIGIN,
@@ -146,7 +166,11 @@ pub(super) fn outline(
     // SVG's text-before-edge uses the font ascent. Align actual ink
     // to our shared font metrics so screen and export agree.
     let mut paths = Vec::new();
-    t.draw_with(|path, color| paths.push((path, color)));
+    if let Some(glyphs) = glyphs {
+        glyphs.draw(&t, |path, color| paths.push((path, color)));
+    } else {
+        t.draw_with(|path, color| paths.push((path, color)));
+    }
     let actual_top = paths
         .iter()
         .flat_map(|(path, _)| path.raw().iter())
@@ -264,12 +288,49 @@ mod tests {
     }
 
     #[test]
+    fn shared_glyphs_exactly_match_iced_at_each_zoom_and_font() {
+        let mut cache = TextCache::default();
+        for family in ["Arial", "Times New Roman", "Courier New"] {
+            for zoom in [0.08, 0.45, 0.455, 0.5, 0.7, 1., 1.25, 2.5, 8.] {
+                for (bold, italic) in [(false, false), (true, false), (false, true)] {
+                    let style = TextStyle {
+                        family: family.into(),
+                        bold,
+                        italic,
+                        ..Default::default()
+                    };
+                    for text in [
+                        "NH2 OH α β →",
+                        "AV office fi",
+                        "日本語 العربية 🧪",
+                        "First\nSecond",
+                    ] {
+                        let cached = cache.get(text, 14., zoom, [25, 90, 140], &style);
+                        let fresh = outline(text, 14., zoom, [25, 90, 140], &style);
+                        assert_eq!(cached.bounds, fresh.bounds, "{family} {zoom} {text}");
+                        assert_eq!(cached.paths.len(), fresh.paths.len());
+                        for ((a, ac), (b, bc)) in cached.paths.iter().zip(&fresh.paths) {
+                            assert_eq!(ac, bc);
+                            assert_eq!(
+                                a.raw().iter().collect::<Vec<_>>(),
+                                b.raw().iter().collect::<Vec<_>>(),
+                                "{family} {zoom} {text}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn changing_text_does_not_grow_the_cache_without_limit() {
         let mut cache = TextCache::default();
         for i in 0..2100 {
             cache.get(&i.to_string(), 14., 1., [0, 0, 0], &TextStyle::default());
             assert!(cache.entries.len() <= 2048);
             assert!(cache.cost <= 8 * 1024 * 1024);
+            assert!(cache.glyphs.within_budget());
         }
     }
 }

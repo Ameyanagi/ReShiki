@@ -10,6 +10,7 @@ mod cache;
 mod dashes;
 pub mod guides;
 pub mod layered;
+mod markers;
 mod movement;
 mod pages;
 #[cfg(test)]
@@ -1786,20 +1787,16 @@ impl MoleculeCanvas<'_> {
             .annotations
             .retain(|a| Some(a.id) != self.hidden_annotation);
         let selected = ring_selection.as_deref().unwrap_or(self.selected);
-        draw_atom_markers(frame, &preview, selected, self.camera, bounds, true);
-        for a in preview
-            .annotations
-            .iter()
-            .filter(|a| selected.contains(&a.id))
-        {
-            let (width, height) = a.size();
-            frame.stroke(
-                &Path::rectangle(
-                    self.camera.screen(a.position, bounds),
-                    iced::Size::new(width * self.camera.zoom, height * self.camera.zoom),
-                ),
-                Stroke::default().with_color(Color::from_rgb8(20, 130, 112)),
-            );
+        if self.hidden_annotation.is_none() && (translation.is_some() || preview == *self.doc) {
+            let markers = state.scene.borrow_mut().markers(self.doc, selected);
+            let delta = translation.unwrap_or_default();
+            let camera = Camera {
+                center: self.camera.center.offset(-delta.x, -delta.y),
+                ..self.camera
+            };
+            markers.draw(frame, camera, bounds, true);
+        } else {
+            markers::Markers::new(&preview, selected).draw(frame, self.camera, bounds, true);
         }
         if self.hidden_annotation.is_none() && (translation.is_some() || preview == *self.doc) {
             let scene = state.scene.borrow_mut().primitives(self.doc);
@@ -2048,7 +2045,7 @@ impl MoleculeCanvas<'_> {
                     if self.tool.selects() && !state.modifiers.alt() {
                         hit = self.doc.expand_groups(&hit);
                     }
-                    draw_atom_markers(frame, self.doc, &hit, self.camera, bounds, false);
+                    markers::Markers::hover(self.doc, &hit).draw(frame, self.camera, bounds, false);
                 }
                 _ => {}
             }
@@ -2148,51 +2145,6 @@ fn region_selection(
 ) -> Vec<u64> {
     let hits = doc.expand_groups(&reshiki::selection_region::objects(doc, polygon));
     reshiki::selection_region::combine(selected, &hits, mods.shift(), mods.alt())
-}
-
-fn draw_atom_markers(
-    frame: &mut layered::Frame<'_>,
-    doc: &Document,
-    ids: &[u64],
-    camera: Camera,
-    bounds: Rectangle,
-    selected: bool,
-) {
-    // At page-fit zoom the selection box is more useful than overlapping atom rings.
-    if selected && ids.len() > 1 && camera.zoom < 0.12 {
-        return;
-    }
-    let marker_scale = camera.zoom.clamp(0.15, 1.);
-    for bond in doc.bonds.iter().filter(|b| doc.bond_visible(b.a, b.b)) {
-        if ids.contains(&bond.a)
-            && ids.contains(&bond.b)
-            && let Some((a, b)) = doc.atom(bond.a).zip(doc.atom(bond.b))
-        {
-            frame.stroke(
-                &Path::line(
-                    camera.screen(a.position, bounds),
-                    camera.screen(b.position, bounds),
-                ),
-                Stroke::default()
-                    .with_width(7.0 * marker_scale)
-                    .with_color(Color::from_rgba8(19, 135, 116, 0.16)),
-            );
-        }
-    }
-    for id in ids {
-        if let Some(atom) = doc.atom(*id).filter(|a| doc.atom_visible(a.id)) {
-            let circle = Path::circle(camera.screen(atom.position, bounds), 8.0 * marker_scale);
-            if selected {
-                frame.fill(&circle, Color::from_rgba8(19, 135, 116, 0.12));
-            }
-            frame.stroke(
-                &circle,
-                Stroke::default()
-                    .with_width((if selected { 1.8 } else { 1.4 }) * marker_scale.sqrt())
-                    .with_color(rgb([19, 135, 116])),
-            );
-        }
-    }
 }
 
 fn ring_gesture(start: World, end: World, attached: bool, radius: f32) -> (World, Option<World>) {

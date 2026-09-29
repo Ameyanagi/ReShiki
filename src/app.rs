@@ -14,6 +14,7 @@ mod arrows;
 mod assistant;
 mod atom_labels;
 mod atom_text;
+mod autosave;
 mod cleanup;
 mod clipboard;
 mod context_menu;
@@ -216,6 +217,7 @@ pub enum Message {
     InsertTemplate(usize),
     SaveAs,
     Tick,
+    Autosaved(autosave::Key, Result<Option<PathBuf>, String>),
     Restore,
     DismissRecovery,
     Charge(i32),
@@ -227,6 +229,7 @@ pub enum Message {
         result: Box<Result<Response, String>>,
     },
     Opened(Option<(PathBuf, Result<String, String>)>),
+    FilePrepared(files::Key, files::Opened),
     #[cfg(target_os = "macos")]
     MacFiles(macos_files::Action),
     Saved(u64, Box<Document>, Result<Option<PathBuf>, String>),
@@ -335,6 +338,7 @@ pub struct App {
     status: String,
     error: bool,
     path: Option<PathBuf>,
+    file_io: files::State,
     untitled_name: Option<&'static str>,
     #[cfg(target_os = "macos")]
     native_opening: bool,
@@ -350,6 +354,7 @@ pub struct App {
     custom_element: String,
     recovery: Option<Recovery>,
     recovered: Vec<Candidate>,
+    autosave: autosave::State,
     autosaved_revision: Option<u64>,
     autosave_status: String,
     inspector_open: bool,
@@ -450,6 +455,7 @@ impl App {
             status: "Ready · Choose a tool to start drawing".into(),
             error: false,
             path: None,
+            file_io: files::State::default(),
             untitled_name: None,
             #[cfg(target_os = "macos")]
             native_opening: false,
@@ -465,6 +471,7 @@ impl App {
             custom_element: String::new(),
             recovery,
             recovered,
+            autosave: autosave::State::default(),
             autosaved_revision: None,
             autosave_status: String::new(),
             inspector_open: true,
@@ -491,19 +498,10 @@ impl App {
             app.office_path = startup_path.clone();
         }
         let task = if let Some(path) = startup_path {
-            Task::perform(
-                async move {
-                    let read_path = path.clone();
-                    let result = tokio::task::spawn_blocking(move || {
-                        std::fs::read_to_string(read_path).map_err(|e| e.to_string())
-                    })
-                    .await
-                    .map_err(|e| e.to_string())
-                    .and_then(|r| r);
-                    Some((path, result))
-                },
-                Message::Opened,
-            )
+            let key = app.file_request_key();
+            Task::perform(files::read(path), move |opened| {
+                Message::FilePrepared(key, opened)
+            })
         } else if !cfg!(test) && std::env::args_os().any(|arg| arg == "--shortcut-examples") {
             if let Err(error) = app.load_shortcut_examples() {
                 app.status = format!("Could not open shortcut examples: {error}");
@@ -569,6 +567,7 @@ impl App {
                 Subscription::none()
             },
             if self.recovery.is_some()
+                && !self.autosave.pending()
                 && ((self.dirty() && self.autosaved_revision != Some(self.revision))
                     || (!self.dirty() && self.autosaved_revision.is_some()))
             {
@@ -611,13 +610,6 @@ impl App {
         {
             false
         }
-    }
-    fn clear_recovery(&mut self) {
-        if let Some(recovery) = &self.recovery {
-            let _ = recovery.clear();
-        }
-        self.autosaved_revision = None;
-        self.autosave_status.clear();
     }
     fn run(&mut self, request: Request, kind: Job) -> Task<Message> {
         if self.busy {
@@ -775,24 +767,20 @@ impl App {
                     iced::advanced::widget::operation::focusable::unfocus(),
                 )
             }
-            Pending::Open => Task::perform(
-                async {
-                    // Accept supported extensions without relying on macOS
-                    // type registration; validate the selected content below.
-                    let file = rfd::AsyncFileDialog::new()
-                        .set_title("Open a ReShiki, MOL, RXN, CDXML, or SMILES document")
-                        .pick_file()
-                        .await?;
-                    let path = file.path().to_path_buf();
-                    let contents = std::fs::read_to_string(&path).map_err(|e| e.to_string());
-                    Some((path, contents))
-                },
-                Message::Opened,
-            ),
-            Pending::Close(id) => {
-                self.clear_recovery();
-                iced::window::close(id)
+            Pending::Open => {
+                let key = self.file_request_key();
+                Task::perform(
+                    async {
+                        let file = rfd::AsyncFileDialog::new()
+                            .set_title("Open a ReShiki, MOL, RXN, CDXML, or SMILES document")
+                            .pick_file()
+                            .await?;
+                        files::read(file.path().to_path_buf()).await
+                    },
+                    move |opened| Message::FilePrepared(key, opened),
+                )
             }
+            Pending::Close(id) => self.close_after_recovery(id),
         }
     }
     fn display_document(&self) -> &Document {
@@ -813,7 +801,7 @@ impl App {
             Message::EngineDone { .. } | Message::LabelsReady(..)
         );
         let task = self.update_inner(message);
-        let task = Task::batch([task, self.start_label_refresh()]);
+        let task = Task::batch([task, self.start_label_refresh(), self.start_autosave()]);
         self.sync_numeric_transforms();
         if refresh_dimensions {
             self.refresh_numeric_dimensions();
@@ -834,9 +822,30 @@ impl App {
     }
 
     fn update_inner(&mut self, message: Message) -> Task<Message> {
+        if let Message::Autosaved(key, result) = message {
+            return self.autosaved(key, result);
+        }
+        if let Message::Saved(epoch, snapshot, result) = message {
+            return self.file_saved(epoch, snapshot, result);
+        }
+        if let Message::Templates(template_library::Action::Finished(serial, result)) = message {
+            return self.template_finished(serial, result);
+        }
+        if let Message::Templates(action @ template_library::Action::Imported(_)) = message {
+            if let Some(task) = self.template_async(&action) {
+                return task;
+            }
+            return self.template_action(action);
+        }
+        if self.autosave.closing() {
+            return Task::none();
+        }
         if let Message::LabelsReady(key, result) = message {
             self.labels_ready(key, result);
             return Task::none();
+        }
+        if let Message::FilePrepared(key, opened) = message {
+            return self.file_prepared(key, opened);
         }
         let Some(message) = self.prepare_molecule_shortcut(message) else {
             return Task::none();
@@ -1762,21 +1771,8 @@ impl App {
                     );
                 }
             }
-            Message::Tick => {
-                if self.dirty() && self.autosaved_revision != Some(self.revision) {
-                    if let Some(recovery) = &self.recovery {
-                        match recovery.save(&self.recovery_document(), self.path.clone()) {
-                            Ok(()) => {
-                                self.autosaved_revision = Some(self.revision);
-                                self.autosave_status = "Recovery draft saved".into();
-                            }
-                            Err(e) => self.autosave_status = format!("Recovery save failed: {e}"),
-                        }
-                    }
-                } else if !self.dirty() {
-                    self.clear_recovery();
-                }
-            }
+            Message::Tick => self.request_autosave(),
+            Message::Autosaved(..) => {} // Handled before editor/modal guards.
             Message::Restore => {
                 if self.dirty() {
                     self.status =
@@ -1798,12 +1794,7 @@ impl App {
                     self.revision = self.revision.wrapping_add(1);
                     self.fit();
                     self.selected.clear();
-                    if let Some(store) = &self.recovery
-                        && store.save(&self.doc, None).is_ok()
-                    {
-                        let _ = reshiki::recovery::remove(&candidate.path);
-                        self.recovered.remove(0);
-                    }
+                    self.recover_candidate(candidate.path);
                     self.status = "Recovered drawing · Save to keep a new copy".into();
                 }
             }
@@ -2186,72 +2177,14 @@ impl App {
             #[cfg(target_os = "macos")]
             Message::MacFiles(_) => {}
             Message::Opened(file) => {
-                if let Some((path, result)) = file {
-                    match result {
-                        Err(e) => {
-                            self.error = true;
-                            self.status = e;
-                        }
-                        Ok(contents) => {
-                            let extension = path
-                                .extension()
-                                .and_then(|e| e.to_str())
-                                .unwrap_or_default()
-                                .to_ascii_lowercase();
-                            if reshiki::compatibility::is_native_extension(&extension) {
-                                match serde_json::from_str::<Document>(&contents)
-                                    .map_err(|e| e.to_string())
-                                    .and_then(|doc| {
-                                        doc.validate()?;
-                                        Ok(doc)
-                                    }) {
-                                    Ok(mut doc) => {
-                                        doc.version = doc.version.max(15);
-                                        reshiki::atom_labels::clear_computed(&mut doc);
-                                        self.clear_recovery();
-                                        self.file_epoch = self.file_epoch.wrapping_add(1);
-                                        self.doc = doc;
-                                        self.sync_drawing_defaults();
-                                        self.styles.editor = None;
-                                        self.theme_library.editor = None;
-                                        self.saved = self.doc.clone();
-                                        self.path = Some(path);
-                                        self.untitled_name = None;
-                                        self.history = History::default();
-                                        self.revision = self.revision.wrapping_add(1);
-                                        self.analysis = None;
-                                        self.labels_dirty = true;
-                                        self.selected.clear();
-                                        self.pages = pages::State::default();
-                                        if self.doc.page_layout.is_some() {
-                                            self.fit_pages(Some(0));
-                                        } else {
-                                            self.fit();
-                                        }
-                                        self.status = "Document opened".into();
-                                        self.error = false;
-                                    }
-                                    Err(e) => {
-                                        self.error = true;
-                                        self.status = format!("Could not open document: {e}");
-                                    }
-                                }
-                            } else {
-                                let format = match extension.as_str() {
-                                    "mol" => "mol",
-                                    "rxn" => "rxn",
-                                    "rsmi" => "rsmi",
-                                    "cdxml" => "cdxml",
-                                    "inchi" => "inchi",
-                                    _ => "smiles",
-                                };
-                                return self
-                                    .run(Request::import(format, &contents), Job::ImportFile);
-                            }
-                        }
-                    }
+                if let Some((path, contents)) = file {
+                    let key = self.file_request_key();
+                    return Task::perform(files::prepare_contents(path, contents), move |opened| {
+                        Message::FilePrepared(key, opened)
+                    });
                 }
             }
+            Message::FilePrepared(..) => {}
             Message::Save | Message::SaveAs => {
                 #[cfg(windows)]
                 let office_save = self.office_document() && matches!(message, Message::Save);
@@ -2260,15 +2193,13 @@ impl App {
                 } else {
                     self.path.clone()
                 };
-                let bytes = match serde_json::to_vec_pretty(&self.doc) {
-                    Ok(b) => b,
-                    Err(e) => {
-                        self.status = e.to_string();
-                        self.error = true;
-                        return Task::none();
-                    }
-                };
-                let snapshot = self.doc.clone();
+                if self.file_io.saving {
+                    self.status = "A document save is already in progress".into();
+                    return Task::none();
+                }
+                self.file_io.saving = true;
+                let snapshot = std::sync::Arc::new(self.doc.clone());
+                let save_snapshot = std::sync::Arc::clone(&snapshot);
                 let suggested_name = if self.path.is_some() {
                     self.document_name()
                 } else {
@@ -2294,6 +2225,8 @@ impl App {
                         };
                         let save_path = path.clone();
                         tokio::task::spawn_blocking(move || {
+                            let bytes = serde_json::to_vec_pretty(save_snapshot.as_ref())
+                                .map_err(|e| e.to_string())?;
                             #[cfg(windows)]
                             if office_save {
                                 reshiki_windows::prepare_office_save(&save_path);
@@ -2309,40 +2242,16 @@ impl App {
                         .map_err(|error| error.to_string())??;
                         Ok(Some(path))
                     },
-                    move |result| Message::Saved(epoch, Box::new(snapshot.clone()), result),
+                    move |result| {
+                        Message::Saved(
+                            epoch,
+                            Box::new(std::sync::Arc::unwrap_or_clone(snapshot)),
+                            result,
+                        )
+                    },
                 );
             }
-            Message::Saved(epoch, snapshot, result) => match result {
-                Ok(Some(path)) => {
-                    if epoch != self.file_epoch {
-                        self.status = "Previous document saved".into();
-                        return Task::none();
-                    }
-                    self.saved = *snapshot;
-                    self.path = Some(path);
-                    self.untitled_name = None;
-                    self.status = if self.office_document() {
-                        "Drawing updated in Office. Save the Office document to keep it."
-                    } else {
-                        "Document saved"
-                    }
-                    .into();
-                    self.error = false;
-                    if !self.dirty() {
-                        self.clear_recovery();
-                    }
-                    if !self.dirty()
-                        && let Some(action) = self.pending.take()
-                    {
-                        return self.perform(action);
-                    }
-                }
-                Ok(None) => {}
-                Err(e) => {
-                    self.status = e;
-                    self.error = true;
-                }
-            },
+            Message::Saved(..) => {}
             Message::Export(format) => {
                 if ["svg", "pdf", "png"].contains(&format) || cfg!(windows) && format == "emf" {
                     return self.export_figure(format, false);
@@ -3288,6 +3197,8 @@ mod tests {
         assert_eq!(subscriptions(&app), idle + 1);
         let _ = app.update(Message::Tick);
         assert_eq!(subscriptions(&app), idle);
+        autosave::tests::finish_pending(&mut app);
+        assert_eq!(subscriptions(&app), idle);
         let path = app
             .recovery
             .as_ref()
@@ -3298,6 +3209,7 @@ mod tests {
         app.saved = app.doc.clone();
         assert_eq!(subscriptions(&app), idle + 1);
         let _ = app.update(Message::Tick);
+        autosave::tests::finish_pending(&mut app);
         assert!(!path.exists());
         assert_eq!(subscriptions(&app), idle);
         Ok(())
@@ -4959,7 +4871,14 @@ mod tests {
         for extension in ["rsk", "RSK", "reshiki", "moruno"] {
             let (mut app, _) = App::new();
             let path = PathBuf::from(format!("Ethanol.{extension}"));
-            let _ = app.update(Message::Opened(Some((path.clone(), Ok(contents.clone())))));
+            let key = app.file_request_key();
+            let runtime = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            let opened =
+                runtime.block_on(files::prepare_contents(path.clone(), Ok(contents.clone())));
+            let _ = app.update(Message::FilePrepared(key, opened));
             assert!(!app.error && !app.dirty(), "{extension}: {}", app.status);
             assert_eq!(app.doc, document);
             assert_eq!(app.path, Some(path));

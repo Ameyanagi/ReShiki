@@ -645,10 +645,12 @@ mod tests {
         app.selected.clear();
         space(&mut app);
         assert_eq!(app.selected, pasted);
-        let _ = app.update(Message::Opened(Some((
+        let task = app.update(Message::Opened(Some((
             "different.rsk".into(),
-            Ok(contents),
+            Ok(contents.clone()),
         ))));
+        assert!(task.units() > 0);
+        super::super::files::finish_dispatched_open(&mut app, "different.rsk".into(), Ok(contents));
         space(&mut app);
         assert!(app.selected.is_empty());
         assert!(!app.history.can_undo());

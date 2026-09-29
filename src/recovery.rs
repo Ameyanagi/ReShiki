@@ -71,8 +71,14 @@ impl Recovery {
     }
     pub fn save(&self, document: &Document, source: Option<PathBuf>) -> Result<(), String> {
         document.validate()?;
-        let snapshot = Snapshot {
-            document: document.clone(),
+        #[derive(Serialize)]
+        struct BorrowedSnapshot<'a> {
+            document: &'a Document,
+            source: Option<PathBuf>,
+            saved_at: u64,
+        }
+        let snapshot = BorrowedSnapshot {
+            document,
             source,
             saved_at: SystemTime::now()
                 .duration_since(UNIX_EPOCH)

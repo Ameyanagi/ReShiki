@@ -259,18 +259,28 @@ fn validate_offset(offset: Option<Point>) -> Result<(), String> {
     }
 }
 pub fn visible(a: &Atom, doc: &Document) -> bool {
+    visible_with_degree(a, doc, || {
+        doc.bonds
+            .iter()
+            .filter(|b| b.a == a.id || b.b == a.id)
+            .count()
+    })
+}
+
+/// Reuse a caller's connectivity index when checking all labels in a drawing.
+pub(crate) fn visible_with_degree(
+    a: &Atom,
+    doc: &Document,
+    degree: impl FnOnce() -> usize,
+) -> bool {
     if crate::attachments::hidden(a, doc) {
         return false;
     }
-    let degree = doc
-        .bonds
-        .iter()
-        .filter(|b| b.a == a.id || b.b == a.id)
-        .count();
-    a.element != "C"
-        || a.radical_electrons != 0
-        || a.isotope != 0
-        || degree == 0
+    if a.element != "C" || a.radical_electrons != 0 || a.isotope != 0 {
+        return true;
+    }
+    let degree = degree();
+    degree == 0
         || match a.display.carbons.unwrap_or(doc.atom_labels.carbons) {
             Carbons::Skeletal => false,
             Carbons::Terminal => degree == 1,

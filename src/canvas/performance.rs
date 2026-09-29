@@ -230,3 +230,104 @@ async fn cached_canvas_matches_fresh_edits_and_committed_drag() {
         "Mean channel error {error}"
     );
 }
+
+/// Compare optimized selection decorations with the pre-cache drawing path,
+/// including clipping at viewport edges and the page-fit marker policy.
+#[tokio::test]
+#[ignore = "Pixel regression check; requires a headless renderer"]
+async fn selection_markers_match_unculled_reference() {
+    use iced::advanced::Renderer as _;
+    use iced::advanced::graphics::geometry::Renderer as _;
+    let mut renderer = <Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .expect("Headless renderer");
+    let doc: Document =
+        serde_json::from_str(include_str!("../../assets/examples/shortcut-examples.rsk")).unwrap();
+    let bounds = Rectangle::with_size(iced::Size::new(800., 500.));
+    let all = doc.all_ids();
+    for ids in [&all[..], &all[..2]] {
+        let markers = markers::Markers::new(&doc, ids);
+        for zoom in [0.08, 0.12, 0.5, 1.25, 2.5] {
+            for center in [World::new(378., 294.), World::new(750., 580.)] {
+                let camera = Camera { center, zoom };
+                let mut render = |reference| {
+                    renderer.reset(bounds);
+                    let mut frame = layered::Frame::new(&renderer, bounds.size());
+                    if reference {
+                        draw_reference_atom_markers(&mut frame, &doc, ids, camera, bounds, true);
+                        for annotation in doc.annotations.iter().filter(|a| ids.contains(&a.id)) {
+                            let (width, height) = annotation.size();
+                            frame.stroke(
+                                &Path::rectangle(
+                                    camera.screen(annotation.position, bounds),
+                                    iced::Size::new(width * zoom, height * zoom),
+                                ),
+                                Stroke::default().with_color(Color::from_rgb8(20, 130, 112)),
+                            );
+                        }
+                    } else {
+                        markers.draw(&mut frame, camera, bounds, true);
+                    }
+                    for geometry in frame.finish() {
+                        renderer.draw_geometry(geometry);
+                    }
+                    Headless::screenshot(&mut renderer, iced::Size::new(800, 500), 1., Color::WHITE)
+                };
+                assert_eq!(
+                    render(false),
+                    render(true),
+                    "zoom {zoom}, center {center:?}"
+                );
+            }
+        }
+    }
+}
+
+fn draw_reference_atom_markers(
+    frame: &mut layered::Frame<'_>,
+    doc: &Document,
+    ids: &[u64],
+    camera: Camera,
+    bounds: Rectangle,
+    selected: bool,
+) {
+    // At page-fit zoom the selection box is more useful than overlapping atom rings.
+    if selected && ids.len() > 1 && camera.zoom < 0.12 {
+        return;
+    }
+    let marker_scale = camera.zoom.clamp(0.15, 1.);
+    for bond in doc.bonds.iter().filter(|b| doc.bond_visible(b.a, b.b)) {
+        if ids.contains(&bond.a)
+            && ids.contains(&bond.b)
+            && let Some((a, b)) = doc.atom(bond.a).zip(doc.atom(bond.b))
+        {
+            frame.stroke(
+                &Path::line(
+                    camera.screen(a.position, bounds),
+                    camera.screen(b.position, bounds),
+                ),
+                Stroke::default()
+                    .with_width(7.0 * marker_scale)
+                    .with_color(Color::from_rgba8(19, 135, 116, 0.16)),
+            );
+        }
+    }
+    for id in ids {
+        if let Some(atom) = doc.atom(*id).filter(|a| doc.atom_visible(a.id)) {
+            let circle = Path::circle(camera.screen(atom.position, bounds), 8.0 * marker_scale);
+            if selected {
+                frame.fill(&circle, Color::from_rgba8(19, 135, 116, 0.12));
+            }
+            frame.stroke(
+                &circle,
+                Stroke::default()
+                    .with_width((if selected { 1.8 } else { 1.4 }) * marker_scale.sqrt())
+                    .with_color(rgb([19, 135, 116])),
+            );
+        }
+    }
+}

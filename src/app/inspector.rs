@@ -382,6 +382,17 @@ impl App {
         expanded: bool,
         content: impl Into<Element<'a, Message>>,
     ) -> Element<'a, Message> {
+        self.inspector_section_lazy(section, title, summary, expanded, || content)
+    }
+
+    fn inspector_section_lazy<'a, Content: Into<Element<'a, Message>>>(
+        &'a self,
+        section: Section,
+        title: &'static str,
+        summary: impl Into<String>,
+        expanded: bool,
+        content: impl FnOnce() -> Content,
+    ) -> Element<'a, Message> {
         let expanded = self
             .inspector_ui
             .expanded
@@ -412,7 +423,7 @@ impl App {
                 )))
         ];
         if expanded {
-            body = body.push(container(content).padding(iced::Padding {
+            body = body.push(container(content()).padding(iced::Padding {
                 top: 2.,
                 right: 10.,
                 bottom: 12.,
@@ -423,6 +434,7 @@ impl App {
     }
 
     pub(super) fn properties_panel(&self) -> Element<'_, Message> {
+        let selected: HashSet<_> = self.selected.iter().copied().collect();
         let mut body = column![
             text("Properties").size(18),
             text(if self.selected.is_empty() {
@@ -450,7 +462,8 @@ impl App {
         if molecular_first {
             body = body.push(self.molecular_section());
         }
-        if self.alignment_count() >= 2 {
+        let multiple = self.alignment_count() >= 2;
+        if multiple {
             body = body.push(self.arrangement_panel(true));
         }
         if let Tool::RingPreset(preset) = self.tool {
@@ -475,7 +488,7 @@ impl App {
                 .doc
                 .graphics
                 .iter()
-                .any(|g| self.selected.contains(&g.id) && g.picture.is_none())
+                .any(|g| selected.contains(&g.id) && g.picture.is_none())
         {
             body = body.push(card(container(self.graphic_panel()).padding(12)));
         }
@@ -483,17 +496,11 @@ impl App {
             .doc
             .graphics
             .iter()
-            .any(|g| self.selected.contains(&g.id) && g.picture.is_some())
+            .any(|g| selected.contains(&g.id) && g.picture.is_some())
         {
             body = body.push(card(container(self.picture_panel()).padding(12)));
         }
-        if self.tool == Tool::Arrow
-            || self
-                .doc
-                .arrows
-                .iter()
-                .any(|a| self.selected.contains(&a.id))
-        {
+        if self.tool == Tool::Arrow || self.doc.arrows.iter().any(|a| selected.contains(&a.id)) {
             body = body.push(card(container(self.arrow_panel()).padding(12)));
         }
         if self.tool == Tool::Text
@@ -505,7 +512,7 @@ impl App {
             body = body.push(card(container(self.text_panel()).padding(12)));
         }
         if !self.selected.is_empty() {
-            body = body.push(self.selection_panel());
+            body = body.push(self.selection_panel(multiple, &selected));
         }
         if let Some(error) = &self.chemistry_notice {
             body = body.push(
@@ -567,12 +574,12 @@ impl App {
     }
 
     fn molecular_section(&self) -> Element<'_, Message> {
-        self.inspector_section(
+        self.inspector_section_lazy(
             Section::Molecule,
             "Molecular properties",
             self.property_summary(),
             self.selected.is_empty() && self.tool == Tool::Select && !self.doc.atoms.is_empty(),
-            self.molecular_properties(),
+            || self.molecular_properties(),
         )
     }
 
@@ -719,10 +726,32 @@ impl App {
     }
 
     pub(super) fn alignment_count(&self) -> usize {
+        if self.selected.len() <= 1 {
+            return self.selected.len();
+        }
         reshiki::editing::groups(&self.doc, &self.selected).len()
     }
 
-    fn arrangement_panel(&self, multiple: bool) -> Element<'_, Message> {
+    fn has_selected_ring(&self) -> bool {
+        if self.selected.len() < 3 {
+            return false;
+        }
+        // Ring detection does linear atom lookups for each selected ID. Reject
+        // large chemical selections before doing that work, while retaining
+        // selections that include extra nonchemical objects or dummy points.
+        let selected: HashSet<_> = self.selected.iter().copied().collect();
+        let ring_atoms = self
+            .doc
+            .atoms
+            .iter()
+            .filter(|a| selected.contains(&a.id) && a.centroid.is_empty() && a.element != "*")
+            .take(9)
+            .count();
+        (3..=8).contains(&ring_atoms)
+            && reshiki::rings::selected_cycle(&self.doc, &self.selected).is_some()
+    }
+
+    fn arrangement_controls(&self) -> Element<'_, Message> {
         let mut arrange = column![
             self.numeric_transform_panel(),
             text("Rotate & reflect").size(11).style(muted_text),
@@ -796,7 +825,7 @@ impl App {
                 .style(muted_text),
         ]
         .spacing(6);
-        if reshiki::rings::selected_cycle(&self.doc, &self.selected).is_some() {
+        if self.has_selected_ring() {
             arrange = arrange.push(
                 command(
                     "Saturated ↔ Aromatic · Shift+R",
@@ -805,7 +834,11 @@ impl App {
                 .width(Length::Fill),
             );
         }
-        self.inspector_section(
+        arrange.into()
+    }
+
+    fn arrangement_panel(&self, multiple: bool) -> Element<'_, Message> {
+        self.inspector_section_lazy(
             Section::Arrange,
             "Arrange & transform",
             if multiple {
@@ -814,23 +847,22 @@ impl App {
                 ""
             },
             multiple,
-            arrange,
+            || self.arrangement_controls(),
         )
     }
 
-    fn selection_panel(&self) -> Element<'_, Message> {
-        let multiple = self.alignment_count() >= 2;
+    fn selection_panel(&self, multiple: bool, selected: &HashSet<u64>) -> Element<'_, Message> {
         let atoms: Vec<_> = self
             .doc
             .atoms
             .iter()
-            .filter(|a| self.selected.contains(&a.id))
+            .filter(|a| selected.contains(&a.id))
             .collect();
         let bonds: Vec<_> = self
             .doc
             .bonds
             .iter()
-            .filter(|b| self.selected.contains(&b.a) && self.selected.contains(&b.b))
+            .filter(|b| selected.contains(&b.a) && selected.contains(&b.b))
             .collect();
         let mut body = column![].spacing(10);
         if self.atom_text_target().is_some() {
@@ -1010,64 +1042,66 @@ impl App {
         if !multiple {
             body = body.push(self.arrangement_panel(false));
         }
-        let groups = self.doc.outer_selected_groups(&self.selected);
-        let mut grouping = column![
-            row![
-                command("Group", Message::Group)
-                    .on_press_maybe(self.can_group().then_some(Message::Group))
-                    .width(Length::Fill),
-                command("Ungroup", Message::Ungroup)
-                    .on_press_maybe((!groups.is_empty()).then_some(Message::Ungroup))
-                    .width(Length::Fill)
-            ]
-            .spacing(6),
-            command("Invert selection", Message::InvertSelection),
-            crate::appearance::pick_list(
-                [
-                    reshiki::graphics::GraphicKind::Brackets,
-                    reshiki::graphics::GraphicKind::Parentheses,
-                    reshiki::graphics::GraphicKind::Braces,
-                    reshiki::graphics::GraphicKind::Rectangle,
-                    reshiki::graphics::GraphicKind::RoundedRectangle
-                ],
-                None::<reshiki::graphics::GraphicKind>,
-                Message::AddFrame
-            )
-            .placeholder("Add frame…")
-            .text_size(12)
-            .padding(7)
-            .width(Length::Fill),
-        ]
-        .spacing(6);
-        if !groups.is_empty() {
-            let integral = self
-                .doc
-                .groups
-                .iter()
-                .filter(|g| groups.contains(&g.id))
-                .all(|g| g.integral);
-            grouping = grouping
-                .push(
-                    checkbox(integral)
-                        .label("Integral group")
-                        .size(14)
-                        .text_size(12)
-                        .on_toggle(Message::IntegralGroup),
-                )
-                .push(
-                    text(
-                        "Integral groups stay whole with Option/Alt-click. Ungroup releases them.",
-                    )
-                    .size(11)
-                    .style(muted_text),
-                );
-        }
-        body = body.push(self.inspector_section(
+        body = body.push(self.inspector_section_lazy(
             Section::Groups,
             "Grouping & frames",
             "",
             false,
-            grouping,
+            || {
+                let groups = self.doc.outer_selected_groups(&self.selected);
+                let mut grouping = column![
+                    row![
+                        command("Group", Message::Group)
+                            .on_press_maybe(self.can_group().then_some(Message::Group))
+                            .width(Length::Fill),
+                        command("Ungroup", Message::Ungroup)
+                            .on_press_maybe((!groups.is_empty()).then_some(Message::Ungroup))
+                            .width(Length::Fill)
+                    ]
+                    .spacing(6),
+                    command("Invert selection", Message::InvertSelection),
+                    crate::appearance::pick_list(
+                        [
+                            reshiki::graphics::GraphicKind::Brackets,
+                            reshiki::graphics::GraphicKind::Parentheses,
+                            reshiki::graphics::GraphicKind::Braces,
+                            reshiki::graphics::GraphicKind::Rectangle,
+                            reshiki::graphics::GraphicKind::RoundedRectangle
+                        ],
+                        None::<reshiki::graphics::GraphicKind>,
+                        Message::AddFrame
+                    )
+                    .placeholder("Add frame…")
+                    .text_size(12)
+                    .padding(7)
+                    .width(Length::Fill),
+                ]
+                .spacing(6);
+                if !groups.is_empty() {
+                    let integral = self
+                        .doc
+                        .groups
+                        .iter()
+                        .filter(|g| groups.contains(&g.id))
+                        .all(|g| g.integral);
+                    grouping = grouping
+                        .push(
+                            checkbox(integral)
+                                .label("Integral group")
+                                .size(14)
+                                .text_size(12)
+                                .on_toggle(Message::IntegralGroup),
+                        )
+                        .push(
+                            text(
+                                "Integral groups stay whole with Option/Alt-click. Ungroup releases them.",
+                            )
+                            .size(11)
+                            .style(muted_text),
+                        );
+                }
+                grouping
+            },
         ));
         body.push(
             button(
@@ -1232,6 +1266,150 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn collapsed_sections_do_not_build_hidden_content() {
+        let (mut app, _) = App::new();
+        let builds = std::cell::Cell::new(0);
+        for (default, override_value, expected) in [
+            (false, None, 0),
+            (true, Some(false), 0),
+            (false, Some(true), 1),
+            (true, None, 1),
+        ] {
+            app.inspector_ui.expanded.clear();
+            if let Some(expanded) = override_value {
+                app.inspector_ui
+                    .expanded
+                    .insert(Section::Molecule, expanded);
+            }
+            builds.set(0);
+            let _ =
+                app.inspector_section_lazy(Section::Molecule, "Properties", "", default, || {
+                    builds.set(builds.get() + 1);
+                    text("Expanded content")
+                });
+            assert_eq!(builds.get(), expected);
+        }
+    }
+
+    #[test]
+    fn selection_summary_and_alignment_keep_group_and_point_semantics() {
+        let (mut app, _) = App::new();
+        app.doc = Document::default();
+        let c = app.doc.add_atom("C", Default::default());
+        let o = app
+            .doc
+            .add_atom("O", reshiki::document::Point::new(42., 0.));
+        let point = app
+            .doc
+            .add_atom("*", reshiki::document::Point::new(21., 24.));
+        app.doc.add_bond(c, o, 1, "plain");
+        assert_eq!(app.selection_summary(), "No selection");
+        assert_eq!(app.alignment_count(), 0);
+        app.selected = vec![o];
+        assert_eq!(app.selection_summary(), "1 atom");
+        assert_eq!(app.alignment_count(), 1);
+        assert!(!app.can_group());
+        app.selected = vec![c, o, point];
+        assert_eq!(app.selection_summary(), "2 atoms · 1 point · 1 bond");
+        assert_eq!(app.alignment_count(), 2);
+        assert!(app.can_group());
+        let _ = app.update(Message::Group);
+        assert_eq!(app.selection_summary(), "1 group · 1 bond");
+        assert_eq!(app.alignment_count(), 1);
+        assert!(!app.can_group());
+        let _ = app.update(Message::Ungroup);
+        assert_eq!(app.selection_summary(), "2 atoms · 1 point · 1 bond");
+        assert_eq!(app.alignment_count(), 2);
+    }
+
+    #[test]
+    fn ring_controls_reject_large_selections_without_dropping_nonchemical_members() {
+        let (mut app, _) = App::new();
+        app.doc = reshiki::rings::Preset::Benzene.document(42., false);
+        app.selected = app.doc.all_ids();
+        assert!(app.has_selected_ring());
+        for _ in 0..20 {
+            let id = app.doc.add_atom("*", Default::default());
+            app.selected.push(id);
+        }
+        assert!(
+            app.has_selected_ring(),
+            "Dummy points do not change the ring atoms"
+        );
+        for _ in 0..3 {
+            let id = app.doc.add_atom("C", Default::default());
+            app.selected.push(id);
+        }
+        assert!(
+            !app.has_selected_ring(),
+            "Nine chemical atoms cannot be one supported ring"
+        );
+    }
+
+    #[test]
+    #[ignore = "release-mode inspector benchmark"]
+    fn inspector_workloads() {
+        use std::{hint::black_box, time::Instant};
+        fn measure(name: &str, mut work: impl FnMut()) {
+            for _ in 0..3 {
+                work();
+            }
+            let mut samples = Vec::new();
+            for _ in 0..30 {
+                let start = Instant::now();
+                work();
+                samples.push(start.elapsed().as_secs_f64() * 1000.);
+            }
+            samples.sort_by(f64::total_cmp);
+            println!("{name},{:.4},{:.4}", samples[15], samples[28]);
+        }
+        println!("workload,median_ms,p95_ms");
+        let gallery: Document =
+            serde_json::from_str(include_str!("../../assets/examples/shortcut-examples.rsk"))
+                .unwrap();
+        for copies in [1, 4] {
+            let (mut app, _) = App::new();
+            app.doc = Document::default();
+            for copy in 0..copies {
+                reshiki::editing::append(
+                    &mut app.doc,
+                    &gallery,
+                    reshiki::document::Point::new(copy as f32 * 1800., 0.),
+                );
+            }
+            let endpoint = app
+                .doc
+                .add_atom("O", reshiki::document::Point::new(-100., -100.));
+            app.inspector_open = true;
+            app.inspector_tab = InspectorTab::Properties;
+            for selection in ["none", "single", "all"] {
+                app.selected = match selection {
+                    "none" => vec![],
+                    "single" => vec![endpoint],
+                    _ => app.doc.all_ids(),
+                };
+                for expanded in [false, true] {
+                    app.inspector_ui
+                        .expanded
+                        .insert(Section::Molecule, expanded);
+                    app.inspector_ui.expanded.insert(Section::Arrange, expanded);
+                    app.inspector_ui.expanded.insert(Section::Groups, expanded);
+                    let name = format!(
+                        "gallery_{copies}x_{selection}_{}",
+                        if expanded { "expanded" } else { "collapsed" }
+                    );
+                    measure(&format!("{name}_panel"), || {
+                        black_box(app.properties_panel());
+                    });
+                    measure(&format!("{name}_view"), || {
+                        black_box(app.view());
+                    });
+                }
+            }
+        }
+    }
+
     async fn calculate(app: &mut App) {
         let key = app.property_request_key();
         let doc = app.property_document(&key);

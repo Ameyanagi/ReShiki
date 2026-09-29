@@ -17,6 +17,7 @@ mod selection_canvas_qa;
 
 impl App {
     pub(super) fn selection_summary(&self) -> String {
+        let selected: std::collections::HashSet<_> = self.selected.iter().copied().collect();
         let groups = self.doc.outer_selected_groups(&self.selected);
         let covered: std::collections::HashSet<_> = self
             .doc
@@ -29,21 +30,21 @@ impl App {
             .doc
             .atoms
             .iter()
-            .filter(|a| self.selected.contains(&a.id))
+            .filter(|a| selected.contains(&a.id))
             .count();
         let points = self
             .doc
             .atoms
             .iter()
             .filter(|a| {
-                self.selected.contains(&a.id) && a.element == "*" && a.display.variable.is_none()
+                selected.contains(&a.id) && a.element == "*" && a.display.variable.is_none()
             })
             .count();
         let bonds = self
             .doc
             .bonds
             .iter()
-            .filter(|b| self.selected.contains(&b.a) && self.selected.contains(&b.b))
+            .filter(|b| selected.contains(&b.a) && selected.contains(&b.b))
             .count();
         let objects = self.selected.len().saturating_sub(atoms);
         let mut parts = Vec::new();
@@ -71,11 +72,14 @@ impl App {
     }
 
     pub(super) fn can_group(&self) -> bool {
-        self.selected.len() > 1
-            && !self.doc.groups.iter().any(|g| {
-                g.members.len() == self.selected.len()
-                    && g.members.iter().all(|id| self.selected.contains(id))
-            })
+        if self.selected.len() <= 1 {
+            return false;
+        }
+        let selected: std::collections::HashSet<_> = self.selected.iter().copied().collect();
+        !self.doc.groups.iter().any(|g| {
+            g.members.len() == self.selected.len()
+                && g.members.iter().all(|id| selected.contains(id))
+        })
     }
     pub(super) fn graphic_panel(&self) -> Element<'_, Message> {
         use reshiki::graphics::{BracketSides, GraphicChange, GraphicKind, LinePattern};

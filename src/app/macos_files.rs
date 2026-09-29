@@ -156,10 +156,15 @@ mod tests {
         doc.add_atom("N", Point::default());
         let path = PathBuf::from("/tmp/日本語 drawing.rsk");
         app.native_opening = true;
-        let _ = app.mac_file_action(Action::Loaded(
-            path.clone(),
-            Ok(serde_json::to_string(&doc).map_err(|e| e.to_string())?),
-        ));
+        let contents = serde_json::to_string(&doc).map_err(|e| e.to_string())?;
+        let task = app.mac_file_action(Action::Loaded(path.clone(), Ok(contents.clone())));
+        assert!(task.units() > 0);
+        assert!(
+            app.path.is_none(),
+            "Finder dispatch waits for the parse worker"
+        );
+        assert!(!app.native_opening);
+        super::super::files::finish_dispatched_open(&mut app, path.clone(), Ok(contents));
         assert_eq!(app.path, Some(path));
         assert_eq!(app.doc.atoms.len(), 1);
         assert!(!app.error);
@@ -187,10 +192,12 @@ mod tests {
     fn invalid_native_files_report_errors_without_panicking_or_changing_the_drawing() {
         let (mut app, _) = App::new();
         let original = app.doc.clone();
-        let _ = app.mac_file_action(Action::Loaded(
-            PathBuf::from("/tmp/bad.rsk"),
-            Ok("not json".into()),
-        ));
+        let path = PathBuf::from("/tmp/bad.rsk");
+        let task = app.mac_file_action(Action::Loaded(path.clone(), Ok("not json".into())));
+        assert!(task.units() > 0);
+        assert_eq!(app.doc, original);
+        assert!(!app.error, "Validation has not run on the event loop");
+        super::super::files::finish_dispatched_open(&mut app, path, Ok("not json".into()));
         assert_eq!(app.doc, original);
         assert!(app.error);
         assert!(app.path.is_none());

@@ -154,7 +154,7 @@ comparison passed. Actual desktop checks on the isolated release
 application verified O → OH on the loaded gallery, rapid N/S/O replacements,
 Undo to SH and Redo to OH, without changing surrounding drawings.
 
-## Broader audit and remaining work
+## Broader audit and follow-up
 
 | Area                                                                                | Finding / disposition                                                                                                                                                                                                                            |
 | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -170,3 +170,9 @@ Undo to SH and Redo to OH, without changing surrounding drawings.
 These follow-ups are findings, not claims that every operation now fits a frame
 budget. The measured changes target common editing latency without changing the
 chemical interpretation or adding a broad asynchronous persistence system.
+
+The next pass implemented ordered background recovery, native file and template
+library workers, lazy inspector sections, selection decoration reuse and shared
+hinted glyphs. See [background I/O, inspector and zoom measurements](background-io-and-zoom.md)
+for results, concurrency checks and the remaining limits. The table above records
+the findings at the end of this editing-latency pass.

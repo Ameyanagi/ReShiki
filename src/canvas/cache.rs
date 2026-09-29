@@ -10,6 +10,7 @@ pub(super) struct SceneCache {
     scene: Option<Rc<[Primitive]>>,
     ids: Vec<u64>,
     selection: Option<Option<SelectionBox>>,
+    markers: Option<Rc<super::markers::Markers>>,
     whole: bool,
 }
 
@@ -20,6 +21,7 @@ impl SceneCache {
             self.scene = None;
             self.ids.clear();
             self.selection = None;
+            self.markers = None;
             self.whole = false;
         }
     }
@@ -29,6 +31,7 @@ impl SceneCache {
         if self.ids != ids {
             self.ids = ids.to_vec();
             self.selection = None;
+            self.markers = None;
             let selected: HashSet<_> = ids.iter().copied().collect();
             let all = doc.all_ids();
             self.whole = !all.is_empty() && all.iter().all(|id| selected.contains(id));
@@ -44,6 +47,13 @@ impl SceneCache {
         self.document(doc);
         self.scene
             .get_or_insert_with(|| scene::primitives(doc).into())
+            .clone()
+    }
+
+    pub fn markers(&mut self, doc: &Document, ids: &[u64]) -> Rc<super::markers::Markers> {
+        self.selected(doc, ids);
+        self.markers
+            .get_or_insert_with(|| Rc::new(super::markers::Markers::new(doc, ids)))
             .clone()
     }
 
@@ -85,6 +95,10 @@ mod tests {
             format!("{:?}", cache.primitives(doc)),
             format!("{:?}", scene::primitives(doc)),
         );
+        assert_eq!(
+            *cache.markers(doc, ids),
+            super::super::markers::Markers::new(doc, ids)
+        );
         for (zoom, x, width) in [(1., 0., 400.), (0.5, 150., 800.), (2., -20., 300.)] {
             let camera = Camera {
                 center: Point::new(x, -15.),
@@ -105,6 +119,8 @@ mod tests {
         let ids = doc.all_ids();
         check(&mut cache, &doc, &ids);
         let first = cache.primitives(&doc);
+        let markers = cache.markers(&doc, &ids);
+        assert!(Rc::ptr_eq(&markers, &cache.markers(&doc, &ids)));
         assert!(Rc::ptr_eq(&first, &cache.primitives(&doc)));
         // The UI may mutate the same document allocation without changing IDs.
         let before = doc.clone();
@@ -117,6 +133,7 @@ mod tests {
         assert!(history.commit(before, &doc));
         check(&mut cache, &doc, &ids);
         assert!(!Rc::ptr_eq(&first, &cache.primitives(&doc)));
+        assert!(!Rc::ptr_eq(&markers, &cache.markers(&doc, &ids)));
         assert!(history.undo(&mut doc));
         check(&mut cache, &doc, &ids);
         assert!(history.redo(&mut doc));

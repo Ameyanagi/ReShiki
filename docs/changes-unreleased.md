@@ -22,6 +22,13 @@ when another component cannot be analyzed. Abbreviation checks, selection
 grouping and dimension readouts also avoid repeated work. See the
 [editing latency investigation and remaining targets](performance/editing-latency.md).
 
+Autosave validation and disk writes now run in order on a background worker,
+and native file parsing/save serialization and template-library changes avoid
+blocking the editor. Collapsed inspector sections skip hidden work. Reusing
+selection decorations and exactly hinted glyphs reduced four-gallery zoom CPU
+preparation from 47 ms to 24 ms on the Mac benchmark. See the
+[background I/O, inspector and zoom report](performance/background-io-and-zoom.md).
+
 ## Stable and Nightly update channels
 
 By @Ameyanagi in [PR #82](https://github.com/Ameyanagi/ReShiki/pull/82).
