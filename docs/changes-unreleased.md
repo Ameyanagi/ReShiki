@@ -2,6 +2,16 @@
 
 The Windows dropdown fix is recorded in [ReShiki 0.9.1](changes-0.9.1.md). Publisher-style, theme, clipboard and aromatic-fusion updates are recorded in [ReShiki 0.9.0](changes-0.9.md).
 
+## Stable and Nightly update channels
+
+By @Ameyanagi in [PR #82](https://github.com/Ameyanagi/ReShiki/pull/82).
+
+Choose **Stable** or **Nightly** in **Check for updates**. ReShiki remembers the channel and preserves your automatic-check preference. Stable remains the default and uses verified installation; Nightly downloads the portable archive for your computer for manual installation. Switching back to Stable offers the latest stable release even when its version number is lower than the installed nightly.
+
+![The update window offers Stable and Nightly, with a portable download and manual-install notice for the selected nightly build.](images/update-channel/nightly.png)
+
+Application-renderer example with automatic checking disabled. Separate desktop checks verified channel persistence and the downloaded nightly archive; see the [validation record](changes/update-channel.md).
+
 ## ChemDraw arrow exchange
 
 By @Ameyanagi in [PR #80](https://github.com/Ameyanagi/ReShiki/pull/80).
