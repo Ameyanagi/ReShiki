@@ -112,6 +112,32 @@ label task after its warmup and measures edit dispatch/coalescing, not visible
 label completion. Rendering is also separate; do not add medians and present
 the sum as measured input-to-display latency.
 
+## Windows measurements
+
+AMD Ryzen 9 7940HS test VM, Windows 11, MSVC release build,
+2026-09-29. These are CPU timings on the VM, not a measurement of the user's
+physical Iris Xe GPU. Milliseconds, median / p95:
+
+| Workload                    |   Baseline 1× |    Updated 1× |     Baseline 4× |      Updated 4× |
+| --------------------------- | ------------: | ------------: | --------------: | --------------: |
+| Validate drawing            | 0.593 / 0.678 | 0.257 / 0.286 |  8.545 / 10.595 |   1.157 / 1.493 |
+| Group selection             | 0.423 / 0.454 | 0.135 / 0.149 |   6.656 / 6.901 |   0.495 / 0.506 |
+| O/C edit pair               | 5.825 / 6.518 | 3.100 / 3.557 | 59.837 / 61.794 | 16.041 / 17.009 |
+| Inspector view construction | 0.595 / 0.623 | 0.744 / 1.115 |   5.391 / 5.985 |   5.602 / 6.323 |
+
+| Label operation                     | Two-atom fragment | 1× gallery + fragment | 4× gallery + fragment |
+| ----------------------------------- | ----------------: | --------------------: | --------------------: |
+| Cold cache                          |     0.025 / 0.026 |         6.624 / 7.476 |       24.111 / 25.167 |
+| Only fragment changed               |     0.025 / 0.032 |         0.840 / 0.953 |         3.837 / 4.093 |
+| Worker round trip, fragment changed |     0.059 / 0.062 |         1.283 / 1.394 |         5.540 / 6.653 |
+
+The baseline's full two-atom analysis took 20.09 ms median; the candidate still
+runs complete analysis in about 20.96 ms when requested. Immediate label updates
+use the separate worker path instead. Source is commit `f31ceea`; archive
+extraction retained older timestamps, so both crate roots were touched before
+building to ensure Cargo actually rebuilt the candidate. The logs confirm the
+new label workloads and new test cases ran.
+
 ## Validation
 
 Regression coverage includes full-analysis parity for neutral/charged/radical,
@@ -121,7 +147,10 @@ results; document replacement with reused IDs; rapid edits; undo/redo; selection
 and menu preservation; lazy property calculations; and existing grouping,
 reaction, abbreviation and clipboard exchange suites. The final macOS release
 suite passed 531 tests (14 explicitly ignored). All-target/all-feature Clippy
-passed with warnings denied. Actual desktop checks on the isolated release
+passed with warnings denied, as did all-target/all-feature compile checks and
+formatting through the normal pre-commit hooks. The Windows application suite
+passed 269 tests (12 explicitly ignored), and the final macOS renderer pixel
+comparison passed. Actual desktop checks on the isolated release
 application verified O → OH on the loaded gallery, rapid N/S/O replacements,
 Undo to SH and Redo to OH, without changing surrounding drawings.
 
