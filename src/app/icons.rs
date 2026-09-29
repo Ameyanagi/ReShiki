@@ -22,6 +22,7 @@ pub(super) enum Icon {
     Inspector,
     Close,
     Keyboard,
+    More,
 }
 pub(super) struct Glyph(pub Icon, pub bool);
 impl<Message> canvas::Program<Message> for Glyph {
@@ -586,6 +587,11 @@ impl Glyph {
             Icon::Close => {
                 line(f, &[(6., 6.), (18., 18.)]);
                 line(f, &[(18., 6.), (6., 18.)]);
+            }
+            Icon::More => {
+                for x in [5., 12., 19.] {
+                    f.fill(&Path::circle(Point::new(x, 12.), 1.8), ink);
+                }
             }
         }
     }

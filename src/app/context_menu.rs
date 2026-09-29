@@ -1,4 +1,5 @@
 //! Commands for the object under a secondary click, or the current selection.
+use super::object_toolbar::Command;
 use super::workspace::horizontal_line;
 use super::{App, InspectorTab, Message, inspector};
 use crate::canvas::Tool;
@@ -9,7 +10,7 @@ use reshiki::{
     editing::{Arrange, Transform},
 };
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub enum Page {
     #[default]
     Main,
@@ -17,6 +18,13 @@ pub enum Page {
     Bonds,
     Tilt,
     Attachments,
+    // Menus anchored under context row buttons.
+    AlignObjects,
+    Distribute,
+    Order,
+    Arrange,
+    /// The first n context row commands, folded into ⋯.
+    More(usize),
 }
 
 #[cfg(test)]
@@ -50,6 +58,51 @@ mod tests {
                 _ => None,
             })
             .collect()
+    }
+
+    #[test]
+    fn row_menus_toggle_and_explain_unavailable_arrange_commands() -> Result<(), String> {
+        let (mut app, _) = App::new();
+        app.doc = reshiki::rings::Preset::Regular.document(42., false);
+        app.selected = app.doc.all_ids();
+        let before = app.doc.clone();
+        let open = Message::ContextMenu(Action::Open(Page::AlignObjects, 300.));
+        let _ = app.update(open.clone());
+        assert_eq!(
+            app.context_menu.as_ref().map(|m| m.page),
+            Some(Page::AlignObjects)
+        );
+        let _ = app.update(open);
+        assert!(
+            app.context_menu.is_none(),
+            "The same button closes its menu"
+        );
+        // One molecule is one object: alignment is unavailable and says why.
+        assert_eq!(
+            labels(&app, Page::Arrange),
+            [
+                "Align needs 2 objects",
+                "Distribute needs 3 objects",
+                "Bring to front",
+                "Send to back",
+                "Flip horizontal",
+                "Flip vertical",
+                "Rotate 180°"
+            ]
+        );
+        assert!(run_item(&mut app, Page::Arrange, "Align needs 2 objects").is_err());
+        assert_eq!(
+            labels(&app, Page::More(2)),
+            ["Move & attach…", "Group"],
+            "⋯ lists the folded commands in row order"
+        );
+        let _ = app.update(Message::ContextMenu(Action::Open(Page::Arrange, 300.)));
+        run_item(&mut app, Page::Arrange, "Flip horizontal")?;
+        assert!(app.context_menu.is_none());
+        assert_ne!(app.doc, before);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, before);
+        Ok(())
     }
 
     #[test]
@@ -282,6 +335,8 @@ mod tests {
 #[derive(Debug, Clone)]
 pub enum Action {
     Close,
+    /// Toggle a context row menu at this x offset over the canvas.
+    Open(Page, f32),
     Page(Page),
     Run(Box<Message>),
     Properties(bool),
@@ -291,6 +346,7 @@ pub(super) struct State {
     pub page: Page,
 }
 
+#[derive(Clone)]
 enum Entry {
     Item {
         label: &'static str,
@@ -567,6 +623,22 @@ impl App {
                 );
                 entries
             }
+            Page::AlignObjects => self.arrange_entries(&[&Command::HORIZONTAL, &Command::VERTICAL]),
+            Page::Distribute => self.arrange_entries(&[&Command::DISTRIBUTE]),
+            Page::Order => self.arrange_entries(&[&Command::ORDER]),
+            Page::Arrange => [
+                self.arrange_entries(&[&Command::HORIZONTAL, &Command::VERTICAL]),
+                self.arrange_entries(&[&Command::DISTRIBUTE]),
+                self.arrange_entries(&[&Command::ORDER]),
+                self.arrange_entries(&[&Command::TRANSFORM]),
+            ]
+            .join(&Separator),
+            Page::More(folded) => self
+                .context_commands()
+                .into_iter()
+                .take(folded)
+                .map(|c| command(c.label, c.message, c.enabled))
+                .collect(),
             Page::Attachments => vec![
                 submenu("‹ Back", Page::Main),
                 Hint("Attach to selected atoms"),
@@ -595,9 +667,45 @@ impl App {
         }
     }
 
+    /// Groups of arrange commands that share one availability rule, or a
+    /// single disabled row saying what they need.
+    fn arrange_entries(&self, groups: &[&[Command]]) -> Vec<Entry> {
+        let mut commands = groups.iter().flat_map(|group| group.iter());
+        if let Some(first) = commands
+            .next()
+            .filter(|c| !c.enabled(self, self.alignment_count()))
+        {
+            return vec![Entry::Item {
+                label: first.unavailable(),
+                action: Action::Close,
+                enabled: false,
+            }];
+        }
+        groups
+            .iter()
+            .map(|group| {
+                group
+                    .iter()
+                    .map(|c| Entry::command(c.name(), c.message(), true))
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>()
+            .join(&Entry::Separator)
+    }
+
     pub(super) fn context_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Close => self.context_menu = None,
+            Action::Open(page, x) => {
+                let open = self
+                    .context_menu
+                    .as_ref()
+                    .is_some_and(|menu| menu.page == page);
+                self.context_menu = (!open).then(|| State {
+                    position: Point::new(x, 0.),
+                    page,
+                });
+            }
             Action::Page(page) => {
                 let origin = self.context_menu.as_ref().map(|menu| {
                     let (position, _, _) = self.context_geometry(menu);

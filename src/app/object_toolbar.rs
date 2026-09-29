@@ -1,10 +1,17 @@
-//! Optional, selection-independent access to arrangement and transform commands.
+//! Align, distribute, order, flip and rotate at the right end of the Select context row.
+use super::context_menu::{self, Page};
 use super::{App, Message, workspace};
-use iced::widget::{Space, button, canvas, container, row, scrollable, text, tooltip};
-use iced::{Alignment, Element, Length};
+use iced::widget::{button, canvas, row, text, tooltip};
+use iced::{Alignment, Element};
 use reshiki::editing::{Arrange, Transform};
 
-const HEIGHT: f32 = 42.;
+const MENU_BUTTON: f32 = 38.;
+const ICON_BUTTON: f32 = 30.;
+const GAP: f32 = 2.;
+/// Width of the full group: three menu buttons, a divider and three icon buttons.
+pub(super) const GROUP_WIDTH: f32 = 3. * MENU_BUTTON + 11. + 3. * ICON_BUTTON + 6. * GAP;
+/// Width of the collapsed `Arrange ▾` button.
+pub(super) const COMPACT_WIDTH: f32 = 80.;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Action {
@@ -13,7 +20,7 @@ pub enum Action {
 }
 
 #[derive(Clone, Copy)]
-enum Command {
+pub(super) enum Command {
     Layer(bool),
     Align(Arrange),
     Reflect(bool),
@@ -21,33 +28,67 @@ enum Command {
 }
 
 impl Command {
-    fn label(self) -> &'static str {
+    pub(super) const HORIZONTAL: [Self; 3] = [
+        Self::Align(Arrange::AlignLeft),
+        Self::Align(Arrange::AlignHorizontal),
+        Self::Align(Arrange::AlignRight),
+    ];
+    pub(super) const VERTICAL: [Self; 3] = [
+        Self::Align(Arrange::AlignTop),
+        Self::Align(Arrange::AlignVertical),
+        Self::Align(Arrange::AlignBottom),
+    ];
+    pub(super) const DISTRIBUTE: [Self; 2] = [
+        Self::Align(Arrange::DistributeHorizontal),
+        Self::Align(Arrange::DistributeVertical),
+    ];
+    pub(super) const ORDER: [Self; 2] = [Self::Layer(true), Self::Layer(false)];
+    pub(super) const TRANSFORM: [Self; 3] =
+        [Self::Reflect(true), Self::Reflect(false), Self::Rotate];
+
+    pub(super) fn name(self) -> &'static str {
         match self {
-            Self::Layer(true) => "Bring selected graphics and bonds to front",
-            Self::Layer(false) => "Send selected graphics and bonds to back",
-            Self::Align(Arrange::AlignLeft) => "Align left edges · Select at least two objects",
-            Self::Align(Arrange::AlignHorizontal) => {
-                "Align horizontal centers · Select at least two objects"
-            }
-            Self::Align(Arrange::AlignRight) => "Align right edges · Select at least two objects",
-            Self::Align(Arrange::AlignTop) => "Align top edges · Select at least two objects",
-            Self::Align(Arrange::AlignVertical) => {
-                "Align vertical centers · Select at least two objects"
-            }
-            Self::Align(Arrange::AlignBottom) => "Align bottom edges · Select at least two objects",
-            Self::Align(Arrange::DistributeHorizontal) => {
-                "Distribute horizontally · Select at least three objects"
-            }
-            Self::Align(Arrange::DistributeVertical) => {
-                "Distribute vertically · Select at least three objects"
-            }
-            Self::Reflect(true) => "Flip horizontal · Preserve stereochemistry",
-            Self::Reflect(false) => "Flip vertical · Preserve stereochemistry",
-            Self::Rotate => "Rotate selection 180°",
+            Self::Layer(true) => "Bring to front",
+            Self::Layer(false) => "Send to back",
+            Self::Align(Arrange::AlignLeft) => "Align left edges",
+            Self::Align(Arrange::AlignHorizontal) => "Align horizontal centers",
+            Self::Align(Arrange::AlignRight) => "Align right edges",
+            Self::Align(Arrange::AlignTop) => "Align top edges",
+            Self::Align(Arrange::AlignVertical) => "Align vertical centers",
+            Self::Align(Arrange::AlignBottom) => "Align bottom edges",
+            Self::Align(Arrange::DistributeHorizontal) => "Distribute horizontally",
+            Self::Align(Arrange::DistributeVertical) => "Distribute vertically",
+            Self::Reflect(true) => "Flip horizontal",
+            Self::Reflect(false) => "Flip vertical",
+            Self::Rotate => "Rotate 180°",
         }
     }
 
-    fn message(self) -> Message {
+    /// Why the command is unavailable, for its tooltip.
+    pub(super) fn requirement(self) -> &'static str {
+        match self {
+            Self::Layer(_) => "Select graphics or bonds",
+            Self::Align(Arrange::DistributeHorizontal | Arrange::DistributeVertical) => {
+                "Select at least three objects"
+            }
+            Self::Align(_) => "Select at least two objects",
+            Self::Reflect(_) | Self::Rotate => "Select objects first",
+        }
+    }
+
+    /// Disabled menu row standing in for the command's whole group.
+    pub(super) fn unavailable(self) -> &'static str {
+        match self {
+            Self::Layer(_) => "Order needs graphics or bonds",
+            Self::Align(Arrange::DistributeHorizontal | Arrange::DistributeVertical) => {
+                "Distribute needs 3 objects"
+            }
+            Self::Align(_) => "Align needs 2 objects",
+            Self::Reflect(_) | Self::Rotate => "Flip and rotate need a selection",
+        }
+    }
+
+    pub(super) fn message(self) -> Message {
         match self {
             Self::Layer(front) => Message::ObjectToolbar(Action::Layer(front)),
             Self::Align(action) => Message::Arrange(action),
@@ -60,7 +101,7 @@ impl Command {
         }
     }
 
-    fn enabled(self, app: &App, objects: usize) -> bool {
+    pub(super) fn enabled(self, app: &App, objects: usize) -> bool {
         if app.cleanup.is_some() || app.joining.is_some() {
             return false;
         }
@@ -89,9 +130,9 @@ impl App {
     pub(super) fn object_toolbar_action(&mut self, action: Action) {
         match action {
             Action::Visible(visible) => {
-                self.appearance.object_toolbar = visible;
+                self.appearance.arrange_controls = visible;
                 if let Err(error) = self.appearance.save() {
-                    self.status = format!("Could not save toolbar preference: {error}");
+                    self.status = format!("Could not save arrange controls preference: {error}");
                     self.error = true;
                 }
             }
@@ -158,66 +199,94 @@ impl App {
         self.changed(before);
     }
 
-    pub(super) fn object_toolbar(&self) -> Element<'_, Message> {
+    /// Arrange group for the context row. `left` is its x offset over the
+    /// canvas, which anchors the menus under their buttons.
+    pub(super) fn arrange_group(&self, left: f32, compact: bool) -> Element<'_, Message> {
         let objects = self.alignment_count();
-        let mut commands = row![text("Objects").size(11).style(workspace::muted_text)]
-            .spacing(3)
-            .align_y(Alignment::Center);
-        for (index, command) in [
-            Command::Layer(true),
-            Command::Layer(false),
-            Command::Align(Arrange::AlignLeft),
-            Command::Align(Arrange::AlignHorizontal),
-            Command::Align(Arrange::AlignRight),
-            Command::Align(Arrange::AlignTop),
-            Command::Align(Arrange::AlignVertical),
-            Command::Align(Arrange::AlignBottom),
-            Command::Align(Arrange::DistributeHorizontal),
-            Command::Align(Arrange::DistributeVertical),
-            Command::Reflect(true),
-            Command::Reflect(false),
-            Command::Rotate,
+        let open = |page, x| Message::ContextMenu(context_menu::Action::Open(page, x));
+        if compact {
+            // Every arrange command needs a selection.
+            let enabled = !self.selected.is_empty();
+            return workspace::hover_hint(
+                button(
+                    row![text("Arrange").size(12), workspace::caret(9.)]
+                        .spacing(5)
+                        .align_y(Alignment::Center),
+                )
+                .width(COMPACT_WIDTH)
+                .padding([7, 9])
+                .style(workspace::control(false))
+                .on_press_maybe(enabled.then(|| open(Page::Arrange, left))),
+                if enabled {
+                    "Align, distribute, order, flip and rotate"
+                } else {
+                    "Arrange · Select objects first"
+                },
+                tooltip::Position::Bottom,
+            )
+            .into();
+        }
+        // Each menu's commands share one availability rule; `icon` stands for them.
+        let menu = |icon: Command, page, name: &str, index: f32| {
+            let enabled = icon.enabled(self, objects);
+            workspace::hover_hint(
+                button(
+                    row![
+                        canvas(Glyph(icon, enabled)).width(24).height(24),
+                        workspace::caret(9.)
+                    ]
+                    .spacing(1)
+                    .align_y(Alignment::Center),
+                )
+                .width(MENU_BUTTON)
+                .padding([3, 3])
+                .style(workspace::control(false))
+                .on_press_maybe(enabled.then(|| open(page, left + index * (MENU_BUTTON + GAP)))),
+                if enabled {
+                    name.to_owned()
+                } else {
+                    format!("{name} · {}", icon.requirement())
+                },
+                tooltip::Position::Bottom,
+            )
+        };
+        let mut group = row![
+            menu(
+                Command::Align(Arrange::AlignLeft),
+                Page::AlignObjects,
+                "Align",
+                0.
+            ),
+            menu(
+                Command::Align(Arrange::DistributeHorizontal),
+                Page::Distribute,
+                "Distribute",
+                1.
+            ),
+            menu(Command::Layer(true), Page::Order, "Order", 2.),
+            workspace::divider(),
         ]
-        .into_iter()
-        .enumerate()
-        {
-            if [2, 8, 10].contains(&index) {
-                commands = commands.push(Space::new().width(8));
-            }
+        .spacing(GAP)
+        .align_y(Alignment::Center);
+        for command in Command::TRANSFORM {
             let enabled = command.enabled(self, objects);
-            commands = commands.push(workspace::hover_hint(
+            group = group.push(workspace::hover_hint(
                 button(canvas(Glyph(command, enabled)).width(24).height(24))
+                    .width(ICON_BUTTON)
                     .padding(3)
                     .on_press_maybe(enabled.then(|| command.message()))
                     .style(workspace::control(false)),
-                command.label(),
+                match (enabled, command) {
+                    (false, _) => format!("{} · {}", command.name(), command.requirement()),
+                    (true, Command::Reflect(_)) => {
+                        format!("{} · Preserves stereochemistry", command.name())
+                    }
+                    _ => command.name().to_owned(),
+                },
                 tooltip::Position::Bottom,
             ));
         }
-        let strip = scrollable(commands)
-            .direction(scrollable::Direction::Horizontal(
-                scrollable::Scrollbar::new().width(3).scroller_width(3),
-            ))
-            .width(Length::Fill);
-        container(
-            row![
-                strip,
-                workspace::hover_hint(
-                    button(text("×").size(18))
-                        .padding([0, 7])
-                        .on_press(Message::ObjectToolbar(Action::Visible(false)))
-                        .style(workspace::control(false)),
-                    "Hide object toolbar · Show again in View",
-                    tooltip::Position::Bottom,
-                )
-            ]
-            .spacing(8)
-            .align_y(Alignment::Center),
-        )
-        .height(HEIGHT)
-        .padding([6, 10])
-        .style(workspace::panel)
-        .into()
+        group.into()
     }
 }
 
@@ -369,9 +438,6 @@ mod tests {
             app.doc.add_bond(a, b, 1, "plain");
         }
         app.selected = app.doc.all_ids();
-        app.appearance.object_toolbar = true;
-        app.inspector_open = false;
-        app.status = "Object toolbar · Align, distribute, reflect and rotate the selection".into();
         app
     }
 
@@ -411,22 +477,26 @@ mod tests {
     }
 
     #[test]
-    fn toolbar_setting_roundtrips_and_does_not_modify_the_drawing() {
+    fn arrange_setting_roundtrips_and_ignores_the_retired_toolbar_key() {
         let mut app = fixture();
         let before = app.doc.clone();
         for visible in [false, true] {
             let _ = app.update(Message::ObjectToolbar(Action::Visible(visible)));
-            assert_eq!(app.appearance.object_toolbar, visible);
+            assert_eq!(app.appearance.arrange_controls, visible);
             assert_eq!(app.doc, before);
             assert!(!app.history.can_undo());
             let bytes = serde_json::to_vec(&app.appearance).unwrap();
             let reloaded: crate::appearance::Settings = serde_json::from_slice(&bytes).unwrap();
-            assert_eq!(reloaded.object_toolbar, visible);
+            assert_eq!(reloaded.arrange_controls, visible);
         }
-        let legacy: crate::appearance::Settings =
-            serde_json::from_str(r#"{"mode":"dark"}"#).unwrap();
-        assert!(!legacy.object_toolbar);
-        assert_eq!(legacy.mode, crate::appearance::Mode::Dark);
+        for legacy in [
+            r#"{"mode":"dark"}"#,
+            r#"{"mode":"dark","object_toolbar":false}"#,
+        ] {
+            let legacy: crate::appearance::Settings = serde_json::from_str(legacy).unwrap();
+            assert!(legacy.arrange_controls);
+            assert_eq!(legacy.mode, crate::appearance::Mode::Dark);
+        }
     }
 
     #[test]
@@ -494,138 +564,67 @@ mod tests {
     }
 
     #[tokio::test]
-    #[ignore = "Opt-in actual renderer evidence and pointer/layout checks"]
-    async fn object_toolbar_headless_snapshot() {
-        use iced::advanced::{layout, mouse, renderer::Headless, widget::Tree};
-        let mut app = fixture();
-        let directory = std::path::Path::new("artifacts/object-toolbar-qa");
-        std::fs::create_dir_all(directory).unwrap();
-        std::fs::write(
-            directory.join("objects.rsk"),
-            serde_json::to_vec_pretty(&app.doc).unwrap(),
+    #[ignore = "Opt-in renderer layout and pointer checks"]
+    async fn arrange_buttons_match_their_menu_anchors_in_a_fixed_height_row() {
+        use iced::advanced::{Layout, Shell, clipboard, layout, mouse, renderer::Headless};
+        use iced::{Event, Rectangle, Size};
+        let renderer = <iced::Renderer as Headless>::new(
+            iced::Font::with_name(reshiki::style::ui_font_family()),
+            iced::Pixels(16.),
+            None,
         )
+        .await
         .unwrap();
-        for (name, width, height, selected, dark, settings) in [
-            ("selected", 1280, 820, true, false, false),
-            ("empty-selection", 1280, 820, false, false, false),
-            ("compact", 1040, 680, true, false, true),
-            ("dark", 1280, 820, true, true, false),
-        ] {
-            app.appearance.mode = if dark {
-                crate::appearance::Mode::Dark
-            } else {
-                crate::appearance::Mode::Light
-            };
-            app.view_open = settings;
-            app.selected = if selected { app.doc.all_ids() } else { vec![] };
-            app.viewport = iced::Size::new(width as f32 - 70., height as f32 - 235.);
-            app.fit();
-            let mut renderer = <iced::Renderer as Headless>::new(
-                iced::Font::with_name(reshiki::style::ui_font_family()),
-                iced::Pixels(16.),
-                None,
-            )
-            .await
-            .unwrap();
-            // Toolbar height and hide control stay fixed when the selection changes.
-            let toolbar_size = iced::Size::new(width as f32 - 430., HEIGHT);
-            let mut toolbar = app.object_toolbar();
-            let mut tree = Tree::new(toolbar.as_widget());
-            let node = toolbar.as_widget_mut().layout(
-                &mut tree,
-                &renderer,
-                &layout::Limits::new(toolbar_size, toolbar_size),
-            );
-            assert_eq!(node.size().height, HEIGHT);
-            let mut command_messages = Vec::new();
-            for event in [
-                iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
-                iced::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
-            ] {
-                toolbar.as_widget_mut().update(
-                    &mut tree,
-                    &event,
-                    iced::advanced::Layout::new(&node),
-                    mouse::Cursor::Available(iced::Point::new(66., HEIGHT / 2.)),
-                    &renderer,
-                    &mut iced::advanced::clipboard::Null,
-                    &mut iced::advanced::Shell::new(&mut command_messages),
-                    &iced::Rectangle::with_size(toolbar_size),
-                );
+        // Canvas widths at 1040 and 1280 with the default inspector.
+        for (width, selected) in [(636., true), (636., false), (876., true)] {
+            let mut app = fixture();
+            if !selected {
+                app.selected.clear();
             }
-            assert_eq!(
-                command_messages
-                    .iter()
-                    .any(|m| matches!(m, Message::ObjectToolbar(Action::Layer(true)))),
-                selected
-            );
-            let cursor =
-                mouse::Cursor::Available(iced::Point::new(toolbar_size.width - 23., HEIGHT / 2.));
-            let mut messages = Vec::new();
-            for event in [
-                iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
-                iced::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
-            ] {
-                toolbar.as_widget_mut().update(
+            let size = Size::new(width, 80.);
+            let left = 14. + (width - 28.) - GROUP_WIDTH;
+            let click = |x: f32| {
+                let mut bar = app.context_bar();
+                let mut tree = iced::advanced::widget::Tree::new(bar.as_widget());
+                let node = bar.as_widget_mut().layout(
                     &mut tree,
-                    &event,
-                    iced::advanced::Layout::new(&node),
-                    cursor,
                     &renderer,
-                    &mut iced::advanced::clipboard::Null,
-                    &mut iced::advanced::Shell::new(&mut messages),
-                    &iced::Rectangle::with_size(toolbar_size),
+                    &layout::Limits::new(Size::ZERO, size),
                 );
-            }
-            assert!(
+                assert_eq!(node.size().height, 46., "Row height is fixed");
+                let mut messages = Vec::new();
+                for event in [mouse::Event::ButtonPressed, mouse::Event::ButtonReleased] {
+                    bar.as_widget_mut().update(
+                        &mut tree,
+                        &Event::Mouse(event(mouse::Button::Left)),
+                        Layout::new(&node),
+                        mouse::Cursor::Available(iced::Point::new(x, 23.)),
+                        &renderer,
+                        &mut clipboard::Null,
+                        &mut Shell::new(&mut messages),
+                        &Rectangle::with_size(size),
+                    );
+                }
                 messages
-                    .iter()
-                    .any(|m| matches!(m, Message::ObjectToolbar(Action::Visible(false))))
-            );
-            drop(toolbar);
-            let size = iced::Size::new(width as f32, height as f32);
-            let theme = app.theme();
-            let mut view = app.view();
-            let mut tree = Tree::new(view.as_widget());
-            let node =
-                view.as_widget_mut()
-                    .layout(&mut tree, &renderer, &layout::Limits::new(size, size));
-            let mut messages = Vec::new();
-            view.as_widget_mut().update(
-                &mut tree,
-                &iced::Event::Window(iced::window::Event::RedrawRequested(
-                    std::time::Instant::now(),
-                )),
-                iced::advanced::Layout::new(&node),
-                mouse::Cursor::Unavailable,
-                &renderer,
-                &mut iced::advanced::clipboard::Null,
-                &mut iced::advanced::Shell::new(&mut messages),
-                &iced::Rectangle::with_size(size),
-            );
-            view.as_widget().draw(
-                &tree,
-                &mut renderer,
-                &theme,
-                &iced::advanced::renderer::Style::default(),
-                iced::advanced::Layout::new(&node),
-                mouse::Cursor::Unavailable,
-                &iced::Rectangle::with_size(size),
-            );
-            let pixels = Headless::screenshot(
-                &mut renderer,
-                iced::Size::new(width, height),
-                1.,
-                theme.palette().background,
-            );
-            image::save_buffer(
-                directory.join(format!("{name}.png")),
-                &pixels,
-                width,
-                height,
-                image::ColorType::Rgba8,
-            )
-            .unwrap();
+            };
+            let align = click(left + MENU_BUTTON / 2.);
+            let flip = click(left + 3. * (MENU_BUTTON + GAP) + 11. + GAP + ICON_BUTTON / 2.);
+            if !selected {
+                assert!(
+                    align.is_empty() && flip.is_empty(),
+                    "Disabled without a selection"
+                );
+                continue;
+            }
+            assert!(matches!(
+                align.as_slice(),
+                [Message::ContextMenu(context_menu::Action::Open(Page::AlignObjects, x))]
+                    if (x - left).abs() < 0.5
+            ));
+            assert!(matches!(
+                flip.as_slice(),
+                [Message::Transform(Transform::FlipHorizontal)]
+            ));
         }
     }
 }

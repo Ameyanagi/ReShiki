@@ -29,11 +29,21 @@ impl std::fmt::Display for Mode {
         })
     }
 }
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
     pub mode: Mode,
-    pub object_toolbar: bool,
+    /// Arrange group in the Select context row. A new key: the retired
+    /// `object_toolbar` preference (off by default) must not hide it.
+    pub arrange_controls: bool,
+}
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            mode: Mode::default(),
+            arrange_controls: true,
+        }
+    }
 }
 impl Settings {
     fn path() -> Result<std::path::PathBuf, String> {

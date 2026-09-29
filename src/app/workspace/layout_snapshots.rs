@@ -193,8 +193,6 @@ async fn ui_layout_snapshots() {
         for (name, setup) in STATES {
             let (mut app, _) = App::new();
             app.appearance.mode = crate::appearance::Mode::Light;
-            // Arrange commands visible (issue #78 compares the object toolbar).
-            app.appearance.object_toolbar = true;
             setup(&mut app);
             let output = directory.join(format!("{name}-{width}.png"));
             snapshot(
@@ -204,6 +202,77 @@ async fn ui_layout_snapshots() {
                 &output,
             );
             eprintln!("{}", output.display());
+        }
+    }
+}
+
+/// Every tool's context row fits the canvas of a 1040 px window with the
+/// default inspector, including Reset and bonded-movement controls.
+#[tokio::test]
+#[ignore = "Opt-in renderer layout check"]
+async fn every_context_row_fits_the_minimum_window() {
+    use reshiki::{bonds::BondPreset, chains::ChainMode, rings::Preset, scientific};
+    let renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .unwrap();
+    let mut tools = vec![
+        Tool::Select,
+        Tool::Lasso,
+        Tool::Tilt,
+        Tool::Wedge,
+        Tool::Hash,
+        Tool::Wavy,
+        Tool::Atom,
+        Tool::Ring,
+        Tool::Template,
+        Tool::Arrow,
+        Tool::Text,
+        Tool::Erase,
+        Tool::EditPoints,
+        Tool::Graphic(GraphicKind::Symbol(scientific::SymbolKind::ALL[0])),
+        Tool::Graphic(GraphicKind::Orbital(scientific::OrbitalKind::ALL[0])),
+    ];
+    tools.extend([ChainMode::Straight, ChainMode::Snaking].map(Tool::Chain));
+    tools.extend((1..=3).map(Tool::Bond));
+    tools.extend(BondPreset::ALL.map(Tool::StyledBond));
+    tools.extend(Preset::ALL.iter().map(|&p| Tool::RingPreset(p)));
+    tools.extend(GraphicKind::DRAWABLE.map(Tool::Graphic));
+    let width = 636. - 2. * CONTEXT_PADDING;
+    for tool in tools {
+        for (selected, reset) in [(0, false), (0, true), (1, true), (6, true)] {
+            let (mut app, _) = App::new();
+            open(&mut app, benzene());
+            app.tool = tool;
+            app.selected = app.doc.all_ids().into_iter().take(selected).collect();
+            app.bond_drawing.fixed_angles = !reset;
+            // Lay out without a width limit; the arrange group sits in a
+            // filling container, so count the group itself.
+            let mut row = app.context_row(width);
+            let mut tree = Tree::new(row.as_widget());
+            let node = row.as_widget_mut().layout(
+                &mut tree,
+                &renderer,
+                &layout::Limits::new(Size::ZERO, Size::new(10_000., 36.)),
+            );
+            let children = node.children();
+            let arrange = tool.selects() && app.appearance.arrange_controls;
+            let natural = children
+                .iter()
+                .enumerate()
+                .map(|(i, child)| match child.children() {
+                    [group] if arrange && i + 1 == children.len() => group.bounds().width,
+                    _ => child.bounds().width,
+                })
+                .sum::<f32>()
+                + CONTEXT_GAP * (children.len() - 1) as f32;
+            assert!(
+                natural <= width,
+                "{tool:?} with {selected} selected, reset {reset}: {natural} > {width}"
+            );
         }
     }
 }

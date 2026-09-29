@@ -5,7 +5,7 @@ use super::{
 use crate::canvas::layered::canvas;
 use crate::canvas::{Edit, MoleculeCanvas, Tool};
 use iced::widget::{
-    Space, button, checkbox, column, combo_box, container, pick_list, row, scrollable, sensor,
+    Space, button, checkbox, column, combo_box, container, responsive, row, scrollable, sensor,
     text, text_editor, tooltip,
 };
 use iced::{Alignment, Border, Color, Element, Length, Theme};
@@ -769,12 +769,7 @@ impl App {
         } else {
             self.context_bar()
         };
-        let mut workspace = column![context];
-        if self.appearance.object_toolbar {
-            workspace = workspace.push(self.object_toolbar());
-        }
-        let workspace = workspace
-            .push(paper)
+        let workspace = column![context, paper]
             .height(Length::Fill)
             .width(Length::Fill);
         let mut body = row![self.tool_palette(), workspace].height(Length::Fill);
@@ -1036,8 +1031,32 @@ impl App {
             .into()
     }
 
+    /// Bond length and angle constraints differ from the document's.
+    fn bond_drawing_changed(&self) -> bool {
+        (self.bond_drawing.length - self.doc.drawing_style.bond_length_world).abs() > 0.001
+            || self.chain_drawing.angle != 120.
+            || !self.bond_drawing.fixed_length
+            || !self.bond_drawing.fixed_angles
+    }
+
+    /// Width of `bond_constraints`: two checkboxes (13 px box, 8 px gap), the
+    /// 48 px field, 6 px gaps and the measured labels.
+    fn constraints_width(&self) -> f32 {
+        let mut width = 2. * 21.
+            + 48.
+            + 18.
+            + ["Length", "pt", "Angles"]
+                .map(|s| text_width(s, 11.))
+                .iter()
+                .sum::<f32>();
+        if self.bond_drawing_changed() {
+            width += 6. + text_width("Reset", 12.) + 18.;
+        }
+        width
+    }
+
     fn bond_constraints(&self) -> Element<'_, Message> {
-        row![
+        let mut constraints = row![
             checkbox(self.bond_drawing.fixed_length)
                 .label("Length")
                 .on_toggle(Message::FixedLength)
@@ -1056,452 +1075,412 @@ impl App {
                 .text_size(11),
         ]
         .spacing(6)
-        .align_y(Alignment::Center)
-        .into()
+        .align_y(Alignment::Center);
+        if self.bond_drawing_changed() {
+            constraints = constraints.push(hover_hint(
+                command("Reset", Message::ResetBondDrawing),
+                "Reset bonds · Restore this document's bond length and drawing constraints",
+                tooltip::Position::Bottom,
+            ));
+        }
+        constraints.into()
     }
 
-    fn context_bar(&self) -> Element<'_, Message> {
+    /// A partial selection drags bonded atoms along, following Length / Angles.
+    fn moving_bonded_selection(&self) -> bool {
+        matches!(self.tool, Tool::Select | Tool::Lasso) && {
+            let selected = self.doc.expand_abbreviation_selection(&self.selected);
+            self.doc
+                .bonds
+                .iter()
+                .any(|bond| selected.contains(&bond.a) != selected.contains(&bond.b))
+        }
+    }
+
+    /// Context row commands in fold order: the first ones fold into ⋯ first.
+    pub(super) fn context_commands(&self) -> Vec<RowCommand> {
+        if !matches!(self.tool, Tool::Select | Tool::Lasso) || self.selected.is_empty() {
+            return Vec::new();
+        }
+        let mut commands = vec![
+            RowCommand {
+                label: "Move & attach…",
+                message: Message::Join(super::joining::Action::Begin),
+                enabled: self.selected.iter().any(|id| self.doc.atom(*id).is_some()),
+            },
+            RowCommand {
+                label: "Group",
+                message: Message::Group,
+                enabled: self.can_group(),
+            },
+        ];
+        if !self.doc.outer_selected_groups(&self.selected).is_empty() {
+            commands.push(RowCommand {
+                label: "Ungroup",
+                message: Message::Ungroup,
+                enabled: true,
+            });
+        }
+        commands
+    }
+
+    pub(super) fn context_bar(&self) -> Element<'_, Message> {
         if self.joining.is_some() {
             return self.join_bar();
         }
-        let mut options = row![
-            text(tool_name(self.tool))
+        container(responsive(move |size| self.context_row(size.width)).height(Length::Shrink))
+            .height(46)
+            .padding([5., CONTEXT_PADDING])
+            .center_y(46)
+            .clip(true)
+            .style(panel)
+            .into()
+    }
+
+    /// Tool name, options and commands, plus the arrange group for selection
+    /// tools. A short row folds commands into ⋯ instead of scrolling.
+    fn context_row(&self, width: f32) -> Element<'_, Message> {
+        let name = tool_name(self.tool);
+        let (options, hint) = self.tool_options();
+        let mut row = row![hover_hint(
+            text(name)
                 .size(12)
                 .style(crate::appearance::text_color(ink())),
-            divider()
-        ]
-        .spacing(10)
+            hint,
+            tooltip::Position::Bottom,
+        )]
+        .spacing(CONTEXT_GAP)
         .align_y(Alignment::Center);
-        match self.tool {
-            tool if tool.bond_preset().is_some() => {
-                options = options
-                    .push(
-                        crate::appearance::pick_list(
-                            BondPreset::ALL,
-                            tool.bond_preset(),
-                            |preset| {
-                                Message::Tool(match preset {
-                                    BondPreset::Single => Tool::Bond(1),
-                                    BondPreset::Double => Tool::Bond(2),
-                                    BondPreset::Triple => Tool::Bond(3),
-                                    BondPreset::Wedge => Tool::Wedge,
-                                    BondPreset::HashedWedge => Tool::Hash,
-                                    BondPreset::Wavy => Tool::Wavy,
-                                    other => Tool::StyledBond(other),
-                                })
-                            },
-                        )
-                        .text_size(12)
-                        .padding(5),
-                    )
-                    .push(self.bond_constraints());
+        if !options.is_empty() {
+            row = row.push(divider());
+        }
+        for option in options {
+            row = row.push(option);
+        }
+        let commands = self.context_commands();
+        let widths: Vec<f32> = commands
+            .iter()
+            .map(|c| text_width(c.label, 12.) + 18.)
+            .collect();
+        let select = matches!(self.tool, Tool::Select | Tool::Lasso);
+        let arrange = (select && self.appearance.arrange_controls).then_some((
+            super::object_toolbar::GROUP_WIDTH,
+            super::object_toolbar::COMPACT_WIDTH,
+        ));
+        // Only the Select row folds. Its fixed part is measured text.
+        let mut fixed = 0.;
+        if select {
+            fixed = text_width(name, 12.);
+            if !self.selected.is_empty() {
+                fixed += 2. * CONTEXT_GAP + DIVIDER + text_width(&self.selection_summary(), 11.);
             }
-            Tool::Chain(mode) => {
-                options = options
-                    .push(
-                        crate::appearance::pick_list(
-                            [
-                                reshiki::chains::ChainMode::Straight,
-                                reshiki::chains::ChainMode::Snaking,
-                            ],
-                            Some(mode),
-                            |m| Message::Tool(Tool::Chain(m)),
-                        )
-                        .text_size(12)
-                        .padding(5),
-                    )
-                    .push(
-                        text(if mode == reshiki::chains::ChainMode::Snaking {
-                            "Max atoms"
-                        } else {
-                            "Atoms"
+            if self.moving_bonded_selection() {
+                fixed += 2. * CONTEXT_GAP + DIVIDER + self.constraints_width();
+            }
+        }
+        let (folded, compact) = fold(width, fixed, &widths, arrange);
+        let mut x = CONTEXT_PADDING + fixed;
+        for (c, w) in commands.iter().zip(&widths).skip(folded) {
+            row = row.push(
+                command(c.label, c.message.clone())
+                    .on_press_maybe(c.enabled.then(|| c.message.clone())),
+            );
+            x += CONTEXT_GAP + w;
+        }
+        if folded > 0 {
+            let labels: Vec<_> = commands.iter().take(folded).map(|c| c.label).collect();
+            row = row.push(hover_hint(
+                button(
+                    iced::widget::canvas(Glyph(Icon::More, true))
+                        .width(24)
+                        .height(24),
+                )
+                .width(MORE_WIDTH)
+                .padding(3)
+                .style(control(false))
+                .on_press(Message::ContextMenu(super::context_menu::Action::Open(
+                    super::context_menu::Page::More(folded),
+                    x + CONTEXT_GAP,
+                ))),
+                format!("More: {}", labels.join(", ")),
+                tooltip::Position::Bottom,
+            ));
+        }
+        if let Some((full, short)) = arrange {
+            let group = if compact { short } else { full };
+            row = row.push(
+                container(self.arrange_group(CONTEXT_PADDING + width - group, compact))
+                    .width(Length::Fill)
+                    .align_right(Length::Fill),
+            );
+        }
+        row.into()
+    }
+
+    /// Options for the current tool, and the usage hint shown on the tool name.
+    fn tool_options(&self) -> (Vec<Element<'_, Message>>, &'static str) {
+        match self.tool {
+            tool if tool.bond_preset().is_some() => (
+                vec![
+                    crate::appearance::pick_list(BondPreset::ALL, tool.bond_preset(), |preset| {
+                        Message::Tool(match preset {
+                            BondPreset::Single => Tool::Bond(1),
+                            BondPreset::Double => Tool::Bond(2),
+                            BondPreset::Triple => Tool::Bond(3),
+                            BondPreset::Wedge => Tool::Wedge,
+                            BondPreset::HashedWedge => Tool::Hash,
+                            BondPreset::Wavy => Tool::Wavy,
+                            other => Tool::StyledBond(other),
                         })
-                        .size(11),
+                    })
+                    .text_size(12)
+                    .padding(5)
+                    .into(),
+                    self.bond_constraints(),
+                ],
+                tool.hint(),
+            ),
+            // The tool name shows the mode; the palette switches it.
+            Tool::Chain(mode) => (
+                vec![
+                    hover_hint(
+                        row![
+                            text(if mode == reshiki::chains::ChainMode::Snaking {
+                                "Max atoms"
+                            } else {
+                                "Atoms"
+                            })
+                            .size(11),
+                            crate::appearance::text_input("Auto", &self.chain_atoms_input)
+                                .on_input(Message::ChainAtoms)
+                                .width(49)
+                                .size(12)
+                                .padding(5),
+                        ]
+                        .spacing(4)
+                        .align_y(Alignment::Center),
+                        "Includes attachment atoms · Auto places 6 atoms per click",
+                        tooltip::Position::Bottom,
                     )
-                    .push(
-                        crate::appearance::text_input("Auto", &self.chain_atoms_input)
-                            .on_input(Message::ChainAtoms)
-                            .width(49)
-                            .size(12)
-                            .padding(5),
-                    )
-                    .push(text("Angle").size(11))
-                    .push(
+                    .into(),
+                    row![
+                        text("Angle").size(11),
                         crate::appearance::text_input("120", &self.chain_angle_input)
                             .on_input(Message::ChainAngle)
                             .width(44)
                             .size(12)
                             .padding(5),
-                    )
-                    .push(text("°").size(11))
-                    .push(text("Includes attachment atoms").size(10).style(muted_text));
-            }
+                        text("°").size(11),
+                    ]
+                    .spacing(4)
+                    .align_y(Alignment::Center)
+                    .into(),
+                    self.bond_constraints(),
+                ],
+                "Ctrl bends · Shift flips start · Alt frees · Auto click: 6 atoms",
+            ),
             Tool::Graphic(kind) => {
+                use reshiki::graphics::GraphicKind as G;
                 let chooser: Element<'_, Message> = match kind {
-                    reshiki::graphics::GraphicKind::Symbol(k) => crate::appearance::pick_list(
+                    G::Symbol(k) => crate::appearance::pick_list(
                         reshiki::scientific::SymbolKind::ALL,
                         Some(k),
-                        |k| Message::ScientificKind(reshiki::graphics::GraphicKind::Symbol(k)),
+                        |k| Message::ScientificKind(G::Symbol(k)),
                     )
                     .text_size(12)
                     .padding(5)
                     .into(),
-                    reshiki::graphics::GraphicKind::Orbital(k) => crate::appearance::pick_list(
+                    G::Orbital(k) => crate::appearance::pick_list(
                         reshiki::scientific::OrbitalKind::ALL,
                         Some(k),
-                        |k| Message::ScientificKind(reshiki::graphics::GraphicKind::Orbital(k)),
+                        |k| Message::ScientificKind(G::Orbital(k)),
                     )
                     .text_size(12)
                     .padding(5)
                     .into(),
-                    _ => crate::appearance::pick_list(
-                        reshiki::graphics::GraphicKind::DRAWABLE,
-                        Some(kind),
-                        |kind| Message::Tool(Tool::Graphic(kind)),
-                    )
+                    _ => crate::appearance::pick_list(G::DRAWABLE, Some(kind), |kind| {
+                        Message::Tool(Tool::Graphic(kind))
+                    })
                     .text_size(12)
                     .padding(5)
                     .into(),
                 };
-                options = options.push(chooser).push(
-                    text(match kind {
-                        reshiki::graphics::GraphicKind::Symbol(_) => {
-                            "Click to place/attach · Drag to position · Escape cancels"
-                        }
-                        reshiki::graphics::GraphicKind::Orbital(_) => {
+                (
+                    vec![chooser],
+                    match kind {
+                        G::Symbol(_) => "Click to place/attach · Drag to position · Escape cancels",
+                        G::Orbital(_) => {
                             "Drag from node · Click for default size · Shift snaps to 15°"
                         }
                         _ => "Drag to draw · Shift constrains · Escape cancels",
-                    })
-                    .size(11)
-                    .style(muted_text),
-                );
+                    },
+                )
             }
-            Tool::EditPoints => {
-                options = options
-                    .push(text("Drag anchors or control points").size(11))
-                    .push(command("Done", Message::Tool(Tool::Select)));
-            }
-            Tool::Template => {
-                options = options
-                    .push(
-                        text(
-                            self.templates
-                                .library
-                                .get(self.template_index)
-                                .map(|t| t.name.as_str())
-                                .unwrap_or("Template"),
-                        )
-                        .size(12),
+            Tool::EditPoints => (
+                vec![command("Done", Message::Tool(Tool::Select)).into()],
+                "Drag anchors or control points · Escape finishes",
+            ),
+            Tool::Template => (
+                vec![
+                    text(
+                        self.templates
+                            .library
+                            .get(self.template_index)
+                            .map(|t| t.name.as_str())
+                            .unwrap_or("Template"),
                     )
-                    .push(
-                        text("Click to place / attach · Drag to orient")
-                            .size(11)
-                            .style(muted_text),
-                    )
-                    .push(command("Cancel", Message::Tool(Tool::Select)));
-            }
+                    .size(12)
+                    .into(),
+                    command("Cancel", Message::Tool(Tool::Select)).into(),
+                ],
+                "Click to place / attach · Drag to orient",
+            ),
             Tool::Ring | Tool::RingPreset(_) => {
+                use reshiki::rings::Preset;
                 let preset = if let Tool::RingPreset(p) = self.tool {
                     p
                 } else {
-                    reshiki::rings::Preset::Regular
+                    Preset::Regular
                 };
-                options = options.push(
-                    crate::appearance::pick_list(reshiki::rings::Preset::ALL, Some(preset), |p| {
-                        Message::Tool(if p == reshiki::rings::Preset::Regular {
+                let mut options = vec![
+                    crate::appearance::pick_list(Preset::ALL, Some(preset), |p| {
+                        Message::Tool(if p == Preset::Regular {
                             Tool::Ring
                         } else {
                             Tool::RingPreset(p)
                         })
                     })
                     .text_size(12)
-                    .padding(5),
-                );
-                if preset == reshiki::rings::Preset::Regular {
-                    options = options
-                        .push(text("Size").size(11).style(muted_text))
-                        .push(
-                            crate::appearance::pick_list(
-                                [3_u8, 4, 5, 6, 7, 8],
-                                Some(self.ring_size),
-                                Message::RingSize,
-                            )
-                            .text_size(12)
-                            .padding(5),
-                        )
-                        .push(
-                            checkbox(self.aromatic_ring)
-                                .label("Aromatic · Shift+R")
-                                .on_toggle(Message::AromaticRing)
-                                .size(14)
-                                .text_size(12),
-                        )
-                        .push(
-                            text("Click / drag to attach · Shift+R keeps ring size")
-                                .size(11)
-                                .style(muted_text),
-                        );
-                } else {
-                    options = options.push(
-                        text(if preset == reshiki::rings::Preset::Cyclopentadiene {
+                    .padding(5)
+                    .into(),
+                ];
+                if preset != Preset::Regular {
+                    return (
+                        options,
+                        if preset == Preset::Cyclopentadiene {
                             "Click / drag · Alt connects · Shift swaps double bonds"
                         } else {
                             "Click / drag · Alt connects by a bond"
-                        })
-                        .size(11)
-                        .style(muted_text),
+                        },
                     );
                 }
-            }
-            Tool::Arrow => {
-                options = options
-                    .push(
-                        crate::appearance::pick_list(
-                            reshiki::arrows::Preset::ALL,
-                            Some(self.arrow_style),
-                            Message::ArrowStyle,
-                        )
+                options.extend([
+                    text("Size").size(11).style(muted_text).into(),
+                    crate::appearance::pick_list(
+                        [3_u8, 4, 5, 6, 7, 8],
+                        Some(self.ring_size),
+                        Message::RingSize,
+                    )
+                    .text_size(12)
+                    .padding(5)
+                    .into(),
+                    checkbox(self.aromatic_ring)
+                        .label("Aromatic · Shift+R")
+                        .on_toggle(Message::AromaticRing)
+                        .size(14)
                         .text_size(12)
-                        .padding(5),
+                        .into(),
+                ]);
+                (options, "Click / drag to attach · Shift+R keeps ring size")
+            }
+            Tool::Arrow => (
+                vec![
+                    crate::appearance::pick_list(
+                        reshiki::arrows::Preset::ALL,
+                        Some(self.arrow_style),
+                        Message::ArrowStyle,
                     )
-                    .push(
-                        text("Click to place / change · Click again to switch · Drag to draw")
-                            .size(11)
-                            .style(muted_text),
-                    );
-            }
-            Tool::Atom => {
-                options = options
-                    .push(text(format!("Element: {}", self.element)).size(12))
-                    .push(
-                        crate::appearance::text_input("Symbol: Si, Na, Fe…", &self.custom_element)
-                            .on_input(Message::CustomElement)
-                            .on_submit(Message::ApplyElement)
-                            .size(12)
-                            .padding(6)
-                            .width(160),
-                    )
-                    .push(command("Use", Message::ApplyElement))
-                    .push(
-                        text("Click to replace · Drag from an atom to add with a bond")
-                            .size(11)
-                            .style(muted_text),
-                    );
-            }
-            Tool::Text => {
-                options = options.push(
-                    text("Click an atom to name it · Click empty space for a caption · Escape cancels")
-                        .size(11)
-                        .style(muted_text),
-                );
-            }
+                    .text_size(12)
+                    .padding(5)
+                    .into(),
+                ],
+                "Click to place / change · Click again to switch · Drag to draw",
+            ),
+            Tool::Atom => (
+                vec![
+                    text(format!("Element: {}", self.element)).size(12).into(),
+                    crate::appearance::text_input("Symbol: Si, Na, Fe…", &self.custom_element)
+                        .on_input(Message::CustomElement)
+                        .on_submit(Message::ApplyElement)
+                        .size(12)
+                        .padding(6)
+                        .width(160)
+                        .into(),
+                    command("Use", Message::ApplyElement).into(),
+                ],
+                "Click to replace · Drag from an atom to add with a bond",
+            ),
+            Tool::Text => (
+                vec![],
+                "Click an atom to name it · Click empty space for a caption · Escape cancels",
+            ),
             Tool::Tilt => {
-                options = options.spacing(4);
                 let enabled = crate::canvas::tilt::available(&self.doc, &self.selected);
+                let mut tilts = row![].spacing(4);
                 for (label, transform) in [
                     ("X −15°", reshiki::editing::Transform::TiltX(-15.)),
                     ("X +15°", reshiki::editing::Transform::TiltX(15.)),
                     ("Y −15°", reshiki::editing::Transform::TiltY(-15.)),
                     ("Y +15°", reshiki::editing::Transform::TiltY(15.)),
                 ] {
-                    options = options.push(
+                    tilts = tilts.push(
                         command(label, Message::Transform(transform))
                             .on_press_maybe(enabled.then_some(Message::Transform(transform))),
                     );
                 }
-                options = options
-                    .push(hover_hint(
-                        command(
-                            "Front bonds",
-                            Message::InspectorAction(super::inspector::Action::DepthBonds),
+                let depth = Message::InspectorAction(super::inspector::Action::DepthBonds);
+                (
+                    vec![
+                        tilts.into(),
+                        hover_hint(
+                            command("Front bonds", depth.clone())
+                                .on_press_maybe(enabled.then_some(depth)),
+                            "Emphasize front bonds using the retained projection depth",
+                            tooltip::Position::Bottom,
                         )
-                        .on_press_maybe(enabled.then_some(
-                            Message::InspectorAction(super::inspector::Action::DepthBonds),
-                        )),
-                        "Emphasize front bonds using the retained projection depth",
-                        tooltip::Position::Bottom,
-                    ))
-                    .push(text("Drag to tilt · Shift: 15°").size(11).style(muted_text))
-                    .push(command("Done", Message::Tool(Tool::Select)));
-            }
-            Tool::Select | Tool::Lasso if !self.selected.is_empty() => {
-                options = options
-                    .push(hover_hint(
-                        text(self.selection_summary()).size(11).style(muted_text),
-                        "Click a bond's middle to select it; Shift-click adds. Cmd/Ctrl+A selects the whole drawing.",
-                        tooltip::Position::Bottom,
-                    ))
-                    .push(command("Cut", Message::Copy(true)))
-                    .push(command("Copy", Message::Copy(false)))
-                    .push(command("Paste", Message::Paste))
-                    .push(command("Duplicate", Message::Duplicate))
-                    .push(command("Move & attach…", Message::Join(super::joining::Action::Begin))
-                        .on_press_maybe(self.selected.iter().any(|id| self.doc.atom(*id).is_some()).then_some(Message::Join(super::joining::Action::Begin))))
-                    .push(
-                        command("Group", Message::Group)
-                            .on_press_maybe(self.can_group().then_some(Message::Group)),
-                    );
-                if !self.doc.outer_selected_groups(&self.selected).is_empty() {
-                    options = options.push(command("Ungroup", Message::Ungroup));
-                }
+                        .into(),
+                        command("Done", Message::Tool(Tool::Select)).into(),
+                    ],
+                    "Drag to tilt · Shift: 15°",
+                )
             }
             Tool::Select | Tool::Lasso => {
-                options = options.push(
-                    text(if self.tool == Tool::Lasso {
+                let mut options = Vec::new();
+                if !self.selected.is_empty() {
+                    options.push(
+                        hover_hint(
+                            text(self.selection_summary()).size(11).style(muted_text),
+                            "Click a bond's middle to select it; Shift-click adds. Cmd/Ctrl+A selects the whole drawing.",
+                            tooltip::Position::Bottom,
+                        )
+                        .into(),
+                    );
+                }
+                // Keep bonded-movement controls in this fixed-height row: a
+                // second row would move the canvas between the two clicks
+                // used to select a molecule.
+                if self.moving_bonded_selection() {
+                    options.push(divider());
+                    options.push(
+                        hover_hint(
+                            self.bond_constraints(),
+                            "Bonded movement follows Length / Angles · Option/Alt: free movement",
+                            tooltip::Position::Bottom,
+                        )
+                        .into(),
+                    );
+                }
+                (
+                    options,
+                    if self.tool == Tool::Lasso {
                         "Draw around objects · Shift adds · Option drag removes"
                     } else {
                         "Double-click selects molecule · Shift-click adds"
-                    })
-                    .size(11)
-                    .style(muted_text),
-                );
-                options = options.push(command("Paste", Message::Paste));
+                    },
+                )
             }
-            _ => {
-                options = options.push(text(self.tool.hint()).size(11).style(muted_text));
-            }
+            _ => (vec![], self.tool.hint()),
         }
-        use super::document_styles::Choice;
-        use reshiki::document_styles::Preset;
-        let current = Preset::ALL
-            .into_iter()
-            .find(|p| p.style() == self.doc.drawing_style)
-            .map(Choice::Journal)
-            .unwrap_or(Choice::Custom);
-        let presets = row![]
-            .spacing(10)
-            .align_y(Alignment::Center)
-            .push(
-                crate::appearance::pick_list(
-                    Preset::ALL
-                        .into_iter()
-                        .map(Choice::Journal)
-                        .chain([Choice::Details])
-                        .collect::<Vec<_>>(),
-                    Some(current),
-                    Message::QuickDrawingStyle,
-                )
-                .text_size(11)
-                .padding([5, 8])
-                .handle(pick_list::Handle::Arrow {
-                    size: Some(iced::Pixels(9.)),
-                })
-                .style(|theme, status| {
-                    let status = match status {
-                        pick_list::Status::Active => button::Status::Active,
-                        pick_list::Status::Hovered => button::Status::Hovered,
-                        pick_list::Status::Opened { .. } => button::Status::Pressed,
-                    };
-                    let style = control(true)(theme, status);
-                    pick_list::Style {
-                        text_color: style.text_color,
-                        placeholder_color: style.text_color,
-                        handle_color: style.text_color,
-                        background: style.background.unwrap_or(Color::TRANSPARENT.into()),
-                        border: style.border,
-                    }
-                }),
-            )
-            .push(
-                crate::appearance::pick_list(
-                    self.theme_choices().0,
-                    Some(self.theme_choices().1),
-                    |choice| Message::ThemeFile(super::theme_files::Action::Choose(choice)),
-                )
-                .text_size(11)
-                .padding([5, 8]),
-            )
-            .push(hover_hint(
-                button(
-                    iced::widget::canvas(Glyph(
-                        if self.doc.canvas_theme.is_dark() {
-                            Icon::Moon
-                        } else {
-                            Icon::Sun
-                        },
-                        true,
-                    ))
-                    .width(24)
-                    .height(24),
-                )
-                .padding(3)
-                .style(control(false))
-                .on_press(Message::CanvasTheme(self.doc.canvas_theme.toggled())),
-                if self.doc.canvas_theme.is_dark() {
-                    "Dark canvas · Switch to light"
-                } else {
-                    "Light canvas · Switch to dark"
-                },
-                tooltip::Position::Bottom,
-            ));
-        let moving_bonded_selection = matches!(self.tool, Tool::Select | Tool::Lasso) && {
-            let selected = self.doc.expand_abbreviation_selection(&self.selected);
-            self.doc
-                .bonds
-                .iter()
-                .any(|bond| selected.contains(&bond.a) != selected.contains(&bond.b))
-        };
-        if (matches!(self.tool, Tool::Chain(_))
-            || self.tool.bond_preset().is_some()
-            || moving_bonded_selection)
-            && ((self.bond_drawing.length - self.doc.drawing_style.bond_length_world).abs() > 0.001
-                || self.chain_drawing.angle != 120.
-                || !self.bond_drawing.fixed_length
-                || !self.bond_drawing.fixed_angles)
-        {
-            options = options.push(hover_hint(
-                command("Reset bonds", Message::ResetBondDrawing),
-                "Restore this document's bond length and drawing constraints",
-                tooltip::Position::Bottom,
-            ));
-        }
-        // Selection can reveal bonded-movement controls. Keep them in the same
-        // fixed-height row: a second row moves the canvas between the two
-        // clicks used to select a molecule.
-        if moving_bonded_selection {
-            options = options.push(divider()).push(self.bond_constraints()).push(
-                text("Bonded movement follows Length / Angles · Option/Alt: free movement")
-                    .size(10)
-                    .style(muted_text),
-            );
-        }
-        // Keep page controls visible even when selection/tool actions overflow.
-        let options = row![
-            scrollable(options)
-                .direction(scrollable::Direction::Horizontal(
-                    scrollable::Scrollbar::new().width(3).scroller_width(3),
-                ))
-                .width(Length::Fill),
-            presets,
-        ]
-        .spacing(12)
-        .align_y(Alignment::Center);
-        if matches!(self.tool, Tool::Chain(_)) {
-            return container(
-                column![
-                    options,
-                    row![
-                        self.bond_constraints(),
-                        text("Ctrl bends · Shift flips start · Alt frees · Auto click: 6 atoms")
-                            .size(10)
-                            .style(muted_text),
-                    ]
-                    .spacing(14)
-                    .align_y(Alignment::Center)
-                ]
-                .spacing(7),
-            )
-            .padding([7, 14])
-            .style(panel)
-            .into();
-        }
-        container(options)
-            .height(46)
-            .padding([5, 14])
-            .center_y(46)
-            .style(panel)
-            .into()
     }
 
     pub(super) fn inspector_width(&self) -> f32 {
@@ -2162,13 +2141,17 @@ impl App {
                 .text_size(12)
                 .padding(5)
                 .width(132),
-                checkbox(self.appearance.object_toolbar)
-                    .label("Object toolbar")
-                    .on_toggle(|visible| Message::ObjectToolbar(
-                        super::object_toolbar::Action::Visible(visible)
-                    ))
-                    .size(14)
-                    .text_size(12),
+                hover_hint(
+                    checkbox(self.appearance.arrange_controls)
+                        .label("Arrange controls")
+                        .on_toggle(|visible| Message::ObjectToolbar(
+                            super::object_toolbar::Action::Visible(visible)
+                        ))
+                        .size(14)
+                        .text_size(12),
+                    "Align, distribute, order, flip and rotate at the right end of the Select row",
+                    tooltip::Position::Top,
+                ),
                 checkbox(self.grid)
                     .label("Grid")
                     .on_toggle(|_| Message::Grid)
@@ -2210,6 +2193,7 @@ impl App {
         let summary = self.status.lines().next().unwrap_or(&self.status);
         let message = text(summary)
             .size(11)
+            .wrapping(text::Wrapping::None)
             .style(|theme| iced::widget::text::Style {
                 color: Some(if self.error {
                     crate::appearance::readable(
@@ -2221,38 +2205,185 @@ impl App {
                     crate::appearance::muted(theme)
                 }),
             });
-        let message: Element<'_, Message> = if self.status.contains('\n') {
-            hover_hint(message, self.status.as_str(), tooltip::Position::Top).into()
-        } else {
-            message.into()
-        };
-        let left = column![message].width(Length::Fill);
-        let status = row![
-            left,
-            command(
-                if self.updates.available() {
-                    "Update available"
-                } else {
-                    concat!("v", env!("CARGO_PKG_VERSION"))
-                },
-                Message::Updates(super::updates::Action::Show(true))
-            ),
-            text(&self.autosave_status).size(10).style(muted_text),
-            text(self.selection_summary()).size(11).style(muted_text),
-            divider(),
-            command("View", Message::ToggleView).style(control(self.view_open)),
-            command("−", Message::Zoom(0.8)),
-            text(format!("{:.0}%", self.camera.zoom * 100.0))
-                .size(11)
-                .width(38)
-                .center(),
-            command("+", Message::Zoom(1.25)),
-            command("Fit", Message::Fit)
-        ]
-        .spacing(10)
-        .align_y(Alignment::Center);
+        // One line; the full text of long or multi-line messages is a tooltip.
+        let message: Element<'_, Message> =
+            if self.status.contains('\n') || text_width(summary, 11.) > 300. {
+                hover_hint(message, self.status.as_str(), tooltip::Position::Top).into()
+            } else {
+                message.into()
+            };
+        let mut status = row![container(message).width(Length::Fill).clip(true)]
+            .spacing(8)
+            .align_y(Alignment::Center);
+        if self.updates.available() {
+            status = status.push(
+                command(
+                    "Update available",
+                    Message::Updates(super::updates::Action::Show(true)),
+                )
+                .style(control(true)),
+            );
+        }
+        if !self.autosave_status.is_empty() {
+            let failed = self.autosave_status.starts_with("Recovery save failed");
+            status = status.push(hover_hint(
+                container(
+                    container(Space::new().width(7).height(7)).style(move |theme| {
+                        container::Style {
+                            background: Some(
+                                crate::appearance::themed(
+                                    theme,
+                                    if failed {
+                                        Color::from_rgb8(168, 52, 47)
+                                    } else {
+                                        Color::from_rgb8(86, 160, 132)
+                                    },
+                                )
+                                .into(),
+                            ),
+                            border: Border {
+                                radius: 4.0.into(),
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        }
+                    }),
+                )
+                .padding(5),
+                self.autosave_status.as_str(),
+                tooltip::Position::Top,
+            ));
+        }
+        let status = status
+            .extend(self.document_settings())
+            .push(divider())
+            .push(command("View", Message::ToggleView).style(control(self.view_open)))
+            .push(command("−", Message::Zoom(0.8)))
+            .push(
+                text(format!("{:.0}%", self.camera.zoom * 100.0))
+                    .size(11)
+                    .width(38)
+                    .center(),
+            )
+            .push(command("+", Message::Zoom(1.25)))
+            .push(command("Fit", Message::Fit));
         container(status).padding([6, 14]).style(panel).into()
     }
+
+    /// Journal preset, color theme and canvas light/dark: whole-document
+    /// settings, kept beside View and zoom.
+    fn document_settings(&self) -> [Element<'_, Message>; 3] {
+        use super::document_styles::Choice;
+        use reshiki::document_styles::Preset;
+        let current = Preset::ALL
+            .into_iter()
+            .find(|p| p.style() == self.doc.drawing_style)
+            .map(Choice::Journal)
+            .unwrap_or(Choice::Custom);
+        let (themes, theme) = self.theme_choices();
+        let dark = self.doc.canvas_theme.is_dark();
+        [
+            hover_hint(
+                crate::appearance::pick_list(
+                    Preset::ALL
+                        .into_iter()
+                        .map(Choice::Journal)
+                        .chain([Choice::Details])
+                        .collect::<Vec<_>>(),
+                    Some(current),
+                    Message::QuickDrawingStyle,
+                )
+                .text_size(11)
+                .padding([4, 8]),
+                "Journal preset · Bond length, line widths and label font",
+                tooltip::Position::Top,
+            )
+            .into(),
+            hover_hint(
+                crate::appearance::pick_list(themes, Some(theme), |choice| {
+                    Message::ThemeFile(super::theme_files::Action::Choose(choice))
+                })
+                .text_size(11)
+                .padding([4, 8]),
+                "Color theme",
+                tooltip::Position::Top,
+            )
+            .into(),
+            hover_hint(
+                button(
+                    iced::widget::canvas(Glyph(if dark { Icon::Moon } else { Icon::Sun }, true))
+                        .width(24)
+                        .height(24),
+                )
+                .padding(3)
+                .style(control(false))
+                .on_press(Message::CanvasTheme(self.doc.canvas_theme.toggled())),
+                if dark {
+                    "Dark canvas · Switch to light"
+                } else {
+                    "Light canvas · Switch to dark"
+                },
+                tooltip::Position::Top,
+            )
+            .into(),
+        ]
+    }
+}
+
+const CONTEXT_PADDING: f32 = 14.;
+const CONTEXT_GAP: f32 = 10.;
+const DIVIDER: f32 = 11.;
+const MORE_WIDTH: f32 = 30.;
+
+/// A context row command that can fold into the ⋯ menu.
+pub(super) struct RowCommand {
+    pub label: &'static str,
+    pub message: Message,
+    pub enabled: bool,
+}
+
+/// How many commands fold into ⋯ (from the front) and whether the arrange
+/// group collapses, so that a row with `fixed` leading content fits `width`.
+/// The group collapses only after every command has folded.
+fn fold(width: f32, fixed: f32, commands: &[f32], arrange: Option<(f32, f32)>) -> (usize, bool) {
+    let total = |folded: usize, compact: bool| {
+        fixed
+            + commands
+                .iter()
+                .skip(folded)
+                .map(|w| CONTEXT_GAP + w)
+                .sum::<f32>()
+            + if folded > 0 {
+                CONTEXT_GAP + MORE_WIDTH
+            } else {
+                0.
+            }
+            + arrange.map_or(0., |(full, short)| {
+                CONTEXT_GAP + if compact { short } else { full }
+            })
+    };
+    (0..=commands.len())
+        .map(|folded| (folded, false))
+        .chain(arrange.map(|_| (commands.len(), true)))
+        .find(|&(folded, compact)| total(folded, compact) <= width)
+        .unwrap_or((commands.len(), arrange.is_some()))
+}
+
+/// Width of one line of interface text, measured like the text widget does.
+fn text_width(label: &str, size: f32) -> f32 {
+    use iced::advanced::text::Paragraph as _;
+    iced::advanced::graphics::text::Paragraph::with_text(iced::advanced::Text {
+        content: label,
+        bounds: iced::Size::INFINITE,
+        size: iced::Pixels(size),
+        line_height: text::LineHeight::default(),
+        font: iced::Font::with_name(reshiki::style::ui_font_family()),
+        align_x: text::Alignment::Default,
+        align_y: iced::alignment::Vertical::Top,
+        shaping: text::Shaping::default(),
+        wrapping: text::Wrapping::None,
+    })
+    .min_width()
 }
 
 // Keep every hover label readable and visually consistent. Menus have their
@@ -2346,7 +2477,15 @@ pub(super) fn muted_text(theme: &Theme) -> iced::widget::text::Style {
 pub(super) fn muted() -> Color {
     Color::from_rgb8(107, 116, 127)
 }
-fn divider() -> Element<'static, Message> {
+/// The dropdown arrow used by pick lists, for buttons that open menus.
+pub(super) fn caret(size: f32) -> iced::widget::Text<'static> {
+    use iced::advanced::text::Renderer as _;
+    text(iced::Renderer::ARROW_DOWN_ICON.to_string())
+        .font(iced::Renderer::ICON_FONT)
+        .size(size)
+        .shaping(text::Shaping::Basic)
+}
+pub(super) fn divider() -> Element<'static, Message> {
     container(container(Space::new().width(1).height(20)).style(|theme| {
         crate::appearance::container(
             theme,
@@ -2510,14 +2649,10 @@ fn tool_name(tool: Tool) -> &'static str {
         Tool::Lasso => "Lasso select",
         Tool::Tilt => "3D tilt",
         Tool::Atom => "Atom label",
-        Tool::Bond(1) => "Single bond",
-        Tool::Chain(_) => "Chain",
-        Tool::Bond(2) => "Double bond",
-        Tool::Bond(_) => "Triple bond",
-        Tool::StyledBond(preset) => preset.name(),
-        Tool::Wedge => "Solid wedge",
-        Tool::Hash => "Hashed wedge",
-        Tool::Wavy => "Wavy bond",
+        Tool::Chain(reshiki::chains::ChainMode::Straight) => "Straight chain",
+        Tool::Chain(_) => "Snaking chain",
+        // The bond pick list beside it names the preset.
+        Tool::Bond(_) | Tool::StyledBond(_) | Tool::Wedge | Tool::Hash | Tool::Wavy => "Bond",
         Tool::Ring | Tool::RingPreset(_) => "Ring",
         Tool::Template => "Template",
         Tool::Arrow => "Reaction arrow",
@@ -2532,6 +2667,35 @@ fn tool_name(tool: Tool) -> &'static str {
 mod selection_tests {
     use super::*;
     use reshiki::document::{Annotation, Point};
+
+    #[test]
+    fn short_rows_fold_commands_before_collapsing_the_arrange_group() {
+        let commands = [120., 56.];
+        let arrange = Some((227., 80.));
+        // Fixed part, two commands with gaps, and the group after one gap.
+        let full = 200. + 130. + 66. + 237.;
+        assert_eq!(fold(full, 200., &commands, arrange), (0, false));
+        assert_eq!(fold(full - 1., 200., &commands, arrange), (1, false));
+        assert_eq!(fold(542., 200., &commands, arrange), (2, false));
+        assert_eq!(fold(476., 200., &commands, arrange), (2, true));
+        assert_eq!(fold(100., 200., &commands, arrange), (2, true));
+        assert_eq!(fold(300., 200., &commands, None), (2, false));
+        assert_eq!(fold(300., 0., &[], None), (0, false));
+    }
+
+    #[test]
+    fn row_commands_leave_clipboard_to_menus_and_shortcuts() {
+        let (mut app, _) = App::new();
+        app.doc = reshiki::rings::Preset::Regular.document(42., false);
+        assert!(app.context_commands().is_empty());
+        app.selected = app.doc.all_ids();
+        let labels: Vec<_> = app.context_commands().iter().map(|c| c.label).collect();
+        assert_eq!(labels, ["Move & attach…", "Group"]);
+        let _ = app.update(Message::Group);
+        let labels: Vec<_> = app.context_commands().iter().map(|c| c.label).collect();
+        assert_eq!(labels, ["Move & attach…", "Group", "Ungroup"]);
+        assert!(!app.context_commands()[1].enabled);
+    }
 
     #[test]
     fn selection_revealing_properties_keeps_targets_at_the_same_screen_position() {
