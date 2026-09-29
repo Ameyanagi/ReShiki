@@ -14,9 +14,15 @@ capture details](changes/regular-ring-safety.md). The three rejection cases,
 valid outward fusion, and Undo/Redo behavior were verified in the combined macOS
 integration application; capture provenance is recorded with the evidence.
 
+Valid neutral-phosphorus attachment and fusion across supported styled shared
+edges remain available. Matched review-correction examples and their native
+valence/preserved-bond checks are included in the validation record.
+
 | Before                                                                                                                              | After                                                                                                                                           |
 | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | ![Before: regular-ring placement creates carbon valence six and four coincident atom pairs.](images/regular-ring-safety/before.png) | ![After: invalid regular-ring placements are rejected while the original molecular graphs remain intact.](images/regular-ring-safety/after.png) |
+
+![Valid phosphorus attachment and bold double-bond fusion remain available; phosphorus bond valence is three and the original styled edge is retained.](images/regular-ring-safety/valid-attachments-after.png)
 
 ## Windows GPU rendering and nightly builds
 

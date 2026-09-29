@@ -50,7 +50,7 @@ Fixed outputs equal the input documents byte-for-byte after serialization.
 Capture provenance:
 
 - Base: `0ae0fb6a21c5e5c5b90ae66730458fda4ea2a20d` (`origin/main`).
-- Head: the implementation on `fix/regular-ring-safety` accompanying this document.
+- Original implementation: `25c8159834b6eda691d2ccc1c39904dc2becf69c`.
   Renderer operation source (`src/editing.rs`) Git blob:
   `43163e31337efd1222188ecbc45a5c5bc0471680`.
 - Platform/build: Apple Silicon macOS, Rust dev profile, native application SVG
@@ -68,6 +68,46 @@ Capture provenance:
 Reproduce with `cargo run --example regular_ring_safety_qa -- OUTPUT_DIRECTORY`.
 Use the environment/helper configuration required by the developer guide. The
 example is new in this PR; copy it unchanged into a base worktree for comparison.
+
+## Valid attachment corrections from review
+
+Neutral phosphorus uses the native strict allowed-valence check for the candidate's
+connected molecule. This restores one-bond P → three-bond P and three-bond P →
+five-bond P attachments while rejecting a result above phosphorus's allowed
+valence. Other atom capacities and the protected charge, explicit-H, and stereo
+policies are unchanged. An unrelated unfinished molecule does not block the edit.
+
+Fusion accepts supported shared-bond appearances, including bold/dashed double
+bonds and projection styles, while retaining the complete original bond. Invalid
+order/display combinations, assigned stereochemistry, drawing-defined stereo,
+overfilled carbon endpoints, and coincident vertices still reject atomically.
+
+| Before review correction                                                                                                                                                       | After review correction                                                                                                                                                                       |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ![Valid phosphorus attachment and bold double-bond fusion are both rejected without changing the two-atom inputs.](../images/regular-ring-safety/valid-attachments-before.png) | ![Phosphorus attachment succeeds with bond valence three, and bold double-bond fusion succeeds while retaining the original edge.](../images/regular-ring-safety/valid-attachments-after.png) |
+
+Inputs: [neutral phosphorus with one carbon bond](fixtures/regular-ring-safety/phosphorus-input.rsk)
+and [bold double bond](fixtures/regular-ring-safety/styled-input.rsk).
+Run `cargo run --example regular_ring_safety_qa -- OUTPUT_DIRECTORY --valid-attachments`.
+The phosphorus gesture starts at `(0, 0)` toward `(80, 0)`; the double-bond gesture
+starts at its midpoint `(0, 0)` toward `(0, 80)`. Both use a regular six-ring and
+5-world-unit hit radius. Before, both operations reject with 2 atoms / 1 bond and
+byte-identical inputs. After, phosphorus has 7 atoms / 7 bonds and bond valence 3;
+the styled ring has 6 atoms / 6 bonds and an unchanged shared bond.
+
+These are matched application-renderer examples, not native desktop screenshots.
+The earlier source is `eea37c3cde643d519f4f9cb459b2b14fcc7b738a`, a prior version
+within this PR, not its `main` base. The corrected source is
+`befcf1460a50fe7fab02138615e57e590a419642`; its `src/editing.rs` blob is
+`3aa53a944ac037c3739c428361d9c8c434fa348a`. Both use the same expanded
+example harness, source drawings, default publication style, white background,
+320 × 245 panel with `viewBox="-110 -100 260 210"`, and 640 × 350 PNG output.
+Captured on Apple Silicon macOS 26.5.1 using Rust dev-profile application SVG
+rendering and resvg on September 29, 2026. Only `src/editing.rs` differs in the
+production renderer source for these two captures; it was rebuilt sequentially
+and the corrected file restored byte-for-byte. Both unedited PNGs were inspected
+for legibility and clipping. The native desktop checks below precede these two
+corrections and are not claimed as desktop validation of the restored paths.
 
 ## Native desktop interaction review
 
@@ -101,17 +141,25 @@ the automated canvas regression below.
 
 ## Validation
 
-- Eight graph regressions cover atom and bond endpoint capacity, protected
+- Ten graph regressions cover atom and bond endpoint capacity, protected
   state/explicit H, drawing-defined stereo versus projection, reaction membership,
   exact and nearby duplicate vertices, every supported ring size, shared double
-  bonds, valid outward fusion, native save/reopen, and invalid geometry.
+  bonds, valid outward fusion, native save/reopen, and invalid geometry. Review
+  regressions add neutral-P permitted/excess valence and styled shared-edge
+  preservation versus invalid appearance or stereo.
 - All fourteen existing aromatic-fusion regressions pass.
 - App/input regressions cover rejected placement with selection/history/Redo
   preserved, valid placement as one Undo step, and matching drag preview/commit
-  at zoom 0.5, 1, and 2.5.
+  at zoom 0.5, 1, and 2.5, including neutral phosphorus and bold/dashed double
+  bonds (15 gesture cases total).
 - Real desktop interaction checks pass for all three rejection cases, successful
   outward fusion, Undo, and preservation of Redo, with the combined-source
   provenance and preview-capture limitation recorded above.
+- The review correction passed all 10 regular-ring graph tests, 14 aromatic-fusion
+  tests, and both app/input regressions on macOS with the required native helper,
+  isolated Cargo target, `CARGO_INCREMENTAL=0`, and one build job. Normal formatting,
+  all-target/all-feature Clippy and Cargo check hooks passed. The documentation
+  build verified 6,621 local links/assets and all 750 palette colors.
 
 Release caption: **Regular rings reject saturated/protected attachment sites and
 coincident duplicate vertices without changing your drawing.** Reuse the after
