@@ -25,7 +25,9 @@ displayed dimensions can differ. Width and height are solved against the same
 bounds used by the selection box; impossible sizes, such as enlarging a lone
 caption without changing its font, show an error without modifying history.
 Unchanged displayed dimensions, full turns, zero tilt, and 100% scale are
-no-ops. Groups, hidden abbreviation atoms, and native document data continue
+no-ops. If a caption draft is open, invalid or unchanged Apply preserves that
+draft and its history. A valid Apply commits the caption first, then applies
+one transform Undo step. Groups, hidden abbreviation atoms, and native document data continue
 through the existing transform APIs. Partial molecular selections retain the
 existing boundary stereochemistry invalidation behavior.
 
@@ -113,7 +115,11 @@ physical dimensions with and without proportional locking, crossing fixed
 labels, impossible and zero-extent sizes, non-finite and invalid input,
 unchanged-value history, selection and Undo refresh, and native-engine
 tetrahedral/alkene InChIKey preservation. The opt-in renderer test covers input,
-Enter, Apply routing, and compact layout.
+Enter, Apply routing, and compact layout. A later command-order regression also
+checks pending caption text, formatting, selection, revision, draft history,
+and drawing Redo after invalid/no-op Apply, plus valid caption/transform Undo
+and Redo. This correction does not change the captured control layout or
+molecular geometry; its evidence is the focused application-state test.
 
 In the debug build, explicit width Apply took 17 ms for six selected atoms in
 a 1000-atom drawing, 261 ms for all 1000 atoms, and 163 ms for the inward-label

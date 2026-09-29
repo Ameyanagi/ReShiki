@@ -79,7 +79,7 @@ impl App {
             self.autosaved_revision = None;
         }
     }
-    fn inline_candidate(&self) -> Result<Document, String> {
+    pub(super) fn inline_candidate(&self) -> Result<Document, String> {
         let Some(state) = &self.inline_text else {
             return Ok(self.doc.clone());
         };
@@ -608,7 +608,6 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::IntegralGroup(_)
             | Message::AddFrame(_)
             | Message::Transform(_)
-            | Message::NumericTransform(super::numeric_transforms::Action::Apply(_))
             | Message::Arrange(_)
             | Message::Clean
             | Message::Analyze

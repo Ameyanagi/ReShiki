@@ -319,6 +319,31 @@ impl App {
         self.numeric_transforms.dimensions = (width, height);
     }
 
+    // Validate against the caption that would be committed, without ending its
+    // draft or consuming history for invalid and unchanged transforms.
+    fn numeric_transform_candidate(&self, field: Field) -> Result<Option<Document>, String> {
+        let source = self.inline_candidate()?;
+        let selected = if self.inline_text.is_some() {
+            let id = self.inline_label_id().unwrap_or_else(|| self.doc.next_id());
+            source
+                .annotations
+                .iter()
+                .filter(|a| a.id == id)
+                .map(|a| a.id)
+                .collect()
+        } else {
+            self.selected.clone()
+        };
+        let document = transformed(
+            &source,
+            &selected,
+            field,
+            self.numeric_transforms.value(field),
+            self.numeric_transforms.proportional,
+        )?;
+        Ok((document != source).then_some(document))
+    }
+
     pub(super) fn numeric_transform_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Input(field, input) => {
@@ -326,33 +351,30 @@ impl App {
                 self.numeric_transforms.error = None;
             }
             Action::Proportional(lock) => self.numeric_transforms.proportional = lock,
-            Action::Apply(field) => {
-                match transformed(
-                    &self.doc,
-                    &self.selected,
-                    field,
-                    self.numeric_transforms.value(field),
-                    self.numeric_transforms.proportional,
-                ) {
-                    Ok(document) => {
-                        self.numeric_transforms.error = None;
-                        self.numeric_transforms.key = None;
-                        self.error = false;
-                        self.status = if document == self.doc {
-                            "No transform needed".into()
-                        } else {
-                            "Drawing updated".into()
-                        };
+            Action::Apply(field) => match self.numeric_transform_candidate(field) {
+                Ok(document) => {
+                    if document.is_some() && !self.finish_inline(true) {
+                        return Task::none();
+                    }
+                    self.numeric_transforms.error = None;
+                    self.numeric_transforms.key = None;
+                    self.error = false;
+                    self.status = if document.is_none() {
+                        "No transform needed".into()
+                    } else {
+                        "Drawing updated".into()
+                    };
+                    if let Some(document) = document {
                         let before = std::mem::replace(&mut self.doc, document);
                         self.changed(before);
                     }
-                    Err(error) => {
-                        self.status = error.clone();
-                        self.error = true;
-                        self.numeric_transforms.error = Some(error);
-                    }
                 }
-            }
+                Err(error) => {
+                    self.status = error.clone();
+                    self.error = true;
+                    self.numeric_transforms.error = Some(error);
+                }
+            },
         }
         Task::none()
     }
@@ -568,6 +590,84 @@ mod tests {
             assert_eq!(app.doc, original, "Displayed rounded sizes are no-ops");
             assert!(!app.history.can_undo());
         }
+    }
+
+    #[test]
+    fn numeric_apply_preserves_caption_drafts_until_a_valid_change() {
+        use iced::widget::text_editor::{Action as TextAction, Edit as TextEdit};
+        for (field, input, invalid) in [
+            (Field::Width, "NaN", true),
+            (Field::Width, "0", true),
+            (Field::Width, "1000", true),
+            (Field::Scale, "100", false),
+            (Field::Rotation, "360", false),
+        ] {
+            let mut app = fixture();
+            let original = app.doc.clone();
+            apply(&mut app, Field::Scale, "125");
+            let redo = app.doc.clone();
+            let _ = app.update(Message::Undo);
+            let id = app.doc.annotations[0].id;
+            let _ = app.update(Message::InlineText(
+                super::super::inline_text::Action::Begin(Some(id), Point::default()),
+            ));
+            let _ = app.update(Message::CaptionAction(TextAction::Edit(TextEdit::Paste(
+                " draft".to_owned().into(),
+            ))));
+            let draft = app.caption.clone();
+            let format = app.caption_format.clone();
+            let revision = app.revision;
+            let draft_history = app.text_history_available(false);
+            apply(&mut app, field, input);
+            assert_eq!(app.error, invalid, "{field:?}: {}", app.status);
+            assert_eq!(app.doc, original);
+            assert_eq!(app.caption, draft);
+            assert_eq!(app.caption_editor.text(), draft);
+            assert_eq!(app.caption_format, format);
+            assert_eq!(app.revision, revision);
+            assert_eq!(app.text_history_available(false), draft_history);
+            assert!(app.inline_text.is_some());
+            assert_eq!(app.selected, vec![id]);
+            assert!(!app.history.can_undo());
+            assert!(app.history.can_redo());
+            let _ = app.update(Message::InlineText(
+                super::super::inline_text::Action::Finish(false),
+            ));
+            let _ = app.update(Message::Redo);
+            assert_eq!(app.doc, redo);
+        }
+        let mut app = fixture();
+        let original = app.doc.clone();
+        let id = app.doc.annotations[0].id;
+        let _ = app.update(Message::InlineText(
+            super::super::inline_text::Action::Begin(Some(id), Point::default()),
+        ));
+        let _ = app.update(Message::CaptionAction(TextAction::Edit(TextEdit::Paste(
+            " draft".to_owned().into(),
+        ))));
+        let mut committed = original.clone();
+        committed.annotations[0].text = app.caption.clone();
+        committed.annotations[0].format = app.caption_format.clone();
+        apply(&mut app, Field::Scale, "125");
+        assert!(!app.error, "{}", app.status);
+        assert!(app.inline_text.is_none());
+        assert_eq!(app.doc.annotations[0].text, committed.annotations[0].text);
+        assert_ne!(
+            app.doc.annotations[0].position,
+            committed.annotations[0].position
+        );
+        let transformed = app.doc.clone();
+        let _ = app.update(Message::Undo);
+        assert_eq!(
+            app.doc, committed,
+            "Transform is one Undo step after committing the caption"
+        );
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, original);
+        assert!(!app.history.can_undo());
+        let _ = app.update(Message::Redo);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc, transformed);
     }
 
     #[test]
