@@ -315,12 +315,13 @@ async fn fetch(channel: Channel) -> Result<Release, String> {
 
 enum FetchError {
     Unavailable(String),
+    Rejected(String),
     TooLarge,
 }
 impl FetchError {
     fn message(self) -> String {
         match self {
-            Self::Unavailable(message) => message,
+            Self::Unavailable(message) | Self::Rejected(message) => message,
             Self::TooLarge => "The release response was too large.".into(),
         }
     }
@@ -335,17 +336,27 @@ async fn fetch_bytes(client: &reqwest::Client, url: &str) -> Result<Vec<u8>, Fet
         .map_err(|_| {
             FetchError::Unavailable("Could not reach GitHub. Try again when you are online.".into())
         })?;
-    if !response.status().is_success() {
-        return Err(FetchError::Unavailable(
-            if matches!(response.status().as_u16(), 403 | 429) {
-                "GitHub's request limit was reached. Please try again later.".into()
+    let status = response.status();
+    if !status.is_success() {
+        if matches!(status.as_u16(), 404 | 410) {
+            return Err(FetchError::Rejected(
+                "The selected release is no longer available. Check for updates again.".into(),
+            ));
+        }
+        if matches!(status.as_u16(), 403 | 429) {
+            return Err(FetchError::Unavailable(
+                "GitHub's request limit was reached. Please try again later.".into(),
+            ));
+        }
+        let message = format!("Update check unavailable (HTTP {status}). Try again later.");
+        return Err(
+            if status.is_server_error() || status == reqwest::StatusCode::REQUEST_TIMEOUT {
+                FetchError::Unavailable(message)
             } else {
-                format!(
-                    "Update check unavailable (HTTP {}). Try again later.",
-                    response.status()
-                )
+                // Other client errors and redirects are not temporary outages.
+                FetchError::Rejected(message)
             },
-        ));
+        );
     }
     let mut bytes = Vec::new();
     while let Some(chunk) = response
@@ -644,27 +655,95 @@ mod tests {
             ("linux", "aarch64"),
             ("linux", "x86_64"),
         ] {
-            for failure in ["Offline", "HTTP 403", "HTTP 429", "HTTP 503"] {
-                let opened = std::cell::RefCell::new(None);
-                open_nightly_download_with(
-                    release(NIGHTLY),
-                    os,
-                    arch,
-                    async |url| {
-                        assert_eq!(url, format!("{API}/tags/nightly-{NIGHTLY}"));
-                        Err(FetchError::Unavailable(failure.into()))
-                    },
-                    async |url| {
-                        opened.replace(Some(url));
-                        Ok(())
-                    },
-                )
+            let opened = std::cell::RefCell::new(None);
+            open_nightly_download_with(
+                release(NIGHTLY),
+                os,
+                arch,
+                async |url| {
+                    assert_eq!(url, format!("{API}/tags/nightly-{NIGHTLY}"));
+                    Err(FetchError::Unavailable("Offline".into()))
+                },
+                async |url| {
+                    opened.replace(Some(url));
+                    Ok(())
+                },
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                opened.into_inner(),
+                Some(release(NIGHTLY).portable_url(os, arch).unwrap())
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn nightly_downloads_only_fall_back_for_transient_http_responses() {
+        use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+
+        let client = reqwest::Client::builder()
+            .no_proxy()
+            .redirect(reqwest::redirect::Policy::none())
+            .timeout(Duration::from_secs(5))
+            .build()
+            .unwrap();
+        for status in [302, 400, 401, 403, 404, 408, 410, 429, 500, 503] {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let local_url = format!("http://{}/release", listener.local_addr().unwrap());
+            let server = tokio::spawn(async move {
+                tokio::time::timeout(Duration::from_secs(10), async move {
+                    let (stream, _) = listener.accept().await.unwrap();
+                    let mut stream = tokio::io::BufReader::new(stream);
+                    loop {
+                        let mut line = String::new();
+                        assert_ne!(stream.read_line(&mut line).await.unwrap(), 0);
+                        if line == "\r\n" {
+                            break;
+                        }
+                    }
+                    stream
+                        .get_mut()
+                        .write_all(
+                            format!("HTTP/1.1 {status} Test\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                                .as_bytes(),
+                        )
+                        .await
+                        .unwrap();
+                })
                 .await
-                .unwrap();
+                .expect("Local release response must finish promptly");
+            });
+            let opened = std::cell::RefCell::new(None);
+            let result = open_nightly_download_with(
+                release(NIGHTLY),
+                "windows",
+                "x86_64",
+                async |url| {
+                    assert_eq!(url, format!("{API}/tags/nightly-{NIGHTLY}"));
+                    fetch_bytes(&client, &local_url).await
+                },
+                async |url| {
+                    opened.replace(Some(url));
+                    Ok(())
+                },
+            )
+            .await;
+            server.await.unwrap();
+            if matches!(status, 403 | 408 | 429 | 500 | 503) {
+                result.unwrap();
                 assert_eq!(
                     opened.into_inner(),
-                    Some(release(NIGHTLY).portable_url(os, arch).unwrap())
+                    Some(release(NIGHTLY).portable_url("windows", "x86_64").unwrap())
                 );
+            } else {
+                let error = result.unwrap_err();
+                if matches!(status, 404 | 410) {
+                    assert!(error.contains("release is no longer available"));
+                } else {
+                    assert!(error.contains(&status.to_string()));
+                }
+                assert_eq!(opened.into_inner(), None, "HTTP {status} opened a browser");
             }
         }
     }
