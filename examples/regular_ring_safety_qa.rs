@@ -32,35 +32,63 @@ fn main() -> anyhow::Result<()> {
     let a = ring.atom(ring.bonds[0].a).unwrap().position;
     let b = ring.atom(ring.bonds[0].b).unwrap().position;
     let midpoint = Point::new((a.x + b.x) / 2., (a.y + b.y) / 2.);
-    let mut svg = String::from(
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"960\" height=\"350\" viewBox=\"0 0 960 350\"><rect width=\"960\" height=\"350\" fill=\"white\"/>",
+    let valid_attachments = std::env::args().nth(2).as_deref() == Some("--valid-attachments");
+    let cases = if valid_attachments {
+        let mut phosphorus = Document::default();
+        let p = phosphorus.add_atom("P", Point::default());
+        let c = phosphorus.add_atom("C", Point::new(-42., 0.));
+        phosphorus.add_bond(p, c, 1, "plain");
+        let mut styled = Document::default();
+        let a = styled.add_atom("C", Point::new(-21., 0.));
+        let b = styled.add_atom("C", Point::new(21., 0.));
+        styled.add_bond(a, b, 2, "bold");
+        styled.bonds[0].secondary_display = Some("plain".into());
+        vec![
+            (
+                "phosphorus",
+                "Phosphorus attachment",
+                phosphorus,
+                Point::default(),
+                Some(Point::new(80., 0.)),
+            ),
+            (
+                "styled",
+                "Bold double-bond fusion",
+                styled,
+                Point::default(),
+                Some(Point::new(0., 80.)),
+            ),
+        ]
+    } else {
+        vec![
+            (
+                "saturated",
+                "Four-bond carbon",
+                saturated(),
+                Point::default(),
+                None,
+            ),
+            (
+                "explicit-h",
+                "Explicit CH4",
+                methane,
+                Point::default(),
+                None,
+            ),
+            (
+                "overlay",
+                "Drag ring over itself",
+                ring,
+                midpoint,
+                Some(Point::default()),
+            ),
+        ]
+    };
+    let width = cases.len() * 320;
+    let mut svg = format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{width}\" height=\"350\" viewBox=\"0 0 {width} 350\"><rect width=\"{width}\" height=\"350\" fill=\"white\"/>",
     );
-    for (column, (name, title, source, point, direction)) in [
-        (
-            "saturated",
-            "Four-bond carbon",
-            saturated(),
-            Point::default(),
-            None,
-        ),
-        (
-            "explicit-h",
-            "Explicit CH4",
-            methane,
-            Point::default(),
-            None,
-        ),
-        (
-            "overlay",
-            "Drag ring over itself",
-            ring,
-            midpoint,
-            Some(Point::default()),
-        ),
-    ]
-    .into_iter()
-    .enumerate()
-    {
+    for (column, (name, title, source, point, direction)) in cases.into_iter().enumerate() {
         fs::write(
             out.join(format!("{name}-input.rsk")),
             serde_json::to_vec_pretty(&source)?,
@@ -104,14 +132,23 @@ fn main() -> anyhow::Result<()> {
             .or_else(|| body.strip_suffix("</svg>"))
             .context("SVG closing tag")?;
         let x = column * 320;
-        svg.push_str(&format!("<text x=\"{}\" y=\"28\" font-family=\"Arial\" font-size=\"19\">{title}</text><svg x=\"{x}\" y=\"40\" width=\"320\" height=\"245\" viewBox=\"-110 -100 260 210\">{body}</svg><text x=\"{}\" y=\"306\" font-family=\"Arial\" font-size=\"16\">{} atoms / {} bonds · {}</text><text x=\"{}\" y=\"331\" font-family=\"Arial\" font-size=\"15\">{}</text>", x+16, x+16, result.atoms.len(), result.bonds.len(), if accepted { "accepted" } else { "rejected" }, x+16, if name == "overlay" { format!("{coincident} coincident atom pairs") } else { format!("Carbon valence: {valence}") }));
+        let detail = match name {
+            "overlay" => format!("{coincident} coincident atom pairs"),
+            "phosphorus" => format!("Phosphorus bond valence: {valence}"),
+            "styled" => format!(
+                "Original bond retained: {}",
+                result.bonds[0] == source.bonds[0]
+            ),
+            _ => format!("Carbon valence: {valence}"),
+        };
+        svg.push_str(&format!("<text x=\"{}\" y=\"28\" font-family=\"Arial\" font-size=\"19\">{title}</text><svg x=\"{x}\" y=\"40\" width=\"320\" height=\"245\" viewBox=\"-110 -100 260 210\">{body}</svg><text x=\"{}\" y=\"306\" font-family=\"Arial\" font-size=\"16\">{} atoms / {} bonds · {}</text><text x=\"{}\" y=\"331\" font-family=\"Arial\" font-size=\"15\">{detail}</text>", x+16, x+16, result.atoms.len(), result.bonds.len(), if accepted { "accepted" } else { "rejected" }, x+16));
     }
     svg.push_str("</svg>");
     fs::write(out.join("regular-ring-safety.svg"), &svg)?;
     let mut options = resvg::usvg::Options::default();
     options.fontdb_mut().load_system_fonts();
     let tree = resvg::usvg::Tree::from_str(&svg, &options)?;
-    let mut pixmap = resvg::tiny_skia::Pixmap::new(960, 350).context("Pixmap")?;
+    let mut pixmap = resvg::tiny_skia::Pixmap::new(width as u32, 350).context("Pixmap")?;
     resvg::render(
         &tree,
         resvg::tiny_skia::Transform::identity(),

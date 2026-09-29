@@ -701,6 +701,25 @@ pub fn ring(doc: &mut Document, p: Point, size: u8, aromatic: bool, radius: f32)
     ring_oriented(doc, p, size, aromatic, radius, None).unwrap_or_default()
 }
 
+fn regular_ring_valence_fits(doc: &Document, target: &crate::document::Atom) -> bool {
+    if target.element == "P" && target.charge == 0 {
+        // The template capacity table intentionally covers only a small set of
+        // attachment atoms. Neutral phosphorus uses the native strict valence
+        // rules (including its permitted trivalent/pentavalent states), not a
+        // blanket exception. Unrelated molecules must not block this edit.
+        let Some(atoms) = crate::reactions::molecules(doc, &[target.id])
+            .into_iter()
+            .next()
+        else {
+            return false;
+        };
+        return crate::chemistry::document::drawing_graph(&selection(doc, &atoms))
+            .ok()
+            .is_some_and(|graph| graph.valences().is_ok());
+    }
+    crate::templates::valence(doc, target.id) <= crate::templates::capacity(target)
+}
+
 /// Attach at an atom/bond, optionally using a drag to choose the ring's side.
 pub fn ring_oriented(
     doc: &mut Document,
@@ -763,8 +782,8 @@ pub fn ring_oriented(
         let (Some(a), Some(z)) = (doc.atom(b.a), doc.atom(b.b)) else {
             return Err("The attachment bond has missing atoms.");
         };
-        if b.display != "plain" || b.stereo.is_some() || !b.stereo_atoms.is_empty() {
-            return Err("Choose a plain bond without assigned stereochemistry.");
+        if b.validate_appearance().is_err() || b.stereo.is_some() || !b.stereo_atoms.is_empty() {
+            return Err("Choose a supported bond appearance without assigned stereochemistry.");
         }
         let (a, z) = (a.position, z.position);
         let positions = |sign: f32| {
@@ -906,7 +925,7 @@ pub fn ring_oriented(
                                         ))
                                         || (b.order == 2 && b.display == "wavy"))))
                 })
-                || crate::templates::valence(&result, *id) > crate::templates::capacity(target))
+                || !regular_ring_valence_fits(&result, target))
         {
             return Err(
                 "This atom has no available valence, or has protected hydrogens, labels or stereochemistry.",

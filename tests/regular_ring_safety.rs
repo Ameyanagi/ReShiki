@@ -81,6 +81,107 @@ fn regular_ring_rejects_explicit_hydrogens_and_protected_atom_state() {
 }
 
 #[test]
+fn regular_ring_checks_neutral_phosphorus_with_native_valence_rules() {
+    for degree in [1, 3, 4, 5] {
+        let mut doc = Document::default();
+        let p = doc.add_atom("P", Point::default());
+        for i in 0..degree {
+            let angle = (120. + i as f32 * 120. / (degree - 1).max(1) as f32).to_radians();
+            let carbon = doc.add_atom("C", Point::new(42. * angle.cos(), 42. * angle.sin()));
+            doc.add_bond(p, carbon, 1, "plain");
+        }
+        if degree >= 4 {
+            reject_unchanged(&doc, Point::default(), 6, Some(Point::new(80., 0.)));
+            continue;
+        }
+        let before = doc.clone();
+        editing::ring_oriented(
+            &mut doc,
+            Point::default(),
+            6,
+            false,
+            5.,
+            Some(Point::new(80., 0.)),
+        )
+        .unwrap();
+        assert_eq!(doc.atom(p), before.atom(p));
+        assert_eq!(&doc.bonds[..before.bonds.len()], before.bonds.as_slice());
+        assert_eq!(
+            doc.bonds.iter().filter(|b| b.a == p || b.b == p).count(),
+            degree + 2
+        );
+        let molecule = reshiki::chemistry::document::prepare(&doc).unwrap();
+        assert_eq!(
+            molecule.state.valences[0].explicit_valence,
+            (degree + 2) as u32
+        );
+    }
+    // Preserve the existing conservative charged-atom policy.
+    let mut charged = Document::default();
+    let p = charged.add_atom("P", Point::default());
+    charged.atom_mut(p).unwrap().charge = 1;
+    reject_unchanged(&charged, Point::default(), 6, None);
+    // An unrelated unfinished molecule must not veto a valid phosphorus edit.
+    let mut doc = Document::default();
+    doc.add_atom("P", Point::default());
+    let other = doc.add_atom("C", Point::new(300., 0.));
+    doc.atom_mut(other).unwrap().explicit_h = 5;
+    let untouched = doc.atom(other).unwrap().clone();
+    editing::ring_oriented(&mut doc, Point::default(), 6, false, 5., None).unwrap();
+    assert_eq!(doc.atom(other), Some(&untouched));
+}
+
+#[test]
+fn regular_ring_preserves_supported_styled_shared_edges() {
+    for (order, display, secondary, projection) in [
+        (2, "bold", Some("plain"), false),
+        (2, "dashed", None, false),
+        (2, "plain", Some("bold"), false),
+        (2, "bold", Some("dashed"), false),
+        (1, "bold", None, true),
+        (1, "wedge", None, true),
+        (1, "hashed", None, true),
+    ] {
+        let mut doc = Document::default();
+        let a = doc.add_atom("C", Point::default());
+        let b = doc.add_atom("C", Point::new(60., 0.));
+        doc.add_bond(a, b, order, display);
+        doc.bonds[0].secondary_display = secondary.map(str::to_string);
+        doc.bonds[0].projection = projection;
+        let shared = doc.bonds[0].clone();
+        editing::ring_oriented(
+            &mut doc,
+            Point::new(30., 0.),
+            6,
+            false,
+            5.,
+            Some(Point::new(30., 80.)),
+        )
+        .unwrap();
+        assert_eq!(doc.bonds[0], shared);
+        assert_eq!((doc.atoms.len(), doc.bonds.len()), (6, 6));
+        reshiki::chemistry::document::prepare(&doc).unwrap();
+    }
+    for (order, display, secondary) in [
+        (1, "dashed", None),        // unsupported single-bond appearance
+        (2, "wedge", None),         // unsupported double-bond appearance
+        (3, "bold", None),          // unsupported triple-bond appearance
+        (4, "bold", None),          // aromatic bold requires projection appearance
+        (2, "bold", Some("wedge")), // unsupported inner-line appearance
+        (1, "wedge", None),         // drawing-defined stereo remains protected
+        (2, "wavy", None),          // unknown double-bond stereo remains protected
+        (6, "plain", None),         // shared carbon edge already uses all valence
+    ] {
+        let mut doc = Document::default();
+        let a = doc.add_atom("C", Point::default());
+        let b = doc.add_atom("C", Point::new(60., 0.));
+        doc.add_bond(a, b, order, display);
+        doc.bonds[0].secondary_display = secondary.map(str::to_string);
+        reject_unchanged(&doc, Point::new(30., 0.), 6, Some(Point::new(30., 80.)));
+    }
+}
+
+#[test]
 fn regular_ring_protects_drawing_defined_stereo_but_keeps_projection_bonds() {
     for display in ["wedge", "hash", "hashed", "hollow_wedge", "bold", "wavy"] {
         let mut doc = Document::default();
