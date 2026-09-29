@@ -79,7 +79,7 @@ impl App {
             self.autosaved_revision = None;
         }
     }
-    fn inline_candidate(&self) -> Result<Document, String> {
+    pub(super) fn inline_candidate(&self) -> Result<Document, String> {
         let Some(state) = &self.inline_text else {
             return Ok(self.doc.clone());
         };

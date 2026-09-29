@@ -31,6 +31,7 @@ mod inline_text;
 mod inspector;
 mod joining;
 mod molecule_shortcuts;
+mod numeric_transforms;
 mod object_toolbar;
 mod pages;
 mod palettes;
@@ -66,6 +67,7 @@ pub enum Message {
     ContextMenu(context_menu::Action),
     ObjectToolbar(object_toolbar::Action),
     InspectorAction(inspector::Action),
+    NumericTransform(numeric_transforms::Action),
     Updates(updates::Action),
     Reaction(reactions::Action),
     DrawingStyle(document_styles::Action),
@@ -343,6 +345,7 @@ pub struct App {
     autosave_status: String,
     inspector_open: bool,
     inspector_ui: inspector::State,
+    numeric_transforms: numeric_transforms::State,
     inspector_tab: InspectorTab,
     import_open: bool,
     help_open: bool,
@@ -455,6 +458,7 @@ impl App {
             autosave_status: String::new(),
             inspector_open: true,
             inspector_ui: inspector::State::default(),
+            numeric_transforms: numeric_transforms::State::default(),
             inspector_tab: InspectorTab::Properties,
             import_open: false,
             help_open: false,
@@ -804,7 +808,12 @@ impl App {
             return self.mac_file_action(action);
         }
         let previous = self.inspector_tab;
+        let refresh_dimensions = matches!(&message, Message::EngineDone { .. });
         let task = self.update_inner(message);
+        self.sync_numeric_transforms();
+        if refresh_dimensions {
+            self.refresh_numeric_dimensions();
+        }
         // Include inspector changes made by tool-specific handlers, which can
         // return early. Ordinary updates within a panel retain its scroll state.
         if previous != self.inspector_tab && self.inspector_tab != InspectorTab::Assistant {
@@ -1713,6 +1722,7 @@ impl App {
                 editing::transform(&mut self.doc, &self.selected, transform);
                 self.changed(before);
             }
+            Message::NumericTransform(action) => return self.numeric_transform_action(action),
             Message::Arrange(arrange) => {
                 let before = self.doc.clone();
                 editing::arrange(&mut self.doc, &self.selected, arrange);

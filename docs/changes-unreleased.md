@@ -2,6 +2,16 @@
 
 The Windows dropdown fix is recorded in [ReShiki 0.9.1](changes-0.9.1.md). Publisher-style, theme, clipboard and aromatic-fusion updates are recorded in [ReShiki 0.9.0](changes-0.9.md).
 
+## Precise numeric transforms
+
+By @Ameyanagi in [PR #73](https://github.com/Ameyanagi/ReShiki/pull/73).
+
+Enter exact rotation, tilt, dimensions, and scale in the selection inspector, with optional proportional resizing and one-step Undo. Fonts and line widths stay fixed. Width and height include labels; sizes that cannot be reached with fixed fonts show an error without changing the drawing.
+
+![A selected group resized independently to 80 pt height while its width stays 101.91 pt](images/pr-reviews/numeric-height80-unlocked.png)
+
+This desktop capture comes from the combined integration build, with other parallel features including the object toolbar. Numeric input, validation, Undo/Redo, and saving were checked; see the [source disclosure and reproduction notes](changes/numeric-transforms.md).
+
 ## Reaction and recent-molecule shortcuts
 
 By @Ameyanagi in [PR #72](https://github.com/Ameyanagi/ReShiki/pull/72). Native macOS interaction checks passed in the combined integration build.
