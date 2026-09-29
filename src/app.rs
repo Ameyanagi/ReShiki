@@ -30,7 +30,9 @@ mod icons;
 mod inline_text;
 mod inspector;
 mod joining;
+mod molecule_shortcuts;
 mod numeric_transforms;
+mod object_toolbar;
 mod pages;
 mod palettes;
 mod pictures;
@@ -63,6 +65,7 @@ pub enum InspectorTab {
 #[derive(Debug, Clone)]
 pub enum Message {
     ContextMenu(context_menu::Action),
+    ObjectToolbar(object_toolbar::Action),
     InspectorAction(inspector::Action),
     NumericTransform(numeric_transforms::Action),
     Updates(updates::Action),
@@ -286,6 +289,7 @@ pub struct App {
     bracket_sides: BracketSides,
     doc: Document,
     history: History,
+    recent_molecules: molecule_shortcuts::Recent,
     selected: Vec<u64>,
     camera: Camera,
     tool: Tool,
@@ -394,6 +398,7 @@ impl App {
             bracket_sides: BracketSides::Both,
             doc: Document::default(),
             history: History::default(),
+            recent_molecules: Default::default(),
             selected: vec![],
             camera: Camera::default(),
             tool: Tool::Select,
@@ -667,6 +672,8 @@ impl App {
             self.doc.reconcile_molecule_groups();
         }
         let drawing_style_changed = before.drawing_style != self.doc.drawing_style;
+        self.recent_molecules
+            .record(&before, &self.doc, self.file_epoch, continuing);
         let chemistry_changed = chemistry_changed(&before, &self.doc);
         if chemistry_changed {
             reshiki::atom_labels::clear_computed(&mut self.doc);
@@ -823,6 +830,9 @@ impl App {
     }
 
     fn update_inner(&mut self, message: Message) -> Task<Message> {
+        let Some(message) = self.prepare_molecule_shortcut(message) else {
+            return Task::none();
+        };
         if self.updates.restarting && !matches!(message, Message::Updates(_)) {
             return Task::none();
         }
@@ -957,6 +967,7 @@ impl App {
                     | Message::Inspector(_)
                     | Message::Appearance(_)
                     | Message::ToggleView
+                    | Message::ObjectToolbar(object_toolbar::Action::Visible(_))
                     | Message::Grid
                     | Message::Rulers(_)
                     | Message::Crosshair(_)
@@ -1390,34 +1401,7 @@ impl App {
                 }
                 self.changed(before);
             }
-            Message::GraphicLayer(front) => {
-                let before = self.doc.clone();
-                let edge = if front {
-                    self.doc
-                        .graphics
-                        .iter()
-                        .map(|g| g.layer)
-                        .max()
-                        .unwrap_or(0)
-                        .max(0)
-                        .saturating_add(1)
-                } else {
-                    self.doc
-                        .graphics
-                        .iter()
-                        .map(|g| g.layer)
-                        .min()
-                        .unwrap_or(0)
-                        .min(0)
-                        .saturating_sub(1)
-                };
-                for g in &mut self.doc.graphics {
-                    if self.selected.contains(&g.id) {
-                        g.layer = edge;
-                    }
-                }
-                self.changed(before);
-            }
+            Message::GraphicLayer(front) => self.layer_objects(front, true, false),
             Message::ToggleInspector => {
                 self.inspector_open = !self.inspector_open;
                 if self.inspector_open && self.inspector_tab == InspectorTab::Assistant {
@@ -1744,33 +1728,7 @@ impl App {
                 editing::arrange(&mut self.doc, &self.selected, arrange);
                 self.changed(before);
             }
-            Message::BondDepth(front) => {
-                let before = self.doc.clone();
-                let z = if front {
-                    self.doc
-                        .bonds
-                        .iter()
-                        .map(|b| b.z_order)
-                        .max()
-                        .unwrap_or(0)
-                        .saturating_add(1)
-                } else {
-                    self.doc
-                        .bonds
-                        .iter()
-                        .map(|b| b.z_order)
-                        .min()
-                        .unwrap_or(0)
-                        .min(-1)
-                        .saturating_sub(1)
-                };
-                for bond in &mut self.doc.bonds {
-                    if self.selected.contains(&bond.a) && self.selected.contains(&bond.b) {
-                        bond.z_order = z;
-                    }
-                }
-                self.changed(before);
-            }
+            Message::BondDepth(front) => self.layer_objects(front, false, true),
             Message::ReverseBonds => {
                 let before = self.doc.clone();
                 self.doc.invalidate_chemistry(&self.selected);
@@ -1896,6 +1854,7 @@ impl App {
             Message::QuickDrawingStyle(choice) => return self.quick_drawing_style(choice),
             Message::Grid => self.grid = !self.grid,
             Message::ToggleView => self.view_open = !self.view_open,
+            Message::ObjectToolbar(action) => self.object_toolbar_action(action),
             Message::Rulers(enabled) => {
                 self.guides.rulers = enabled;
                 if self.fit_to_view {
@@ -2126,6 +2085,8 @@ impl App {
                     self.history.redo(&mut self.doc)
                 };
                 if changed {
+                    self.recent_molecules
+                        .restore(matches!(message, Message::Redo), self.file_epoch);
                     self.revision = self.revision.wrapping_add(1);
                     if chemistry_changed(&before, &self.doc) {
                         self.analysis = None;
@@ -2391,7 +2352,7 @@ impl App {
                 }
             },
             Message::Export(format) => {
-                if ["svg", "pdf", "png"].contains(&format) {
+                if ["svg", "pdf", "png"].contains(&format) || cfg!(windows) && format == "emf" {
                     return self.export_figure(format, false);
                 }
                 let mut request = Request::molecule("export", self.doc.clone());

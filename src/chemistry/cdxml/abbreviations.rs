@@ -460,6 +460,7 @@ fn flatten_one(tree: &mut Tree, outer: usize) -> Result<Expanded> {
         ("OBz", "BzO"),
         ("OTs", "TsO"),
         ("OMs", "MsO"),
+        ("OTBDPS", "TBDPSO"),
         ("CF3", "F3C"),
         ("CN", "NC"),
         ("NO2", "O2N"),
