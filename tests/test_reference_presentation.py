@@ -1,6 +1,7 @@
 """The legacy comparison adjustment must not hide chemical or layout differences."""
 
 import base64
+import struct
 import unittest
 import xml.etree.ElementTree as ET
 
@@ -53,6 +54,28 @@ class ReferencePresentationTests(unittest.TestCase):
                     compare(changed, legacy, format)
         with self.assertRaises(ValueError):
             compare(self.legacy, self.legacy, "cdxml")
+
+    def test_only_captured_arrow_tag_and_fill_codes_are_adjusted(self):
+        text = '<CDXML><page id="1"><arrow id="2" Head3D="30 0 0" Tail3D="0 0 0" FillType="None"/><graphic id="3" GraphicType="Rectangle" FillType="Solid" BoundingBox="1 2 3 4"/></page></CDXML>'
+        legacy = to_cdx(text)
+        # Independently patch the historical binary writer's exact codes;
+        # neither the current Rust encoder nor the corrected decoder writes it.
+        actual = legacy.replace(struct.pack("<HI", 0x8027, 2), struct.pack("<HI", 0x8021, 2))
+        actual = actual.replace(struct.pack("<HHh", 0xA37, 2, 1), struct.pack("<HHh", 0xA37, 2, 2))
+        actual = actual.replace(struct.pack("<HHh", 0xA37, 2, 0), struct.pack("<HHh", 0xA37, 2, 1))
+
+        def encoded(data):
+            return base64.b64encode(data).decode()
+
+        compare(encoded(actual), encoded(legacy), "cdx")
+        for changed in (
+            actual.replace(struct.pack("<HHh", 0xA37, 2, 2), struct.pack("<HHh", 0xA37, 2, 4)),
+            actual.replace(struct.pack("<HI", 0x8021, 2), struct.pack("<HI", 0x8021, 4)),
+            to_cdx(text.replace('Head3D="30 0 0"', 'Head3D="31 0 0"')),
+            to_cdx(text.replace('FillType="None"', 'FillType="Solid"')),
+        ):
+            with self.subTest(binary=changed), self.assertRaises(ValueError):
+                compare(encoded(changed), encoded(legacy), "cdx")
 
 
 if __name__ == "__main__":

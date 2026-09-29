@@ -137,6 +137,7 @@ fn validate(text: &str) -> Result<Tree> {
         }
     }
     let mut pages = 0;
+    at(Validation, super::schemes::validate(text))?;
     for index in nodes {
         let node = at(Validation, tree.node(index))?;
         if node.tag == "page" {
@@ -164,6 +165,8 @@ fn validate(text: &str) -> Result<Tree> {
                 | "embeddedobject"
                 | "ColoredMolecularArea"
                 | "annotation"
+                | "scheme"
+                | "step"
         ) {
             return Err(error(Validation, PreparationCause::Objects));
         }

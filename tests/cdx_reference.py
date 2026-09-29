@@ -1,10 +1,10 @@
 """Differential corpus for the Rust codec; Python stays an independent oracle.
 
 Invoked by tests/cdx_codec.rs. This script never regenerates expected results
-with Rust, so a migration cannot make both sides agree by accident. Two explicit
+with Rust, so a migration cannot make both sides agree by accident. Explicit
 compatibility corrections below are independently grounded by GUI-captured
-ChemDraw binary/XML pairs in fixtures/chemdraw-captions. The historical Python
-codec source remains unchanged.
+ChemDraw binary/XML pairs in fixtures/chemdraw-captions and
+fixtures/chemdraw-arrows. The historical Python codec source remains unchanged.
 """
 
 import base64
@@ -15,9 +15,21 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from engine.cdx_exchange import BY_NAME, INTS, PROPERTIES, property_bytes
+from engine.cdx_exchange import BY_NAME, INTS, OBJECTS, PROPERTIES, property_bytes
 from engine.cdx_exchange import from_cdx as legacy_from_cdx
 from engine.cdx_exchange import to_cdx as legacy_to_cdx
+
+# Genuine ChemDraw 26 files in fixtures/chemdraw-arrows establish these codes.
+# Keep the historical worker untouched. Its published-SDK arrow code is wrong;
+# the decoder still accepts old ReShiki files, and the encoder's reverse mapping
+# selects the canonical entry appended here. Scheme/step preserve references
+# that ChemDraw automatically adds when saving drawings containing arrows.
+OBJECTS.update({0x8021: "arrow", 0x800D: "scheme", 0x800E: "step"})
+# The real files store FillType=None as 1. The published CDXConstants.h confirms
+# Unspecified=0, None=1, Solid=2, Shaded=4; keep unsupported fills rejected.
+fill_types = {"Unspecified": 0, "None": 1, "Solid": 2, "Shaded": 4}
+PROPERTIES[0xA37] = ("FillType", "INT16", fill_types)
+BY_NAME["FillType"] = (0xA37, "INT16", fill_types)
 
 LINE_HEIGHTS = {"LineHeight", "CaptionLineHeight", "LabelLineHeight"}
 # An encoding-only alias uses the reference codec's existing explicit boolean

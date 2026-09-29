@@ -1,0 +1,217 @@
+{
+  "counts": {
+    "atoms": [
+      7,
+      7
+    ],
+    "bonds": [
+      6,
+      6
+    ],
+    "annotations": [
+      1,
+      1
+    ],
+    "arrows": [
+      1,
+      1
+    ],
+    "graphics": [
+      1,
+      1
+    ],
+    "groups": [
+      1,
+      1
+    ],
+    "abbreviations": [
+      0,
+      0
+    ],
+    "reactions": [
+      0,
+      0
+    ]
+  },
+  "before_components": [
+    {
+      "atoms": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "elements": {
+        "C": 5,
+        "N": 1
+      },
+      "bonds": 6
+    },
+    {
+      "atoms": [
+        11
+      ],
+      "elements": {
+        "O": 1
+      },
+      "bonds": 0
+    }
+  ],
+  "returned_components": [
+    {
+      "atoms": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "elements": {
+        "C": 5,
+        "N": 1
+      },
+      "bonds": 6
+    },
+    {
+      "atoms": [
+        7
+      ],
+      "elements": {
+        "O": 1
+      },
+      "bonds": 0
+    }
+  ],
+  "same_element_charge_isotope_map_radical_connectivity_and_bond_orders": true,
+  "topology_mapping_candidates": 2,
+  "atom_id_mapping": {
+    "1": 1,
+    "11": 7,
+    "2": 2,
+    "3": 3,
+    "4": 4,
+    "5": 5,
+    "6": 6
+  },
+  "geometry": {
+    "units": "publication points",
+    "global_translation_xy": [
+      -54.107484489795915,
+      -5.73793866122449
+    ],
+    "max_atom_error_after_translation": 1.9492769939400714e-05,
+    "best_uniform_scale": 1.000000070647996,
+    "max_atom_error_after_translation_and_scale": 1.8667731314623946e-05,
+    "translation_only_within_0_03_pt": true
+  },
+  "groups_before": [
+    [
+      "annotations:Fixed text",
+      "arrows:0",
+      "atom:1",
+      "atom:2",
+      "atom:3",
+      "atom:4",
+      "atom:5",
+      "atom:6",
+      "graphics:0"
+    ]
+  ],
+  "groups_returned_remapped": [
+    [
+      "annotations:Fixed text",
+      "arrows:0",
+      "atom:1",
+      "atom:2",
+      "atom:3",
+      "atom:4",
+      "atom:5",
+      "atom:6",
+      "graphics:0"
+    ]
+  ],
+  "groups_match_after_id_remapping": true,
+  "arrows_document_order_comparison": [
+    {
+      "before_id": 8,
+      "returned_id": 9,
+      "kind_before": "forward",
+      "kind_returned": "forward",
+      "start_translation_error_pt": 9.053025300304293e-06,
+      "end_translation_error_pt": 9.726376418358685e-06
+    }
+  ],
+  "annotations_document_order_comparison": [
+    {
+      "before_id": 7,
+      "returned_id": 8,
+      "kind_before": null,
+      "kind_returned": null,
+      "text_unchanged": true,
+      "font_style_before": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      },
+      "font_style_returned": {
+        "family": "Arial",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      },
+      "position_translation_error_pt": 2.06450062345438
+    }
+  ],
+  "graphics_document_order_comparison": [
+    {
+      "before_id": 9,
+      "returned_id": 10,
+      "kind_before": "rectangle",
+      "kind_returned": "path",
+      "style_before": {
+        "stroke": [
+          0,
+          0,
+          0
+        ],
+        "fill": null,
+        "width_pt": 0.6,
+        "pattern": "solid"
+      },
+      "style_returned": {
+        "stroke": [
+          0,
+          0,
+          0
+        ],
+        "fill": null,
+        "width_pt": 0.6000061,
+        "pattern": "solid"
+      },
+      "layer_before": -1,
+      "layer_returned": 15,
+      "max_polygon_corner_error_pt": 2.8972825858615364e-05
+    }
+  ],
+  "metadata_note": "Reaction roles, stored 3D depth, and ReShiki preset types are not guaranteed through external CDX/CDXML. Role-count loss alone is separate from chemical/visual loss. Arrow/graphic rows use document order; inspect if external editor reordered objects."
+}

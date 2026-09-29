@@ -1409,7 +1409,9 @@ pub(super) const PROPERTIES: &[Property] = &[
         code: 0x0a37,
         name: "FillType",
         kind: "INT16",
-        variants: &[("None", 0), ("Solid", 1), ("Shaded", 2)],
+        // ChemDraw-written arrows use 1 for None. Zero is Unspecified;
+        // confusing the two made ordinary native arrows appear filled.
+        variants: &[("Unspecified", 0), ("None", 1), ("Solid", 2), ("Shaded", 4)],
     },
     Property {
         code: 0x0a38,

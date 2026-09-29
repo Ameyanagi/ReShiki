@@ -82,10 +82,11 @@ pub enum Error {
 struct Prepared {
     molecule: molecular::Molecule,
     document: Document,
+    warnings: Vec<String>,
 }
 enum Preparation {
     Complete(Box<Prepared>),
-    Drawing(Box<Document>, String),
+    Drawing(Box<Document>, Vec<String>),
     Inchi(String),
     Deferred(Deferred),
 }
@@ -103,13 +104,13 @@ pub async fn execute(
     let prepared = tokio::task::spawn_blocking(move || prepare((*request).clone())).await??;
     let prepared = match prepared {
         Preparation::Complete(prepared) => prepared,
-        Preparation::Drawing(document, warning) => {
+        Preparation::Drawing(document, warnings) => {
             return Ok(Outcome::Complete(Box::new(Response {
                 document: Some(*document),
                 analysis: None,
                 output: None,
                 engine_version: chemistry::RDKIT_VERSION.into(),
-                warnings: vec![warning],
+                warnings,
             })));
         }
         Preparation::Inchi(text) => {
@@ -129,23 +130,26 @@ pub async fn execute(
         }
         Preparation::Deferred(reason) => return Ok(Outcome::Deferred(reason)),
     };
-    let Prepared { molecule, document } = *prepared;
+    let Prepared {
+        molecule,
+        document,
+        mut warnings,
+    } = *prepared;
     let attachments = crate::attachments::present(&document);
     let analysis = if molecule.state.graph.atoms.is_empty() || attachments {
         None
     } else {
         Some(native_response::analyze_prepared(Arc::new(molecule), config).await?)
     };
+    if attachments {
+        warnings.push(crate::attachments::ANALYSIS_NOTICE.into());
+    }
     Ok(Outcome::Complete(Box::new(Response {
         document: Some(document),
         analysis,
         output: None,
         engine_version: chemistry::RDKIT_VERSION.into(),
-        warnings: if attachments {
-            vec![crate::attachments::ANALYSIS_NOTICE.into()]
-        } else {
-            Vec::new()
-        },
+        warnings,
     })))
 }
 
@@ -183,7 +187,11 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             } else {
                 imported.molecule
             };
-            Prepared { molecule, document }
+            Prepared {
+                molecule,
+                document,
+                warnings: Vec::new(),
+            }
         }
         "cdxml" | "cdx" => {
             let xml = if format == "cdx" {
@@ -196,35 +204,38 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             };
             let (xml, variables) =
                 cdxml::drawing_variables(&xml).map_err(|e| Error::Binary(e.to_string()))?;
+            let mut warnings = Vec::new();
+            if cdxml::schemes::validate(&xml).map_err(|e| Error::Binary(e.to_string()))? {
+                warnings.push(cdxml::schemes::NOTICE.into());
+            }
             if !variables.0.is_empty() {
                 let prepared = cdxml::prepare_drawing(&xml)?;
                 let mut document = cdxml::assemble_cdxml(&prepared)?.into_unchecked_drawing()?;
                 variables
                     .restore(&prepared, &mut document)
                     .map_err(|e| Error::Binary(e.to_string()))?;
-                return Ok(Preparation::Drawing(Box::new(document),
-                    "Drawing imported with variable labels as uninterpreted atom text; query semantics and molecular properties are unavailable".into()));
+                warnings.push("Drawing imported with variable labels as uninterpreted atom text; query semantics and molecular properties are unavailable".into());
+                return Ok(Preparation::Drawing(Box::new(document), warnings));
             }
             let prepared = match cdxml::prepare_cdxml(&xml) {
                 Ok(prepared) => prepared,
                 Err(error) if matches!(error.cause, cdxml::PreparationCause::Sanitization(_)) => {
                     let scene = cdxml::assemble_cdxml(&cdxml::prepare_drawing(&xml)?)?;
                     let document = scene.into_unchecked_drawing()?;
-                    return Ok(Preparation::Drawing(
-                        Box::new(document),
-                        format!(
-                            "Drawing imported; chemical assignments need review: {}",
-                            error.cause
-                        ),
+                    warnings.push(format!(
+                        "Drawing imported; chemical assignments need review: {}",
+                        error.cause
                     ));
+                    return Ok(Preparation::Drawing(Box::new(document), warnings));
                 }
                 Err(error) => return Err(error.into()),
             };
             if styled_coordination_changed(&prepared) {
                 let scene = cdxml::assemble_cdxml(&cdxml::prepare_drawing(&xml)?)?;
+                warnings.push("Drawing imported; styled metal contacts retained as drawn. Coordination assignments need review; molecular properties are unavailable".into());
                 return Ok(Preparation::Drawing(
                     Box::new(scene.into_unchecked_drawing()?),
-                    "Drawing imported; styled metal contacts retained as drawn. Coordination assignments need review; molecular properties are unavailable".into(),
+                    warnings,
                 ));
             }
             let mut scene = cdxml::assemble_cdxml(&prepared)?;
@@ -236,6 +247,7 @@ fn prepare(request: Request) -> Result<Preparation, Error> {
             Prepared {
                 molecule: imported.molecule,
                 document: imported.document,
+                warnings,
             }
         }
         "rxn" => finish_reaction(reaction::read_rxn(&text)?.drawing()?)?,
@@ -284,7 +296,11 @@ fn finish_reaction(drawing: reaction::Drawing) -> Result<Prepared, Error> {
     let labels = drawing.labels()?;
     let document = drawing.finish(labels)?;
     let molecule = molecular::prepare(&document)?;
-    Ok(Prepared { molecule, document })
+    Ok(Prepared {
+        molecule,
+        document,
+        warnings: Vec::new(),
+    })
 }
 
 fn molecule(state: State) -> Result<molecular::Molecule, Error> {
@@ -341,7 +357,11 @@ fn finish_molecule(
     let labels = drawing.labels()?;
     let document = drawing.finish(labels)?;
     document.validate().map_err(Error::Document)?;
-    Ok(Prepared { molecule, document })
+    Ok(Prepared {
+        molecule,
+        document,
+        warnings: Vec::new(),
+    })
 }
 
 fn prepare_inchi(output: output::Output) -> Result<Prepared, Error> {
