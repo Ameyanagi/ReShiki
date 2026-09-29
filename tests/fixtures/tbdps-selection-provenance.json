@@ -1,0 +1,76 @@
+{
+  "workflow_run": "https://github.com/Ameyanagi/ReShiki/actions/runs/36512854135",
+  "source_commit": "277972dca66d665769e05b420ffc327e7a1b8f3a",
+  "purpose": "Genuine three-platform recapture after selected-fragment eligibility correction; saved request and response records remain byte-for-byte unchanged.",
+  "platforms": [
+    {
+      "platform": "macos",
+      "job_url": "https://github.com/Ameyanagi/ReShiki/actions/runs/36512854135/job/109228627594",
+      "job_conclusion": "success",
+      "artifact_id": 11009747724,
+      "artifact_zip_digest": "sha256:dfcc791382be7f6b8f5dfdcd021499434c4d3343d88ad08f4e72fdebeb4f20ab",
+      "fixture": "tests/fixtures/native-aromatic-macos.json.gz",
+      "fixture_sha256": "78acc1bc185eecf9ec381dc1f703a55e637d2fbbd9e2e96bc380fccd9f1c9365",
+      "records": 13425,
+      "records_sha256": "bbf121966cc3aa5cf313f5effc2191eef9441ea314a0a4111e075386af5b6cfd",
+      "records_unchanged": true,
+      "changed_header_keys": [
+        "request_file_sha256",
+        "request_source",
+        "source_sha256"
+      ],
+      "source_changes": {
+        "engine/abbreviations.py": {
+          "before": "e53e10f6a95bade99786c30a76be1155954675e4eea060f42cdb67b5c7130c20",
+          "after": "df9a6ee91f677d96a1c5ad8e7023e55e277bc782e05c7cd06ac1fba38cfe57c7"
+        }
+      }
+    },
+    {
+      "platform": "linux",
+      "job_url": "https://github.com/Ameyanagi/ReShiki/actions/runs/36512854135/job/109228627710",
+      "job_conclusion": "success",
+      "artifact_id": 11010381219,
+      "artifact_zip_digest": "sha256:155fd591576763cf67f2a6ec63dca0e6a0dba86de93fd15465a85a1259315af9",
+      "fixture": "tests/fixtures/native-aromatic-linux.json.gz",
+      "fixture_sha256": "d153f31181ff5f360990b9741922cf08b22cad42ccdcdaa9f3ccd4d2ed4dbc27",
+      "records": 13425,
+      "records_sha256": "249e5306fa1bd0aad49e5994fd78f30ec1f50492feb5b60b46435e5b77b03ee9",
+      "records_unchanged": true,
+      "changed_header_keys": [
+        "request_file_sha256",
+        "request_source",
+        "source_sha256"
+      ],
+      "source_changes": {
+        "engine/abbreviations.py": {
+          "before": "e53e10f6a95bade99786c30a76be1155954675e4eea060f42cdb67b5c7130c20",
+          "after": "df9a6ee91f677d96a1c5ad8e7023e55e277bc782e05c7cd06ac1fba38cfe57c7"
+        }
+      }
+    },
+    {
+      "platform": "windows",
+      "job_url": "https://github.com/Ameyanagi/ReShiki/actions/runs/36512854135/job/109228627766",
+      "job_conclusion": "success",
+      "artifact_id": 11009751685,
+      "artifact_zip_digest": "sha256:464cfc8015d016e9bb9d4f6358df0be9c8e3ef43f2f15589e7a57c6348e71c1e",
+      "fixture": "tests/fixtures/native-aromatic-windows.json.gz",
+      "fixture_sha256": "3cbd521223454f94c257c03cac862b74091f86c137b0358fa0085831a335888d",
+      "records": 13425,
+      "records_sha256": "ebfeb2c84fc39a2c6a325691c9450f6a60e0b52f2dbe4e2496467e78bb7711d8",
+      "records_unchanged": true,
+      "changed_header_keys": [
+        "request_file_sha256",
+        "request_source",
+        "source_sha256"
+      ],
+      "source_changes": {
+        "engine/abbreviations.py": {
+          "before": "e53e10f6a95bade99786c30a76be1155954675e4eea060f42cdb67b5c7130c20",
+          "after": "df9a6ee91f677d96a1c5ad8e7023e55e277bc782e05c7cd06ac1fba38cfe57c7"
+        }
+      }
+    }
+  ]
+}

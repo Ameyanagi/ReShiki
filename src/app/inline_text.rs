@@ -607,6 +607,7 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::Ungroup
             | Message::IntegralGroup(_)
             | Message::AddFrame(_)
+            | Message::ObjectToolbar(super::object_toolbar::Action::Layer(_))
             | Message::Transform(_)
             | Message::Arrange(_)
             | Message::Clean
