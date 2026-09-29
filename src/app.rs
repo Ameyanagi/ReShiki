@@ -9,6 +9,7 @@ use reshiki::{
 };
 use std::path::PathBuf;
 mod abbreviations;
+mod arcs;
 mod arrows;
 mod assistant;
 mod atom_labels;
@@ -99,6 +100,7 @@ pub enum Message {
     BondPosition(reshiki::bonds::DoublePosition),
     BondColor(String),
     ApplyBondColor,
+    Arc(arcs::Action),
     GraphicStyle(GraphicChange),
     GraphicWidth(String),
     ApplyGraphicWidth,
@@ -279,6 +281,7 @@ pub struct App {
     drawing_length_input: String,
     chain_atoms_input: String,
     chain_angle_input: String,
+    arc_editor: arcs::Editor,
     graphic_style: GraphicStyle,
     orbital_phase: reshiki::scientific::Phase,
     phase_flipped: bool,
@@ -388,6 +391,7 @@ impl App {
             drawing_length_input: reshiki::style::DEFAULT.bond_length_pt.to_string(),
             chain_atoms_input: String::new(),
             chain_angle_input: "120".into(),
+            arc_editor: arcs::Editor::default(),
             graphic_style: GraphicStyle::default(),
             orbital_phase: Default::default(),
             phase_flipped: false,
@@ -758,6 +762,7 @@ impl App {
                 self.caption = "Reaction conditions".into();
                 self.caption_target = None;
                 self.graphic_style = Default::default();
+                self.arc_editor = Default::default();
                 self.orbital_phase = Default::default();
                 self.phase_flipped = false;
                 self.attach_symbols = true;
@@ -1266,6 +1271,7 @@ impl App {
                 self.sync_graphics();
                 self.sync_arrows();
             }
+            Message::Arc(action) => self.update_arc(action),
             Message::GraphicStyle(change) => self.apply_graphic_style(change),
             Message::GraphicWidth(s) => self.graphic_width_input = s,
             Message::ApplyGraphicWidth => match self.graphic_width_input.parse::<f32>() {
@@ -2511,15 +2517,18 @@ impl App {
                         }
                     } else {
                         let id = self.doc.next_id();
-                        self.doc.graphics.push(Graphic::dragged(
-                            id,
-                            kind,
-                            start,
-                            end,
-                            self.graphic_style.clone(),
-                            self.bracket_sides,
-                            constrain,
-                        ));
+                        self.doc.graphics.push(
+                            Graphic::dragged(
+                                id,
+                                kind,
+                                start,
+                                end,
+                                self.graphic_style.clone(),
+                                self.bracket_sides,
+                                constrain,
+                            )
+                            .with_arc(self.arc_editor.geometry),
+                        );
                         self.selected = vec![id];
                     }
                     self.tool = Tool::Select;
@@ -2549,6 +2558,7 @@ impl App {
                 if let Some(g) = self.doc.graphics.iter_mut().find(|g| g.id == id) {
                     g.edit_point(index, p);
                 }
+                self.sync_arc();
             }
             Edit::Template(anchor, direction) => {
                 if let Some(state) = &self.joining {
