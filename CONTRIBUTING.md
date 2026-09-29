@@ -27,6 +27,10 @@ the contribution cannot be merged under the default terms until it is resolved.
 
 ## Development
 
+Open feature and fix pull requests against **`main`**, the default and development
+branch. Nightly prereleases are built from `main`. Stable release tags identify
+tested commits already on `main`.
+
 See the [developer guide](https://reshiki.com/developer/development/) for setup
 and checks. Describe the problem your change solves and the relevant validation
 in your pull request.
@@ -47,3 +51,6 @@ Add the contributor and pull-request link to [the contributor list](docs/contrib
 and credit them beside the change in [the next release notes](docs/changes-unreleased.md).
 Keep that credit when moving an entry into a versioned changelog. Mark work still
 under review explicitly; update its status when it merges.
+
+Keep @Ameyanagi's contributor-list entry as "project creator and maintainer";
+credit individual changes in the release notes.

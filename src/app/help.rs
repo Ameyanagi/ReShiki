@@ -291,7 +291,10 @@ mod tests {
         app.help_open = true;
         let size = iced::Size::new(1040., 680.);
         let bounds = iced::Rectangle::with_size(size);
-        let mut renderer = iced::Renderer::new(iced::Font::default(), iced::Pixels(16.));
+        let mut renderer = iced::Renderer::Secondary(iced_tiny_skia::Renderer::new(
+            iced::Font::default(),
+            iced::Pixels(16.),
+        ));
         let mut view = app.with_help(Space::new().width(Length::Fill).height(Length::Fill).into());
         let mut tree = Tree::new(view.as_widget());
         let node =
@@ -327,6 +330,9 @@ mod tests {
             y: 300.,
             width: 40.,
             height: 40.,
+        };
+        let iced::Renderer::Secondary(mut renderer) = renderer else {
+            panic!("partial-redraw regression requires the software renderer");
         };
         for scale in [1., 1.25, 2.] {
             let width = (size.width * scale) as u32;

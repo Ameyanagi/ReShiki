@@ -14,6 +14,20 @@ The unmodified native captures below show Cmd+Shift+Right creating a reaction co
 
 ![Native desktop: Space selects the most recently edited product after changing its terminal atom to N](images/reaction-selection-shortcuts/desktop-space-selection.png)
 
+## Windows GPU rendering and nightly builds
+
+By @Ameyanagi in [PR #68](https://github.com/Ameyanagi/ReShiki/pull/68).
+
+Windows builds include WGPU with a Tiny Skia fallback. CPU-only environments keep
+the direct software renderer, and explicit renderer overrides remain available
+for testing. The [validation record](windows-gpu-validation.md) includes Windows
+VM measurements and real Radeon GPU rendering on Linux; physical Windows GPU
+performance remains unmeasured.
+
+Development PRs target `main`. Successful nightly builds publish unsigned portable
+prereleases for all six platforms, with unique versions and checksums. Stable
+releases use version tags on tested commits in `main`.
+
 ## Website videos and reusable color palettes
 
 By @Ameyanagi in [PR #59](https://github.com/Ameyanagi/ReShiki/pull/59).

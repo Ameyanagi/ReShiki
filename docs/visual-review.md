@@ -20,6 +20,13 @@ Label sketches and expected-result references explicitly. Do not redraw or
 retouch a bug away in a screenshot. Keep any annotations outside the drawing
 or make them visibly distinct.
 
+Published images should be professionally presented, including test evidence.
+Use chemically sensible fixtures with clear bond geometry and correct atom labels.
+Keep representative views free of selection handles, debug overlays and accidental
+UI state; show those controls only when they are the subject of the example.
+If a fixture produces an awkward drawing, correct the input and recapture it
+through the application before publishing.
+
 Record the input/fixture, exact actions or keys, base and head commits,
 platform/build, zoom, and export format. For a stacked PR, compare against its
 declared base. If a defect was introduced and fixed within the same PR, label

@@ -374,7 +374,10 @@ mod tests {
                     "Manage themes…",
                 ],
             ] {
-                let mut renderer = iced::Renderer::new(iced::Font::default(), iced::Pixels(16.));
+                let mut renderer = iced::Renderer::Secondary(iced_tiny_skia::Renderer::new(
+                    iced::Font::default(),
+                    iced::Pixels(16.),
+                ));
                 let mut state = menu::State::new();
                 let mut hovered = Some(3);
                 let class: menu::StyleFn<'_, Theme> = Box::new(dropdown_menu);
@@ -404,6 +407,9 @@ mod tests {
                     y: 180.,
                     width: 220.,
                     height: 30.,
+                };
+                let iced::Renderer::Secondary(mut renderer) = renderer else {
+                    panic!("partial-redraw regression requires the software renderer");
                 };
                 for scale in [1., 1.25, 2.] {
                     let width = (size.width * scale) as u32;
