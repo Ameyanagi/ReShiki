@@ -135,6 +135,7 @@ pub(super) fn read(text: &str) -> Result<Parsed> {
             | "embeddedobject"
             | "ColoredMolecularArea"
             | "annotation" => (),
+            "scheme" | "step" => (),
             _ => return Err(Error::Unsupported("drawing object")),
         }
         if matches!(node.tag_name().name(), "fragment" | "n" | "b") {

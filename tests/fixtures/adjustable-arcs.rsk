@@ -1,0 +1,877 @@
+{
+  "atom_labels": {
+    "carbons": "skeletal",
+    "hydrogens": true,
+    "stereo": false
+  },
+  "version": 15,
+  "atoms": [],
+  "bonds": [],
+  "annotations": [
+    {
+      "id": 2,
+      "position": {
+        "x": 17.0,
+        "y": 160.0
+      },
+      "text": "90° preset",
+      "format": {
+        "style": {
+          "family": "Arial",
+          "size_pt": 10.0,
+          "bold": false,
+          "italic": false,
+          "underline": false,
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "script": "normal",
+          "formula": false
+        },
+        "spans": [],
+        "alignment": "left",
+        "line_spacing": 1.2,
+        "width_pt": null
+      }
+    },
+    {
+      "id": 4,
+      "position": {
+        "x": 227.0,
+        "y": 160.0
+      },
+      "text": "120° preset",
+      "format": {
+        "style": {
+          "family": "Arial",
+          "size_pt": 10.0,
+          "bold": false,
+          "italic": false,
+          "underline": false,
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "script": "normal",
+          "formula": false
+        },
+        "spans": [],
+        "alignment": "left",
+        "line_spacing": 1.2,
+        "width_pt": null
+      }
+    },
+    {
+      "id": 6,
+      "position": {
+        "x": 437.0,
+        "y": 160.0
+      },
+      "text": "180° preset",
+      "format": {
+        "style": {
+          "family": "Arial",
+          "size_pt": 10.0,
+          "bold": false,
+          "italic": false,
+          "underline": false,
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "script": "normal",
+          "formula": false
+        },
+        "spans": [],
+        "alignment": "left",
+        "line_spacing": 1.2,
+        "width_pt": null
+      }
+    },
+    {
+      "id": 8,
+      "position": {
+        "x": 647.0,
+        "y": 160.0
+      },
+      "text": "270° preset",
+      "format": {
+        "style": {
+          "family": "Arial",
+          "size_pt": 10.0,
+          "bold": false,
+          "italic": false,
+          "underline": false,
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "script": "normal",
+          "formula": false
+        },
+        "spans": [],
+        "alignment": "left",
+        "line_spacing": 1.2,
+        "width_pt": null
+      }
+    },
+    {
+      "id": 10,
+      "position": {
+        "x": 17.0,
+        "y": 330.0
+      },
+      "text": "234.5° sweep\n32° start",
+      "format": {
+        "style": {
+          "family": "Arial",
+          "size_pt": 10.0,
+          "bold": false,
+          "italic": false,
+          "underline": false,
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "script": "normal",
+          "formula": false
+        },
+        "spans": [],
+        "alignment": "left",
+        "line_spacing": 1.2,
+        "width_pt": null
+      }
+    },
+    {
+      "id": 12,
+      "position": {
+        "x": 227.0,
+        "y": 330.0
+      },
+      "text": "360° full circle",
+      "format": {
+        "style": {
+          "family": "Arial",
+          "size_pt": 10.0,
+          "bold": false,
+          "italic": false,
+          "underline": false,
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "script": "normal",
+          "formula": false
+        },
+        "spans": [],
+        "alignment": "left",
+        "line_spacing": 1.2,
+        "width_pt": null
+      }
+    },
+    {
+      "id": 14,
+      "position": {
+        "x": 437.0,
+        "y": 330.0
+      },
+      "text": "Affine\ntransform",
+      "format": {
+        "style": {
+          "family": "Arial",
+          "size_pt": 10.0,
+          "bold": false,
+          "italic": false,
+          "underline": false,
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "script": "normal",
+          "formula": false
+        },
+        "spans": [],
+        "alignment": "left",
+        "line_spacing": 1.2,
+        "width_pt": null
+      }
+    },
+    {
+      "id": 16,
+      "position": {
+        "x": 647.0,
+        "y": 330.0
+      },
+      "text": "Legacy\nhalf ellipse",
+      "format": {
+        "style": {
+          "family": "Arial",
+          "size_pt": 10.0,
+          "bold": false,
+          "italic": false,
+          "underline": false,
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "script": "normal",
+          "formula": false
+        },
+        "spans": [],
+        "alignment": "left",
+        "line_spacing": 1.2,
+        "width_pt": null
+      }
+    }
+  ],
+  "arrows": [],
+  "graphics": [
+    {
+      "arc": {
+        "start_degrees": 180.0,
+        "sweep_degrees": 90.0
+      },
+      "id": 1,
+      "kind": "path",
+      "origin": {
+        "x": 25.0,
+        "y": 30.0
+      },
+      "axis_x": {
+        "x": 145.0,
+        "y": 0.0
+      },
+      "axis_y": {
+        "x": 0.0,
+        "y": 100.0
+      },
+      "style": {
+        "stroke": [
+          32,
+          80,
+          145
+        ],
+        "fill": null,
+        "width_pt": 1.2,
+        "pattern": "solid"
+      },
+      "sides": "both",
+      "phase": "solid",
+      "phase_flipped": false,
+      "layer": -1,
+      "path": [
+        {
+          "command": "move",
+          "points": {
+            "x": 0.0,
+            "y": 0.49999997
+          }
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 2.4141134e-8,
+              "y": 0.22385758
+            },
+            {
+              "x": 0.22385761,
+              "y": -3.292965e-9
+            },
+            {
+              "x": 0.5,
+              "y": 0.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "arc": {
+        "start_degrees": 180.0,
+        "sweep_degrees": 120.0
+      },
+      "id": 3,
+      "kind": "path",
+      "origin": {
+        "x": 235.0,
+        "y": 30.0
+      },
+      "axis_x": {
+        "x": 145.0,
+        "y": 0.0
+      },
+      "axis_y": {
+        "x": 0.0,
+        "y": 100.0
+      },
+      "style": {
+        "stroke": [
+          32,
+          80,
+          145
+        ],
+        "fill": null,
+        "width_pt": 1.2,
+        "pattern": "solid"
+      },
+      "sides": "both",
+      "phase": "solid",
+      "phase_flipped": false,
+      "layer": -1,
+      "path": [
+        {
+          "command": "move",
+          "points": {
+            "x": 0.0,
+            "y": 0.49999997
+          }
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 1.5616575e-8,
+              "y": 0.32136717
+            },
+            {
+              "x": 0.09529951,
+              "y": 0.15630366
+            },
+            {
+              "x": 0.25000006,
+              "y": 0.066987276
+            }
+          ]
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 0.4047006,
+              "y": -0.022329107
+            },
+            {
+              "x": 0.59529936,
+              "y": -0.022329107
+            },
+            {
+              "x": 0.74999994,
+              "y": 0.066987276
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "arc": {
+        "start_degrees": 180.0,
+        "sweep_degrees": 180.0
+      },
+      "id": 5,
+      "kind": "path",
+      "origin": {
+        "x": 445.0,
+        "y": 30.0
+      },
+      "axis_x": {
+        "x": 145.0,
+        "y": 0.0
+      },
+      "axis_y": {
+        "x": 0.0,
+        "y": 100.0
+      },
+      "style": {
+        "stroke": [
+          32,
+          80,
+          145
+        ],
+        "fill": null,
+        "width_pt": 1.2,
+        "pattern": "solid"
+      },
+      "sides": "both",
+      "phase": "solid",
+      "phase_flipped": false,
+      "layer": -1,
+      "path": [
+        {
+          "command": "move",
+          "points": {
+            "x": 0.0,
+            "y": 0.49999997
+          }
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 2.4141134e-8,
+              "y": 0.22385758
+            },
+            {
+              "x": 0.22385761,
+              "y": -3.292965e-9
+            },
+            {
+              "x": 0.5,
+              "y": 0.0
+            }
+          ]
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 0.77614236,
+              "y": 3.292965e-9
+            },
+            {
+              "x": 1.0,
+              "y": 0.22385761
+            },
+            {
+              "x": 1.0,
+              "y": 0.5
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "arc": {
+        "start_degrees": 180.0,
+        "sweep_degrees": 270.0
+      },
+      "id": 7,
+      "kind": "path",
+      "origin": {
+        "x": 655.0,
+        "y": 30.0
+      },
+      "axis_x": {
+        "x": 145.0,
+        "y": 0.0
+      },
+      "axis_y": {
+        "x": 0.0,
+        "y": 100.0
+      },
+      "style": {
+        "stroke": [
+          32,
+          80,
+          145
+        ],
+        "fill": null,
+        "width_pt": 1.2,
+        "pattern": "solid"
+      },
+      "sides": "both",
+      "phase": "solid",
+      "phase_flipped": false,
+      "layer": -1,
+      "path": [
+        {
+          "command": "move",
+          "points": {
+            "x": 0.0,
+            "y": 0.49999997
+          }
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 2.4141134e-8,
+              "y": 0.22385758
+            },
+            {
+              "x": 0.22385761,
+              "y": -3.292965e-9
+            },
+            {
+              "x": 0.5,
+              "y": 0.0
+            }
+          ]
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 0.77614236,
+              "y": 3.292965e-9
+            },
+            {
+              "x": 1.0,
+              "y": 0.22385761
+            },
+            {
+              "x": 1.0,
+              "y": 0.5
+            }
+          ]
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 0.99999994,
+              "y": 0.77614236
+            },
+            {
+              "x": 0.77614236,
+              "y": 0.99999994
+            },
+            {
+              "x": 0.49999997,
+              "y": 1.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "arc": {
+        "start_degrees": 32.0,
+        "sweep_degrees": 234.5
+      },
+      "id": 9,
+      "kind": "path",
+      "origin": {
+        "x": 25.0,
+        "y": 200.0
+      },
+      "axis_x": {
+        "x": 145.0,
+        "y": 0.0
+      },
+      "axis_y": {
+        "x": 0.0,
+        "y": 100.0
+      },
+      "style": {
+        "stroke": [
+          32,
+          80,
+          145
+        ],
+        "fill": null,
+        "width_pt": 1.2,
+        "pattern": "solid"
+      },
+      "sides": "both",
+      "phase": "solid",
+      "phase_flipped": false,
+      "layer": -1,
+      "path": [
+        {
+          "command": "move",
+          "points": {
+            "x": 0.92402405,
+            "y": 0.76495963
+          }
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 0.798632,
+              "y": 0.96562886
+            },
+            {
+              "x": 0.5497422,
+              "y": 1.0509238
+            },
+            {
+              "x": 0.32762396,
+              "y": 0.9693469
+            }
+          ]
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 0.105505735,
+              "y": 0.88777
+            },
+            {
+              "x": -0.029015265,
+              "y": 0.66166055
+            },
+            {
+              "x": 0.0052791834,
+              "y": 0.4275341
+            }
+          ]
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 0.039573632,
+              "y": 0.19340767
+            },
+            {
+              "x": 0.23329224,
+              "y": 0.01537823
+            },
+            {
+              "x": 0.4694757,
+              "y": 0.0009326041
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "arc": {
+        "start_degrees": 180.0,
+        "sweep_degrees": 360.0
+      },
+      "id": 11,
+      "kind": "path",
+      "origin": {
+        "x": 257.5,
+        "y": 200.0
+      },
+      "axis_x": {
+        "x": 100.0,
+        "y": 0.0
+      },
+      "axis_y": {
+        "x": 0.0,
+        "y": 100.0
+      },
+      "style": {
+        "stroke": [
+          32,
+          80,
+          145
+        ],
+        "fill": null,
+        "width_pt": 1.2,
+        "pattern": "solid"
+      },
+      "sides": "both",
+      "phase": "solid",
+      "phase_flipped": false,
+      "layer": -1,
+      "path": [
+        {
+          "command": "move",
+          "points": {
+            "x": 0.0,
+            "y": 0.49999997
+          }
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 2.4141134e-8,
+              "y": 0.22385758
+            },
+            {
+              "x": 0.22385761,
+              "y": -3.292965e-9
+            },
+            {
+              "x": 0.5,
+              "y": 0.0
+            }
+          ]
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 0.77614236,
+              "y": 3.292965e-9
+            },
+            {
+              "x": 1.0,
+              "y": 0.22385761
+            },
+            {
+              "x": 1.0,
+              "y": 0.5
+            }
+          ]
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 0.99999994,
+              "y": 0.77614236
+            },
+            {
+              "x": 0.77614236,
+              "y": 0.99999994
+            },
+            {
+              "x": 0.49999997,
+              "y": 1.0
+            }
+          ]
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 0.22385758,
+              "y": 1.0
+            },
+            {
+              "x": -6.58593e-9,
+              "y": 0.77614236
+            },
+            {
+              "x": 0.0,
+              "y": 0.49999997
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "arc": {
+        "start_degrees": 180.0,
+        "sweep_degrees": 270.0
+      },
+      "id": 13,
+      "kind": "path",
+      "origin": {
+        "x": 585.0,
+        "y": 200.0
+      },
+      "axis_x": {
+        "x": -116.0,
+        "y": 31.899994
+      },
+      "axis_y": {
+        "x": -30.0,
+        "y": 75.0
+      },
+      "style": {
+        "stroke": [
+          32,
+          80,
+          145
+        ],
+        "fill": null,
+        "width_pt": 1.2,
+        "pattern": "solid"
+      },
+      "sides": "both",
+      "phase": "solid",
+      "phase_flipped": false,
+      "layer": -1,
+      "path": [
+        {
+          "command": "move",
+          "points": {
+            "x": 0.0,
+            "y": 0.49999997
+          }
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 2.4141134e-8,
+              "y": 0.22385758
+            },
+            {
+              "x": 0.22385761,
+              "y": -3.292965e-9
+            },
+            {
+              "x": 0.5,
+              "y": 0.0
+            }
+          ]
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 0.77614236,
+              "y": 3.292965e-9
+            },
+            {
+              "x": 1.0,
+              "y": 0.22385761
+            },
+            {
+              "x": 1.0,
+              "y": 0.5
+            }
+          ]
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 0.99999994,
+              "y": 0.77614236
+            },
+            {
+              "x": 0.77614236,
+              "y": 0.99999994
+            },
+            {
+              "x": 0.49999997,
+              "y": 1.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "kind": "arc",
+      "origin": {
+        "x": 655.0,
+        "y": 200.0
+      },
+      "axis_x": {
+        "x": 145.0,
+        "y": 0.0
+      },
+      "axis_y": {
+        "x": 0.0,
+        "y": 100.0
+      },
+      "style": {
+        "stroke": [
+          32,
+          80,
+          145
+        ],
+        "fill": null,
+        "width_pt": 1.2,
+        "pattern": "solid"
+      },
+      "sides": "both",
+      "phase": "solid",
+      "phase_flipped": false,
+      "layer": -1
+    }
+  ],
+  "groups": []
+}

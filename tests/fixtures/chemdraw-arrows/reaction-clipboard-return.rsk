@@ -1,0 +1,781 @@
+{
+  "atom_labels": {
+    "carbons": "skeletal",
+    "hydrogens": true,
+    "stereo": false
+  },
+  "version": 15,
+  "atoms": [
+    {
+      "display": {
+        "color_override": true,
+        "carbons": "skeletal",
+        "hydrogens": true,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": false,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 1,
+      "element": "C",
+      "position": {
+        "x": -273.4691,
+        "y": 34.5
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 3,
+      "text_style": {
+        "family": "Helvetica",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "display": {
+        "color_override": true,
+        "carbons": "skeletal",
+        "hydrogens": true,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": false,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 2,
+      "element": "C",
+      "position": {
+        "x": -237.46912,
+        "y": 13.5
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 2,
+      "text_style": {
+        "family": "Helvetica",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "display": {
+        "color_override": true,
+        "carbons": "skeletal",
+        "hydrogens": true,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": false,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 3,
+      "element": "O",
+      "position": {
+        "x": -201.46912,
+        "y": 34.5
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 1,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 1,
+      "text_style": {
+        "family": "Helvetica",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "display": {
+        "color_override": true,
+        "carbons": "skeletal",
+        "hydrogens": true,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": false,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 4,
+      "element": "C",
+      "position": {
+        "x": -1.062439,
+        "y": 34.5
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 3,
+      "text_style": {
+        "family": "Helvetica",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "display": {
+        "color_override": true,
+        "carbons": "skeletal",
+        "hydrogens": true,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": false,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 5,
+      "element": "C",
+      "position": {
+        "x": 34.9375,
+        "y": 13.5
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 2,
+      "text_style": {
+        "family": "Helvetica",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "display": {
+        "color_override": true,
+        "carbons": "skeletal",
+        "hydrogens": true,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": false,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 6,
+      "element": "N",
+      "position": {
+        "x": 70.9375,
+        "y": 34.5
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 2,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 2,
+      "text_style": {
+        "family": "Helvetica",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "display": {
+        "color_override": true,
+        "carbons": "skeletal",
+        "hydrogens": true,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": false,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 7,
+      "element": "C",
+      "position": {
+        "x": 249.46912,
+        "y": 34.5
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 3,
+      "text_style": {
+        "family": "Helvetica",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "display": {
+        "color_override": true,
+        "carbons": "skeletal",
+        "hydrogens": true,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": false,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 8,
+      "element": "C",
+      "position": {
+        "x": 285.46912,
+        "y": 13.5
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 0,
+      "no_implicit": false,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 2,
+      "text_style": {
+        "family": "Helvetica",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    },
+    {
+      "display": {
+        "color_override": true,
+        "carbons": "skeletal",
+        "hydrogens": true,
+        "hydrogen_position": "auto",
+        "number": null,
+        "stereo": {
+          "show": false,
+          "offset": null,
+          "style": {
+            "family": "Arial",
+            "size_pt": 7.5,
+            "bold": false,
+            "italic": true,
+            "underline": false,
+            "color": [
+              0,
+              0,
+              0
+            ],
+            "script": "normal",
+            "formula": false
+          }
+        }
+      },
+      "id": 9,
+      "element": "N",
+      "position": {
+        "x": 321.46906,
+        "y": 34.5
+      },
+      "charge": 0,
+      "radical_electrons": 0,
+      "isotope": 0,
+      "explicit_h": 2,
+      "no_implicit": true,
+      "aromatic": false,
+      "stereo": null,
+      "map_num": 0,
+      "label_h": 2,
+      "text_style": {
+        "family": "Helvetica",
+        "size_pt": 10.0,
+        "bold": false,
+        "italic": false,
+        "underline": false,
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "script": "normal",
+        "formula": false
+      }
+    }
+  ],
+  "bonds": [
+    {
+      "z_order": 45,
+      "indicator": {
+        "show": false,
+        "offset": null,
+        "style": {
+          "family": "Arial",
+          "size_pt": 7.5,
+          "bold": false,
+          "italic": true,
+          "underline": false,
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "script": "normal",
+          "formula": false
+        }
+      },
+      "a": 1,
+      "b": 2,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 46,
+      "indicator": {
+        "show": false,
+        "offset": null,
+        "style": {
+          "family": "Arial",
+          "size_pt": 7.5,
+          "bold": false,
+          "italic": true,
+          "underline": false,
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "script": "normal",
+          "formula": false
+        }
+      },
+      "a": 2,
+      "b": 3,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 47,
+      "indicator": {
+        "show": false,
+        "offset": null,
+        "style": {
+          "family": "Arial",
+          "size_pt": 7.5,
+          "bold": false,
+          "italic": true,
+          "underline": false,
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "script": "normal",
+          "formula": false
+        }
+      },
+      "a": 4,
+      "b": 5,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 48,
+      "indicator": {
+        "show": false,
+        "offset": null,
+        "style": {
+          "family": "Arial",
+          "size_pt": 7.5,
+          "bold": false,
+          "italic": true,
+          "underline": false,
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "script": "normal",
+          "formula": false
+        }
+      },
+      "a": 5,
+      "b": 6,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 49,
+      "indicator": {
+        "show": false,
+        "offset": null,
+        "style": {
+          "family": "Arial",
+          "size_pt": 7.5,
+          "bold": false,
+          "italic": true,
+          "underline": false,
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "script": "normal",
+          "formula": false
+        }
+      },
+      "a": 7,
+      "b": 8,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "z_order": 50,
+      "indicator": {
+        "show": false,
+        "offset": null,
+        "style": {
+          "family": "Arial",
+          "size_pt": 7.5,
+          "bold": false,
+          "italic": true,
+          "underline": false,
+          "color": [
+            0,
+            0,
+            0
+          ],
+          "script": "normal",
+          "formula": false
+        }
+      },
+      "a": 8,
+      "b": 9,
+      "order": 1,
+      "display": "plain",
+      "stereo": null,
+      "stereo_atoms": [],
+      "double_position": "auto",
+      "color": [
+        0,
+        0,
+        0
+      ]
+    }
+  ],
+  "annotations": [],
+  "arrows": [
+    {
+      "id": 10,
+      "start": {
+        "x": -127.0625,
+        "y": 30.604614
+      },
+      "end": {
+        "x": -43.0625,
+        "y": 30.604614
+      },
+      "kind": "forward",
+      "style": {
+        "head": "full",
+        "tail": "none",
+        "shape": "solid",
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "width_pt": 0.6000061,
+        "pattern": "solid",
+        "head_length_pt": 6.0,
+        "head_width_pt": 1.5,
+        "equilibrium_ratio": 1.0,
+        "head_notch": 0.125,
+        "gap_pt": 2.0,
+        "no_go": "none",
+        "dipole": false
+      }
+    },
+    {
+      "id": 11,
+      "start": {
+        "x": 123.46918,
+        "y": 30.601074
+      },
+      "end": {
+        "x": 207.46918,
+        "y": 30.601074
+      },
+      "kind": "forward",
+      "style": {
+        "head": "full",
+        "tail": "none",
+        "shape": "solid",
+        "color": [
+          0,
+          0,
+          0
+        ],
+        "width_pt": 0.6000061,
+        "pattern": "solid",
+        "head_length_pt": 6.0,
+        "head_width_pt": 1.5,
+        "equilibrium_ratio": 1.0,
+        "head_notch": 0.125,
+        "gap_pt": 2.0,
+        "no_go": "none",
+        "dipole": false
+      }
+    }
+  ],
+  "graphics": [],
+  "groups": []
+}

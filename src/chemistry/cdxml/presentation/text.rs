@@ -227,7 +227,7 @@ impl<'a, 'input> TextReader<'a, 'input> {
         let height = inherited(&format!("{prefix}LineHeight"))
             .or_else(|| inherited("LineHeight"))
             .unwrap_or("auto");
-        let line_spacing = if ["auto", "variable", "0", "1"].contains(&height) {
+        let line_spacing = if ["auto", "automatic", "variable", "0", "1"].contains(&height) {
             1.2
         } else {
             numeric::float(height)? / base.size_pt

@@ -1,0 +1,64 @@
+{
+  "numeric": {
+    "source": [
+      {
+        "smiles": "C1CCNCC1",
+        "formula": "C5H11N",
+        "inchikey": "NQRYJNQNLNOLGT-UHFFFAOYSA-N"
+      },
+      {
+        "smiles": "O",
+        "formula": "H2O",
+        "inchikey": "XLYOFNOQVPJJNP-UHFFFAOYSA-N"
+      }
+    ],
+    "clipboard-return": [
+      {
+        "smiles": "C1CCNCC1",
+        "formula": "C5H11N",
+        "inchikey": "NQRYJNQNLNOLGT-UHFFFAOYSA-N"
+      },
+      {
+        "smiles": "O",
+        "formula": "H2O",
+        "inchikey": "XLYOFNOQVPJJNP-UHFFFAOYSA-N"
+      }
+    ]
+  },
+  "reaction": {
+    "source": [
+      {
+        "smiles": "CCN",
+        "formula": "C2H7N",
+        "inchikey": "QUSNBJAOOMFDIB-UHFFFAOYSA-N"
+      },
+      {
+        "smiles": "CCN",
+        "formula": "C2H7N",
+        "inchikey": "QUSNBJAOOMFDIB-UHFFFAOYSA-N"
+      },
+      {
+        "smiles": "CCO",
+        "formula": "C2H6O",
+        "inchikey": "LFQSCWFLJHTTHZ-UHFFFAOYSA-N"
+      }
+    ],
+    "clipboard-return": [
+      {
+        "smiles": "CCN",
+        "formula": "C2H7N",
+        "inchikey": "QUSNBJAOOMFDIB-UHFFFAOYSA-N"
+      },
+      {
+        "smiles": "CCN",
+        "formula": "C2H7N",
+        "inchikey": "QUSNBJAOOMFDIB-UHFFFAOYSA-N"
+      },
+      {
+        "smiles": "CCO",
+        "formula": "C2H6O",
+        "inchikey": "LFQSCWFLJHTTHZ-UHFFFAOYSA-N"
+      }
+    ]
+  }
+}

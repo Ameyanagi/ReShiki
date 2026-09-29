@@ -1,7 +1,10 @@
 """Differential corpus for the Rust codec; Python stays an independent oracle.
 
 Invoked by tests/cdx_codec.rs. This script never regenerates expected results
-with Rust, so a migration cannot make both sides agree by accident.
+with Rust, so a migration cannot make both sides agree by accident. Explicit
+compatibility corrections below are independently grounded by GUI-captured
+ChemDraw binary/XML pairs in fixtures/chemdraw-captions and
+fixtures/chemdraw-arrows. The historical Python codec source remains unchanged.
 """
 
 import base64
@@ -12,7 +15,54 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from engine.cdx_exchange import INTS, PROPERTIES, from_cdx, property_bytes, to_cdx
+from engine.cdx_exchange import BY_NAME, INTS, OBJECTS, PROPERTIES, property_bytes
+from engine.cdx_exchange import from_cdx as legacy_from_cdx
+from engine.cdx_exchange import to_cdx as legacy_to_cdx
+
+# Genuine ChemDraw 26 files in fixtures/chemdraw-arrows establish these codes.
+# Keep the historical worker untouched. Its published-SDK arrow code is wrong;
+# the decoder still accepts old ReShiki files, and the encoder's reverse mapping
+# selects the canonical entry appended here. Scheme/step preserve references
+# that ChemDraw automatically adds when saving drawings containing arrows.
+OBJECTS.update({0x8021: "arrow", 0x800D: "scheme", 0x800E: "step"})
+# The real files store FillType=None as 1. The published CDXConstants.h confirms
+# Unspecified=0, None=1, Solid=2, Shaded=4; keep unsupported fills rejected.
+fill_types = {"Unspecified": 0, "None": 1, "Solid": 2, "Shaded": 4}
+PROPERTIES[0xA37] = ("FillType", "INT16", fill_types)
+BY_NAME["FillType"] = (0xA37, "INT16", fill_types)
+
+LINE_HEIGHTS = {"LineHeight", "CaptionLineHeight", "LabelLineHeight"}
+# An encoding-only alias uses the reference codec's existing explicit boolean
+# encoder for false, while its ordinary implied-boolean behavior stays intact.
+BY_NAME["_NonchemicalCaption"] = (0x0708, "CDXBoolean", {})
+
+
+def to_cdx(text):
+    root = ET.fromstring(text)
+    for node in root.iter():
+        if node.get("InterpretChemically") == "no":
+            del node.attrib["InterpretChemically"]
+            node.set("_NonchemicalCaption", "no")
+        for name in LINE_HEIGHTS & node.attrib.keys():
+            try:
+                value = float(node.attrib[name])
+            except ValueError:
+                continue  # Preserve variable/automatic aliases.
+            if value not in (0, 1):
+                node.set(name, str(value * 20))
+    return legacy_to_cdx(ET.tostring(root, encoding="unicode"))
+
+
+def from_cdx(data):
+    root = ET.fromstring(legacy_from_cdx(data))
+    for node in root.iter():
+        for name in LINE_HEIGHTS & node.attrib.keys():
+            try:
+                value = float(node.attrib[name])
+            except ValueError:
+                continue
+            node.set(name, f"{value / 20:.8g}")
+    return ET.tostring(root, encoding="unicode")
 
 
 def corpus():

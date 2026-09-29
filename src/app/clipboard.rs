@@ -182,7 +182,9 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::Job;
     use reshiki::document::Document;
+    use reshiki::engine::Response;
 
     fn success() -> Result<CopyOutcome, String> {
         Ok(CopyOutcome {
@@ -257,5 +259,39 @@ mod tests {
         assert_eq!(app.selected.len(), 2);
         let _ = app.update(Message::Undo);
         assert_eq!(app.doc, before);
+    }
+
+    #[test]
+    fn external_metadata_warnings_remain_visible_after_paste_and_file_import() {
+        let warning = "External reaction roles and condition references are not retained";
+        let mut doc = Document::default();
+        doc.add_atom("O", Point::default());
+        let (mut app, _) = App::new();
+        app.clipboard_read(
+            app.file_epoch,
+            app.revision,
+            Ok(PasteOutcome {
+                document: doc.clone(),
+                warnings: vec![warning.into()],
+            }),
+        );
+        assert!(app.status.starts_with("Editable drawing pasted"));
+        assert!(app.status.contains(warning));
+        assert!(!app.error);
+        for kind in [Job::Import, Job::ImportFile, Job::Insert] {
+            let _ = app.update(Message::EngineDone {
+                revision: app.revision,
+                kind,
+                result: Box::new(Ok(Response {
+                    document: Some(doc.clone()),
+                    analysis: None,
+                    output: None,
+                    engine_version: "test".into(),
+                    warnings: vec![warning.into()],
+                })),
+            });
+            assert!(app.status.contains(warning));
+            assert!(!app.error);
+        }
     }
 }
