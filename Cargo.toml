@@ -20,7 +20,11 @@ reshiki-macos = { path = "native/macos" }
 
 [target.'cfg(windows)'.dependencies]
 reshiki-windows = { path = "native/windows" }
-iced = { version = "0.14", default-features = false, features = ["tiny-skia"] }
+iced = { version = "0.14", default-features = false, features = ["wgpu", "tiny-skia"] }
+
+[target.'cfg(windows)'.dev-dependencies]
+# The partial-redraw regression tests exercise the software fallback directly.
+iced_tiny_skia = { version = "0.14", default-features = false }
 
 [target.'cfg(not(windows))'.dependencies]
 iced = { version = "0.14", default-features = false, features = ["wgpu"] }
