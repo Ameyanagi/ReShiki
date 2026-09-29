@@ -196,6 +196,14 @@ impl App {
                 self.autosave.retire_candidate = None;
             }
         }
+        if !key.clear && !self.dirty() {
+            // Undo or cancelling a text draft can make the drawing clean while
+            // its first save is running. A clean drawing with no acknowledged
+            // save has no autosave timer, so queue the ordered clear now, even
+            // when the completed save's revision or draft generation is stale.
+            self.clear_recovery();
+            return Task::none();
+        }
         if key.generation != self.autosave.generation || key.epoch != self.file_epoch {
             return Task::none();
         }
@@ -338,6 +346,125 @@ pub(super) mod tests {
         let saved: reshiki::recovery::Snapshot =
             serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
         assert_eq!(saved.document.atoms[0].element, "C");
+    }
+
+    #[test]
+    fn undo_to_saved_state_clears_an_in_flight_first_save() {
+        let (mut app, directory) = fixture();
+        app.history.commit(app.saved.clone(), &app.doc);
+        let other = Recovery::in_directory(directory.path()).unwrap();
+        other.save(&app.doc, None).unwrap();
+        let other_contents = std::fs::read(&other.session).unwrap();
+        app.request_autosave();
+        let old = app.prepare_autosave().unwrap();
+        let path = old.1.clone();
+        let _ = app.update(Message::Undo);
+        assert!(!app.dirty());
+        assert_ne!(app.revision, old.0.revision);
+        assert_eq!(app.autosaved_revision, None);
+        assert!(app.prepare_autosave().is_none(), "Wait for the old writer");
+
+        let (key, result) = run(old);
+        assert!(result.is_ok());
+        assert!(path.exists(), "The old worker persisted the undone drawing");
+        let _ = app.update(Message::Autosaved(key, result));
+        assert!(
+            app.autosave.pending.unwrap().clear,
+            "No further Tick is needed"
+        );
+        finish_pending(&mut app);
+        assert!(!path.exists());
+        assert_eq!(std::fs::read(other.session).unwrap(), other_contents);
+        assert_eq!(app.autosaved_revision, None);
+        assert!(!app.autosave.pending());
+    }
+
+    #[test]
+    fn cancelled_or_undone_inline_drafts_clear_stale_first_save() {
+        use iced::widget::text_editor::{Action, Edit};
+        for cancel in [false, true] {
+            let (mut app, _directory) = fixture();
+            app.saved = app.doc.clone();
+            let _ = app.update(Message::InlineText(
+                super::super::inline_text::Action::Begin(None, Point::default()),
+            ));
+            let _ = app.update(Message::CaptionAction(Action::Edit(Edit::Paste(
+                "Unsaved caption".to_owned().into(),
+            ))));
+            app.request_autosave();
+            let old = app.prepare_autosave().unwrap();
+            let path = old.1.clone();
+            let _ = app.update(if cancel {
+                Message::Escape
+            } else {
+                Message::Undo
+            });
+            assert!(!app.dirty());
+            assert_eq!(app.revision, old.0.revision);
+            assert_ne!(app.autosave.generation, old.0.generation);
+            let (key, result) = run(old);
+            assert!(result.is_ok());
+            let snapshot: reshiki::recovery::Snapshot =
+                serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+            assert_eq!(snapshot.document.annotations[0].text, "Unsaved caption");
+            let _ = app.update(Message::Autosaved(key, result));
+            assert!(app.autosave.pending.unwrap().clear);
+            finish_pending(&mut app);
+            assert!(!path.exists());
+            assert_eq!(app.doc, app.saved);
+            assert_eq!(app.inline_text.is_some(), !cancel);
+        }
+    }
+
+    #[test]
+    fn stale_failed_save_after_undo_still_queues_recovery_cleanup() {
+        let (mut app, _directory) = fixture();
+        app.history.commit(app.saved.clone(), &app.doc);
+        app.recovery.as_ref().unwrap().save(&app.doc, None).unwrap();
+        app.request_autosave();
+        let old = app.prepare_autosave().unwrap();
+        let _ = app.update(Message::Undo);
+        let status = app.status.clone();
+        let _ = app.update(Message::Autosaved(old.0, Err("obsolete error".into())));
+        assert!(app.autosave.pending.unwrap().clear);
+        assert_eq!(app.status, status);
+        assert!(app.autosave_status.is_empty());
+        finish_pending(&mut app);
+        assert!(!old.1.exists());
+    }
+
+    #[test]
+    fn redo_during_stale_save_cleanup_preserves_latest_recovery() {
+        let (mut app, _directory) = fixture();
+        app.history.commit(app.saved.clone(), &app.doc);
+        app.request_autosave();
+        let old = app.prepare_autosave().unwrap();
+        let path = old.1.clone();
+        let _ = app.update(Message::Undo);
+        let (key, result) = run(old);
+        assert!(result.is_ok());
+        let _ = app.autosaved(key, result);
+        let clear = app.prepare_autosave().unwrap();
+        assert!(clear.0.clear);
+        let _ = app.update(Message::Redo);
+        assert!(app.dirty());
+        app.request_autosave();
+        assert!(
+            app.prepare_autosave().is_none(),
+            "Clear still owns the file"
+        );
+        let (key, result) = run(clear);
+        assert!(result.is_ok());
+        let _ = app.autosaved(key, result);
+        assert!(!path.exists());
+        let (key, result) = run(app.prepare_autosave().unwrap());
+        assert!(!key.clear);
+        assert!(result.is_ok());
+        let _ = app.autosaved(key, result);
+        let snapshot: reshiki::recovery::Snapshot =
+            serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+        assert_eq!(snapshot.document.atoms[0].element, "O");
+        assert_eq!(app.autosaved_revision, Some(app.revision));
     }
 
     #[test]
