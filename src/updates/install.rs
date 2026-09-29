@@ -1,5 +1,5 @@
 //! Download only official stable artifacts; stage before touching the running app.
-use super::{CURRENT_VERSION, RELEASES, Release};
+use super::{CURRENT_VERSION, Channel, RELEASES, Release};
 use sha2::{Digest, Sha256};
 use std::{
     path::{Path, PathBuf},
@@ -165,7 +165,10 @@ pub async fn prepare(
     release: Release,
     progress: tokio::sync::mpsc::Sender<Progress>,
 ) -> Result<Arc<Prepared>, String> {
-    if !release.newer_than(CURRENT_VERSION) {
+    if release.channel() != Some(Channel::Stable) {
+        return Err("Nightly builds must be downloaded and installed manually.".into());
+    }
+    if !release.available_for(CURRENT_VERSION) {
         return Err("You already have this release or a newer version.".into());
     }
     let name = asset_name(
@@ -397,6 +400,19 @@ pub async fn handoff(prepared: Arc<Prepared>, drawing: Option<PathBuf>) -> Resul
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn nightly_cannot_enter_verified_stable_installation() {
+        let (sender, _) = tokio::sync::mpsc::channel(1);
+        let result = prepare(
+            Release {
+                version: "99.0.0-nightly.20260929.20.1".into(),
+            },
+            sender,
+        )
+        .await;
+        assert!(result.unwrap_err().contains("manually"));
+    }
+
     #[cfg(unix)]
     #[test]
     fn helper_replaces_owned_files_and_rolls_back_an_interrupted_install() {
