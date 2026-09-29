@@ -4,7 +4,7 @@ The Release builds workflow produces signed macOS disk images, Windows x64/ARM64
 
 Windows setup uses Inno Setup 6.7.3, downloaded with a pinned SHA-256 checksum. It installs per user, adds a Start menu shortcut, and offers a desktop shortcut and `.rsk` file association. Setup and uninstall preserve user data. CI installs twice to check upgrades, runs native chemistry, and checks uninstallation. Upgrades remove the old app-owned worker while preserving user drawings and caches.
 
-The macOS disk image contains the signed app and an Applications shortcut. Both the app and disk image are notarized and stapled. CI mounts the image, copies the app out, and verifies chemistry, its signature and Gatekeeper status. The release has ten downloads plus `SHA256SUMS`.
+The macOS disk image contains the signed app and an Applications shortcut. Both the app and disk image are notarized and stapled. CI mounts the image, copies the app out, and verifies chemistry, its signature and Gatekeeper status. The release has ten downloads plus `SHA256SUMS`. Both publishers validate the exact ten filenames and their checksum sidecars before creating the shared OS/architecture/installer/portable download table. macOS archive manifests must declare the matching version, architecture, signature and notarization. Generated GitHub release notes are retained after this table.
 
 Keep the homepage, README, and installation guide's primary download links pointed
 at [the latest stable release](https://github.com/Ameyanagi/ReShiki/releases/latest).
@@ -21,18 +21,31 @@ branch. Tag tested commits on `main` for stable releases.
 
 The **Nightly builds** workflow builds `main` daily at 18:37 UTC (03:37 JST), or on
 manual dispatch with `main` selected. Each successful run publishes a downloadable
-GitHub prerelease with six portable archives and `SHA256SUMS`. Nightlies use the
-same native helper, package tests and extracted-application verification as release
-builds. They omit installers, Developer ID signing and notarization. The complete
+GitHub prerelease with ten downloads and `SHA256SUMS`: signed and notarized macOS
+DMG/ZIP for both architectures, Windows setup/ZIP for both architectures, and
+Linux archives for both architectures. Nightlies reuse the stable installer,
+Developer ID signing, notarization and extracted-application verification paths. The complete
 live reference suite remains a stable-release requirement; nightly package checks
 do not replace it.
 
 Each nightly has a unique `VERSION-nightly.YYYYMMDD.RUN_ID.ATTEMPT` package version,
 embedded in the executable and recorded with its source commit in `build.json`.
+Build and signing jobs stamp the same version into their temporary Cargo manifest
+and lockfile, so archive provenance must match before signing. Numeric macOS
+`CFBundleVersion`/`CFBundleShortVersionString` and Windows setup `VersionInfoVersion`
+retain the three-component base version. The full nightly identifier is retained in
+the executable, `build.json`, macOS `ReShikiPackageVersion`, and Windows setup display
+and text-version fields. GitHub's large run ID is never put in a Windows 16-bit
+version component. See [Apple bundle versions](https://developer.apple.com/documentation/bundleresources/information-property-list/cfbundleversion),
+[Apple display versions](https://developer.apple.com/documentation/bundleresources/information-property-list/cfbundleshortversionstring),
+and [Inno Setup version fields](https://jrsoftware.org/ishelp/topic_setup_versioninfoversion.htm).
+
 The workflow stamps only its temporary checkout. Published nightly tags start with
 `nightly-`, so they do not trigger the stable `v*` release workflow. Prereleases are
 excluded from the stable updater. Keep the stable installation and test with copies
-of drawings. Nightlies are unsigned; macOS nightlies are not notarized.
+of drawings. Windows and Linux packages remain unsigned. Installers replace the
+existing installation; use a portable archive in a separate folder to retain Stable.
+Older nightlies published before this installer workflow contain unsigned archives.
 
 ```sh
 gh workflow run nightly.yml --ref main
@@ -40,7 +53,8 @@ gh workflow run nightly.yml --ref main
 
 GitHub schedules run from the repository's default branch, `main`.
 The workflow publishes only runs from `main` and only
-after all six package jobs pass. Standard build runners do not establish hardware
+after all six package jobs and both macOS signing jobs pass. Signing failures
+prevent publication; there is no unsigned macOS fallback. Standard build runners do not establish hardware
 GPU performance: use the [Windows renderer checks](windows.md#release-performance-and-debugging)
 on the test machine and record its adapter separately.
 
@@ -51,7 +65,7 @@ path after configuring credentials.
 
 ```sh
 gh workflow run release.yml --ref YOUR_FEATURE_BRANCH
-# Exercise nightly versioning and portable packages before merging the PR:
+# Exercise nightly versioning and installers before merging the PR:
 gh workflow run release.yml --ref YOUR_FEATURE_BRANCH -f nightly=true
 # Includes Developer ID and Apple notarization checks:
 gh workflow run release.yml --ref main -f sign_macos=true
@@ -145,4 +159,4 @@ ReShiki defaults to **Stable** and saves a **Stable / Nightly** choice in the ex
 
 Within a channel, semantic version comparison offers only newer builds. Switching between an installed stable and nightly version offers the selected channel’s release even if its semantic version is lower, including returning from a nightly to the latest stable. The automatic-check preference retains its older Boolean file format so returning to an older stable build preserves an opt-out.
 
-**Release notes** opens the selected release page. Stable **Update and restart** downloads and verifies a matching package, waits for unsaved work and pending assistant/input state to be resolved, then installs and restarts. Nightly **Download portable ↗** opens the platform-specific ZIP or tar.gz in the browser; these unsigned builds require manual extraction and installation. Nightlies cannot enter the verified stable installer. Automatic checks never install without a click. No signing credentials or drawing data are used by the update check. See the [installation and update guide](https://reshiki.com/guide/install/).
+**Release notes** opens the selected release page. Stable **Update and restart** downloads and verifies a matching package, waits for unsaved work and pending assistant/input state to be resolved, then installs and restarts. Nightly **Download nightly ↗** opens the matching DMG or Windows setup in the browser when that asset is published, falling back to the portable ZIP or Linux tar.gz for older nightlies. Installation remains manual; **Release notes** includes both installer and portable choices. Nightlies cannot enter the automatic stable installer. Automatic checks never install without a click. No signing credentials or drawing data are used by the update check. See the [installation and update guide](https://reshiki.com/guide/install/).

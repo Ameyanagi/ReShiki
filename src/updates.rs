@@ -271,15 +271,19 @@ pub async fn check(channel: Channel, manual: bool) -> Result<Release, String> {
     result
 }
 
-async fn fetch(channel: Channel) -> Result<Release, String> {
-    let client = reqwest::Client::builder()
+fn release_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
         .user_agent(concat!("ReShiki/", env!("CARGO_PKG_VERSION")))
         .https_only(true)
         .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(Duration::from_secs(5))
         .timeout(Duration::from_secs(15))
         .build()
-        .map_err(|e| format!("Could not start the update check: {e}"))?;
+        .map_err(|e| format!("Could not start the update check: {e}"))
+}
+
+async fn fetch(channel: Channel) -> Result<Release, String> {
+    let client = release_client()?;
     if channel == Channel::Stable {
         return parse_release(&fetch_bytes(&client, &format!("{API}/latest")).await?);
     }
@@ -337,8 +341,58 @@ async fn fetch_bytes(client: &reqwest::Client, url: &str) -> Result<Vec<u8>, Str
 pub async fn open_release(release: Option<Release>) -> Result<(), String> {
     open_url(release.map(|r| r.url()).unwrap_or_else(|| RELEASES.into())).await
 }
-pub async fn open_portable(release: Release) -> Result<(), String> {
-    open_url(release.portable_url(std::env::consts::OS, std::env::consts::ARCH)?).await
+fn nightly_download_url(
+    release: &Release,
+    bytes: &[u8],
+    os: &str,
+    arch: &str,
+) -> Result<String, String> {
+    #[derive(Deserialize)]
+    struct Asset {
+        name: String,
+    }
+    #[derive(Deserialize)]
+    struct Downloads {
+        tag_name: String,
+        draft: bool,
+        prerelease: bool,
+        assets: Vec<Asset>,
+    }
+    let portable = release.portable_url(os, arch)?;
+    let downloads: Downloads = serde_json::from_slice(bytes)
+        .map_err(|_| "The release service returned unreadable downloads.".to_owned())?;
+    if downloads.tag_name != release.tag()? || downloads.draft || !downloads.prerelease {
+        return Err("The selected nightly release is no longer available.".into());
+    }
+    let installer = portable.strip_suffix(".zip").and_then(|stem| match os {
+        "macos" => Some(format!("{stem}.dmg")),
+        "windows" => Some(format!("{stem}-setup.exe")),
+        _ => None,
+    });
+    // Use only expected names to build trusted GitHub URLs. Older nightlies have
+    // portable archives only; server-supplied download URLs are never opened.
+    installer
+        .into_iter()
+        .chain(std::iter::once(portable))
+        .find(|url| {
+            let filename = url.rsplit('/').next().unwrap_or_default();
+            downloads.assets.iter().any(|asset| asset.name == filename)
+        })
+        .ok_or_else(|| "No matching download is available for this nightly release.".into())
+}
+
+pub async fn open_nightly_download(release: Release) -> Result<(), String> {
+    // Reject nonnightly versions before making a request.
+    release.portable_url(std::env::consts::OS, std::env::consts::ARCH)?;
+    let client = release_client()?;
+    let bytes = fetch_bytes(&client, &format!("{API}/tags/{}", release.tag()?)).await?;
+    open_url(nightly_download_url(
+        &release,
+        &bytes,
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+    )?)
+    .await
 }
 async fn open_url(url: String) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
@@ -483,6 +537,60 @@ mod tests {
         assert!(release(NIGHTLY).portable_url("unknown", "x86_64").is_err());
         assert!(release("../bad").portable_url("linux", "x86_64").is_err());
         assert!(release("0.9.1").portable_url("linux", "x86_64").is_err());
+    }
+
+    #[test]
+    fn nightly_downloads_prefer_published_installers_and_fall_back_to_legacy_archives() {
+        for (os, arch, platform, installer, portable) in [
+            ("macos", "aarch64", "macos-arm64", ".dmg", ".zip"),
+            ("macos", "x86_64", "macos-x64", ".dmg", ".zip"),
+            ("windows", "aarch64", "windows-arm64", "-setup.exe", ".zip"),
+            ("windows", "x86_64", "windows-x64", "-setup.exe", ".zip"),
+            ("linux", "aarch64", "linux-arm64", ".tar.gz", ".tar.gz"),
+            ("linux", "x86_64", "linux-x64", ".tar.gz", ".tar.gz"),
+        ] {
+            let stem = format!("reshiki-{NIGHTLY}-{platform}");
+            let mut response = serde_json::json!({
+                "tag_name": format!("nightly-{NIGHTLY}"), "draft": false, "prerelease": true,
+                "assets": [{"name": format!("{stem}{portable}"), "browser_download_url": "https://untrusted.example/archive"}]
+            });
+            let bytes = serde_json::to_vec(&response).unwrap();
+            assert_eq!(
+                nightly_download_url(&release(NIGHTLY), &bytes, os, arch).unwrap(),
+                release(NIGHTLY).portable_url(os, arch).unwrap()
+            );
+            response["assets"]
+                .as_array_mut()
+                .unwrap()
+                .push(serde_json::json!({"name": format!("{stem}{installer}")}));
+            let bytes = serde_json::to_vec(&response).unwrap();
+            assert!(
+                nightly_download_url(&release(NIGHTLY), &bytes, os, arch)
+                    .unwrap()
+                    .ends_with(installer)
+            );
+            response["draft"] = true.into();
+            assert!(
+                nightly_download_url(
+                    &release(NIGHTLY),
+                    &serde_json::to_vec(&response).unwrap(),
+                    os,
+                    arch
+                )
+                .is_err()
+            );
+            response["draft"] = false.into();
+            response["assets"] = serde_json::json!([]);
+            assert!(
+                nightly_download_url(
+                    &release(NIGHTLY),
+                    &serde_json::to_vec(&response).unwrap(),
+                    os,
+                    arch
+                )
+                .is_err()
+            );
+        }
     }
 
     #[test]

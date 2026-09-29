@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       nightly:
-        description: Test nightly versions and portable packages without publishing
+        description: Test nightly versions and installers without publishing
         type: boolean
         default: false
       sign_macos:
@@ -15,7 +15,7 @@ on:
   workflow_call:
     inputs:
       nightly:
-        description: Build unsigned portable nightly packages with a unique version
+        description: Build nightly packages with installers and a unique version
         type: boolean
         default: false
     outputs:
@@ -130,7 +130,7 @@ jobs:
       - run: uv sync --locked
         if: matrix.native_only != true
       - name: Install pinned Windows installer compiler
-        if: runner.os == 'Windows' && !inputs.nightly
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $compilerInstaller = Join-Path $env:RUNNER_TEMP 'innosetup.exe'
@@ -150,14 +150,14 @@ jobs:
         if: matrix.native_only == true
         env:
           RESHIKI_REQUIRE_INCHI_HELPER: "1"
-        run: uv run --no-project --isolated --python 3.12 python -m unittest tests.test_release tests.test_inchi_distribution tests.test_inchi_helper_builder tests.test_inchi_source_patch tests.test_inchi_helper_protocol tests.test_inchi_arena tests.test_native_packaging tests.test_license_notices tests.test_native_clipboard tests.test_native_print
+        run: uv run --no-project --isolated --python 3.12 python -m unittest tests.test_release tests.test_release_downloads tests.test_prepare_nightly tests.test_inchi_distribution tests.test_inchi_helper_builder tests.test_inchi_source_patch tests.test_inchi_helper_protocol tests.test_inchi_arena tests.test_native_packaging tests.test_license_notices tests.test_native_clipboard tests.test_native_print
       - name: Verify reference dependencies
         if: matrix.native_only != true
         run: uv run --locked python scripts/check_reference_dependencies.py
       - name: Build and test extracted portable archive
         env:
           MACOSX_DEPLOYMENT_TARGET: "14.0"
-        run: uv run --no-project --isolated --python 3.12 python scripts/build_release.py --target ${{ matrix.target }} --fetch-inchi-source ${{ inputs.nightly != true && '--installer' || '' }}
+        run: uv run --no-project --isolated --python 3.12 python scripts/build_release.py --target ${{ matrix.target }} --fetch-inchi-source --installer
       - name: Test native chemistry on Intel macOS
         if: matrix.artifact == 'macos-x64'
         env:
@@ -178,8 +178,8 @@ jobs:
           path: dist/releases/*
           if-no-files-found: error
   sign:
-    needs: build
-    if: ${{ !inputs.nightly && (github.event_name == 'push' || inputs.sign_macos) }}
+    needs: [validate, build]
+    if: ${{ github.event_name == 'push' || inputs.sign_macos || (inputs.nightly && github.ref == 'refs/heads/main') }}
     environment: macos-signing
     timeout-minutes: 75
     strategy:
@@ -197,6 +197,11 @@ jobs:
         with:
           version: "0.12.3"
           python-version: "3.12"
+      - name: Match the nightly version of the qualified archive
+        if: inputs.nightly
+        env:
+          NIGHTLY_VERSION: ${{ needs.validate.outputs.nightly_version }}
+        run: uv run --no-project --python 3.12 python scripts/prepare_nightly.py --version "$NIGHTLY_VERSION"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: unsigned-${{ matrix.artifact }}
@@ -222,6 +227,12 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.3"
+          python-version: "3.12"
+          enable-cache: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: signed-*
@@ -250,9 +261,8 @@ jobs:
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          cat *.sha256 | tr -d '\r' > SHA256SUMS
-          sha256sum --check SHA256SUMS
-          test "$(wc -l < SHA256SUMS)" -eq 10
-          args=()
-          if [[ "$RELEASE_TAG" == *-* ]]; then args+=(--prerelease); fi
-          gh release create "$RELEASE_TAG" --verify-tag --generate-notes "${args[@]}" *.zip *.tar.gz *.dmg *-setup.exe SHA256SUMS
+          set -euo pipefail
+          uv run --no-project --python 3.12 python ../scripts/release_downloads.py --directory . --repository "$GH_REPO" --tag "$RELEASE_TAG" --notes notes.md
+          args=(--latest)
+          if [[ "$RELEASE_TAG" == *-* ]]; then args=(--prerelease --latest=false); fi
+          gh release create "$RELEASE_TAG" --verify-tag --generate-notes --notes-file notes.md "${args[@]}" *.zip *.tar.gz *.dmg *-setup.exe SHA256SUMS
