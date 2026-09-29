@@ -4,7 +4,7 @@ The Windows dropdown fix is recorded in [ReShiki 0.9.1](changes-0.9.1.md). Publi
 
 ## Stable downloads and optional nightly builds
 
-By @Ameyanagi; under review.
+By @Ameyanagi in [PR #81](https://github.com/Ameyanagi/ReShiki/pull/81); under review.
 
 The homepage, repository README, and installation guide now explicitly offer the latest stable release for everyday work. A smaller Nightly builds link leads to separate testing instructions. GitHub's all-releases list still includes newer prereleases; the primary download links go directly to stable. [Change and validation notes](changes/release-channels.md).
 
