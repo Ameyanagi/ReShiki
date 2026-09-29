@@ -34,6 +34,11 @@ selection decorations and exactly hinted glyphs reduced four-gallery zoom CPU
 preparation from 47 ms to 24 ms on the Mac benchmark. See the
 [background I/O, inspector and zoom report](performance/background-io-and-zoom.md).
 
+Double bonds now participate in **Emphasize front bonds** and retain their
+emphasis during further 3D tilts. Foreground double bonds use a bold main stroke
+with a thin second stroke; editable CDX/CDXML copy and export keep that appearance.
+See the [before/after example and validation](changes/tilted-double-bonds.md).
+
 ## Stable and Nightly update channels
 
 By @Ameyanagi in [PR #82](https://github.com/Ameyanagi/ReShiki/pull/82).

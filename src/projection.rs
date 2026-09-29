@@ -159,7 +159,7 @@ pub fn tilt(doc: &mut Document, ids: &[u64], degrees: f32, around_x: bool) {
     refresh_depth_bonds(doc, &ids);
 }
 
-/// Emphasize single/aromatic ring outlines; never rewrite stereo wedges or orders.
+/// Emphasize single, double and aromatic outlines without rewriting stereo or order.
 pub fn depth_bonds(doc: &mut Document, ids: &[u64]) {
     let atoms: Vec<_> = doc
         .atoms
@@ -172,8 +172,9 @@ pub fn depth_bonds(doc: &mut Document, ids: &[u64]) {
     let mean = atoms.iter().map(|a| a.depth).sum::<f32>() / atoms.len() as f32;
     let depth: std::collections::HashMap<_, _> = atoms.iter().map(|a| (a.id, a.depth)).collect();
     for b in &mut doc.bonds {
-        if matches!(b.order, 1 | 4)
+        if matches!(b.order, 1 | 2 | 4)
             && matches!(b.display.as_str(), "plain" | "bold")
+            && b.secondary_display.as_deref() != Some("dashed")
             && let (Some(a), Some(z)) = (depth.get(&b.a), depth.get(&b.b))
         {
             b.projection = true;
@@ -183,6 +184,11 @@ pub fn depth_bonds(doc: &mut Document, ids: &[u64]) {
                 "plain"
             }
             .into();
+            if b.order == 2 {
+                // Use the established bold-double appearance: emphasize the
+                // main rail while retaining a separate thin second rail.
+                b.secondary_display = Some("plain".into());
+            }
         }
     }
 }
@@ -195,8 +201,9 @@ pub(crate) fn refresh_depth_bonds(doc: &mut Document, ids: &[u64]) {
     let mut adjacent = HashMap::<u64, Vec<u64>>::new();
     let eligible = |b: &crate::document::Bond| {
         b.projection
-            && matches!(b.order, 1 | 4)
+            && matches!(b.order, 1 | 2 | 4)
             && matches!(b.display.as_str(), "plain" | "bold" | "wedge")
+            && b.secondary_display.as_deref() != Some("dashed")
             && [b.a, b.b]
                 .iter()
                 .all(|id| doc.atom(*id).is_some_and(|a| a.centroid.is_empty()))
@@ -240,7 +247,7 @@ pub(crate) fn refresh_depth_bonds(doc: &mut Document, ids: &[u64]) {
         }
         let mean = depths.iter().map(|(_, z)| z).sum::<f32>() / depths.len() as f32;
         for (id, z) in depths {
-            near.insert(id, z > mean + 0.01);
+            near.insert(id, z - mean);
         }
     }
     for (i, bond) in doc.bonds.iter_mut().enumerate() {
@@ -250,15 +257,24 @@ pub(crate) fn refresh_depth_bonds(doc: &mut Document, ids: &[u64]) {
         let (Some(a), Some(b)) = (near.get(&bond.a), near.get(&bond.b)) else {
             continue;
         };
+        if bond.order == 2 {
+            // Double bonds have no tapered-wedge display. Their midpoint
+            // determines foreground emphasis, as in the initial command.
+            // Keep endpoint orientation, E/Z references and rail placement.
+            bond.display = if (a + b) / 2. > 0.01 { "bold" } else { "plain" }.into();
+            bond.secondary_display = Some("plain".into());
+            continue;
+        }
+        let (a, b) = (*a > 0.01, *b > 0.01);
         bond.display = if a == b {
             // Stable orientation makes rotation followed by its inverse restore
             // the same document, including endpoints of non-stereo outlines.
             if bond.a > bond.b {
                 std::mem::swap(&mut bond.a, &mut bond.b);
             }
-            if *a { "bold" } else { "plain" }
+            if a { "bold" } else { "plain" }
         } else {
-            if *a {
+            if a {
                 std::mem::swap(&mut bond.a, &mut bond.b);
             }
             "wedge"
