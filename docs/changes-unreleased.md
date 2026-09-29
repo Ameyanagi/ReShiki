@@ -2,6 +2,18 @@
 
 The Windows dropdown fix is recorded in [ReShiki 0.9.1](changes-0.9.1.md). Publisher-style, theme, clipboard and aromatic-fusion updates are recorded in [ReShiki 0.9.0](changes-0.9.md).
 
+## Stable canvas during selection
+
+By @Ameyanagi in [PR #74](https://github.com/Ameyanagi/ReShiki/pull/74), following @HiroYokoyama's proposal in [issue #61](https://github.com/Ameyanagi/ReShiki/issues/61).
+
+Selecting atoms and opening object properties keeps the drawing steady, making double-click molecule selection reliable. Bonded-movement controls stay in the existing scrolling context row. Explicit Fit, inspector toggles, window resizing, pan, and zoom keep their behavior.
+
+Matched examples come from application-renderer and pointer-event checks. Real macOS desktop checks also passed on combined source `446331e`, including the minimum window size, inspector visibility changes, and the optional object toolbar. [Reproduction steps, fixtures, measurements, and exact capture sources](changes/selection-canvas-stability.md).
+
+| Before                                                                                                              | After                                                                                                                         |
+| ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| ![A second click misses the nitrogen after the canvas shifts](images/selection-canvas/before-1280-double-click.png) | ![Double-click selects the whole molecule while the drawing stays fixed](images/selection-canvas/after-1280-double-click.png) |
+
 ## Precise numeric transforms
 
 By @Ameyanagi in [PR #73](https://github.com/Ameyanagi/ReShiki/pull/73).
