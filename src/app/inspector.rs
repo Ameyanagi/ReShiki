@@ -1,13 +1,12 @@
 //! Selection-focused properties and task-based export controls.
-use super::workspace::{command, muted_text};
+use super::workspace::{command, hover_hint, muted_text};
 use super::{App, InspectorTab, Message};
 use crate::canvas::Tool;
-use iced::widget::{button, checkbox, column, container, row, text};
+use iced::widget::{button, checkbox, column, container, row, text, tooltip};
 use iced::{Alignment, Border, Color, Element, Length, Subscription, Task};
 use reshiki::{
     bonds::{BondPreset, DoublePosition},
     document::Document,
-    editing::{Arrange, Transform},
     engine::{Analysis, ChemistryEngine, Request},
 };
 use std::collections::{HashMap, HashSet};
@@ -17,7 +16,7 @@ pub enum Section {
     Bonds,
     BondDirection,
     Atoms,
-    Arrange,
+    Transform,
     Groups,
     Molecule,
     Chemistry,
@@ -416,7 +415,6 @@ impl App {
 
     pub(super) fn properties_panel(&self) -> Element<'_, Message> {
         let mut body = column![
-            text("Properties").size(18),
             text(if self.selected.is_empty() {
                 if self.tool.selects() {
                     "Select an object to edit its properties."
@@ -442,25 +440,45 @@ impl App {
         if molecular_first {
             body = body.push(self.molecular_section());
         }
-        if self.alignment_count() >= 2 {
-            body = body.push(self.arrangement_panel(true));
-        }
         if let Tool::RingPreset(preset) = self.tool {
-            body = body.push(card(container(column![
-                text(preset.to_string()).size(14),
-                crate::canvas::layered::canvas(crate::canvas::DrawingThumbnail(preset.document(self.bond_drawing.length, false))).width(Length::Fill).height(90),
-                text(if preset == reshiki::rings::Preset::Benzene {
+            use reshiki::rings::Preset;
+            let details = format!(
+                "{} Alt/Option on an atom connects the ring with a new bond. Each placement is one Undo step. {}",
+                if preset == Preset::Benzene {
                     "Click an aromatic carbon to attach a phenyl group, or a bond to fuse. Terminal carbons become part of the ring. Drag to choose the direction."
                 } else {
                     "Click to place. Drag to rotate or choose an attachment side. Click an atom to share it, or a bond to fuse."
-                }).size(12),
-                text("Alt/Option on an atom connects the ring with a new bond. Each placement is one Undo step.").size(11).style(muted_text),
-                text(match preset {
-                    reshiki::rings::Preset::Benzene | reshiki::rings::Preset::Cyclopentadiene => "Hold Shift to move the double bonds.",
-                    reshiki::rings::Preset::HaworthFive | reshiki::rings::Preset::HaworthSix => "Haworth outlines have a bold front edge. Templates → Carbohydrates contains oxygen scaffolds and defined α/β sugars. These blank outlines do not assign stereochemistry.",
-                    _ => "Chair projections do not assign stereochemistry. Cleanup may redraw them as regular hexagons.",
-                }).size(11).style(muted_text),
-            ].spacing(8)).padding(12)));
+                },
+                match preset {
+                    Preset::Benzene | Preset::Cyclopentadiene =>
+                        "Hold Shift to move the double bonds.",
+                    Preset::HaworthFive | Preset::HaworthSix =>
+                        "Haworth outlines have a bold front edge. Templates → Carbohydrates contains oxygen scaffolds and defined α/β sugars. These blank outlines do not assign stereochemistry.",
+                    _ =>
+                        "Chair projections do not assign stereochemistry. Cleanup may redraw them as regular hexagons.",
+                }
+            );
+            body = body.push(card(
+                container(
+                    column![
+                        text(preset.to_string()).size(14),
+                        hover_hint(
+                            crate::canvas::layered::canvas(crate::canvas::DrawingThumbnail(
+                                preset.document(self.bond_drawing.length, false)
+                            ))
+                            .width(Length::Fill)
+                            .height(90),
+                            details,
+                            tooltip::Position::Left,
+                        ),
+                        text("Click to place · Click a bond to fuse.")
+                            .size(11)
+                            .style(muted_text),
+                    ]
+                    .spacing(8),
+                )
+                .padding(12),
+            ));
         }
         if matches!(self.tool, Tool::Graphic(_))
             || self
@@ -509,7 +527,7 @@ impl App {
         if !molecular_first {
             body = body.push(self.molecular_section());
         }
-        let chemistry = column![
+        let mut chemistry = column![
             command(
                 "Reaction roles…",
                 Message::Reaction(super::reactions::Action::Open)
@@ -524,6 +542,9 @@ impl App {
             ),
         ]
         .spacing(3);
+        if self.selected.iter().any(|id| self.doc.atom(*id).is_some()) {
+            chemistry = chemistry.push(self.attachment_points());
+        }
         body = body.push(self.inspector_section(
             Section::Chemistry,
             "Labels & chemistry",
@@ -563,7 +584,7 @@ impl App {
             Section::Molecule,
             "Molecular properties",
             self.property_summary(),
-            self.selected.is_empty() && self.tool == Tool::Select && !self.doc.atoms.is_empty(),
+            self.opened_section() == Some(Section::Molecule),
             self.molecular_properties(),
         )
     }
@@ -714,104 +735,107 @@ impl App {
         reshiki::editing::groups(&self.doc, &self.selected).len()
     }
 
-    fn arrangement_panel(&self, multiple: bool) -> Element<'_, Message> {
-        let mut arrange = column![
-            self.numeric_transform_panel(),
-            text("Rotate & reflect").size(11).style(muted_text),
-            row![
-                command("↶ 30°", Message::Transform(Transform::Rotate(-30.))).width(Length::Fill),
-                command("↷ 30°", Message::Transform(Transform::Rotate(30.))).width(Length::Fill)
-            ]
-            .spacing(6),
-            row![
-                command("Flip H", Message::Transform(Transform::FlipHorizontal))
-                    .width(Length::Fill),
-                command("Flip V", Message::Transform(Transform::FlipVertical)).width(Length::Fill)
-            ]
-            .spacing(6),
-            text("3D tilt").size(11).style(muted_text),
-            row![
-                command("X −15°", Message::Transform(Transform::TiltX(-15.))).width(Length::Fill),
-                command("X +15°", Message::Transform(Transform::TiltX(15.))).width(Length::Fill),
-            ]
-            .spacing(4),
-            row![
-                command("Y −15°", Message::Transform(Transform::TiltY(-15.))).width(Length::Fill),
-                command("Y +15°", Message::Transform(Transform::TiltY(15.))).width(Length::Fill),
-            ]
-            .spacing(4),
-            command(
-                "Emphasize front bonds",
-                Message::InspectorAction(Action::DepthBonds)
-            )
-            .width(Length::Fill),
-            row![
-                command("Add centroid", Message::InspectorAction(Action::Centroid))
-                    .width(Length::Fill),
-                command("Dummy atom (*)", Message::Element("*".into())).width(Length::Fill),
-            ]
-            .spacing(4),
-            command("Add multi-center attachment", Message::InspectorAction(Action::Attachment(reshiki::attachments::Kind::MultiCenter)))
-                .width(Length::Fill),
-            command("Add variable attachment", Message::InspectorAction(Action::Attachment(reshiki::attachments::Kind::Variable)))
-                .width(Length::Fill),
-            text("Select the target atoms, then add a point. Multi-center attaches to all; variable attaches to one of the selected positions.")
-                .size(11)
-                .style(muted_text),
-            text("Align horizontally").size(11).style(muted_text),
-            row![
-                command("Left", Message::Arrange(Arrange::AlignLeft)).width(Length::Fill),
-                command("Center", Message::Arrange(Arrange::AlignHorizontal)).width(Length::Fill),
-                command("Right", Message::Arrange(Arrange::AlignRight)).width(Length::Fill)
-            ]
-            .spacing(2),
-            text("Align vertically").size(11).style(muted_text),
-            row![
-                command("Top", Message::Arrange(Arrange::AlignTop)).width(Length::Fill),
-                command("Middles", Message::Arrange(Arrange::AlignVertical)).width(Length::Fill),
-                command("Bottom", Message::Arrange(Arrange::AlignBottom)).width(Length::Fill)
-            ]
-            .spacing(2),
-            text("Distribute").size(11).style(muted_text),
-            row![
-                command(
-                    "Horizontally",
-                    Message::Arrange(Arrange::DistributeHorizontal)
-                )
-                .width(Length::Fill),
-                command("Vertically", Message::Arrange(Arrange::DistributeVertical))
-                    .width(Length::Fill)
-            ]
-            .spacing(2),
-            text("Drag a box corner to resize. Drag the top handle to rotate; Shift snaps to 15°.")
-                .size(11)
-                .style(muted_text),
-        ]
-        .spacing(6);
-        if reshiki::rings::selected_cycle(&self.doc, &self.selected).is_some() {
-            arrange = arrange.push(
-                command(
-                    "Saturated ↔ Aromatic · Shift+R",
-                    Message::ToggleSelectedRing,
-                )
-                .width(Length::Fill),
-            );
+    /// The one section a selection opens. Sections the user opened or
+    /// closed keep that state.
+    fn opened_section(&self) -> Option<Section> {
+        if self.selected.is_empty() {
+            return (self.tool == Tool::Select && !self.doc.atoms.is_empty())
+                .then_some(Section::Molecule);
         }
+        if self
+            .doc
+            .bonds
+            .iter()
+            .any(|b| self.selected.contains(&b.a) && self.selected.contains(&b.b))
+        {
+            return Some(Section::Bonds);
+        }
+        let atoms: Vec<_> = self
+            .doc
+            .atoms
+            .iter()
+            .filter(|a| self.selected.contains(&a.id))
+            .collect();
+        (atoms.len() == 1
+            || atoms
+                .iter()
+                .any(|a| !a.marks.is_empty() || a.radical_electrons != 0))
+        .then_some(Section::Atoms)
+    }
+
+    /// Centroids, dummy atoms and semantic attachment points for the
+    /// selected atoms; the rules match the right-click menu.
+    fn attachment_points(&self) -> Element<'_, Message> {
+        let atoms = self
+            .doc
+            .atoms
+            .iter()
+            .filter(|a| self.selected.contains(&a.id) && a.element != "*" && a.centroid.is_empty())
+            .count();
+        let centroid = (2..=300).contains(&atoms);
+        let attachment = centroid && atoms == self.selected.len();
+        let item = |label, message: Message, enabled: bool, hint: &'static str, reason| {
+            hover_hint(
+                command(label, message.clone())
+                    .on_press_maybe(enabled.then_some(message))
+                    .width(Length::Fill),
+                if enabled { hint } else { reason },
+                tooltip::Position::Top,
+            )
+        };
+        let kind = |kind| Message::InspectorAction(Action::Attachment(kind));
+        column![
+            text("Attachment points").size(11).style(muted_text),
+            row![
+                item(
+                    "Add centroid",
+                    Message::InspectorAction(Action::Centroid),
+                    centroid,
+                    "A point at the center of the selected atoms · Draw a dashed contact from it",
+                    "Select at least two atoms",
+                ),
+                hover_hint(
+                    command("Dummy atom (*)", Message::Element("*".into())).width(Length::Fill),
+                    "Draw * wildcard atoms with the Atom tool",
+                    tooltip::Position::Top,
+                ),
+            ]
+            .spacing(4),
+            row![
+                item(
+                    "Multi-center",
+                    kind(reshiki::attachments::Kind::MultiCenter),
+                    attachment,
+                    "Attaches to all selected atoms · Then draw a bond from * to the metal or substituent",
+                    "Select only the target atoms (2–300)",
+                ),
+                item(
+                    "Variable",
+                    kind(reshiki::attachments::Kind::Variable),
+                    attachment,
+                    "Attaches to one of the selected positions · Then draw a bond from * to the substituent",
+                    "Select only the target atoms (2–300)",
+                ),
+            ]
+            .spacing(4),
+        ]
+        .spacing(3)
+        .padding(iced::Padding::ZERO.top(6))
+        .into()
+    }
+
+    fn transform_section(&self) -> Element<'_, Message> {
         self.inspector_section(
-            Section::Arrange,
-            "Arrange & transform",
-            if multiple {
-                "Align selected molecules, arrows & groups"
-            } else {
-                ""
-            },
-            multiple,
-            arrange,
+            Section::Transform,
+            "Transform",
+            "",
+            false,
+            self.numeric_transform_panel(),
         )
     }
 
     fn selection_panel(&self) -> Element<'_, Message> {
-        let multiple = self.alignment_count() >= 2;
+        let opened = self.opened_section();
         let atoms: Vec<_> = self
             .doc
             .atoms
@@ -886,17 +910,38 @@ impl App {
                 );
             if atoms.len() >= 3 {
                 controls = controls.push(
-                    command("Toggle aromatic circle", Message::AromaticDisplay)
-                        .on_press_maybe((!self.busy).then_some(Message::AromaticDisplay)),
+                    row![
+                        hover_hint(
+                            command("Aromatic circle", Message::AromaticDisplay)
+                                .on_press_maybe((!self.busy).then_some(Message::AromaticDisplay))
+                                .width(Length::Fill),
+                            "Toggle the aromatic circle",
+                            tooltip::Position::Top,
+                        ),
+                        hover_hint(
+                            command("Inner ring curve", Message::InspectorAction(Action::RingArc))
+                                .width(Length::Fill),
+                            "Toggle the inner ring curve · Select consecutive ring atoms for a partial curve, or the whole ring for a circle. Bond orders stay unchanged.",
+                            tooltip::Position::Top,
+                        ),
+                    ]
+                    .spacing(6),
                 );
-                controls = controls.push(command("Toggle inner ring curve", Message::InspectorAction(Action::RingArc)))
-                    .push(text("Select consecutive ring atoms for a partial curve, or the whole ring for a circle. Bond orders stay unchanged.").size(11).style(muted_text));
+            }
+            if reshiki::rings::selected_cycle(&self.doc, &self.selected).is_some() {
+                controls = controls.push(
+                    command(
+                        "Saturated ↔ Aromatic · Shift+R",
+                        Message::ToggleSelectedRing,
+                    )
+                    .width(Length::Fill),
+                );
             }
             body = body.push(self.inspector_section(
                 Section::Bonds,
                 "Bond appearance",
                 "",
-                true,
+                opened == Some(Section::Bonds),
                 controls,
             ));
             body = body.push(
@@ -986,22 +1031,15 @@ impl App {
                     }),
                 ));
             }
-            body = body.push(
-                self.inspector_section(
-                    Section::Atoms,
-                    "Atom details",
-                    "Charge, isotope & electron marks",
-                    atoms.len() == 1
-                        || atoms
-                            .iter()
-                            .any(|a| !a.marks.is_empty() || a.radical_electrons != 0),
-                    controls,
-                ),
-            );
+            body = body.push(self.inspector_section(
+                Section::Atoms,
+                "Atom details",
+                "Charge, isotope & electron marks",
+                opened == Some(Section::Atoms),
+                controls,
+            ));
         }
-        if !multiple {
-            body = body.push(self.arrangement_panel(false));
-        }
+        body = body.push(self.transform_section());
         let groups = self.doc.outer_selected_groups(&self.selected);
         let mut grouping = column![
             row![
@@ -1038,21 +1076,15 @@ impl App {
                 .iter()
                 .filter(|g| groups.contains(&g.id))
                 .all(|g| g.integral);
-            grouping = grouping
-                .push(
-                    checkbox(integral)
-                        .label("Integral group")
-                        .size(14)
-                        .text_size(12)
-                        .on_toggle(Message::IntegralGroup),
-                )
-                .push(
-                    text(
-                        "Integral groups stay whole with Option/Alt-click. Ungroup releases them.",
-                    )
-                    .size(11)
-                    .style(muted_text),
-                );
+            grouping = grouping.push(hover_hint(
+                checkbox(integral)
+                    .label("Integral group")
+                    .size(14)
+                    .text_size(12)
+                    .on_toggle(Message::IntegralGroup),
+                "Integral groups stay whole with Option/Alt-click. Ungroup releases them.",
+                tooltip::Position::Top,
+            ));
         }
         body = body.push(self.inspector_section(
             Section::Groups,
@@ -1224,6 +1256,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use reshiki::editing::Transform;
     async fn calculate(app: &mut App) {
         let key = app.property_key().unwrap();
         let doc = app.property_document(&key);
@@ -1413,6 +1446,37 @@ mod tests {
     }
 
     #[test]
+    fn a_selection_opens_at_most_one_section() {
+        let (mut app, _) = App::new();
+        assert_eq!(app.opened_section(), None);
+        let ring = reshiki::editing::ring(
+            &mut app.doc,
+            reshiki::document::Point::default(),
+            6,
+            false,
+            0.,
+        );
+        let arrow = app.doc.next_id();
+        app.doc.arrows.push(reshiki::document::Arrow::new(
+            arrow,
+            reshiki::document::Point::new(80., 0.),
+            reshiki::document::Point::new(160., 0.),
+            Default::default(),
+            Default::default(),
+        ));
+        assert_eq!(app.opened_section(), Some(Section::Molecule));
+        app.selected = ring.iter().copied().chain([arrow]).collect();
+        assert!(app.alignment_count() >= 2);
+        assert_eq!(app.opened_section(), Some(Section::Bonds));
+        app.selected = vec![ring[0]];
+        assert_eq!(app.opened_section(), Some(Section::Atoms));
+        app.selected = vec![ring[0], ring[2]];
+        assert_eq!(app.opened_section(), None);
+        app.selected = vec![arrow];
+        assert_eq!(app.opened_section(), None);
+    }
+
+    #[test]
     fn inspector_preferences_preserve_drawing_selection_and_history() {
         let (mut app, _) = App::new();
         let a = app.doc.add_atom("C", Default::default());
@@ -1425,7 +1489,7 @@ mod tests {
         let revision = app.revision;
         for action in [
             Action::Section(Section::Atoms, true),
-            Action::Section(Section::Arrange, true),
+            Action::Section(Section::Transform, true),
             Action::Figure(FigureFormat::Png),
             Action::Chemical(ChemicalFormat::Cdxml),
         ] {

@@ -1,4 +1,4 @@
-//! Screen-space tilt gestures share the same projection as the inspector buttons.
+//! Screen-space tilt gestures share the same projection as the inspector tilt fields.
 use iced::Point;
 use reshiki::document::Document;
 

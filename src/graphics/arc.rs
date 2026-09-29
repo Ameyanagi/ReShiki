@@ -49,7 +49,7 @@ impl Default for ArcGeometry {
 }
 
 impl ArcGeometry {
-    pub const PRESETS: [f32; 4] = [90., 120., 180., 270.];
+    pub const PRESETS: [f32; 5] = [90., 120., 180., 270., 360.];
 
     pub fn validate(self) -> Result<(), String> {
         if !self.start_degrees.is_finite() || !(0.1..=360.).contains(&self.sweep_degrees) {

@@ -176,14 +176,12 @@ impl App {
         match kind {
             GraphicKind::Symbol(kind) => {
                 panel=panel.push(crate::appearance::pick_list(reshiki::scientific::SymbolKind::ALL,Some(kind),|k|Message::ScientificKind(GraphicKind::Symbol(k))).text_size(12).padding(6).width(Length::Fill))
-                    .push(checkbox(self.attach_symbols).label("Attach to atoms").on_toggle(Message::AttachSymbols).size(14).text_size(12))
-                    .push(text("Attached charges and radicals update chemistry. Lone pairs annotate the atom. H and attachment symbols use free placement.").size(11).style(muted_text));
+                    .push(hover_hint(checkbox(self.attach_symbols).label("Attach to atoms").on_toggle(Message::AttachSymbols).size(14).text_size(12), "Attached charges and radicals update chemistry. Lone pairs annotate the atom. H and attachment symbols use free placement.", tooltip::Position::Top));
             }
             GraphicKind::Orbital(kind) => {
-                panel=panel.push(crate::appearance::pick_list(reshiki::scientific::OrbitalKind::ALL,Some(kind),|k|Message::ScientificKind(GraphicKind::Orbital(k))).text_size(12).padding(6).width(Length::Fill))
+                panel=panel.push(hover_hint(crate::appearance::pick_list(reshiki::scientific::OrbitalKind::ALL,Some(kind),|k|Message::ScientificKind(GraphicKind::Orbital(k))).text_size(12).padding(6).width(Length::Fill), "Drag from the orbital node to set direction and size. Click uses one bond length. Shift snaps to 15°. Group with a molecule to move them together.", tooltip::Position::Top))
                     .push(crate::appearance::pick_list(reshiki::scientific::Phase::ALL,Some(self.orbital_phase),Message::OrbitalPhase).text_size(12).padding(6).width(Length::Fill))
-                    .push(checkbox(self.phase_flipped).label("Reverse phases").on_toggle_maybe((!matches!(kind, reshiki::scientific::OrbitalKind::S | reshiki::scientific::OrbitalKind::Sigma | reshiki::scientific::OrbitalKind::Lobe)).then_some(Message::FlipPhase)).size(14).text_size(12))
-                    .push(text("Drag from the orbital node to set direction and size. Click uses one bond length. Shift snaps to 15°. Group with a molecule to move them together.").size(11).style(muted_text));
+                    .push(checkbox(self.phase_flipped).label("Reverse phases").on_toggle_maybe((!matches!(kind, reshiki::scientific::OrbitalKind::S | reshiki::scientific::OrbitalKind::Sigma | reshiki::scientific::OrbitalKind::Lobe)).then_some(Message::FlipPhase)).size(14).text_size(12));
             }
             _ => {}
         }
@@ -240,33 +238,32 @@ impl App {
                 .padding(6),
             );
         }
-        if !selected.is_empty() {
-            panel = panel.push(
-                row![
-                    command("Send to back", Message::GraphicLayer(false)),
-                    command("Bring to front", Message::GraphicLayer(true))
-                ]
-                .spacing(4),
-            );
-        }
-        if matches!(selected.as_slice(), [g] if matches!(g.kind, GraphicKind::Curve | GraphicKind::Path | GraphicKind::Arc))
+        // Editing points ends with Done in the context row or Escape.
+        if self.tool != Tool::EditPoints
+            && matches!(selected.as_slice(), [g] if matches!(g.kind, GraphicKind::Curve | GraphicKind::Path | GraphicKind::Arc))
         {
             panel = panel.push(command(
-                if self.tool == Tool::EditPoints {
-                    "Finish editing points"
-                } else if kind == GraphicKind::Arc {
+                if kind == GraphicKind::Arc {
                     "Edit arc endpoints"
                 } else {
                     "Edit curve points"
                 },
-                Message::Tool(if self.tool == Tool::EditPoints {
-                    Tool::Select
-                } else {
-                    Tool::EditPoints
-                }),
+                Message::Tool(Tool::EditPoints),
             ));
         }
-        panel.push(text("Drag to size. Select to move, rotate or resize. Enter applies numeric and color fields.").size(11).style(muted_text)).into()
+        panel
+            .push(
+                text(match kind {
+                    GraphicKind::Arc if selected.is_empty() => {
+                        "Drag to draw · Shift makes a circle."
+                    }
+                    GraphicKind::Arc => "Drag the endpoints to adjust the curve.",
+                    _ => "Enter applies typed widths and colors.",
+                })
+                .size(11)
+                .style(muted_text),
+            )
+            .into()
     }
 
     fn style_bar(&self) -> Element<'_, Message> {
@@ -1267,12 +1264,19 @@ impl App {
                     .padding(5)
                     .into(),
                 };
+                let mut options = vec![chooser];
+                if kind == G::Arc {
+                    options.push(self.arc_presets(false));
+                }
                 (
-                    vec![chooser],
+                    options,
                     match kind {
                         G::Symbol(_) => "Click to place/attach · Drag to position · Escape cancels",
                         G::Orbital(_) => {
                             "Drag from node · Click for default size · Shift snaps to 15°"
+                        }
+                        G::Arc => {
+                            "Drag an ellipse frame · Shift makes it circular · Escape cancels"
                         }
                         _ => "Drag to draw · Shift constrains · Escape cancels",
                     },
@@ -1815,25 +1819,55 @@ impl App {
             .chain(reshiki::ligands::LABELS)
             .map(|s| (*s).into())
             .collect();
+        // Disabled commands say what they need.
+        let item = |label, message: Message, enabled: bool, hint, reason| {
+            hover_hint(
+                command(label, message.clone()).on_press_maybe(enabled.then_some(message)),
+                if enabled { hint } else { reason },
+                tooltip::Position::Top,
+            )
+        };
+        let wait = "Wait for the current chemistry job to finish";
+        let label = self.abbreviations.label.trim();
         let mut body = column![
             command("‹ Properties", Message::Inspector(InspectorTab::Properties)),
             text("Chemical abbreviations").size(18),
             text("Compact labels with the complete molecule inside.").size(12).style(muted_text),
-            row![command("Expand selected", action(A::Expand)).on_press_maybe((!selected.is_empty()).then_some(action(A::Expand))), command("Expand all", action(A::ExpandAll)).on_press_maybe((!self.doc.abbreviations.is_empty()).then_some(action(A::ExpandAll)))].spacing(6),
+            row![
+                item("Expand selected", action(A::Expand), !selected.is_empty(), "Restore the atoms and bonds of the selected abbreviations", "Select an abbreviation first"),
+                item("Expand all", action(A::ExpandAll), !self.doc.abbreviations.is_empty(), "Restore every abbreviation in the drawing", "The drawing has no abbreviations"),
+            ]
+            .spacing(6),
             horizontal_line(),
             text("COMMON GROUP").size(11).style(muted_text),
             crate::appearance::pick_list(choices, Some(self.abbreviations.preset.clone()), move |s| action(A::Preset(s))).width(Length::Fill).text_size(14),
-            command("Replace selected endpoint", action(A::Replace)).on_press_maybe((!self.busy && !self.selected.is_empty()).then_some(action(A::Replace))),
-            text("Select one terminal atom or an existing abbreviation. Its connecting bond stays in place.").size(11).style(muted_text),
+            item(
+                "Replace selected endpoint",
+                action(A::Replace),
+                !self.busy && !self.selected.is_empty(),
+                "Replaces one terminal atom or an existing abbreviation. Its connecting bond stays in place.",
+                if self.busy { wait } else { "Select one terminal atom or an existing abbreviation" },
+            ),
             horizontal_line(),
-            command("Contract common groups", action(A::Find)).on_press_maybe((!self.busy && !self.doc.atoms.is_empty()).then_some(action(A::Find))),
-            text(if self.selected.is_empty() { "Searches the whole drawing." } else { "Only complete groups within the selection are contracted." }).size(11).style(muted_text),
+            item(
+                "Contract common groups",
+                action(A::Find),
+                !self.busy && !self.doc.atoms.is_empty(),
+                "Contracts recognized common groups into labels",
+                if self.busy { wait } else { "Draw or import a molecule first" },
+            ),
+            text(if self.selected.is_empty() { "Searches the whole drawing." } else { "Complete groups in the selection only." }).size(11).style(muted_text),
             horizontal_line(),
             text("NAME A SELECTED FRAGMENT").size(11).style(muted_text),
             crate::appearance::text_input("Label, e.g. Ar", &self.abbreviations.label).on_input(move |s| action(A::Label(s))).on_submit(action(A::Contract)).size(13),
             crate::appearance::text_input("From the right (optional)", &self.abbreviations.reverse_label).on_input(move |s| action(A::ReverseLabel(s))).on_submit(action(A::Contract)).size(13),
-            command("Contract selection", action(A::Contract)).on_press_maybe((!self.selected.is_empty() && !self.abbreviations.label.trim().is_empty()).then_some(action(A::Contract))),
-            text("Select a connected fragment whose outside bonds meet one selected atom. A custom name does not change its chemistry.").size(11).style(muted_text),
+            item(
+                "Contract selection",
+                action(A::Contract),
+                !self.selected.is_empty() && !label.is_empty(),
+                "Select a connected fragment whose outside bonds meet one selected atom. A custom name does not change its chemistry.",
+                if self.selected.is_empty() { "Select a connected fragment first" } else { "Enter a label first" },
+            ),
             horizontal_line(),
         ].spacing(10);
         for group in selected {
@@ -2291,7 +2325,7 @@ fn fold(width: f32, fixed: f32, commands: &[f32], arrange: Option<(f32, f32)>) -
 }
 
 /// Width of one line of interface text, measured like the text widget does.
-fn text_width(label: &str, size: f32) -> f32 {
+pub(super) fn text_width(label: &str, size: f32) -> f32 {
     use iced::advanced::text::Paragraph as _;
     iced::advanced::graphics::text::Paragraph::with_text(iced::advanced::Text {
         content: label,
@@ -2326,6 +2360,35 @@ pub(super) fn hover_hint<'a>(
     .gap(7)
     .delay(std::time::Duration::from_millis(500))
     .snap_within_viewport(true)
+}
+
+/// A numeric input with its unit inside the right edge of the field.
+pub(super) fn unit_field<'a>(
+    input: iced::widget::TextInput<'a, Message>,
+    unit: &'a str,
+) -> Element<'a, Message> {
+    iced::widget::stack![
+        input
+            .size(12)
+            .padding(iced::Padding {
+                top: 5.,
+                right: 18.,
+                bottom: 5.,
+                left: 5.,
+            })
+            .width(Length::Fill),
+        // The degree sign is too small to see at the other units' size.
+        container(
+            text(unit)
+                .size(if unit == "°" { 16 } else { 11 })
+                .style(muted_text)
+        )
+        .padding([0, 4])
+        .align_right(Length::Fill)
+        .center_y(Length::Fill),
+    ]
+    .width(Length::Fill)
+    .into()
 }
 
 pub(super) fn command(label: &str, message: Message) -> button::Button<'_, Message> {

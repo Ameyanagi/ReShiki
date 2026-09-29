@@ -149,12 +149,16 @@ fn import(app: &mut App) {
     let _ = app.update(Message::Inspector(InspectorTab::Import));
 }
 
+/// The Transform section with tilt shown under More.
 fn transform(app: &mut App) {
     use crate::app::inspector::{Action, Section};
     molecule(app);
-    for (section, expanded) in [(Section::Bonds, false), (Section::Arrange, true)] {
+    for (section, expanded) in [(Section::Bonds, false), (Section::Transform, true)] {
         let _ = app.update(Message::InspectorAction(Action::Section(section, expanded)));
     }
+    let _ = app.update(Message::NumericTransform(
+        crate::app::numeric_transforms::Action::More(true),
+    ));
 }
 
 /// New on an edited drawing waits for the native save dialog, which the

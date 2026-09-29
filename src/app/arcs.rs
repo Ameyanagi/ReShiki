@@ -1,5 +1,6 @@
 use super::*;
-use iced::widget::{button, column, row, text};
+use iced::Length;
+use iced::widget::{button, column, container, row, text, tooltip};
 use reshiki::graphics::{ArcGeometry, GraphicKind};
 
 #[derive(Debug, Clone)]
@@ -107,33 +108,81 @@ impl App {
         self.sync_arc();
     }
 
-    pub(super) fn arc_controls(&self) -> Element<'_, Message> {
-        let preset = |degrees| {
-            button(text(format!("{degrees:.0}°")).size(12))
-                .padding(5)
+    /// Sweep presets as one segmented strip marking the current sweep.
+    /// `fill` spreads it across the inspector.
+    pub(super) fn arc_presets(&self, fill: bool) -> Element<'_, Message> {
+        let sweep = self.arc_editor.geometry.sweep_degrees;
+        let strip = row(ArcGeometry::PRESETS.into_iter().map(|degrees| {
+            button(text(format!("{degrees:.0}°")).size(12).center())
+                .width(if fill { Length::Fill } else { Length::Shrink })
+                .padding([4, 7])
+                .style(move |theme: &iced::Theme, status| {
+                    if sweep == degrees {
+                        crate::appearance::primary(theme, status)
+                    } else {
+                        workspace::control(false)(theme, status)
+                    }
+                })
                 .on_press(Message::Arc(Action::Preset(degrees)))
-        };
-        let field = |placeholder, value, input: fn(String) -> Message| {
-            crate::appearance::text_input(placeholder, value)
-                .on_input(input)
-                .on_submit(Message::Arc(Action::Apply))
-                .padding(5)
-                .size(12)
-                .width(78)
+                .into()
+        }))
+        .spacing(2);
+        workspace::hover_hint(
+            container(strip).padding(2).style(|theme| {
+                let field =
+                    crate::appearance::dropdown(theme, iced::widget::pick_list::Status::Active);
+                container::Style {
+                    background: Some(field.background),
+                    border: field.border,
+                    ..Default::default()
+                }
+            }),
+            "Arc sweep",
+            tooltip::Position::Bottom,
+        )
+        .into()
+    }
+
+    pub(super) fn arc_controls(&self) -> Element<'_, Message> {
+        let field = |label, value, hint, input: fn(String) -> Message| {
+            row![
+                text(label).size(12),
+                workspace::hover_hint(
+                    workspace::unit_field(
+                        crate::appearance::text_input("180", value)
+                            .on_input(input)
+                            .on_submit(Message::Arc(Action::Apply)),
+                        "°",
+                    ),
+                    hint,
+                    tooltip::Position::Top,
+                ),
+            ]
+            .spacing(4)
+            .align_y(iced::Alignment::Center)
+            .width(Length::Fill)
         };
         column![
-            text("ARC ANGLES").size(11),
-            row(ArcGeometry::PRESETS.into_iter().map(|p| preset(p).into())).spacing(5),
+            workspace::section("ARC ANGLES"),
+            self.arc_presets(true),
             row![
-                column![text("Start (°)").size(11), field("180", &self.arc_editor.start, |s| Message::Arc(Action::Start(s)))].spacing(4),
-                column![text("Sweep (°)").size(11), field("180", &self.arc_editor.sweep, |s| Message::Arc(Action::Sweep(s)))].spacing(4),
-            ].spacing(8),
-            row![
-                button(text("Apply angles").size(12)).padding(5).on_press(Message::Arc(Action::Apply)),
-                preset(360.),
-            ].spacing(5),
-            text("Sweep: 0.1–360°. Angles run clockwise from the right. Drag an ellipse frame; Shift makes it circular. Edit arc endpoints to adjust the curve.").size(11),
-        ].spacing(7).into()
+                field(
+                    "Start",
+                    &self.arc_editor.start,
+                    "Clockwise from the right · Enter applies",
+                    |s| Message::Arc(Action::Start(s))
+                ),
+                field(
+                    "Sweep",
+                    &self.arc_editor.sweep,
+                    "0.1–360° · Enter applies",
+                    |s| Message::Arc(Action::Sweep(s))
+                ),
+            ]
+            .spacing(10),
+        ]
+        .spacing(8)
+        .into()
     }
 }
 
@@ -171,6 +220,19 @@ mod tests {
         assert_eq!(app.arc_editor.geometry.sweep_degrees, 270.);
         let _ = app.update(Message::Redo);
         assert_eq!(app.doc, after);
+    }
+
+    #[test]
+    fn full_circle_joins_the_preset_strip_and_keeps_the_start() {
+        assert_eq!(ArcGeometry::PRESETS.last(), Some(&360.));
+        let mut app = drawing();
+        app.update_arc(Action::Start("32".into()));
+        app.update_arc(Action::Apply);
+        app.update_arc(Action::Preset(360.));
+        let arc = app.doc.graphics[0].arc.unwrap();
+        assert_eq!((arc.start_degrees, arc.sweep_degrees), (32., 360.));
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc.graphics[0].arc.unwrap().sweep_degrees, 270.);
     }
 
     #[test]

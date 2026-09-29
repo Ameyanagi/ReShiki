@@ -3,10 +3,11 @@
 Partial implementation of [#67](https://github.com/Ameyanagi/ReShiki/issues/67).
 The general pen tool remains a separate feature.
 
-Arc drawings now offer 90°, 120°, 180° and 270° presets, a 360° button,
-and numeric start/sweep angles. The sweep accepts 0.1–360°. Angles increase
-clockwise from the right side of the ellipse. Select **Arc**, choose a preset
-in Properties, and drag the ellipse frame; hold Shift for a circle. A 360° sweep completes
+Arc drawings offer a 90°/120°/180°/270°/360° preset strip and numeric
+start/sweep angles, applied with Enter. The sweep accepts 0.1–360°. Angles
+increase clockwise from the right side of the ellipse. Select **Arc**, choose a
+preset in the context row or in Properties, and drag the ellipse frame; hold
+Shift for a circle. A 360° sweep completes
 the ellipse. On a
 selected arc, choose **Edit arc endpoints** to drag either endpoint along the
 ellipse without converting it into an arbitrary Bézier path. The other endpoint

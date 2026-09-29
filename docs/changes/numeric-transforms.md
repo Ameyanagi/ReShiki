@@ -2,21 +2,23 @@
 
 Issue: [#65](https://github.com/Ameyanagi/ReShiki/issues/65).
 
-Select objects, open **Properties → Arrange & transform**, and enter a value
-under **Precise transforms**. Each **Apply** button, or Enter in its input,
-applies just that field as one Undo step. Typing alone does not change the
-drawing. Changing the selection, undoing, or applying an edit refreshes the
-displayed values.
+Select objects, open **Properties → Transform**, and enter a value. Enter in a
+field applies just that field as one Undo step; the **Apply** button applies
+every edited field, in the order rotate, tilt, scale, size, as one Undo step.
+Typing alone does not change the drawing. Changing the selection, undoing, or
+applying an edit refreshes the displayed values. Hovering a field explains it.
+(Issue #78 replaced the original six rows, each with its own Apply, with this
+compact grid.)
 
-- **Rotate °** is a relative angle; positive values rotate clockwise. For
+- **Rotate** (°) is a relative angle; positive values rotate clockwise. For
   example, enter `72` for a pentagon-sized turn.
-- **Tilt X ° / Tilt Y °** use the existing orthographic projection, with an
-  allowed change of −85° through 85°. As with the existing tilt controls,
-  atoms and shapes tilt; arrows and upright captions do not.
-- **Width pt / Height pt** specify the canvas selection bounds in publication
-  points, including labels. **Lock proportions for width / height** scales
-  coordinates uniformly; clear it to change one axis independently.
-- **Scale %** is relative uniform coordinate scaling: `125` enlarges by 25%.
+- **Tilt X / Tilt Y** (°, under **More**) use the existing orthographic
+  projection, with an allowed change of −85° through 85°. As with the existing
+  tilt controls, atoms and shapes tilt; arrows and upright captions do not.
+- **W / H** (pt) specify the canvas selection bounds in publication points,
+  including labels. The lock beside **H** scales coordinates uniformly; unlock
+  it to change one axis independently.
+- **Scale** (%) is relative uniform coordinate scaling: `125` enlarges by 25%.
   It resets to `100` after applying; angles reset to `0`.
 
 Font sizes, line widths, and arrowhead styling stay fixed. Their contribution
