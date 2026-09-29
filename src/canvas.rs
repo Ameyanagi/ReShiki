@@ -240,7 +240,8 @@ enum Gesture {
         start: World,
         ids: Vec<u64>,
         clicked: Vec<u64>,
-        copy: std::cell::OnceCell<Box<Document>>,
+        /// The source document and the part copied from it, reused while it is unchanged.
+        copy: std::cell::RefCell<Option<Box<(Document, Document)>>>,
     },
     Select {
         start: World,
@@ -312,19 +313,19 @@ impl MoleculeCanvas<'_> {
         requested: World,
         modifiers: iced::keyboard::Modifiers,
     ) -> World {
-        // Shift frees bond constraints like Option/Alt, so the move stays on its axis.
-        if modifiers.shift() {
-            return movement::axis_locked(requested);
-        }
         if command_held(modifiers) {
-            return requested;
+            return if modifiers.shift() {
+                movement::axis_locked(requested)
+            } else {
+                requested
+            };
         }
-        movement::delta(
-            self.doc,
-            ids,
-            requested,
-            self.bond_drawing.unconstrained(modifiers.alt()),
-        )
+        let drawing = self.bond_drawing.unconstrained(modifiers.alt());
+        if modifiers.shift() {
+            movement::axis_delta(self.doc, ids, requested, drawing)
+        } else {
+            movement::delta(self.doc, ids, requested, drawing)
+        }
     }
     fn template_gesture(
         &self,
@@ -1644,9 +1645,14 @@ impl MoleculeCanvas<'_> {
             if start.distance(p) < 1.0 / self.camera.zoom {
                 ring_selection = Some(ids.clone());
             } else if command_held(state.modifiers) {
-                let part =
-                    copy.get_or_init(|| Box::new(reshiki::editing::selection(self.doc, ids)));
-                ring_selection = Some(reshiki::editing::append(&mut preview, part, delta));
+                let mut copy = copy.borrow_mut();
+                if copy.as_ref().is_none_or(|c| c.0 != *self.doc) {
+                    let part = reshiki::editing::selection(self.doc, ids);
+                    *copy = Some(Box::new((self.doc.clone(), part)));
+                }
+                if let Some(c) = copy.as_ref() {
+                    ring_selection = Some(reshiki::editing::append(&mut preview, &c.1, delta));
+                }
             } else if state.scene.borrow_mut().whole_document(self.doc, ids) {
                 // Moving every object cannot change their relative geometry,
                 // chemical labels, crossing gaps or ring attachment targets.
@@ -4896,10 +4902,10 @@ mod tests {
             pointer_gesture_with(&canvas, Point::new(221.0, 171.0), Point::new(251.0, 201.0), Modifiers::COMMAND),
             Edit::Duplicate(ids, 30.0, 30.0) if ids == partial
         ));
-        // A part still bonded to the rest stays on its axis despite Length/Angles.
+        // Shift+Option/Alt moves a part still bonded to the rest freely along the axis.
         assert!(matches!(
-            pointer_gesture_with(&canvas, Point::new(221.0, 171.0), Point::new(251.0, 181.0), Modifiers::SHIFT),
-            Edit::Move(ids, 30.0, 0.0) if ids == partial
+            pointer_gesture_with(&canvas, Point::new(221.0, 171.0), Point::new(251.0, 181.0), Modifiers::SHIFT | Modifiers::ALT),
+            Edit::Move(ids, 30.0, 0.0) if ids.len() == 2 && partial.iter().all(|id| ids.contains(id))
         ));
     }
 
