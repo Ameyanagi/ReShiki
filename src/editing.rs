@@ -701,6 +701,53 @@ pub fn ring(doc: &mut Document, p: Point, size: u8, aromatic: bool, radius: f32)
     ring_oriented(doc, p, size, aromatic, radius, None).unwrap_or_default()
 }
 
+fn regular_ring_valence_fits(doc: &Document, target: &crate::document::Atom) -> bool {
+    if target.element == "P" && target.charge == 0 {
+        use crate::chemistry::graph::{Atom, Bond, Graph};
+        // This is a valence-only local star, never a molecular representation.
+        // Native per-atom valence depends on the target and incident bonds;
+        // wildcard neighbors avoid interpreting attachment nodes or validating
+        // unrelated chemistry. The protected-state guard runs before this.
+        let mut graph = Graph {
+            atoms: vec![Atom {
+                atomic_number: 15,
+                aromatic: target.aromatic,
+                ..Atom::default()
+            }],
+            bonds: vec![],
+        };
+        let mut indices = HashMap::from([(target.id, 0)]);
+        for bond in doc
+            .bonds
+            .iter()
+            .filter(|b| b.a == target.id || b.b == target.id)
+        {
+            let other = if bond.a == target.id { bond.b } else { bond.a };
+            if doc.atom(other).is_none() || bond.validate_appearance().is_err() {
+                return false;
+            }
+            let index = *indices.entry(other).or_insert_with(|| {
+                let index = graph.atoms.len();
+                graph.atoms.push(Atom::default());
+                index
+            });
+            let (a, b) = if bond.a == target.id {
+                (0, index)
+            } else {
+                (index, 0)
+            };
+            graph.bonds.push(Bond {
+                a,
+                b,
+                order: bond.order,
+                aromatic: bond.order == 4,
+            });
+        }
+        return graph.valences().is_ok();
+    }
+    crate::templates::valence(doc, target.id) <= crate::templates::capacity(target)
+}
+
 /// Attach at an atom/bond, optionally using a drag to choose the ring's side.
 pub fn ring_oriented(
     doc: &mut Document,
@@ -710,6 +757,14 @@ pub fn ring_oriented(
     radius: f32,
     direction: Option<Point>,
 ) -> Result<Vec<u64>, &'static str> {
+    if !p.x.is_finite()
+        || !p.y.is_finite()
+        || !radius.is_finite()
+        || radius < 0.
+        || direction.is_some_and(|p| !p.x.is_finite() || !p.y.is_finite())
+    {
+        return Err("Invalid ring attachment geometry.");
+    }
     let n = size.clamp(3, 8) as usize;
     if aromatic && n == 6 {
         let drawing = crate::rings::Drawing {
@@ -744,6 +799,9 @@ pub fn ring_oriented(
     } else {
         None
     };
+    // Both the live preview and commit build the same candidate. Nothing is
+    // written back until its attachment chemistry and vertices are checked.
+    let mut result = doc.clone();
     let mut ids = vec![];
     if let Some(index) = bond {
         let Some(b) = doc.bonds.get(index).cloned() else {
@@ -752,6 +810,9 @@ pub fn ring_oriented(
         let (Some(a), Some(z)) = (doc.atom(b.a), doc.atom(b.b)) else {
             return Err("The attachment bond has missing atoms.");
         };
+        if b.validate_appearance().is_err() || b.stereo.is_some() || !b.stereo_atoms.is_empty() {
+            return Err("Choose a supported bond appearance without assigned stereochemistry.");
+        }
         let (a, z) = (a.position, z.position);
         let positions = |sign: f32| {
             let mut points = vec![a, z];
@@ -787,7 +848,7 @@ pub fn ring_oriented(
         let points = if first_side { first } else { second };
         ids.extend([b.a, b.b]);
         for p in points.iter().skip(2) {
-            ids.push(doc.add_atom("C", *p));
+            ids.push(result.add_atom("C", *p));
         }
     } else {
         let neighbors: Vec<_> = doc
@@ -835,7 +896,7 @@ pub fn ring_oriented(
             ids.push(if let Some(id) = atom.filter(|_| i == 0) {
                 id
             } else {
-                doc.add_atom("C", center.offset(angle.cos() * r, angle.sin() * r))
+                result.add_atom("C", center.offset(angle.cos() * r, angle.sin() * r))
             });
         }
     }
@@ -848,15 +909,88 @@ pub fn ring_oriented(
         if i == 0 && bond.is_some() && !aromatic {
             continue;
         }
-        doc.add_bond(a, b, if aromatic { 4 } else { 1 }, "plain");
+        result.add_bond(a, b, if aromatic { 4 } else { 1 }, "plain");
     }
     if aromatic {
         for id in &ids {
-            if let Some(atom) = doc.atom_mut(*id) {
+            if let Some(atom) = result.atom_mut(*id) {
                 atom.aromatic = true;
             }
         }
     }
+    for id in &ids {
+        if let Some(target) = doc.atom(*id)
+            && (target.stereo.is_some()
+                || target.radical_electrons != 0
+                || !target.marks.is_empty()
+                || target.explicit_h != 0
+                || target.no_implicit
+                || target.isotope != 0
+                || target.map_num != 0
+                || target.attachment.is_some()
+                || !target.centroid.is_empty()
+                || doc.abbreviation(*id).is_some()
+                || doc.atoms.iter().any(|a| {
+                    a.stereo
+                        .as_ref()
+                        .is_some_and(|stereo| stereo.neighbors.contains(id))
+                })
+                || doc.bonds.iter().any(|b| {
+                    b.stereo_atoms.contains(id)
+                        || (b.a == *id || b.b == *id)
+                            && (b.stereo.is_some()
+                                || !b.stereo_atoms.is_empty()
+                                || (!b.projection
+                                    && ((b.order == 1
+                                        && matches!(
+                                            b.display.as_str(),
+                                            "wedge"
+                                                | "hollow_wedge"
+                                                | "bold"
+                                                | "hash"
+                                                | "hashed"
+                                                | "wavy"
+                                        ))
+                                        || (b.order == 2 && b.display == "wavy"))))
+                })
+                || !regular_ring_valence_fits(&result, target))
+        {
+            return Err(
+                "This atom has no available valence, or has protected hydrogens, labels or stereochemistry.",
+            );
+        }
+    }
+    let [first, second, ..] = ids.as_slice() else {
+        return Err("The ring has a missing edge.");
+    };
+    let a = result.atom(*first).ok_or("The ring has a missing atom.")?;
+    let b = result.atom(*second).ok_or("The ring has a missing atom.")?;
+    let length = a.position.distance(b.position);
+    if !length.is_finite() || length < 0.001 {
+        return Err("Choose an attachment with nonzero bond lengths.");
+    }
+    // Use the aromatic fusion planner's scale-relative proximity threshold,
+    // independent of zoom/hit radius. Regular rings conservatively reject an
+    // unshared coincident vertex instead of merging arbitrary existing atoms.
+    let tolerance = (length * (5. / 75.)).max(0.01);
+    for added in result.atoms.iter().skip(doc.atoms.len()) {
+        if doc
+            .atoms
+            .iter()
+            .any(|old| added.position.distance(old.position) <= tolerance)
+        {
+            return Err(
+                "The ring would overlap an existing atom. Choose another position or side.",
+            );
+        }
+    }
+    result.reconcile_molecule_groups();
+    crate::reactions::reconcile(&mut result)
+        .map_err(|_| "The ring would create incompatible reaction participants.")?;
+    result
+        .validate()
+        .map_err(|_| "Invalid ring attachment geometry.")?;
+    *doc = result;
     Ok(ids)
 }
 

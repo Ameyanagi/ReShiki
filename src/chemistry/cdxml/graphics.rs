@@ -122,6 +122,7 @@ impl NativeGraphic {
         };
         let graphic = Graphic {
             depth: [0.; 3],
+            arc: None,
             id: self.id,
             kind: self.kind,
             origin: self.origin.into_document(),

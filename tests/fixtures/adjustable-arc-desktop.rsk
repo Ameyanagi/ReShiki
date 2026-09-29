@@ -1,0 +1,109 @@
+{
+  "atom_labels": {
+    "carbons": "skeletal",
+    "hydrogens": true,
+    "stereo": false
+  },
+  "version": 15,
+  "atoms": [],
+  "bonds": [],
+  "annotations": [],
+  "arrows": [],
+  "graphics": [
+    {
+      "arc": {
+        "start_degrees": 32.0,
+        "sweep_degrees": 256.3056
+      },
+      "id": 1,
+      "kind": "path",
+      "origin": {
+        "x": -242.46875,
+        "y": -128.91876
+      },
+      "axis_x": {
+        "x": 388.28125,
+        "y": 0.0
+      },
+      "axis_y": {
+        "x": 0.0,
+        "y": 221.875
+      },
+      "style": {
+        "stroke": [
+          0,
+          0,
+          0
+        ],
+        "fill": null,
+        "width_pt": 0.6,
+        "pattern": "solid"
+      },
+      "sides": "both",
+      "phase": "solid",
+      "phase_flipped": false,
+      "layer": -1,
+      "path": [
+        {
+          "command": "move",
+          "points": {
+            "x": 0.92402405,
+            "y": 0.76495963
+          }
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 0.7858683,
+              "y": 0.9860551
+            },
+            {
+              "x": 0.5010169,
+              "y": 1.0638876
+            },
+            {
+              "x": 0.26962745,
+              "y": 0.94376624
+            }
+          ]
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 0.03823799,
+              "y": 0.82364494
+            },
+            {
+              "x": -0.062017962,
+              "y": 0.5458915
+            },
+            {
+              "x": 0.03930685,
+              "y": 0.30567598
+            }
+          ]
+        },
+        {
+          "command": "cubic",
+          "points": [
+            {
+              "x": 0.14063166,
+              "y": 0.06546046
+            },
+            {
+              "x": 0.40952492,
+              "y": -0.056582846
+            },
+            {
+              "x": 0.65704256,
+              "y": 0.025302589
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "groups": []
+}

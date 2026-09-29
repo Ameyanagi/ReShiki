@@ -122,6 +122,8 @@ Acyclic triple-bond edits straighten the adjacent branches. Bond appearance and 
 | Cmd/Ctrl+A / Shift+A        | Select all / invert selection                                                             |
 | Cmd/Ctrl+G / Shift+G        | Group / ungroup                                                                           |
 | Cmd/Ctrl+Shift+D            | Duplicate                                                                                 |
+| Cmd/Ctrl+Shift+Right        | Add a reaction arrow and a copy of the selected molecule to its right                     |
+| Space with Select active    | Select the whole most recently edited molecule                                            |
 | Cmd/Ctrl+J                  | Join selected atoms or bonds                                                              |
 | Cmd/Ctrl+Shift+K            | Preview cleanup                                                                           |
 | Cmd/Ctrl+L / E              | Toggle fixed bond length / fixed angles                                                   |
@@ -136,6 +138,10 @@ Acyclic triple-bond edits straighten the adjacent branches. Bond appearance and 
 | Double-click an atom        | Select its molecule                                                                       |
 | Shift-click                 | Add to or toggle the selection                                                            |
 | Side handle / corner handle | Resize one axis / resize proportionally                                                   |
+
+**Cmd/Ctrl+Shift+Right** completes partial atom/bond selections to whole molecules, preserves selected groups and their captions, and selects the product copy. Each press creates a new forward arrow with explicit reactant/product assignments in one Undo step. Repeating the shortcut extends the scheme from the new product. Select molecular objects without existing arrows; make room on the right if another molecule, caption, arrow or foreground graphic occupies the destination. Background graphics remain in place and do not block the shortcut.
+
+**Space** switches other drawing tools to Select as before. Press it again with Select active to recall the most recent molecular edit, even after deselecting or selecting another object. If one edit changed several molecules, Space selects all of those molecules; selection alone and caption edits do not change this memory. Undo and Redo restore the corresponding edit context. Newly opened drawings have no remembered edit until a molecule is changed. With no remembered molecule, the current selection stays intact. Space is idempotent while Select remains active. Text fields and open text drafts retain their typing and caret shortcuts; neither new shortcut modifies the drawing from those contexts.
 
 ## Arrange and transform a selection
 

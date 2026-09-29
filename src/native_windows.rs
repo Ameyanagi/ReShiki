@@ -130,6 +130,25 @@ pub(crate) fn office_metafile(doc: &Document) -> Result<Vec<u8>, String> {
     let mut options = usvg::Options::default();
     options.fontdb_mut().load_system_fonts();
     let tree = usvg::Tree::from_str(&scene::svg(doc), &options).map_err(|e| e.to_string())?;
+    metafile(&tree)
+}
+
+/// Use the figure renderer's resolved geometry, fonts, background and bounds.
+pub(crate) fn metafile(tree: &usvg::Tree) -> Result<Vec<u8>, String> {
+    record_metafile(tree, reshiki_windows::metafile)
+}
+
+pub(crate) fn file_metafile(tree: &usvg::Tree) -> Result<Vec<u8>, String> {
+    record_metafile(tree, reshiki_windows::file_metafile)
+}
+
+fn record_metafile(
+    tree: &usvg::Tree,
+    record: fn(&[u8]) -> Result<Vec<u8>, String>,
+) -> Result<Vec<u8>, String> {
+    if tree.size().width() * 0.75 > 2880. || tree.size().height() * 0.75 > 2880. {
+        return Err("Drawing exceeds EMF's supported 40-inch dimensions; use SVG or PDF.".into());
+    }
     let mut primitives = Vec::new();
     collect(tree.root(), usvg::Transform::identity(), &mut primitives)?;
     let bytes = serde_json::to_vec(&json!({
@@ -138,7 +157,7 @@ pub(crate) fn office_metafile(doc: &Document) -> Result<Vec<u8>, String> {
         "pages": [[0., 0.]], "primitives": primitives
     }))
     .map_err(|e| e.to_string())?;
-    reshiki_windows::metafile(&bytes)
+    record(&bytes)
 }
 
 #[cfg(test)]

@@ -1,7 +1,8 @@
-"""Independent original-worker abbreviation oracle and pinned native query export.
+"""Independent RDKit abbreviation oracle and pinned native query export.
 
 Regenerate the production catalog with --write-presets. Expected detection and
-validation always call the original Python functions, never Rust or its data.
+validation call the Python reference functions, never Rust or its data. Selection
+eligibility deliberately precedes overlap arbitration in both implementations.
 """
 
 import copy

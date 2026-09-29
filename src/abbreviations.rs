@@ -69,8 +69,8 @@ impl std::fmt::Display for LabelAlignment {
 
 pub const PRESETS: &[&str] = &[
     "OMe", "OEt", "Me", "Et", "nPr", "iPr", "nBu", "tBu", "Ph", "Bn", "Boc", "Cbz", "Fmoc", "Ac",
-    "OAc", "Bz", "OBz", "Ts", "OTs", "Ms", "OMs", "TMS", "TBS", "CF3", "CN", "NO2", "CO2H",
-    "CO2Me", "CO2Et",
+    "OAc", "Bz", "OBz", "Ts", "OTs", "Ms", "OMs", "TMS", "TBS", "TBDPS", "OTBDPS", "CF3", "CN",
+    "NO2", "CO2H", "CO2Me", "CO2Et",
 ];
 
 impl Abbreviation {
