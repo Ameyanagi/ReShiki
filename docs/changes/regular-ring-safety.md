@@ -71,11 +71,16 @@ example is new in this PR; copy it unchanged into a base worktree for comparison
 
 ## Valid attachment corrections from review
 
-Neutral phosphorus uses the native strict allowed-valence check for the candidate's
-connected molecule. This restores one-bond P → three-bond P and three-bond P →
+Neutral phosphorus uses the native strict allowed-valence check at the edited
+atom, using its aromatic state and exact incident bond orders/directions. This restores one-bond P → three-bond P and three-bond P →
 five-bond P attachments while rejecting a result above phosphorus's allowed
 valence. Other atom capacities and the protected charge, explicit-H, and stereo
-policies are unchanged. An unrelated unfinished molecule does not block the edit.
+policies are unchanged. Unrelated chemistry and semantic attachment nodes in the
+same connected drawing do not block the edit. The validation-only local graph
+uses wildcard neighbors: native per-atom valence depends on the target's fields
+and incident bonds, so no neighbor chemistry or attachment semantics need to be
+converted. Aromatic half-bond contributions and dative donor/acceptor direction
+remain intact; the graph is never used for identifiers or molecular properties.
 
 Fusion accepts supported shared-bond appearances, including bold/dashed double
 bonds and projection styles, while retaining the complete original bond. Invalid
@@ -109,6 +114,39 @@ and the corrected file restored byte-for-byte. Both unedited PNGs were inspected
 for legibility and clipping. The native desktop checks below precede these two
 corrections and are not claimed as desktop validation of the restored paths.
 
+### Connected semantic attachments
+
+The final follow-up fixes a false rejection when a multi-center or variable
+attachment node belongs to the phosphorus atom's connected drawing. Both examples
+retain the original attachment node, members, atoms, and bonds exactly.
+
+| Before per-atom validation                                                                                                                                                        | After per-atom validation                                                                                                                                                   |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ![A remote multi-center or variable attachment blocks phosphorus ring placement; both input graphs are unchanged.](../images/regular-ring-safety/semantic-attachments-before.png) | ![Both phosphorus rings are accepted with valence three while their semantic attachment nodes remain intact.](../images/regular-ring-safety/semantic-attachments-after.png) |
+
+Inputs: [multi-center targets](fixtures/regular-ring-safety/multi-center-input.rsk)
+and [variable targets](fixtures/regular-ring-safety/variable-input.rsk).
+Reproduce with `cargo run --example regular_ring_safety_qa -- OUTPUT_DIRECTORY --semantic-attachments`.
+Both gestures start at P `(0, 0)` toward `(80, 0)`, regular six-ring,
+5-world-unit hit radius. Before, both reject at 5 atoms / 3 bonds, P valence 1,
+byte-identical to input. After, both accept at 10 atoms / 9 bonds, P valence 3,
+with zero coincident atom pairs and unchanged attachment metadata.
+
+These are matched application-renderer captures, not native desktop screenshots.
+Before source: `4646df060b8bf4be56cddd4a79b179caa9b97c53` (`src/editing.rs` blob
+`3aa53a944ac037c3739c428361d9c8c434fa348a`). After source: `387b803fc9550738bf7a371cbb0161681f10d028`
+(`src/editing.rs` blob `257d7f3568d28d8bd7ad702689d8ca0b98d6eb2d`). The same expanded
+harness was run before and after the source change, sequentially in the isolated
+Cargo target. Platform: Apple Silicon macOS 26.5.1, Rust dev-profile application
+SVG renderer and resvg, September 29, 2026. Default publication style, white
+background, each panel 320 × 245 with `viewBox="-110 -100 260 210"`, whole PNG
+640 × 350. Both unedited images were inspected for readability and clipping.
+The native desktop evidence below predates this follow-up too.
+
+Reusable caption: **Phosphorus ring attachment remains available beside semantic
+attachment nodes, with native valence checks and the original attachment retained.**
+Reuse [the after image](../images/regular-ring-safety/semantic-attachments-after.png).
+
 ## Native desktop interaction review
 
 The same input fixtures were also exercised in the real macOS application with
@@ -141,25 +179,26 @@ the automated canvas regression below.
 
 ## Validation
 
-- Ten graph regressions cover atom and bond endpoint capacity, protected
+- Eleven graph regressions cover atom and bond endpoint capacity, protected
   state/explicit H, drawing-defined stereo versus projection, reaction membership,
   exact and nearby duplicate vertices, every supported ring size, shared double
   bonds, valid outward fusion, native save/reopen, and invalid geometry. Review
   regressions add neutral-P permitted/excess valence and styled shared-edge
-  preservation versus invalid appearance or stereo.
+  preservation versus invalid appearance or stereo, connected semantic attachments,
+  directional dative bonds, and aromatic phosphorus.
 - All fourteen existing aromatic-fusion regressions pass.
 - App/input regressions cover rejected placement with selection/history/Redo
   preserved, valid placement as one Undo step, and matching drag preview/commit
   at zoom 0.5, 1, and 2.5, including neutral phosphorus and bold/dashed double
-  bonds (15 gesture cases total).
+  bonds and a connected multi-center attachment (18 gesture cases total).
 - Real desktop interaction checks pass for all three rejection cases, successful
   outward fusion, Undo, and preservation of Redo, with the combined-source
   provenance and preview-capture limitation recorded above.
-- The review correction passed all 10 regular-ring graph tests, 14 aromatic-fusion
+- The review correction passed all 11 regular-ring graph tests, 14 aromatic-fusion
   tests, and both app/input regressions on macOS with the required native helper,
   isolated Cargo target, `CARGO_INCREMENTAL=0`, and one build job. Normal formatting,
   all-target/all-feature Clippy and Cargo check hooks passed. The documentation
-  build verified 6,621 local links/assets and all 750 palette colors.
+  build verified local links/assets and all 750 palette colors.
 
 Release caption: **Regular rings reject saturated/protected attachment sites and
 coincident duplicate vertices without changing your drawing.** Reuse the after

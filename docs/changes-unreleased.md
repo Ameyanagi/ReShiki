@@ -14,8 +14,8 @@ capture details](changes/regular-ring-safety.md). The three rejection cases,
 valid outward fusion, and Undo/Redo behavior were verified in the combined macOS
 integration application; capture provenance is recorded with the evidence.
 
-Valid neutral-phosphorus attachment and fusion across supported styled shared
-edges remain available. Matched review-correction examples and their native
+Valid neutral-phosphorus attachment, including drawings with semantic attachment
+nodes, and fusion across supported styled shared edges remain available. Matched review-correction examples and their native
 valence/preserved-bond checks are included in the validation record.
 
 | Before                                                                                                                              | After                                                                                                                                           |
