@@ -630,43 +630,6 @@ impl App {
         if self.import_open {
             content = content.push(self.import_drawer());
         }
-        if !self.recovered.is_empty() {
-            content = content.push(
-                container(
-                    row![
-                        text(format!(
-                            "{} recovery draft(s) available",
-                            self.recovered.len()
-                        ))
-                        .size(12),
-                        Space::new().width(Length::Fill),
-                        command("Restore latest", Message::Restore),
-                        command("Later", Message::DismissRecovery)
-                    ]
-                    .spacing(8)
-                    .align_y(Alignment::Center),
-                )
-                .padding([8, 16])
-                .style(panel),
-            );
-        }
-        if self.pending.is_some() {
-            content = content.push(
-                container(
-                    row![
-                        text("This drawing has unsaved changes.").size(12),
-                        Space::new().width(Length::Fill),
-                        command("Save", Message::Save).style(crate::appearance::primary),
-                        command("Discard & continue", Message::Discard).style(button::danger),
-                        command("Cancel", Message::Cancel)
-                    ]
-                    .spacing(8)
-                    .align_y(Alignment::Center),
-                )
-                .padding([8, 16])
-                .style(panel),
-            );
-        }
         let drawing: Element<'_, Edit> = canvas(MoleculeCanvas {
             element: &self.element,
             joining: self.joining.as_ref().map(|s| &s.prepared),
@@ -2206,15 +2169,41 @@ impl App {
                 }),
             });
         // One line; the full text of long or multi-line messages is a tooltip.
+        let room = if self.recovered.is_empty() {
+            300.
+        } else {
+            160.
+        };
         let message: Element<'_, Message> =
-            if self.status.contains('\n') || text_width(summary, 11.) > 300. {
+            if self.status.contains('\n') || text_width(summary, 11.) > room {
                 hover_hint(message, self.status.as_str(), tooltip::Position::Top).into()
             } else {
                 message.into()
             };
-        let mut status = row![container(message).width(Length::Fill).clip(true)]
-            .spacing(8)
-            .align_y(Alignment::Center);
+        let mut status = row![].spacing(8).align_y(Alignment::Center);
+        // Short enough to fit the minimum window beside Update available.
+        if !self.recovered.is_empty() {
+            status = status
+                .push(
+                    text("Recovery draft")
+                        .size(11)
+                        .wrapping(text::Wrapping::None),
+                )
+                .push(hover_hint(
+                    command("Restore", Message::Restore).style(control(true)),
+                    match self.recovered.len() {
+                        1 => "Open the draft · Save it to keep a copy".to_owned(),
+                        n => format!("Open the latest of {n} drafts · Save it to keep a copy"),
+                    },
+                    tooltip::Position::Top,
+                ))
+                .push(hover_hint(
+                    command("Dismiss", Message::DismissRecovery),
+                    "Hide until the next launch",
+                    tooltip::Position::Top,
+                ));
+        }
+        status = status.push(container(message).width(Length::Fill).clip(true));
         if self.updates.available() {
             status = status.push(
                 command(

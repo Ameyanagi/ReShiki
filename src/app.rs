@@ -440,7 +440,13 @@ impl App {
             busy: false,
             clipboard_busy: false,
             figure_exporting: false,
-            status: "Ready · Choose a tool to start drawing".into(),
+            // A recovery offer in the status bar is the launch message.
+            status: if recovered.is_empty() {
+                "Ready · Choose a tool to start drawing"
+            } else {
+                ""
+            }
+            .into(),
             error: false,
             path: None,
             untitled_name: None,
@@ -723,12 +729,20 @@ impl App {
         self.fit_to_view = true;
     }
     fn pending(&mut self, action: Pending) -> Task<Message> {
-        if self.dirty() {
-            self.pending = Some(action);
-            Task::none()
-        } else {
-            self.perform(action)
+        // The save dialog, or the save it started, still answers an earlier request.
+        if self.pending.is_some() {
+            return Task::none();
         }
+        if !self.dirty() {
+            return self.perform(action);
+        }
+        self.pending = Some(action);
+        files::ask_to_save(self.document_name())
+    }
+    /// Save chosen in the save dialog passes the gates of transient editors,
+    /// whose Close already reached the dialog.
+    fn answers_save_dialog(&self, message: &Message) -> bool {
+        self.pending.is_some() && matches!(message, Message::Save)
     }
     fn perform(&mut self, action: Pending) -> Task<Message> {
         match action {
@@ -848,7 +862,7 @@ impl App {
             if matches!(message, Message::Escape) {
                 return self.atom_text_action(atom_text::Action::Cancel);
             }
-            if !atom_text::background(&message) {
+            if !atom_text::background(&message) && !self.answers_save_dialog(&message) {
                 return Task::none();
             }
         }
@@ -992,7 +1006,8 @@ impl App {
                     | Message::Opened(_)
                     | Message::ClipboardRead { .. }
                     | Message::ClipboardWritten { .. }
-            ) {
+            ) && !self.answers_save_dialog(&message)
+            {
                 if !matches!(message, Message::RefreshLabels | Message::Canvas(_)) {
                     self.status = "Apply or cancel the cleanup preview to continue editing".into();
                 }
@@ -2287,6 +2302,7 @@ impl App {
                 let bytes = match serde_json::to_vec_pretty(&self.doc) {
                     Ok(b) => b,
                     Err(e) => {
+                        self.pending = None;
                         self.status = e.to_string();
                         self.error = true;
                         return Task::none();
@@ -2338,6 +2354,8 @@ impl App {
             }
             Message::Saved(epoch, snapshot, result) => match result {
                 Ok(Some(path)) => {
+                    // Continue the save dialog's action only when nothing is left unsaved.
+                    let pending = self.pending.take();
                     if epoch != self.file_epoch {
                         self.status = "Previous document saved".into();
                         return Task::none();
@@ -2354,15 +2372,15 @@ impl App {
                     self.error = false;
                     if !self.dirty() {
                         self.clear_recovery();
-                    }
-                    if !self.dirty()
-                        && let Some(action) = self.pending.take()
-                    {
-                        return self.perform(action);
+                        if let Some(action) = pending {
+                            return self.perform(action);
+                        }
                     }
                 }
-                Ok(None) => {}
+                // A cancelled Save As or a failed save also cancels the dialog's action.
+                Ok(None) => self.pending = None,
                 Err(e) => {
+                    self.pending = None;
                     self.status = e;
                     self.error = true;
                 }
@@ -5036,6 +5054,63 @@ mod tests {
             Ok(Some("example.reshiki".into())),
         ));
         assert!(app.dirty());
+    }
+
+    #[test]
+    fn unsaved_changes_wait_for_one_save_dialog_answer() {
+        let (mut app, _) = App::new();
+        app.doc.add_atom("O", Point::default());
+        let edited = app.doc.clone();
+        let window = iced::window::Id::unique();
+        assert!(app.update(Message::Close(window)).units() > 0);
+        assert!(matches!(app.pending, Some(Pending::Close(id)) if id == window));
+        // Further requests are ignored while the dialog is open.
+        for message in [Message::Close(window), Message::New, Message::Open] {
+            assert_eq!(app.update(message).units(), 0);
+        }
+        assert!(matches!(app.pending, Some(Pending::Close(_))));
+        let _ = app.update(Message::Cancel);
+        assert!(app.pending.is_none());
+        assert_eq!(app.doc, edited);
+        let _ = app.update(Message::New);
+        let _ = app.update(Message::Discard);
+        assert!(app.pending.is_none());
+        assert!(app.doc.all_ids().is_empty());
+    }
+
+    #[test]
+    fn save_answer_continues_only_after_the_drawing_is_saved() {
+        let (mut app, _) = App::new();
+        app.doc.add_atom("O", Point::default());
+        let _ = app.update(Message::New);
+        // Cancelling Save As cancels New too, so a later save does not continue it.
+        let epoch = app.file_epoch;
+        let _ = app.update(Message::Saved(epoch, Box::new(app.doc.clone()), Ok(None)));
+        assert!(app.pending.is_none());
+        let saved = Ok(Some(PathBuf::from("drawing.reshiki")));
+        let _ = app.update(Message::Saved(
+            epoch,
+            Box::new(app.doc.clone()),
+            saved.clone(),
+        ));
+        assert_eq!(app.doc.atoms.len(), 1);
+        app.doc.add_atom("N", Point::new(80., 0.));
+        let _ = app.update(Message::New);
+        let _ = app.update(Message::Saved(epoch, Box::new(app.doc.clone()), saved));
+        assert!(app.pending.is_none());
+        assert!(app.doc.all_ids().is_empty() && app.path.is_none());
+    }
+
+    #[test]
+    fn save_answer_passes_an_open_atom_editor() {
+        let (mut app, _) = App::new();
+        let atom = app.doc.add_atom("C", Point::default());
+        app.selected = vec![atom];
+        let _ = app.update(Message::AtomText(atom_text::Action::Begin(None)));
+        assert_eq!(app.update(Message::Save).units(), 0);
+        let _ = app.update(Message::Close(iced::window::Id::unique()));
+        assert!(app.pending.is_some());
+        assert!(app.update(Message::Save).units() > 0);
     }
 
     #[test]

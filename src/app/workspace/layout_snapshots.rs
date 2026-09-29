@@ -157,14 +157,31 @@ fn transform(app: &mut App) {
     }
 }
 
+/// New on an edited drawing waits for the native save dialog, which the
+/// headless renderer cannot show; nothing may appear above the canvas.
 fn unsaved(app: &mut App) {
     app.doc = benzene();
     let _ = app.update(Message::New);
+    assert!(app.pending.is_some());
+}
+
+/// A launch that found drafts from a session that closed unexpectedly.
+fn recovery(app: &mut App) {
+    use reshiki::recovery::{Candidate, Snapshot};
+    let snapshot = Snapshot {
+        document: benzene(),
+        source: None,
+        saved_at: 0,
+    };
+    let path = std::path::PathBuf::from("draft.json");
+    app.recovered = vec![Candidate { path, snapshot }];
+    // As at launch, where the offer replaces the ready message.
+    app.status.clear();
 }
 
 type Setup = fn(&mut App);
 
-const STATES: [(&str, Setup); 8] = [
+const STATES: [(&str, Setup); 9] = [
     ("default", |_| {}),
     ("molecule", molecule),
     ("mixed", mixed),
@@ -173,6 +190,7 @@ const STATES: [(&str, Setup); 8] = [
     ("import", import),
     ("transform", transform),
     ("unsaved", unsaved),
+    ("recovery", recovery),
 ];
 
 #[tokio::test]
