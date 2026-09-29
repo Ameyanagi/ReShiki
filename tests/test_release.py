@@ -5,6 +5,7 @@ import hashlib
 import io
 import json
 import os
+import plistlib
 import subprocess
 import sys
 import tempfile
@@ -17,8 +18,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from build_release import (
     archive,
     check_tag,
+    mac_bundle,
     main,
     notices,
+    numeric_version,
     release_platform,
     verify_binary,
     version,
@@ -27,6 +30,95 @@ from sign_macos import is_macho, private_run
 
 
 class ReleaseTests(unittest.TestCase):
+    def test_nightly_native_versions_preserve_full_identity_outside_numeric_fields(self):
+        nightly = "0.9.1-nightly.20260929.36501221724.1"
+        self.assertEqual(numeric_version(nightly), "0.9.1")
+        self.assertEqual(numeric_version("1.2.3"), "1.2.3")
+        for invalid in ("0.9", "65536.1.1", "1.2.bad", "../0.9.1"):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                numeric_version(invalid)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            binary = root / "target/release/reshiki"
+            binary.parent.mkdir(parents=True)
+            binary.touch()
+
+            def run(command, **_kwargs):
+                if command[0] == "swiftc":
+                    Path(command[command.index("-o") + 1]).touch()
+
+            app = root / "ReShiki.app"
+            with (
+                patch("build_release.version", return_value=nightly),
+                patch("build_release.target_directory", return_value=root / "target"),
+                patch("build_release.run", side_effect=run),
+                patch("build_release.notices"),
+            ):
+                mac_bundle(app, "release")
+            for info_path in (
+                app / "Contents/Info.plist",
+                app / "Contents/Helpers/ReShiki Print.app/Contents/Info.plist",
+            ):
+                info = plistlib.loads(info_path.read_bytes())
+                self.assertEqual(info["CFBundleVersion"], "0.9.1")
+                self.assertEqual(info["CFBundleShortVersionString"], "0.9.1")
+                self.assertEqual(info["ReShikiPackageVersion"], nightly)
+
+    def test_nightly_windows_setup_uses_numeric_resource_and_full_display_version(self):
+        from installers import windows_installer
+
+        nightly = "0.9.1-nightly.20260929.36501221724.1"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            folder = root / f"reshiki-{nightly}-windows-arm64"
+            folder.mkdir()
+            (folder / "build.json").write_text(
+                json.dumps(dict(version=nightly, platform="windows", architecture="arm64"))
+            )
+            (folder / "reshiki.exe").write_bytes(self.pe_image(0xAA64))
+
+            def compile_setup(command):
+                self.assertIn(f"/DAppVersion={nightly}", command)
+                self.assertIn("/DAppNumericVersion=0.9.1", command)
+                (root / f"{folder.name}-setup.exe").write_bytes(b"installer fixture")
+
+            with (
+                patch("installers.inno_compiler", return_value=Path("ISCC.exe")),
+                patch("installers.run", side_effect=compile_setup),
+                patch("installers.verify_windows_installer") as verify,
+            ):
+                result = windows_installer(folder, root)
+            verify.assert_called_once_with(result, folder)
+            self.assertTrue(Path(str(result) + ".sha256").is_file())
+            script = (
+                Path(__file__).resolve().parents[1] / "packaging/windows/reshiki.iss"
+            ).read_text()
+            self.assertIn("VersionInfoVersion={#AppNumericVersion}", script)
+            self.assertIn("VersionInfoTextVersion={#AppVersion}", script)
+
+    def test_nightly_signing_requires_stamped_version_and_matching_source(self):
+        from prepare_nightly import stamp
+        from sign_release import verify_source
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = Path(__file__).resolve().parents[1]
+            for filename in ("Cargo.toml", "Cargo.lock"):
+                (root / filename).write_bytes((source / filename).read_bytes())
+            nightly = numeric_version(version()) + "-nightly.20260929.36501221724.1"
+            metadata = dict(version=nightly, commit="qualified-commit")
+            with (
+                patch("build_release.ROOT", root),
+                patch.dict(os.environ, {"GITHUB_SHA": "qualified-commit"}),
+            ):
+                with self.assertRaisesRegex(ValueError, "source does not match"):
+                    verify_source(metadata)
+                stamp(root, version=nightly)
+                verify_source(metadata)
+                metadata["commit"] = "another-commit"
+                with self.assertRaisesRegex(ValueError, "source does not match"):
+                    verify_source(metadata)
+
     def test_release_includes_adapted_source_licenses(self):
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "Licenses"

@@ -45,11 +45,23 @@ See the [before/after example and validation](changes/tilted-double-bonds.md).
 
 By @Ameyanagi in [PR #82](https://github.com/Ameyanagi/ReShiki/pull/82).
 
-Choose **Stable** or **Nightly** in **Check for updates**. ReShiki remembers the channel and preserves your automatic-check preference. Stable remains the default and uses verified installation; Nightly downloads the portable archive for your computer for manual installation. Switching back to Stable offers the latest stable release even when its version number is lower than the installed nightly.
+Choose **Stable** or **Nightly** in **Check for updates**. ReShiki remembers the channel and preserves your automatic-check preference. Stable remains the default and uses verified installation; Nightly downloads the matching installer when available, with portable archives as a fallback, for manual installation. Switching back to Stable offers the latest stable release even when its version number is lower than the installed nightly.
 
 ![The update window offers Stable and Nightly, with a portable download and manual-install notice for the selected nightly build.](images/update-channel/nightly.png)
 
 Application-renderer example with automatic checking disabled. Separate desktop checks verified channel persistence and the downloaded nightly archive; see the [validation record](changes/update-channel.md).
+
+## Nightly installers and release downloads
+
+By @Ameyanagi in [PR #85](https://github.com/Ameyanagi/ReShiki/pull/85).
+
+Nightly builds include installers and portable archives for all six supported targets. macOS DMG and ZIP downloads are signed and notarized; Windows and Linux packages remain unsigned. Each release provides a table organized by operating system, architecture, installer and portable archive, with verified checksums. Stable remains the primary release.
+
+**Download nightly ↗** prefers a matching published installer, with a portable fallback for older builds. Installation remains manual; installers replace the existing app. Use the portable option from **Release notes** to retain Stable in a separate folder.
+
+![The Nightly update window offers Download nightly and explains that installation is manual, with portable archives linked from Release notes.](images/nightly-installers/nightly.png)
+
+Application-renderer evidence and packaging checks are recorded in the [validation notes](changes/nightly-installers.md).
 
 ## ChemDraw arrow exchange
 
@@ -177,8 +189,8 @@ for testing. The [validation record](windows-gpu-validation.md) includes Windows
 VM measurements and real Radeon GPU rendering on Linux; physical Windows GPU
 performance remains unmeasured.
 
-Development PRs target `main`. Successful nightly builds publish unsigned portable
-prereleases for all six platforms, with unique versions and checksums. Stable
+Development PRs target `main`. Successful nightly builds publish installers and portable
+archives as prereleases for all six platforms, with unique versions and checksums. Stable
 releases use version tags on tested commits in `main`.
 
 ## Stable downloads and optional nightly builds

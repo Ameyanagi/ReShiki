@@ -10,7 +10,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from build_release import ROOT, run, verify_binary, verify_inchi_helper
+from build_release import ROOT, numeric_version, run, verify_binary, verify_inchi_helper
 from check_runtime_dependencies import verify_payload, verify_runtime
 from inchi_source import manifest
 
@@ -68,6 +68,7 @@ def windows_installer(folder, output_dir):
             inno_compiler(),
             f"/DSourceDir={folder.resolve()}",
             f"/DAppVersion={metadata['version']}",
+            f"/DAppNumericVersion={numeric_version(metadata['version'])}",
             f"/DAppArchitecture={architecture}",
             f"/DOutputDir={output_dir.resolve()}",
             f"/DOutputName={name}",

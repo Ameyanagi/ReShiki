@@ -213,7 +213,7 @@ impl App {
                     && self.updates.available()
                     && let Some(release) = self.updates.latest.clone()
                 {
-                    return Task::perform(updates::open_portable(release), |result| {
+                    return Task::perform(updates::open_nightly_download(release), |result| {
                         Message::Updates(Action::Opened(result))
                     });
                 }
@@ -375,7 +375,7 @@ impl App {
                 button("Check for updates")
                     .padding([9, 12])
                     .on_press_maybe((!state.checking && !state.installing && !state.restarting).then_some(msg(Action::Check(true)))),
-                button(if state.channel == Channel::Nightly { "Download portable ↗" } else if state.installing { "Downloading…" } else { "Update and restart" })
+                button(if state.channel == Channel::Nightly { "Download nightly ↗" } else if state.installing { "Downloading…" } else { "Update and restart" })
                     .padding([9, 12])
                     .on_press_maybe((state.available() && !state.installing && !state.restarting).then_some(msg(if state.channel == Channel::Nightly { Action::Portable } else { Action::Install })))
             ]
@@ -389,7 +389,7 @@ impl App {
                 .size(16)
                 .text_size(13),
             button("Release notes ↗").on_press(msg(Action::Download)).style(button::text),
-            text(if state.channel == Channel::Nightly { "Checks once a day. Nightly builds are unsigned and installed manually. Extract the entire download; keep your stable installation." } else { "Checks once a day. Stable updates are verified before installation. Your saved drawing reopens after restarting." })
+            text(if state.channel == Channel::Nightly { "Checks once a day. Nightlies are installed manually. Downloads prefer installers when available; Release notes also links portable archives." } else { "Checks once a day. Stable updates are verified before installation. Your saved drawing reopens after restarting." })
                 .size(12)
                 .style(super::workspace::muted_text),
         ]
