@@ -34,7 +34,9 @@ cargo test --release --locked --bin reshiki \
 
 **Download nightly ↗** requests the selected release's asset names, chooses the
 matching DMG or Windows setup when present, and falls back to the legacy portable
-ZIP; Linux uses tar.gz. URLs are constructed locally for the expected GitHub
+ZIP; Linux uses tar.gz. If the asset lookup is unavailable or rate-limited, the
+button still opens the cached nightly's trusted portable URL. Malformed or
+oversized responses remain errors. URLs are constructed locally for the expected GitHub
 repository rather than accepting a server-provided download URL. Missing assets,
 unrelated tags, drafts and nonnightly releases are rejected. Installation remains
 manual. **Release notes** includes both installer and portable choices. Installers
@@ -59,7 +61,8 @@ same Cargo version before checking archive provenance. See the
 configuration.
 
 Rust update tests cover installer preference and legacy fallback across all six
-targets, locally constructed URLs, existing channel persistence, stale channel
+targets, unavailable/rate-limited API fallback without bypassing version or
+metadata validation, locally constructed URLs, existing channel persistence, stale channel
 checks and exclusion of nightlies from automatic stable installation. The
 application update tests and renderer capture check the corresponding dialog.
 

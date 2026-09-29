@@ -285,12 +285,18 @@ fn release_client() -> Result<reqwest::Client, String> {
 async fn fetch(channel: Channel) -> Result<Release, String> {
     let client = release_client()?;
     if channel == Channel::Stable {
-        return parse_release(&fetch_bytes(&client, &format!("{API}/latest")).await?);
+        return parse_release(
+            &fetch_bytes(&client, &format!("{API}/latest"))
+                .await
+                .map_err(FetchError::message)?,
+        );
     }
     // GitHub excludes prereleases from /latest. Follow release-list pages until
     // a published nightly is found, without accepting arbitrary prereleases.
     for page in 1..=10 {
-        let bytes = fetch_bytes(&client, &format!("{API}?per_page=100&page={page}")).await?;
+        let bytes = fetch_bytes(&client, &format!("{API}?per_page=100&page={page}"))
+            .await
+            .map_err(FetchError::message)?;
         if let Some(release) = parse_nightlies(&bytes)? {
             return Ok(release);
         }
@@ -307,31 +313,48 @@ async fn fetch(channel: Channel) -> Result<Release, String> {
     )
 }
 
-async fn fetch_bytes(client: &reqwest::Client, url: &str) -> Result<Vec<u8>, String> {
+enum FetchError {
+    Unavailable(String),
+    TooLarge,
+}
+impl FetchError {
+    fn message(self) -> String {
+        match self {
+            Self::Unavailable(message) => message,
+            Self::TooLarge => "The release response was too large.".into(),
+        }
+    }
+}
+
+async fn fetch_bytes(client: &reqwest::Client, url: &str) -> Result<Vec<u8>, FetchError> {
     let mut response = client
         .get(url)
         .header("Accept", "application/vnd.github+json")
         .send()
         .await
-        .map_err(|_| "Could not reach GitHub. Try again when you are online.".to_owned())?;
+        .map_err(|_| {
+            FetchError::Unavailable("Could not reach GitHub. Try again when you are online.".into())
+        })?;
     if !response.status().is_success() {
-        return Err(if matches!(response.status().as_u16(), 403 | 429) {
-            "GitHub's request limit was reached. Please try again later.".into()
-        } else {
-            format!(
-                "Update check unavailable (HTTP {}). Try again later.",
-                response.status()
-            )
-        });
+        return Err(FetchError::Unavailable(
+            if matches!(response.status().as_u16(), 403 | 429) {
+                "GitHub's request limit was reached. Please try again later.".into()
+            } else {
+                format!(
+                    "Update check unavailable (HTTP {}). Try again later.",
+                    response.status()
+                )
+            },
+        ));
     }
     let mut bytes = Vec::new();
     while let Some(chunk) = response
         .chunk()
         .await
-        .map_err(|_| "The update check was interrupted.".to_owned())?
+        .map_err(|_| FetchError::Unavailable("The update check was interrupted.".into()))?
     {
         if bytes.len().saturating_add(chunk.len()) > MAX_RESPONSE {
-            return Err("The release response was too large.".into());
+            return Err(FetchError::TooLarge);
         }
         bytes.extend_from_slice(&chunk);
     }
@@ -382,17 +405,35 @@ fn nightly_download_url(
 }
 
 pub async fn open_nightly_download(release: Release) -> Result<(), String> {
-    // Reject nonnightly versions before making a request.
-    release.portable_url(std::env::consts::OS, std::env::consts::ARCH)?;
-    let client = release_client()?;
-    let bytes = fetch_bytes(&client, &format!("{API}/tags/{}", release.tag()?)).await?;
-    open_url(nightly_download_url(
-        &release,
-        &bytes,
+    open_nightly_download_with(
+        release,
         std::env::consts::OS,
         std::env::consts::ARCH,
-    )?)
+        async |url| {
+            let client = release_client().map_err(FetchError::Unavailable)?;
+            fetch_bytes(&client, &url).await
+        },
+        open_url,
+    )
     .await
+}
+
+async fn open_nightly_download_with(
+    release: Release,
+    os: &str,
+    arch: &str,
+    lookup: impl AsyncFnOnce(String) -> Result<Vec<u8>, FetchError>,
+    open: impl AsyncFnOnce(String) -> Result<(), String>,
+) -> Result<(), String> {
+    // Validate the cached version and target before making any request or opening
+    // a browser. A transient API failure must not block its trusted archive URL.
+    let portable = release.portable_url(os, arch)?;
+    let url = match lookup(format!("{API}/tags/{}", release.tag()?)).await {
+        Ok(bytes) => nightly_download_url(&release, &bytes, os, arch)?,
+        Err(FetchError::Unavailable(_)) => portable,
+        Err(error) => return Err(error.message()),
+    };
+    open(url).await
 }
 async fn open_url(url: String) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
@@ -591,6 +632,118 @@ mod tests {
                 .is_err()
             );
         }
+    }
+
+    #[tokio::test]
+    async fn cached_nightly_downloads_open_trusted_archives_when_asset_lookup_is_unavailable() {
+        for (os, arch) in [
+            ("macos", "aarch64"),
+            ("macos", "x86_64"),
+            ("windows", "aarch64"),
+            ("windows", "x86_64"),
+            ("linux", "aarch64"),
+            ("linux", "x86_64"),
+        ] {
+            for failure in ["Offline", "HTTP 403", "HTTP 429", "HTTP 503"] {
+                let opened = std::cell::RefCell::new(None);
+                open_nightly_download_with(
+                    release(NIGHTLY),
+                    os,
+                    arch,
+                    async |url| {
+                        assert_eq!(url, format!("{API}/tags/nightly-{NIGHTLY}"));
+                        Err(FetchError::Unavailable(failure.into()))
+                    },
+                    async |url| {
+                        opened.replace(Some(url));
+                        Ok(())
+                    },
+                )
+                .await
+                .unwrap();
+                assert_eq!(
+                    opened.into_inner(),
+                    Some(release(NIGHTLY).portable_url(os, arch).unwrap())
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn nightly_download_fallback_cannot_bypass_version_or_metadata_validation() {
+        for (version, os, arch) in [
+            ("0.9.1", "macos", "aarch64"),
+            ("../bad", "windows", "x86_64"),
+            ("0.9.1-nightly.20260929.1.1/evil", "linux", "x86_64"),
+            (NIGHTLY, "unknown", "x86_64"),
+            (NIGHTLY, "macos", "riscv64"),
+        ] {
+            assert!(
+                open_nightly_download_with(
+                    release(version),
+                    os,
+                    arch,
+                    async |_| panic!("Invalid target must be rejected before lookup"),
+                    async |_| panic!("Invalid target must never open a browser"),
+                )
+                .await
+                .is_err()
+            );
+        }
+        let valid = serde_json::json!({
+            "tag_name": format!("nightly-{NIGHTLY}"), "draft": false, "prerelease": true,
+            "assets": [{"name": format!("reshiki-{NIGHTLY}-macos-arm64.dmg")}]
+        });
+        let mut invalid = vec![b"not JSON".to_vec()];
+        for (field, value) in [
+            (
+                "tag_name",
+                serde_json::json!("nightly-0.9.1-nightly.20260928.1.1"),
+            ),
+            ("draft", serde_json::json!(true)),
+            ("prerelease", serde_json::json!(false)),
+            ("assets", serde_json::json!([])),
+        ] {
+            let mut response = valid.clone();
+            response[field] = value;
+            invalid.push(serde_json::to_vec(&response).unwrap());
+        }
+        for result in invalid
+            .into_iter()
+            .map(Ok)
+            .chain([Err(FetchError::TooLarge)])
+        {
+            assert!(
+                open_nightly_download_with(
+                    release(NIGHTLY),
+                    "macos",
+                    "aarch64",
+                    async |_| result,
+                    async |_| panic!("Invalid metadata must not trigger an archive fallback"),
+                )
+                .await
+                .is_err()
+            );
+        }
+        let opened = std::cell::RefCell::new(None);
+        open_nightly_download_with(
+            release(NIGHTLY),
+            "macos",
+            "aarch64",
+            async |_| Ok(serde_json::to_vec(&valid).unwrap()),
+            async |url| {
+                opened.replace(Some(url));
+                Ok(())
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            opened.into_inner(),
+            Some(format!(
+                "{RELEASES}/download/nightly-{NIGHTLY}/reshiki-{NIGHTLY}-macos-arm64.dmg"
+            ))
+        );
     }
 
     #[test]
