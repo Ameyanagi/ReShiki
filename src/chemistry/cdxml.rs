@@ -29,6 +29,7 @@ mod preparation;
 pub mod presentation;
 mod read_abbreviations;
 mod scene;
+pub(crate) mod schemes;
 mod stereo;
 mod tree;
 mod variables;

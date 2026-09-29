@@ -2,6 +2,15 @@
 
 The Windows dropdown fix is recorded in [ReShiki 0.9.1](changes-0.9.1.md). Publisher-style, theme, clipboard and aromatic-fusion updates are recorded in [ReShiki 0.9.0](changes-0.9.md).
 
+## ChemDraw arrow exchange (under review)
+
+By @Ameyanagi. Keep arrows visible and editable when copying reaction drawings
+between ReShiki and ChemDraw. The [verification record](changes/chemdraw-arrow-exchange.md)
+includes actual clipboard results, matched returned-file renders and the
+explicit limit on external reaction-role metadata.
+
+![Editable arrow retained after the actual ChemDraw round trip.](images/chemdraw-arrows/after.png)
+
 ## Windows GPU rendering and nightly builds
 
 By @Ameyanagi in [PR #68](https://github.com/Ameyanagi/ReShiki/pull/68).

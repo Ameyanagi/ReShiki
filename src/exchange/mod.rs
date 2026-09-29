@@ -36,7 +36,14 @@ const OBJECTS: &[(u16, &str)] = &[
     (0x8007, "graphic"),
     (0x8008, "curve"),
     (0x8009, "embeddedobject"),
+    // ChemDraw adds reaction references when saving drawings with arrows.
+    (0x800d, "scheme"),
+    (0x800e, "step"),
     (0x8011, "objecttag"),
+    // ChemDraw stores arrows as 0x8021, despite the published SDK listing
+    // 0x8027. Keep the former ReShiki code as a read-only compatibility alias;
+    // the encoder selects the first entry for a name.
+    (0x8021, "arrow"),
     (0x8027, "arrow"),
     (0x802b, "annotation"),
     // ChemDraw 26 native ring fill, verified against a ChemDraw-saved CDX.

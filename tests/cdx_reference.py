@@ -12,7 +12,27 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from engine.cdx_exchange import INTS, PROPERTIES, from_cdx, property_bytes, to_cdx
+from engine.cdx_exchange import (
+    BY_NAME,
+    INTS,
+    OBJECTS,
+    PROPERTIES,
+    from_cdx,
+    property_bytes,
+    to_cdx,
+)
+
+# Genuine ChemDraw 26 files in fixtures/chemdraw-arrows establish these codes.
+# Keep the historical worker untouched. Its published-SDK arrow code is wrong;
+# the decoder still accepts old ReShiki files, and the encoder's reverse mapping
+# selects the canonical entry appended here. Scheme/step preserve references
+# that ChemDraw automatically adds when saving drawings containing arrows.
+OBJECTS.update({0x8021: "arrow", 0x800D: "scheme", 0x800E: "step"})
+# The real files store FillType=None as 1. The published CDXConstants.h confirms
+# Unspecified=0, None=1, Solid=2, Shaded=4; keep unsupported fills rejected.
+fill_types = {"Unspecified": 0, "None": 1, "Solid": 2, "Shaded": 4}
+PROPERTIES[0xA37] = ("FillType", "INT16", fill_types)
+BY_NAME["FillType"] = (0xA37, "INT16", fill_types)
 
 
 def corpus():

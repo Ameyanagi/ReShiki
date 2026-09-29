@@ -2020,6 +2020,10 @@ impl App {
                                 self.tool = Tool::Select;
                                 self.status =
                                     "Inserted structure · Drag to position · Delete or Undo to remove".into();
+                                if !response.warnings.is_empty() {
+                                    self.status.push_str(" · ");
+                                    self.status.push_str(&response.warnings.join(" · "));
+                                }
                             }
                             return Task::none();
                         }
@@ -2101,6 +2105,10 @@ impl App {
                             _ => "Structure imported · Undo restores the previous drawing",
                         }
                         .into();
+                        if !response.warnings.is_empty() {
+                            self.status.push_str(" · ");
+                            self.status.push_str(&response.warnings.join(" · "));
+                        }
                         self.error = false;
                     }
                 }
