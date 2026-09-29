@@ -31,11 +31,14 @@ mod icons;
 mod inline_text;
 mod inspector;
 mod joining;
+mod label_refresh;
 mod molecule_shortcuts;
 mod numeric_transforms;
 mod object_toolbar;
 mod pages;
 mod palettes;
+#[cfg(test)]
+mod performance;
 mod pictures;
 mod printing;
 mod reactions;
@@ -86,7 +89,10 @@ pub enum Message {
     AromaticDisplay,
     Abbreviations(abbreviations::Action),
     Labels(atom_labels::Action),
-    RefreshLabels,
+    LabelsReady(
+        label_refresh::Key,
+        Result<std::sync::Arc<reshiki::atom_labels::refresh::Refresh>, String>,
+    ),
     Templates(template_library::Action),
     TemplateNavigate(bool),
     InspectorScroll(f32),
@@ -238,7 +244,6 @@ pub enum Job {
     ImportFile,
     Insert,
     Analyze,
-    RefreshLabels,
     Clean(cleanup::CleanupJob),
     Export(&'static str),
 }
@@ -274,7 +279,8 @@ pub struct App {
     cleanup_serial: u64,
     abbreviations: abbreviations::State,
     labels: atom_labels::State,
-    refresh_due: Option<std::time::Instant>,
+    labels_dirty: bool,
+    label_refresh: label_refresh::State,
     chemistry_notice: Option<String>,
     bond_drawing: reshiki::chains::BondDrawing,
     chain_drawing: reshiki::chains::ChainDrawing,
@@ -383,7 +389,8 @@ impl App {
             cleanup_serial: 0,
             labels: Default::default(),
             abbreviations: Default::default(),
-            refresh_due: None,
+            labels_dirty: false,
+            label_refresh: Default::default(),
             chemistry_notice: None,
             context_menu: None,
             bond_drawing: Default::default(),
@@ -561,16 +568,6 @@ impl App {
             } else {
                 Subscription::none()
             },
-            if self.refresh_due.is_some()
-                && !self.busy
-                && self.cleanup.is_none()
-                && !self.erase_stroke
-            {
-                iced::time::every(std::time::Duration::from_millis(250))
-                    .map(|_| Message::RefreshLabels)
-            } else {
-                Subscription::none()
-            },
             if self.recovery.is_some()
                 && ((self.dirty() && self.autosaved_revision != Some(self.revision))
                     || (!self.dirty() && self.autosaved_revision.is_some()))
@@ -627,10 +624,8 @@ impl App {
             return Task::none();
         }
         self.busy = true;
-        if !matches!(kind, Job::RefreshLabels) {
-            self.error = false;
-            self.status = "Working…".into();
-        }
+        self.error = false;
+        self.status = "Working…".into();
         let engine = self.engine.clone();
         let revision = self.revision;
         let aromatic_selection = matches!(kind, Job::AromaticDisplay);
@@ -681,8 +676,7 @@ impl App {
         let chemistry_changed = chemistry_changed(&before, &self.doc);
         if chemistry_changed {
             reshiki::atom_labels::clear_computed(&mut self.doc);
-            self.refresh_due =
-                Some(std::time::Instant::now() + std::time::Duration::from_millis(350));
+            self.labels_dirty = true;
             self.chemistry_notice = None;
         }
         if self
@@ -705,7 +699,8 @@ impl App {
         if drawing_style_changed {
             self.sync_drawing_defaults();
         }
-        self.selected.retain(|id| self.doc.all_ids().contains(id));
+        let existing: std::collections::HashSet<_> = self.doc.all_ids().into_iter().collect();
+        self.selected.retain(|id| existing.contains(id));
     }
     fn fit(&mut self) {
         self.pages.fit = None;
@@ -734,7 +729,7 @@ impl App {
         match action {
             Pending::New => {
                 self.labels = Default::default();
-                self.refresh_due = None;
+                self.labels_dirty = false;
                 self.chemistry_notice = None;
                 self.clear_recovery();
                 self.file_epoch = self.file_epoch.wrapping_add(1);
@@ -813,8 +808,12 @@ impl App {
             return self.mac_file_action(action);
         }
         let previous = self.inspector_tab;
-        let refresh_dimensions = matches!(&message, Message::EngineDone { .. });
+        let refresh_dimensions = matches!(
+            &message,
+            Message::EngineDone { .. } | Message::LabelsReady(..)
+        );
         let task = self.update_inner(message);
+        let task = Task::batch([task, self.start_label_refresh()]);
         self.sync_numeric_transforms();
         if refresh_dimensions {
             self.refresh_numeric_dimensions();
@@ -835,6 +834,10 @@ impl App {
     }
 
     fn update_inner(&mut self, message: Message) -> Task<Message> {
+        if let Message::LabelsReady(key, result) = message {
+            self.labels_ready(key, result);
+            return Task::none();
+        }
         let Some(message) = self.prepare_molecule_shortcut(message) else {
             return Task::none();
         };
@@ -867,7 +870,6 @@ impl App {
             message,
             Message::Canvas(Edit::Hover(_))
                 | Message::Tick
-                | Message::RefreshLabels
                 | Message::InspectorScroll(_)
                 | Message::EngineDone { .. }
                 | Message::InspectorAction(_)
@@ -993,7 +995,7 @@ impl App {
                     | Message::ClipboardRead { .. }
                     | Message::ClipboardWritten { .. }
             ) {
-                if !matches!(message, Message::RefreshLabels | Message::Canvas(_)) {
+                if !matches!(message, Message::Canvas(_)) {
                     self.status = "Apply or cancel the cleanup preview to continue editing".into();
                 }
                 return Task::none();
@@ -1048,21 +1050,7 @@ impl App {
             }
             Message::Abbreviations(action) => return self.abbreviation_action(action),
             Message::Labels(action) => self.label_action(action),
-            Message::RefreshLabels => {
-                if !self.busy
-                    && self
-                        .refresh_due
-                        .is_some_and(|due| std::time::Instant::now() >= due)
-                {
-                    self.refresh_due = None;
-                    if !self.doc.atoms.is_empty() && !reshiki::attachments::present(&self.doc) {
-                        return self.run(
-                            Request::molecule("analyze", self.doc.clone()),
-                            Job::RefreshLabels,
-                        );
-                    }
-                }
-            }
+            Message::LabelsReady(..) => {}
             Message::InspectorScroll(y) => {
                 if self.inspector_tab == InspectorTab::Templates && y.is_finite() {
                     self.templates.scroll = y.max(0.);
@@ -1929,14 +1917,6 @@ impl App {
                 }
                 match *result {
                     Err(e) => {
-                        if matches!(kind, Job::RefreshLabels) {
-                            if self.revision == revision {
-                                self.chemistry_notice = Some(e);
-                            } else {
-                                self.refresh_due = Some(std::time::Instant::now());
-                            }
-                            return Task::none();
-                        }
                         self.error = true;
                         self.status = e;
                     }
@@ -1945,10 +1925,6 @@ impl App {
                             return export_file(response.output.unwrap_or_default(), format);
                         }
                         if self.revision != revision {
-                            if matches!(kind, Job::RefreshLabels) {
-                                self.refresh_due = Some(std::time::Instant::now());
-                                return Task::none();
-                            }
                             self.status="Operation finished; newer edits were preserved. Run it again to update.".into();
                             return Task::none();
                         }
@@ -2013,7 +1989,7 @@ impl App {
                                     return Task::none();
                                 }
                                 reshiki::atom_labels::refresh_computed(&mut self.doc, &document);
-                                self.refresh_due = None;
+                                self.labels_dirty = false;
                                 self.analysis = response.analysis;
                                 self.tool = Tool::Select;
                                 self.status =
@@ -2042,7 +2018,7 @@ impl App {
                             }
                             return Task::none();
                         }
-                        if matches!(kind, Job::Analyze | Job::RefreshLabels) {
+                        if matches!(kind, Job::Analyze) {
                             // Checking is a read-only chemistry operation. Refresh
                             // computed H labels without rewriting the user's bond
                             // orders/stereo or inserting a step into Undo/Redo.
@@ -2062,7 +2038,7 @@ impl App {
                             self.doc = document.clone();
                             self.changed(before);
                             reshiki::atom_labels::refresh_computed(&mut self.doc, &document);
-                            self.refresh_due = None;
+                            self.labels_dirty = false;
                             self.chemistry_notice = None;
                             self.selected.clear();
                             if matches!(kind, Job::Import | Job::ImportFile) {
@@ -2078,7 +2054,7 @@ impl App {
                         self.analysis = response.analysis;
                         self.status = match kind {
                             Job::Clean(_) => "Structure cleaned",
-                            Job::Analyze | Job::RefreshLabels => "No chemistry errors found",
+                            Job::Analyze => "No chemistry errors found",
                             _ => "Structure imported · Undo restores the previous drawing",
                         }
                         .into();
@@ -2107,7 +2083,7 @@ impl App {
                     if chemistry_changed(&before, &self.doc) {
                         self.analysis = None;
                         reshiki::atom_labels::clear_computed(&mut self.doc);
-                        self.refresh_due = Some(std::time::Instant::now());
+                        self.labels_dirty = true;
                     }
                     let ids = self.doc.all_ids();
                     self.selected.retain(|id| ids.contains(id));
@@ -2244,7 +2220,7 @@ impl App {
                                         self.history = History::default();
                                         self.revision = self.revision.wrapping_add(1);
                                         self.analysis = None;
-                                        self.refresh_due = Some(std::time::Instant::now());
+                                        self.labels_dirty = true;
                                         self.selected.clear();
                                         self.pages = pages::State::default();
                                         if self.doc.page_layout.is_some() {
@@ -3297,15 +3273,16 @@ mod tests {
         app.assistant.busy = true;
         assert_eq!(subscriptions(&app), idle + 1);
         app.assistant.busy = false;
-        app.refresh_due = Some(std::time::Instant::now());
-        assert_eq!(subscriptions(&app), idle + 1);
+        app.labels_dirty = true;
+        assert_eq!(subscriptions(&app), idle); // Labels use a task, not a polling timer.
         app.busy = true;
         assert_eq!(subscriptions(&app), idle);
         app.busy = false;
-        app.refresh_due = None;
+        app.labels_dirty = false;
 
         let directory = tempfile::tempdir().map_err(|e| e.to_string())?;
         app.recovery = Some(Recovery::in_directory(directory.path())?);
+        app.inspector_open = false;
         assert_eq!(subscriptions(&app), idle);
         app.doc.add_atom("O", Point::default());
         assert_eq!(subscriptions(&app), idle + 1);
@@ -3572,38 +3549,6 @@ mod tests {
         assert_eq!(app.doc.atom_labels, Default::default());
         assert_eq!(app.current_text_style().size_pt, 10.);
         assert_eq!(app.current_text_style().family, "Arial");
-    }
-
-    #[test]
-    fn stale_refresh_is_rescheduled_and_derived_labels_do_not_dirty_the_document() {
-        let (mut app, _) = App::new();
-        let _ = app.perform(Pending::New);
-        let id = app.doc.add_atom("N", Point::default());
-        app.saved = app.doc.clone();
-        let mut computed = app.doc.clone();
-        computed.atom_mut(id).unwrap().cip_label = Some("S".into());
-        computed.atom_mut(id).unwrap().label_h = 3;
-        let response = Response {
-            document: Some(computed),
-            analysis: None,
-            output: None,
-            engine_version: "test".into(),
-            warnings: vec![],
-        };
-        let _ = app.update(Message::EngineDone {
-            revision: app.revision.wrapping_sub(1),
-            kind: Job::RefreshLabels,
-            result: Box::new(Ok(response.clone())),
-        });
-        assert!(app.refresh_due.is_some());
-        assert!(app.doc.atom(id).unwrap().cip_label.is_none());
-        let _ = app.update(Message::EngineDone {
-            revision: app.revision,
-            kind: Job::RefreshLabels,
-            result: Box::new(Ok(response)),
-        });
-        assert_eq!(app.doc.atom(id).unwrap().label_h, 3);
-        assert!(!app.dirty());
     }
 
     #[test]

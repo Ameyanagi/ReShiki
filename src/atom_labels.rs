@@ -5,6 +5,7 @@ use crate::{
     typography::TextStyle,
 };
 use serde::{Deserialize, Serialize};
+pub mod refresh;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -565,17 +566,21 @@ pub fn clear_computed(doc: &mut Document) {
     }
 }
 pub fn refresh_computed(doc: &mut Document, checked: &Document) {
+    let atoms: std::collections::HashMap<_, _> = checked.atoms.iter().map(|a| (a.id, a)).collect();
+    let bonds: std::collections::HashMap<_, _> = checked
+        .bonds
+        .iter()
+        .map(|b| ((b.a.min(b.b), b.a.max(b.b)), b))
+        .collect();
     for a in &mut doc.atoms {
-        if let Some(source) = checked.atom(a.id) {
+        if let Some(source) = atoms.get(&a.id) {
             a.label_h = source.label_h;
             a.cip_label = source.cip_label.clone();
         }
     }
     for b in &mut doc.bonds {
-        b.cip_label = checked
-            .bonds
-            .iter()
-            .find(|s| (s.a == b.a && s.b == b.b) || (s.a == b.b && s.b == b.a))
+        b.cip_label = bonds
+            .get(&(b.a.min(b.b), b.a.max(b.b)))
             .and_then(|s| s.cip_label.clone());
     }
 }

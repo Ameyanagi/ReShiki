@@ -208,10 +208,19 @@ impl App {
         part
     }
 
+    fn property_request_key(&self) -> PropertyKey {
+        self.property_key().unwrap_or_else(|| PropertyKey {
+            revision: self.revision,
+            epoch: self.file_epoch,
+            atoms: self.doc.atoms.iter().map(|a| a.id).collect(),
+        })
+    }
+
     pub(super) fn property_analysis(&self) -> Option<&Analysis> {
-        let Some(key) = self.property_key() else {
+        if self.selected.is_empty() && self.analysis.is_some() {
             return self.analysis.as_ref();
-        };
+        }
+        let key = self.property_request_key();
         self.inspector_ui
             .properties
             .as_ref()
@@ -230,9 +239,10 @@ impl App {
         {
             return Subscription::none();
         }
-        let Some(key) = self.property_key().filter(|key| !key.atoms.is_empty()) else {
+        let key = self.property_request_key();
+        if key.atoms.is_empty() || self.property_analysis().is_some() {
             return Subscription::none();
-        };
+        }
         if self
             .inspector_ui
             .properties
@@ -308,9 +318,7 @@ impl App {
                 Task::none()
             }
             Action::RefreshProperties => {
-                let Some(key) = self.property_key() else {
-                    return self.update(Message::Analyze);
-                };
+                let key = self.property_request_key();
                 if key.atoms.is_empty() || self.inspector_ui.pending.is_some() {
                     return Task::none();
                 }
@@ -337,7 +345,7 @@ impl App {
             Action::PropertiesCalculated(key, result) => {
                 if self.inspector_ui.pending.as_ref() == Some(&key) {
                     self.inspector_ui.pending = None;
-                    if self.property_key().as_ref() == Some(&key) {
+                    if self.property_request_key() == key {
                         // Never apply fragment labels or hydrogen counts to the original drawing.
                         self.inspector_ui.properties = Some((key, *result));
                     }
@@ -675,7 +683,7 @@ impl App {
             .inspector_ui
             .properties
             .as_ref()
-            .filter(|(saved, _)| Some(saved) == key.as_ref())
+            .filter(|(saved, _)| *saved == self.property_request_key())
         {
             body = body.push(
                 text(error)
@@ -687,7 +695,7 @@ impl App {
                 text(if key.is_some() {
                     "Calculating selection…"
                 } else {
-                    "Check the structure to calculate its formula and properties."
+                    "Calculating molecular properties…"
                 })
                 .size(12)
                 .style(muted_text),
@@ -1225,7 +1233,7 @@ impl App {
 mod tests {
     use super::*;
     async fn calculate(app: &mut App) {
-        let key = app.property_key().unwrap();
+        let key = app.property_request_key();
         let doc = app.property_document(&key);
         let _ = app.inspector_action(Action::RefreshProperties);
         let result = app
@@ -1236,6 +1244,27 @@ mod tests {
             .analysis
             .unwrap();
         let _ = app.inspector_action(Action::PropertiesCalculated(key, Box::new(Ok(result))));
+    }
+
+    #[tokio::test]
+    async fn whole_drawing_properties_are_lazy_cached_and_never_modify_labels() {
+        let (mut app, _) = App::new();
+        app.doc.add_atom("O", Default::default());
+        app.selected.clear();
+        let before = app.doc.clone();
+        let subscriptions = |app: &App| {
+            iced::advanced::subscription::into_recipes(app.properties_subscription()).len()
+        };
+        app.inspector_open = false;
+        assert_eq!(subscriptions(&app), 0);
+        app.inspector_open = true;
+        assert_eq!(subscriptions(&app), 1);
+        calculate(&mut app).await;
+        assert_eq!(app.property_analysis().unwrap().formula, "H2O");
+        assert_eq!(app.doc, before);
+        assert_eq!(subscriptions(&app), 0);
+        app.revision += 1;
+        assert!(app.property_analysis().is_none());
     }
 
     #[test]

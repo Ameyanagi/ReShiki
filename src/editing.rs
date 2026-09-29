@@ -445,6 +445,36 @@ fn map_positions(doc: &mut Document, ids: &[u64], convert: impl Fn(Point) -> Poi
 /// Connected selected atoms move as one object during alignment/distribution.
 pub fn groups(doc: &Document, ids: &[u64]) -> Vec<Vec<u64>> {
     let mut remaining: HashSet<_> = ids.iter().copied().collect();
+    if remaining.is_empty() {
+        return vec![];
+    }
+    let attachments: Vec<Vec<_>> = doc
+        .atoms
+        .iter()
+        .filter(|a| a.attachment.is_some())
+        .map(|a| {
+            std::iter::once(a.id)
+                .chain(a.centroid.iter().copied())
+                .collect()
+        })
+        .collect();
+    let memberships: Vec<&[u64]> = attachments
+        .iter()
+        .map(Vec::as_slice)
+        .chain(doc.groups.iter().map(|g| g.members.as_slice()))
+        .collect();
+    let mut groups_by_id = std::collections::HashMap::<u64, Vec<usize>>::new();
+    for (index, members) in memberships.iter().enumerate() {
+        for id in *members {
+            groups_by_id.entry(*id).or_default().push(index);
+        }
+    }
+    let mut visited_groups = HashSet::new();
+    let mut adjacent = std::collections::HashMap::<u64, Vec<u64>>::new();
+    for bond in &doc.bonds {
+        adjacent.entry(bond.a).or_default().push(bond.b);
+        adjacent.entry(bond.b).or_default().push(bond.a);
+    }
     let mut result = vec![];
     for id in ids {
         if !remaining.remove(id) {
@@ -453,36 +483,22 @@ pub fn groups(doc: &Document, ids: &[u64]) -> Vec<Vec<u64>> {
         let mut group = vec![*id];
         let mut i = 0;
         while let Some(current) = group.get(i).copied() {
-            for atom in doc.atoms.iter().filter(|a| a.attachment.is_some()) {
-                if atom.id == current || atom.centroid.contains(&current) {
-                    for id in std::iter::once(&atom.id).chain(&atom.centroid) {
+            for index in groups_by_id.get(&current).into_iter().flatten() {
+                if visited_groups.insert(*index) {
+                    for id in memberships
+                        .get(*index)
+                        .into_iter()
+                        .flat_map(|ids| ids.iter())
+                    {
                         if remaining.remove(id) {
                             group.push(*id);
                         }
                     }
                 }
             }
-            for persistent in &doc.groups {
-                if persistent.members.contains(&current) {
-                    for id in &persistent.members {
-                        if remaining.remove(id) {
-                            group.push(*id);
-                        }
-                    }
-                }
-            }
-            for bond in &doc.bonds {
-                let neighbor = if bond.a == current {
-                    Some(bond.b)
-                } else if bond.b == current {
-                    Some(bond.a)
-                } else {
-                    None
-                };
-                if let Some(n) = neighbor
-                    && remaining.remove(&n)
-                {
-                    group.push(n);
+            for neighbor in adjacent.get(&current).into_iter().flatten() {
+                if remaining.remove(neighbor) {
+                    group.push(*neighbor);
                 }
             }
             i += 1;

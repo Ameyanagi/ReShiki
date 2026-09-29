@@ -121,7 +121,7 @@ impl App {
                 {
                     b.indicator.show = (self.labels.scope == Scope::Selection).then_some(value);
                 }
-                self.refresh_due = Some(std::time::Instant::now());
+                self.labels_dirty = true;
             }
             Action::Number => {
                 let sequence = labels::sequence(&self.labels.seed, ids.len())?;

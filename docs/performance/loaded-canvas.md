@@ -75,8 +75,10 @@ the drag measurements cover preview updates, not the mouse-release commit.
   neighbors, and label visibility once per scene, preserving document order.
   These borrowed indexes have no lifetime beyond the current scene build.
 
-Async work is deliberately deferred: the profiles identified redundant CPU work
-that can be removed directly. Moving scene generation to a worker would require
+Async scene generation remains deferred: the canvas profiles identified redundant
+CPU work that can be removed directly. A subsequent [editing and chemistry audit](editing-latency.md)
+introduces immediate background label updates with version checks and a bounded
+per-molecule cache. Moving scene generation to a worker would require
 versioned results, cancellation/coalescing, and a defined policy for stale previews.
 The measurements below determine whether that additional complexity is needed.
 

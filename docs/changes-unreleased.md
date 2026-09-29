@@ -15,6 +15,13 @@ gallery and from 1182 ms to 23 ms for four copies. Larger partial drags and zoom
 changes remain more expensive. See the
 [profiling method, measurements, and validation](performance/loaded-canvas.md).
 
+Atom shortcuts such as O → OH now start label calculation immediately, without
+the polling delay or unnecessary identifier/property calculations. Unchanged
+molecules reuse checked label results; independent structures keep updating even
+when another component cannot be analyzed. Abbreviation checks, selection
+grouping and dimension readouts also avoid repeated work. See the
+[editing latency investigation and remaining targets](performance/editing-latency.md).
+
 ## Stable and Nightly update channels
 
 By @Ameyanagi in [PR #82](https://github.com/Ameyanagi/ReShiki/pull/82).
