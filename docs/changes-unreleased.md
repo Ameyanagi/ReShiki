@@ -2,6 +2,18 @@
 
 The Windows dropdown fix is recorded in [ReShiki 0.9.1](changes-0.9.1.md). Publisher-style, theme, clipboard and aromatic-fusion updates are recorded in [ReShiki 0.9.0](changes-0.9.md).
 
+## Loaded canvas performance
+
+By @Ameyanagi; pending pull request review.
+
+Dragging and selecting the shortcut gallery requires much less CPU work, with
+bounded text caching and checks that edits and undo/redo keep the drawing current.
+The Mac benchmark reduced whole-gallery drag preparation from 115 ms to 2.7 ms;
+a four-copy workload fell from 573 ms to 16 ms. These measure CPU preparation,
+not display FPS. Larger partial drags and zoom changes remain more expensive;
+Windows candidate validation is pending. See the
+[profiling method, measurements, and validation](performance/loaded-canvas.md).
+
 ## Stable and Nightly update channels
 
 By @Ameyanagi in [PR #82](https://github.com/Ameyanagi/ReShiki/pull/82).

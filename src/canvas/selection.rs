@@ -32,6 +32,9 @@ pub(super) struct SelectionBox {
 
 impl SelectionBox {
     pub fn new(doc: &Document, ids: &[u64], camera: Camera, bounds: Rectangle) -> Option<Self> {
+        if ids.is_empty() {
+            return None;
+        }
         if matches!(ids, [id] if doc.atom(*id).is_some()) {
             return None;
         }
@@ -42,6 +45,20 @@ impl SelectionBox {
             camera,
             bounds,
         })
+    }
+
+    pub(super) fn with_view(mut self, camera: Camera, bounds: Rectangle) -> Self {
+        self.camera = camera;
+        self.bounds = bounds;
+        self
+    }
+
+    pub(super) fn translated(mut self, delta: World) -> Self {
+        for point in &mut self.corners {
+            *point = point.offset(delta.x, delta.y);
+        }
+        self.pivot = self.pivot.offset(delta.x, delta.y);
+        self
     }
 
     fn grips(self) -> [Point; 4] {

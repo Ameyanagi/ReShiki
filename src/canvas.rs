@@ -6,12 +6,16 @@ use reshiki::{
     graphics::{BracketSides, Graphic, GraphicKind, GraphicStyle, PathCommand},
     scene::{Primitive, primitives},
 };
+mod cache;
 mod dashes;
 pub mod guides;
 pub mod layered;
 mod movement;
 mod pages;
+#[cfg(test)]
+mod performance;
 mod selection;
+mod text_cache;
 pub(crate) mod tilt;
 use selection::{Handle, SelectionBox, TransformDrag};
 
@@ -181,6 +185,8 @@ impl Camera {
 }
 #[derive(Default)]
 pub struct State {
+    scene: std::cell::RefCell<cache::SceneCache>,
+    text: std::cell::RefCell<text_cache::TextCache>,
     gesture: Option<Gesture>,
     cursor: Option<Point>,
     last_click: Option<(std::time::Instant, u64)>,
@@ -648,8 +654,12 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                     }
                 }
                 if self.tool.selects()
-                    && let Some(selection) =
-                        SelectionBox::new(self.doc, self.selected, self.camera, bounds)
+                    && let Some(selection) = state.scene.borrow_mut().selection(
+                        self.doc,
+                        self.selected,
+                        self.camera,
+                        bounds,
+                    )
                     && let Some(handle) = selection.hit(point?)
                 {
                     state.last_click = None;
@@ -1121,7 +1131,8 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
             },
             offset,
         )
-        .with_canvas(self.doc.canvas_theme);
+        .with_canvas(self.doc.canvas_theme)
+        .with_text_cache(&state.text);
         self.draw_paper(&mut frame, state, paper, cursor);
         let mut layers = frame.finish();
         let mut frame = layered::Frame::new(renderer, bounds.size()).with_theme(theme);
@@ -1181,7 +1192,10 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
         if cursor.is_over(bounds) {
             if self.tool.selects() {
                 if let Some(selection) =
-                    SelectionBox::new(self.doc, self.selected, self.camera, bounds)
+                    state
+                        .scene
+                        .borrow_mut()
+                        .selection(self.doc, self.selected, self.camera, bounds)
                     && let Some(p) = cursor.position()
                     && let Some(handle) = selection.hit(Point::new(p.x - bounds.x, p.y - bounds.y))
                 {
@@ -1239,6 +1253,7 @@ impl MoleculeCanvas<'_> {
         let mut ring_selection = None;
         let mut chain_badge = None;
         let mut template_notice = None;
+        let mut translation = None;
         if let (Some(Gesture::Tilt(drag)), Some(p)) = (&state.gesture, state.cursor)
             && self.tool == Tool::Tilt
         {
@@ -1589,6 +1604,12 @@ impl MoleculeCanvas<'_> {
             );
             if start.distance(p) < 1.0 / self.camera.zoom {
                 ring_selection = Some(ids.clone());
+            } else if state.scene.borrow_mut().whole_document(self.doc, ids) {
+                // Moving every object cannot change their relative geometry,
+                // chemical labels, crossing gaps or ring attachment targets.
+                preview.translate(ids, delta.x, delta.y);
+                ring_selection = Some(ids.clone());
+                translation = Some(delta);
             } else if let Some(snapped) =
                 reshiki::editing::snap_ring(&mut preview, ids, delta, 14.0 / self.camera.zoom)
             {
@@ -1766,21 +1787,31 @@ impl MoleculeCanvas<'_> {
             .retain(|a| Some(a.id) != self.hidden_annotation);
         let selected = ring_selection.as_deref().unwrap_or(self.selected);
         draw_atom_markers(frame, &preview, selected, self.camera, bounds, true);
-        for id in selected {
-            for a in preview.annotations.iter().filter(|a| a.id == *id) {
-                frame.stroke(
-                    &Path::rectangle(
-                        self.camera.screen(a.position, bounds),
-                        iced::Size::new(
-                            a.size().0 * self.camera.zoom,
-                            a.size().1 * self.camera.zoom,
-                        ),
-                    ),
-                    Stroke::default().with_color(Color::from_rgb8(20, 130, 112)),
-                );
-            }
+        for a in preview
+            .annotations
+            .iter()
+            .filter(|a| selected.contains(&a.id))
+        {
+            let (width, height) = a.size();
+            frame.stroke(
+                &Path::rectangle(
+                    self.camera.screen(a.position, bounds),
+                    iced::Size::new(width * self.camera.zoom, height * self.camera.zoom),
+                ),
+                Stroke::default().with_color(Color::from_rgb8(20, 130, 112)),
+            );
         }
-        draw_document(frame, &preview, self.camera, bounds);
+        if self.hidden_annotation.is_none() && (translation.is_some() || preview == *self.doc) {
+            let scene = state.scene.borrow_mut().primitives(self.doc);
+            let delta = translation.unwrap_or_default();
+            let camera = Camera {
+                center: self.camera.center.offset(-delta.x, -delta.y),
+                ..self.camera
+            };
+            draw_primitives(frame, scene.iter().cloned(), camera, bounds, 0.);
+        } else {
+            draw_document(frame, &preview, self.camera, bounds);
+        }
         // Editing aids stay out of the shared scene used by figure/Office export.
         for atom in reshiki::attachments::editor_markers(&preview) {
             let center = self.camera.screen(atom.position, bounds);
@@ -2042,10 +2073,21 @@ impl MoleculeCanvas<'_> {
                     .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
                 drag.selection
                     .draw(frame, drag.values(end, state.modifiers.shift()).1);
-            } else if let Some(selection) =
-                SelectionBox::new(&preview, selected, self.camera, bounds)
-            {
-                selection.draw(frame, 0.0);
+            } else {
+                let selection = if self.hidden_annotation.is_none()
+                    && (translation.is_some() || preview == *self.doc)
+                {
+                    state
+                        .scene
+                        .borrow_mut()
+                        .selection(self.doc, selected, self.camera, bounds)
+                        .map(|selection| selection.translated(translation.unwrap_or_default()))
+                } else {
+                    SelectionBox::new(&preview, selected, self.camera, bounds)
+                };
+                if let Some(selection) = selection {
+                    selection.draw(frame, 0.0);
+                }
             }
             if let (Some(Gesture::Transform(drag)), Some(p)) = (&state.gesture, state.cursor)
                 && let Handle::Edge(i) = drag.handle
@@ -2320,7 +2362,17 @@ fn draw_document_with_minimum_stroke(
     bounds: Rectangle,
     minimum: f32,
 ) {
-    for primitive in primitives(doc) {
+    draw_primitives(frame, primitives(doc), camera, bounds, minimum);
+}
+
+fn draw_primitives(
+    frame: &mut layered::Frame<'_>,
+    primitives: impl IntoIterator<Item = Primitive>,
+    camera: Camera,
+    bounds: Rectangle,
+    minimum: f32,
+) {
+    for primitive in primitives {
         match primitive {
             Primitive::Picture(g) => {
                 if let Some(picture) = &g.picture {
@@ -2413,85 +2465,34 @@ fn draw_document_with_minimum_stroke(
                 color,
                 style,
             } => {
-                let t = canvas::Text {
-                    content: text,
-                    position: camera.screen(position, bounds),
-                    size: (size * camera.zoom).into(),
-                    font: iced::Font {
-                        family: iced::font::Family::Name(reshiki::style::font_name(&style.family)),
-                        weight: if style.bold {
-                            iced::font::Weight::Bold
-                        } else {
-                            iced::font::Weight::Normal
-                        },
-                        style: if style.italic {
-                            iced::font::Style::Italic
-                        } else {
-                            iced::font::Style::Normal
-                        },
-                        ..Default::default()
-                    },
-                    line_height: iced::widget::text::LineHeight::Relative(1.0),
-                    color: rgb(color),
-                    shaping: iced::widget::text::Shaping::Advanced,
-                    ..Default::default()
+                let paths = if let Some(cache) = frame.text_cache {
+                    cache
+                        .borrow_mut()
+                        .get(&text, size, camera.zoom, color, &style)
+                } else {
+                    std::rc::Rc::new(text_cache::outline(&text, size, camera.zoom, color, &style))
                 };
-                // Iced centers its font metrics within line height, whereas
-                // SVG's text-before-edge uses the font ascent. Align actual ink
-                // to our shared font metrics so screen and export agree.
-                let mut paths = Vec::new();
-                t.draw_with(|path, color| paths.push((path, color)));
-                let actual_top = paths
-                    .iter()
-                    .flat_map(|(path, _)| path.raw().iter())
-                    .map(|event| {
-                        use iced::widget::canvas::path::lyon_path::{Event, geom};
-                        match event {
-                            Event::Begin { at } => at.y,
-                            Event::Line { from, to } => from.y.min(to.y),
-                            Event::Quadratic { from, ctrl, to } => {
-                                geom::QuadraticBezierSegment { from, ctrl, to }
-                                    .bounding_box()
-                                    .min
-                                    .y
-                            }
-                            Event::Cubic {
-                                from,
-                                ctrl1,
-                                ctrl2,
-                                to,
-                            } => {
-                                geom::CubicBezierSegment {
-                                    from,
-                                    ctrl1,
-                                    ctrl2,
-                                    to,
-                                }
-                                .bounding_box()
-                                .min
-                                .y
-                            }
-                            Event::End { last, first, .. } => last.y.min(first.y),
-                        }
-                    })
-                    .reduce(f32::min);
-                let mut metrics_style = style.clone();
-                metrics_style.underline = false;
-                let expected_top = reshiki::style::text_ink_boxes(&t.content, size, &metrics_style)
-                    .iter()
-                    .map(|(lo, _)| lo.y)
-                    .reduce(f32::min)
-                    .map(|top| camera.screen(position.offset(0., top), bounds).y);
-                let offset = actual_top
-                    .zip(expected_top)
-                    .map_or(0., |(actual, expected)| expected - actual);
-                let transform =
-                    iced::widget::canvas::path::lyon_path::math::Transform::translation(0., offset);
-                for (path, color) in paths {
-                    frame.fill(&path.transform(&transform), color);
+                let position_screen = camera.screen(position, bounds);
+                let visible = paths.bounds.is_some_and(|text_bounds| {
+                    Rectangle {
+                        x: text_bounds.x + position_screen.x,
+                        y: text_bounds.y + position_screen.y,
+                        ..text_bounds
+                    }
+                    .intersects(&Rectangle::with_size(bounds.size()))
+                });
+                if visible {
+                    let transform =
+                        iced::widget::canvas::path::lyon_path::math::Transform::translation(
+                            position_screen.x,
+                            position_screen.y,
+                        );
+                    for (path, color) in &paths.paths {
+                        frame.fill(&path.transform(&transform), *color);
+                    }
                 }
                 if style.underline {
-                    let width = reshiki::style::styled_text_width(&t.content, size, &style);
+                    let width = reshiki::style::styled_text_width(&text, size, &style);
                     frame.stroke(
                         &Path::line(
                             camera.screen(position.offset(0.0, size * 0.95), bounds),
@@ -3404,7 +3405,7 @@ mod tests {
         Ok(())
     }
 
-    fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_> {
+    pub(super) fn chain_canvas(doc: &Document, mode: ChainMode) -> MoleculeCanvas<'_> {
         static STYLE: std::sync::LazyLock<GraphicStyle> =
             std::sync::LazyLock::new(GraphicStyle::default);
         MoleculeCanvas {

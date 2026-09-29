@@ -377,6 +377,9 @@ pub fn layout(text: &str, format: &TextFormat) -> Layout {
         .fold(0.0, f32::max);
     let width = max_width.unwrap_or(natural_width).max(natural_width);
     let mut fragments: Vec<TextFragment> = vec![];
+    // Keep the current run's advance. Re-measuring the growing string for every
+    // appended character made long captions quadratic in their character count.
+    let mut fragment_width = 0.;
     let mut y = 0.0;
     let line_count = lines.len();
     for (line_index, line) in lines.into_iter().enumerate() {
@@ -415,19 +418,17 @@ pub fn layout(text: &str, format: &TextFormat) -> Layout {
             if let Some(last) = fragments.last_mut()
                 && last.style == s
                 && (last.position.y - position.y).abs() < 0.001
-                && (last.position.x
-                    + style::styled_text_width(&last.text, last.style.size(), &last.style)
-                    - position.x)
-                    .abs()
-                    < 0.01
+                && (last.position.x + fragment_width - position.x).abs() < 0.01
             {
                 last.text.push(c);
+                fragment_width += advance;
             } else {
                 fragments.push(TextFragment {
                     position,
                     text: c.to_string(),
                     style: s,
                 });
+                fragment_width = advance;
             }
             x += advance + if c == ' ' { gap } else { 0.0 };
         }

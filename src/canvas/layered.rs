@@ -152,6 +152,7 @@ pub struct Frame<'a> {
     current: canvas::Frame,
     layers: Vec<canvas::Geometry>,
     dark: bool,
+    pub(super) text_cache: Option<&'a std::cell::RefCell<super::text_cache::TextCache>>,
 }
 impl<'a> Frame<'a> {
     pub fn new(renderer: &'a Renderer, size: Size) -> Self {
@@ -167,10 +168,18 @@ impl<'a> Frame<'a> {
             current,
             layers: vec![],
             dark: false,
+            text_cache: None,
         }
     }
     pub fn with_theme(mut self, theme: &Theme) -> Self {
         self.dark = crate::appearance::is_dark(theme);
+        self
+    }
+    pub(super) fn with_text_cache(
+        mut self,
+        cache: &'a std::cell::RefCell<super::text_cache::TextCache>,
+    ) -> Self {
+        self.text_cache = Some(cache);
         self
     }
     pub fn with_canvas(mut self, theme: reshiki::canvas_theme::CanvasTheme) -> Self {
