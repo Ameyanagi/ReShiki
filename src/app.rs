@@ -228,6 +228,13 @@ pub enum Message {
         kind: Job,
         result: Box<Result<Response, String>>,
     },
+    #[cfg_attr(
+        not(any(target_os = "macos", test)),
+        expect(
+            dead_code,
+            reason = "Finder open callback; exercised by cross-platform tests"
+        )
+    )]
     Opened(Option<(PathBuf, Result<String, String>)>),
     FilePrepared(files::Key, files::Opened),
     #[cfg(target_os = "macos")]

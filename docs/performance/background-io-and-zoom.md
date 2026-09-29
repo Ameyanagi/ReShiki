@@ -174,6 +174,14 @@ preferences were preserved. All-target/all-feature compile checks, Clippy with
 warnings denied, Rust formatting and Markdown formatting passed through the
 normal pre-commit hooks.
 
+A subsequent desktop report exposed a misleading red “Invalid drawing” notice
+for the gallery's valid semantic attachments. Automatic label refresh now skips
+analysis of attachment/centroid components after validating the complete drawing,
+preserving their supplied labels. The inspector's existing limitation notice and
+explicit molecular-export restrictions remain. Regression coverage checks the
+gallery alongside an ordinary alcohol, both semantic attachment types, legacy
+centroids, cache reuse, malformed targets and independent valence errors.
+
 ```sh
 cargo test --release --locked --bin reshiki \
   app::autosave::tests::recovery_workloads -- --ignored --exact --nocapture

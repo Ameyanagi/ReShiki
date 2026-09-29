@@ -22,6 +22,11 @@ when another component cannot be analyzed. Abbreviation checks, selection
 grouping and dimension readouts also avoid repeated work. See the
 [editing latency investigation and remaining targets](performance/editing-latency.md).
 
+Valid multi-center/variable attachments and drawing centroids no longer produce
+an automatic “Invalid drawing” warning. Their supplied labels are retained, and
+the inspector continues to explain analysis limitations. Malformed attachment
+targets and invalid valence in ordinary molecules still report errors.
+
 Autosave validation and disk writes now run in order on a background worker,
 and native file parsing/save serialization and template-library changes avoid
 blocking the editor. Collapsed inspector sections skip hidden work. Reusing

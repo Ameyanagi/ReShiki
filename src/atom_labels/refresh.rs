@@ -23,7 +23,7 @@ struct Entry {
     result: Result<Computed, String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct Computed {
     atoms: Vec<(u64, u32, Option<String>)>,
     bonds: Vec<((u64, u64), Option<String>)>,
@@ -102,6 +102,14 @@ impl Refresh {
 }
 
 fn compute(source: &Document) -> Result<Computed, String> {
+    // The complete drawing was validated before splitting it into components.
+    // Attachment/centroid components have no ordinary molecular graph to
+    // analyze. Preserve their supplied labels without reporting a false error;
+    // the inspector already explains the analysis/export limitation. Do not
+    // synthesize bonds or let these components block independent molecules.
+    if source.atoms.iter().any(|atom| !atom.centroid.is_empty()) {
+        return Ok(Computed::default());
+    }
     // Use the same sanitization, drawing reconstruction and full CIP pass as
     // Analyze/exports. Never approximate chemical valence for quick labels.
     let molecule = chemistry::prepare(source).map_err(|e| e.to_string())?;
@@ -283,6 +291,7 @@ mod tests {
         let ids = crate::editing::append(&mut source, &alcohol(), Point::new(-100., -100.));
         let before = source.clone();
         let result = Refresh::calculate(&source, &Refresh::default()).unwrap();
+        assert!(result.notice.is_none(), "{:?}", result.notice);
         result.apply(&mut source);
         assert_eq!(source.atom(ids[1]).unwrap().label_h, 1);
         for (before, after) in before.atoms.iter().zip(&source.atoms) {
@@ -297,6 +306,42 @@ mod tests {
             assert_eq!(&bond, after);
         }
         assert_eq!(source.abbreviations, before.abbreviations);
+    }
+
+    #[test]
+    fn unsupported_components_keep_labels_without_hiding_invalid_drawings() {
+        for kind in [
+            Some(crate::attachments::Kind::MultiCenter),
+            Some(crate::attachments::Kind::Variable),
+            None,
+        ] {
+            let mut source = alcohol();
+            source.atoms[1].label_h = 1;
+            let point = crate::projection::add_centroid(&mut source, &[1, 2]).unwrap();
+            source.atom_mut(point).unwrap().attachment = kind;
+            let before = source.clone();
+            let first = Refresh::calculate(&source, &Refresh::default()).unwrap();
+            let cached = Refresh::calculate(&source, &first).unwrap();
+            assert!(cached.notice.is_none());
+            assert!(Arc::ptr_eq(&first.cache[&1], &cached.cache[&1]));
+            cached.apply(&mut source);
+            assert_eq!(source, before, "Keep labels and attachment semantics");
+            assert!(
+                chemistry::prepare(&source).is_err(),
+                "Export stays restricted"
+            );
+
+            let invalid = source.add_atom("O", Point::new(100., 100.));
+            source.atom_mut(invalid).unwrap().explicit_h = 5;
+            let result = Refresh::calculate(&source, &cached).unwrap();
+            assert!(result.notice.is_some(), "Independent valence errors remain");
+
+            source.atom_mut(point).unwrap().centroid = vec![999, 1000];
+            assert!(
+                Refresh::calculate(&source, &result).is_err(),
+                "Malformed attachment targets must still fail validation"
+            );
+        }
     }
 
     #[test]
