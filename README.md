@@ -11,7 +11,7 @@ Draw molecules, build reaction schemes, and prepare figures on an editable canva
 
 **ReShiki (リシキ)** means “REinvention of the wheel for drawing chemical structure.” _Shiki_ is 式, as in chemical equation; **R** also stands for Rust, and **RE** for reaction.
 
-[Download](https://github.com/Ameyanagi/ReShiki/releases) · [Visual manual](https://reshiki.com/guide/first-molecule/) · [Development](https://reshiki.com/developer/development/)
+[Download stable](https://github.com/Ameyanagi/ReShiki/releases/latest) · [Visual manual](https://reshiki.com/guide/first-molecule/) · [Development](https://reshiki.com/developer/development/)
 
 [![Sponsor this work](website/public/badges/sponsor.svg)](https://github.com/sponsors/Ameyanagi)
 [![Star on GitHub](website/public/badges/star.svg)](https://github.com/Ameyanagi/ReShiki)
@@ -35,6 +35,8 @@ Download ReShiki for Apple Silicon or Intel macOS, Windows (x64 / ARM64), or Lin
 On Mac, open the disk image and drag ReShiki to Applications. On Windows, run setup. Click **ReShiki** in the app to check for updates.
 
 [Installation guide](https://reshiki.com/guide/install/)
+
+Want to test upcoming changes? [Nightly builds](https://reshiki.com/guide/install/#nightly-builds) are optional prereleases. Stable is the recommended download for everyday work.
 
 Open **Help → Open shortcut examples** for a single editable reference file. Double-click an example structure to select it, then copy it into your drawing. See the [clipboard compatibility table](docs/clipboard.md#changes-made-for-an-external-copy) for supported transfer and explicit conversions.
 
