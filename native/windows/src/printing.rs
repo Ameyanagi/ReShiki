@@ -994,7 +994,7 @@ mod tests {
 
     fn replay_metafile_plus(bytes: &[u8], width: usize, height: usize) -> Vec<u8> {
         let _runtime = GdiPlus::new().unwrap();
-        let pixels = vec![230; width * height * 4];
+        let mut pixels = vec![230; width * height * 4];
         unsafe {
             let emf = SetEnhMetaFileBits(bytes);
             assert!(!emf.is_invalid());
@@ -1006,7 +1006,7 @@ mod tests {
                 height as i32,
                 width as i32 * 4,
                 ARGB32,
-                Some(pixels.as_ptr()),
+                Some(pixels.as_mut_ptr()),
                 &mut bitmap.0,
             ))
             .unwrap();

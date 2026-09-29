@@ -57,11 +57,17 @@ Actual Word and PowerPoint insertion exposed a defect that checking only the EMF
 
 File export now uses a fixed recording space with matching physical and logical resolution. One unit is 0.01 mm; integer intrinsic bounds may round outward by at most 0.02 mm. The existing OLE preview recorder is unchanged. The relevant format fields are documented in Microsoft's [ENHMETAHEADER reference](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-enhmetaheader) and [EMF+ header example](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-emfplus/10f336a0-5f7c-4ee2-ab89-5329af0720c7).
 
-The corrected light and dark figures were inserted through Word and PowerPoint's real **Insert Pictures** commands, without resizing. Both the saved DOCX and PPTX contain **1,246,680 × 541,080 EMU**, or **34.63 × 15.03 mm**. The mixed vector/raster files retain **1,246,680 × 723,240 EMU**, or **34.63 × 20.09 mm**, against a **34.62 × 20.08 mm** physical frame. Embedded EMF hashes match the source exports. Labels, arrow placement, backgrounds, raster colors and half-transparent orange were visually checked.
+The corrected light and dark figures were inserted through Word and PowerPoint's real **Insert Pictures** commands, without resizing. Both the saved DOCX and PPTX contain **1,246,680 × 541,080 EMU**, or **34.63 × 15.03 mm**. The mixed vector/raster files retain **1,246,680 × 723,240 EMU**, or **34.63 × 20.09 mm**, against a **34.62 × 20.08 mm** physical frame. Embedded EMF hashes match the source exports. Labels, arrow placement, backgrounds, raster colors and half-transparent orange were visually checked. Both documents were closed and reopened; all four pictures retained their appearance and size.
+
+These actual Word captures use the same 200% zoom, with the selected picture's dimensions visible. The original is **39.69 × 17.20 mm**; the corrected export is **34.63 × 15.03 mm**. Their page positions differ because the corrected document contains four test figures. Neither picture was resized.
+
+| Original export inserted into Word                                                                                          | Corrected export, saved and reopened in Word                                                                                                 |
+| --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| ![Original Word insertion at 200%, with width 39.69 mm and height 17.2 mm.](../images/emf-file-export/word-before-size.png) | ![Corrected Word insertion at 200%, with width 34.63 mm and height 15.03 mm after reopening.](../images/emf-file-export/word-fixed-size.png) |
 
 ![Actual Word insertion of all four corrected EMF files, saved and displayed at 200% zoom.](../images/emf-file-export/word-fixed.png)
 
-PowerPoint's saved presentation was closed and reopened through its Recent list; all four pictures retained their appearance and size. This check used Microsoft 365 version 16.0.20430.20092 on Windows 11 x64.
+PowerPoint's saved presentation was reopened through its Recent list. These checks used Microsoft 365 version 16.0.20430.20092 on Windows 11 x64.
 
 ![Reopened PowerPoint presentation with all four EMF figures and the selected vector picture's size fields.](../images/emf-file-export/powerpoint-fixed.png)
 
