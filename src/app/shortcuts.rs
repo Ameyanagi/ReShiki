@@ -13,6 +13,8 @@ use reshiki::{
 
 #[derive(Debug, Clone)]
 pub enum Action {
+    ReactionCopy,
+    SelectRecent,
     FixedLength,
     FixedAngles,
     Rulers,
@@ -34,6 +36,9 @@ pub(super) fn key_message(key: &Key, modified: &Key, mods: Modifiers) -> Option<
         return Some(Message::ToggleHelp);
     }
     if mods.command() {
+        if mods.shift() && !mods.alt() && matches!(key, Key::Named(Named::ArrowRight)) {
+            return Some(Message::Shortcut(Action::ReactionCopy));
+        }
         let Key::Character(c) = key else {
             return matches!(key, Key::Named(Named::Enter)).then_some(Message::InlineText(
                 super::inline_text::Action::Finish(true),
@@ -119,6 +124,7 @@ pub(super) fn key_message(key: &Key, modified: &Key, mods: Modifiers) -> Option<
     let step = if mods.shift() { 10. } else { 1. };
     Some(match modified {
         Key::Character(c) => Message::ContextKey(c.to_string()),
+        Key::Named(Named::Space) if mods.is_empty() => Message::Shortcut(Action::SelectRecent),
         Key::Named(Named::Space) => Message::Tool(Tool::Select),
         Key::Named(Named::Delete | Named::Backspace) => Message::Delete,
         Key::Named(Named::Enter) => Message::ContextKey("Enter".into()),
@@ -134,6 +140,8 @@ pub(super) fn key_message(key: &Key, modified: &Key, mods: Modifiers) -> Option<
 impl App {
     pub(super) fn shortcut_action(&mut self, action: Action) -> Task<Message> {
         match action {
+            Action::ReactionCopy => self.reaction_copy_shortcut(),
+            Action::SelectRecent => self.select_recent_shortcut(),
             Action::FixedLength => {
                 return self.update(Message::FixedLength(!self.bond_drawing.fixed_length));
             }

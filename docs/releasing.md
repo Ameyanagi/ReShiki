@@ -6,6 +6,14 @@ Windows setup uses Inno Setup 6.7.3, downloaded with a pinned SHA-256 checksum. 
 
 The macOS disk image contains the signed app and an Applications shortcut. Both the app and disk image are notarized and stapled. CI mounts the image, copies the app out, and verifies chemistry, its signature and Gatekeeper status. The release has ten downloads plus `SHA256SUMS`.
 
+Keep the homepage, README, and installation guide's primary download links pointed
+at [the latest stable release](https://github.com/Ameyanagi/ReShiki/releases/latest).
+Nightly publication uses `--prerelease --latest=false`; reserve GitHub's **Latest**
+designation for stable releases. This designation does not reorder the all-releases
+list, where newer nightlies can appear above stable. See [GitHub's release options](https://cli.github.com/manual/gh_release_create).
+Link to the [nightly installation instructions](https://reshiki.com/guide/install/#nightly-builds)
+as a secondary path for testers.
+
 ## Test a build
 
 Open development pull requests against `main`, the default and development

@@ -1,16 +1,25 @@
 # Exporting figures
 
-Open **Export → Figure**, choose PDF, SVG or PNG, then click **Export** and choose a destination. File export includes the whole drawing. **Copy image** uses the selected objects, or the whole drawing when nothing is selected.
+Open **Export → Figure**, choose PDF, SVG or PNG (or EMF on Windows), then click **Export** and choose a destination. File export includes the whole drawing. **Copy image** uses the selected objects, or the whole drawing when nothing is selected.
 
-| Format | Output                                                                      |
-| ------ | --------------------------------------------------------------------------- |
-| PDF    | Vector artwork at the drawing's physical publication size.                  |
-| SVG    | Vector artwork for illustration and layout applications. Text remains text. |
-| PNG    | An opaque image, normally at 1200 dpi, with physical resolution metadata.   |
+| Format        | Output                                                                                            |
+| ------------- | ------------------------------------------------------------------------------------------------- |
+| PDF           | Vector artwork at the drawing's physical publication size.                                        |
+| SVG           | Vector artwork for illustration and layout applications. Text remains text.                       |
+| PNG           | An opaque image, normally at 1200 dpi, with physical resolution metadata.                         |
+| EMF (Windows) | Vector picture for Microsoft Office at the drawing's physical size. Text becomes vector outlines. |
 
-File exports in all three formats include the document’s canvas colors and background. **Copy image** instead uses a transparent background, preserving the visible ink for slides and other documents. **Canvas: Dark** exports white bonds and labels on black paper; **View → Interface** changes only the surrounding UI.
+File exports in all formats include the document’s canvas colors and background. **Copy image** instead uses a transparent background, preserving the visible ink for slides and other documents. **Canvas: Dark** exports white bonds and labels on black paper; **View → Interface** changes only the surrounding UI.
 
 Canvas zoom, rulers, grid and crosshair do not affect the exported figure. **Export pages as PDF** uses an explicitly configured publication layout; ordinary figure export crops to the artwork. See [publication pages](publication-pages.md).
+
+## EMF pictures for Office on Windows
+
+Choose **EMF · Office vector picture**, export the file, then insert it as a picture in Word, PowerPoint or Excel. Bonds, shapes and outlined text retain vector quality and the figure's physical publication size. File dimensions do not depend on the recording display; intrinsic picture bounds can round outward by up to 0.02 mm. Existing raster pictures remain raster pictures. EMF+ readers preserve their transparency; older readers using only the GDI fallback can make raster transparency opaque. The file contains the whole drawing, cropped to its artwork, including the canvas background. It does not contain an editable ReShiki document; keep the `.rsk` original separately.
+
+EMF file export is available on Windows only and supports figures up to 40 inches in either dimension. Use PDF or SVG for larger drawings. EMF import is not supported. This option does not change SVG file export or the transparent editable Office clipboard workflow.
+
+[EMF output examples and verification](changes/emf-file-export.md).
 
 ## Large PNG drawings
 

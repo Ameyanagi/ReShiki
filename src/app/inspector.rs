@@ -35,14 +35,24 @@ pub enum FigureFormat {
     Pdf,
     Svg,
     Png,
+    #[cfg(windows)]
+    Emf,
 }
 impl FigureFormat {
-    const ALL: [Self; 3] = [Self::Pdf, Self::Svg, Self::Png];
+    const ALL: &'static [Self] = &[
+        Self::Pdf,
+        Self::Svg,
+        Self::Png,
+        #[cfg(windows)]
+        Self::Emf,
+    ];
     fn code(self) -> &'static str {
         match self {
             Self::Pdf => "pdf",
             Self::Svg => "svg",
             Self::Png => "png",
+            #[cfg(windows)]
+            Self::Emf => "emf",
         }
     }
     fn description(self) -> &'static str {
@@ -51,6 +61,10 @@ impl FigureFormat {
             Self::Svg => "Editable vector artwork for layout and illustration.",
             Self::Png => {
                 "Up to 1200 dpi. Large drawings use a lower resolution; physical size is preserved."
+            }
+            #[cfg(windows)]
+            Self::Emf => {
+                "Vector picture for Microsoft Office at its physical size. Text becomes outlines."
             }
         }
     }
@@ -61,6 +75,8 @@ impl std::fmt::Display for FigureFormat {
             Self::Pdf => "PDF · vector",
             Self::Svg => "SVG · editable vector",
             Self::Png => "PNG · automatic resolution",
+            #[cfg(windows)]
+            Self::Emf => "EMF · Office vector picture",
         })
     }
 }
@@ -700,6 +716,7 @@ impl App {
 
     fn arrangement_panel(&self, multiple: bool) -> Element<'_, Message> {
         let mut arrange = column![
+            self.numeric_transform_panel(),
             text("Rotate & reflect").size(11).style(muted_text),
             row![
                 command("↶ 30°", Message::Transform(Transform::Rotate(-30.))).width(Length::Fill),
