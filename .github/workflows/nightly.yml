@@ -21,6 +21,8 @@ jobs:
     permissions:
       contents: write
     uses: ./.github/workflows/release.yml
+    # Required for the reusable signing jobs to resolve their environment secrets.
+    secrets: inherit
     with:
       nightly: true
 

@@ -100,6 +100,13 @@ Both Mac builds use the fixed abbreviation drawing coordinates recorded on Apple
 
 Use a **Developer ID Application** certificate with its private key exported as a password-protected `.p12`. A development certificate cannot replace it. An existing Developer ID Application certificate can sign multiple apps from the same team.
 
+The Nightly workflow calls the reusable release workflow with `secrets: inherit`.
+Keep this explicit even though the signing jobs select `environment: macos-signing`:
+without inheritance, environment variables can resolve while environment secrets
+remain empty in the called workflow. See [GitHub's reusable-secret documentation](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows#using-inputs-and-secrets-in-a-reusable-workflow)
+and the matching [runner issue](https://github.com/actions/runner/issues/4453).
+Signing and publication must still fail when credentials are unavailable.
+
 The `macos-signing` GitHub environment contains:
 
 | Type     | Name                           | Purpose                                    |
