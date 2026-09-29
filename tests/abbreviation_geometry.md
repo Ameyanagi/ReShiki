@@ -1,9 +1,20 @@
 # Abbreviation geometry references
 
-The 29 preset fragments use coordinates captured from RDKit 2026.03.6.
+The 31 preset fragments use coordinates captured from RDKit 2026.03.6.
 `abbreviation_replacement` compares each platform's table with freshly generated
 coordinates before checking complete replacement documents. These tables preserve
 the existing layout until the general Rust layout implementation replaces it.
+
+TBDPS and OTBDPS were captured independently on all five native reference ABIs
+in [capture run 36483117507](https://github.com/Ameyanagi/ReShiki/actions/runs/36483117507).
+All 29 earlier templates remained unchanged on every host. The macOS CI capture
+also exactly matched the local Apple Silicon capture. See
+[capture provenance and SHA-256 hashes](fixtures/tbdps-geometry-provenance.json).
+The Windows artifacts use CRLF; committed files normalize line endings to LF,
+so the provenance records both original capture and committed-file hashes.
+The narrowly triggered `Abbreviation geometry capture` workflow reproduces these
+captures when preset definitions change; it does not replace the exact live
+reference comparisons.
 
 Windows ARM runs the pinned x64 Python/RDKit worker under emulation. Eight presets
 have different floating-point coordinates from a native Windows x64 run. The ARM
