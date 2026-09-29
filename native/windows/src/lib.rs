@@ -50,9 +50,14 @@ pub struct OfficePreview {
 }
 
 /// Record vector paths and outlined text as EMF+ dual, preserving any background
-/// supplied by the snapshot. Used by figure files and Office's OLE cache.
+/// supplied by the snapshot. Used by Office's OLE cache.
 pub fn metafile(snapshot: &[u8]) -> std::result::Result<Vec<u8>, String> {
     printing::metafile(snapshot).map_err(|e| e.to_string())
+}
+
+/// Record a figure file with display-independent physical and logical resolution.
+pub fn file_metafile(snapshot: &[u8]) -> std::result::Result<Vec<u8>, String> {
+    printing::file_metafile(snapshot).map_err(|e| e.to_string())
 }
 
 use windows::{

@@ -41,6 +41,22 @@ fn assert_vector_emf(bytes: &[u8], width_pt: f32, height_pt: f32) {
     assert!(paths > 0, "missing vector outlines");
 }
 
+fn assert_file_emf_intrinsic_size(bytes: &[u8], width_pt: f32, height_pt: f32) {
+    let plus_header = emf_u32(bytes, 4) as usize;
+    for (lo, hi, dpi_offset, points) in [
+        (8, 16, plus_header + 36, width_pt),
+        (12, 20, plus_header + 40, height_pt),
+    ] {
+        let pixels = emf_u32(bytes, hi) as i32 - emf_u32(bytes, lo) as i32 + 1;
+        let dpi = emf_u32(bytes, dpi_offset) as f32;
+        assert_eq!(dpi, 2540.);
+        assert!(
+            (pixels as f32 * 25.4 / dpi - points * 25.4 / 72.).abs() <= 0.021,
+            "Office intrinsic size changed: {pixels}px / {dpi}dpi vs {points}pt"
+        );
+    }
+}
+
 #[test]
 fn windows_emf_file_export_keeps_vectors_bounds_and_source_document() {
     let mut doc: Document =
@@ -55,6 +71,11 @@ fn windows_emf_file_export_keeps_vectors_bounds_and_source_document() {
         let file = reshiki::export::figure(&doc, "emf").unwrap();
         let clipboard = reshiki::export::clipboard_drawing(&doc, "emf").unwrap();
         assert_vector_emf(
+            &file.bytes,
+            tree.size().width() * 0.75,
+            tree.size().height() * 0.75,
+        );
+        assert_file_emf_intrinsic_size(
             &file.bytes,
             tree.size().width() * 0.75,
             tree.size().height() * 0.75,
@@ -96,6 +117,34 @@ fn windows_emf_file_export_review() {
     for (name, theme) in [
         ("light", reshiki::canvas_theme::CanvasTheme::Light),
         ("dark", reshiki::canvas_theme::CanvasTheme::Dark),
+    ] {
+        doc.canvas_theme = theme;
+        for format in ["emf", "png"] {
+            std::fs::write(
+                output.join(format!("{name}.{format}")),
+                reshiki::export::drawing(&doc, format).unwrap(),
+            )
+            .unwrap();
+        }
+    }
+    // A separate mixed vector/raster figure exercises picture placement and
+    // transparency without changing the established light/dark comparison.
+    let pixels = image::RgbaImage::from_fn(64, 48, |x, y| match (x < 32, y < 24) {
+        (true, true) => image::Rgba([230, 30, 40, 255]),
+        (false, true) => image::Rgba([30, 170, 80, 255]),
+        (true, false) => image::Rgba([40, 80, 230, 255]),
+        (false, false) => image::Rgba([255, 160, 0, 128]),
+    });
+    let mut png = std::io::Cursor::new(Vec::new());
+    pixels.write_to(&mut png, image::ImageFormat::Png).unwrap();
+    let picture = reshiki::pictures::Picture::import(png.get_ref()).unwrap();
+    let mut graphic = picture.graphic(doc.next_id(), Point::new(-40., -115.));
+    graphic.axis_x.x *= 2.;
+    graphic.axis_y.y *= 2.;
+    doc.graphics.push(graphic);
+    for (name, theme) in [
+        ("raster-light", reshiki::canvas_theme::CanvasTheme::Light),
+        ("raster-dark", reshiki::canvas_theme::CanvasTheme::Dark),
     ] {
         doc.canvas_theme = theme;
         for format in ["emf", "png"] {
