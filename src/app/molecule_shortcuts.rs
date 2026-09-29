@@ -647,7 +647,7 @@ mod tests {
         assert_eq!(app.selected, pasted);
         let _ = app.update(Message::Opened(Some((
             "different.rsk".into(),
-            Ok(contents),
+            Ok(contents.into_bytes()),
         ))));
         space(&mut app);
         assert!(app.selected.is_empty());

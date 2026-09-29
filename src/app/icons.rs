@@ -20,7 +20,6 @@ pub(super) enum Icon {
     Import,
     Export,
     Inspector,
-    Close,
     Keyboard,
     More,
 }
@@ -583,10 +582,6 @@ impl Glyph {
             Icon::Inspector => {
                 line(f, &[(3., 4.), (21., 4.), (21., 20.), (3., 20.), (3., 4.)]);
                 line(f, &[(15., 4.), (15., 20.)]);
-            }
-            Icon::Close => {
-                line(f, &[(6., 6.), (18., 18.)]);
-                line(f, &[(18., 6.), (6., 18.)]);
             }
             Icon::More => {
                 for x in [5., 12., 19.] {

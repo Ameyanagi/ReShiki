@@ -9,7 +9,7 @@ static EVENTS: Mutex<Option<UnboundedReceiver<reshiki_macos::OpenRequest>>> = Mu
 #[derive(Debug, Clone)]
 pub enum Action {
     Open(reshiki_macos::OpenRequest),
-    Loaded(PathBuf, Result<String, String>),
+    Loaded(PathBuf, Result<Vec<u8>, String>),
     Launched(Result<(), String>),
 }
 
@@ -50,7 +50,7 @@ impl App {
             && self.atom_text.is_none()
             && self.inline_text.is_none()
             && self.pending.is_none()
-            && !self.import_open
+            && self.imports.is_blank()
             && self.styles.editor.is_none()
     }
 
@@ -64,9 +64,8 @@ impl App {
                         self.native_opening = true;
                         tasks.push(Task::perform(
                             async move {
-                                let contents = tokio::fs::read_to_string(&path)
-                                    .await
-                                    .map_err(|e| e.to_string());
+                                let contents =
+                                    tokio::fs::read(&path).await.map_err(|e| e.to_string());
                                 Action::Loaded(path, contents)
                             },
                             Message::MacFiles,
@@ -158,7 +157,7 @@ mod tests {
         app.native_opening = true;
         let _ = app.mac_file_action(Action::Loaded(
             path.clone(),
-            Ok(serde_json::to_string(&doc).map_err(|e| e.to_string())?),
+            Ok(serde_json::to_vec(&doc).map_err(|e| e.to_string())?),
         ));
         assert_eq!(app.path, Some(path));
         assert_eq!(app.doc.atoms.len(), 1);
@@ -177,7 +176,7 @@ mod tests {
         let original = app.doc.clone();
         let _ = app.mac_file_action(Action::Loaded(
             PathBuf::from("/tmp/other.rsk"),
-            Ok("{}".into()),
+            Ok(b"{}".to_vec()),
         ));
         assert_eq!(app.doc, original);
         assert!(app.path.is_none());
@@ -189,7 +188,7 @@ mod tests {
         let original = app.doc.clone();
         let _ = app.mac_file_action(Action::Loaded(
             PathBuf::from("/tmp/bad.rsk"),
-            Ok("not json".into()),
+            Ok(b"not json".to_vec()),
         ));
         assert_eq!(app.doc, original);
         assert!(app.error);

@@ -28,6 +28,7 @@ pub(crate) use macos_files::install_document_events;
 mod graphics;
 mod help;
 mod icons;
+mod import;
 mod inline_text;
 mod inspector;
 mod joining;
@@ -60,6 +61,7 @@ pub enum InspectorTab {
     Properties,
     Labels,
     Templates,
+    Import,
     Export,
 }
 
@@ -119,7 +121,7 @@ pub enum Message {
     GraphicLayer(bool),
     ToggleInspector,
     Inspector(InspectorTab),
-    ToggleImport,
+    Imports(import::Action),
     InsertInput,
     ToggleHelp,
     OpenShortcutExamples,
@@ -141,7 +143,6 @@ pub enum Message {
     TextSpacing(f32),
     TextWidth(String),
     ApplyTextWidth,
-    Smiles(String),
     Import,
     Example(&'static str),
     Clean,
@@ -220,7 +221,7 @@ pub enum Message {
         kind: Job,
         result: Box<Result<Response, String>>,
     },
-    Opened(Option<(PathBuf, Result<String, String>)>),
+    Opened(Option<(PathBuf, Result<Vec<u8>, String>)>),
     #[cfg(target_os = "macos")]
     MacFiles(macos_files::Action),
     Saved(u64, Box<Document>, Result<Option<PathBuf>, String>),
@@ -245,7 +246,8 @@ pub enum Job {
 #[derive(Debug, Clone)]
 enum Pending {
     New,
-    Open,
+    /// Open this file, or the one chosen in the open dialog.
+    Open(Option<PathBuf>),
     Close(iced::window::Id),
 }
 
@@ -314,7 +316,7 @@ pub struct App {
     color_scope: typography::ColorScope,
     text_width_input: String,
     bond_color_input: String,
-    smiles: String,
+    imports: import::State,
     isotope: String,
     grid: bool,
     guides: canvas::guides::Guides,
@@ -350,7 +352,6 @@ pub struct App {
     inspector_ui: inspector::State,
     numeric_transforms: numeric_transforms::State,
     inspector_tab: InspectorTab,
-    import_open: bool,
     help_open: bool,
     viewport: iced::Size,
     fit_to_view: bool,
@@ -428,7 +429,7 @@ impl App {
             color_scope: Default::default(),
             bond_color_input: "#000000".into(),
             text_width_input: String::new(),
-            smiles: String::new(),
+            imports: Default::default(),
             isotope: String::new(),
             grid: false,
             guides: Default::default(),
@@ -470,7 +471,6 @@ impl App {
             inspector_ui: inspector::State::default(),
             numeric_transforms: numeric_transforms::State::default(),
             inspector_tab: InspectorTab::Properties,
-            import_open: false,
             help_open: false,
             viewport: iced::Size::new(850.0, 600.0),
             fit_to_view: false,
@@ -494,7 +494,7 @@ impl App {
                 async move {
                     let read_path = path.clone();
                     let result = tokio::task::spawn_blocking(move || {
-                        std::fs::read_to_string(read_path).map_err(|e| e.to_string())
+                        std::fs::read(read_path).map_err(|e| e.to_string())
                     })
                     .await
                     .map_err(|e| e.to_string())
@@ -587,6 +587,9 @@ impl App {
             },
             iced::window::close_requests().map(Message::Close),
             iced::event::listen_with(|event, status, _window| {
+                if let iced::Event::Window(event) = &event {
+                    return import::drag_event(event);
+                }
                 if status == iced::event::Status::Ignored
                     && let Some(forward) = template_library::navigation_event(&event)
                 {
@@ -794,16 +797,20 @@ impl App {
                     iced::advanced::widget::operation::focusable::unfocus(),
                 )
             }
-            Pending::Open => Task::perform(
+            Pending::Open(path) => Task::perform(
                 async {
-                    // Accept supported extensions without relying on macOS
-                    // type registration; validate the selected content below.
-                    let file = rfd::AsyncFileDialog::new()
-                        .set_title("Open a ReShiki, MOL, RXN, CDXML, or SMILES document")
-                        .pick_file()
-                        .await?;
-                    let path = file.path().to_path_buf();
-                    let contents = std::fs::read_to_string(&path).map_err(|e| e.to_string());
+                    let path = match path {
+                        Some(path) => path,
+                        // Accept supported extensions without relying on macOS
+                        // type registration; validate the selected content below.
+                        None => rfd::AsyncFileDialog::new()
+                            .set_title("Open a ReShiki, MOL, RXN, CDXML, CDX or SMILES document")
+                            .pick_file()
+                            .await?
+                            .path()
+                            .to_path_buf(),
+                    };
+                    let contents = tokio::fs::read(&path).await.map_err(|e| e.to_string());
                     Some((path, contents))
                 },
                 Message::Opened,
@@ -855,6 +862,14 @@ impl App {
         if self.updates.restarting && !matches!(message, Message::Updates(_)) {
             return Task::none();
         }
+        if let Message::Imports(
+            action @ (import::Action::Hovered(_)
+            | import::Action::Dropped(_)
+            | import::Action::Left),
+        ) = message
+        {
+            return self.import_drag(action);
+        }
         if let Message::AtomText(action) = message {
             return self.atom_text_action(action);
         }
@@ -877,6 +892,10 @@ impl App {
             self.context_menu = None;
             return Task::none();
         }
+        if self.imports.menu && matches!(message, Message::Escape) {
+            self.imports.menu = false;
+            return Task::none();
+        }
         if !matches!(
             message,
             Message::Canvas(Edit::Hover(_))
@@ -887,8 +906,12 @@ impl App {
                 | Message::InspectorAction(_)
                 | Message::Viewport(_)
                 | Message::Updates(_)
+                | Message::Imports(import::Action::Loaded(..))
         ) {
             self.context_menu = None;
+            if !matches!(message, Message::Imports(import::Action::Menu(_))) {
+                self.imports.menu = false;
+            }
         }
         if let Message::InspectorAction(action) = message {
             return self.inspector_action(action);
@@ -1003,6 +1026,7 @@ impl App {
                         printing::Action::Prepared(..) | printing::Action::Finished(..)
                     )
                     | Message::Pictures(pictures::Action::Loaded(..))
+                    | Message::Imports(import::Action::Loaded(..))
                     | Message::Opened(_)
                     | Message::ClipboardRead { .. }
                     | Message::ClipboardWritten { .. }
@@ -1040,6 +1064,7 @@ impl App {
             && matches!(&message, Message::Canvas(Edit::Select(ids)) if ids.iter().any(|id| self.doc.annotations.iter().any(|a| a.id == *id) || self.doc.graphics.iter().any(|g|g.id==*id))));
         match message {
             Message::DrawingStyle(action) => return self.drawing_style_action(action),
+            Message::Imports(action) => return self.import_action(action),
             Message::Pages(action) => return self.page_action(action),
             Message::Printing(action) => return self.print_action(action),
             Message::Pictures(action) => return self.picture_action(action),
@@ -1460,14 +1485,14 @@ impl App {
                 }
                 self.inspector_tab = tab;
                 self.inspector_open = true;
-            }
-            Message::ToggleImport => {
-                self.import_open = !self.import_open;
-                if self.import_open {
+                if tab == InspectorTab::Import {
                     self.help_open = false;
+                    return iced::widget::operation::focus(import::INPUT);
                 }
             }
-            Message::InsertInput => return self.run(input_request(&self.smiles), Job::Insert),
+            Message::InsertInput => {
+                return self.run(input_request(&self.imports.input.text()), Job::Insert);
+            }
             Message::ToggleHelp => {
                 self.help_open = !self.help_open;
                 if self.help_open {
@@ -1585,7 +1610,6 @@ impl App {
                         "Text width must be 10–2000 pt, or blank for automatic width".into();
                 }
             }
-            Message::Smiles(s) => self.smiles = s,
             Message::Isotope(s) => self.isotope = s,
             Message::RingSize(n) => {
                 self.toolbar.ring = Tool::Ring;
@@ -1892,9 +1916,11 @@ impl App {
                 self.fit_to_view = false;
                 self.camera.zoom = (self.camera.zoom * f).clamp(0.005, 5.0);
             }
-            Message::Import => return self.run(input_request(&self.smiles), Job::Import),
+            Message::Import => {
+                return self.run(input_request(&self.imports.input.text()), Job::Import);
+            }
             Message::Example(smiles) => {
-                self.smiles = smiles.into();
+                self.imports.set_text(smiles);
                 return self.run(Request::import_smiles(smiles), Job::Insert);
             }
             Message::Analyze => {
@@ -2214,7 +2240,7 @@ impl App {
                 }
             }
             Message::New => return self.pending(Pending::New),
-            Message::Open => return self.pending(Pending::Open),
+            Message::Open => return self.pending(Pending::Open(None)),
             Message::Close(id) => return self.pending(Pending::Close(id)),
             Message::Cancel => self.pending = None,
             Message::Discard => {
@@ -2238,7 +2264,7 @@ impl App {
                                 .unwrap_or_default()
                                 .to_ascii_lowercase();
                             if reshiki::compatibility::is_native_extension(&extension) {
-                                match serde_json::from_str::<Document>(&contents)
+                                match serde_json::from_slice::<Document>(&contents)
                                     .map_err(|e| e.to_string())
                                     .and_then(|doc| {
                                         doc.validate()?;
@@ -2281,11 +2307,12 @@ impl App {
                                     "rxn" => "rxn",
                                     "rsmi" => "rsmi",
                                     "cdxml" => "cdxml",
+                                    "cdx" => "cdx",
                                     "inchi" => "inchi",
                                     _ => "smiles",
                                 };
-                                return self
-                                    .run(Request::import(format, &contents), Job::ImportFile);
+                                let text = import::contents(format, contents);
+                                return self.run(Request::import(format, &text), Job::ImportFile);
                             }
                         }
                     }
@@ -5032,7 +5059,10 @@ mod tests {
         for extension in ["rsk", "RSK", "reshiki", "moruno"] {
             let (mut app, _) = App::new();
             let path = PathBuf::from(format!("Ethanol.{extension}"));
-            let _ = app.update(Message::Opened(Some((path.clone(), Ok(contents.clone())))));
+            let _ = app.update(Message::Opened(Some((
+                path.clone(),
+                Ok(contents.clone().into_bytes()),
+            ))));
             assert!(!app.error && !app.dirty(), "{extension}: {}", app.status);
             assert_eq!(app.doc, document);
             assert_eq!(app.path, Some(path));
@@ -5133,7 +5163,7 @@ mod tests {
         assert!(app.doc.all_ids().is_empty());
         assert!(!app.busy && !app.dirty() && !app.history.can_undo());
         assert!(app.analysis.is_none() && app.path.is_none());
-        assert!(app.smiles.is_empty());
+        assert!(app.imports.is_blank());
     }
 
     #[test]

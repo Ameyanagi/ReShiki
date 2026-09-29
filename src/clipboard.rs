@@ -463,7 +463,12 @@ fn mol_text(data: &[u8]) -> Result<String, String> {
 }
 
 pub fn text_request(text: &str) -> Request {
-    let format = if text.trim_start().starts_with("InChI=") {
+    Request::import(text_format(text), text)
+}
+
+/// Import format of typed or pasted structure text, recognized by cheap markers.
+pub fn text_format(text: &str) -> &'static str {
+    if text.trim_start().starts_with("InChI=") {
         "inchi"
     } else if text.trim_start().starts_with("$RXN") {
         "rxn"
@@ -471,12 +476,13 @@ pub fn text_request(text: &str) -> Request {
         "mol"
     } else if text.contains("<CDXML") {
         "cdxml"
+    } else if text.contains("V2000") || text.contains("V3000") {
+        "mol"
     } else if text.replace("->", "").matches('>').count() == 2 {
         "rsmi"
     } else {
         "smiles"
-    };
-    Request::import(format, text)
+    }
 }
 
 pub async fn paste(engine: LocalEngine, image_only: bool) -> Result<Document, String> {
@@ -571,6 +577,27 @@ async fn paste_packet_with_warnings(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn typed_text_formats_follow_cheap_markers() {
+        for (text, format) in [
+            ("  InChI=1S/C2H6O/c1-2-3/h3H,2H2,1H3", "inchi"),
+            ("$RXN\n\n  ReShiki\n\n  1  1\n$MOL\nM  END", "rxn"),
+            (
+                "ethanol\n\n\n  3  2  0  0  0  0  0  0  0  0999 V2000\nM  END",
+                "mol",
+            ),
+            ("\n\n\n  0  0  0     0  0            999 V3000\n", "mol"),
+            ("<?xml version=\"1.0\"?><CDXML><page/></CDXML>", "cdxml"),
+            ("CCO>>CC=O", "rsmi"),
+            ("CCO>O=O>CC=O", "rsmi"),
+            ("C->C", "smiles"),
+            ("c1ccccc1", "smiles"),
+        ] {
+            assert_eq!(text_format(text), format, "{text}");
+            assert_eq!(text_request(text).format.as_deref(), Some(format));
+        }
+    }
 
     #[tokio::test]
     async fn both_canvas_modes_copy_visible_ink_without_background_objects() {

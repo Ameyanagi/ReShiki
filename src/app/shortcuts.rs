@@ -92,7 +92,7 @@ pub(super) fn key_message(key: &Key, modified: &Key, mods: Modifiers) -> Option<
             "v" => Message::Paste,
             "d" => Message::Shortcut(Action::CopyText("cdxml")),
             "j" => Message::Shortcut(Action::Join),
-            "i" => Message::ToggleImport,
+            "i" => Message::Inspector(InspectorTab::Import),
             "l" => Message::Shortcut(Action::FixedLength),
             "e" => Message::Shortcut(Action::FixedAngles),
             "/" => Message::Fit,

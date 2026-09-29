@@ -164,7 +164,7 @@ where
         .menu_style(dropdown_menu)
 }
 
-fn dropdown(
+pub fn dropdown(
     theme: &Theme,
     status: iced::widget::pick_list::Status,
 ) -> iced::widget::pick_list::Style {

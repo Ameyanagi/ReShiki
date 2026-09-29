@@ -394,14 +394,14 @@ mod tests {
     fn dismissing_shortcuts_preserves_the_drawing_tool_and_view() {
         let (mut app, _) = App::new();
         app.tool = crate::canvas::Tool::Ring;
-        app.import_open = true;
+        app.inspector_tab = crate::app::InspectorTab::Import;
         app.selected = vec![app.doc.add_atom("O", reshiki::document::Point::default())];
         app.camera.zoom = 5.;
         let before = app.doc.clone();
         let selected = app.selected.clone();
         let _ = app.update(Message::ToggleHelp);
         assert!(app.help_open);
-        assert!(app.import_open);
+        assert_eq!(app.inspector_tab, crate::app::InspectorTab::Import);
         let _ = app.update(Message::Escape);
         assert!(!app.help_open);
         assert_eq!(app.tool, crate::canvas::Tool::Ring);

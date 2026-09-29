@@ -627,9 +627,6 @@ impl App {
             return self.theme_generator_workspace();
         }
         let mut content = column![self.command_bar(), self.style_bar()];
-        if self.import_open {
-            content = content.push(self.import_drawer());
-        }
         let drawing: Element<'_, Edit> = canvas(MoleculeCanvas {
             element: &self.element,
             joining: self.joining.as_ref().map(|s| &s.prepared),
@@ -681,10 +678,12 @@ impl App {
         .width(Length::Fill)
         .height(Length::Fill)
         .into();
-        let paper =
+        let paper = self.with_drop_overlay(
             sensor(self.with_context_menu(self.with_inline_text(drawing.map(Message::Canvas))))
                 .on_show(Message::Viewport)
-                .on_resize(Message::Viewport);
+                .on_resize(Message::Viewport)
+                .into(),
+        );
         let context: Element<'_, Message> = if let Some(preview) = &self.cleanup {
             use reshiki::cleanup::Scope;
             let scopes = vec![Scope::SelectedAtoms, Scope::SelectedMolecules];
@@ -824,8 +823,8 @@ impl App {
             action(
                 Icon::Import,
                 "Import",
-                Message::ToggleImport,
-                self.import_open
+                Message::Inspector(InspectorTab::Import),
+                self.inspector_open && self.inspector_tab == InspectorTab::Import
             ),
             command(
                 if self.busy { "Checking…" } else { "Check" },
@@ -1453,7 +1452,7 @@ impl App {
         match self.inspector_tab {
             InspectorTab::Assistant => 380.,
             InspectorTab::DrawingStyle | InspectorTab::Reactions => 320.,
-            InspectorTab::Properties | InspectorTab::Export => 300.,
+            InspectorTab::Properties | InspectorTab::Import | InspectorTab::Export => 300.,
             _ => 256.,
         }
     }
@@ -1480,11 +1479,13 @@ impl App {
         for (label, tab) in [
             ("Properties", InspectorTab::Properties),
             ("Templates", InspectorTab::Templates),
+            ("Import", InspectorTab::Import),
             ("Export", InspectorTab::Export),
         ] {
             tabs = tabs.push(
+                // Four tabs fit the narrowest (256 px) inspector.
                 button(text(label).size(11))
-                    .padding([7, 8])
+                    .padding([7, 6])
                     .style(control(
                         self.inspector_tab == tab
                             || (tab == InspectorTab::Properties
@@ -1511,6 +1512,7 @@ impl App {
             InspectorTab::Labels => self.atom_labels_panel(),
             InspectorTab::Abbreviations => self.abbreviations_panel(),
             InspectorTab::Templates => self.templates_panel(),
+            InspectorTab::Import => self.import_panel(),
             InspectorTab::Export => self.export_panel(),
         };
         container(
@@ -2019,76 +2021,6 @@ impl App {
                 Message::Labels(A::ResetOverrides),
             ))
             .into()
-    }
-
-    fn import_drawer(&self) -> Element<'_, Message> {
-        container(
-            column![
-                row![
-                    text("Import").size(13),
-                    Space::new().width(Length::Fill),
-                    icon_button(
-                        Icon::Close,
-                        "Close import",
-                        Some(Message::ToggleImport),
-                        false
-                    )
-                ]
-                .align_y(Alignment::Center),
-                row![
-                    crate::appearance::text_input(
-                        "SMILES, reaction SMILES, RXN, InChI, MOL or CDXML",
-                        &self.smiles
-                    )
-                    .on_input(Message::Smiles)
-                    .on_submit(Message::InsertInput)
-                    .size(13)
-                    .padding(9),
-                    command("Insert", Message::InsertInput)
-                        .style(crate::appearance::primary)
-                        .on_press_maybe((!self.busy).then_some(Message::InsertInput)),
-                    command("Replace drawing", Message::Import)
-                        .on_press_maybe((!self.busy).then_some(Message::Import))
-                ]
-                .spacing(8)
-                .align_y(Alignment::Center),
-                row![
-                    command(
-                        "Picture…",
-                        Message::Pictures(super::pictures::Action::Import)
-                    )
-                    .on_press_maybe(
-                        self.pictures
-                            .active
-                            .is_none()
-                            .then_some(Message::Pictures(super::pictures::Action::Import))
-                    ),
-                    text("PNG · JPEG · TIFF · WebP").size(11).style(muted_text),
-                    command("Paste picture", Message::PastePicture).on_press_maybe(
-                        (reshiki::clipboard::available() && !self.clipboard_busy)
-                            .then_some(Message::PastePicture)
-                    )
-                ]
-                .spacing(6)
-                .align_y(Alignment::Center),
-                row![
-                    text("Insert example").size(11).style(muted_text),
-                    command("Ethanol", Message::Example("CCO")),
-                    command("Benzene", Message::Example("c1ccccc1")),
-                    command("Aspirin", Message::Example("CC(=O)Oc1ccccc1C(=O)O")),
-                    command("Caffeine", Message::Example("Cn1c(=O)c2c(ncn2C)n(C)c1=O")),
-                    text("Drag to position · Delete or Undo to remove")
-                        .size(11)
-                        .style(muted_text)
-                ]
-                .spacing(6)
-                .align_y(Alignment::Center)
-            ]
-            .spacing(8),
-        )
-        .padding([10, 18])
-        .style(panel)
-        .into()
     }
 
     fn view_options(&self) -> Element<'_, Message> {

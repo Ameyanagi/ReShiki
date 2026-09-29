@@ -572,9 +572,9 @@ pub(super) fn commits_draft(message: &Message) -> bool {
                 | super::pages::Action::Center(_)
                 | super::pages::Action::Export
         ) | Message::Printing(super::printing::Action::Start(_))
+            | Message::Imports(super::import::Action::Files(_))
             | Message::Pictures(
-                super::pictures::Action::Import
-                    | super::pictures::Action::Replace
+                super::pictures::Action::Replace
                     | super::pictures::Action::Resize(_)
                     | super::pictures::Action::RestoreAspect
             )

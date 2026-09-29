@@ -146,7 +146,7 @@ fn arc(app: &mut App) {
 }
 
 fn import(app: &mut App) {
-    let _ = app.update(Message::ToggleImport);
+    let _ = app.update(Message::Inspector(InspectorTab::Import));
 }
 
 fn transform(app: &mut App) {
