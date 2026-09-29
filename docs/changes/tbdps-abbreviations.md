@@ -95,3 +95,11 @@ captured on all five supported reference ABIs; see
 
 Release-note caption: **Enter TBDPS or OTBDPS as real protecting groups,
 preserving chemistry when expanding, saving, and exchanging drawings.**
+
+## Selected-fragment contraction correction
+
+Automatic **Contract common groups** now considers only groups whose members are all selected before resolving overlaps. Previously, a complete but unselected TBDPS/OTBDPS match reserved its phenyl atoms, then failed the selection check; a selected phenyl ring could not become Ph. The correction lets either selected ring contract, while unrestricted detection still prefers the complete protecting group. The outside attachment atom need not be selected, and expanding the label preserves every atom and bond.
+
+This deliberately corrects the earlier Python/native parity behavior for selected fragments. It also lets a selected methyl carbon inside OMe become Me when oxygen is outside the selection. Explicit-label filtering, partial-ring rejection, atom-annotation exclusions, and unrestricted matching retain their existing rules. The independent Python reference expresses selection as RDKit query predicates before RDKit resolves overlaps; it does not call the Rust matcher.
+
+Rust and Python regressions exercise both protecting groups, each phenyl ring, partial rings, explicit Ph, full-group selection, unchanged input, and expansion. The original rendered and desktop examples above remain unchanged; this correction concerns selected-fragment eligibility and is established by the molecular-state assertions.

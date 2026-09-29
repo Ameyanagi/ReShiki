@@ -4,7 +4,7 @@ import copy
 import math
 
 from rdkit import Chem
-from rdkit.Chem import rdAbbreviations, rdDepictor
+from rdkit.Chem import rdAbbreviations, rdDepictor, rdqueries
 
 # The leading dummy is the sole outside attachment; it is not part of the label.
 PRESETS = {
@@ -98,13 +98,25 @@ def find(doc, mol, selection, label=None):
     used = {i for g in groups for i in g["members"]}
     ids = {a.GetIdx(): int(a.GetProp("reshiki_id")) for a in mol.GetAtoms()}
     atoms = {a["id"]: a for a in doc["atoms"]}
+    if selection:
+        # Restrict member matches before RDKit arbitrates overlapping groups.
+        # Otherwise an unselected TBDPS match can suppress a selected Ph ring.
+        selected = set(selection)
+        mol = Chem.Mol(mol)
+        marker = "_reshiki_abbreviation_selected"
+        for atom in mol.GetAtoms():
+            atom.ClearProp(marker)
+            if ids[atom.GetIdx()] in selected:
+                atom.SetBoolProp(marker, True)
+        for definition in definitions:
+            for atom in definition.mol.GetAtoms():
+                if atom.GetIdx() != 0:  # The outside attachment need not be selected.
+                    atom.ExpandQuery(rdqueries.HasPropQueryAtom(marker))
     labeled = rdAbbreviations.LabelMolAbbreviations(mol, definitions, 1.0)
     for g in Chem.GetMolSubstanceGroups(labeled):
         members = [ids[i] for i in g.GetAtoms()]
         points = list(g.GetAttachPoints())
         if not members or len(points) != 1 or used.intersection(members):
-            continue
-        if selection and not set(members) <= set(selection):
             continue
         if any(
             atoms[i].get("isotope")

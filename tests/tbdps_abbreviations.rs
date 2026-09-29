@@ -291,3 +291,61 @@ async fn automatic_detection_prefers_complete_groups_on_a_ring_backbone() -> Res
     }
     Ok(())
 }
+
+#[tokio::test]
+async fn selected_phenyl_contracts_without_an_unselected_protecting_group_suppressing_it()
+-> Result<(), String> {
+    let engine = LocalEngine::default();
+    for (label, smiles) in [
+        ("TBDPS", "N1CCC([Si](c2ccccc2)(c2ccccc2)C(C)(C)C)CC1"),
+        ("OTBDPS", "N1CCC(O[Si](c2ccccc2)(c2ccccc2)C(C)(C)C)CC1"),
+    ] {
+        let source = engine
+            .request(Request::import_smiles(smiles))
+            .await?
+            .document
+            .ok_or("Missing protecting group")?;
+        let before = source.clone();
+        let prepared = chemistry::prepare(&source).map_err(|e| e.to_string())?;
+        let phenyls =
+            abbreviations::find(&source, &prepared, &[], Some("Ph")).map_err(|e| e.to_string())?;
+        assert_eq!(phenyls.abbreviations.len(), 2);
+        for phenyl in &phenyls.abbreviations {
+            assert_eq!(phenyl.members.len(), 6);
+            let mut detected = abbreviations::find(&source, &prepared, &phenyl.members, None)
+                .map_err(|e| e.to_string())?;
+            assert_eq!(detected.abbreviations, vec![phenyl.clone()]);
+            assert_eq!(detected.atoms, source.atoms);
+            assert_eq!(detected.bonds, source.bonds);
+            let explicit = abbreviations::find(&source, &prepared, &phenyl.members, Some("Ph"))
+                .map_err(|e| e.to_string())?;
+            assert_eq!(detected, explicit);
+            assert!(
+                abbreviations::find(&source, &prepared, &phenyl.members, Some(label))
+                    .map_err(|e| e.to_string())?
+                    .abbreviations
+                    .is_empty()
+            );
+            assert_eq!(detected.expand_abbreviations(&phenyl.members), 1);
+            assert_eq!(detected.atoms, source.atoms);
+            assert_eq!(detected.bonds, source.bonds);
+            detected.validate()?;
+            let partial: Vec<_> = phenyl.members.iter().skip(1).copied().collect();
+            assert!(
+                abbreviations::find(&source, &prepared, &partial, Some("Ph"))
+                    .map_err(|e| e.to_string())?
+                    .abbreviations
+                    .is_empty()
+            );
+        }
+        let full = abbreviations::find(&source, &prepared, &[], None).map_err(|e| e.to_string())?;
+        assert_eq!(full.abbreviations.len(), 1);
+        assert_eq!(full.abbreviations[0].label, label);
+        let selected_full =
+            abbreviations::find(&source, &prepared, &full.abbreviations[0].members, None)
+                .map_err(|e| e.to_string())?;
+        assert_eq!(selected_full, full);
+        assert_eq!(source, before);
+    }
+    Ok(())
+}

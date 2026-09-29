@@ -84,9 +84,63 @@ class Abbreviations(unittest.TestCase):
         self.assertEqual({g["label"] for g in whole["document"]["abbreviations"]}, {"Boc", "OMe"})
         self.assertEqual(whole["analysis"]["inchikey"], original["analysis"]["inchikey"])
         partial = run(operation="abbreviate", document=d, selected_ids=[ids[0]])
-        self.assertEqual(partial["document"]["abbreviations"], [])
+        # Selecting just the methoxy carbon now permits the eligible Me match;
+        # the unselected larger OMe group must not reserve that atom.
+        self.assertEqual(
+            partial["document"]["abbreviations"],
+            [dict(label="Me", reverse_label="", anchor=ids[0], members=[ids[0]])],
+        )
         checked = run(operation="clean", document=result["document"])
         self.assertEqual(checked["document"]["abbreviations"], result["document"]["abbreviations"])
+
+    def test_selected_phenyl_is_not_suppressed_by_unselected_protecting_group(self):
+        for label, smiles in [
+            ("TBDPS", "N1CCC([Si](c2ccccc2)(c2ccccc2)C(C)(C)C)CC1"),
+            ("OTBDPS", "N1CCC(O[Si](c2ccccc2)(c2ccccc2)C(C)(C)C)CC1"),
+        ]:
+            with self.subTest(label=label):
+                d = imported(smiles)["document"]
+                before = copy.deepcopy(d)
+                phenyls = run(operation="abbreviate", format="find", document=d, text="Ph")[
+                    "document"
+                ]["abbreviations"]
+                self.assertEqual(len(phenyls), 2)
+                for phenyl in phenyls:
+                    result = run(
+                        operation="abbreviate",
+                        format="find",
+                        document=d,
+                        selected_ids=phenyl["members"],
+                    )["document"]
+                    self.assertEqual(result["abbreviations"], [phenyl])
+                    self.assertEqual(result["atoms"], d["atoms"])
+                    self.assertEqual(result["bonds"], d["bonds"])
+                    explicit = run(
+                        operation="abbreviate",
+                        format="find",
+                        document=d,
+                        selected_ids=phenyl["members"],
+                        text="Ph",
+                    )["document"]
+                    self.assertEqual(result, explicit)
+                    partial = run(
+                        operation="abbreviate",
+                        format="find",
+                        document=d,
+                        selected_ids=phenyl["members"][1:],
+                        text="Ph",
+                    )["document"]
+                    self.assertEqual(partial["abbreviations"], [])
+                full = run(operation="abbreviate", format="find", document=d)["document"]
+                self.assertEqual([g["label"] for g in full["abbreviations"]], [label])
+                selected = run(
+                    operation="abbreviate",
+                    format="find",
+                    document=d,
+                    selected_ids=full["abbreviations"][0]["members"],
+                )["document"]
+                self.assertEqual(selected, full)
+                self.assertEqual(d, before)
 
     def test_invalid_attachment_and_metadata_are_rejected(self):
         d = imported("CCC")["document"]
