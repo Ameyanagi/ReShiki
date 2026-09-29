@@ -88,11 +88,62 @@ Use `cargo run --release --locked` to measure performance. Debug builds perform
 substantially more work in drawing and layout. Measure idle CPU after the
 drawing and chemistry finish loading.
 
-The idle timer correction is included in v0.4.0. Windows additionally uses
-Iced's Tiny Skia renderer, avoiding GPU emulation on virtual machines and remote
-desktops. Other platforms retain WGPU. On the tested Windows VM, the downloaded
-v0.3.0 continuously used about 89% CPU. WGPU also became expensive during editing
-with Microsoft's WARP adapter. Direct software rendering avoids that path.
+Windows includes both Iced's WGPU renderer and its Tiny Skia software fallback.
+At startup, ReShiki enumerates WGPU adapters. If none are available, or all are
+CPU adapters such as Microsoft's WARP, it selects Tiny Skia directly. Otherwise
+Iced tries WGPU first and falls back to Tiny Skia if initialization fails.
+An unclassified adapter is allowed to try WGPU. Other platforms retain their
+existing WGPU configuration. GPU rendering accelerates the interface and canvas;
+it does not move chemistry calculations or file export onto the GPU.
+
+To inspect the adapters and automatic startup preference in PowerShell:
+
+```powershell
+.\reshiki.exe --graphics-info | Write-Output
+```
+
+This reports adapter discovery, not successful window or device creation. For
+an explicit comparison, set `ICED_BACKEND` before launching the same release
+build. `wgpu` forces WGPU (including WARP when that is the only adapter), while
+`tiny-skia` forces software rendering. `wgpu,tiny-skia` tries both in that order.
+An explicit preference bypasses the automatic CPU-adapter check.
+
+```powershell
+$env:ICED_BACKEND = 'wgpu'
+.\reshiki.exe
+# Close that test window before starting the comparison.
+$env:ICED_BACKEND = 'tiny-skia'
+.\reshiki.exe
+# Restore automatic selection for subsequent launches in this shell.
+Remove-Item Env:ICED_BACKEND
+```
+
+`WGPU_BACKEND` also constrains adapter discovery, matching Iced's WGPU backend
+selection. Software-only VMs cannot establish a hardware acceleration speedup;
+measure on a machine that exposes a hardware adapter to Windows as well.
+
+For a repeatable desktop CPU comparison, run this from an interactive Windows
+session after the release build finishes:
+
+```powershell
+.\scripts\benchmark_windows_renderer.ps1 -Executable .\target\release\reshiki.exe
+```
+
+The script opens isolated copies of the built-in shortcut drawing, samples idle
+CPU, then moves the pointer and scrolls over the canvas at a fixed cadence. It
+runs software and WGPU twice in opposite order plus one automatic-selection
+trial. Results and desktop captures go under
+`artifacts/windows-renderer-benchmark`. It temporarily controls the pointer and
+foreground window, then restores them and the previous environment settings.
+CPU percentages are normalized across all logical processors. This measures
+CPU cost for the input workload, not achieved frame rate or input latency.
+See the [Windows VM validation](windows-gpu-validation.md) for measured results
+and their limits.
+
+The idle timer correction from v0.4.0 remains in place. The original Windows
+software-only choice avoided expensive editing through WARP; it was separate
+from the v0.3.0 idle-redraw issue that continuously used about 89% CPU on the
+earlier test VM.
 
 Windows clipboard, printing and process detection are implemented in Rust and
 linked into the application. No .NET runtime, C# compiler or extra native helper

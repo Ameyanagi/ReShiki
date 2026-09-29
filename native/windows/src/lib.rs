@@ -18,6 +18,14 @@ mod clipboard;
 mod ole;
 mod printing;
 
+/// Select Iced's CPU renderer for this process when startup finds no GPU.
+/// The caller preserves any explicit ICED_BACKEND override.
+pub fn use_software_renderer() {
+    // SAFETY: Rust documents set_var as always safe on Windows, including in
+    // multithreaded programs. This crate is compiled only on Windows.
+    unsafe { std::env::set_var("ICED_BACKEND", "tiny-skia") };
+}
+
 /// Enable editable Office clipboard objects for the application executable.
 pub fn enable_office_embedding() {
     ole::enable();
