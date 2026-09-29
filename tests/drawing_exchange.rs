@@ -60,9 +60,20 @@ fn compare_xml(actual: &str, expected: &str, name: &str) -> anyhow::Result<()> {
     assert_eq!(a.len(), e.len(), "{name}: object count");
     for (a, e) in a.iter().zip(e.iter()) {
         assert_eq!(a.tag_name().name(), e.tag_name().name(), "{name}: tag");
+        // Deliberate compatibility correction: an annotation must not be
+        // interpreted as another molecule by ChemDraw. Keep every historical
+        // attribute comparison and require this one precise addition.
+        let caption = e.has_tag_name("t")
+            && e.attribute("CaptionLineHeight").is_some()
+            && e.parent()
+                .is_some_and(|p| p.has_tag_name("page") || p.has_tag_name("group"));
+        if caption {
+            assert_eq!(a.attribute("InterpretChemically"), Some("no"), "{name}");
+            assert!(e.attribute("InterpretChemically").is_none(), "{name}");
+        }
         assert_eq!(
             a.attributes().len(),
-            e.attributes().len(),
+            e.attributes().len() + usize::from(caption),
             "{name}: {:?} attributes",
             e.tag_name()
         );

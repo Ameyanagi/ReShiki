@@ -886,6 +886,43 @@ mod tests {
             back.atoms.iter().map(|a| a.charge).sum::<i32>()
                 == source.atoms.iter().map(|a| a.charge).sum::<i32>()
         );
+        // This native CDX self-round-trip keeps the complete current gallery,
+        // including captions and pi ligands together. Genuine external
+        // captures are covered separately in pi_ligand_exchange/chemdraw_captions.
+        ensure!(back.atoms.iter().filter(|a| a.attachment.is_some()).count() == 5);
+        ensure!(back.bonds.iter().filter(|b| b.order == 4).count() == 33);
+        ensure!(
+            back.atoms
+                .iter()
+                .filter(|a| a.charge == -1 && a.display.hide_charge)
+                .count()
+                == 3
+        );
+        ensure!(
+            back.atoms
+                .iter()
+                .any(|a| a.element == "Fe" && a.charge == 2)
+        );
+        let mut expected_text: Vec<_> = source.annotations.iter().map(|a| &a.text).collect();
+        let mut returned_text: Vec<_> = back.annotations.iter().map(|a| &a.text).collect();
+        expected_text.sort();
+        returned_text.sort();
+        ensure!(returned_text == expected_text);
+        for caption in &back.annotations {
+            ensure!(
+                source.annotations.iter().any(|original| {
+                    original.text == caption.text
+                        && original.format.style == caption.format.style
+                        // The binary format rounds to the nearest 0.05pt.
+                        && (original.format.style.size_pt * original.format.line_spacing
+                            - caption.format.style.size_pt * caption.format.line_spacing)
+                            .abs()
+                            <= 0.0251
+                }),
+                "Caption style or spacing changed: {}",
+                caption.text
+            );
+        }
         Ok(())
     }
 
