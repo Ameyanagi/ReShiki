@@ -10,8 +10,9 @@ Dragging and selecting the shortcut gallery requires much less CPU work, with
 bounded text caching and checks that edits and undo/redo keep the drawing current.
 The Mac benchmark reduced whole-gallery drag preparation from 115 ms to 2.7 ms;
 a four-copy workload fell from 573 ms to 16 ms. These measure CPU preparation,
-not display FPS. Larger partial drags and zoom changes remain more expensive;
-Windows candidate validation is pending. See the
+not display FPS. The Windows test VM improved from 254 ms to 5.4 ms for the
+gallery and from 1182 ms to 23 ms for four copies. Larger partial drags and zoom
+changes remain more expensive. See the
 [profiling method, measurements, and validation](performance/loaded-canvas.md).
 
 ## Stable and Nightly update channels

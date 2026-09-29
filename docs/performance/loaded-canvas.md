@@ -99,13 +99,30 @@ The large workload still spends about 31 ms on a partial drag and 56 ms on
 a changing zoom level. These are remaining optimization targets; the change
 does not claim a universal 60 FPS frame budget.
 
+Windows test VM: AMD Ryzen 9 7940HS, Windows 11, remote/software display
+adapters, release build. Matched CPU workloads (median / p95 milliseconds):
+
+| Workload                       |     Baseline 1× |    Optimized 1× |       Baseline 4× |    Optimized 4× |
+| ------------------------------ | --------------: | --------------: | ----------------: | --------------: |
+| Unselected redraw              | 166.81 / 173.94 |     2.92 / 3.09 |   774.89 / 813.63 |   17.01 / 19.42 |
+| Selected redraw                | 230.28 / 238.06 |     6.65 / 6.91 | 1006.05 / 1057.88 |   32.85 / 33.70 |
+| Pointer/selection handle query |   37.97 / 42.38 |     0.02 / 0.02 |   160.75 / 164.72 |     0.07 / 0.09 |
+| Drag all                       | 253.99 / 273.11 |     5.42 / 5.68 | 1182.48 / 1216.23 |   23.11 / 23.86 |
+| Drag two atoms                 | 155.49 / 168.76 |     5.19 / 5.43 |   764.00 / 788.21 |   39.68 / 41.42 |
+| Pan                            | 226.44 / 232.32 |     6.68 / 6.95 | 1004.18 / 1035.06 |   34.32 / 36.88 |
+| Zoom                           | 233.97 / 243.48 | 105.50 / 114.61 | 1027.72 / 1109.86 | 132.31 / 192.77 |
+
+The Windows renderer pixel comparison also passed. These results measure CPU
+preparation on the test VM, not an Intel Iris Xe GPU or Windows display FPS.
+Zoom remains relatively expensive on this host (106 ms at 1×, 132 ms at 4×).
+
 ## Validation and limits
 
 - 507 targeted tests passed: 230 library tests, 264 application tests, nine
   typography tests, three figure-export tests, and one CDX/CDXML exchange test.
   The exchange test covers nine ChemDraw fixture families. These are automated
   interchange checks, not a new external ChemDraw clipboard session.
-- The release-mode rendered-pixel check passed on macOS. Cache tests cover edits,
+- The release-mode rendered-pixel check passed on macOS and Windows. Cache tests cover edits,
   document replacement with reused IDs, selection changes, undo/redo, font,
   color, size, zoom, and eviction limits.
 - An isolated macOS application using the release binary was checked with the
@@ -114,12 +131,9 @@ does not claim a universal 60 FPS frame budget.
   zooming to 62%. No stale drawing, selection, or caption placement was observed.
   `sample` recordings from both the published nightly and candidate support the
   CPU findings. This desktop check does not measure display FPS.
-- Windows baseline measurements completed on the test host (AMD Ryzen 9 7940HS,
-  Windows VM with remote/software display adapters): whole-gallery drag CPU
-  median was 253.99 ms at 1× and 1182.48 ms at 4×. The candidate build/comparison
-  was started, but workspace network restrictions prevented retrieval of its
-  result. Windows candidate validation remains pending; these are not
-  measurements of an Intel Iris Xe GPU.
+- Windows baseline/candidate CPU workloads and the renderer pixel comparison
+  completed successfully. The Mac desktop interaction check remains separate
+  from these headless Windows tests.
 - The scene cache retains one document snapshot and compares document contents.
   Equality checking remains linear in document size; large image-heavy drawings
   were not measured. The text budget accounts for retained keys and path events,
