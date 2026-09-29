@@ -4,13 +4,27 @@ The Windows dropdown fix is recorded in [ReShiki 0.9.1](changes-0.9.1.md). Publi
 
 ## Adjustable arcs (under review)
 
-By @Ameyanagi in [PR #76](https://github.com/Ameyanagi/ReShiki/pull/76), requested by @rlavendomme in [#67](https://github.com/Ameyanagi/ReShiki/issues/67). This draft remains under review.
+By @Ameyanagi in [PR #76](https://github.com/Ameyanagi/ReShiki/pull/76), requested by @rlavendomme in [#67](https://github.com/Ameyanagi/ReShiki/issues/67). This contribution remains under review.
 
 Draw adjustable elliptical arcs with 90°, 120°, 180° and 270° presets, precise start/sweep controls and draggable endpoints. A 360° sweep completes the ellipse; Shift drawing creates circles. Existing native arcs keep their appearance, and CDXML retains editable curve paths. The general pen tool remains separate.
 
 ![Four arc presets, a fractional sweep, a full circle, an affine transformed arc and a legacy half ellipse](images/adjustable-arcs.png)
 
 [Example drawings, compatibility notes and completed desktop review](changes/adjustable-arcs.md).
+
+## Windows GPU rendering and nightly builds
+
+By @Ameyanagi in [PR #68](https://github.com/Ameyanagi/ReShiki/pull/68).
+
+Windows builds include WGPU with a Tiny Skia fallback. CPU-only environments keep
+the direct software renderer, and explicit renderer overrides remain available
+for testing. The [validation record](windows-gpu-validation.md) includes Windows
+VM measurements and real Radeon GPU rendering on Linux; physical Windows GPU
+performance remains unmeasured.
+
+Development PRs target `main`. Successful nightly builds publish unsigned portable
+prereleases for all six platforms, with unique versions and checksums. Stable
+releases use version tags on tested commits in `main`.
 
 ## Website videos and reusable color palettes
 

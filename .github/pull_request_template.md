@@ -1,5 +1,7 @@
 ## Change
 
+<!-- Target main for features and fixes. Nightly builds follow main. -->
+
 Describe the problem and resulting behavior.
 
 ## Validation
