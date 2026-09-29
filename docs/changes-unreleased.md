@@ -4,13 +4,23 @@ The Windows dropdown fix is recorded in [ReShiki 0.9.1](changes-0.9.1.md). Publi
 
 ## Optional object toolbar
 
-By @Ameyanagi in [PR #70](https://github.com/Ameyanagi/ReShiki/pull/70) (under review).
+By @Ameyanagi in [PR #70](https://github.com/Ameyanagi/ReShiki/pull/70).
 
 Show the optional object toolbar for one-click alignment, distribution, reflection, rotation, and graphics/bond stacking. Enable **View → Object toolbar**; ReShiki remembers the preference between sessions. Controls stay in place when the selection changes, with unavailable commands disabled.
 
 Front/back changes graphics and bond depth; text and reaction arrows do not have editable stacking order. Mixed graphics/bond changes undo together. [Reproduction details](changes/object-toolbar.md) include standalone renderer checks and desktop interaction checks on the combined integration build.
 
 ![Three molecules aligned by clicking Align top edges in the desktop object toolbar](images/object-toolbar/desktop-align-top.png)
+
+## TBDPS and OTBDPS protecting groups
+
+By @Ameyanagi in [PR #69](https://github.com/Ameyanagi/ReShiki/pull/69).
+
+Enter TBDPS or OTBDPS as real protecting groups, preserving chemistry when expanding, saving, and exchanging drawings. TBDPS attaches through silicon; OTBDPS attaches through oxygen and reverses its label to TBDPSO when the bond is on the right. Both are available from atom-label entry and the chemical-abbreviation presets. Selecting a phenyl ring inside an expanded protecting group also works with **Contract common groups**; an unselected larger group no longer blocks the selected fragment.
+
+![TBDPS and OTBDPS with left and right attachments, expanded structures, and matching molecular formulas.](images/tbdps-abbreviations.png)
+
+The image is application renderer output; [reproduction and molecular checks](changes/tbdps-abbreviations.md) document the full graph and editable exchange.
 
 ## Windows GPU rendering and nightly builds
 
@@ -25,6 +35,14 @@ performance remains unmeasured.
 Development PRs target `main`. Successful nightly builds publish unsigned portable
 prereleases for all six platforms, with unique versions and checksums. Stable
 releases use version tags on tested commits in `main`.
+
+## Stable downloads and optional nightly builds
+
+By @Ameyanagi in [PR #81](https://github.com/Ameyanagi/ReShiki/pull/81).
+
+The homepage, repository README, and installation guide now explicitly offer the latest stable release for everyday work. A smaller Nightly builds link leads to separate testing instructions. GitHub's all-releases list still includes newer prereleases; the primary download links go directly to stable. [Change and validation notes](changes/release-channels.md).
+
+![ReShiki homepage with an orange Download stable button, a Stable release version badge, and a smaller Nightly builds link beside the installation guide.](images/release-channels/homepage.jpg)
 
 ## Website videos and reusable color palettes
 

@@ -193,8 +193,8 @@ pub fn validate_with_policy(document: &Document, policy: AttachmentPolicy) -> Re
     Ok(())
 }
 
-/// Add preset labels to a detached drawing. Selection and atom annotations filter
-/// the native winning matches, so excluded groups never expose smaller matches.
+/// Add preset labels to a detached drawing. Selection limits eligible matches
+/// before overlap resolution; atom annotations still filter winning matches.
 /// The supplied molecule must be the prepared state for this document.
 pub fn find(
     document: &Document,
@@ -240,6 +240,7 @@ pub fn find_with_policy(
     if selection.len() > 100_000 {
         return Err(invalid("Selection size limit exceeded"));
     }
+    let selected: HashSet<_> = selection.iter().copied().collect();
     let target = matcher::Target::new(&molecule.state.graph, &molecule.state.rings)?;
     let mut covered = HashSet::new();
     let mut first_atoms = HashSet::new();
@@ -251,6 +252,17 @@ pub fn find_with_policy(
             continue;
         }
         for mapping in target.matches(preset, &mut work)? {
+            // Ineligible larger groups must not reserve selected atoms and hide
+            // a smaller eligible fragment (for example Ph inside TBDPS).
+            if !selected.is_empty() {
+                let mut eligible = true;
+                for &index in mapping.iter().skip(1) {
+                    eligible &= selected.contains(at(&molecule.ids, index)?);
+                }
+                if !eligible {
+                    continue;
+                }
+            }
             let anchor = *at(&mapping, 1)?;
             if first_atoms.contains(&anchor)
                 || mapping.iter().skip(1).any(|atom| covered.contains(atom))
@@ -264,7 +276,6 @@ pub fn find_with_policy(
             }
         }
     }
-    let selected: HashSet<_> = selection.iter().copied().collect();
     let mut result = document.clone();
     let mut used: HashSet<_> = result
         .abbreviations
@@ -280,10 +291,7 @@ pub fn find_with_policy(
             .skip(1)
             .map(|&i| at(&molecule.ids, i).copied())
             .collect::<Result<Vec<_>>>()?;
-        if members
-            .iter()
-            .any(|id| used.contains(id) || !selected.is_empty() && !selected.contains(id))
-        {
+        if members.iter().any(|id| used.contains(id)) {
             continue;
         }
         let mut excluded = false;
