@@ -13,6 +13,8 @@ use reshiki::bonds::BondPreset;
 use reshiki::typography::{Script, StyleChange, TextAlign};
 
 #[cfg(test)]
+mod layout_snapshots;
+#[cfg(test)]
 mod selection_canvas_qa;
 
 impl App {
