@@ -2,6 +2,16 @@
 
 The Windows dropdown fix is recorded in [ReShiki 0.9.1](changes-0.9.1.md). Publisher-style, theme, clipboard and aromatic-fusion updates are recorded in [ReShiki 0.9.0](changes-0.9.md).
 
+## EMF figure export on Windows
+
+By @Ameyanagi in [PR #71](https://github.com/Ameyanagi/ReShiki/pull/71).
+
+Export a vector EMF picture on Windows for Microsoft Office, preserving outlined labels, publication size and the canvas background. Choose **Export → Figure → EMF**. The file includes the whole drawing; keep the `.rsk` original to edit it later. EMF import remains unsupported, and figures larger than 40 inches in either dimension still require PDF or SVG.
+
+![EMF export preserving ethanol labels, an oxidation caption and a reaction arrow on white paper.](images/emf-file-export/light.png)
+
+[Dark-canvas example, reproduction and validation](changes/emf-file-export.md).
+
 ## Optional object toolbar
 
 By @Ameyanagi in [PR #70](https://github.com/Ameyanagi/ReShiki/pull/70).

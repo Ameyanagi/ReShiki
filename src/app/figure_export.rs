@@ -73,6 +73,21 @@ impl App {
 mod tests {
     use super::*;
 
+    #[cfg(windows)]
+    #[test]
+    fn emf_uses_figure_snapshot_without_changing_selection_or_document() {
+        let (mut app, _) = App::new();
+        let a = app.doc.add_atom("C", Default::default());
+        app.selected = vec![a];
+        let snapshot = app.doc.clone();
+        let _task = app.update(Message::Export("emf"));
+        assert!(app.figure_exporting);
+        assert!(!app.busy);
+        assert_eq!(app.status, "Preparing EMF export…");
+        assert_eq!(app.doc, snapshot);
+        assert_eq!(app.selected, vec![a]);
+    }
+
     #[test]
     fn exporting_a_snapshot_blocks_duplicate_exports_and_always_resets() {
         let (mut app, _) = App::new();
