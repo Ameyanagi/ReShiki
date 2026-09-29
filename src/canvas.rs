@@ -3056,6 +3056,22 @@ mod tests {
         let p = phosphorus.add_atom("P", World::default());
         let carbon = phosphorus.add_atom("C", World::new(-42., 0.));
         phosphorus.add_bond(p, carbon, 1, "plain");
+        cases.push((
+            phosphorus.clone(),
+            World::default(),
+            World::new(40., 0.),
+            false,
+        ));
+        let ligand = phosphorus.add_atom("C", World::new(-75., 28.));
+        phosphorus.add_bond(carbon, ligand, 1, "plain");
+        let anchor = reshiki::attachments::add(
+            &mut phosphorus,
+            &[carbon, ligand],
+            reshiki::attachments::Kind::MultiCenter,
+        )
+        .unwrap();
+        let metal = phosphorus.add_atom("Fe", World::new(-90., -40.));
+        phosphorus.add_bond(anchor, metal, 1, "plain");
         cases.push((phosphorus, World::default(), World::new(40., 0.), false));
         for display in ["bold", "dashed"] {
             let mut styled = Document::default();

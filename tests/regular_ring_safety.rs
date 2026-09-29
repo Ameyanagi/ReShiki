@@ -116,6 +116,85 @@ fn regular_ring_checks_neutral_phosphorus_with_native_valence_rules() {
             (degree + 2) as u32
         );
     }
+    // Native dative semantics count the bond only at the acceptor, including
+    // the P5 limit with three single bonds plus one outgoing donor contact.
+    for ordinary in [0, 3] {
+        for donor in [true, false] {
+            let mut doc = Document::default();
+            let p = doc.add_atom("P", Point::default());
+            for i in 0..4 {
+                let angle = (120. + i as f32 * 40.).to_radians();
+                let neighbor = doc.add_atom(
+                    if i < ordinary { "C" } else { "Fe" },
+                    Point::new(42. * angle.cos(), 42. * angle.sin()),
+                );
+                let (a, b) = if donor { (p, neighbor) } else { (neighbor, p) };
+                doc.add_bond(a, b, if i < ordinary { 1 } else { 5 }, "plain");
+            }
+            let before = doc.clone();
+            let result = editing::ring_oriented(
+                &mut doc,
+                Point::default(),
+                6,
+                false,
+                5.,
+                Some(Point::new(80., 0.)),
+            );
+            assert_eq!(result.is_ok(), donor);
+            if donor {
+                assert_eq!(&doc.bonds[..before.bonds.len()], before.bonds.as_slice());
+                assert_eq!(
+                    reshiki::chemistry::document::prepare(&doc)
+                        .unwrap()
+                        .state
+                        .valences[0]
+                        .explicit_valence,
+                    ordinary + 2
+                );
+            } else {
+                assert_eq!(doc, before);
+            }
+        }
+    }
+    // An aromatic P keeps the native aromatic half-bond contributions.
+    let mut aromatic = Preset::Benzene.document(42., false);
+    for atom in &mut aromatic.atoms {
+        atom.aromatic = true;
+    }
+    for bond in &mut aromatic.bonds {
+        bond.order = 4;
+    }
+    assert!(aromatic.atoms.iter().all(|a| a.aromatic));
+    assert!(aromatic.bonds.iter().all(|b| b.order == 4));
+    let p = aromatic.atoms[0].id;
+    aromatic.atom_mut(p).unwrap().element = "P".into();
+    let point = aromatic.atom(p).unwrap().position;
+    let before = aromatic.clone();
+    editing::ring_oriented(
+        &mut aromatic,
+        point,
+        6,
+        false,
+        5.,
+        Some(Point::new(point.x * 3., point.y * 3.)),
+    )
+    .unwrap();
+    assert_eq!(aromatic.atom(p), before.atom(p));
+    assert_eq!(
+        &aromatic.bonds[..before.bonds.len()],
+        before.bonds.as_slice()
+    );
+    // Unsupported incident appearance must still reject at a P attachment.
+    let mut invalid_style = Document::default();
+    let p = invalid_style.add_atom("P", Point::default());
+    let c = invalid_style.add_atom("C", Point::new(-42., 0.));
+    invalid_style.add_bond(p, c, 1, "dashed");
+    reject_unchanged(
+        &invalid_style,
+        Point::default(),
+        6,
+        Some(Point::new(80., 0.)),
+    );
     // Preserve the existing conservative charged-atom policy.
     let mut charged = Document::default();
     let p = charged.add_atom("P", Point::default());
@@ -129,6 +208,57 @@ fn regular_ring_checks_neutral_phosphorus_with_native_valence_rules() {
     let untouched = doc.atom(other).unwrap().clone();
     editing::ring_oriented(&mut doc, Point::default(), 6, false, 5., None).unwrap();
     assert_eq!(doc.atom(other), Some(&untouched));
+}
+
+#[test]
+fn regular_ring_phosphorus_checks_only_the_edited_site() {
+    for kind in [
+        reshiki::attachments::Kind::MultiCenter,
+        reshiki::attachments::Kind::Variable,
+    ] {
+        for degree in [1, 3, 4, 5] {
+            let mut doc = Document::default();
+            let p = doc.add_atom("P", Point::default());
+            let mut neighbors = vec![];
+            for i in 0..degree {
+                let angle = (120. + i as f32 * 120. / (degree - 1).max(1) as f32).to_radians();
+                let carbon = doc.add_atom("C", Point::new(42. * angle.cos(), 42. * angle.sin()));
+                doc.add_bond(p, carbon, 1, "plain");
+                neighbors.push(carbon);
+            }
+            let ligand = doc.add_atom("C", Point::new(-70., 50.));
+            doc.add_bond(neighbors[0], ligand, 1, "plain");
+            let anchor =
+                reshiki::attachments::add(&mut doc, &[neighbors[0], ligand], kind).unwrap();
+            let metal = doc.add_atom("Fe", Point::new(-85., -20.));
+            doc.add_bond(anchor, metal, 1, "plain");
+            doc.validate().unwrap();
+            assert!(reshiki::reactions::molecules(&doc, &[p])[0].contains(&anchor));
+            if degree >= 4 {
+                reject_unchanged(&doc, Point::default(), 6, Some(Point::new(80., 0.)));
+                continue;
+            }
+            let before = doc.clone();
+            editing::ring_oriented(
+                &mut doc,
+                Point::default(),
+                6,
+                false,
+                5.,
+                Some(Point::new(80., 0.)),
+            )
+            .unwrap();
+            doc.validate().unwrap();
+            for atom in &before.atoms {
+                assert_eq!(doc.atom(atom.id), Some(atom));
+            }
+            assert_eq!(&doc.bonds[..before.bonds.len()], before.bonds.as_slice());
+            assert_eq!(
+                doc.bonds.iter().filter(|b| b.a == p || b.b == p).count(),
+                degree + 2
+            );
+        }
+    }
 }
 
 #[test]

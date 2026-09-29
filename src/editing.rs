@@ -703,19 +703,47 @@ pub fn ring(doc: &mut Document, p: Point, size: u8, aromatic: bool, radius: f32)
 
 fn regular_ring_valence_fits(doc: &Document, target: &crate::document::Atom) -> bool {
     if target.element == "P" && target.charge == 0 {
-        // The template capacity table intentionally covers only a small set of
-        // attachment atoms. Neutral phosphorus uses the native strict valence
-        // rules (including its permitted trivalent/pentavalent states), not a
-        // blanket exception. Unrelated molecules must not block this edit.
-        let Some(atoms) = crate::reactions::molecules(doc, &[target.id])
-            .into_iter()
-            .next()
-        else {
-            return false;
+        use crate::chemistry::graph::{Atom, Bond, Graph};
+        // This is a valence-only local star, never a molecular representation.
+        // Native per-atom valence depends on the target and incident bonds;
+        // wildcard neighbors avoid interpreting attachment nodes or validating
+        // unrelated chemistry. The protected-state guard runs before this.
+        let mut graph = Graph {
+            atoms: vec![Atom {
+                atomic_number: 15,
+                aromatic: target.aromatic,
+                ..Atom::default()
+            }],
+            bonds: vec![],
         };
-        return crate::chemistry::document::drawing_graph(&selection(doc, &atoms))
-            .ok()
-            .is_some_and(|graph| graph.valences().is_ok());
+        let mut indices = HashMap::from([(target.id, 0)]);
+        for bond in doc
+            .bonds
+            .iter()
+            .filter(|b| b.a == target.id || b.b == target.id)
+        {
+            let other = if bond.a == target.id { bond.b } else { bond.a };
+            if doc.atom(other).is_none() || bond.validate_appearance().is_err() {
+                return false;
+            }
+            let index = *indices.entry(other).or_insert_with(|| {
+                let index = graph.atoms.len();
+                graph.atoms.push(Atom::default());
+                index
+            });
+            let (a, b) = if bond.a == target.id {
+                (0, index)
+            } else {
+                (index, 0)
+            };
+            graph.bonds.push(Bond {
+                a,
+                b,
+                order: bond.order,
+                aromatic: bond.order == 4,
+            });
+        }
+        return graph.valences().is_ok();
     }
     crate::templates::valence(doc, target.id) <= crate::templates::capacity(target)
 }

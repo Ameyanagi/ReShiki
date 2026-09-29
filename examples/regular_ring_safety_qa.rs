@@ -32,8 +32,41 @@ fn main() -> anyhow::Result<()> {
     let a = ring.atom(ring.bonds[0].a).unwrap().position;
     let b = ring.atom(ring.bonds[0].b).unwrap().position;
     let midpoint = Point::new((a.x + b.x) / 2., (a.y + b.y) / 2.);
-    let valid_attachments = std::env::args().nth(2).as_deref() == Some("--valid-attachments");
-    let cases = if valid_attachments {
+    let mode = std::env::args().nth(2);
+    let cases = if mode.as_deref() == Some("--semantic-attachments") {
+        [
+            (
+                "multi-center",
+                "P with multi-center targets",
+                reshiki::attachments::Kind::MultiCenter,
+            ),
+            (
+                "variable",
+                "P with variable targets",
+                reshiki::attachments::Kind::Variable,
+            ),
+        ]
+        .into_iter()
+        .map(|(name, title, kind)| {
+            let mut doc = Document::default();
+            let p = doc.add_atom("P", Point::default());
+            let c = doc.add_atom("C", Point::new(-42., 0.));
+            let ligand = doc.add_atom("C", Point::new(-75., 28.));
+            doc.add_bond(p, c, 1, "plain");
+            doc.add_bond(c, ligand, 1, "plain");
+            let anchor = reshiki::attachments::add(&mut doc, &[c, ligand], kind).unwrap();
+            let metal = doc.add_atom("Fe", Point::new(-90., -40.));
+            doc.add_bond(anchor, metal, 1, "plain");
+            (
+                name,
+                title,
+                doc,
+                Point::default(),
+                Some(Point::new(80., 0.)),
+            )
+        })
+        .collect()
+    } else if mode.as_deref() == Some("--valid-attachments") {
         let mut phosphorus = Document::default();
         let p = phosphorus.add_atom("P", Point::default());
         let c = phosphorus.add_atom("C", Point::new(-42., 0.));
@@ -135,6 +168,14 @@ fn main() -> anyhow::Result<()> {
         let detail = match name {
             "overlay" => format!("{coincident} coincident atom pairs"),
             "phosphorus" => format!("Phosphorus bond valence: {valence}"),
+            "multi-center" | "variable" => format!(
+                "P valence: {valence}; attachment retained: {}",
+                source
+                    .atoms
+                    .iter()
+                    .filter(|a| a.attachment.is_some())
+                    .all(|a| result.atom(a.id) == Some(a))
+            ),
             "styled" => format!(
                 "Original bond retained: {}",
                 result.bonds[0] == source.bonds[0]
