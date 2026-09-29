@@ -633,13 +633,15 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                         .iter()
                         .filter(|g| self.selected.contains(&g.id))
                     {
-                        if let Some((index, _)) = g
-                            .edit_points()
-                            .into_iter()
-                            .enumerate()
-                            .rev()
-                            .find(|(_, q)| q.distance(p) < 8.0 / self.camera.zoom)
-                        {
+                        let points = g.edit_points();
+                        let hit = |q: &World| q.distance(p) < 8.0 / self.camera.zoom;
+                        let index = if g.kind == GraphicKind::Arc {
+                            // Coincident full-circle endpoints must expose the end.
+                            points.iter().rposition(hit)
+                        } else {
+                            points.iter().position(hit)
+                        };
+                        if let Some(index) = index {
                             state.gesture = Some(Gesture::GraphicPoint { id: g.id, index });
                             return Some(Action::request_redraw().and_capture());
                         }
@@ -4286,6 +4288,20 @@ mod tests {
             Edit::GraphicPoint(1, 1, _)
         ));
         assert_eq!(with_curve, original);
+
+        let mut with_closed_path = with_curve.clone();
+        with_closed_path.graphics[0].edit_point(3, World::new(-50., 0.));
+        with_closed_path.graphics[0].path.push(PathCommand::Close);
+        canvas.doc = &with_closed_path;
+        let original = with_closed_path.clone();
+        assert!(
+            matches!(
+                pointer_gesture(&canvas, Point::new(150., 150.), Point::new(140., 140.)),
+                Edit::GraphicPoint(1, 0, _)
+            ),
+            "coincident closed-path handles must retain first-point priority"
+        );
+        assert_eq!(with_closed_path, original);
 
         let mut with_arc = doc.clone();
         with_arc.graphics.push(
