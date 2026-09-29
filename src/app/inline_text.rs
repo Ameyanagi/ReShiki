@@ -77,9 +77,13 @@ impl App {
                 state.past.remove(0);
             }
             self.autosaved_revision = None;
+            self.autosave.edited_draft();
         }
     }
     pub(super) fn inline_candidate(&self) -> Result<Document, String> {
+        self.inline_snapshot(true)
+    }
+    fn inline_snapshot(&self, validate: bool) -> Result<Document, String> {
         let Some(state) = &self.inline_text else {
             return Ok(self.doc.clone());
         };
@@ -109,11 +113,16 @@ impl App {
             }),
             (None, true) => {}
         }
-        doc.validate()?;
+        if validate {
+            doc.validate()?;
+        }
         Ok(doc)
     }
     pub(super) fn recovery_document(&self) -> Document {
-        self.inline_candidate().unwrap_or_else(|_| self.doc.clone())
+        // Full validation runs on the recovery worker; building a caption draft
+        // only needs its local format/identity checks on the event-loop thread.
+        self.inline_snapshot(false)
+            .unwrap_or_else(|_| self.doc.clone())
     }
     pub(super) fn finish_inline(&mut self, apply: bool) -> bool {
         if self.inline_text.is_none() {
@@ -158,6 +167,7 @@ impl App {
             self.status = "Text edit cancelled".into();
         }
         self.autosaved_revision = None;
+        self.autosave.edited_draft();
         self.tool = crate::canvas::Tool::Select;
         self.selected.retain(|id| self.doc.all_ids().contains(id));
         let inspector = (self.inspector_open, self.inspector_tab);
@@ -239,6 +249,7 @@ impl App {
                         self.caption_editor
                             .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
                         self.autosaved_revision = None;
+                        self.autosave.edited_draft();
                         self.sync_style_inputs();
                     }
                 }
@@ -849,6 +860,7 @@ mod tests {
         begin(&mut app, None);
         type_text(&mut app, "Unsaved label");
         let _ = app.update(Message::Tick);
+        super::super::autosave::tests::finish_pending(&mut app);
         let path = app.recovery.as_ref().unwrap().session.clone();
         let snapshot: reshiki::recovery::Snapshot =
             serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
@@ -856,6 +868,7 @@ mod tests {
         assert!(app.doc.annotations.is_empty());
         type_text(&mut app, " updated");
         let _ = app.update(Message::Tick);
+        super::super::autosave::tests::finish_pending(&mut app);
         let snapshot: reshiki::recovery::Snapshot =
             serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
         assert_eq!(
@@ -864,6 +877,7 @@ mod tests {
         );
         let _ = app.update(Message::Escape);
         let _ = app.update(Message::Tick);
+        super::super::autosave::tests::finish_pending(&mut app);
         assert!(!path.exists());
     }
 

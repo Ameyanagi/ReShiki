@@ -164,16 +164,22 @@ pub(crate) fn ring_stroke(
         .bonds
         .iter()
         .any(|b| b.projection && ring.contains_bond(b.a, b.b));
+    // Resolve endpoints once instead of scanning all atoms for every ring/bond
+    // pair. Reject distant segments before checking abbreviation visibility.
+    let atoms: std::collections::HashMap<_, _> = doc.atoms.iter().map(|a| (a.id, a)).collect();
     for (index, bond) in doc.bonds.iter().enumerate() {
-        if ring.contains_bond(bond.a, bond.b) || !doc.bond_visible(bond.a, bond.b) {
+        if ring.contains_bond(bond.a, bond.b) {
             continue;
         }
-        let (Some(a), Some(b)) = (doc.atom(bond.a), doc.atom(bond.b)) else {
+        let (Some(a), Some(b)) = (atoms.get(&bond.a), atoms.get(&bond.b)) else {
             continue;
         };
         let (a, b) = (a.position, b.position);
         if a.x.min(b.x) > hi.x || a.x.max(b.x) < lo.x || a.y.min(b.y) > hi.y || a.y.max(b.y) < lo.y
         {
+            continue;
+        }
+        if !doc.bond_visible(bond.a, bond.b) {
             continue;
         }
         let length = a.distance(b);

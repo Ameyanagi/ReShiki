@@ -186,7 +186,14 @@ fn write_impl(
             && [bond.a, bond.b]
                 .iter()
                 .all(|id| document.atom(*id).is_some_and(|a| a.stereo.is_none()));
-        bond.projection && bond.display != "plain" && !haworth.contains(&i) && !aromatic_bold
+        // Bold double bonds have an ordinary two-rail CDXML representation;
+        // unlike a bold single bond, it cannot imply tetrahedral stereo.
+        let bold_double = bond.order == 2 && bond.display == "bold";
+        bond.projection
+            && bond.display != "plain"
+            && !haworth.contains(&i)
+            && !aromatic_bold
+            && !bold_double
     }) {
         return Err(invalid(
             "CDXML cannot yet preserve non-stereochemical front-bond emphasis or projected wedge styles. Restore plain bond appearance before editable export, or use ReShiki (.rsk), SVG, PNG or PDF to retain the appearance.",

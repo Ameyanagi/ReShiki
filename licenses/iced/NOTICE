@@ -1,0 +1,14 @@
+Iced canvas glyph rendering adaptation
+======================================
+
+src/canvas/text_cache/glyphs.rs adapts Text::draw_with from iced_graphics 0.14.0:
+https://github.com/iced-rs/iced/blob/3997291f318a8bc06fa522f5579836fb3feb94df/graphics/src/geometry/text.rs
+
+Copyright 2019 Héctor Ramón, Iced contributors
+Licensed under MIT; see LICENSE in this directory.
+
+ReShiki retains Iced's paragraph shaping, font-size hinting, glyph path commands
+and bitmap/color fallback. Its adaptation restricts placement to top-left at the
+origin and reuses a bounded Swash glyph cache between text strings, with explicit
+memory/entry accounting and eviction. These adapted portions retain their MIT
+terms and are not represented as original dual-licensed ReShiki code.

@@ -99,11 +99,31 @@ impl Reaction {
 
 /// Includes complete connected molecules, including atoms hidden by abbreviations.
 pub fn molecules(doc: &Document, selected: &[u64]) -> Vec<Vec<u64>> {
+    if selected.is_empty() {
+        return vec![];
+    }
+    let atoms: HashSet<_> = doc.atoms.iter().map(|a| a.id).collect();
     let mut remaining: HashSet<_> = selected
         .iter()
         .copied()
-        .filter(|id| doc.atom(*id).is_some())
+        .filter(|id| atoms.contains(id))
         .collect();
+    let mut adjacent = HashMap::<u64, Vec<u64>>::new();
+    for (a, b) in doc
+        .bonds
+        .iter()
+        .filter(|b| b.order != 0)
+        .map(|b| (b.a, b.b))
+        .chain(
+            doc.atoms
+                .iter()
+                .filter(|a| a.attachment.is_some())
+                .flat_map(|a| a.centroid.iter().map(move |id| (a.id, *id))),
+        )
+    {
+        adjacent.entry(a).or_default().push(b);
+        adjacent.entry(b).or_default().push(a);
+    }
     let mut result = Vec::new();
     for atom in &doc.atoms {
         if !remaining.contains(&atom.id) {
@@ -112,31 +132,9 @@ pub fn molecules(doc: &Document, selected: &[u64]) -> Vec<Vec<u64>> {
         let mut component = HashSet::from([atom.id]);
         let mut pending = vec![atom.id];
         while let Some(id) = pending.pop() {
-            for attachment in doc.atoms.iter().filter(|a| a.attachment.is_some()) {
-                if attachment.id == id || attachment.centroid.contains(&id) {
-                    for other in std::iter::once(&attachment.id).chain(&attachment.centroid) {
-                        if component.insert(*other) {
-                            pending.push(*other);
-                        }
-                    }
-                }
-            }
-            for bond in &doc.bonds {
-                // A hydrogen interaction does not combine two chemical participants.
-                if bond.order == 0 {
-                    continue;
-                }
-                let other = if bond.a == id {
-                    Some(bond.b)
-                } else if bond.b == id {
-                    Some(bond.a)
-                } else {
-                    None
-                };
-                if let Some(other) = other
-                    && component.insert(other)
-                {
-                    pending.push(other);
+            for other in adjacent.get(&id).into_iter().flatten() {
+                if component.insert(*other) {
+                    pending.push(*other);
                 }
             }
         }

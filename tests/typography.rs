@@ -265,3 +265,79 @@ fn japanese_fallback_uses_real_advances_and_keeps_document_styles() {
     );
     assert!(wrapped.height > style.size() * 2.);
 }
+
+#[test]
+fn long_caption_runs_preserve_width_and_styled_boundaries() {
+    let text = "A long caption with repeated words. ".repeat(100);
+    let format = TextFormat::default();
+    let layout = typography::layout(&text, &format);
+    assert_eq!(layout.fragments.len(), 1);
+    assert_eq!(layout.fragments[0].text, text);
+    let expected = reshiki::style::styled_text_width(&text, format.style.size(), &format.style);
+    assert!((layout.width - expected).abs() < 0.01);
+
+    let text = "plain bold plain\nH2O + NH4+";
+    let mut format = TextFormat::default();
+    format.apply(text, Some(6..10), &StyleChange::Bold(true));
+    format.apply(text, Some(17..text.len()), &StyleChange::Formula(true));
+    let layout = typography::layout(text, &format);
+    assert_eq!(layout.fragments[0].text, "plain ");
+    assert_eq!(layout.fragments[1].text, "bold");
+    assert!(layout.fragments[1].style.bold);
+    assert_eq!(layout.fragments[2].text, " plain");
+    for pair in layout.fragments.windows(2).take(2) {
+        let before = &pair[0];
+        let after = &pair[1];
+        let end = before.position.x
+            + reshiki::style::styled_text_width(&before.text, before.style.size(), &before.style);
+        assert!((end - after.position.x).abs() < 0.001);
+    }
+    assert!(
+        layout
+            .fragments
+            .iter()
+            .any(|f| f.style.script == Script::Subscript)
+    );
+    assert!(
+        layout
+            .fragments
+            .iter()
+            .any(|f| f.style.script == Script::Superscript)
+    );
+}
+
+#[test]
+fn justified_runs_keep_expanded_spaces_and_wrapped_line_boundaries() {
+    let text = "one two three four five six seven eight";
+    let format = TextFormat {
+        width_pt: Some(60.),
+        alignment: TextAlign::Justified,
+        ..Default::default()
+    };
+    let layout = typography::layout(text, &format);
+    assert_eq!(
+        layout
+            .fragments
+            .iter()
+            .map(|f| f.text.as_str())
+            .collect::<String>(),
+        text
+    );
+    let mut expanded = false;
+    let mut wrapped = false;
+    for pair in layout.fragments.windows(2) {
+        let before = &pair[0];
+        let after = &pair[1];
+        if before.position.y != after.position.y {
+            wrapped = true;
+            continue;
+        }
+        let end = before.position.x
+            + reshiki::style::styled_text_width(&before.text, before.style.size(), &before.style);
+        if after.position.x - end > 0.01 {
+            expanded = true;
+            assert!(before.text.ends_with(' '));
+        }
+    }
+    assert!(expanded && wrapped);
+}

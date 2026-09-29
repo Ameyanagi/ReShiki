@@ -1,5 +1,185 @@
 use reshiki::document::{Document, Point};
 
+fn fused_doubles() -> Document {
+    serde_json::from_str(include_str!("fixtures/tilted-fused-double-bonds.rsk")).unwrap()
+}
+
+#[test]
+fn foreground_double_bonds_follow_tilt_without_changing_order_or_rail_orientation() {
+    let mut doc = fused_doubles();
+    let ids = doc.all_ids();
+    let original = doc.clone();
+    reshiki::projection::depth_bonds(&mut doc, &ids);
+    let front = doc.clone();
+    assert!(
+        doc.bonds
+            .iter()
+            .any(|b| b.order == 2 && b.display == "bold")
+    );
+    assert!(
+        doc.bonds
+            .iter()
+            .any(|b| b.order == 2 && b.display == "plain")
+    );
+    for (before, after) in original.bonds.iter().zip(&doc.bonds) {
+        assert_eq!(
+            (before.a, before.b, before.order),
+            (after.a, after.b, after.order)
+        );
+        if after.order == 2 {
+            assert!(after.projection);
+            assert_eq!(after.secondary_display.as_deref(), Some("plain"));
+            assert_eq!(before.double_position, after.double_position);
+            assert_eq!(
+                (&before.stereo, &before.stereo_atoms),
+                (&after.stereo, &after.stereo_atoms)
+            );
+        }
+    }
+    // A half-turn swaps near/far. The public tilt command is bounded to 85°.
+    for _ in 0..3 {
+        reshiki::projection::tilt(&mut doc, &ids, 60., true);
+    }
+    for (before, after) in front
+        .bonds
+        .iter()
+        .zip(&doc.bonds)
+        .filter(|(b, _)| b.order == 2)
+    {
+        assert_eq!((before.a, before.b), (after.a, after.b));
+        let midpoint_depth =
+            (front.atom(before.a).unwrap().depth + front.atom(before.b).unwrap().depth) / 2.;
+        if midpoint_depth.abs() < 0.01 {
+            assert_eq!(after.display, "plain", "The middle plane stays thin");
+        } else {
+            assert_ne!(
+                before.display, after.display,
+                "Near/far double rail did not change"
+            );
+        }
+    }
+    for _ in 0..3 {
+        reshiki::projection::tilt(&mut doc, &ids, -60., true);
+    }
+    for (before, after) in front
+        .bonds
+        .iter()
+        .zip(&doc.bonds)
+        .filter(|(b, _)| b.order == 2)
+    {
+        assert_eq!(
+            before, after,
+            "Inverse tilt should restore each double bond"
+        );
+    }
+    doc.validate().unwrap();
+    let molecule = reshiki::chemistry::document::prepare(&doc).unwrap();
+    assert!(
+        molecule
+            .state
+            .directions
+            .iter()
+            .all(|d| *d == reshiki::chemistry::kekulize::Direction::None)
+    );
+}
+
+#[tokio::test]
+async fn projected_bold_doubles_keep_editable_appearance_and_chemical_identity()
+-> anyhow::Result<()> {
+    use anyhow::{Context, ensure};
+    use reshiki::engine::{LocalEngine, Request};
+    let engine = LocalEngine::default();
+    let alkene = engine
+        .request(Request::import_smiles("F/C=C/F"))
+        .await
+        .map_err(anyhow::Error::msg)?
+        .document
+        .context("Alkene")?;
+    for mut source in [fused_doubles(), alkene] {
+        // Give the ordinary alkene's double bond foreground depth, leaving
+        // actual E/Z descriptors unchanged.
+        if source.atoms.len() == 4 {
+            let b = source
+                .bonds
+                .iter()
+                .find(|b| b.order == 2)
+                .context("Double bond")?;
+            let ends = [b.a, b.b];
+            for atom in &mut source.atoms {
+                atom.depth = if ends.contains(&atom.id) { 10. } else { -10. };
+            }
+        }
+        let reference = engine
+            .request(Request::molecule("analyze", source.clone()))
+            .await
+            .map_err(anyhow::Error::msg)?
+            .analysis
+            .context("Reference chemistry")?;
+        let ids = source.all_ids();
+        reshiki::projection::depth_bonds(&mut source, &ids);
+        if source.atoms.len() == 4 {
+            for b in source.bonds.iter_mut().filter(|b| b.order == 1) {
+                b.display = "plain".into();
+            }
+        }
+        for format in ["cdxml", "cdx"] {
+            let mut request = Request::molecule("export", source.clone());
+            request.format = Some(format.into());
+            let data = engine
+                .request(request)
+                .await
+                .map_err(anyhow::Error::msg)?
+                .output
+                .context("Export")?;
+            let response = engine
+                .request(Request::import(format, &data))
+                .await
+                .map_err(anyhow::Error::msg)?;
+            let restored = response.document.context("Reimported drawing")?;
+            assert_eq!(
+                response.analysis.context("Reimported chemistry")?.inchikey,
+                reference.inchikey
+            );
+            for (before, after) in source.bonds.iter().zip(&restored.bonds) {
+                assert_eq!(
+                    (
+                        before.order,
+                        &before.display,
+                        before
+                            .secondary_display
+                            .as_deref()
+                            .unwrap_or(&before.display)
+                    ),
+                    (
+                        after.order,
+                        &after.display,
+                        after.secondary_display.as_deref().unwrap_or(&after.display)
+                    ),
+                    "{format}"
+                );
+            }
+            ensure!(restored.atoms.iter().all(|a| a.stereo.is_none()));
+        }
+        if source.atoms.len() > 4
+            && let Some(dir) = std::env::var_os("RESHIKI_PROJECTION_ARTIFACTS")
+        {
+            let dir = std::path::PathBuf::from(dir);
+            std::fs::create_dir_all(&dir)?;
+            for (name, doc) in [("before", fused_doubles()), ("after", source)] {
+                std::fs::write(
+                    dir.join(format!("tilted-doubles-{name}.png")),
+                    reshiki::export::drawing(&doc, "png").map_err(anyhow::Error::msg)?,
+                )?;
+                std::fs::write(
+                    dir.join(format!("tilted-doubles-{name}.rsk")),
+                    serde_json::to_vec_pretty(&doc)?,
+                )?;
+            }
+        }
+    }
+    Ok(())
+}
+
 #[tokio::test]
 async fn native_clipboard_round_trip_retains_editable_bold_arene() -> anyhow::Result<()> {
     use anyhow::{Context, ensure};

@@ -18,6 +18,7 @@ pub enum Action {
     Install,
     Poll,
     Prepared(Result<std::sync::Arc<updates::install::Prepared>, String>),
+    RecoveryCleared,
     Restarted(Result<(), String>),
     Opened(Result<(), String>),
 }
@@ -139,9 +140,9 @@ impl App {
                     Err(error) => self.updates.error = Some(error),
                 }
             }
+            Action::RecoveryCleared => return self.handoff_update(),
             Action::Restarted(result) => match result {
                 Ok(()) => {
-                    self.clear_recovery();
                     return iced::exit();
                 }
                 Err(error) => {
@@ -262,6 +263,8 @@ impl App {
             Some("Save your drawing, then click Update and restart.")
         } else if self.assistant.has_unfinished_work() {
             Some("Finish or clear the assistant draft and input before restarting.")
+        } else if self.file_io.saving || self.templates.pending() {
+            Some("Wait for the current file or library save before restarting.")
         } else if self.busy
             || self.cleanup.is_some()
             || self.joining.is_some()
@@ -272,18 +275,37 @@ impl App {
             None
         }
     }
+    pub(super) fn update_restart_failed(&mut self, error: String) {
+        self.updates.restarting = false;
+        self.updates.error = Some(error);
+        self.updates.open = true;
+    }
+
     fn restart_for_update(&mut self) -> Task<Message> {
         if let Some(reason) = self.update_restart_blocker() {
             self.updates.error = Some(format!("Update ready. {reason}"));
             self.updates.open = true;
             return Task::none();
         }
-        let Some(prepared) = self.updates.prepared.clone() else {
+        if self.updates.prepared.is_none() {
             return Task::none();
-        };
+        }
         self.updates.restarting = true;
         self.updates.open = true;
         self.updates.error = None;
+        // The installer helper has a limited lifetime waiting for this process.
+        // Drain recovery writes and clear the draft before launching that helper.
+        self.restart_after_recovery()
+    }
+
+    fn handoff_update(&mut self) -> Task<Message> {
+        if !self.updates.restarting {
+            return Task::none();
+        }
+        let Some(prepared) = self.updates.prepared.clone() else {
+            self.updates.restarting = false;
+            return Task::none();
+        };
         Task::perform(
             updates::install::handoff(prepared, self.path.clone()),
             |result| Message::Updates(Action::Restarted(result)),

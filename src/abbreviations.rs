@@ -1,7 +1,7 @@
 //! Collapsed labels are a view of real atoms, never a replacement for chemistry.
 use crate::document::{Document, Point};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Abbreviation {
@@ -73,8 +73,32 @@ pub const PRESETS: &[&str] = &[
     "NO2", "CO2H", "CO2Me", "CO2Et",
 ];
 
+// Build connectivity once for a batch of abbreviations. Only member adjacency
+// is visited by each check; unrelated page content is not rescanned per atom.
+struct Connectivity {
+    atoms: HashSet<u64>,
+    adjacent: HashMap<u64, Vec<u64>>,
+}
+impl Connectivity {
+    fn new(doc: &Document) -> Self {
+        let mut adjacent = HashMap::<u64, Vec<u64>>::new();
+        for (a, b) in crate::attachments::edges(doc) {
+            adjacent.entry(a).or_default().push(b);
+            adjacent.entry(b).or_default().push(a);
+        }
+        Self {
+            atoms: doc.atoms.iter().map(|a| a.id).collect(),
+            adjacent,
+        }
+    }
+}
+
 impl Abbreviation {
     pub fn validate(&self, doc: &Document) -> Result<(), String> {
+        self.validate_with(&Connectivity::new(doc))
+    }
+
+    fn validate_with(&self, connectivity: &Connectivity) -> Result<(), String> {
         for label in [&self.label, &self.reverse_label] {
             if label.chars().count() > 32 || label.chars().any(char::is_control) {
                 return Err(
@@ -88,31 +112,31 @@ impl Abbreviation {
         let members: HashSet<_> = self.members.iter().copied().collect();
         if members.len() != self.members.len()
             || !members.contains(&self.anchor)
-            || members.iter().any(|id| doc.atom(*id).is_none())
+            || members.iter().any(|id| !connectivity.atoms.contains(id))
         {
             return Err("Invalid abbreviation atoms or attachment".into());
         }
-        let mut reached = HashSet::from([self.anchor]);
-        for (a, b) in crate::attachments::edges(doc) {
-            if members.contains(&a) != members.contains(&b) && a != self.anchor && b != self.anchor
+        for id in &members {
+            if *id != self.anchor
+                && connectivity
+                    .adjacent
+                    .get(id)
+                    .into_iter()
+                    .flatten()
+                    .any(|other| !members.contains(other))
             {
                 return Err(
                     "Only the abbreviation's attachment atom can connect outside it".into(),
                 );
             }
         }
-        loop {
-            let before = reached.len();
-            for (a, b) in crate::attachments::edges(doc) {
-                if members.contains(&a)
-                    && members.contains(&b)
-                    && (reached.contains(&a) || reached.contains(&b))
-                {
-                    reached.extend([a, b]);
+        let mut reached = HashSet::from([self.anchor]);
+        let mut pending = vec![self.anchor];
+        while let Some(id) = pending.pop() {
+            for other in connectivity.adjacent.get(&id).into_iter().flatten() {
+                if members.contains(other) && reached.insert(*other) {
+                    pending.push(*other);
                 }
-            }
-            if reached.len() == before {
-                break;
             }
         }
         if reached.len() != members.len() {
@@ -232,9 +256,13 @@ impl Document {
         if self.version < 10 && !self.abbreviations.is_empty() {
             return Err("Abbreviations require document version 10".into());
         }
+        if self.abbreviations.is_empty() {
+            return Ok(());
+        }
+        let connectivity = Connectivity::new(self);
         let mut used = HashSet::new();
         for abbreviation in &self.abbreviations {
-            abbreviation.validate(self)?;
+            abbreviation.validate_with(&connectivity)?;
             if abbreviation.members.iter().any(|id| !used.insert(*id)) {
                 return Err("Abbreviations cannot overlap".into());
             }
@@ -287,11 +315,15 @@ impl Document {
     /// Topology/element changes reveal affected groups so labels never conceal
     /// an edit to their original chemical definition. Geometry/styles stay collapsed.
     pub fn reconcile_abbreviations(&mut self, before: &Document) {
+        if self.abbreviations.is_empty() {
+            return;
+        }
+        let connectivity = Connectivity::new(self);
         let keep: Vec<_> = self
             .abbreviations
             .iter()
             .filter(|g| {
-                if g.validate(self).is_err() {
+                if g.validate_with(&connectivity).is_err() {
                     return false;
                 }
                 if !before.abbreviations.contains(g) {

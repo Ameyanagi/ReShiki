@@ -1,0 +1,31 @@
+running 1 test
+workload,median_ms,p95_ms
+gallery_0x_validate,0.0009,0.0010
+gallery_0x_groups,0.0006,0.0007
+gallery_0x_labels_cold,0.0258,0.0384
+gallery_0x_labels_one_changed,0.0259,0.0271
+gallery_0x_labels_worker_roundtrip,0.0711,0.1717
+gallery_0x_oxygen_hotkey,0.0369,0.0617
+gallery_0x_idle_update,0.0002,0.0003
+gallery_0x_view,0.0468,0.0547
+methanol_full_analysis,21.4556,23.2275
+methanol_drawing_labels,0.0196,0.0211
+gallery_1x_validate,0.2797,0.4884
+gallery_1x_groups,0.1734,0.2188
+gallery_1x_labels_cold,6.1507,7.0719
+gallery_1x_labels_one_changed,0.7627,0.8931
+gallery_1x_labels_worker_roundtrip,1.3323,1.7405
+gallery_1x_oxygen_hotkey,3.5405,3.7590
+gallery_1x_idle_update,0.0002,0.0003
+gallery_1x_view,0.2480,0.2798
+gallery_4x_validate,1.6280,1.9052
+gallery_4x_groups,0.5790,0.8309
+gallery_4x_labels_cold,26.3850,31.2715
+gallery_4x_labels_one_changed,4.0383,4.4880
+gallery_4x_labels_worker_roundtrip,5.8969,6.6323
+gallery_4x_oxygen_hotkey,17.3935,20.1244
+gallery_4x_idle_update,0.0003,0.0004
+gallery_4x_view,0.8482,0.9100
+test app::performance::editing_workloads ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 308 filtered out; finished in 3.20s

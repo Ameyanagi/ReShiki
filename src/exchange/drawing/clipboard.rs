@@ -28,6 +28,7 @@ pub(crate) fn write(source: &Document) -> Result<(String, Vec<String>)> {
             && bond.display != "plain"
             && !haworth.contains(&i)
             && !(bond.order == 4 && matches!(bond.display.as_str(), "bold" | "wedge"))
+            && !(bond.order == 2 && bond.display == "bold")
         {
             if [bond.a, bond.b]
                 .iter()

@@ -2,6 +2,45 @@
 
 The Windows dropdown fix is recorded in [ReShiki 0.9.1](changes-0.9.1.md). Publisher-style, theme, clipboard and aromatic-fusion updates are recorded in [ReShiki 0.9.0](changes-0.9.md).
 
+## Loaded canvas performance
+
+By @Ameyanagi in [PR #84](https://github.com/Ameyanagi/ReShiki/pull/84).
+
+Dragging and selecting the shortcut gallery requires much less CPU work, with
+bounded text caching and checks that edits and undo/redo keep the drawing current.
+The original pre-optimization Nightly required 573 ms for four-gallery drag
+preparation on the Mac and 1,182 ms on the Windows test VM. After the combined
+canvas changes, the same workloads took 4.11 ms and 6.86 ms in the follow-up
+measurement. These measure CPU preparation, not display FPS. Larger partial
+drags and zoom changes remain more expensive. See the
+[complete measurement history](performance/release-to-current.md), including a
+separate comparison against the actual stable v0.9.1 tag, and the original
+[profiling method and validation](performance/loaded-canvas.md).
+
+Atom shortcuts such as O → OH now start label calculation immediately, without
+the polling delay or unnecessary identifier/property calculations. Unchanged
+molecules reuse checked label results; independent structures keep updating even
+when another component cannot be analyzed. Abbreviation checks, selection
+grouping and dimension readouts also avoid repeated work. See the
+[editing latency investigation and remaining targets](performance/editing-latency.md).
+
+Valid multi-center/variable attachments and drawing centroids no longer produce
+an automatic “Invalid drawing” warning. Their supplied labels are retained, and
+the inspector continues to explain analysis limitations. Malformed attachment
+targets and invalid valence in ordinary molecules still report errors.
+
+Autosave validation and disk writes now run in order on a background worker,
+and native file parsing/save serialization and template-library changes avoid
+blocking the editor. Collapsed inspector sections skip hidden work. Reusing
+selection decorations and exactly hinted glyphs reduced four-gallery zoom CPU
+preparation from 47 ms to 24 ms on the Mac benchmark. See the
+[background I/O, inspector and zoom report](performance/background-io-and-zoom.md).
+
+Double bonds now participate in **Emphasize front bonds** and retain their
+emphasis during further 3D tilts. Foreground double bonds use a bold main stroke
+with a thin second stroke; editable CDX/CDXML copy and export keep that appearance.
+See the [before/after example and validation](changes/tilted-double-bonds.md).
+
 ## Stable and Nightly update channels
 
 By @Ameyanagi in [PR #82](https://github.com/Ameyanagi/ReShiki/pull/82).
