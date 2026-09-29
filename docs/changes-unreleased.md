@@ -4,7 +4,7 @@ The Windows dropdown fix is recorded in [ReShiki 0.9.1](changes-0.9.1.md). Publi
 
 ## Loaded canvas performance
 
-By @Ameyanagi; pending pull request review.
+By @Ameyanagi in [PR #84](https://github.com/Ameyanagi/ReShiki/pull/84); draft, under review.
 
 Dragging and selecting the shortcut gallery requires much less CPU work, with
 bounded text caching and checks that edits and undo/redo keep the drawing current.
