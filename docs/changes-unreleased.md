@@ -14,7 +14,7 @@ Application-renderer example with automatic checking disabled. Separate desktop 
 
 ## Nightly installers and release downloads
 
-By @Ameyanagi in [PR #85](https://github.com/Ameyanagi/ReShiki/pull/85), under review.
+By @Ameyanagi in [PR #85](https://github.com/Ameyanagi/ReShiki/pull/85).
 
 Nightly builds include installers and portable archives for all six supported targets. macOS DMG and ZIP downloads are signed and notarized; Windows and Linux packages remain unsigned. Each release provides a table organized by operating system, architecture, installer and portable archive, with verified checksums. Stable remains the primary release.
 
