@@ -46,6 +46,19 @@ Only format facts were used; no implementation source was copied. The older
 SDK overview's erroneous arrow tag was also identified in
 [Roger Sayle's 2013 ACS presentation](https://www.nextmovesoftware.com/talks/Sayle_FileFormats_ACS_201309.pdf).
 
+The vendor's [reaction-step property definitions](https://chemapps.stolaf.edu/iupac/cdx/sdk/ReactionStep.htm)
+distinguish arrows, atom-map pairs, pluses, reactants/products, and above/below-arrow
+objects. The native validator checks these target categories. These captures
+establish valid references to a legacy arrow graphic, a drawing group and a
+standalone caption. Synthetic regressions additionally cover fragment and caption
+reactants/products, explicit arrow targets, atom pairs, plus captions/symbols,
+and rejection of objects of the wrong kind. The stricter target checks were added
+after the desktop capture; both genuine numeric captures are reimported unchanged
+by the final regression suite.
+The [vendor Arrow_Type definition](https://chemapps.stolaf.edu/iupac/cdx/sdk/properties/Arrow_Type.htm)
+also permits `NoHead` and an omitted arrow type. Native-import positives cover
+both forms as editable line graphics referenced by `ReactionStepArrows`.
+
 The reaction test exercises full CDX and CDXML engine imports, molecular
 identity, endpoints, stroke and head sizes. The numeric tests cover the binary
 codec, arrow reader and complete CDXML import with an explicit metadata warning.

@@ -99,6 +99,18 @@ unchanged; the comparison harness has
 explicit corrections supported by the captured files and published format
 constants.
 
+Review tightened the reference validator after the desktop capture: arrow lists
+must point to arrows or arrow graphics, atom-map pairs to atom nodes, and plus
+lists to plus symbols or `+` captions. Reactant/product references accept
+fragments, groups and standalone captions; above/below-arrow references accept
+drawable objects. The actual ChemDraw files legitimately reference a legacy
+`GraphicType="Line"`, `ArrowType="FullHead"` graphic whose `SupersededBy` points
+to the modern arrow. Both the diagnostic and final clipboard captures pass the
+stricter validator unchanged. Supported headless line graphics remain valid
+arrow targets, with explicit `NoHead` or the vendor's default omitted type.
+This later validation patch was checked against
+the saved captures; it is not part of the recorded desktop executable.
+
 Old ReShiki exports that encoded a solid fill as `1` are ambiguous with genuine
 ChemDraw's `None=1`. The importer does not guess. Re-export the original native
 drawing when a prior binary file has incorrect fill values.

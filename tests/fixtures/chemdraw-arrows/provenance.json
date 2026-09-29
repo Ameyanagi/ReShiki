@@ -92,5 +92,5 @@
     "renderer_base": "60718b3",
     "edits": "No raster edits, composition, or reconstructed arrows. Native figures exported with identical physical-scale renderer."
   },
-  "post_capture_source_changes": "Clippy-only equivalent Boolean simplification and collapsed condition in schemes.rs; no behavior, fixture, or renderer changes."
+  "post_capture_source_changes": "Clippy-only equivalent Boolean simplification, followed by stricter field-specific reaction reference target validation in schemes.rs. The final regression suite reimports both actual diagnostic and final numeric CDXML captures unchanged; genuine reaction CDX/CDXML imports also pass. No new desktop transfer was performed for this validation-only follow-up. Captured bytes and renderer outputs remain unchanged."
 }

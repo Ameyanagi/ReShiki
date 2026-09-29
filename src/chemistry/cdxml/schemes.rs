@@ -1,5 +1,8 @@
 //! Validate external reaction references without inventing native reaction roles.
-use super::{Error, Result, tree::Tree};
+use super::{
+    Error, Result,
+    tree::{Element, Tree},
+};
 use std::collections::HashMap;
 
 pub(crate) const NOTICE: &str = "Drawing imported; external reaction roles and condition references are not retained. The molecules, captions, and arrows remain editable. Keep the original CDX/CDXML or native ReShiki document for reaction metadata.";
@@ -24,7 +27,7 @@ pub(crate) fn validate(text: &str) -> Result<bool> {
             && let Some(id) = node.attr("id")
         {
             let id = id.parse::<u32>().map_err(|_| invalid())?;
-            if id != 0 && ids.insert(id, node.tag.as_str()).is_some() {
+            if id != 0 && ids.insert(id, index).is_some() {
                 return Err(invalid());
             }
         }
@@ -77,10 +80,8 @@ pub(crate) fn validate(text: &str) -> Result<bool> {
                     return Err(Error::Limit);
                 }
                 let id = reference.parse::<u32>().map_err(|_| invalid())?;
-                if ids
-                    .get(&id)
-                    .is_none_or(|tag| matches!(*tag, "scheme" | "step" | "CDXML" | "page"))
-                {
+                let &target = ids.get(&id).ok_or_else(invalid)?;
+                if !valid_target(&tree, &ids, name, target)? {
                     return Err(invalid());
                 }
                 count += 1;
@@ -91,6 +92,87 @@ pub(crate) fn validate(text: &str) -> Result<bool> {
         }
     }
     Ok(!metadata.is_empty())
+}
+
+fn valid_target(tree: &Tree, ids: &HashMap<u32, usize>, field: &str, index: usize) -> Result<bool> {
+    let node = tree.node(index)?;
+    let caption = node.tag == "t"
+        && node
+            .parent
+            .map(|p| tree.node(p))
+            .transpose()?
+            .is_some_and(|p| matches!(p.tag.as_str(), "page" | "group"));
+    Ok(match field {
+        "ReactionStepArrows" => {
+            if !arrow(node) {
+                false
+            } else if let Some(replacement) = node.attr("SupersededBy") {
+                let id = replacement.parse::<u32>().map_err(|_| invalid())?;
+                let replacement = tree.node(*ids.get(&id).ok_or_else(invalid)?)?;
+                matches!(replacement.tag.as_str(), "arrow" | "curve") && arrow(replacement)
+            } else {
+                true
+            }
+        }
+        "ReactionStepAtomMap" | "ReactionStepAtomMapManual" | "ReactionStepAtomMapAuto" => {
+            node.tag == "n"
+        }
+        "ReactionStepReactants" | "ReactionStepProducts" => {
+            matches!(node.tag.as_str(), "fragment" | "group") || caption
+        }
+        "ReactionStepPlusses" => {
+            if node.tag == "graphic" {
+                node.attr("GraphicType") == Some("Symbol")
+                    && node.attr("SymbolType") == Some("Plus")
+            } else if caption {
+                let mut text = String::new();
+                for child in tree.descendants(index)? {
+                    let child = tree.node(child)?;
+                    tree.spend(child.text.len().saturating_add(child.tail.len()))?;
+                    text.push_str(&child.text);
+                    text.push_str(&child.tail);
+                }
+                text.trim() == "+"
+            } else {
+                false
+            }
+        }
+        "ReactionStepObjectsAboveArrow" | "ReactionStepObjectsBelowArrow" => {
+            matches!(
+                node.tag.as_str(),
+                "fragment" | "group" | "graphic" | "curve" | "arrow" | "embeddedobject"
+            ) || caption
+        }
+        _ => false,
+    })
+}
+
+fn arrow(node: &Element) -> bool {
+    match node.tag.as_str() {
+        "arrow" => true,
+        "curve" => ["ArrowheadHead", "ArrowheadTail"]
+            .iter()
+            .any(|name| matches!(node.attr(name), Some("Full" | "HalfLeft" | "HalfRight"))),
+        // Genuine ChemDraw files reference this legacy graphic rather than the
+        // modern arrow named by SupersededBy. NoHead (also the default) keeps
+        // headless lines in this family; rectangles and atoms do not belong.
+        "graphic" => {
+            matches!(node.attr("GraphicType"), Some("Line" | "Arc"))
+                && matches!(
+                    node.attr("ArrowType").unwrap_or("NoHead"),
+                    "NoHead"
+                        | "HalfHead"
+                        | "FullHead"
+                        | "Resonance"
+                        | "Equilibrium"
+                        | "Hollow"
+                        | "RetroSynthetic"
+                        | "NoGo"
+                        | "Dipole"
+                )
+        }
+        _ => false,
+    }
 }
 
 fn invalid() -> Error {

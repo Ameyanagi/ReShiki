@@ -205,37 +205,136 @@ async fn actual_chemdraw_reaction_imports_complete_graph_and_both_arrows() -> an
 #[tokio::test]
 async fn actual_mixed_drawing_imports_scheme_with_explicit_metadata_warning() -> anyhow::Result<()>
 {
-    let response = LocalEngine::default()
-        .request(Request::import(
-            "cdxml",
-            include_str!("fixtures/chemdraw-arrows/numeric.cdxml"),
-        ))
-        .await
-        .map_err(anyhow::Error::msg)?;
-    let doc = response.document.context("Missing drawing")?;
-    assert_eq!(
-        (
-            doc.atoms.len(),
-            doc.bonds.len(),
-            doc.arrows.len(),
-            doc.annotations.len(),
-            doc.graphics.len(),
-            doc.groups.len()
-        ),
-        (7, 6, 1, 1, 1, 1)
-    );
-    assert_eq!(doc.groups[0].members.len(), 9);
-    assert_eq!(doc.annotations[0].text, "Fixed text");
-    assert!(doc.reactions.is_empty());
-    assert_eq!(response.warnings.len(), 1);
-    assert!(
-        response.warnings[0]
-            .contains("external reaction roles and condition references are not retained")
-    );
-    assert_eq!(
-        response.analysis.context("Missing identity")?.inchikey,
-        "IZWQYPFXJMTLHZ-UHFFFAOYSA-N"
-    );
+    for xml in [
+        include_str!("fixtures/chemdraw-arrows/numeric.cdxml"),
+        include_str!("fixtures/chemdraw-arrows/numeric-final.cdxml"),
+    ] {
+        let response = LocalEngine::default()
+            .request(Request::import("cdxml", xml))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let doc = response.document.context("Missing drawing")?;
+        assert_eq!(
+            (
+                doc.atoms.len(),
+                doc.bonds.len(),
+                doc.arrows.len(),
+                doc.annotations.len(),
+                doc.graphics.len(),
+                doc.groups.len()
+            ),
+            (7, 6, 1, 1, 1, 1)
+        );
+        assert_eq!(doc.groups[0].members.len(), 9);
+        assert_eq!(doc.annotations[0].text, "Fixed text");
+        assert!(doc.reactions.is_empty());
+        assert_eq!(response.warnings.len(), 1);
+        assert!(
+            response.warnings[0]
+                .contains("external reaction roles and condition references are not retained")
+        );
+        assert_eq!(
+            response.analysis.context("Missing identity")?.inchikey,
+            "IZWQYPFXJMTLHZ-UHFFFAOYSA-N"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn scheme_fields_require_appropriate_drawing_targets() -> anyhow::Result<()> {
+    let engine = LocalEngine::default();
+    let original = include_str!("fixtures/chemdraw-arrows/numeric.cdxml");
+    // These IDs come from the immutable ChemDraw capture: atom 3, bond 10,
+    // fragment 2, caption 16, legacy arrow 17, closed path 18, group 20,
+    // modern arrow 23. Font 20 uses the same ID in its separate namespace.
+    for fields in [
+        r#"ReactionStepArrows="3""#,
+        r#"ReactionStepArrows="10""#,
+        r#"ReactionStepArrows="16""#,
+        r#"ReactionStepArrows="18""#,
+        r#"ReactionStepArrows="20""#,
+        r#"ReactionStepReactants="3""#,
+        r#"ReactionStepProducts="23""#,
+        r#"ReactionStepPlusses="17""#,
+        r#"ReactionStepPlusses="16""#,
+        r#"ReactionStepAtomMap="3 23""#,
+        r#"ReactionStepAtomMapManual="2 19""#,
+        r#"ReactionStepAtomMapAuto="16 20""#,
+        r#"ReactionStepObjectsAboveArrow="3""#,
+        r#"ReactionStepObjectsAboveArrow="10""#,
+    ] {
+        let xml = original.replace(r#"ReactionStepArrows="17""#, fields);
+        let error = engine
+            .request(Request::import("cdxml", &xml))
+            .await
+            .unwrap_err();
+        assert!(
+            error.contains("reaction scheme references"),
+            "{fields}: {error}"
+        );
+    }
+    for (from, to) in [
+        (r#"GraphicType="Line""#, r#"GraphicType="Rectangle""#),
+        (r#"ArrowType="FullHead""#, r#"ArrowType="Unknown""#),
+        (r#"SupersededBy="23""#, r#"SupersededBy="3""#),
+        (r#"SupersededBy="23""#, r#"SupersededBy="17""#),
+    ] {
+        let error = engine
+            .request(Request::import("cdxml", &original.replace(from, to)))
+            .await
+            .unwrap_err();
+        assert!(
+            error.contains("reaction scheme references"),
+            "{to}: {error}"
+        );
+    }
+    let fields = r#"ReactionStepArrows="17 23" ReactionStepReactants="2 20 16" ReactionStepProducts="19" ReactionStepAtomMap="3 9" ReactionStepAtomMapManual="3 9" ReactionStepAtomMapAuto="3 9" ReactionStepObjectsAboveArrow="2 16 18 20""#;
+    let positive = original.replace(r#"ReactionStepArrows="17""#, fields);
+    let plus_caption = positive
+        .replace("Fixed text", "+")
+        .replace("<step", "<step ReactionStepPlusses=\"16\"");
+    let plus_symbol = positive.replace("<scheme", "<graphic id=\"50\" GraphicType=\"Symbol\" SymbolType=\"Plus\" BoundingBox=\"140 20 145 25\"/><scheme")
+        .replace("<step", "<step ReactionStepPlusses=\"50\"");
+    for xml in [positive, plus_caption, plus_symbol] {
+        let response = engine
+            .request(Request::import("cdxml", &xml))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let document = response.document.context("Missing drawing")?;
+        assert_eq!(
+            (
+                document.atoms.len(),
+                document.bonds.len(),
+                document.arrows.len()
+            ),
+            (7, 6, 1)
+        );
+        assert!(document.reactions.is_empty());
+        assert_eq!(response.warnings.len(), 1);
+    }
+    // The vendor Arrow_Type definition includes NoHead and treats an absent
+    // property as headless. The existing native reader keeps these as editable
+    // line graphics, so metadata references must not require a visible head.
+    for style in [r#"ArrowType="NoHead""#, ""] {
+        let xml = original.replace(r#"ReactionStepArrows="17""#, r#"ReactionStepArrows="50""#)
+            .replace("<scheme", &format!(r#"<graphic id="50" GraphicType="Line" {style} BoundingBox="140 20 165 20"/><scheme"#));
+        let response = engine
+            .request(Request::import("cdxml", &xml))
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let document = response.document.context("Missing headless drawing")?;
+        assert_eq!(
+            (
+                document.atoms.len(),
+                document.arrows.len(),
+                document.graphics.len()
+            ),
+            (7, 1, 2)
+        );
+        assert!(document.reactions.is_empty());
+        assert_eq!(response.warnings.len(), 1);
+    }
     Ok(())
 }
 
