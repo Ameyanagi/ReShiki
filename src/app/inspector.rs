@@ -1195,13 +1195,14 @@ impl App {
                 .style(super::color_popover::surface)
                 .into()
         });
-        super::popover::popover(
-            anchor,
-            popup,
-            Message::InspectorAction(Action::FigureMenu(false)),
+        Element::new(
+            super::popover::popover(
+                anchor,
+                popup,
+                Message::InspectorAction(Action::FigureMenu(false)),
+            )
+            .fit_anchor(),
         )
-        .fit_anchor()
-        .into()
     }
 
     pub(super) fn export_panel(&self) -> Element<'_, Message> {

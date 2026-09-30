@@ -235,7 +235,13 @@ pub enum Message {
         kind: Job,
         result: Box<Result<Response, String>>,
     },
-    /// Legacy open event retained for editor-boundary tests.
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "Legacy open event retained for editor-boundary tests"
+        )
+    )]
     Opened(Option<(PathBuf, Result<Vec<u8>, String>)>),
     FilePrepared(files::Key, files::Opened),
     #[cfg(target_os = "macos")]

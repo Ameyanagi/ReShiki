@@ -644,13 +644,14 @@ fn insert_menu(
         .style(super::color_popover::surface)
         .into()
     });
-    super::popover::popover(
-        hover_hint(anchor, "More ways to insert", tooltip::Position::Top),
-        popup,
-        Message::Imports(Action::Menu(false)),
+    Element::new(
+        super::popover::popover(
+            hover_hint(anchor, "More ways to insert", tooltip::Position::Top),
+            popup,
+            Message::Imports(Action::Menu(false)),
+        )
+        .align_end(),
     )
-    .align_end()
-    .into()
 }
 
 /// The dashed drop outline, colored for the canvas it covers.

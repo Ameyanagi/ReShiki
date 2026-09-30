@@ -330,7 +330,7 @@ impl App {
                 .style(surface)
                 .into()
         });
-        popover(anchor, popup, Message::StyleMenu(Action::Close)).into()
+        Element::new(popover(anchor, popup, Message::StyleMenu(Action::Close)))
     }
 
     pub(super) fn color_button(&self) -> Element<'_, Message> {
@@ -386,10 +386,11 @@ impl App {
                 }
                 _ => (None, Action::Close, |_| None),
             };
-        popover(anchor, popup, Message::StyleMenu(Action::Close))
-            .on_escape(Message::StyleMenu(escape))
-            .keys(keys)
-            .into()
+        Element::new(
+            popover(anchor, popup, Message::StyleMenu(Action::Close))
+                .on_escape(Message::StyleMenu(escape))
+                .keys(keys),
+        )
     }
 
     fn color_picker(&self, invalid: bool) -> Element<'_, Message> {

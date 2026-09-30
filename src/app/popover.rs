@@ -21,6 +21,8 @@ pub struct Popover<'a> {
 }
 
 /// `popup` is shown while it is Some; `close` is sent for a click outside it.
+/// Wrap it with `Element::new`: a `From` conversion into `Element<'_, Message>`
+/// stops rustc from reporting `Message` variants that are never constructed.
 pub fn popover<'a>(
     anchor: impl Into<Element<'a, Message>>,
     popup: Option<Element<'a, Message>>,
@@ -181,12 +183,6 @@ impl Widget<Message, Theme, Renderer> for Popover<'_> {
             fit_anchor: self.fit_anchor,
             align_end: self.align_end,
         })))
-    }
-}
-
-impl<'a> From<Popover<'a>> for Element<'a, Message> {
-    fn from(popover: Popover<'a>) -> Self {
-        Element::new(popover)
     }
 }
 

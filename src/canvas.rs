@@ -311,6 +311,10 @@ fn rgb(c: [u8; 3]) -> Color {
 }
 
 impl MoleculeCanvas<'_> {
+    /// Ctrl/Cmd drags place a copy with the selection tools; Edit Points only moves points.
+    fn copies(&self, modifiers: iced::keyboard::Modifiers) -> bool {
+        self.tool.selects() && command_held(modifiers)
+    }
     /// Drag offset for the preview and release. A Ctrl/Cmd copy has no bonds to constrain.
     fn move_delta(
         &self,
@@ -318,7 +322,7 @@ impl MoleculeCanvas<'_> {
         requested: World,
         modifiers: iced::keyboard::Modifiers,
     ) -> World {
-        if command_held(modifiers) {
+        if self.copies(modifiers) {
             return if modifiers.shift() {
                 movement::axis_locked(requested)
             } else {
@@ -1114,7 +1118,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                                 World::new(p.x - start.x, p.y - start.y),
                                 state.modifiers,
                             );
-                            if command_held(state.modifiers) {
+                            if self.copies(state.modifiers) {
                                 Edit::Duplicate(ids, delta.x, delta.y)
                             } else {
                                 Edit::Move(ids, delta.x, delta.y)
@@ -1674,7 +1678,7 @@ impl MoleculeCanvas<'_> {
             );
             if start.distance(p) < 1.0 / self.camera.zoom {
                 ring_selection = Some(ids.clone());
-            } else if command_held(state.modifiers) {
+            } else if self.copies(state.modifiers) {
                 let part = state.scene.borrow_mut().copy(self.doc, ids);
                 ring_selection = Some(reshiki::editing::append(&mut preview, &part, delta));
             } else if state.scene.borrow_mut().whole_document(self.doc, ids) {
@@ -4982,6 +4986,29 @@ mod tests {
             pointer_gesture_with(&canvas, Point::new(221.0, 171.0), Point::new(251.0, 181.0), Modifiers::SHIFT | Modifiers::ALT),
             Edit::Move(ids, 30.0, 0.0) if ids.len() == 2 && partial.iter().all(|id| ids.contains(id))
         ));
+    }
+
+    #[test]
+    fn command_drag_in_point_edit_mode_moves_the_point() -> Result<(), String> {
+        let mut doc = Document::default();
+        let metal = doc.add_atom("Fe", World::default());
+        let (doc, _) = reshiki::hotkeys::atom_edit(&doc, metal, "j", 42.).ok_or("Shortcut")??;
+        let anchor = doc
+            .atoms
+            .iter()
+            .find(|a| a.attachment.is_some())
+            .ok_or("Point")?;
+        let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+        canvas.tool = Tool::EditPoints;
+        let bounds = Rectangle::with_size(iced::Size::new(400., 300.));
+        let start = canvas.camera.screen(anchor.position, bounds);
+        let modifiers = iced::keyboard::Modifiers::COMMAND;
+        let edit = pointer_gesture_with(&canvas, start, start + Vector::new(35., 25.), modifiers);
+        assert!(
+            matches!(&edit, Edit::Move(ids, ..) if *ids == vec![anchor.id]),
+            "{edit:?}"
+        );
+        Ok(())
     }
 
     #[test]
