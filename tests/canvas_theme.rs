@@ -178,7 +178,7 @@ fn editable_exchange_contains_white_bonds_and_a_black_background() {
 }
 
 #[test]
-fn pasting_across_canvas_modes_keeps_visible_colors_and_editable_atoms() {
+fn foreign_pastes_across_canvas_modes_keep_visible_colors_and_editable_atoms() {
     for source in CanvasTheme::ALL {
         let mut doc = sample();
         doc.canvas_theme = source;
@@ -208,6 +208,122 @@ fn pasting_across_canvas_modes_keeps_visible_colors_and_editable_atoms() {
             );
         }
     }
+}
+
+/// A colored ring with a palette bond, a custom bond, a palette ring fill and
+/// automatic atom colors, on the light Publication canvas.
+fn palette_sample() -> Document {
+    let mut doc = reshiki::rings::Preset::Regular.document(42., false);
+    doc.atoms[0].element = "N".into();
+    doc.bonds[0].color = Color::Palette(Hue::Red, Row::Strong);
+    doc.bonds[1].color = Color::Custom([12, 34, 56]);
+    let ids = doc.all_ids();
+    reshiki::ring_fills::apply(&mut doc, &ids, Some(Color::Palette(Hue::Blue, Row::Tint)));
+    doc
+}
+
+/// Colors of the copy appended after the first `from` atoms and bonds (one ring),
+/// with the atom ink the drawing shows.
+fn appended_colors(doc: &Document, from: usize) -> (Vec<Color>, Vec<Color>, Vec<[u8; 3]>) {
+    (
+        doc.bonds[from..].iter().map(|b| b.color).collect(),
+        doc.ring_fills[1..].iter().map(|f| f.color).collect(),
+        doc.atoms[from..]
+            .iter()
+            .map(|a| canvas_theme::atom_color(doc, a))
+            .collect(),
+    )
+}
+
+#[test]
+fn native_pastes_keep_palette_colors_like_duplicates() {
+    use reshiki::editing;
+    let source = palette_sample();
+    let part = editing::selection(&source, &source.all_ids());
+    let offset = Point::new(24., 24.);
+    let mut duplicated = source.clone();
+    assert!(!editing::append(&mut duplicated, &part, offset).is_empty());
+    let mut pasted = source.clone();
+    let native = canvas_theme::for_native_paste(part.clone(), source.canvas_theme);
+    assert!(!editing::append(&mut pasted, &native, offset).is_empty());
+    let count = source.bonds.len();
+    assert_eq!(
+        appended_colors(&pasted, count),
+        appended_colors(&duplicated, count)
+    );
+    assert_eq!(
+        pasted.bonds[count].color,
+        Color::Palette(Hue::Red, Row::Strong)
+    );
+    assert_eq!(
+        pasted.ring_fills[1].color,
+        Color::Palette(Hue::Blue, Row::Tint)
+    );
+    assert!(
+        pasted.atoms[count..]
+            .iter()
+            .all(|a| !a.display.color_override)
+    );
+}
+
+#[test]
+fn native_pastes_follow_the_target_theme_canvas_and_hues() {
+    use reshiki::{canvas_theme::ColorTheme, editing, palette::Hues};
+    let source = palette_sample();
+    let part = editing::selection(&source, &source.all_ids());
+    let mut target = Document {
+        canvas_theme: CanvasTheme::Dark,
+        ..Default::default()
+    };
+    ColorTheme::Presentation.apply(&mut target);
+    let mut hues = Hues::default();
+    hues.set(Hue::Red, 5);
+    reshiki::palette::set_hues(&mut target, hues);
+    let native = canvas_theme::for_native_paste(part, target.canvas_theme);
+    let ids = editing::append(&mut target, &native, Point::default());
+    assert_eq!(ids.len(), source.all_ids().len());
+    target.validate().unwrap();
+    let palette = Palette::of(&target);
+    let red = target.bonds[0].color;
+    assert_eq!(red, Color::Palette(Hue::Red, Row::Strong));
+    assert_eq!(
+        palette.rgb(red),
+        Palette::new(
+            ColorTheme::Presentation.tones(CanvasTheme::Dark),
+            hues,
+            CanvasTheme::Dark
+        )
+        .swatch(Hue::Red, Row::Strong)
+    );
+    assert_ne!(palette.rgb(red), Palette::of(&source).rgb(red));
+    assert_eq!(target.bonds[1].color, Color::Custom([12, 34, 56]));
+    assert_eq!(palette.rgb(target.bonds[1].color), [12, 34, 56]);
+    assert_eq!(target.bonds[2].color, Color::Ink);
+    assert_eq!(palette.rgb(Color::Ink), [255; 3]);
+    assert_eq!(
+        target.ring_fills[0].color,
+        Color::Palette(Hue::Blue, Row::Tint)
+    );
+    // Automatic atom colors come from the target's theme and canvas.
+    let mut plain = target.clone();
+    plain.ring_fills.clear();
+    let nitrogen = plain.atoms.iter().find(|a| a.element == "N").unwrap();
+    assert!(!nitrogen.display.color_override);
+    let shown = CanvasTheme::Dark.color(canvas_theme::atom_color(&plain, nitrogen));
+    assert_eq!(
+        shown,
+        canvas_theme::element_color(&plain, "N", CanvasTheme::Dark)
+    );
+    assert_ne!(shown, canvas_theme::atom_color(&source, &source.atoms[0]));
+    let foreign = canvas_theme::for_paste(
+        editing::selection(&source, &source.all_ids()),
+        CanvasTheme::Dark,
+    );
+    assert!(foreign.atoms.iter().all(|a| a.display.color_override));
+    assert!(!reshiki::palette::any_color(&foreign, |c| matches!(
+        c,
+        Color::Palette(..)
+    )));
 }
 
 #[test]

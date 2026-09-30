@@ -136,7 +136,11 @@ impl App {
                 return;
             }
         };
-        let part = reshiki::canvas_theme::for_paste(outcome.document, self.doc.canvas_theme);
+        let part = if outcome.native {
+            reshiki::canvas_theme::for_native_paste(outcome.document, self.doc.canvas_theme)
+        } else {
+            reshiki::canvas_theme::for_paste(outcome.document, self.doc.canvas_theme)
+        };
         let center = editing::center(&part, &part.all_ids());
         let before = self.doc.clone();
         let selected = editing::append(
@@ -262,6 +266,36 @@ mod tests {
     }
 
     #[test]
+    fn reshiki_pastes_keep_palette_colors_and_other_sources_stay_exact() {
+        use reshiki::palette::{Color, Hue, Row};
+        let (mut app, _) = App::new();
+        let a = app.doc.add_atom("C", Point::default());
+        let b = app.doc.add_atom("O", Point::new(42., 0.));
+        app.doc.add_bond(a, b, 1, "plain");
+        app.doc.bonds[0].color = Color::Palette(Hue::Teal, Row::Strong);
+        let part = editing::selection(&app.doc, &[a, b]);
+        app.clipboard_read(
+            app.file_epoch,
+            app.revision,
+            Ok(PasteOutcome::native(part.clone())),
+        );
+        assert_eq!(app.doc.bonds[1].color, app.doc.bonds[0].color);
+        assert!(app.doc.atoms[2..].iter().all(|a| !a.display.color_override));
+        // The same drawing from ChemDraw keeps its source appearance.
+        app.doc.canvas_theme = reshiki::canvas_theme::CanvasTheme::Dark;
+        let teal = reshiki::palette::Palette::of(&part).rgb(part.bonds[0].color);
+        app.clipboard_read(
+            app.file_epoch,
+            app.revision,
+            Ok(reshiki::canvas_theme::resolved_document(&part)
+                .into_owned()
+                .into()),
+        );
+        assert_eq!(app.doc.bonds[2].color, Color::Custom(teal));
+        assert!(app.doc.atoms[4..].iter().all(|a| a.display.color_override));
+    }
+
+    #[test]
     fn external_metadata_warnings_remain_visible_after_paste_and_file_import() {
         let warning = "External reaction roles and condition references are not retained";
         let mut doc = Document::default();
@@ -273,6 +307,7 @@ mod tests {
             Ok(PasteOutcome {
                 document: doc.clone(),
                 warnings: vec![warning.into()],
+                native: false,
             }),
         );
         assert!(app.status.starts_with("Editable drawing pasted"));

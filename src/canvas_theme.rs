@@ -43,19 +43,16 @@ impl std::fmt::Display for CanvasTheme {
     }
 }
 
-/// Materialize the visible colors at the clipboard boundary. Templates still
-/// inherit their destination canvas; pasted drawings keep their source appearance
-/// as custom colors, which are exact on any canvas. Ink pasted onto the same
-/// canvas already looks the same, so it stays Ink and keeps following the canvas.
+/// Materialize the visible colors of a drawing from another source (ChemDraw,
+/// CDX/CDXML, text) or bound for another editor. Such drawings keep their source
+/// appearance as custom colors, which are exact on any canvas. Ink pasted onto
+/// the same canvas already looks the same, so it stays Ink and keeps following
+/// the canvas. Templates still inherit their destination canvas.
 pub fn for_paste(doc: crate::document::Document, target: CanvasTheme) -> crate::document::Document {
     let mut doc = resolved_document(&doc).into_owned();
-    let text = doc.drawing_style.text_style();
+    keep_typography(&mut doc);
     for atom in &mut doc.atoms {
-        atom.text_style.get_or_insert_with(|| text.clone());
         atom.display.color_override = true;
-    }
-    for arrow in &mut doc.arrows {
-        arrow.style = Some(arrow.appearance());
     }
     if doc.canvas_theme != target {
         let ink = Color::Custom(doc.canvas_theme.color([0; 3]));
@@ -67,6 +64,28 @@ pub fn for_paste(doc: crate::document::Document, target: CanvasTheme) -> crate::
     }
     doc.canvas_theme = target;
     doc
+}
+
+/// ReShiki's own clipboard data pastes like a duplicate: Ink, palette colors and
+/// automatic atom colors resolve in the target's theme, canvas and hues, and
+/// custom colors stay exact. Only the source typography is kept.
+pub fn for_native_paste(
+    mut doc: crate::document::Document,
+    target: CanvasTheme,
+) -> crate::document::Document {
+    keep_typography(&mut doc);
+    doc.canvas_theme = target;
+    doc
+}
+
+fn keep_typography(doc: &mut crate::document::Document) {
+    let text = doc.drawing_style.text_style();
+    for atom in &mut doc.atoms {
+        atom.text_style.get_or_insert_with(|| text.clone());
+    }
+    for arrow in &mut doc.arrows {
+        arrow.style = Some(arrow.appearance());
+    }
 }
 
 /// Element colors are independent of journal dimensions and paper brightness.

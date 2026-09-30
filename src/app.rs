@@ -1746,13 +1746,12 @@ impl App {
             Message::Pasted(contents) => {
                 if let Some(contents) = contents.filter(|s| !s.trim().is_empty()) {
                     if let Some(json) = editing::clipboard_json(&contents) {
-                        match serde_json::from_str::<Document>(json)
-                            .map_err(|e| e.to_string())
-                            .and_then(|d| {
-                                d.validate()?;
-                                Ok(d)
-                            }) {
+                        match Document::from_json(json.as_bytes()) {
                             Ok(part) => {
+                                let part = reshiki::canvas_theme::for_native_paste(
+                                    part,
+                                    self.doc.canvas_theme,
+                                );
                                 let center = editing::center(&part, &part.all_ids());
                                 let before = self.doc.clone();
                                 self.selected = editing::append(
@@ -2284,12 +2283,7 @@ impl App {
                                 .unwrap_or_default()
                                 .to_ascii_lowercase();
                             if reshiki::compatibility::is_native_extension(&extension) {
-                                match serde_json::from_slice::<Document>(&contents)
-                                    .map_err(|e| e.to_string())
-                                    .and_then(|doc| {
-                                        doc.validate()?;
-                                        Ok(doc)
-                                    }) {
+                                match Document::from_json(&contents) {
                                     Ok(mut doc) => {
                                         doc.version = doc.version.max(15);
                                         reshiki::atom_labels::clear_computed(&mut doc);
@@ -2346,11 +2340,11 @@ impl App {
                 } else {
                     self.path.clone()
                 };
-                let bytes = match serde_json::to_vec_pretty(&self.doc) {
+                let bytes = match self.doc.file_json() {
                     Ok(b) => b,
                     Err(e) => {
                         self.pending = None;
-                        self.status = e.to_string();
+                        self.status = e;
                         self.error = true;
                         return Task::none();
                     }
@@ -5107,6 +5101,32 @@ mod tests {
             assert!(app.camera.zoom > Camera::default().zoom);
             assert!(app.camera.zoom <= 2.5);
         }
+    }
+
+    #[test]
+    fn drawings_from_a_newer_reshiki_ask_for_an_update_and_keep_the_current_drawing() {
+        let (mut app, _) = App::new();
+        app.doc.add_atom("O", Point::default());
+        let before = app.doc.clone();
+        let newer = format!(
+            r#"{{"version": {}, "atoms": [], "bonds": [], "future": "blue.strong"}}"#,
+            reshiki::document::VERSION + 1
+        );
+        let _ = app.update(Message::Opened(Some((
+            PathBuf::from("newer.rsk"),
+            Ok(newer.into_bytes()),
+        ))));
+        assert!(app.error);
+        assert!(
+            app.status.ends_with(&format!(
+                "This drawing was made with a newer version of ReShiki (document version {}). Update ReShiki to open it.",
+                reshiki::document::VERSION + 1
+            )),
+            "{}",
+            app.status
+        );
+        assert_eq!(app.doc, before);
+        assert_eq!(app.path, None);
     }
 
     #[test]
