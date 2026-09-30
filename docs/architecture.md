@@ -22,7 +22,7 @@ flowchart LR
 | `src/scene.rs`                                 | Toolkit-independent lines, polygons, labels and SVG serialization              |
 | `src/canvas.rs`                                | Hit testing, pointer gestures, snapping, camera and previews                   |
 | `src/app.rs`                                   | Desktop controls, asynchronous requests, selection and file workflows          |
-| `src/app/workspace.rs`                         | Command bar, context options, compact palette, inspector and drawers           |
+| `src/app/workspace.rs`                         | Command bar, context row, compact palette, inspector and status bar            |
 | `src/app/icons.rs`                             | Original vector tool and command icons                                         |
 | `src/engine.rs`                                | Chemistry interface, native routing and response validation                    |
 | `src/chemistry/`                               | Molecule preparation, bounded graph, properties and stereo calculations        |

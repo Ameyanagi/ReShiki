@@ -68,7 +68,7 @@ valence/preserved-bond checks are included in the validation record.
 
 By @Ameyanagi in [PR #74](https://github.com/Ameyanagi/ReShiki/pull/74), following @HiroYokoyama's proposal in [issue #61](https://github.com/Ameyanagi/ReShiki/issues/61).
 
-Selecting atoms and opening object properties keeps the drawing steady, making double-click molecule selection reliable. Bonded-movement controls stay in the existing scrolling context row. Explicit Fit, inspector toggles, window resizing, pan, and zoom keep their behavior.
+Selecting atoms and opening object properties keeps the drawing steady, making double-click molecule selection reliable. Bonded-movement controls stay in the existing fixed-height context row. Explicit Fit, inspector toggles, window resizing, pan, and zoom keep their behavior.
 
 Matched examples come from application-renderer and pointer-event checks. Real macOS desktop checks also passed on combined source `446331e`, including the minimum window size, inspector visibility changes, and the optional object toolbar. [Reproduction steps, fixtures, measurements, and exact capture sources](changes/selection-canvas-stability.md).
 
@@ -108,15 +108,15 @@ Export a vector EMF picture on Windows for Microsoft Office, preserving outlined
 
 [Dark-canvas example, reproduction and validation](changes/emf-file-export.md).
 
-## Optional object toolbar
+## Arrange controls
 
 By @Ameyanagi in [PR #70](https://github.com/Ameyanagi/ReShiki/pull/70).
 
-Show the optional object toolbar for one-click alignment, distribution, reflection, rotation, and graphics/bond stacking. Enable **View → Object toolbar**; ReShiki remembers the preference between sessions. Controls stay in place when the selection changes, with unavailable commands disabled.
+Align, distribute, reflect, rotate and stack graphics and bonds with one click. With Select or Lasso, the right end of the context row holds **Align ▾**, **Distribute ▾** and **Order ▾** menus, then Flip horizontal, Flip vertical and Rotate 180°; a short row collapses them into one **Arrange ▾** menu. **View → Arrange controls** hides them, and ReShiki remembers that preference between sessions. Controls stay in place when the selection changes, with unavailable commands disabled and their tooltips saying why.
 
-Front/back changes graphics and bond depth; text and reaction arrows do not have editable stacking order. Mixed graphics/bond changes undo together. [Reproduction details](changes/object-toolbar.md) include standalone renderer checks and desktop interaction checks on the combined integration build.
+Front/back changes graphics and bond depth; text and reaction arrows do not have editable stacking order. Mixed graphics/bond changes undo together. [Reproduction details](changes/object-toolbar.md) describe the original separate toolbar row, including standalone renderer checks and desktop interaction checks on the combined integration build.
 
-![Three molecules aligned by clicking Align top edges in the desktop object toolbar](images/object-toolbar/desktop-align-top.png)
+![A mixed selection with the Align, Distribute and Order menus and the flip and rotate buttons at the right end of the context row](images/ui-declutter/after/mixed-1280.png)
 
 ## TBDPS and OTBDPS protecting groups
 

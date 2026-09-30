@@ -1,6 +1,6 @@
 # Document drawing styles
 
-Click the style selector beside the drawing controls to switch directly between journal presets. Choose **Manage styles…** at the bottom of that menu, or **Properties → Edit drawing style…**, to open the detailed editor. New documents always start with **JACS / ACS**. Changing one document does not change the defaults for another.
+Click the style selector in the status bar, left of **View**, to switch directly between journal presets. Choose **Manage styles…** at the bottom of that menu, or **Properties → Edit drawing style…**, to open the detailed editor. New documents always start with **JACS / ACS**. Changing one document does not change the defaults for another.
 
 Choose **JACS / ACS**, **Nature**, **RSC**, **Angewandte**, or **SYNLETT / SYNTHESIS**. Each journal choice follows publisher instructions or an official download and has a **Publisher instructions ↗** link in the panel. See [journal settings and publisher sources](journal-drawing-presets.md).
 
@@ -38,7 +38,7 @@ The interface was rendered offscreen at 1280 × 820 and 1040 × 680. Pointer eve
 
 ## Canvas colors and interface appearance
 
-The top-right controls separate **journal style**, **canvas color theme**, and **canvas brightness**. The sun/moon button shows the current canvas mode; click it to switch between white and black paper. These controls are also available in **Page setup**. They do not change bond dimensions, font sizes, or bold formatting.
+The status bar controls left of **View** separate **journal style**, **canvas color theme**, and **canvas brightness**. The sun/moon button shows the current canvas mode; click it to switch between white and black paper. These controls are also available in **Page setup**. They do not change bond dimensions, font sizes, or bold formatting.
 
 The color theme offers:
 
@@ -47,7 +47,7 @@ The color theme offers:
 - **Pastel**: a softer, lighter version of the same Jmol hues, with label contrast maintained on light paper and gentle tints on dark paper. Carbon, hydrogen, and bonds stay neutral.
 - **Jmol**: the [Jmol CPK palette](https://jmol.sourceforge.net/jscolors/), using the published [element color table](https://jmol.sourceforge.net/jscolors/jmol_constants.js) for H through Mt. Later elements retain neutral colors. Canvas labels adjust brightness only when necessary for a 5:1 target against the paper, including white hydrogen and yellow sulfur on light canvases.
 
-Presentation and Pastel derive their light and dark palettes from the same Jmol table, covering H through Mt. Their tiles include the corresponding neutral carbon and hydrogen shades; canvas labels keep those two elements black or white. Elements beyond the source table retain neutral colors. Selecting a theme replaces atom color overrides, including pasted atom colors, while preserving typography and geometry. You can assign individual colors afterward; choosing a theme again resets them. New atoms automatically follow the theme. Manually colored vector objects retain their hue while their lightness adapts to canvas brightness; raster pictures keep their original pixels. The toolbar swatches and hex field show visible canvas colors.
+Presentation and Pastel derive their light and dark palettes from the same Jmol table, covering H through Mt. Their tiles include the corresponding neutral carbon and hydrogen shades; canvas labels keep those two elements black or white. Elements beyond the source table retain neutral colors. Selecting a theme replaces atom color overrides, including pasted atom colors, while preserving typography and geometry. You can assign individual colors afterward; choosing a theme again resets them. New atoms automatically follow the theme. Ink and palette colors follow the canvas brightness, custom colors stay exact on both canvases, and raster pictures keep their original pixels. The color button and **Color** box show the colors as they appear on the canvas.
 
 The periodic table and quick atom buttons use colored tile backgrounds with regular-weight, high-contrast symbols. Jmol tiles derive their backgrounds from its published element colors; canvas label brightness adjustments do not change those tile hues. A thicker outline identifies the selected element.
 

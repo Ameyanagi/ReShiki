@@ -55,7 +55,7 @@ export function inspector(theme: Theme, selected: Selection, mode: Mode) {
     selected.kind === "role" && !["paper", "ink"].includes(name)
       ? `<svg class="cr-ring-preview" viewBox="0 0 100 100" aria-label="${escape(name)} ring fill"><polygon points="50,10 85,30 85,70 50,90 15,70 15,30" fill="${hex(color)}" stroke="currentColor" stroke-width="2"/></svg>`
       : `<span class="cr-preview-symbol" style="color:${name === "paper" ? "inherit" : hex(color)}">${element ? name : "Aa"}</span>`;
-  return `<div class="cr-inspector-title"><span class="cr-eyebrow">${heading}</span><h2>${escape(name === "paper" ? "Paper" : name === "ink" ? "Ink" : name)}</h2><p>${theme.name} · ${selected.kind === "element" ? "Canvas color" : "Shared by all themes"}</p></div>
+  return `<div class="cr-inspector-title"><span class="cr-eyebrow">${heading}</span><h2>${escape(name === "paper" ? "Paper" : name === "ink" ? "Ink" : name)}</h2><p>${theme.name} · ${selected.kind === "element" ? "Canvas color" : heading === "Canvas" ? "Shared by all themes" : "This theme's ring tint"}</p></div>
     <section class="cr-mode-card" aria-label="${escape(label)}"><div class="cr-preview" data-mode="${mode}"><span class="cr-preview-caption">${title} canvas</span>${sample}<span class="cr-preview-swatch" style="background:${hex(color)}" aria-hidden="true"></span></div><div class="cr-code-list">${[
       ["HEX", hex(color)],
       ["RGB", rgb(color)],
