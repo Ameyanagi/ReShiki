@@ -84,6 +84,10 @@ impl App {
                     "Drag a copy, leaving the original in place",
                 ),
                 (
+                    format!("Release {}, then Esc", keys(command, "")),
+                    "Cancel a copy drag",
+                ),
+                (
                     format!("{} drag", keys(shift, "")),
                     "Move horizontally or vertically only",
                 ),
