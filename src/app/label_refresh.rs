@@ -84,7 +84,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::{Pending, same_drawing};
+    use crate::app::same_drawing;
     use reshiki::document::{Document, Point};
 
     fn fixture() -> (App, u64) {
@@ -166,7 +166,7 @@ mod tests {
         let _ = app.update(Message::ContextKey("o".into()));
         let old = app.tab.label_refresh.pending.unwrap();
         let result = compute(&app);
-        let _ = app.perform(Pending::New);
+        let _ = app.update(Message::New);
         let id = app.tab.doc.add_atom("N", Point::default());
         app.tab.revision = old.revision;
         let _ = app.update(Message::LabelsReady(old, result));

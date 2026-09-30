@@ -970,7 +970,7 @@ mod navigation_tests {
         let _ = app.update(Message::Templates(Action::SaveDetails));
         let serial = app.templates.pending.unwrap();
         let transaction = operation.execute().map(Box::new);
-        let _ = app.perform(super::super::Pending::New);
+        let _ = app.update(Message::New);
         app.status = "New drawing is active".into();
         let original = app.tab.doc.clone();
         let tool = app.tool;

@@ -250,7 +250,7 @@ mod tests {
         send(&mut app, Action::Apply);
         assert_eq!(app.tab.doc, after);
         assert!(app.error);
-        let _ = app.perform(super::super::Pending::New);
+        let _ = app.update(Message::New);
         assert!(app.tab.doc.drawing_style.is_default());
         assert_eq!(app.tab.caption_format.style.size_pt, 10.);
         assert_eq!(app.tab.drawing_length_input, "14.4");

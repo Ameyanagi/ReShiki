@@ -18,7 +18,7 @@ impl App {
         self.tab.saved = self.tab.doc.clone();
         self.tab.path = None;
         self.tab.untitled_name = Some("Shortcut examples");
-        self.tab.file_epoch = self.tab.file_epoch.wrapping_add(1);
+        self.tab.file_epoch = self.next_epoch();
         self.sync_drawing_defaults();
         self.recovered.clear();
         self.inspector_open = false;
@@ -105,7 +105,7 @@ mod tests {
         app.tab.doc.add_atom("C", Point::default());
         assert!(app.dirty());
         let _ = app.update(Message::Discard);
-        let _ = app.perform(super::super::Pending::New);
+        let _ = app.update(Message::New);
         assert_eq!(app.document_name(), "Untitled");
         Ok(())
     }

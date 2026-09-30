@@ -1,5 +1,5 @@
 //! Ordered recovery operations. Only one worker may touch a tab's draft file.
-use super::{App, Message};
+use super::{App, Message, document_tab::DocumentTab, document_tab::TabId};
 use iced::Task;
 use reshiki::{document::Document, recovery::Recovery};
 use std::path::PathBuf;
@@ -31,6 +31,16 @@ impl State {
 
     pub(super) fn edited_draft(&mut self) {
         self.generation = self.generation.wrapping_add(1);
+    }
+
+    /// A write or removal waits to start.
+    fn ready(&self) -> bool {
+        self.pending.is_none() && (self.clear || self.requested)
+    }
+
+    /// No write is running or waiting to remove the draft.
+    fn settled(&self) -> bool {
+        self.pending.is_none() && !self.clear
     }
 }
 
@@ -84,8 +94,10 @@ impl App {
     pub(super) fn cancel_close(&mut self) {
         if self.exit.closing() {
             self.exit = Exit::default();
-            self.tab.autosave.clear = false;
-            self.tab.autosave.requested = true;
+            self.each_tab(|app| {
+                app.tab.autosave.clear = false;
+                app.tab.autosave.requested = true;
+            });
         }
     }
 
@@ -108,6 +120,31 @@ impl App {
         }
     }
 
+    /// The autosave timer's tick: a draft write or removal for the tab in
+    /// front and every other tab whose draft is behind its drawing.
+    pub(super) fn request_drafts(&mut self) {
+        self.request_autosave();
+        let behind: Vec<_> = self
+            .tabs
+            .background
+            .iter()
+            .filter(|tab| self.needs_draft(tab))
+            .map(|tab| tab.id)
+            .collect();
+        for id in behind {
+            self.in_tab(id, Self::request_autosave);
+        }
+    }
+
+    /// The autosave timer runs while some tab's draft is behind its drawing.
+    pub(super) fn needs_draft(&self, tab: &DocumentTab) -> bool {
+        let dirty = self.edited(tab);
+        tab.recovery.is_some()
+            && !tab.autosave.pending()
+            && ((dirty && tab.autosaved_revision != Some(tab.revision))
+                || (!dirty && tab.autosaved_revision.is_some()))
+    }
+
     pub(super) fn recover_candidate(&mut self, path: PathBuf) {
         self.tab.autosave.retire_candidate = Some(path);
         self.tab.autosave.requested = true;
@@ -115,40 +152,83 @@ impl App {
     }
 
     pub(super) fn close_after_recovery(&mut self, id: iced::window::Id) -> Task<Message> {
-        self.clear_recovery();
+        self.each_tab(Self::clear_recovery);
         self.exit.closing = Some(id);
         self.start_autosave()
     }
 
     pub(super) fn restart_after_recovery(&mut self) -> Task<Message> {
-        self.clear_recovery();
+        self.each_tab(Self::clear_recovery);
         self.exit.updating = true;
         self.start_autosave()
     }
 
+    /// Starts one draft write or removal for every tab that waits for one.
     pub(super) fn start_autosave(&mut self) -> Task<Message> {
-        if self.exit.closing() {
-            // Explicit saves and library writes must finish before the process
-            // exits. Their completion messages are handled before this gate.
-            if self.file_io.saving || self.templates.pending() {
-                return Task::none();
-            }
-            if self.tab.recovery.is_none() {
-                if self.exit.updating {
-                    self.exit.updating = false;
-                    return Task::done(Message::Updates(super::updates::Action::RecoveryCleared));
-                }
-                if let Some(id) = self.exit.closing.take() {
-                    return iced::window::close(id);
-                }
+        // Explicit saves and library writes must finish before the process
+        // exits. Their completion messages are handled before this gate.
+        if self.exit.closing() && (self.file_io.saving || self.templates.pending()) {
+            return Task::none();
+        }
+        let ready: Vec<_> = self
+            .strip()
+            .filter(|tab| tab.recovery.is_some() && tab.autosave.ready())
+            .map(|tab| tab.id)
+            .collect();
+        let mut tasks = vec![];
+        for id in ready {
+            if let Some(Some((key, path, work))) = self.in_tab(id, Self::prepare_autosave) {
+                tasks.push(Task::perform(execute(path, work), move |result| {
+                    Message::Tab(id, Box::new(Message::Autosaved(key, result)))
+                }));
             }
         }
-        let Some((key, path, work)) = self.prepare_autosave() else {
+        if tasks.is_empty() && self.exit.closing() && self.drafts_settled() {
+            return self.finish_exit();
+        }
+        Task::batch(tasks)
+    }
+
+    /// Every draft write and removal has finished, closed tabs' too.
+    fn drafts_settled(&self) -> bool {
+        self.tabs.retiring.is_empty() && self.strip().all(|tab| tab.autosave.settled())
+    }
+
+    fn finish_exit(&mut self) -> Task<Message> {
+        if self.exit.updating {
+            self.exit.updating = false;
+            return Task::done(Message::Updates(super::updates::Action::RecoveryCleared));
+        }
+        self.exit
+            .closing
+            .take()
+            .map_or_else(Task::none, iced::window::close)
+    }
+
+    /// Removes a closed tab's draft; a write still running for it finishes
+    /// first, and its result, which finds no tab, starts the removal.
+    pub(super) fn retire(&mut self, tab: DocumentTab) -> Task<Message> {
+        let Some(recovery) = tab.recovery else {
             return Task::none();
         };
-        Task::perform(execute(path, work), move |result| {
-            Message::Autosaved(key, result)
-        })
+        self.tabs.retiring.push((tab.id, recovery.session.clone()));
+        if tab.autosave.pending() {
+            return Task::none();
+        }
+        remove_draft(tab.id, recovery.session)
+    }
+
+    /// A draft result for a closed tab: its last write finished, so remove
+    /// the draft, or the draft is gone.
+    pub(super) fn retired(&mut self, id: TabId, key: Key) -> Task<Message> {
+        if key.clear {
+            self.tabs.retiring.retain(|(tab, _)| *tab != id);
+            return Task::none();
+        }
+        match self.tabs.retiring.iter().find(|(tab, _)| *tab == id) {
+            Some((_, path)) => remove_draft(id, path.clone()),
+            None => Task::none(),
+        }
     }
 
     fn prepare_autosave(&mut self) -> Option<(Key, PathBuf, Work)> {
@@ -224,14 +304,8 @@ impl App {
             }
             match result {
                 Ok(_) => {
-                    if self.exit.updating {
-                        self.exit.updating = false;
-                        return Task::done(Message::Updates(
-                            super::updates::Action::RecoveryCleared,
-                        ));
-                    }
-                    if let Some(id) = self.exit.closing.take() {
-                        return iced::window::close(id);
+                    if self.exit.closing() && self.drafts_settled() {
+                        return self.finish_exit();
                     }
                 }
                 Err(error) => {
@@ -256,6 +330,19 @@ impl App {
         }
         Task::none()
     }
+}
+
+fn remove_draft(id: TabId, path: PathBuf) -> Task<Message> {
+    let key = Key {
+        serial: 0,
+        generation: 0,
+        epoch: 0,
+        revision: 0,
+        clear: true,
+    };
+    Task::perform(execute(path, Work::Clear), move |result| {
+        Message::Tab(id, Box::new(Message::Autosaved(key, result)))
+    })
 }
 
 #[cfg(test)]
@@ -297,6 +384,182 @@ pub(super) mod tests {
         let (key, result) = run((key, path, work));
         assert!(result.is_ok(), "{result:?}");
         let _ = app.update(Message::Autosaved(key, result));
+    }
+
+    /// Runs the draft work a tab started and delivers its tagged result.
+    fn finish_tab(app: &mut App, id: TabId) {
+        let work = app
+            .in_tab(id, |app| {
+                let key = app.tab.autosave.pending.unwrap();
+                let work = if key.clear {
+                    Work::Clear
+                } else {
+                    Work::Save {
+                        document: Box::new(app.recovery_document()),
+                        source: app.tab.path.clone(),
+                        retire_candidate: app.tab.autosave.retire_candidate.clone(),
+                    }
+                };
+                (
+                    key,
+                    app.tab.recovery.as_ref().unwrap().session.clone(),
+                    work,
+                )
+            })
+            .unwrap();
+        let (key, result) = run(work);
+        assert!(result.is_ok(), "{result:?}");
+        let _ = app.update(Message::Tab(id, Box::new(Message::Autosaved(key, result))));
+    }
+
+    fn draft(app: &App, id: TabId) -> PathBuf {
+        let tab = app.strip().find(|tab| tab.id == id).unwrap();
+        tab.recovery.as_ref().unwrap().session.clone()
+    }
+
+    #[test]
+    fn every_tab_keeps_its_own_draft_and_closing_removes_them() {
+        let (mut app, directory) = fixture();
+        app.tabs.recovery_root = Some(directory.path().into());
+        let first = app.tab.id;
+        let _ = app.update(Message::New);
+        let second = app.tab.id;
+        let before = app.tab.doc.clone();
+        app.tab.doc.add_atom("N", Point::default());
+        app.changed(before);
+        let _ = app.update(Message::New);
+        let closed = app.tab.id;
+        let before = app.tab.doc.clone();
+        app.tab.doc.add_atom("S", Point::default());
+        app.changed(before);
+        assert_ne!(draft(&app, first), draft(&app, second));
+        let _ = app.update(Message::Tick);
+        for id in [first, second, closed] {
+            finish_tab(&mut app, id);
+        }
+        for (id, element) in [(first, "O"), (second, "N")] {
+            let saved: reshiki::recovery::Snapshot =
+                serde_json::from_slice(&std::fs::read(draft(&app, id)).unwrap()).unwrap();
+            assert_eq!(saved.document.atoms[0].element, element);
+        }
+        // Discarding a tab removes its draft.
+        let closed_draft = draft(&app, closed);
+        let _ = app.update(Message::Tabs(super::super::tabs::Action::Close(None)));
+        let _ = app.update(Message::Discard);
+        assert!(!app.tabs.retiring.is_empty());
+        let key = Key {
+            serial: 0,
+            generation: 0,
+            epoch: 0,
+            revision: 0,
+            clear: true,
+        };
+        let result = run((key, closed_draft.clone(), Work::Clear)).1;
+        let _ = app.update(Message::Tab(
+            closed,
+            Box::new(Message::Autosaved(key, result)),
+        ));
+        assert!(!closed_draft.exists() && app.tabs.retiring.is_empty());
+        // The window closes once both remaining drafts are removed.
+        let window = iced::window::Id::unique();
+        let _ = app.update(Message::Close(window));
+        for _ in 0..2 {
+            let _ = app.update(Message::Discard);
+        }
+        assert!(app.exit.closing());
+        finish_tab(&mut app, first);
+        assert!(app.exit.closing(), "Waits for the other tab's draft");
+        let path = draft(&app, second);
+        let key = app
+            .in_tab(second, |app| app.tab.autosave.pending.unwrap())
+            .unwrap();
+        let (key, result) = run((key, path.clone(), Work::Clear));
+        let close = app.update(Message::Tab(
+            second,
+            Box::new(Message::Autosaved(key, result)),
+        ));
+        assert!(close.units() > 0 && !app.exit.closing());
+        assert!(!path.exists() && !draft(&app, first).exists());
+    }
+
+    #[test]
+    fn a_tab_closed_during_its_draft_write_removes_the_draft_afterwards() {
+        let (mut app, directory) = fixture();
+        app.tabs.recovery_root = Some(directory.path().into());
+        let closed = app.tab.id;
+        app.request_autosave();
+        let write = app.prepare_autosave().unwrap();
+        let _ = app.update(Message::Tabs(super::super::tabs::Action::Close(None)));
+        assert!(
+            app.update(Message::Discard).units() == 0,
+            "The removal waits for the write"
+        );
+        assert_ne!(app.tab.id, closed);
+        let path = write.1.clone();
+        let (key, result) = run(write);
+        assert!(path.exists());
+        let removal = app.update(Message::Tab(
+            closed,
+            Box::new(Message::Autosaved(key, result)),
+        ));
+        assert!(removal.units() > 0 && !app.tabs.retiring.is_empty());
+        let key = Key { clear: true, ..key };
+        let result = run((key, path.clone(), Work::Clear)).1;
+        let _ = app.update(Message::Tab(
+            closed,
+            Box::new(Message::Autosaved(key, result)),
+        ));
+        assert!(!path.exists() && app.tabs.retiring.is_empty());
+    }
+
+    #[test]
+    fn restore_opens_every_draft_as_a_tab_with_the_latest_in_front() {
+        use reshiki::recovery::{Candidate, Snapshot};
+        let (mut app, directory) = fixture();
+        app.tab.doc = Default::default();
+        app.tab.revision = 0;
+        app.tabs.recovery_root = Some(directory.path().into());
+        let candidate = |element: &str, saved_at| {
+            let mut document = reshiki::document::Document::default();
+            document.add_atom(element, Point::default());
+            let path = directory.path().join(format!("4294967294-{element}.json"));
+            std::fs::write(&path, "draft").unwrap();
+            Candidate {
+                path,
+                snapshot: Snapshot {
+                    document,
+                    source: None,
+                    saved_at,
+                },
+            }
+        };
+        // Candidates arrive newest first.
+        app.recovered = vec![candidate("N", 2), candidate("O", 1)];
+        let _ = app.update(Message::Restore);
+        assert!(app.recovered.is_empty());
+        let elements: Vec<_> = app
+            .strip()
+            .map(|tab| tab.doc.atoms[0].element.clone())
+            .collect();
+        assert_eq!(elements, ["O", "N"], "The empty tab took the first draft");
+        assert_eq!(app.tabs.active, 1);
+        assert!(app.status.starts_with("Recovered 2 drawings"));
+        let ids: Vec<_> = app.strip().map(|tab| tab.id).collect();
+        for id in ids {
+            assert!(app.edited(app.strip().find(|tab| tab.id == id).unwrap()));
+            finish_tab(&mut app, id);
+        }
+        let old: Vec<_> = std::fs::read_dir(directory.path())
+            .unwrap()
+            .flatten()
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with("4294967294")
+            })
+            .collect();
+        assert!(old.is_empty(), "Each restored draft replaced its original");
     }
 
     #[test]

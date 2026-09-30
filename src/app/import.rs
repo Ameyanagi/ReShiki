@@ -1,6 +1,6 @@
 //! The Import tab, and structure or picture files chosen or dropped on the window.
 use super::workspace::{caret, hover_hint, muted_text};
-use super::{App, Message, Pending};
+use super::{App, Message};
 use crate::canvas::Tool;
 use iced::widget::canvas::{self, Geometry, Path as Outline, Stroke};
 use iced::widget::{button, column, container, row, stack, text, text_editor, tooltip};
@@ -75,6 +75,7 @@ pub struct State {
     dropped: Vec<PathBuf>,
 }
 impl State {
+    #[cfg(test)]
     pub fn is_blank(&self) -> bool {
         self.format.is_none()
     }
@@ -150,7 +151,8 @@ fn describe(paths: &[PathBuf]) -> String {
 #[derive(Debug, PartialEq)]
 enum Plan {
     Insert(Vec<PathBuf>),
-    Open(PathBuf),
+    /// Drawings, each opened in a tab.
+    Open(Vec<PathBuf>),
     Reject(String),
 }
 fn plan(paths: &[PathBuf]) -> Plan {
@@ -160,19 +162,20 @@ fn plan(paths: &[PathBuf]) -> Plan {
             e => format!("Can't import .{e}"),
         });
     }
-    match paths {
-        [path] if kind(path) == Kind::Document => Plan::Open(path.clone()),
-        _ if paths.iter().any(|p| kind(p) == Kind::Document) => {
-            Plan::Reject("Open one drawing at a time".into())
-        }
-        _ => Plan::Insert(paths.to_vec()),
+    let documents = paths.iter().filter(|p| kind(p) == Kind::Document).count();
+    if documents == paths.len() {
+        Plan::Open(paths.to_vec())
+    } else if documents > 0 {
+        Plan::Reject("Drop drawings apart from structures and pictures".into())
+    } else {
+        Plan::Insert(paths.to_vec())
     }
 }
 impl Plan {
     fn label(&self) -> String {
         match self {
             Plan::Insert(paths) => format!("Drop to insert · {}", describe(paths)),
-            Plan::Open(path) => format!("Drop to open · {}", name(path)),
+            Plan::Open(paths) => format!("Drop to open · {}", describe(paths)),
             Plan::Reject(reason) => reason.clone(),
         }
     }
@@ -290,7 +293,7 @@ impl App {
                     self.error = true;
                     self.status = reason;
                 }
-                Plan::Open(path) => return self.pending(Pending::Open(Some(path))),
+                Plan::Open(paths) => return super::files::open_paths(paths),
                 Plan::Insert(paths) => {
                     if self.tab.busy {
                         self.error = true;
@@ -741,16 +744,22 @@ mod tests {
         let pictures = paths(&["a.png", "b.JPG", "c.jpeg", "d.tif", "e.tiff", "f.webp"]);
         assert_eq!(plan(&pictures), Plan::Insert(pictures.clone()));
         for native in ["x.rsk", "x.reshiki", "x.moruno"] {
-            let path = PathBuf::from(native);
-            assert_eq!(plan(std::slice::from_ref(&path)), Plan::Open(path));
+            let path = paths(&[native]);
+            assert_eq!(plan(&path), Plan::Open(path.clone()));
         }
         assert_eq!(plan(&paths(&["x.rsk"])).label(), "Drop to open · x.rsk");
+        assert_eq!(
+            plan(&paths(&["a.rsk", "b.rsk"])).label(),
+            "Drop to open · 2 files"
+        );
         for (names, reason) in [
             (&["notes.docx"][..], "Can't import .docx"),
             (&["a.mol", "notes.docx"][..], "Can't import .docx"),
             (&["README"][..], "Can't import this file"),
-            (&["a.rsk", "b.rsk"][..], "Open one drawing at a time"),
-            (&["a.rsk", "b.mol"][..], "Open one drawing at a time"),
+            (
+                &["a.rsk", "b.mol"][..],
+                "Drop drawings apart from structures and pictures",
+            ),
         ] {
             assert_eq!(plan(&paths(names)).label(), reason);
         }
@@ -837,19 +846,31 @@ mod tests {
         assert_eq!(app.status, "Can't import .docx");
     }
 
-    #[test]
-    fn a_dropped_drawing_opens_after_the_save_dialog() {
-        let path = PathBuf::from("Esterification.rsk");
+    #[tokio::test]
+    async fn dropped_drawings_open_in_tabs_without_a_save_dialog() {
+        let folder = tempfile::tempdir().unwrap();
         let mut app = ready();
-        assert!(
-            app.update(Message::Imports(Action::Files(vec![path.clone()])))
-                .units()
-                > 0
-        );
-        assert!(app.pending.is_none(), "A saved drawing opens at once");
         app.tab.doc.add_atom("O", Point::default());
-        let _ = app.update(Message::Imports(Action::Files(vec![path.clone()])));
-        assert!(matches!(&app.pending, Some(Pending::Open(Some(p))) if *p == path));
+        let mut dropped = vec![];
+        for (name, element) in [("first.rsk", "N"), ("second.rsk", "S")] {
+            let mut doc = Document::default();
+            doc.add_atom(element, Point::default());
+            let path = folder.path().join(name);
+            std::fs::write(&path, serde_json::to_vec(&doc).unwrap()).unwrap();
+            dropped.push(path);
+        }
+        let task = app.update(Message::Imports(Action::Files(dropped.clone())));
+        assert!(task.units() > 0 && app.pending.is_none());
+        for path in &dropped {
+            let opened = super::super::files::read(path.clone()).await;
+            let _ = app.update(Message::FilePrepared(opened));
+        }
+        let paths: Vec<_> = app.strip().map(|tab| tab.path.clone()).collect();
+        assert_eq!(
+            paths,
+            [None, Some(dropped[0].clone()), Some(dropped[1].clone())]
+        );
+        assert_eq!(app.tab.doc.atoms[0].element, "S");
     }
 
     #[tokio::test]
@@ -940,7 +961,6 @@ mod tests {
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("tests/fixtures/native-ethyl-clipboard.cdx");
         let mut app = ready();
-        let key = app.file_request_key();
         let opened = super::super::files::read(path).await;
         let Some((_, Ok(super::super::files::Prepared::Import { format, contents }))) = &opened
         else {
@@ -950,11 +970,7 @@ mod tests {
         let response = LocalEngine::default()
             .request(Request::import(format, contents))
             .await?;
-        assert!(
-            app.update(Message::FilePrepared(key, opened.clone()))
-                .units()
-                > 0
-        );
+        assert!(app.update(Message::FilePrepared(opened.clone())).units() > 0);
         assert!(app.tab.busy, "{}", app.status);
         assert!(!response.document.ok_or("drawing")?.atoms.is_empty());
         Ok(())

@@ -14,7 +14,15 @@ use reshiki::{
 };
 use std::path::PathBuf;
 
+/// Names a tab for the lifetime of the window; results of work started in a
+/// tab carry it, so they can never land in another tab.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TabId(pub(super) u64);
+
 pub(super) struct DocumentTab {
+    pub(super) id: TabId,
+    /// Whether this tab had unsaved changes when it last left the front.
+    pub(super) edited: bool,
     // Document, history and file identity.
     pub(super) doc: Document,
     pub(super) saved: Document,
@@ -88,6 +96,8 @@ pub(super) struct DocumentTab {
 impl DocumentTab {
     pub(super) fn new(recovery: Option<Recovery>) -> Self {
         Self {
+            id: TabId(0),
+            edited: false,
             doc: Document::default(),
             saved: Document::default(),
             history: History::default(),
@@ -151,6 +161,37 @@ impl DocumentTab {
             autosaved_revision: None,
             autosave_status: String::new(),
         }
+    }
+
+    /// The file name, or the name of an unsaved drawing.
+    pub(super) fn name(&self) -> String {
+        self.path
+            .as_ref()
+            .and_then(|p| p.file_name())
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| self.untitled_name.unwrap_or("Untitled").into())
+    }
+
+    pub(super) fn dirty(&self) -> bool {
+        self.inline_changed() || !super::same_drawing(&self.doc, &self.saved)
+    }
+
+    /// An unchanged empty Untitled drawing with nothing in progress, which New,
+    /// Open and Restore take over instead of adding a tab.
+    pub(super) fn reusable(&self) -> bool {
+        self.path.is_none()
+            && self.untitled_name.is_none()
+            && self.doc.all_ids().is_empty()
+            && !self.history.can_undo()
+            && !self.history.can_redo()
+            && !self.dirty()
+            && !self.busy
+            && !self.clipboard_busy
+            && self.cleanup.is_none()
+            && self.inline_text.is_none()
+            && self.atom_text.is_none()
+            && self.joining.is_none()
+            && self.pictures.active.is_none()
     }
 }
 

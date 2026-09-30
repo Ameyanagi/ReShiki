@@ -259,8 +259,8 @@ impl App {
     }
 
     fn update_restart_blocker(&self) -> Option<&'static str> {
-        if self.dirty() {
-            Some("Save your drawing, then click Update and restart.")
+        if self.strip().any(|tab| self.edited(tab)) {
+            Some("Save your drawings, then click Update and restart.")
         } else if self.assistant.has_unfinished_work() {
             Some("Finish or clear the assistant draft and input before restarting.")
         } else if self.file_io.saving || self.templates.pending() {

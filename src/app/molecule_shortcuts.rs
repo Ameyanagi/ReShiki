@@ -671,7 +671,7 @@ mod tests {
         app.changed(before);
         space(&mut app);
         assert_eq!(app.tab.selected, original);
-        let _ = app.perform(super::super::Pending::New);
+        let _ = app.update(Message::New);
         space(&mut app);
         assert!(app.tab.selected.is_empty());
         assert!(app.tab.doc.atoms.is_empty());

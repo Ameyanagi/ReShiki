@@ -574,6 +574,11 @@ impl App {
         .width(Length::Fill)
         .height(Length::Fill)
         .into();
+        // Keyed by tab, so that switching tabs ends a drag or other gesture.
+        let drawing: Element<'_, Edit> = iced::widget::keyed_column([(self.tab.id, drawing)])
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into();
         let paper = self.with_drop_overlay(
             sensor(self.with_context_menu(self.with_inline_text(drawing.map(Message::Canvas))))
                 .on_show(Message::Viewport)
@@ -642,7 +647,6 @@ impl App {
     }
 
     fn command_bar(&self) -> Element<'_, Message> {
-        let title = self.document_name();
         let bar = row![
             hover_hint(
                 button(crate::branding::wordmark(21.0))
@@ -689,23 +693,10 @@ impl App {
                     .then_some(Message::Redo),
                 false
             ),
-            Space::new().width(8),
-            column![
-                text(title).size(12),
-                text(if self.dirty() {
-                    "Edited".into()
-                } else if self.office_document() {
-                    keyed("Office drawing", &Message::Save) + " updates Office"
-                } else if self.tab.path.is_some() {
-                    "All changes saved".into()
-                } else {
-                    "Not saved to file".into()
-                })
-                .size(10)
-                .style(muted_text)
-            ]
-            .spacing(2)
-            .width(Length::Fill),
+            divider(),
+            responsive(move |size| self.tab_strip(size.width))
+                .width(Length::Fill)
+                .height(Length::Shrink),
             command(
                 if self.assistant.busy {
                     "● Assistant · Working"
@@ -2185,8 +2176,8 @@ impl App {
                 .push(hover_hint(
                     command("Restore", Message::Restore).style(control(true)),
                     match self.recovered.len() {
-                        1 => "Open the draft · Save it to keep a copy".to_owned(),
-                        n => format!("Open the latest of {n} drafts · Save it to keep a copy"),
+                        1 => "Open the draft in a tab · Save it to keep a copy".to_owned(),
+                        n => format!("Open all {n} drafts as tabs · Save them to keep copies"),
                     },
                     tooltip::Position::Top,
                 ))
@@ -2461,7 +2452,11 @@ pub(super) fn hover_hint<'a>(
     let label: Element<'a, Message> = if label.contains(super::shortcuts::symbol) {
         rich_text(super::shortcuts::spans(&label)).size(12).into()
     } else {
-        text(label).size(12).into()
+        // File paths in hints can hold words wider than the tooltip.
+        text(label)
+            .size(12)
+            .wrapping(text::Wrapping::WordOrGlyph)
+            .into()
     };
     hint_tooltip(content, label, position)
 }
@@ -2548,7 +2543,7 @@ pub(super) fn command(label: &str, message: Message) -> button::Button<'_, Messa
         .style(control(false))
 }
 /// `title · keys` with the shortcut of `message`, for plain-text hints.
-fn keyed(title: &str, message: &Message) -> String {
+pub(super) fn keyed(title: &str, message: &Message) -> String {
     match super::shortcuts::label(message) {
         Some(keys) => format!("{title} · {keys}"),
         None => title.to_owned(),

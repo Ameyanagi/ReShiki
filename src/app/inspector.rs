@@ -156,6 +156,10 @@ impl State {
     pub(super) fn close_menu(&mut self) {
         self.figure_menu = false;
     }
+    #[cfg(test)]
+    pub(super) fn expanded(&self, section: Section) -> Option<bool> {
+        self.expanded.get(&section).copied()
+    }
     pub(super) fn update(&mut self, action: Action) {
         match action {
             Action::Section(section, expanded) => {

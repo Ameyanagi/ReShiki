@@ -102,8 +102,11 @@ Acyclic triple-bond edits straighten the adjacent branches. Bond appearance and 
 | Keys                 | Action                                    |
 | -------------------- | ----------------------------------------- |
 | F1                   | Help and editable examples                |
-| Cmd/Ctrl+N / O / S   | New / open / save                         |
+| Cmd/Ctrl+N / O / S   | New / open, each in a new tab / save      |
 | Cmd/Ctrl+Shift+S     | Save as                                   |
+| Cmd/Ctrl+W           | Close tab                                 |
+| Ctrl+Tab / Shift+Tab | Next / previous tab                       |
+| Cmd/Ctrl+1–8 / 9     | Tab 1–8 / last tab                        |
 | Cmd/Ctrl+P           | Print                                     |
 | Cmd/Ctrl+I           | Import                                    |
 | Cmd/Ctrl+Shift+E     | Open Export                               |

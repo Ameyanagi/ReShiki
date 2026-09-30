@@ -160,9 +160,27 @@ impl App {
             &[
                 (
                     format!("{} / {}", keys(command, "N"), keys(command, "O")),
-                    "New / Open",
+                    "New / Open, each in a new tab",
                 ),
                 (keys(command, "S"), "Save"),
+                (keys(command, "W"), "Close tab"),
+                (
+                    format!(
+                        "{} / {}",
+                        keys(Modifiers::CTRL, "Tab"),
+                        keys(Modifiers::CTRL | shift, "Tab")
+                    ),
+                    "Next / previous tab",
+                ),
+                (
+                    format!(
+                        "{}–{} / {}",
+                        keys(command, "1"),
+                        keys(command, "8"),
+                        keys(command, "9")
+                    ),
+                    "Tab 1–8 / last tab",
+                ),
                 (
                     format!("{} / {}", keys(command, "I"), keys(command | shift, "E")),
                     "Import / Export",

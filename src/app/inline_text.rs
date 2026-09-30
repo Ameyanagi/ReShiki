@@ -30,6 +30,17 @@ pub struct State {
     future: Vec<Revision>,
     auto_formula: bool,
 }
+impl super::DocumentTab {
+    /// A caption draft that differs from the text it started with.
+    pub(super) fn inline_changed(&self) -> bool {
+        self.inline_text
+            .as_ref()
+            .is_some_and(|s| match &s.original {
+                Some(a) => a.text != self.caption || a.format != self.caption_format,
+                None => !self.caption.trim().is_empty(),
+            })
+    }
+}
 impl App {
     pub(super) fn auto_format_caption(&mut self) {
         if self
@@ -66,15 +77,6 @@ impl App {
             .original
             .as_ref()
             .map(|a| a.id)
-    }
-    pub(super) fn inline_changed(&self) -> bool {
-        self.tab
-            .inline_text
-            .as_ref()
-            .is_some_and(|s| match &s.original {
-                Some(a) => a.text != self.tab.caption || a.format != self.tab.caption_format,
-                None => !self.tab.caption.trim().is_empty(),
-            })
     }
     pub(super) fn inline_checkpoint(&mut self) {
         if let Some(state) = &mut self.tab.inline_text {
@@ -637,6 +639,12 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             )
             | Message::New
             | Message::Open
+            | Message::Tabs(
+                super::tabs::Action::Select(_)
+                    | super::tabs::Action::Cycle(_)
+                    | super::tabs::Action::Number(_)
+                    | super::tabs::Action::Close(_)
+            )
             | Message::Save
             | Message::SaveAs
             | Message::Close(_)
@@ -929,10 +937,11 @@ mod tests {
         begin(&mut app, None);
         type_text(&mut app, "Keep me");
         let _ = app.update(Message::New);
+        assert!(app.pending.is_none(), "New opens a tab without asking");
+        assert!(app.tab.doc.annotations.is_empty());
+        let _ = app.update(Message::Tabs(super::super::tabs::Action::Cycle(false)));
         assert!(app.tab.inline_text.is_none());
         assert_eq!(app.tab.doc.annotations[0].text, "Keep me");
-        assert!(app.pending.is_some());
-        let _ = app.update(Message::Cancel);
         begin(&mut app, Some(1));
         type_text(&mut app, " too");
         let _ = app.update(Message::Tool(Tool::Bond(1)));

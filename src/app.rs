@@ -50,6 +50,7 @@ mod printing;
 mod reactions;
 mod shortcut_examples;
 mod shortcuts;
+mod tabs;
 mod template_library;
 mod theme_files;
 mod theme_generator;
@@ -246,9 +247,12 @@ pub enum Message {
         )
     )]
     Opened(Option<(PathBuf, Result<Vec<u8>, String>)>),
-    FilePrepared(files::Key, files::Opened),
+    FilePrepared(files::Opened),
     #[cfg(target_os = "macos")]
     MacFiles(macos_files::Action),
+    Tabs(tabs::Action),
+    /// A task result for the drawing in this tab, which may no longer be in front.
+    Tab(document_tab::TabId, Box<Message>),
     Saved(u64, Box<Document>, Result<Option<PathBuf>, String>),
     Exported(Result<Option<PathBuf>, String>),
     FigureExported(Result<Option<figure_export::Saved>, String>),
@@ -267,12 +271,18 @@ pub enum Job {
     Clean(cleanup::CleanupJob),
     Export(&'static str),
 }
+/// What the save dialog's answer continues.
 #[derive(Debug, Clone)]
 enum Pending {
-    New,
-    /// Open this file, or the one chosen in the open dialog.
-    Open(Option<PathBuf>),
-    Close(iced::window::Id),
+    /// Close this tab, which is in front.
+    CloseTab(document_tab::TabId),
+    /// Close the window after asking about each unsaved tab: the one asked
+    /// about now, and those whose changes were discarded.
+    CloseWindow(
+        iced::window::Id,
+        document_tab::TabId,
+        Vec<document_tab::TabId>,
+    ),
 }
 
 struct CleanupPreview {
@@ -288,6 +298,7 @@ struct CleanupPreview {
 pub struct App {
     /// The active document; see `document_tab` for what is per document.
     tab: DocumentTab,
+    tabs: tabs::State,
     context_menu: Option<context_menu::State>,
     style_menu: Option<color_popover::Menu>,
     updates: updates::State,
@@ -310,8 +321,6 @@ pub struct App {
     status: String,
     error: bool,
     file_io: files::State,
-    #[cfg(target_os = "macos")]
-    native_opening: bool,
     #[cfg(windows)]
     office_path: Option<PathBuf>,
     pending: Option<Pending>,
@@ -338,8 +347,12 @@ impl App {
             .as_ref()
             .map(|r| r.candidates())
             .unwrap_or_default();
+        let recovery_root = recovery
+            .as_ref()
+            .and_then(|r| r.session.parent().map(PathBuf::from));
         let mut app = Self {
             tab: DocumentTab::new(recovery),
+            tabs: tabs::State::new(recovery_root),
             updates: updates::State::new(),
             theme_library: theme_files::State::load(),
             palette: None,
@@ -368,8 +381,6 @@ impl App {
             status: if recovered.is_empty() { READY } else { "" }.into(),
             error: false,
             file_io: files::State::default(),
-            #[cfg(target_os = "macos")]
-            native_opening: false,
             #[cfg(windows)]
             office_path: None,
             pending: None,
@@ -398,10 +409,7 @@ impl App {
             app.office_path = startup_path.clone();
         }
         let task = if let Some(path) = startup_path {
-            let key = app.file_request_key();
-            Task::perform(files::read(path), move |opened| {
-                Message::FilePrepared(key, opened)
-            })
+            files::open_paths(vec![path])
         } else if !cfg!(test) && std::env::args_os().any(|arg| arg == "--shortcut-examples") {
             if let Err(error) = app.load_shortcut_examples() {
                 app.status = format!("Could not open shortcut examples: {error}");
@@ -422,12 +430,7 @@ impl App {
         )
     }
     fn document_name(&self) -> String {
-        self.tab
-            .path
-            .as_ref()
-            .and_then(|p| p.file_name())
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| self.tab.untitled_name.unwrap_or("Untitled").into())
+        self.tab.name()
     }
     pub fn theme(&self) -> Theme {
         if self.appearance.mode.is_dark(self.tab.doc.canvas_theme) {
@@ -467,11 +470,7 @@ impl App {
             } else {
                 Subscription::none()
             },
-            if self.tab.recovery.is_some()
-                && !self.tab.autosave.pending()
-                && ((self.dirty() && self.tab.autosaved_revision != Some(self.tab.revision))
-                    || (!self.dirty() && self.tab.autosaved_revision.is_some()))
-            {
+            if self.strip().any(|tab| self.needs_draft(tab)) {
                 iced::time::every(std::time::Duration::from_secs(5)).map(|_| Message::Tick)
             } else {
                 Subscription::none()
@@ -503,7 +502,7 @@ impl App {
         ])
     }
     fn dirty(&self) -> bool {
-        self.inline_changed() || !same_drawing(&self.tab.doc, &self.tab.saved)
+        self.tab.dirty()
     }
     fn office_document(&self) -> bool {
         #[cfg(windows)]
@@ -615,13 +614,11 @@ impl App {
             .clamp(0.005, 2.5);
         self.tab.fit_to_view = true;
     }
-    fn pending(&mut self, action: Pending) -> Task<Message> {
+    /// Shows the save dialog for the tab in front; its answer continues `action`.
+    fn ask(&mut self, action: Pending) -> Task<Message> {
         // The save dialog, or the save it started, still answers an earlier request.
         if self.pending.is_some() {
             return Task::none();
-        }
-        if !self.dirty() {
-            return self.perform(action);
         }
         self.pending = Some(action);
         files::ask_to_save(self.document_name())
@@ -631,80 +628,72 @@ impl App {
     fn answers_save_dialog(&self, message: &Message) -> bool {
         self.pending.is_some() && matches!(message, Message::Save)
     }
+    /// Continues the save dialog's action once the tab in front is saved.
     fn perform(&mut self, action: Pending) -> Task<Message> {
         match action {
-            Pending::New => {
-                self.tab.labels = Default::default();
-                self.tab.labels_dirty = false;
-                self.tab.chemistry_notice = None;
-                self.clear_recovery();
-                self.tab.file_epoch = self.tab.file_epoch.wrapping_add(1);
-                self.tab.revision = self.tab.revision.wrapping_add(1);
-                let before = self.tab.doc.clone();
-                self.tab.doc = Document::default();
-                self.changed(before);
-                self.tab.saved = self.tab.doc.clone();
-                self.tab.path = None;
-                self.tab.untitled_name = None;
-                self.tab.selected.clear();
-                self.tab.camera = Camera::default();
-                self.tab.pages = pages::State::default();
-                self.tab.styles.editor = None;
-                self.theme_library.editor = None;
-                self.tab.fit_to_view = false;
-                self.tab.analysis = None;
-                self.error = false;
-                self.tab.bond_drawing = Default::default();
-                self.tab.chain_drawing = Default::default();
-                self.tab.drawing_length_input = reshiki::style::DEFAULT.bond_length_pt.to_string();
-                self.tab.chain_atoms_input.clear();
-                self.tab.chain_angle_input = "120".into();
-                self.tab.caption_format = Default::default();
-                self.tab.caption = "Reaction conditions".into();
-                self.tab.caption_target = None;
-                self.tab.graphic_style = Default::default();
-                self.tab.arc_editor = Default::default();
-                self.tab.orbital_phase = Default::default();
-                self.tab.phase_flipped = false;
-                self.tab.attach_symbols = true;
-                self.tab.arrow_style = Default::default();
-                self.tab.arrows = Default::default();
-                self.tab.graphic_width_input = reshiki::style::DEFAULT.line_width_pt.to_string();
-                self.tab.graphic_stroke_input = "#000000".into();
-                self.tab.graphic_fill_input.clear();
-                self.tab.color_scope = Default::default();
-                self.tab.bond_color_input = "#000000".into();
-                self.tool = Tool::Select;
-                self.sync_typography();
-                self.status = "New document".into();
-                iced::advanced::widget::operate(
-                    iced::advanced::widget::operation::focusable::unfocus(),
-                )
-            }
-            Pending::Open(path) => {
-                let key = self.file_request_key();
-                Task::perform(
-                    async {
-                        let path = match path {
-                            Some(path) => path,
-                            // Accept supported extensions without relying on macOS
-                            // type registration; the worker validates the content.
-                            None => rfd::AsyncFileDialog::new()
-                                .set_title(
-                                    "Open a ReShiki, MOL, RXN, CDXML, CDX or SMILES document",
-                                )
-                                .pick_file()
-                                .await?
-                                .path()
-                                .to_path_buf(),
-                        };
-                        files::read(path).await
-                    },
-                    move |opened| Message::FilePrepared(key, opened),
-                )
-            }
-            Pending::Close(id) => self.close_after_recovery(id),
+            Pending::CloseTab(id) if id == self.tab.id => self.close_active_tab(),
+            Pending::CloseTab(_) => Task::none(),
+            Pending::CloseWindow(window, _, discarded) => self.close_window(window, discarded),
         }
+    }
+    /// The save dialog's answer acts on the tab it asked about, even if a file
+    /// opened from Finder took the front meanwhile.
+    fn front_pending(&mut self) {
+        let (Some(Pending::CloseTab(id)) | Some(Pending::CloseWindow(_, id, _))) = self.pending
+        else {
+            return;
+        };
+        if let Some(index) = self.tab_index(id) {
+            self.select_tab(index);
+        }
+    }
+    /// A new drawing in a new tab, or in the tab in front if it is an unchanged
+    /// empty Untitled drawing.
+    fn new_document(&mut self) -> Task<Message> {
+        if self.tab.reusable() {
+            self.reset_tab();
+        } else {
+            self.add_tab();
+        }
+        self.tool = Tool::Select;
+        self.sync_typography();
+        self.error = false;
+        self.status = "New document".into();
+        iced::advanced::widget::operate(iced::advanced::widget::operation::focusable::unfocus())
+    }
+    fn open_dialog(&mut self) -> Task<Message> {
+        Task::perform(
+            async {
+                // Accept supported extensions without relying on macOS
+                // type registration; the worker validates the content.
+                let file = rfd::AsyncFileDialog::new()
+                    .set_title("Open a ReShiki, MOL, RXN, CDXML, CDX or SMILES document")
+                    .pick_file()
+                    .await?;
+                files::read(file.path().to_path_buf()).await
+            },
+            Message::FilePrepared,
+        )
+    }
+    /// Opens a recovery draft in a new tab, or in the tab in front if it is an
+    /// unchanged empty Untitled drawing.
+    fn restore(&mut self, candidate: Candidate) {
+        self.target_tab();
+        let before = self.tab.doc.clone();
+        self.tab.doc = candidate.snapshot.document;
+        self.tab.doc.version = self.tab.doc.version.max(15);
+        self.sync_drawing_defaults();
+        self.tab.styles.editor = None;
+        self.theme_library.editor = None;
+        self.tab.path = None;
+        self.tab.untitled_name = None;
+        self.tab.saved = Document::default();
+        self.tab.file_epoch = self.next_epoch();
+        self.changed(before);
+        self.tab.revision = self.tab.revision.wrapping_add(1);
+        self.fit();
+        self.tab.selected.clear();
+        self.recover_candidate(candidate.path);
     }
     fn display_document(&self) -> &Document {
         self.tab
@@ -717,6 +706,20 @@ impl App {
             .unwrap_or(&self.tab.doc)
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        if let Message::Tab(id, message) = message {
+            if id == self.tab.id {
+                return self.update(*message);
+            }
+            let task = tagged(self.background_result(id, *message), id);
+            return Task::batch([task, self.start_autosave()]);
+        }
+        let task = self.update_front(message);
+        // Results of the work this message started belong to the tab now in
+        // front, which may be one it just opened or brought forward.
+        tagged(task, self.tab.id)
+    }
+
+    fn update_front(&mut self, message: Message) -> Task<Message> {
         #[cfg(target_os = "macos")]
         if let Message::MacFiles(action) = message {
             return self.mac_file_action(action);
@@ -770,8 +773,8 @@ impl App {
             self.labels_ready(key, result);
             return Task::none();
         }
-        if let Message::FilePrepared(key, opened) = message {
-            return self.file_prepared(key, opened);
+        if let Message::FilePrepared(opened) = message {
+            return self.file_prepared(opened);
         }
         let Some(message) = self.prepare_molecule_shortcut(message) else {
             return Task::none();
@@ -823,6 +826,10 @@ impl App {
             self.imports.menu = false;
             return Task::none();
         }
+        if self.tabs.menu && matches!(message, Message::Escape) {
+            self.tabs.menu = false;
+            return Task::none();
+        }
         if !matches!(
             message,
             Message::Canvas(Edit::Hover(_))
@@ -838,6 +845,9 @@ impl App {
             self.tab.inspector_ui.close_menu();
             if !matches!(message, Message::Imports(import::Action::Menu(_))) {
                 self.imports.menu = false;
+            }
+            if !matches!(message, Message::Tabs(tabs::Action::Menu(_))) {
+                self.tabs.menu = false;
             }
         }
         if let Message::InspectorAction(action) = message {
@@ -947,6 +957,9 @@ impl App {
                     | Message::Close(_)
                     | Message::Discard
                     | Message::Cancel
+                    | Message::New
+                    | Message::Open
+                    | Message::Tabs(_)
                     | Message::Saved(..)
                     | Message::Exported(_)
                     | Message::FigureExported(_)
@@ -1747,32 +1760,21 @@ impl App {
                     );
                 }
             }
-            Message::Tick => self.request_autosave(),
+            Message::Tick => self.request_drafts(),
             Message::Autosaved(..) => {} // Handled before editor/modal guards.
+            Message::Restore if self.pending.is_some() => {}
             Message::Restore => {
-                if self.dirty() {
-                    self.status =
-                        "Save the current drawing before restoring a previous session".into();
-                    return Task::none();
+                // Oldest first, so the latest draft ends up in front.
+                let candidates = std::mem::take(&mut self.recovered);
+                let count = candidates.len();
+                for candidate in candidates.into_iter().rev() {
+                    self.restore(candidate);
                 }
-                if let Some(candidate) = self.recovered.first().cloned() {
-                    let before = self.tab.doc.clone();
-                    self.tab.doc = candidate.snapshot.document;
-                    self.tab.doc.version = self.tab.doc.version.max(15);
-                    self.sync_drawing_defaults();
-                    self.tab.styles.editor = None;
-                    self.theme_library.editor = None;
-                    self.tab.path = None;
-                    self.tab.untitled_name = None;
-                    self.tab.saved = Document::default();
-                    self.tab.file_epoch = self.tab.file_epoch.wrapping_add(1);
-                    self.changed(before);
-                    self.tab.revision = self.tab.revision.wrapping_add(1);
-                    self.fit();
-                    self.tab.selected.clear();
-                    self.recover_candidate(candidate.path);
-                    self.status = "Recovered drawing · Save to keep a new copy".into();
-                }
+                self.status = match count {
+                    0 => return Task::none(),
+                    1 => "Recovered drawing · Save to keep a new copy".into(),
+                    n => format!("Recovered {n} drawings as tabs · Save them to keep new copies"),
+                };
             }
             Message::DismissRecovery => {
                 self.recovered.clear();
@@ -1892,173 +1894,7 @@ impl App {
                 revision,
                 kind,
                 result,
-            } => {
-                self.tab.busy = false;
-                if matches!(&kind, Job::Clean(job) if job.serial != self.tab.cleanup_serial || job.epoch != self.tab.file_epoch)
-                {
-                    return Task::none();
-                }
-                match *result {
-                    Err(e) => {
-                        self.error = true;
-                        self.status = e;
-                    }
-                    Ok(response) => {
-                        if let Job::Export(format) = kind {
-                            return export_file(response.output.unwrap_or_default(), format);
-                        }
-                        if self.tab.revision != revision {
-                            self.status="Operation finished; newer edits were preserved. Run it again to update.".into();
-                            return Task::none();
-                        }
-                        if let Job::Clean(job) = &kind {
-                            if let Some(document) = response.document {
-                                if let Err(error) = document.validate() {
-                                    self.status = error;
-                                    self.error = true;
-                                } else {
-                                    self.tab.cleanup = Some(CleanupPreview {
-                                        job: job.clone(),
-                                        warnings: response.warnings,
-                                        document,
-                                        analysis: response.analysis,
-                                        revision,
-                                        epoch: self.tab.file_epoch,
-                                        original: false,
-                                    });
-                                    self.status = "Cleanup preview · Compare with the original, then Apply or Cancel".into();
-                                    self.error = false;
-                                }
-                            }
-                            return Task::none();
-                        }
-                        if matches!(kind, Job::Insert) {
-                            if let Some(document) = response.document {
-                                let before = self.tab.doc.clone();
-                                let center = editing::center(&document, &document.all_ids());
-                                let offset = if self.tab.doc.all_ids().is_empty() {
-                                    Point::new(
-                                        self.tab.camera.center.x - center.x,
-                                        self.tab.camera.center.y - center.y,
-                                    )
-                                } else {
-                                    let (_, existing_max) = self.tab.doc.bounds();
-                                    let (insert_min, _) = document.bounds();
-                                    Point::new(
-                                        existing_max.x
-                                            + self.tab.doc.drawing_style.bond_length_world
-                                            - insert_min.x,
-                                        self.tab.camera.center.y - center.y,
-                                    )
-                                };
-                                self.tab.selected =
-                                    editing::append(&mut self.tab.doc, &document, offset);
-                                self.changed(before);
-                                self.fit();
-                                self.tool = Tool::Select;
-                                self.status =
-                                    "Inserted structure · Drag to position · Delete or Undo to remove".into();
-                                if !response.warnings.is_empty() {
-                                    self.status.push_str(" · ");
-                                    self.status.push_str(&response.warnings.join(" · "));
-                                }
-                            }
-                            return Task::none();
-                        }
-                        if matches!(kind, Job::AromaticDisplay) {
-                            if let Some(document) = response.document {
-                                let before = self.tab.doc.clone();
-                                self.tab.doc = document.clone();
-                                self.changed(before);
-                                if self.error {
-                                    return Task::none();
-                                }
-                                reshiki::atom_labels::refresh_computed(
-                                    &mut self.tab.doc,
-                                    &document,
-                                );
-                                self.tab.labels_dirty = false;
-                                self.tab.analysis = response.analysis;
-                                self.tool = Tool::Select;
-                                self.status =
-                                    "Aromatic display changed · Molecular identity retained".into();
-                            }
-                            return Task::none();
-                        }
-                        if matches!(kind, Job::Abbreviate) {
-                            if let Some(document) = response.document {
-                                let before = self.tab.doc.clone();
-                                let count = document.abbreviations.len();
-                                self.tab.doc = document;
-                                self.tab.selected = self
-                                    .tab
-                                    .doc
-                                    .expand_abbreviation_selection(&self.tab.selected);
-                                self.changed(before);
-                                self.tab.analysis = response.analysis;
-                                self.tool = Tool::Select;
-                                self.status = if count == 0 {
-                                    "No matching common groups in this selection".into()
-                                } else {
-                                    format!(
-                                        "{count} abbreviation{} · Full chemistry retained · Expand to edit internal atoms",
-                                        if count == 1 { "" } else { "s" }
-                                    )
-                                };
-                            }
-                            return Task::none();
-                        }
-                        if matches!(kind, Job::Analyze) {
-                            // Checking is a read-only chemistry operation. Refresh
-                            // computed H labels without rewriting the user's bond
-                            // orders/stereo or inserting a step into Undo/Redo.
-                            if let Some(document) = response.document {
-                                reshiki::atom_labels::refresh_computed(
-                                    &mut self.tab.doc,
-                                    &document,
-                                );
-                            }
-                            self.tab.analysis = response.analysis;
-                            self.tab.chemistry_notice = None;
-                            if matches!(kind, Job::Analyze) {
-                                self.status = "No chemistry errors found".into();
-                                self.error = false;
-                            }
-                            return Task::none();
-                        }
-                        if let Some(document) = response.document {
-                            let before = self.tab.doc.clone();
-                            self.tab.doc = document.clone();
-                            self.changed(before);
-                            reshiki::atom_labels::refresh_computed(&mut self.tab.doc, &document);
-                            self.tab.labels_dirty = false;
-                            self.tab.chemistry_notice = None;
-                            self.tab.selected.clear();
-                            if matches!(kind, Job::Import | Job::ImportFile) {
-                                self.fit();
-                            }
-                            if matches!(kind, Job::ImportFile) {
-                                self.tab.path = None;
-                                self.tab.untitled_name = None;
-                                self.tab.saved = Document::default();
-                                self.tab.file_epoch = self.tab.file_epoch.wrapping_add(1);
-                            }
-                        }
-                        self.tab.analysis = response.analysis;
-                        self.status = match kind {
-                            Job::Clean(_) => "Structure cleaned",
-                            Job::Analyze => "No chemistry errors found",
-                            _ => "Structure imported · Undo restores the previous drawing",
-                        }
-                        .into();
-                        if !response.warnings.is_empty() {
-                            self.status.push_str(" · ");
-                            self.status.push_str(&response.warnings.join(" · "));
-                        }
-                        self.error = false;
-                    }
-                }
-            }
+            } => return self.engine_done(revision, kind, *result),
             Message::Undo | Message::Redo => {
                 self.tab.erase_stroke = false;
                 self.tab.cleanup = None;
@@ -2171,27 +2007,46 @@ impl App {
                     return iced::clipboard::write(a.smiles.clone());
                 }
             }
-            Message::New => return self.pending(Pending::New),
-            Message::Open => return self.pending(Pending::Open(None)),
-            Message::Close(id) => return self.pending(Pending::Close(id)),
+            // Tabs wait while the save dialog asks about the tab in front.
+            Message::New | Message::Open if self.pending.is_some() => {}
+            Message::New => return self.new_document(),
+            Message::Open => return self.open_dialog(),
+            Message::Tabs(action) => return self.tab_action(action),
+            Message::Tab(..) => {}
+            Message::Close(window) => {
+                if self.pending.is_none() {
+                    return self.close_window(window, vec![]);
+                }
+            }
             Message::Cancel => self.pending = None,
             Message::Discard => {
-                if let Some(action) = self.pending.take() {
-                    return self.perform(action);
+                self.front_pending();
+                match self.pending.take() {
+                    Some(Pending::CloseTab(id)) if id == self.tab.id => {
+                        return self.close_active_tab();
+                    }
+                    Some(Pending::CloseWindow(window, id, mut discarded)) => {
+                        discarded.push(id);
+                        return self.close_window(window, discarded);
+                    }
+                    _ => {}
                 }
             }
             #[cfg(target_os = "macos")]
             Message::MacFiles(_) => {}
             Message::Opened(file) => {
                 if let Some((path, contents)) = file {
-                    let key = self.file_request_key();
-                    return Task::perform(files::prepare_contents(path, contents), move |opened| {
-                        Message::FilePrepared(key, opened)
-                    });
+                    return Task::perform(
+                        files::prepare_contents(path, contents),
+                        Message::FilePrepared,
+                    );
                 }
             }
             Message::FilePrepared(..) => {}
             Message::Save | Message::SaveAs => {
+                if matches!(message, Message::Save) {
+                    self.front_pending();
+                }
                 #[cfg(windows)]
                 let office_save = self.office_document() && matches!(message, Message::Save);
                 let path = if matches!(message, Message::SaveAs) {
@@ -2289,6 +2144,177 @@ impl App {
         } else {
             Task::none()
         }
+    }
+    /// A chemistry job's result for the drawing in front.
+    fn engine_done(
+        &mut self,
+        revision: u64,
+        kind: Job,
+        result: Result<Response, String>,
+    ) -> Task<Message> {
+        self.tab.busy = false;
+        if matches!(&kind, Job::Clean(job) if job.serial != self.tab.cleanup_serial || job.epoch != self.tab.file_epoch)
+        {
+            return Task::none();
+        }
+        match result {
+            Err(e) => {
+                self.error = true;
+                self.status = e;
+            }
+            Ok(response) => {
+                if let Job::Export(format) = kind {
+                    return export_file(response.output.unwrap_or_default(), format);
+                }
+                if self.tab.revision != revision {
+                    self.status =
+                        "Operation finished; newer edits were preserved. Run it again to update."
+                            .into();
+                    return Task::none();
+                }
+                if let Job::Clean(job) = &kind {
+                    if let Some(document) = response.document {
+                        if let Err(error) = document.validate() {
+                            self.status = error;
+                            self.error = true;
+                        } else {
+                            self.tab.cleanup = Some(CleanupPreview {
+                                job: job.clone(),
+                                warnings: response.warnings,
+                                document,
+                                analysis: response.analysis,
+                                revision,
+                                epoch: self.tab.file_epoch,
+                                original: false,
+                            });
+                            self.status =
+                                "Cleanup preview · Compare with the original, then Apply or Cancel"
+                                    .into();
+                            self.error = false;
+                        }
+                    }
+                    return Task::none();
+                }
+                if matches!(kind, Job::Insert) {
+                    if let Some(document) = response.document {
+                        let before = self.tab.doc.clone();
+                        let center = editing::center(&document, &document.all_ids());
+                        let offset = if self.tab.doc.all_ids().is_empty() {
+                            Point::new(
+                                self.tab.camera.center.x - center.x,
+                                self.tab.camera.center.y - center.y,
+                            )
+                        } else {
+                            let (_, existing_max) = self.tab.doc.bounds();
+                            let (insert_min, _) = document.bounds();
+                            Point::new(
+                                existing_max.x + self.tab.doc.drawing_style.bond_length_world
+                                    - insert_min.x,
+                                self.tab.camera.center.y - center.y,
+                            )
+                        };
+                        self.tab.selected = editing::append(&mut self.tab.doc, &document, offset);
+                        self.changed(before);
+                        self.fit();
+                        self.tool = Tool::Select;
+                        self.status =
+                            "Inserted structure · Drag to position · Delete or Undo to remove"
+                                .into();
+                        if !response.warnings.is_empty() {
+                            self.status.push_str(" · ");
+                            self.status.push_str(&response.warnings.join(" · "));
+                        }
+                    }
+                    return Task::none();
+                }
+                if matches!(kind, Job::AromaticDisplay) {
+                    if let Some(document) = response.document {
+                        let before = self.tab.doc.clone();
+                        self.tab.doc = document.clone();
+                        self.changed(before);
+                        if self.error {
+                            return Task::none();
+                        }
+                        reshiki::atom_labels::refresh_computed(&mut self.tab.doc, &document);
+                        self.tab.labels_dirty = false;
+                        self.tab.analysis = response.analysis;
+                        self.tool = Tool::Select;
+                        self.status =
+                            "Aromatic display changed · Molecular identity retained".into();
+                    }
+                    return Task::none();
+                }
+                if matches!(kind, Job::Abbreviate) {
+                    if let Some(document) = response.document {
+                        let before = self.tab.doc.clone();
+                        let count = document.abbreviations.len();
+                        self.tab.doc = document;
+                        self.tab.selected = self
+                            .tab
+                            .doc
+                            .expand_abbreviation_selection(&self.tab.selected);
+                        self.changed(before);
+                        self.tab.analysis = response.analysis;
+                        self.tool = Tool::Select;
+                        self.status = if count == 0 {
+                            "No matching common groups in this selection".into()
+                        } else {
+                            format!(
+                                "{count} abbreviation{} · Full chemistry retained · Expand to edit internal atoms",
+                                if count == 1 { "" } else { "s" }
+                            )
+                        };
+                    }
+                    return Task::none();
+                }
+                if matches!(kind, Job::Analyze) {
+                    // Checking is a read-only chemistry operation. Refresh
+                    // computed H labels without rewriting the user's bond
+                    // orders/stereo or inserting a step into Undo/Redo.
+                    if let Some(document) = response.document {
+                        reshiki::atom_labels::refresh_computed(&mut self.tab.doc, &document);
+                    }
+                    self.tab.analysis = response.analysis;
+                    self.tab.chemistry_notice = None;
+                    if matches!(kind, Job::Analyze) {
+                        self.status = "No chemistry errors found".into();
+                        self.error = false;
+                    }
+                    return Task::none();
+                }
+                if let Some(document) = response.document {
+                    let before = self.tab.doc.clone();
+                    self.tab.doc = document.clone();
+                    self.changed(before);
+                    reshiki::atom_labels::refresh_computed(&mut self.tab.doc, &document);
+                    self.tab.labels_dirty = false;
+                    self.tab.chemistry_notice = None;
+                    self.tab.selected.clear();
+                    if matches!(kind, Job::Import | Job::ImportFile) {
+                        self.fit();
+                    }
+                    if matches!(kind, Job::ImportFile) {
+                        self.tab.path = None;
+                        self.tab.untitled_name = None;
+                        self.tab.saved = Document::default();
+                        self.tab.file_epoch = self.next_epoch();
+                    }
+                }
+                self.tab.analysis = response.analysis;
+                self.status = match kind {
+                    Job::Clean(_) => "Structure cleaned",
+                    Job::Analyze => "No chemistry errors found",
+                    _ => "Structure imported · Undo restores the previous drawing",
+                }
+                .into();
+                if !response.warnings.is_empty() {
+                    self.status.push_str(" · ");
+                    self.status.push_str(&response.warnings.join(" · "));
+                }
+                self.error = false;
+            }
+        }
+        Task::none()
     }
     fn edit(&mut self, edit: Edit) {
         if let Edit::ContextMenu { position, selected } = edit {
@@ -3060,6 +3086,14 @@ fn chemistry_changed(before: &Document, after: &Document) -> bool {
         })
 }
 
+/// Marks the results of `task` as belonging to tab `id`, unless already marked.
+fn tagged(task: Task<Message>, id: document_tab::TabId) -> Task<Message> {
+    task.map(move |message| match message {
+        Message::Tab(..) => message,
+        message => Message::Tab(id, Box::new(message)),
+    })
+}
+
 fn export_file(contents: String, format: &'static str) -> Task<Message> {
     Task::perform(
         save_export(contents.into_bytes(), format),
@@ -3473,7 +3507,7 @@ mod tests {
         use atom_labels::Action;
         use reshiki::atom_labels::{Carbons, Owner};
         let (mut app, _) = App::new();
-        let _ = app.perform(Pending::New);
+        let _ = app.update(Message::New);
         let a = app.tab.doc.add_atom("N", Point::default());
         app.tab.history = History::default();
         let original = app.tab.doc.clone();
@@ -3502,7 +3536,7 @@ mod tests {
         app.label_action(Action::Carbons(Carbons::All));
         app.label_action(Action::Hydrogens(false));
         app.label_action(Action::Stereo(true));
-        let _ = app.perform(Pending::New);
+        let _ = app.update(Message::New);
         assert_eq!(app.tab.doc.atom_labels, Default::default());
         assert_eq!(app.current_text_style().size_pt, 10.);
         assert_eq!(app.current_text_style().family, "Arial");
@@ -3511,7 +3545,7 @@ mod tests {
     #[test]
     fn invalid_edit_is_rolled_back_without_an_undo_entry() {
         let (mut app, _) = App::new();
-        let _ = app.perform(Pending::New);
+        let _ = app.update(Message::New);
         app.tab.doc.add_atom("C", Point::default());
         app.tab.history = History::default();
         let before = app.tab.doc.clone();
@@ -3529,7 +3563,7 @@ mod tests {
     fn chemistry_check_keeps_placement_atomic_and_preserves_redo() {
         use reshiki::rings::Preset;
         let (mut app, _) = App::new();
-        let _ = app.perform(Pending::New);
+        let _ = app.update(Message::New);
         app.edit(Edit::RingPreset(
             Preset::ChairUp,
             Point::default(),
@@ -3617,7 +3651,7 @@ mod tests {
     fn computed_hydrogen_labels_do_not_make_a_saved_drawing_dirty() {
         use reshiki::rings::Preset;
         let (mut app, _) = App::new();
-        let _ = app.perform(Pending::New);
+        let _ = app.update(Message::New);
         app.tab.doc = Preset::ChairUp.document(42., false);
         app.tab.saved = app.tab.doc.clone();
         checked_labels(&mut app);
@@ -3669,7 +3703,7 @@ mod tests {
     fn regular_ring_rejection_preserves_selection_history_and_redo() {
         for legacy_click in [false, true] {
             let (mut app, _) = App::new();
-            let _ = app.perform(Pending::New);
+            let _ = app.update(Message::New);
             app.tool = Tool::Ring;
             app.aromatic_ring = false;
             app.ring_size = 6;
@@ -3701,7 +3735,7 @@ mod tests {
         }
 
         let (mut app, _) = App::new();
-        let _ = app.perform(Pending::New);
+        let _ = app.update(Message::New);
         app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
         app.aromatic_ring = false;
         app.ring_size = 6;
@@ -3757,7 +3791,7 @@ mod tests {
         let _ = app.update(Message::Undo);
         assert_eq!(app.tab.doc, placed);
         let _ = app.update(Message::Tool(Tool::RingPreset(Preset::ChairUp)));
-        let _ = app.perform(Pending::New);
+        let _ = app.update(Message::New);
         assert_eq!(app.tool, Tool::Select);
         assert_eq!(app.tab.bond_drawing.length, 42.);
         let c = app.tab.doc.add_atom("C", Point::default());
@@ -3916,7 +3950,7 @@ mod tests {
         app.arrow_action(Action::ApplyNumber(Field::Length));
         assert_eq!(app.tab.doc, before);
         assert!(app.error);
-        let _ = app.perform(Pending::New);
+        let _ = app.update(Message::New);
         assert_eq!(app.tab.arrows.style, ArrowStyle::default());
         assert_eq!(app.tab.arrow_style, Preset::Forward);
         assert_eq!(app.tab.caption_format.style.family, "Arial");
@@ -4028,7 +4062,7 @@ mod tests {
         let _ = app.update(Message::FixedLength(false));
         let _ = app.update(Message::FixedAngles(false));
         let _ = app.update(Message::ChainAngle("90".into()));
-        let _ = app.perform(Pending::New);
+        let _ = app.update(Message::New);
         assert_eq!(
             app.tab.caption_format.style,
             reshiki::typography::TextStyle::default()
@@ -4963,7 +4997,7 @@ mod tests {
         let _ = app.update(Message::Viewport(iced::Size::new(1000., 700.)));
         assert_eq!(app.tab.camera.zoom, 1.2);
 
-        let _ = app.perform(Pending::New);
+        let _ = app.update(Message::New);
         assert!(app.tab.doc.all_ids().is_empty());
         assert_eq!(app.tab.camera.zoom, 1.0);
         let _ = app.update(Message::Viewport(iced::Size::new(700., 500.)));
@@ -5050,7 +5084,6 @@ mod tests {
         for extension in ["rsk", "RSK", "reshiki", "moruno"] {
             let (mut app, _) = App::new();
             let path = PathBuf::from(format!("Ethanol.{extension}"));
-            let key = app.file_request_key();
             let runtime = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
@@ -5059,7 +5092,7 @@ mod tests {
                 path.clone(),
                 Ok(contents.clone().into_bytes()),
             ));
-            let _ = app.update(Message::FilePrepared(key, opened));
+            let _ = app.update(Message::FilePrepared(opened));
             assert!(!app.error && !app.dirty(), "{extension}: {}", app.status);
             assert_eq!(app.tab.doc, document);
             assert_eq!(app.tab.path, Some(path));
@@ -5119,27 +5152,37 @@ mod tests {
         let edited = app.tab.doc.clone();
         let window = iced::window::Id::unique();
         assert!(app.update(Message::Close(window)).units() > 0);
-        assert!(matches!(app.pending, Some(Pending::Close(id)) if id == window));
+        assert!(matches!(app.pending, Some(Pending::CloseWindow(id, ..)) if id == window));
         // Further requests are ignored while the dialog is open.
-        for message in [Message::Close(window), Message::New, Message::Open] {
+        for message in [
+            Message::Close(window),
+            Message::New,
+            Message::Open,
+            Message::Tabs(tabs::Action::Close(None)),
+        ] {
             assert_eq!(app.update(message).units(), 0);
         }
-        assert!(matches!(app.pending, Some(Pending::Close(_))));
+        assert!(matches!(app.pending, Some(Pending::CloseWindow(..))));
+        assert_eq!(app.strip().count(), 1);
         let _ = app.update(Message::Cancel);
         assert!(app.pending.is_none());
         assert_eq!(app.tab.doc, edited);
-        let _ = app.update(Message::New);
+        let _ = app.update(Message::Tabs(tabs::Action::Close(None)));
+        assert!(matches!(app.pending, Some(Pending::CloseTab(_))));
         let _ = app.update(Message::Discard);
         assert!(app.pending.is_none());
-        assert!(app.tab.doc.all_ids().is_empty());
+        assert!(
+            app.tab.doc.all_ids().is_empty(),
+            "The last tab gives way to an empty one"
+        );
     }
 
     #[test]
-    fn save_answer_continues_only_after_the_drawing_is_saved() {
+    fn save_answer_closes_the_tab_only_after_it_is_saved() {
         let (mut app, _) = App::new();
         app.tab.doc.add_atom("O", Point::default());
-        let _ = app.update(Message::New);
-        // Cancelling Save As cancels New too, so a later save does not continue it.
+        let _ = app.update(Message::Tabs(tabs::Action::Close(None)));
+        // Cancelling Save As cancels the close too, so a later save does not continue it.
         let epoch = app.tab.file_epoch;
         let _ = app.update(Message::Saved(
             epoch,
@@ -5155,7 +5198,7 @@ mod tests {
         ));
         assert_eq!(app.tab.doc.atoms.len(), 1);
         app.tab.doc.add_atom("N", Point::new(80., 0.));
-        let _ = app.update(Message::New);
+        let _ = app.update(Message::Tabs(tabs::Action::Close(None)));
         let _ = app.update(Message::Saved(epoch, Box::new(app.tab.doc.clone()), saved));
         assert!(app.pending.is_none());
         assert!(app.tab.doc.all_ids().is_empty() && app.tab.path.is_none());
@@ -5177,7 +5220,7 @@ mod tests {
     fn late_save_does_not_retarget_another_document() {
         let (mut app, _) = App::new();
         let snapshot = app.tab.doc.clone();
-        let _ = app.perform(Pending::New);
+        let _ = app.update(Message::New);
         let _ = app.update(Message::Saved(
             0,
             Box::new(snapshot),
@@ -5200,7 +5243,7 @@ mod tests {
     fn new_document_invalidates_inflight_import_even_when_empty() {
         let (mut app, _) = App::new();
         let revision = app.tab.revision;
-        let _ = app.perform(Pending::New);
+        let _ = app.update(Message::New);
         let mut old = Document::default();
         old.add_atom("O", Point::default());
         let _ = app.update(Message::EngineDone {

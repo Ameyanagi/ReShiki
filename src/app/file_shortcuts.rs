@@ -321,13 +321,27 @@ impl Operation for Fields {
 }
 
 pub(super) fn file_message(key: &keyboard::Key, modifiers: keyboard::Modifiers) -> Option<Message> {
+    use super::tabs::Action as Tabs;
+    if modifiers.control()
+        && !modifiers.alt()
+        && !modifiers.logo()
+        && matches!(key, keyboard::Key::Named(keyboard::key::Named::Tab))
+    {
+        return Some(Message::Tabs(Tabs::Cycle(!modifiers.shift())));
+    }
     if !modifiers.command() || modifiers.alt() {
         return None;
     }
     let keyboard::Key::Character(c) = key else {
         return None;
     };
+    if let Some(n) = c.parse::<usize>().ok().filter(|n| (1..=9).contains(n))
+        && !modifiers.shift()
+    {
+        return Some(Message::Tabs(Tabs::Number(n)));
+    }
     Some(match c.to_ascii_lowercase().as_str() {
+        "w" if !modifiers.shift() => Message::Tabs(Tabs::Close(None)),
         "p" if !modifiers.shift() => Message::Printing(super::printing::Action::Start(
             reshiki::printing::Scope::Document,
         )),

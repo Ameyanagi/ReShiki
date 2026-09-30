@@ -189,12 +189,42 @@ fn transform(app: &mut App) {
     ));
 }
 
-/// New on an edited drawing waits for the native save dialog, which the
+/// Closing an edited tab waits for the native save dialog, which the
 /// headless renderer cannot show; nothing may appear above the canvas.
 fn unsaved(app: &mut App) {
     app.tab.doc = benzene();
-    let _ = app.update(Message::New);
+    let _ = app.update(Message::Tabs(crate::app::tabs::Action::Close(None)));
     assert!(app.pending.is_some());
+}
+
+/// Three drawings; the one in front has unsaved changes.
+fn tabs(app: &mut App) {
+    open(app, benzene());
+    app.tab.path = Some("aspirin.rsk".into());
+    app.add_tab();
+    app.tab.doc = benzene();
+    let unsaved = app.tab.id;
+    app.add_tab();
+    mixed(app);
+    app.tab.path = Some("scheme-3.rsk".into());
+    let _ = app.update(Message::Tabs(crate::app::tabs::Action::Select(unsaved)));
+}
+
+/// More tabs than fit, with the ▾ list of the others open.
+fn many_tabs(app: &mut App) {
+    tabs(app);
+    for name in [
+        "oxidation",
+        "suzuki-coupling",
+        "grignard",
+        "aldol",
+        "wittig",
+    ] {
+        app.add_tab();
+        open(app, benzene());
+        app.tab.path = Some(format!("{name}.rsk").into());
+    }
+    let _ = app.update(Message::Tabs(crate::app::tabs::Action::Menu(true)));
 }
 
 /// A launch that found drafts from a session that closed unexpectedly.
@@ -377,7 +407,7 @@ fn smart_guides(renderer: &mut iced::Renderer, size: Size, output: &Path) {
 
 type Setup = fn(&mut App);
 
-const STATES: [(&str, Setup); 17] = [
+const STATES: [(&str, Setup); 19] = [
     ("default", |_| {}),
     ("molecule", molecule),
     ("mixed", mixed),
@@ -388,6 +418,8 @@ const STATES: [(&str, Setup); 17] = [
     ("help", |app| app.help_open = true),
     ("transform", transform),
     ("unsaved", unsaved),
+    ("tabs", tabs),
+    ("tabs-many", many_tabs),
     ("recovery", recovery),
     ("color-popover", color_popover),
     ("edit-hues", edit_hues),
@@ -628,6 +660,107 @@ async fn the_insert_menu_closes_like_the_other_menus() {
     // Choosing the item closes the menu, as the style bar and Export menus do.
     let _ = app.update(Message::Import);
     assert!(!app.imports.menu);
+}
+
+/// A click on a tab brings it to the front, the × of a tab under the pointer
+/// closes it, and the ▾ list of the tabs that do not fit opens and closes
+/// like the other menus.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn tab_strip_clicks_switch_and_close_tabs() {
+    use crate::app::tabs::Action;
+    let renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .unwrap();
+    // Sends events at a point and returns the messages published.
+    fn click(app: &App, renderer: &iced::Renderer, size: Size, at: iced::Point) -> Vec<String> {
+        let mut messages = Vec::new();
+        let mut view = app.view();
+        let mut tree = Tree::new(view.as_widget());
+        let node =
+            view.as_widget_mut()
+                .layout(&mut tree, renderer, &layout::Limits::new(size, size));
+        for event in [
+            mouse::Event::CursorMoved { position: at },
+            mouse::Event::ButtonPressed(mouse::Button::Left),
+            mouse::Event::ButtonReleased(mouse::Button::Left),
+        ] {
+            let mut shell = iced::advanced::Shell::new(&mut messages);
+            view.as_widget_mut().update(
+                &mut tree,
+                &Event::Mouse(event),
+                Layout::new(&node),
+                mouse::Cursor::Available(at),
+                renderer,
+                &mut iced::advanced::clipboard::Null,
+                &mut shell,
+                &Rectangle::with_size(size),
+            );
+        }
+        messages.iter().map(|m| format!("{m:?}")).collect()
+    }
+    let tabs_in = |app: &App, size| {
+        let mut view = app.view();
+        let mut tree = Tree::new(view.as_widget());
+        let node =
+            view.as_widget_mut()
+                .layout(&mut tree, &renderer, &layout::Limits::new(size, size));
+        [30., 28.].map(|height| {
+            let mut row = vec![];
+            layout_row(Layout::new(&node), height, &mut row);
+            row
+        })
+    };
+    /// Header controls of this height, left to right: tabs are 30 high, the
+    /// + and ▾ buttons 28.
+    fn layout_row(layout: Layout<'_>, height: f32, found: &mut Vec<Rectangle>) {
+        let bounds = layout.bounds();
+        if bounds.y < 54. && bounds.height == height && (20. ..=200.).contains(&bounds.width) {
+            if !found.iter().any(|b| b.x == bounds.x) {
+                found.push(bounds);
+            }
+            return;
+        }
+        for child in layout.children() {
+            layout_row(child, height, found);
+        }
+    }
+    let size = Size::new(1280., 820.);
+    let (mut app, _) = App::new();
+    tabs(&mut app);
+    let ids: Vec<_> = app.strip().map(|tab| tab.id).collect();
+    let found = tabs_in(&app, size);
+    let [first, _, third] = found[0].as_slice() else {
+        panic!("Three tabs: {found:?}");
+    };
+    assert_eq!(
+        click(&app, &renderer, size, first.center()),
+        [format!("Tabs(Select({:?}))", ids[0])]
+    );
+    // The × shows and works on a tab behind the front one under the pointer.
+    let close = iced::Point::new(third.x + third.width - 10., third.center_y());
+    assert_eq!(
+        click(&app, &renderer, size, close),
+        [format!("Tabs(Close(Some({:?})))", ids[2])]
+    );
+    let _ = app.update(Message::Tabs(Action::Close(Some(ids[2]))));
+    assert_eq!(app.strip().count(), 2);
+    // At the minimum window, the ▾ list holds the tabs that do not fit.
+    let size = Size::new(1040., 680.);
+    let (mut app, _) = App::new();
+    many_tabs(&mut app);
+    let _ = app.update(Message::Tabs(Action::Menu(false)));
+    let found = tabs_in(&app, size);
+    assert_eq!(found[0].len(), 1, "Only the front tab fits: {found:?}");
+    let more = found[1][0];
+    assert_eq!(
+        click(&app, &renderer, size, more.center()),
+        ["Tabs(Menu(true))"]
+    );
 }
 
 /// Every tool's context row fits the canvas of a 1040 px window with any

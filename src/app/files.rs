@@ -78,16 +78,8 @@ pub(super) async fn save_path(title: &str, name: &str, extension: &str) -> Optio
     Some(path)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Key {
-    serial: u64,
-    epoch: u64,
-    revision: u64,
-}
-
 #[derive(Default)]
 pub(super) struct State {
-    serial: u64,
     pub(super) saving: bool,
 }
 
@@ -143,6 +135,13 @@ pub(super) async fn read(path: PathBuf) -> Opened {
     .map_err(|e| e.to_string())
     .and_then(|r| r);
     Some((path, result))
+}
+
+/// Reads files one after another, so they open as tabs in this order.
+pub(super) fn open_paths(paths: Vec<PathBuf>) -> Task<Message> {
+    paths.into_iter().fold(Task::none(), |task, path| {
+        task.chain(Task::perform(read(path), Message::FilePrepared))
+    })
 }
 
 pub(super) async fn prepare_contents(path: PathBuf, contents: Result<Vec<u8>, String>) -> Opened {
@@ -203,56 +202,34 @@ impl super::App {
         iced::Task::none()
     }
 
-    pub(super) fn file_request_key(&mut self) -> Key {
-        self.file_io.serial = self.file_io.serial.wrapping_add(1);
-        Key {
-            serial: self.file_io.serial,
-            epoch: self.tab.file_epoch,
-            revision: self.tab.revision,
-        }
-    }
-
-    pub(super) fn file_request_is_current(&self, key: Key) -> bool {
-        key.serial == self.file_io.serial && key.epoch == self.tab.file_epoch
-    }
-
-    pub(super) fn file_prepared(&mut self, key: Key, opened: Opened) -> iced::Task<super::Message> {
+    /// Opens a read file in a new tab, or in the tab in front if it is an
+    /// unchanged empty Untitled drawing. A file that is already open brings
+    /// its tab to the front.
+    pub(super) fn file_prepared(&mut self, opened: Opened) -> iced::Task<super::Message> {
         if self.updates.restarting {
             return iced::Task::none();
         }
         let Some((path, result)) = opened else {
             return iced::Task::none();
         };
-        if !self.file_request_is_current(key) {
-            return iced::Task::none();
-        }
-        // Opening is deliberately not a global busy state. An intervening edit,
-        // text draft or chemistry operation wins over a slow read/parse result.
-        if key.revision != self.tab.revision
-            || self.tab.inline_text.is_some()
-            || self.tab.atom_text.is_some()
-            || self.tab.busy
-            || self.tab.cleanup.is_some()
-            || self.tab.erase_stroke
-        {
-            self.status = "Drawing changed while the file was opening. Open the file again.".into();
-            self.error = true;
-            return iced::Task::none();
-        }
         match result {
             Err(error) => {
                 self.status = error;
                 self.error = true;
             }
             Ok(Prepared::Import { format, contents }) => {
+                self.open_target(None);
                 return self.run(
                     super::Request::import(format, &contents),
                     super::Job::ImportFile,
                 );
             }
             Ok(Prepared::Native(doc)) => {
+                if !self.open_target(Some(&path)) {
+                    return iced::Task::none();
+                }
                 self.clear_recovery();
-                self.tab.file_epoch = self.tab.file_epoch.wrapping_add(1);
+                self.tab.file_epoch = self.next_epoch();
                 self.tab.doc = *doc;
                 self.sync_drawing_defaults();
                 self.tab.styles.editor = None;
@@ -279,45 +256,26 @@ impl super::App {
     }
 }
 
-/// Capture the request before testing changes while its worker is pending.
-#[cfg(test)]
-pub(super) fn dispatched_open_key(app: &super::App) -> Key {
-    assert_ne!(app.file_io.serial, 0, "An open must be dispatched first");
-    Key {
-        serial: app.file_io.serial,
-        epoch: app.tab.file_epoch,
-        revision: app.tab.revision,
-    }
-}
-
 /// Drive the real parse worker after a unit test dispatches a legacy/Finder
-/// Opened event. The request serial must already have been allocated by dispatch.
+/// Opened event.
 #[cfg(test)]
 pub(super) fn finish_dispatched_open(
     app: &mut super::App,
     path: PathBuf,
     contents: Result<Vec<u8>, String>,
 ) {
-    let key = dispatched_open_key(app);
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .unwrap();
     let opened = runtime.block_on(prepare_contents(path, contents));
-    #[cfg(target_os = "macos")]
-    if app.native_opening {
-        let _ = app.update(super::Message::MacFiles(
-            super::macos_files::Action::Prepared(key, opened),
-        ));
-        return;
-    }
-    let _ = app.update(super::Message::FilePrepared(key, opened));
+    let _ = app.update(super::Message::FilePrepared(opened));
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::{App, Message, Pending, inline_text};
+    use crate::app::{App, Message, inline_text};
     use reshiki::document::{Document, Point};
     use rfd::MessageDialogResult as Answer;
 
@@ -331,10 +289,16 @@ mod tests {
     }
 
     #[test]
-    fn slow_open_rejects_intervening_edits_and_inline_drafts() {
+    fn opening_takes_an_empty_tab_and_keeps_edited_and_drafting_tabs() {
+        let (mut app, _) = App::new();
+        let _ = app.update(Message::FilePrepared(prepared()));
+        assert!(
+            app.tabs.background.is_empty(),
+            "The empty startup tab is reused"
+        );
+        assert_eq!(app.tab.path, Some("oxygen.rsk".into()));
         for inline in [false, true] {
             let (mut app, _) = App::new();
-            let key = app.file_request_key();
             if inline {
                 let _ = app.inline_action(inline_text::Action::Begin(None, Point::default()));
             } else {
@@ -343,38 +307,33 @@ mod tests {
                 app.changed(before);
             }
             let expected = app.tab.doc.clone();
-            let _ = app.update(Message::FilePrepared(key, prepared()));
-            assert_eq!(app.tab.doc, expected);
-            assert_eq!(app.tab.inline_text.is_some(), inline);
-            assert!(app.error);
-            assert!(app.status.contains("Open the file again"));
-            assert!(app.tab.path.is_none());
+            let _ = app.update(Message::FilePrepared(prepared()));
+            assert_eq!(app.tab.path, Some("oxygen.rsk".into()));
+            assert!(!app.error);
+            let [kept] = app.tabs.background.as_slice() else {
+                panic!("One tab behind the opened file");
+            };
+            assert_eq!(kept.doc, expected);
+            assert_eq!(kept.inline_text.is_some(), inline);
+            assert!(kept.path.is_none());
         }
     }
 
     #[test]
-    fn superseded_open_results_and_errors_leave_new_context_untouched() {
-        for replace_document in [false, true] {
-            for failed in [false, true] {
-                let (mut app, _) = App::new();
-                let key = app.file_request_key();
-                if replace_document {
-                    let _ = app.perform(Pending::New);
-                } else {
-                    let _ = app.file_request_key();
-                }
-                app.status = "Current context".into();
-                let old_result = if failed {
-                    Some(("old.rsk".into(), Err("Old error".into())))
-                } else {
-                    prepared()
-                };
-                let _ = app.update(Message::FilePrepared(key, old_result));
-                assert_eq!(app.status, "Current context");
-                assert!(app.tab.doc.atoms.is_empty());
-                assert!(app.tab.path.is_none());
-            }
-        }
+    fn open_errors_and_files_already_open_add_no_tab() {
+        let (mut app, _) = App::new();
+        let _ = app.update(Message::FilePrepared(prepared()));
+        let _ = app.update(Message::New);
+        assert_eq!(app.tabs.active, 1);
+        let _ = app.update(Message::FilePrepared(Some((
+            "old.rsk".into(),
+            Err("Old error".into()),
+        ))));
+        assert!(app.error && app.status == "Old error");
+        let _ = app.update(Message::FilePrepared(prepared()));
+        assert_eq!(app.strip().count(), 2);
+        assert_eq!(app.tabs.active, 0, "The open file's tab comes to the front");
+        assert_eq!(app.status, "oxygen.rsk is already open");
     }
 
     #[test]
