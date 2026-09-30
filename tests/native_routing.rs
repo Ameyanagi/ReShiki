@@ -703,7 +703,7 @@ async fn routing_child() -> anyhow::Result<()> {
             "relative" => "RESHIKI_INCHI_HELPER must be an absolute path",
             "exit" => "exited with code Some(17)",
             "protocol" => "InChI helper protocol:",
-            "resource" => "KernelHeap exhausted",
+            "resource" => "Heap exhausted",
             _ => anyhow::bail!("Unknown failure mode"),
         };
         anyhow::ensure!(!cases.is_empty(), "Missing helper failure cases");

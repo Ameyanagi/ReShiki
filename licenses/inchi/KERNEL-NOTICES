@@ -1,11 +1,9 @@
-The native helper compiles the official InChI 1.07.3 kernel with the recorded
-ReShiki string-stream repair in tools/inchi-helper/source-patches.json.
-The repair reserves the terminating NUL, checks representable buffer sizes,
-and passes identifier text as a string argument rather than a printf format.
-The audited original source remains unchanged; compilation uses a private copy.
-Source/header notices remain in that copy. The IUPAC,
-InChI Trust and InChI Project MIT notices are retained in LICENSE.
+The runtime uses the MIT-licensed cosmolkit-inchi Rust source port of InChI
+1.07.5. Its dependency license is retained under licenses/rust/. The original
+IUPAC, InChI Trust and InChI Project notices are retained in LICENSE.
+No official C InChI source is compiled into the runtime helper.
 
+The source-port dependency includes the InChI SHA-256 algorithm; its original
 INCHI_BASE/src/sha2.c and sha2.h carry this additional notice:
 
 FIPS-180-2 compliant SHA-256 implementation

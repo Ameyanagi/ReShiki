@@ -1,10 +1,7 @@
 use anyhow::Context;
 use reshiki::chemistry::{
     RDKIT_VERSION,
-    inchi::{
-        INCHI_VERSION,
-        key::{self, Error},
-    },
+    inchi::key::{self, Error},
 };
 use serde::Deserialize;
 use std::{
@@ -49,7 +46,7 @@ fn keys_and_errors_match_direct_native_api() -> anyhow::Result<()> {
     let mut lines = BufReader::new(child.stdout.take().context("Missing native output")?).lines();
     let header: Header = serde_json::from_str(&lines.next().context("Missing native header")??)?;
     assert_eq!(header.rdkit_version, RDKIT_VERSION);
-    assert_eq!(header.inchi_version, INCHI_VERSION);
+    assert_eq!(header.inchi_version, "1.07.3");
     assert_eq!(header.c_long_bytes, size_of::<std::os::raw::c_long>());
     let mut counts = BTreeMap::new();
     let mut corpus = BTreeSet::new();

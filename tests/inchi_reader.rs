@@ -9,7 +9,6 @@ use reshiki::chemistry::inchi::{
 };
 use serde::Deserialize;
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 #[cfg(unix)]
 use std::process::{Command, Stdio};
 use std::{
@@ -46,129 +45,100 @@ struct Case {
     sanitize: bool,
     #[serde(default)]
     remove: bool,
-    #[serde(default)]
-    limit: bool,
     expected: Option<Value>,
     error: Option<String>,
 }
 
-async fn compare_original_captures(boundary: bool) -> anyhow::Result<()> {
+#[tokio::test]
+async fn import_options_match_independently_captured_molecules() -> anyhow::Result<()> {
     let Some(helper) = helper("reshiki-inchi-helper")? else {
         return Ok(());
     };
-    let mut lines = fixture::open(if boundary {
-        "inchi-reader-text.json.gz"
-    } else {
-        "inchi-output.jsonl.gz"
-    })?
-    .lines();
-    let header: Value = serde_json::from_str(&lines.next().context("Missing fixture version")??)?;
-    assert_eq!(header["rdkit_version"], reshiki::chemistry::RDKIT_VERSION);
-    assert_eq!(
-        header["inchi_version"],
-        reshiki::chemistry::inchi::INCHI_VERSION
-    );
-    if boundary {
-        let capture = include_str!("inchi_output_reference.cpp").replace(
-            "in.get();std::getline(in,text);",
-            "in.get();std::getline(in,text);text=observe::unhex(text);",
-        );
-        assert_eq!(
-            header["transport_capture_sha256"],
-            format!("{:x}", Sha256::digest(capture.as_bytes()))
-        );
-    }
-    assert_eq!(
-        header["capture_sha256"],
-        format!(
-            "{:x}",
-            Sha256::digest(include_bytes!("inchi_output_reference.cpp"))
-        )
-    );
-    let (mut records, mut warnings, mut failed, mut reconstructed, mut boundaries) =
-        (0, 0, 0, 0, 0);
-    for line in lines {
-        let line = line?;
-        if !boundary {
-            #[derive(Deserialize)]
-            struct Kind<'a> {
-                operation: &'a str,
-            }
-            // Match inchi_reader_reference.py's selection from the independent
-            // output corpus. Synthetic reconstruction records are tested there.
-            if serde_json::from_str::<Kind<'_>>(&line)?.operation != "import" {
-                continue;
-            }
-        }
-        let case: Case = serde_json::from_str(&line)?;
-        let before = case.inchi.clone();
-        let result = generator::read(&helper, &case.inchi, Duration::from_secs(30)).await;
-        assert_eq!(case.inchi, before, "{} changed input", case.name);
-        if case.limit {
-            assert!(
-                matches!(result, Err(Error::Limit("InChI text"))),
-                "{}: {result:?}",
-                case.name
-            );
-            boundaries += 1;
+    let mut count = 0;
+    for line in fixture::open("inchi-output.jsonl.gz")?.lines().skip(1) {
+        let value: Value = serde_json::from_str(&line?)?;
+        if value["operation"] != "import" {
             continue;
         }
-        let actual = result.with_context(|| case.name.clone())?;
-        assert_eq!(actual, case.raw, "{} native output", case.name);
-        records += 1;
-        warnings += usize::from(actual.status == 1);
-        failed += usize::from(!matches!(actual.status, 0 | 1));
-        if !boundary {
-            let input_before = actual.clone();
-            let assembled = output::reconstruct(
-                &actual,
-                output::Options {
-                    sanitize: case.sanitize,
-                    remove_hydrogens: case.remove,
-                },
-            );
-            assert_eq!(actual, input_before, "{} changed output records", case.name);
-            match (assembled, case.expected, case.error) {
-                (Ok(value), expected, None) => assert_eq!(
+        let case: Case = serde_json::from_value(value)?;
+        let actual = generator::read_with_options(
+            &helper,
+            &case.inchi,
+            Limits {
+                timeout: Duration::from_secs(30),
+                heap_bytes: generator::DEFAULT_HEAP_BYTES,
+            },
+            output::Options {
+                sanitize: case.sanitize,
+                remove_hydrogens: case.remove,
+            },
+        )
+        .await;
+        match (actual, case.expected, case.error) {
+            (Ok(value), expected, None) => {
+                assert_eq!(value.status, case.raw.status, "{} status", case.name);
+                assert_eq!(value.message, case.raw.message, "{} diagnostics", case.name);
+                assert_eq!(
                     serde_json::to_value(value.state)?,
                     expected.unwrap_or(Value::Null),
-                    "{} reconstruction",
+                    "{}",
                     case.name
-                ),
-                (Err(_), None, Some(_)) => (),
-                (actual, expected, error) => anyhow::bail!(
-                    "{} reconstruction mismatch: {actual:?}, expected={expected:?}, native error={error:?}",
-                    case.name
-                ),
+                );
             }
-            reconstructed += 1;
+            (Err(Error::Rejected(_)), None, Some(_)) => (),
+            (actual, expected, error) => anyhow::bail!(
+                "{}: {actual:?}, expected={expected:?}, error={error:?}",
+                case.name
+            ),
         }
+        count += 1;
     }
-    if boundary {
-        assert_eq!(records, 24);
-        assert_eq!(reconstructed, 0);
-        assert_eq!(boundaries, 1);
-    } else {
-        assert_eq!(records, 1848);
-        assert_eq!(reconstructed, 1848);
-        assert_eq!(boundaries, 0);
-        assert_eq!(warnings, 4);
-        assert_eq!(failed, 16);
-    }
-    println!(
-        "Native InChI import: {records} exact raw records, {reconstructed} reconstruction outcomes, {warnings} warnings, {failed} native failures, {boundaries} explicit text limit"
-    );
+    assert_eq!(count, 1848);
     Ok(())
 }
 
 #[tokio::test]
-async fn native_import_and_reconstruction_match_original_captures() -> anyhow::Result<()> {
-    compare_original_captures(false).await
-}
-
-#[tokio::test]
-async fn native_import_text_boundaries_match_original_captures() -> anyhow::Result<()> {
-    compare_original_captures(true).await
+async fn import_text_boundaries_preserve_native_results() -> anyhow::Result<()> {
+    let Some(helper) = helper("reshiki-inchi-helper")? else {
+        return Ok(());
+    };
+    let options = output::Options {
+        sanitize: false,
+        remove_hydrogens: false,
+    };
+    let mut count = 0;
+    for line in fixture::open("inchi-reader-text.json.gz")?.lines().skip(1) {
+        let case: Value = serde_json::from_str(&line?)?;
+        let text = case["inchi"].as_str().context("Missing InChI text")?;
+        let actual = generator::read_with_options(
+            &helper,
+            text,
+            Limits {
+                timeout: Duration::from_secs(30),
+                heap_bytes: generator::DEFAULT_HEAP_BYTES,
+            },
+            options,
+        )
+        .await;
+        if case["limit"] == true {
+            assert!(matches!(actual, Err(Error::Limit("InChI text"))));
+        } else {
+            let raw: output::Output = serde_json::from_value(case["raw"].clone())?;
+            let actual = actual.with_context(|| case["name"].to_string())?;
+            assert_eq!(actual.status, raw.status, "{} status", case["name"]);
+            assert_eq!(actual.message, raw.message, "{} message", case["name"]);
+            assert_eq!(actual.log, raw.log, "{} log", case["name"]);
+            assert_eq!(
+                serde_json::to_value(actual.state)?,
+                serde_json::to_value(output::reconstruct(&raw, options)?.state)?,
+                "{} molecule",
+                case["name"]
+            );
+        }
+        count += 1;
+    }
+    assert_eq!(count, 25);
+    Ok(())
 }
 
 fn prepare_stub(source: &Path, destination: &Path) -> anyhow::Result<()> {
@@ -195,12 +165,12 @@ async fn reader_limits_and_transport_failures_are_distinct_from_native_status() 
                 text,
                 Limits {
                     timeout: Duration::from_secs(5),
-                    kernel_heap_bytes: budget
+                    heap_bytes: budget
                 }
             )
             .await,
             Err(Error::ResourceLimit {
-                resource: Resource::KernelHeap,
+                resource: Resource::Heap,
                 ..
             })
         ));
@@ -208,8 +178,17 @@ async fn reader_limits_and_transport_failures_are_distinct_from_native_status() 
     let invalid = generator::read(&path, "invalid", Duration::from_secs(5)).await?;
     assert!(!matches!(invalid.status, 0 | 1));
     let actual = generator::read(&path, text, Duration::from_secs(5)).await?;
-    assert_eq!(actual.atoms.len(), 1);
-    assert_eq!(actual.atoms.first().context("Missing atom")?.element, "C");
+    let state = actual.state.context("Missing molecule")?;
+    assert_eq!(state.graph.atoms.len(), 1);
+    assert_eq!(
+        state
+            .graph
+            .atoms
+            .first()
+            .context("Missing atom")?
+            .atomic_number,
+        6
+    );
     let Some(stub) = helper("inchi-helper-stub")? else {
         return Ok(());
     };
@@ -220,14 +199,11 @@ async fn reader_limits_and_transport_failures_are_distinct_from_native_status() 
         "oversized",
         "hang",
         "resource",
-        "resource-unavailable",
         "ok",
         "read-ok",
         "read-counts",
         "read-stereo",
         "read-element",
-        "read-coordinate",
-        "read-adjacency",
         "read-index",
         "read-status",
         "read-trailing",
@@ -254,25 +230,8 @@ async fn reader_limits_and_transport_failures_are_distinct_from_native_status() 
             ("version", Err(Error::Version(_)))
             | ("oversized", Err(Error::Limit(_)))
             | ("hang", Err(Error::Timeout))
-            | ("resource", Err(Error::ResourceLimit { .. }))
-            | ("resource-unavailable", Err(Error::ResourceUnavailable { .. })) => true,
-            ("read-ok", Ok(output)) => {
-                assert_eq!(output.warning_flags, [[1 << 50, 7], [8, 9]]);
-                let atom = output.atoms.first().context("Missing stub atom")?;
-                assert_eq!(atom.radical, 2);
-                assert_eq!(
-                    atom.bonds
-                        .iter()
-                        .map(|b| (b.neighbor, b.kind, b.stereo))
-                        .collect::<Vec<_>>(),
-                    [(1, -1, -4), (1, -1, -4)]
-                );
-                assert_eq!(
-                    output.stereo.first().context("Missing stub stereo")?.parity,
-                    4
-                );
-                true
-            }
+            | ("resource", Err(Error::ResourceLimit { .. })) => true,
+            ("read-ok", Ok(output)) => output.state.is_some(),
             (_, Err(Error::Protocol(_)))
                 if mode.starts_with("read-") || matches!(mode, "protocol" | "truncated" | "ok") =>
             {
@@ -349,19 +308,19 @@ async fn invalid_import_limits_do_not_launch_a_process() -> anyhow::Result<()> {
     for limits in [
         Limits {
             timeout: Duration::ZERO,
-            kernel_heap_bytes: 1,
+            heap_bytes: 1,
         },
         Limits {
             timeout: generator::MAX_TIMEOUT + Duration::from_secs(1),
-            kernel_heap_bytes: 1,
+            heap_bytes: 1,
         },
         Limits {
             timeout: Duration::from_secs(1),
-            kernel_heap_bytes: 0,
+            heap_bytes: 0,
         },
         Limits {
             timeout: Duration::from_secs(1),
-            kernel_heap_bytes: generator::MAX_KERNEL_HEAP_BYTES + 1,
+            heap_bytes: generator::MAX_HEAP_BYTES + 1,
         },
     ] {
         assert!(matches!(

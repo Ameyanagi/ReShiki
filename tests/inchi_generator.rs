@@ -2,7 +2,7 @@ use anyhow::Context;
 use reshiki::chemistry::{
     inchi::{
         generator::{self, Error},
-        input,
+        input, kernel,
     },
     stereo::{Point3, perception::State},
 };
@@ -55,6 +55,7 @@ fn log_content(value: &str) -> String {
         .filter(|line| !line.contains(" Build ("))
         .collect::<Vec<_>>()
         .join("\n")
+        .replace("1.07.3", "1.07.5")
 }
 
 #[tokio::test]
@@ -88,7 +89,7 @@ async fn standalone_kernel_matches_original_native_generation() -> anyhow::Resul
     let mut failures = Vec::new();
     for line in lines {
         let case: Case = serde_json::from_str(&line?)?;
-        let prepared = input::prepare(&case.state, case.positions.as_deref());
+        let prepared = kernel::Molecule::prepare(&case.state, case.positions.as_deref());
         match (prepared, case.expected) {
             (Err(_), None) => preparation_errors += 1,
             (Err(input::Error::NativeEmpty(input::NativeEmpty::TooManyNeighbors { .. })), Some(expected))
@@ -141,20 +142,31 @@ async fn standalone_kernel_matches_original_native_generation() -> anyhow::Resul
     Ok(())
 }
 
-fn methane() -> input::Input {
-    input::Input {
-        has_coordinates: false,
-        atoms: vec![input::Atom {
-            position: [0.0; 3],
-            element: "C".into(),
-            isotopic_mass: 0,
-            charge: 0,
-            hydrogens: [-1, 0, 0, 0],
-            radical: 0,
-            bonds: vec![],
+fn methane() -> kernel::Molecule {
+    use reshiki::chemistry::{
+        electronic::Hybridization,
+        graph::{Atom, Graph},
+        ranking::Metadata,
+        stereo::perception::{Properties, RingCache},
+    };
+    let graph = Graph {
+        atoms: vec![Atom {
+            atomic_number: 6,
+            ..Default::default()
         }],
-        stereo: vec![],
-    }
+        bonds: vec![],
+    };
+    let state = State {
+        valences: graph.valences().unwrap(),
+        metadata: Metadata::unspecified(&graph),
+        directions: vec![],
+        hybridizations: vec![Hybridization::Sp3],
+        conjugated: vec![],
+        rings: RingCache::default(),
+        properties: Properties::unspecified(&graph),
+        graph,
+    };
+    kernel::Molecule::prepare(&state, None).unwrap()
 }
 
 fn prepare_stub(source: &Path, destination: &Path) -> anyhow::Result<()> {
@@ -179,7 +191,6 @@ async fn helper_failures_are_bounded_and_typed() -> anyhow::Result<()> {
         "truncated",
         "rejected",
         "resource",
-        "resource-unavailable",
         "resource-scope",
         "resource-reason",
         "resource-budget",
@@ -217,14 +228,7 @@ async fn helper_failures_are_bounded_and_typed() -> anyhow::Result<()> {
             (
                 "resource",
                 Err(Error::ResourceLimit {
-                    resource: generator::Resource::KernelHeap,
-                    ..
-                }),
-            )
-            | (
-                "resource-unavailable",
-                Err(Error::ResourceUnavailable {
-                    resource: generator::Resource::KernelHeap,
+                    resource: generator::Resource::Heap,
                     ..
                 }),
             )
@@ -294,7 +298,11 @@ async fn dropping_generation_kills_the_child_and_bad_input_never_spawns() -> any
     let executable = dir.path().join("hang");
     prepare_stub(&stub, &executable)?;
     let mut invalid = methane();
-    invalid.atoms.first_mut().context("Missing atom")?.position[0] = f64::NAN;
+    invalid.positions = Some(vec![Point3 {
+        x: f64::NAN,
+        y: 0.0,
+        z: 0.0,
+    }]);
     assert!(matches!(
         generator::generate(&executable, &invalid, Duration::from_secs(1)).await,
         Err(Error::Input(_))
@@ -330,8 +338,27 @@ async fn dropping_generation_kills_the_child_and_bad_input_never_spawns() -> any
     let executable = dir.path().join("no-read");
     prepare_stub(&stub, &executable)?;
     let mut large = methane();
-    let atom = large.atoms.first().context("Missing atom")?.clone();
-    large.atoms.resize(32767, atom);
+    let original = large.state.clone();
+    large
+        .state
+        .graph
+        .atoms
+        .resize(5000, original.graph.atoms[0].clone());
+    large.state.valences.resize(5000, original.valences[0]);
+    large
+        .state
+        .metadata
+        .atoms
+        .resize(5000, original.metadata.atoms[0].clone());
+    large
+        .state
+        .properties
+        .atoms
+        .resize(5000, original.properties.atoms[0].clone());
+    large
+        .state
+        .hybridizations
+        .resize(5000, original.hybridizations[0]);
     assert!(matches!(
         generator::generate(&executable, &large, Duration::from_millis(100)).await,
         Err(Error::Timeout)
@@ -353,12 +380,12 @@ async fn exhausted_kernel_heap_is_typed_and_does_not_affect_next_request() -> an
                 &methane(),
                 generator::Limits {
                     timeout: Duration::from_secs(5),
-                    kernel_heap_bytes: budget,
+                    heap_bytes: budget,
                 },
             )
             .await;
             let Err(Error::ResourceLimit {
-                resource: generator::Resource::KernelHeap,
+                resource: generator::Resource::Heap,
                 budget: actual_budget,
                 used,
                 requested,
@@ -377,14 +404,14 @@ async fn exhausted_kernel_heap_is_typed_and_does_not_affect_next_request() -> an
     }
     let output = generator::generate(&path, &methane(), Duration::from_secs(5)).await?;
     assert_eq!(output.inchi, "InChI=1S/CH4/h1H4");
-    for budget in [0, generator::MAX_KERNEL_HEAP_BYTES + 1] {
+    for budget in [0, generator::MAX_HEAP_BYTES + 1] {
         assert!(matches!(
             generator::generate_with_limits(
                 Path::new("must-not-spawn-invalid-budget"),
                 &methane(),
                 generator::Limits {
                     timeout: Duration::from_secs(5),
-                    kernel_heap_bytes: budget
+                    heap_bytes: budget
                 }
             )
             .await,
