@@ -45,7 +45,7 @@ impl App {
                 ("F1".into(), "Keyboard shortcuts"),
                 (
                     format!("{} drag", keys(alt, "")),
-                    "Draw or move bonded atoms freely",
+                    "Draw or move freely, without bond constraints or smart guides",
                 ),
                 (
                     format!("{}-click with a ring tool", keys(command, "")),
@@ -80,12 +80,16 @@ impl App {
                 (label(Message::InvertSelection), "Invert selection"),
                 (label(Message::Duplicate), "Duplicate"),
                 (
+                    "Drag an object".into(),
+                    "Snap to other objects' edges, centers and equal gaps (smart guides)",
+                ),
+                (
                     format!("{} drag", keys(command, "")),
-                    "Drag a copy, leaving the original in place",
+                    "Drag a copy, leaving the original in place; the copy snaps too",
                 ),
                 (
                     format!("{} drag", keys(command | shift, "")),
-                    "Drag a copy along one axis",
+                    "Drag a copy along one axis, snapping along it",
                 ),
                 (
                     format!("Release {}, then Esc", keys(command, "")),
@@ -93,7 +97,7 @@ impl App {
                 ),
                 (
                     format!("{} drag", keys(shift, "")),
-                    "Move horizontally or vertically only",
+                    "Move horizontally or vertically only, snapping along that axis",
                 ),
                 (
                     keys(command | shift, "Right"),
@@ -190,7 +194,7 @@ impl App {
                 ),
                 (
                     format!("Arrows / {} arrows", keys(shift, "")),
-                    "Nudge 1 / 10 units",
+                    "Nudge 1 / 10 units, never snapping",
                 ),
                 ("Drag side handle".into(), "Change width or height"),
                 ("Drag corner handle".into(), "Resize proportionally"),

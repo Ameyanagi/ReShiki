@@ -542,6 +542,7 @@ impl App {
             camera: self.camera,
             grid: self.grid,
             guides: self.guides,
+            smart_guides: self.appearance.smart_guides,
             ring_size: self.ring_size,
             aromatic_ring: self.aromatic_ring,
             template_connection: self
@@ -2057,6 +2058,15 @@ impl App {
                     .on_toggle(|_| Message::Grid)
                     .size(14)
                     .text_size(12),
+                hover_hint(
+                    checkbox(self.appearance.smart_guides)
+                        .label("Smart guides")
+                        .on_toggle(Message::SmartGuides)
+                        .size(14)
+                        .text_size(12),
+                    "Snap dragged objects to other objects' edges, centers and equal gaps · Hold Option/Alt to move freely",
+                    tooltip::Position::Top,
+                ),
                 checkbox(self.guides.rulers)
                     .label("Rulers")
                     .on_toggle(Message::Rulers)

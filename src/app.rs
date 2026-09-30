@@ -175,6 +175,7 @@ pub enum Message {
     IntegralGroup(bool),
     AddFrame(reshiki::graphics::GraphicKind),
     Grid,
+    SmartGuides(bool),
     ToggleView,
     Appearance(crate::appearance::Mode),
     CanvasTheme(reshiki::canvas_theme::CanvasTheme),
@@ -1048,6 +1049,7 @@ impl App {
                     | Message::ToggleView
                     | Message::ObjectToolbar(object_toolbar::Action::Visible(_))
                     | Message::Grid
+                    | Message::SmartGuides(_)
                     | Message::Rulers(_)
                     | Message::Crosshair(_)
                     | Message::RulerUnit(_)
@@ -1913,6 +1915,13 @@ impl App {
             Message::ThemeGenerator(action) => return self.theme_generator_action(action),
             Message::QuickDrawingStyle(choice) => return self.quick_drawing_style(choice),
             Message::Grid => self.grid = !self.grid,
+            Message::SmartGuides(enabled) => {
+                self.appearance.smart_guides = enabled;
+                if let Err(error) = self.appearance.save() {
+                    self.status = format!("Could not save smart guides preference: {error}");
+                    self.error = true;
+                }
+            }
             Message::ToggleView => self.view_open = !self.view_open,
             Message::ObjectToolbar(action) => self.object_toolbar_action(action),
             Message::Rulers(enabled) => {
@@ -4765,6 +4774,44 @@ mod tests {
     }
 
     #[test]
+    fn a_smart_guide_drag_is_one_undoable_edit() {
+        use reshiki::graphics::{Graphic, GraphicKind};
+        let (mut app, _) = App::new();
+        for (lo, hi) in [((-150., -100.), (-90., -60.)), ((0., 0.), (60., 40.))] {
+            let id = app.doc.next_id();
+            app.doc.graphics.push(Graphic::dragged(
+                id,
+                GraphicKind::Rectangle,
+                Point::new(lo.0, lo.1),
+                Point::new(hi.0, hi.1),
+                Default::default(),
+                Default::default(),
+                false,
+            ));
+        }
+        let moving = app.doc.graphics[1].id;
+        let before = app.doc.clone();
+        let edits = crate::canvas::select_drag(
+            &before,
+            &[],
+            Point::new(0., 20.),
+            Point::new(-3., -77.),
+            Default::default(),
+        );
+        for edit in edits {
+            let _ = app.update(Message::Canvas(edit));
+        }
+        let mut expected = before.clone();
+        expected.translate(&[moving], -3., -100.);
+        assert_eq!(app.doc, expected, "the top edges snapped together");
+        assert_eq!(app.selected, [moving]);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, before);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc, expected);
+    }
+
+    #[test]
     fn drag_duplicate_keeps_the_original_and_is_one_undoable_edit() {
         let (mut app, _) = App::new();
         let a = app.doc.add_atom("C", Point::default());
@@ -4997,9 +5044,15 @@ mod tests {
             Message::Crosshair(true),
             Message::RulerUnit(canvas::guides::Unit::Inches),
             Message::Grid,
+            Message::SmartGuides(false),
         ] {
             let _ = app.update(message);
         }
+        // Smart guides are on by default, also for settings saved before them.
+        assert!(!app.appearance.smart_guides);
+        let legacy: crate::appearance::Settings =
+            serde_json::from_str(r#"{"mode":"light","arrange_controls":false}"#).unwrap();
+        assert!(legacy.smart_guides && !legacy.arrange_controls);
         assert_eq!(app.doc, document);
         assert_eq!(app.selected, [id]);
         assert_eq!(app.revision, revision);

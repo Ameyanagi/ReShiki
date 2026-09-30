@@ -16,9 +16,11 @@ mod pages;
 #[cfg(test)]
 mod performance;
 mod selection;
+mod smart_guides;
 mod text_cache;
 pub(crate) mod tilt;
 use selection::{Handle, SelectionBox, TransformDrag};
+use smart_guides::{Axis, Guide};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Tool {
@@ -61,7 +63,7 @@ impl Tool {
     pub fn hint(self) -> &'static str {
         match self {
             Self::Select => {
-                "Bonded drags use Length/Angles · Option/Alt frees movement · Shift locks an axis · Ctrl/Cmd drag copies · Drag a ring edge to fuse"
+                "Bonded drags use Length/Angles · Option/Alt moves freely, without guides · Shift locks an axis · Ctrl/Cmd drag copies · Drag a ring edge to fuse"
             }
             Self::Lasso => "Draw around objects · Shift adds · Option/Alt drag subtracts",
             Self::Tilt => "Drag a ring or selection to tilt · Shift snaps to 15° · Escape cancels",
@@ -292,6 +294,8 @@ pub struct MoleculeCanvas<'a> {
     pub camera: Camera,
     pub grid: bool,
     pub guides: guides::Guides,
+    /// Snap dragged objects and arrow ends to other objects.
+    pub smart_guides: bool,
     pub ring_size: u8,
     pub aromatic_ring: bool,
     pub template_connection: reshiki::templates::Connection,
@@ -315,26 +319,94 @@ impl MoleculeCanvas<'_> {
     fn copies(&self, modifiers: iced::keyboard::Modifiers) -> bool {
         self.tool.selects() && command_held(modifiers)
     }
-    /// Drag offset for the preview and release. A Ctrl/Cmd copy has no bonds to constrain.
+    /// Drag offset for the preview and release, and the smart guides it meets.
+    /// A Ctrl/Cmd copy has no bonds to constrain.
     fn move_delta(
         &self,
+        state: &State,
         ids: &[u64],
         requested: World,
-        modifiers: iced::keyboard::Modifiers,
-    ) -> World {
-        if self.copies(modifiers) {
-            return if modifiers.shift() {
+        bounds: Rectangle,
+    ) -> (World, Vec<Guide>) {
+        let modifiers = state.modifiers;
+        let copies = self.copies(modifiers);
+        let delta = if copies {
+            if modifiers.shift() {
                 movement::axis_locked(requested)
             } else {
                 requested
-            };
-        }
-        let drawing = self.bond_drawing.unconstrained(modifiers.alt());
-        if modifiers.shift() {
-            movement::axis_delta(self.doc, ids, requested, drawing)
+            }
         } else {
-            movement::delta(self.doc, ids, requested, drawing)
+            let drawing = self.bond_drawing.unconstrained(modifiers.alt());
+            if modifiers.shift() {
+                movement::axis_delta(self.doc, ids, requested, drawing)
+            } else {
+                movement::delta(self.doc, ids, requested, drawing)
+            }
+        };
+        // Guides move whole objects; part of a molecule keeps its bond constraints.
+        // Moving everything leaves nothing to snap to.
+        if !self.tool.selects()
+            || (!copies && state.scene.borrow_mut().whole_document(self.doc, ids))
+        {
+            return (delta, vec![]);
         }
+        let Some((layout, targets)) = self
+            .guide_targets(state, ids, copies, bounds)
+            .filter(|(layout, _)| copies || layout.whole)
+        else {
+            return (delta, vec![]);
+        };
+        let axes: &[Axis] = match (modifiers.shift(), movement::horizontal(requested)) {
+            (false, _) => &Axis::BOTH,
+            (true, true) => &[Axis::X],
+            (true, false) => &[Axis::Y],
+        };
+        let pixel = 1. / self.camera.zoom;
+        let delta = smart_guides::snap(layout.moving, delta, &targets, axes, pixel);
+        let guides = smart_guides::guides(layout.moving.translated(delta), &targets, pixel);
+        (delta, guides)
+    }
+    /// A dragged arrow end: 15° steps under fixed angles, then smart guides.
+    fn arrow_end(
+        &self,
+        state: &State,
+        arrow: &reshiki::document::Arrow,
+        index: usize,
+        cursor: World,
+        bounds: Rectangle,
+    ) -> (World, Vec<Guide>) {
+        let origin = if index == 0 { arrow.end } else { arrow.start };
+        let fixed = self.bond_drawing.fixed_angles && !state.modifiers.alt();
+        let end = arrow_endpoint(origin, cursor, fixed);
+        let Some((_, targets)) = self.guide_targets(state, &[arrow.id], false, bounds) else {
+            return (end, vec![]);
+        };
+        let pixel = 1. / self.camera.zoom;
+        let end = smart_guides::snap_point(end, &targets, fixed.then_some(origin), pixel);
+        (end, smart_guides::point_guides(end, &targets, pixel))
+    }
+    /// The dragged objects and the on-screen objects they can snap to, unless
+    /// smart guides are off or Option/Alt moves freely.
+    fn guide_targets(
+        &self,
+        state: &State,
+        ids: &[u64],
+        copies: bool,
+        bounds: Rectangle,
+    ) -> Option<(std::rc::Rc<smart_guides::Layout>, Vec<smart_guides::Bounds>)> {
+        if !self.smart_guides || state.modifiers.alt() {
+            return None;
+        }
+        let layout = state.scene.borrow_mut().guides(self.doc, ids)?;
+        let view = smart_guides::Bounds {
+            lo: self.camera.world(Point::ORIGIN, bounds),
+            hi: self
+                .camera
+                .world(Point::new(bounds.width, bounds.height), bounds),
+        };
+        let targets = layout.targets(view, copies);
+        Some((layout, targets))
     }
     fn template_gesture(
         &self,
@@ -943,13 +1015,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                                 .arrows
                                 .iter()
                                 .find(|a| a.id == id)
-                                .map(|a| {
-                                    arrow_endpoint(
-                                        if index == 0 { a.end } else { a.start },
-                                        p,
-                                        self.bond_drawing.fixed_angles && !state.modifiers.alt(),
-                                    )
-                                })
+                                .map(|a| self.arrow_end(state, a, index, p, bounds).0)
                                 .unwrap_or(p)
                         } else {
                             p
@@ -1113,10 +1179,11 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                             }
                         } else {
                             state.last_click = None;
-                            let delta = self.move_delta(
+                            let (delta, _) = self.move_delta(
+                                state,
                                 &ids,
                                 World::new(p.x - start.x, p.y - start.y),
-                                state.modifiers,
+                                bounds,
                             );
                             if self.copies(state.modifiers) {
                                 Edit::Duplicate(ids, delta.x, delta.y)
@@ -1265,22 +1332,12 @@ impl MoleculeCanvas<'_> {
             pages::draw(frame, layout, self.camera, bounds);
         }
         if self.grid {
-            let spacing = 28.0 * self.camera.zoom;
-            if spacing > 9.0 {
-                let origin = self.camera.screen(World::default(), bounds);
-                let mut x = origin.x.rem_euclid(spacing);
-                while x < bounds.width {
-                    let mut y = origin.y.rem_euclid(spacing);
-                    while y < bounds.height {
-                        frame.fill(
-                            &Path::circle(Point::new(x, y), 0.7),
-                            Color::from_rgb8(218, 226, 224),
-                        );
-                        y += spacing;
-                    }
-                    x += spacing;
-                }
-            }
+            draw_grid(
+                frame,
+                self.camera,
+                bounds,
+                self.doc.drawing_style.bond_length_world,
+            );
         }
         self.guides.draw_crosshair(
             frame,
@@ -1296,6 +1353,7 @@ impl MoleculeCanvas<'_> {
         let mut template_notice = None;
         let mut rejection: Option<reshiki::editing::RingRejection> = None;
         let mut translation = None;
+        let mut smart = Vec::new();
         if let (Some(Gesture::Tilt(drag)), Some(p)) = (&state.gesture, state.cursor)
             && self.tool == Tool::Tilt
         {
@@ -1426,18 +1484,18 @@ impl MoleculeCanvas<'_> {
                 mark.offset = World::new(end.x - a.position.x, end.y - a.position.y);
             }
             if let Some(Gesture::ArrowHandle { id, index }) = &state.gesture
-                && let Some(a) = preview.arrows.iter_mut().find(|a| a.id == *id)
+                && let Some(arrow) = self.doc.arrows.iter().find(|a| a.id == *id)
             {
                 let end = if *index < 2 {
-                    arrow_endpoint(
-                        if *index == 0 { a.end } else { a.start },
-                        end,
-                        self.bond_drawing.fixed_angles && !state.modifiers.alt(),
-                    )
+                    let (end, guides) = self.arrow_end(state, arrow, *index, end, bounds);
+                    smart = guides;
+                    end
                 } else {
                     end
                 };
-                a.edit_handle(*index, end);
+                if let Some(a) = preview.arrows.iter_mut().find(|a| a.id == *id) {
+                    a.edit_handle(*index, end);
+                }
             }
             if let Some(Gesture::Draw { start, .. }) = &state.gesture
                 && self.tool == Tool::Arrow
@@ -1671,16 +1729,14 @@ impl MoleculeCanvas<'_> {
             let p = self
                 .camera
                 .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
-            let delta = self.move_delta(
-                ids,
-                World::new(p.x - start.x, p.y - start.y),
-                state.modifiers,
-            );
+            let (delta, guides) =
+                self.move_delta(state, ids, World::new(p.x - start.x, p.y - start.y), bounds);
             if start.distance(p) < 1.0 / self.camera.zoom {
                 ring_selection = Some(ids.clone());
             } else if self.copies(state.modifiers) {
                 let part = state.scene.borrow_mut().copy(self.doc, ids);
                 ring_selection = Some(reshiki::editing::append(&mut preview, &part, delta));
+                smart = guides;
             } else if state.scene.borrow_mut().whole_document(self.doc, ids) {
                 // Moving every object cannot change their relative geometry,
                 // chemical labels, crossing gaps or ring attachment targets.
@@ -1690,10 +1746,12 @@ impl MoleculeCanvas<'_> {
             } else if let Some(snapped) =
                 reshiki::editing::snap_ring(&mut preview, ids, delta, 14.0 / self.camera.zoom)
             {
+                // Fusing onto a ring wins over the guides, on release too.
                 ring_selection = Some(snapped);
             } else {
                 preview.translate(ids, delta.x, delta.y);
                 ring_selection = Some(ids.clone());
+                smart = guides;
             }
         }
         if let Some(p) = state.cursor {
@@ -2230,7 +2288,57 @@ impl MoleculeCanvas<'_> {
                     .with_color(rgb([65, 136, 119])),
             );
         }
+        // Above the selection, so that gap labels stay legible.
+        smart_guides::draw(
+            frame,
+            &smart,
+            self.camera,
+            bounds,
+            self.guides.unit,
+            self.doc.canvas_theme.is_dark(),
+        );
     }
+}
+
+/// Grid dots on bond-length multiples from the world origin, with fainter half
+/// steps once they are 12 px apart; none when the step is under 10 px. Each
+/// dot is its screen position and whether it is on a whole step.
+fn grid_dots(camera: Camera, bounds: Rectangle, step: f32) -> Vec<(Point, bool)> {
+    let step = step * camera.zoom;
+    let origin = camera.screen(World::default(), bounds);
+    if !step.is_finite() || step < 10. || !origin.x.is_finite() || !origin.y.is_finite() {
+        return vec![];
+    }
+    let halves = step / 2. >= 12.;
+    let pitch = if halves { step / 2. } else { step };
+    let indices = |origin: f32, length: f32| {
+        (-origin / pitch).ceil() as i64..=((length - origin) / pitch).floor() as i64
+    };
+    let mut dots = Vec::new();
+    for i in indices(origin.x, bounds.width) {
+        for j in indices(origin.y, bounds.height) {
+            dots.push((
+                Point::new(origin.x + i as f32 * pitch, origin.y + j as f32 * pitch),
+                !halves || (i.rem_euclid(2) == 0 && j.rem_euclid(2) == 0),
+            ));
+        }
+    }
+    dots
+}
+
+/// There is no grid snapping; the dots only help the eye.
+fn draw_grid(frame: &mut layered::Frame<'_>, camera: Camera, bounds: Rectangle, step: f32) {
+    let dots = grid_dots(camera, bounds, step);
+    let path = |major: bool, radius: f32| {
+        Path::new(|b| {
+            for (p, _) in dots.iter().filter(|(_, m)| *m == major) {
+                b.circle(*p, radius);
+            }
+        })
+    };
+    // Muted green-gray; the dark canvas inverts its lightness like drawing ink.
+    frame.fill(&path(false, 0.9), Color::from_rgba8(90, 104, 99, 0.3));
+    frame.fill(&path(true, 1.3), Color::from_rgba8(90, 104, 99, 0.6));
 }
 
 fn region_selection(
@@ -2926,6 +3034,22 @@ impl canvas::Program<crate::app::Message> for OwnedDrawingPreview {
     }
 }
 
+/// Every edit a Select drag of `selected` from `from` to `to` publishes, with
+/// smart guides on, at zoom 1.
+#[cfg(test)]
+pub(crate) fn select_drag(
+    doc: &Document,
+    selected: &[u64],
+    from: World,
+    to: World,
+    modifiers: iced::keyboard::Modifiers,
+) -> Vec<Edit> {
+    let mut canvas = tests::chain_canvas(doc, ChainMode::Straight);
+    canvas.tool = Tool::Select;
+    canvas.selected = selected;
+    tests::guided_drag(&canvas, from, to, modifiers).0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3501,6 +3625,7 @@ mod tests {
             },
             grid: false,
             guides: Default::default(),
+            smart_guides: true,
             ring_size: 6,
             aromatic_ring: false,
             template_connection: reshiki::templates::Connection::Auto,
@@ -4187,6 +4312,7 @@ mod tests {
             },
             grid: false,
             guides: Default::default(),
+            smart_guides: true,
             ring_size: 6,
             aromatic_ring: false,
             template_connection: reshiki::templates::Connection::Auto,
@@ -4301,6 +4427,7 @@ mod tests {
             },
             grid: false,
             guides: Default::default(),
+            smart_guides: true,
             ring_size: 6,
             aromatic_ring: false,
             template_connection: reshiki::templates::Connection::Auto,
@@ -4427,6 +4554,7 @@ mod tests {
             },
             grid: false,
             guides: Default::default(),
+            smart_guides: true,
             ring_size: 6,
             aromatic_ring: false,
             template_connection: reshiki::templates::Connection::Auto,
@@ -4536,6 +4664,7 @@ mod tests {
             },
             grid: false,
             guides: Default::default(),
+            smart_guides: true,
             ring_size: 6,
             aromatic_ring: false,
             template_connection: reshiki::templates::Connection::Auto,
@@ -4642,6 +4771,7 @@ mod tests {
             },
             grid: false,
             guides: Default::default(),
+            smart_guides: true,
             ring_size: 6,
             aromatic_ring: false,
             template_connection: reshiki::templates::Connection::Auto,
@@ -4785,6 +4915,7 @@ mod tests {
             },
             grid: false,
             guides: Default::default(),
+            smart_guides: true,
             ring_size: 6,
             aromatic_ring: false,
             template_connection: reshiki::templates::Connection::Auto,
@@ -4885,6 +5016,7 @@ mod tests {
             },
             grid: false,
             guides: Default::default(),
+            smart_guides: true,
             ring_size: 6,
             aromatic_ring: false,
             template_connection: reshiki::templates::Connection::Auto,
@@ -4945,6 +5077,7 @@ mod tests {
             camera: Camera::default(),
             grid: false,
             guides: Default::default(),
+            smart_guides: true,
             ring_size: 6,
             aromatic_ring: false,
             template_connection: reshiki::templates::Connection::Auto,
@@ -5083,6 +5216,7 @@ mod tests {
             },
             grid: false,
             guides: Default::default(),
+            smart_guides: true,
             ring_size: 5,
             aromatic_ring: false,
             template_connection: reshiki::templates::Connection::Auto,
@@ -5120,6 +5254,7 @@ mod tests {
             camera: Camera::default(),
             grid: false,
             guides: Default::default(),
+            smart_guides: true,
             ring_size: 6,
             aromatic_ring: false,
             template_connection: reshiki::templates::Connection::Auto,
@@ -5179,6 +5314,7 @@ mod tests {
             },
             grid: false,
             guides: Default::default(),
+            smart_guides: true,
             ring_size: 6,
             aromatic_ring: false,
             template_connection: reshiki::templates::Connection::Auto,
@@ -5252,6 +5388,7 @@ mod tests {
             },
             grid: false,
             guides: Default::default(),
+            smart_guides: true,
             ring_size: 6,
             aromatic_ring: false,
             template_connection: reshiki::templates::Connection::Auto,
@@ -5296,5 +5433,209 @@ mod tests {
         };
         assert_eq!(start, World::new(-50.0, 0.0));
         assert_eq!(end, World::new(-8.0, 0.0));
+    }
+
+    /// A drag's published edits, and its preview offset and guides just
+    /// before release, as `draw_paper` computes them.
+    pub(super) fn guided_drag(
+        canvas: &MoleculeCanvas<'_>,
+        from: World,
+        to: World,
+        modifiers: iced::keyboard::Modifiers,
+    ) -> (Vec<Edit>, Option<(World, Vec<Guide>)>) {
+        let bounds = Rectangle::with_size(iced::Size::new(400., 300.));
+        let (start, end) = (
+            canvas.camera.screen(from, bounds),
+            canvas.camera.screen(to, bounds),
+        );
+        let cursor = mouse::Cursor::Available(end);
+        let mut state = State {
+            modifiers,
+            ..Default::default()
+        };
+        let mut edits = Vec::new();
+        let mut send = |state: &mut State, event| {
+            let action = canvas.update(state, &Event::Mouse(event), bounds, cursor);
+            edits.extend(action.and_then(|a| a.into_inner().0));
+        };
+        send(&mut state, mouse::Event::CursorMoved { position: start });
+        send(&mut state, mouse::Event::ButtonPressed(mouse::Button::Left));
+        send(&mut state, mouse::Event::CursorMoved { position: end });
+        let p = canvas.camera.world(end, bounds);
+        let preview = match &state.gesture {
+            Some(Gesture::Move { start, ids, .. }) => Some(canvas.move_delta(
+                &state,
+                ids,
+                World::new(p.x - start.x, p.y - start.y),
+                bounds,
+            )),
+            Some(Gesture::ArrowHandle { id, index }) => canvas
+                .doc
+                .arrows
+                .iter()
+                .find(|a| a.id == *id)
+                .map(|a| canvas.arrow_end(&state, a, *index, p, bounds)),
+            _ => None,
+        };
+        send(
+            &mut state,
+            mouse::Event::ButtonReleased(mouse::Button::Left),
+        );
+        (edits, preview)
+    }
+
+    fn rectangle(doc: &mut Document, lo: World, hi: World) -> u64 {
+        let id = doc.next_id();
+        doc.graphics.push(Graphic::dragged(
+            id,
+            GraphicKind::Rectangle,
+            lo,
+            hi,
+            GraphicStyle::default(),
+            BracketSides::Both,
+            false,
+        ));
+        id
+    }
+
+    #[test]
+    fn smart_guides_snap_whole_objects_and_the_preview_matches_the_release() {
+        use iced::keyboard::Modifiers;
+        let mut doc = Document::default();
+        rectangle(&mut doc, World::new(-150., -100.), World::new(-90., -60.));
+        let moving = rectangle(&mut doc, World::new(0., 0.), World::new(60., 40.));
+        let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+        canvas.tool = Tool::Select;
+        // Drag by (-3, -97): the top edges end 3 px apart and snap together.
+        let (from, to) = (World::new(0., 20.), World::new(-3., -77.));
+        let released = |canvas: &MoleculeCanvas<'_>, modifiers| {
+            let (edits, preview) = guided_drag(canvas, from, to, modifiers);
+            let last = edits.last().cloned();
+            let (d, guides) = preview.expect("A move preview");
+            let (ids, x, y) = match last {
+                Some(Edit::Move(ids, x, y) | Edit::Duplicate(ids, x, y)) => (ids, x, y),
+                other => panic!("{other:?}"),
+            };
+            assert_eq!(ids, [moving]);
+            assert_eq!((d.x, d.y), (x, y), "the preview agrees with the release");
+            (World::new(x, y), guides)
+        };
+        let (snapped, guides) = released(&canvas, Modifiers::empty());
+        assert_eq!(snapped, World::new(-3., -100.));
+        // Same-size objects: one center guide spans both.
+        assert!(
+            guides
+                .iter()
+                .any(|g| matches!(g, Guide::Align { axis: Axis::Y, .. })),
+            "{guides:?}"
+        );
+        // Shift keeps the vertical axis and still snaps along it; a copy snaps too.
+        assert_eq!(released(&canvas, Modifiers::SHIFT).0, World::new(0., -100.));
+        let copy = guided_drag(&canvas, from, to, Modifiers::COMMAND | Modifiers::SHIFT);
+        assert!(matches!(copy.0.last(), Some(Edit::Duplicate(_, x, y)) if (*x, *y) == (0., -100.)));
+        // Option/Alt, or the setting off, moves freely without guides.
+        let (free, guides) = released(&canvas, Modifiers::ALT);
+        assert_eq!((free, guides), (World::new(-3., -97.), vec![]));
+        canvas.smart_guides = false;
+        let (free, guides) = released(&canvas, Modifiers::empty());
+        assert_eq!((free, guides), (World::new(-3., -97.), vec![]));
+    }
+
+    #[test]
+    fn smart_guides_leave_part_of_a_molecule_to_its_bond_constraints() {
+        let mut doc = Document::default();
+        let a = doc.add_atom("C", World::new(0., 0.));
+        let b = doc.add_atom("C", World::new(42., 0.));
+        doc.add_bond(a, b, 1, "plain");
+        rectangle(&mut doc, World::new(-40., -120.), World::new(0., -80.));
+        let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+        canvas.tool = Tool::Select;
+        let selected = [b];
+        canvas.selected = &selected;
+        let drag = |canvas: &MoleculeCanvas<'_>| {
+            guided_drag(
+                canvas,
+                World::new(42., 0.),
+                World::new(3., -80.),
+                Default::default(),
+            )
+        };
+        let (guided, preview) = drag(&canvas);
+        canvas.smart_guides = false;
+        assert_eq!(
+            format!("{:?}", guided.last()),
+            format!("{:?}", drag(&canvas).0.last())
+        );
+        assert!(preview.is_some_and(|(_, guides)| guides.is_empty()));
+    }
+
+    #[test]
+    fn arrow_ends_snap_along_their_fixed_angle_to_other_objects() {
+        let mut doc = Document::default();
+        let target = rectangle(&mut doc, World::new(100., -30.), World::new(160., 30.));
+        let arrow = doc.next_id();
+        doc.arrows.push(reshiki::document::Arrow::new(
+            arrow,
+            World::new(0., 0.),
+            World::new(80., 0.),
+            Default::default(),
+            Default::default(),
+        ));
+        let (lo, _) = reshiki::scene::selection_bounds(&doc, &[target]).expect("bounds");
+        let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+        canvas.tool = Tool::Select;
+        let selected = [arrow];
+        canvas.selected = &selected;
+        let to = World::new(lo.x - 4., 2.);
+        let (edits, preview) = guided_drag(&canvas, World::new(80., 0.), to, Default::default());
+        let Some(Edit::ArrowHandle(id, 1, end)) = edits.last().cloned() else {
+            panic!("{edits:?}");
+        };
+        assert_eq!(id, arrow);
+        assert!((end.x - lo.x).abs() < 1e-3 && end.y.abs() < 1e-3, "{end:?}");
+        let (preview, guides) = preview.expect("A handle preview");
+        assert_eq!(preview, end);
+        // The target's left edge, and its middle line, which the arrow already sits on.
+        assert!(
+            matches!(
+                guides.as_slice(),
+                [
+                    Guide::Align { axis: Axis::X, at: x, .. },
+                    Guide::Align { axis: Axis::Y, at: y, .. },
+                ] if *x == end.x && *y == 0.
+            ),
+            "{guides:?}"
+        );
+        // Option/Alt frees the end from both the angle steps and the guides.
+        let (edits, _) = guided_drag(
+            &canvas,
+            World::new(80., 0.),
+            to,
+            iced::keyboard::Modifiers::ALT,
+        );
+        assert!(matches!(edits.last(), Some(Edit::ArrowHandle(_, 1, end)) if *end == to));
+    }
+
+    #[test]
+    fn grid_dots_sit_on_bond_length_steps_from_the_origin() {
+        let bounds = Rectangle::with_size(iced::Size::new(400., 300.));
+        let at = |zoom| Camera {
+            center: World::new(13., -7.),
+            zoom,
+        };
+        let on = |v: f32, step: f32| (v / step - (v / step).round()).abs() < 1e-3;
+        // Zoom 1: whole 42-unit steps, with half steps 21 px apart between them.
+        let dots = grid_dots(at(1.), bounds, 42.);
+        for (p, major) in &dots {
+            let w = at(1.).world(*p, bounds);
+            assert!(on(w.x, 21.) && on(w.y, 21.), "{w:?}");
+            assert_eq!(*major, on(w.x, 42.) && on(w.y, 42.), "{w:?}");
+        }
+        assert_eq!(dots.len(), 19 * 14);
+        assert!(dots.iter().any(|(_, major)| !major));
+        // Half steps under 12 px apart are dropped; steps under 10 px hide the grid.
+        let zoomed_out = grid_dots(at(0.5), bounds, 42.);
+        assert!(!zoomed_out.is_empty() && zoomed_out.iter().all(|(_, major)| *major));
+        assert!(grid_dots(at(0.2), bounds, 42.).is_empty());
     }
 }

@@ -261,6 +261,120 @@ fn atom(app: &mut App) {
     app.bond_drawing.fixed_angles = false;
 }
 
+/// A reaction scheme in one row with a molecule waiting below it, selected,
+/// with the grid and View panel shown. Returns the drag from the molecule to
+/// its place in the row, and a point on the molecule to drag by.
+fn smart_guides_scheme(app: &mut App) -> (World, World) {
+    let arrow = {
+        let mut doc = Document::default();
+        doc.arrows.push(Arrow::new(
+            doc.next_id(),
+            World::new(0., 0.),
+            World::new(80., 0.),
+            Default::default(),
+            Default::default(),
+        ));
+        doc
+    };
+    let mut doc = Document::default();
+    let mut place = |part: &Document, left: f32, middle: f32| {
+        let (lo, hi) = reshiki::scene::selection_bounds(part, &part.all_ids()).unwrap();
+        let offset = World::new(left - lo.x, middle - (lo.y + hi.y) / 2.);
+        let ids = reshiki::editing::append(&mut doc, part, offset);
+        (ids, left + hi.x - lo.x + 30.)
+    };
+    // Equal 30-unit gaps, with the middle molecule 25 right and 170 below its place.
+    let (_, x) = place(&benzene(), -300., 0.);
+    let (_, x) = place(&arrow, x, 0.);
+    let (ids, x) = place(&benzene(), x + 25., 170.);
+    let (_, x) = place(&arrow, x - 25., 0.);
+    place(&benzene(), x, 0.);
+    open(app, doc);
+    let grab = app.doc.atom(ids[0]).unwrap().position;
+    let _ = app.update(Message::Canvas(Edit::Select(ids)));
+    app.grid = true;
+    app.view_open = true;
+    app.camera.center = World::new(-40., 70.);
+    (World::new(-25., -170.), grab)
+}
+
+/// The canvas widget: the leaf the size of the drawing viewport.
+fn canvas_bounds(layout: Layout<'_>, size: Size) -> Option<Rectangle> {
+    if layout.bounds().size() == size && layout.children().next().is_none() {
+        return Some(layout.bounds());
+    }
+    layout
+        .children()
+        .find_map(|child| canvas_bounds(child, size))
+}
+
+/// Mid-drag: the molecule moved to 3 px right of and 4 px below its place in the
+/// row, where smart guides center it and even out the gaps.
+fn smart_guides(renderer: &mut iced::Renderer, size: Size, output: &Path) {
+    let (mut app, _) = App::new();
+    app.appearance.mode = crate::appearance::Mode::Light;
+    let (offset, grab) = smart_guides_scheme(&mut app);
+    let mut tree = Tree::empty();
+    for _ in 0..3 {
+        for message in pass(&app, renderer, &mut tree, size, None) {
+            let _ = app.update(message);
+        }
+    }
+    // Sends one pointer event; returns what it publishes and where the canvas is.
+    let mut send = |app: &App, event, point| {
+        let mut messages = Vec::new();
+        let mut view = app.view();
+        tree.diff(view.as_widget());
+        let node =
+            view.as_widget_mut()
+                .layout(&mut tree, renderer, &layout::Limits::new(size, size));
+        view.as_widget_mut().update(
+            &mut tree,
+            &Event::Mouse(event),
+            Layout::new(&node),
+            mouse::Cursor::Available(point),
+            renderer,
+            &mut iced::advanced::clipboard::Null,
+            &mut iced::advanced::Shell::new(&mut messages),
+            &Rectangle::with_size(size),
+        );
+        let canvas = canvas_bounds(Layout::new(&node), app.viewport);
+        (messages, canvas)
+    };
+    let (_, canvas) = send(&app, mouse::Event::CursorLeft, iced::Point::ORIGIN);
+    let canvas = canvas.expect("Canvas layout");
+    let camera = app.camera;
+    let screen = |p: World| {
+        iced::Point::new(
+            canvas.x + (p.x - camera.center.x) * camera.zoom + canvas.width / 2.,
+            canvas.y + (p.y - camera.center.y) * camera.zoom + canvas.height / 2.,
+        )
+    };
+    let pixel = 1. / camera.zoom;
+    let to = grab.offset(offset.x + 3. * pixel, offset.y + 4. * pixel);
+    for (event, point) in [
+        (
+            mouse::Event::CursorMoved {
+                position: screen(grab),
+            },
+            grab,
+        ),
+        (mouse::Event::ButtonPressed(mouse::Button::Left), grab),
+        (
+            mouse::Event::CursorMoved {
+                position: screen(to),
+            },
+            to,
+        ),
+    ] {
+        let (messages, _) = send(&app, event, screen(point));
+        for message in messages {
+            let _ = app.update(message);
+        }
+    }
+    pass(&app, renderer, &mut tree, size, Some(output));
+}
+
 type Setup = fn(&mut App);
 
 const STATES: [(&str, Setup); 17] = [
@@ -323,6 +437,13 @@ async fn ui_layout_snapshots() {
             );
             eprintln!("{}", output.display());
         }
+        let output = directory.join(format!("smart-guides-{width}.png"));
+        smart_guides(
+            &mut renderer,
+            Size::new(width as f32, height as f32),
+            &output,
+        );
+        eprintln!("{}", output.display());
     }
 }
 

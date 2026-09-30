@@ -13,6 +13,9 @@ pub(super) struct SceneCache {
     markers: Option<Rc<super::markers::Markers>>,
     whole: bool,
     copy: Option<Rc<Document>>,
+    /// Keyed by the dragged IDs alone: hovering reads the selection box of
+    /// another selection during a drag.
+    guides: Option<(Vec<u64>, Option<Rc<super::smart_guides::Layout>>)>,
 }
 
 impl SceneCache {
@@ -25,6 +28,7 @@ impl SceneCache {
             self.markers = None;
             self.whole = false;
             self.copy = None;
+            self.guides = None;
         }
     }
 
@@ -52,6 +56,20 @@ impl SceneCache {
         self.copy
             .get_or_insert_with(|| Rc::new(reshiki::editing::selection(doc, ids)))
             .clone()
+    }
+
+    /// The objects a drag of `ids` can snap to, measured once per drag.
+    pub fn guides(
+        &mut self,
+        doc: &Document,
+        ids: &[u64],
+    ) -> Option<Rc<super::smart_guides::Layout>> {
+        self.document(doc);
+        if !matches!(&self.guides, Some((cached, _)) if cached == ids) {
+            let layout = super::smart_guides::Layout::new(doc, ids).map(Rc::new);
+            self.guides = Some((ids.to_vec(), layout));
+        }
+        self.guides.as_ref().and_then(|(_, layout)| layout.clone())
     }
 
     /// A cancelled drag leaves the document and selection unchanged, so its
@@ -176,5 +194,20 @@ mod tests {
         }
         assert!(!cache.whole_document(&doc, &[ids[0], ids[0], 999]));
         assert!(!cache.whole_document(&Document::default(), &[]));
+    }
+
+    #[test]
+    fn guide_layouts_outlive_other_selection_reads_but_not_edits() {
+        let mut doc = drawing();
+        let ids = doc.all_ids();
+        let mut cache = SceneCache::default();
+        let dragged = &ids[..2];
+        let first = cache.guides(&doc, dragged).unwrap();
+        // The pointer reads the current selection's box on every event of a drag.
+        let bounds = Rectangle::with_size(iced::Size::new(400., 300.));
+        let _ = cache.selection(&doc, &ids[2..], Camera::default(), bounds);
+        assert!(Rc::ptr_eq(&first, &cache.guides(&doc, dragged).unwrap()));
+        doc.atoms[0].position.x -= 25.;
+        assert!(!Rc::ptr_eq(&first, &cache.guides(&doc, dragged).unwrap()));
     }
 }

@@ -398,54 +398,82 @@ fn label_ink_boxes(runs: &[Primitive]) -> Vec<(Point, Point)> {
 
 /// Visible selected extents, including atom labels in the original graph.
 pub fn selection_bounds(doc: &Document, ids: &[u64]) -> Option<(Point, Point)> {
-    if ids.is_empty() {
-        return None;
+    selections_bounds(doc, &[ids.to_vec()]).pop().flatten()
+}
+
+/// `selection_bounds` of several disjoint selections, such as the Align menu's
+/// units, in one pass over the drawing.
+pub fn selections_bounds(doc: &Document, selections: &[Vec<u64>]) -> Vec<Option<(Point, Point)>> {
+    use crate::atom_labels::Owner;
+    let owners: std::collections::HashMap<u64, usize> = selections
+        .iter()
+        .enumerate()
+        .flat_map(|(i, ids)| ids.iter().map(move |id| (*id, i)))
+        .collect();
+    let mut bounds: Vec<Option<(Point, Point)>> = vec![None; selections.len()];
+    let mut grow = |id: u64, points: &mut dyn Iterator<Item = Point>| {
+        let Some(extent) = owners.get(&id).and_then(|i| bounds.get_mut(*i)) else {
+            return;
+        };
+        for p in points {
+            *extent = Some(match *extent {
+                None => (p, p),
+                Some((lo, hi)) => (
+                    Point::new(lo.x.min(p.x), lo.y.min(p.y)),
+                    Point::new(hi.x.max(p.x), hi.y.max(p.y)),
+                ),
+            });
+        }
+    };
+    for label in crate::atom_labels::indicators(doc) {
+        let id = match label.owner {
+            Owner::Number(id) | Owner::AtomStereo(id) => id,
+            Owner::BondStereo(a, b) if owners.get(&a) == owners.get(&b) => a,
+            Owner::BondStereo(..) => continue,
+        };
+        let corner = label.origin.offset(label.width, label.height);
+        grow(id, &mut [label.origin, corner].into_iter());
     }
-    let mut points = Vec::new();
-    for label in crate::atom_labels::indicators(doc)
-        .into_iter()
-        .filter(|l| l.owner.selected(ids))
-    {
-        points.extend([label.origin, label.origin.offset(label.width, label.height)]);
-    }
-    for g in doc.graphics.iter().filter(|g| ids.contains(&g.id)) {
+    // Only selected objects are measured, so one small selection stays cheap.
+    for g in doc.graphics.iter().filter(|g| owners.contains_key(&g.id)) {
         let (lo, hi) = g.bounds();
-        points.extend([lo, hi]);
+        grow(g.id, &mut [lo, hi].into_iter());
     }
     for atom in doc
         .atoms
         .iter()
-        .filter(|a| ids.contains(&a.id) && doc.atom_visible(a.id))
+        .filter(|a| owners.contains_key(&a.id) && doc.atom_visible(a.id))
     {
-        points.push(atom.position);
+        grow(atom.id, &mut std::iter::once(atom.position));
         for part in crate::scientific::styled_mark_parts(atom, &doc.drawing_style) {
-            points.extend(
-                part.commands
+            grow(
+                atom.id,
+                &mut part
+                    .commands
                     .iter()
                     .flat_map(crate::graphics::PathCommand::points),
             );
         }
         if let Some((lo, hi)) = text_bounds(&atom_label(atom, doc)) {
-            points.extend([lo, hi]);
+            grow(atom.id, &mut [lo, hi].into_iter());
         }
     }
-    for a in doc.annotations.iter().filter(|a| ids.contains(&a.id)) {
+    for a in doc
+        .annotations
+        .iter()
+        .filter(|a| owners.contains_key(&a.id))
+    {
         let (width, height) = a.size();
-        points.extend([a.position, a.position.offset(width, height)]);
+        grow(
+            a.id,
+            &mut [a.position, a.position.offset(width, height)].into_iter(),
+        );
     }
-    for a in doc.arrows.iter().filter(|a| ids.contains(&a.id)) {
+    for a in doc.arrows.iter().filter(|a| owners.contains_key(&a.id)) {
         let (lo, hi) = a.bounds();
-        points.extend([lo, hi]);
+        grow(a.id, &mut [lo, hi].into_iter());
     }
-    points.into_iter().fold(None, |bounds, p| {
-        Some(match bounds {
-            None => (p, p),
-            Some((lo, hi)) => (
-                Point::new(lo.x.min(p.x), lo.y.min(p.y)),
-                Point::new(hi.x.max(p.x), hi.y.max(p.y)),
-            ),
-        })
-    })
+    bounds
 }
 
 fn label_end(
@@ -1241,6 +1269,19 @@ fn render_svg(doc: &Document, background: bool) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn batched_bounds_match_each_selection() {
+        let doc: Document =
+            serde_json::from_str(include_str!("../assets/examples/shortcut-examples.rsk")).unwrap();
+        let groups = crate::editing::groups(&doc, &doc.all_ids());
+        assert!(groups.len() > 100);
+        for (group, bounds) in groups.iter().zip(selections_bounds(&doc, &groups)) {
+            assert_eq!(bounds, selection_bounds(&doc, group), "{group:?}");
+        }
+        assert_eq!(selections_bounds(&doc, &[vec![]]), [None]);
+    }
+
     #[test]
     fn stacked_hydrogens_keep_charge_isotope_and_subscript_ink_separate() {
         for size in [8., 10., 18.] {

@@ -127,17 +127,18 @@ Acyclic triple-bond edits straighten the adjacent branches. Bond appearance and 
 | Cmd/Ctrl+J                  | Join selected atoms or bonds                                                              |
 | Cmd/Ctrl+Shift+K            | Preview cleanup                                                                           |
 | Cmd/Ctrl+L / E              | Toggle fixed bond length / fixed angles                                                   |
-| Option/Alt-drag             | Temporarily draw or move bonded endpoints freely                                          |
-| Cmd/Ctrl-drag               | Drag a copy, leaving the original in place                                                |
-| Shift-drag                  | Move horizontally or vertically only                                                      |
-| Cmd/Ctrl+Shift-drag         | Drag a copy along one axis                                                                |
+| Option/Alt-drag             | Temporarily draw or move freely, without bond constraints or smart guides                 |
+| Drag an object              | Snap its edges, center and gaps to other objects on screen (smart guides)                 |
+| Cmd/Ctrl-drag               | Drag a copy, leaving the original in place; the copy snaps to guides too                  |
+| Shift-drag                  | Move horizontally or vertically only; guides snap along that axis                         |
+| Cmd/Ctrl+Shift-drag         | Drag a copy along one axis, snapping along it                                             |
 | Cmd/Ctrl+Alt+K              | Toggle a selected aromatic ring's circle / alternating bonds; Windows also supports Alt+K |
 | Cmd/Ctrl+[ / ]              | Send crossing bonds behind / bring forward                                                |
 | Cmd/Ctrl+/                  | Fit drawing                                                                               |
 | Cmd/Ctrl+;                  | Toggle rulers                                                                             |
 | Cmd/Ctrl+Alt+X              | Toggle crosshair                                                                          |
 | Delete or Backspace         | Delete selection                                                                          |
-| Arrow / Shift+arrow         | Nudge 1 / 10 drawing units                                                                |
+| Arrow / Shift+arrow         | Nudge 1 / 10 drawing units; nudges never snap                                             |
 | Double-click an atom        | Select its molecule                                                                       |
 | Shift-click                 | Add to or toggle the selection                                                            |
 | Side handle / corner handle | Resize one axis / resize proportionally                                                   |

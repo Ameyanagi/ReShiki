@@ -36,6 +36,12 @@ By @HiroYokoyama in [PR #87](https://github.com/Ameyanagi/ReShiki/pull/87).
 
 With Select or Lasso, hold **⌘** on macOS or **Ctrl** on Windows and Linux while dragging a selection to drop a copy and leave the original in place; the copy is selected afterwards. Hold **Shift** to move only horizontally or vertically, whichever way the pointer moved farther. Bonded parts keep their bond length and angle constraints, and **Option/Alt** still frees them. Hold both keys for a copy along one axis. Each drag is one Undo step. The keys held at release decide, so to cancel a copy drag, release ⌘ or Ctrl first, then press **Escape**. The Help panel lists these gestures.
 
+## Smart guides and a bond-length grid
+
+While you drag objects with Select or Lasso, their edges and center snap to the same lines of other objects on screen within about 6 screen pixels, at any zoom: left and right edges to edges, top and bottom to edges, centers to centers. In a row or column they also snap to the midpoint between two neighbours or to a gap equal to the neighbouring one. Thin magenta guides show each match during the drag, and equal gaps show their distance in the ruler unit. Molecules, arrows, text and shapes count as objects, measured with their labels, as the Align menu does. Dragging an arrow's end snaps it to other objects' edges and middle lines; with fixed angles it slides along its current direction. **Shift** snaps only along the locked axis, a **⌘**/**Ctrl** copy snaps too, and **Option/Alt** moves freely without guides. Moving part of a molecule keeps its bond constraints instead, and arrow-key nudges never snap. **View → Smart guides** turns them off. Each drag is still one Undo step.
+
+**View → Grid** now places its dots on multiples of the drawing's bond length (5.08 mm for ACS / JACS) from the drawing origin, with fainter half steps when zoomed in, and larger dots that read on both the light and dark canvas. Nothing snaps to the grid.
+
 ## Loaded canvas performance
 
 By @Ameyanagi in [PR #84](https://github.com/Ameyanagi/ReShiki/pull/84).
