@@ -194,7 +194,7 @@ fn main() -> anyhow::Result<()> {
         }
         if variant == "colored" {
             for b in &mut doc.bonds {
-                b.color = [180, 68, 32];
+                b.color = reshiki::palette::Color::Custom([180, 68, 32]);
             }
         }
         if variant == "three-way" {

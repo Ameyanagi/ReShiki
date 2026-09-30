@@ -9,7 +9,7 @@ pub struct Circle {
     pub atoms: Vec<u64>,
     pub center: Point,
     pub radius: f32,
-    pub color: [u8; 3],
+    pub color: crate::palette::Color,
     pub width_pt: f32,
     pub projected_axes: Option<[Point; 2]>,
 }

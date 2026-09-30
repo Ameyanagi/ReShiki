@@ -101,13 +101,12 @@ pub fn orbital_parts(
         let fill = if phase == Phase::Open || positive == flipped {
             None
         } else {
+            let color = style.fill.unwrap_or(style.stroke);
             Some(if phase == Phase::Solid {
-                style.fill.unwrap_or(style.stroke)
+                color
             } else {
-                style
-                    .fill
-                    .unwrap_or(style.stroke)
-                    .map(|c| ((c as u16 + 255 * 2) / 3) as u8)
+                // Scene documents hold canonical bytes, so this lightens toward the paper.
+                crate::palette::Color::Custom(color.rgb().map(|c| ((c as u16 + 255 * 2) / 3) as u8))
             })
         };
         out.push(Part {
@@ -306,7 +305,10 @@ pub fn styled_mark_parts(atom: &Atom, drawing_style: &crate::style::DrawingStyle
         .map_or(drawing_style.font_size_pt, |s| s.size_pt)
         * 0.75;
     let style = GraphicStyle {
-        stroke: atom.text_style.as_ref().map_or([0; 3], |s| s.color),
+        stroke: atom
+            .text_style
+            .as_ref()
+            .map_or(Default::default(), |s| s.color),
         width_pt: drawing_style.line_width_pt,
         ..Default::default()
     };

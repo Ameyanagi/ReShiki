@@ -6,6 +6,7 @@ use reshiki::{
     color_contrast::{Oklch, Rgb},
     document::Document,
     editing::ELEMENTS,
+    palette::{Palette, Row},
     ring_fills,
     theme_files::{self, ThemeFile},
 };
@@ -51,9 +52,11 @@ fn main() -> anyhow::Result<()> {
                         })
                     })
                     .collect();
+                // Ring interiors use the Tint row; keep the slot names readers know.
+                let palette = Palette::new(file.tones(mode), file.hues, mode);
                 let fills: BTreeMap<_, _> = ring_fills::PALETTE
                     .iter()
-                    .map(|&(name, key)| (name, color(ring_fills::palette_color(key, mode))))
+                    .map(|&(name, _, hue)| (name, color(palette.swatch(hue, Row::Tint))))
                     .collect();
                 (
                     mode.to_string().to_lowercase(),

@@ -1463,7 +1463,10 @@ impl MoleculeCanvas<'_> {
                     preview = doc;
                     for b in &mut preview.bonds {
                         if self.doc.atom(b.a).is_none() || self.doc.atom(b.b).is_none() {
-                            b.color = [17, 126, 108];
+                            b.color = reshiki::palette::Color::Palette(
+                                reshiki::palette::Hue::Teal,
+                                reshiki::palette::Row::Strong,
+                            );
                         }
                     }
                     ring_selection = Some(ids);
@@ -1537,7 +1540,8 @@ impl MoleculeCanvas<'_> {
                         .all_ids()
                         .into_iter()
                         .collect();
-                    let tint = [17, 126, 108];
+                    use reshiki::palette::{Color as Paint, Hue, Row};
+                    let tint = Paint::Palette(Hue::Teal, Row::Strong);
                     for atom in &mut preview.atoms {
                         if !existing.contains(&atom.id) {
                             atom.text_style.get_or_insert_with(Default::default).color = tint;
@@ -1560,7 +1564,7 @@ impl MoleculeCanvas<'_> {
                         if !existing.contains(&graphic.id) {
                             graphic.style.stroke = tint;
                             if graphic.style.fill.is_some() {
-                                graphic.style.fill = Some([220, 239, 233]);
+                                graphic.style.fill = Some(Paint::Palette(Hue::Teal, Row::Tint));
                             }
                         }
                     }
@@ -2369,11 +2373,11 @@ fn draw_document_with_minimum_stroke(
                     }
                 });
                 if filled && let Some(c) = style.fill {
-                    frame.fill(&path, rgb(c));
+                    frame.fill(&path, rgb(c.rgb()));
                 }
                 let dashes: Vec<_> = style.dashes().iter().map(|v| v * camera.zoom).collect();
                 let stroke = Stroke::default()
-                    .with_color(rgb(style.stroke))
+                    .with_color(rgb(style.stroke.rgb()))
                     .with_width(if style.width_pt > 0. {
                         (style.width() * camera.zoom).max(minimum)
                     } else {
@@ -4318,7 +4322,7 @@ mod tests {
             BracketSides::Both,
             false,
         );
-        g.style.fill = Some([220, 239, 233]);
+        g.style.fill = Some(reshiki::palette::Color::Custom([220, 239, 233]));
         doc.graphics.push(g);
         assert_eq!(hit_selection(&doc, World::new(-20., 0.), 5.), vec![a]);
         assert_eq!(hit_selection(&doc, World::default(), 5.), vec![a, b]);

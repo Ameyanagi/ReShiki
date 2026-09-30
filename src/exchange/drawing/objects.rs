@@ -230,7 +230,9 @@ impl Writer<'_> {
                         ));
                     }
                 };
-                if atom.text_style.as_ref().is_some_and(|s| s.color != [0; 3]) {
+                if atom.text_style.as_ref().is_some_and(|s| {
+                    self.palette.rgb(s.color) != self.palette.rgb(crate::palette::Color::Ink)
+                }) {
                     return Err(invalid("Colored atom marks require native or image export"));
                 }
                 let label_size = real(
@@ -442,7 +444,7 @@ impl Writer<'_> {
         parent: Key,
         points: &[P],
         closed: bool,
-        color: [u8; 3],
+        color: crate::palette::Color,
         fill: bool,
         width: f64,
         dashed: bool,

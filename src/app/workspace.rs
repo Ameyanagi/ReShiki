@@ -10,6 +10,7 @@ use iced::widget::{
 };
 use iced::{Alignment, Border, Color, Element, Length, Theme};
 use reshiki::bonds::BondPreset;
+use reshiki::palette::{Color as Paint, Hue, Palette, Row};
 use reshiki::typography::{Script, StyleChange, TextAlign};
 
 #[cfg(test)]
@@ -94,11 +95,13 @@ impl App {
                 .map(|g| g.kind)
                 .unwrap_or(GraphicKind::Rectangle),
         };
-        let swatch = |c: [u8; 3], fill: bool| {
-            button(Space::new().width(19).height(19))
+        let palette = Palette::of(&self.doc);
+        let swatch = |color: Paint, fill: bool| {
+            let [r, g, b] = palette.rgb(color);
+            let swatch = button(Space::new().width(19).height(19))
                 .padding(3)
                 .style(move |_, _| button::Style {
-                    background: Some(Color::from_rgb8(c[0], c[1], c[2]).into()),
+                    background: Some(Color::from_rgb8(r, g, b).into()),
                     border: Border {
                         color: Color::from_rgb8(186, 198, 195),
                         width: 1.0,
@@ -107,10 +110,11 @@ impl App {
                     ..Default::default()
                 })
                 .on_press(Message::GraphicStyle(if fill {
-                    GraphicChange::Fill(Some(c))
+                    GraphicChange::Fill(Some(color))
                 } else {
-                    GraphicChange::Stroke(c)
-                }))
+                    GraphicChange::Stroke(color)
+                }));
+            hover_hint(swatch, color.name(), tooltip::Position::Top)
         };
         let mut panel = column![
             section(if selected.is_empty() {
@@ -139,11 +143,11 @@ impl App {
             .align_y(Alignment::Center),
             text("Stroke color").size(11).style(muted_text),
             row![
-                swatch([0, 0, 0], false),
-                swatch([32, 80, 145], false),
-                swatch([17, 126, 108], false),
-                swatch([180, 50, 55], false),
-                swatch([116, 65, 147], false)
+                swatch(Paint::Ink, false),
+                swatch(Paint::Palette(Hue::Blue, Row::Strong), false),
+                swatch(Paint::Palette(Hue::Teal, Row::Strong), false),
+                swatch(Paint::Palette(Hue::Red, Row::Strong), false),
+                swatch(Paint::Palette(Hue::Purple, Row::Strong), false)
             ]
             .spacing(6),
             crate::appearance::text_input("#RRGGBB", &self.graphic_stroke_input)
@@ -202,17 +206,17 @@ impl App {
                         .on_toggle(|v| {
                             Message::GraphicStyle(GraphicChange::Fill(v.then(|| {
                                 super::graphics::parse_color(&self.graphic_fill_input)
-                                    .unwrap_or([220, 239, 233])
+                                    .map_or(Paint::Palette(Hue::Teal, Row::Tint), Paint::Custom)
                             })))
                         }),
                 )
                 .push(
                     row![
-                        swatch([220, 239, 233], true),
-                        swatch([221, 232, 248], true),
-                        swatch([253, 239, 203], true),
-                        swatch([249, 223, 225], true),
-                        swatch([255, 255, 255], true)
+                        swatch(Paint::Palette(Hue::Teal, Row::Tint), true),
+                        swatch(Paint::Palette(Hue::Blue, Row::Tint), true),
+                        swatch(Paint::Palette(Hue::Amber, Row::Tint), true),
+                        swatch(Paint::Palette(Hue::Red, Row::Tint), true),
+                        swatch(Paint::Custom([255, 255, 255]), true)
                     ]
                     .spacing(6),
                 )
@@ -411,39 +415,23 @@ impl App {
                 .padding(6),
             );
         let ring_colors = self.color_scope == super::typography::ColorScope::Rings;
-        let mut palette = if ring_colors {
-            reshiki::ring_fills::PALETTE
+        let swatches = if ring_colors {
+            [Hue::Blue, Hue::Teal, Hue::Red, Hue::Purple, Hue::Amber]
+                .map(|hue| Paint::Palette(hue, Row::Tint))
         } else {
             [
-                ("Neutral", [0, 0, 0]),
-                ("Blue", [32, 80, 145]),
-                ("Teal", [17, 126, 108]),
-                ("Red", [180, 50, 55]),
-                ("Purple", [116, 65, 147]),
+                Paint::Ink,
+                Paint::Palette(Hue::Blue, Row::Strong),
+                Paint::Palette(Hue::Teal, Row::Strong),
+                Paint::Palette(Hue::Red, Row::Strong),
+                Paint::Palette(Hue::Purple, Row::Strong),
             ]
         };
-        if !ring_colors
-            && (self.doc.custom_theme.is_some() || !self.doc.color_theme.is_publication())
-        {
-            for ((_, color), element) in palette.iter_mut().zip(["C", "N", "Cl", "O", "I"]) {
-                *color = self
-                    .doc
-                    .canvas_theme
-                    .color(reshiki::canvas_theme::element_color(
-                        &self.doc,
-                        element,
-                        self.doc.canvas_theme,
-                    ));
-            }
-        }
+        let palette = Palette::of(&self.doc);
         let current_color = self.current_selection_color();
-        for (name, c) in palette {
-            let shown = if ring_colors {
-                reshiki::canvas_theme::ring_color(&self.doc, c)
-            } else {
-                self.doc.canvas_theme.color(c)
-            };
-            let active = current_color == Some(self.doc.canvas_theme.color(shown));
+        for color in swatches {
+            let shown = palette.rgb(color);
+            let active = current_color == Some(color);
             tools = tools.push(hover_hint(
                 button(Space::new().width(12).height(12))
                     .padding(4)
@@ -460,8 +448,8 @@ impl App {
                         },
                         ..Default::default()
                     })
-                    .on_press(Message::TextStyle(StyleChange::Color(c))),
-                format!("{name} · Apply to {}", self.color_scope),
+                    .on_press(Message::TextStyle(StyleChange::Color(color))),
+                format!("{} · Apply to {}", color.name(), self.color_scope),
                 tooltip::Position::Bottom,
             ));
         }

@@ -466,7 +466,9 @@ mod tests {
         let _ = app.update(Message::Pictures(Action::RestoreAspect));
         assert_eq!(app.pictures.height, "40.00");
         let restored = app.doc.clone();
-        app.apply_graphic_style(reshiki::graphics::GraphicChange::Stroke([255, 0, 0]));
+        app.apply_graphic_style(reshiki::graphics::GraphicChange::Stroke(
+            reshiki::palette::Color::Custom([255, 0, 0]),
+        ));
         assert_eq!(app.doc, restored);
         assert_eq!(app.doc.atoms, before.atoms);
     }

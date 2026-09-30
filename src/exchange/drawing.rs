@@ -89,6 +89,8 @@ impl P {
 
 struct Writer<'a> {
     doc: &'a Document,
+    /// The source document's palette, for colors in export options.
+    palette: crate::palette::Palette,
     options: Options<'a>,
     tree: Tree,
     fonts: Key,
@@ -126,6 +128,7 @@ fn write_impl(
     preserve_drawing: bool,
     variable_labels: bool,
 ) -> Result<String> {
+    let original = document;
     let resolved = crate::canvas_theme::resolved_document(document);
     let document = resolved.as_ref();
     document.validate().map_err(invalid)?;
@@ -192,7 +195,7 @@ fn write_impl(
             "CDXML cannot yet preserve non-stereochemical front-bond emphasis or projected wedge styles. Restore plain bond appearance before editable export, or use ReShiki (.rsk), SVG, PNG or PDF to retain the appearance.",
         ));
     }
-    let mut w = Writer::new(document, options)?;
+    let mut w = Writer::new(document, options, crate::palette::Palette::of(original))?;
     w.variable_labels = variable_labels;
     w.atoms(&graph)?;
     w.bonds()?;
@@ -249,8 +252,9 @@ fn write_impl(
     if document.canvas_theme.is_dark() {
         // A real filled object survives paste into another ChemDraw document;
         // a document background setting alone does not travel with a selection.
-        let (lo, hi) = crate::scene::bounds(&crate::scene::primitives(document));
-        let background = w.color([255; 3])?;
+        // The scene resolves colors itself; pass the unresolved document.
+        let (lo, hi) = crate::scene::bounds(&crate::scene::primitives(original));
+        let background = w.raw_color(document.canvas_theme.background())?;
         w.tree.set(0, "bgcolor", background.clone())?;
         let id = w.id()?;
         // ChemDraw treats Z=0 as unspecified. Reserve a positive backmost rank.
@@ -297,7 +301,11 @@ impl<'a> Writer<'a> {
         self.next = self.next.checked_add(1).ok_or(Error::Limit)?;
         Ok(id.to_string())
     }
-    fn new(doc: &'a Document, options: Options<'a>) -> Result<Self> {
+    fn new(
+        doc: &'a Document,
+        options: Options<'a>,
+        palette: crate::palette::Palette,
+    ) -> Result<Self> {
         let style = &doc.drawing_style;
         // Default drawing settings are omitted from the native document. The
         // reference then loads their decimal values from the shared style file.
@@ -394,6 +402,7 @@ impl<'a> Writer<'a> {
         let fragment = tree.add(Some(page), "fragment", [("id", "2".into())])?;
         let mut w = Self {
             doc,
+            palette,
             options,
             tree,
             fonts,
@@ -449,8 +458,9 @@ impl<'a> Writer<'a> {
         self.font_ids.insert(name.into(), id);
         Ok(id.to_string())
     }
-    fn color(&mut self, rgb: [u8; 3]) -> Result<String> {
-        self.raw_color(self.doc.canvas_theme.color(rgb))
+    /// Colors written as they appear on the canvas.
+    fn color(&mut self, color: crate::palette::Color) -> Result<String> {
+        self.raw_color(self.palette.rgb(color))
     }
     fn raw_color(&mut self, rgb: [u8; 3]) -> Result<String> {
         if let Some(id) = self.color_ids.get(&rgb) {

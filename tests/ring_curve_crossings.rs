@@ -4,7 +4,7 @@ use reshiki::{
     scene::{self, Primitive},
 };
 
-const BLUE: [u8; 3] = [32, 80, 145];
+const BLUE: reshiki::palette::Color = reshiki::palette::Color::Custom([32, 80, 145]);
 fn drawing(tilted: bool, partial: bool, front: bool) -> Result<Document, String> {
     let mut doc = Document::default();
     let metal = doc.add_atom("Fe", Point::default());
@@ -180,7 +180,11 @@ fn filled_rings_and_wide_contacts_keep_transparent_clearance() -> Result<(), Str
             .centroid
             .clone();
         assert_eq!(
-            reshiki::ring_fills::apply(&mut doc, &ring, Some([245, 221, 165])),
+            reshiki::ring_fills::apply(
+                &mut doc,
+                &ring,
+                Some(reshiki::palette::Color::Custom([245, 221, 165]))
+            ),
             1
         );
         let stroke = if matches!(display, "bold" | "wedge" | "hashed") {
@@ -206,7 +210,7 @@ fn filled_rings_and_wide_contacts_keep_transparent_clearance() -> Result<(), Str
         );
         let svg = scene::svg(&doc);
         assert!(!svg.contains("rgb(255,255,255)"));
-        assert!(scene::primitives(&doc).iter().any(|p| matches!(p, Primitive::Path { filled: true, style, .. } if style.fill == Some([245, 221, 165]))));
+        assert!(scene::primitives(&doc).iter().any(|p| matches!(p, Primitive::Path { filled: true, style, .. } if style.fill == Some(reshiki::palette::Color::Custom([245, 221, 165])))));
         let restored: Document =
             serde_json::from_str(&serde_json::to_string(&doc).map_err(|e| e.to_string())?)
                 .map_err(|e| e.to_string())?;

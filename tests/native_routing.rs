@@ -206,7 +206,7 @@ async fn cases(lazy: bool) -> anyhow::Result<Vec<Case>> {
                 atom.cip_label = Some("S".into());
             }
             for bond in &mut doc.bonds {
-                bond.color = [17, 126, 108];
+                bond.color = reshiki::palette::Color::Custom([17, 126, 108]);
             }
             documents.push(doc);
         }

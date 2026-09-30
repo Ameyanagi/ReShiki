@@ -135,7 +135,7 @@ pub fn polygon(doc: &Document, b: &Bond, start: Point, end: Point) -> Vec<Point>
 }
 
 pub struct Junction {
-    pub color: [u8; 3],
+    pub color: crate::palette::Color,
     pub parts: Vec<(usize, Vec<Point>)>,
     pub underlay: bool,
 }
@@ -245,7 +245,7 @@ mod tests {
                                 mode
                             }
                             .into();
-                            bond.color = [180, 68, 32];
+                            bond.color = crate::palette::Color::Custom([180, 68, 32]);
                             if i % 2 == 0 {
                                 bond.reverse();
                             }
@@ -308,7 +308,10 @@ mod tests {
         let mut doc: Document =
             serde_json::from_str(include_str!("../tests/fixtures/bond-join-regression.rsk"))
                 .unwrap();
-        for color in [[0, 0, 0], [180, 68, 32]] {
+        for color in [
+            crate::palette::Color::Ink,
+            crate::palette::Color::Custom([180, 68, 32]),
+        ] {
             for b in &mut doc.bonds {
                 b.color = color;
             }

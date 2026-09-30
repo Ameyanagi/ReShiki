@@ -41,12 +41,12 @@ async fn reaction_is_editable_validated_styled_and_exchangeable() {
     let engine = LocalEngine::default();
     let mut settings = DrawingSettings {
         bond_length: 63.,
-        bond_color: [40, 100, 140],
+        bond_color: reshiki::palette::Color::Custom([40, 100, 140]),
         ..Default::default()
     };
     settings.format.style.family = "Arial".into();
     settings.format.style.size_pt = 12.;
-    settings.format.style.color = [90, 30, 130];
+    settings.format.style.color = reshiki::palette::Color::Custom([90, 30, 130]);
     let doc = assistant::render(&engine, &reaction(), &settings)
         .await
         .unwrap();

@@ -487,7 +487,7 @@ fn reconstruct(
                 cip_label: None,
                 double_position: Default::default(),
                 secondary_display: None,
-                color: [0; 3],
+                color: Default::default(),
                 indicator: Default::default(),
                 z_order: 0,
             };

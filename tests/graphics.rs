@@ -35,7 +35,7 @@ fn shape_hit_testing_and_affine_transforms_retain_geometry() {
     }
     let mut g = shape(1, GraphicKind::Ellipse);
     assert!(!g.hit(Point::new(90., 75.), 2.));
-    g.style.fill = Some([220, 239, 233]);
+    g.style.fill = Some(reshiki::palette::Color::Custom([220, 239, 233]));
     assert!(g.hit(Point::new(90., 75.), 2.));
     assert!(!g.hit(Point::new(20., 30.), 2.));
     let mut brackets = shape(2, GraphicKind::Brackets);
@@ -110,8 +110,8 @@ fn all_graphics_render_in_vector_and_raster_exports_with_colors_and_dashes() {
         let mut g = shape(i as u64 + 1, *kind);
         g.origin.x += (i % 3) as f32 * 180.;
         g.origin.y += (i / 3) as f32 * 180.;
-        g.style.stroke = [32, 80, 145];
-        g.style.fill = Some([249, 223, 225]);
+        g.style.stroke = reshiki::palette::Color::Custom([32, 80, 145]);
+        g.style.fill = Some(reshiki::palette::Color::Custom([249, 223, 225]));
         g.style.pattern = if i % 2 == 0 {
             LinePattern::Dashed
         } else {
@@ -165,9 +165,9 @@ async fn every_shape_survives_chemistry_and_cdxml_as_editable_geometry() {
         let mut g = shape(10 + i as u64, *kind);
         g.origin = g.origin.offset(i as f32 * 200., 200.);
         if kind.closed() {
-            g.style.fill = Some([221, 232, 248]);
+            g.style.fill = Some(reshiki::palette::Color::Custom([221, 232, 248]));
         }
-        g.style.stroke = [32, 80, 145];
+        g.style.stroke = reshiki::palette::Color::Custom([32, 80, 145]);
         g.style.pattern = LinePattern::Dashed;
         g.layer = if i % 2 == 0 { -1 } else { 1 };
         doc.graphics.push(g);

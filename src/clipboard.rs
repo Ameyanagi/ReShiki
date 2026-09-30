@@ -638,7 +638,10 @@ mod tests {
                 back.graphics.is_empty(),
                 "Editable copies must not add a canvas rectangle"
             );
-            assert_eq!(back.bonds[0].color, theme.color([0; 3]));
+            assert_eq!(
+                back.bonds[0].color,
+                crate::palette::Color::imported(theme.color([0; 3]))
+            );
             for (_, image) in copy_images(&doc, true) {
                 let image = image.unwrap();
                 if image.kind == "public.png" {

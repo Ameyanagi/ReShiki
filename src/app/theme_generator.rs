@@ -10,6 +10,7 @@ use reshiki::{
     canvas_theme::{CanvasTheme, ColorTheme},
     color_contrast,
     document::{Document, Point},
+    palette::{Color as Paint, Hue, Palette, Row},
     theme_files::{self, ThemeFile},
     theme_generator::{Recipe, Reference, Tone},
 };
@@ -112,7 +113,7 @@ pub enum Action {
     Chroma(CanvasTheme, f64),
     Preview(Preview),
     Bold(bool),
-    Fill(String),
+    Fill(Hue),
     Element(String),
     Apply,
     Export,
@@ -128,7 +129,7 @@ pub(super) struct Editor {
     name: String,
     preview: Preview,
     bold: bool,
-    fill: String,
+    fill: Hue,
     element: String,
 }
 impl Editor {
@@ -192,7 +193,7 @@ impl Editor {
             palette,
             preview: Preview::Labels,
             bold: true,
-            fill: "Sky".into(),
+            fill: Hue::Blue,
             element: "N".into(),
         }
     }
@@ -225,10 +226,9 @@ impl Editor {
             self.palette = palette;
         }
     }
-    fn fill_color(&self, key: [u8; 3], mode: CanvasTheme) -> [u8; 3] {
-        self.palette
-            .fill_color(key, mode)
-            .unwrap_or_else(|| reshiki::ring_fills::palette_color(key, mode))
+    /// Ring interiors use the draft theme's Tint row.
+    fn fill_color(&self, hue: Hue, mode: CanvasTheme) -> [u8; 3] {
+        Palette::new(self.palette.tones(mode), self.palette.hues, mode).swatch(hue, Row::Tint)
     }
     fn colors(&self, element: &str, mode: CanvasTheme) -> ([u8; 3], [u8; 3]) {
         let paper = mode.background();
@@ -261,11 +261,7 @@ impl Editor {
                 )
             }
             Preview::Rings => {
-                let bg = reshiki::ring_fills::PALETTE
-                    .iter()
-                    .find(|(name, _)| *name == self.fill)
-                    .map(|(_, key)| self.fill_color(*key, mode))
-                    .unwrap_or(paper);
+                let bg = self.fill_color(self.fill, mode);
                 let ink =
                     color_contrast::ensure_contrast(ink, &[paper, bg], color_contrast::TEXT_TARGET)
                         .or_else(|| {
@@ -584,11 +580,7 @@ impl App {
                     }
                     Action::Preview(preview) => editor.preview = preview,
                     Action::Bold(bold) => editor.bold = bold,
-                    Action::Fill(fill)
-                        if reshiki::ring_fills::PALETTE.iter().any(|(n, _)| *n == fill) =>
-                    {
-                        editor.fill = fill
-                    }
+                    Action::Fill(fill) => editor.fill = fill,
                     Action::Element(element)
                         if reshiki::editing::ELEMENTS.contains(&element.as_str()) =>
                     {
@@ -701,13 +693,13 @@ impl App {
         let mut molecule = preview_molecule();
         molecule.canvas_theme = mode;
         let _ = editor.palette.clone().apply(&mut molecule);
-        if editor.preview == Preview::Rings
-            && let Some((_, key)) = reshiki::ring_fills::PALETTE
-                .iter()
-                .find(|(name, _)| *name == editor.fill)
-        {
+        if editor.preview == Preview::Rings {
             let ids = molecule.all_ids();
-            reshiki::ring_fills::apply(&mut molecule, &ids, Some(*key));
+            reshiki::ring_fills::apply(
+                &mut molecule,
+                &ids,
+                Some(Paint::Palette(editor.fill, Row::Tint)),
+            );
         }
         let mut body = column![
             row![
@@ -853,8 +845,8 @@ impl App {
         ]
         .spacing(12);
         if editor.preview == Preview::Rings {
-            let fills = reshiki::ring_fills::PALETTE.map(|(name, key)| {
-                let color = editor.fill_color(key, CanvasTheme::Light);
+            let fills = [Hue::Blue, Hue::Teal, Hue::Red, Hue::Purple, Hue::Amber].map(|hue| {
+                let color = editor.fill_color(hue, CanvasTheme::Light);
                 preview_control(
                     container(Space::new().width(18).height(18)).style(move |_| container::Style {
                         background: Some(rgb(color).into()),
@@ -864,9 +856,9 @@ impl App {
                         },
                         ..Default::default()
                     }),
-                    name,
-                    Action::Fill(name.into()),
-                    editor.fill == name,
+                    hue.name(),
+                    Action::Fill(hue),
+                    editor.fill == hue,
                 )
             });
             body = body.push(row(fills).spacing(5));
@@ -1028,13 +1020,13 @@ mod tests {
             let mut doc = preview_molecule();
             doc.canvas_theme = mode;
             theme.clone().apply(&mut doc).unwrap();
-            for (name, key) in reshiki::ring_fills::PALETTE {
-                editor.fill = name.into();
+            for hue in Hue::ALL {
+                editor.fill = hue;
                 let ids = doc.all_ids();
-                reshiki::ring_fills::apply(&mut doc, &ids, Some(key));
-                let expected = reshiki::canvas_theme::fill_color(&doc, &doc.ring_fills[0]);
+                reshiki::ring_fills::apply(&mut doc, &ids, Some(Paint::Palette(hue, Row::Tint)));
+                let expected = Palette::of(&doc).rgb(doc.ring_fills[0].color);
                 assert_eq!(editor.colors("N", mode).1, expected);
-                assert_eq!(editor.fill_color(key, mode), expected);
+                assert_eq!(editor.fill_color(hue, mode), expected);
             }
         }
     }

@@ -36,7 +36,8 @@ impl App {
             }
         }
         self.graphic_width_input = self.graphic_style.width_pt.to_string();
-        let hex = |c: [u8; 3]| format!("#{:02X}{:02X}{:02X}", c[0], c[1], c[2]);
+        let palette = reshiki::palette::Palette::of(&self.doc);
+        let hex = |c| reshiki::palette::hex(palette.rgb(c));
         self.graphic_stroke_input = hex(self.graphic_style.stroke);
         if let Some(c) = self.graphic_style.fill {
             self.graphic_fill_input = hex(c);
@@ -49,6 +50,9 @@ impl App {
             if self.selected.contains(&g.id) && g.picture.is_none() {
                 change.apply(&mut g.style);
             }
+        }
+        if let GraphicChange::Stroke(color) | GraphicChange::Fill(Some(color)) = change {
+            self.remember_custom(Some(color), &before);
         }
         self.changed(before);
         self.sync_graphics();

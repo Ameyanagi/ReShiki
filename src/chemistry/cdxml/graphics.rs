@@ -109,10 +109,10 @@ impl NativeGraphic {
             .transpose()?;
         let style = if let Some(s) = self.style {
             GraphicStyle {
-                stroke: s.stroke.into_document()?,
+                stroke: s.stroke.into_color()?,
                 fill: s
                     .fill
-                    .map(presentation::NativeColor::into_document)
+                    .map(presentation::NativeColor::into_color)
                     .transpose()?,
                 width_pt: s.width_pt as f32,
                 pattern: s.pattern,

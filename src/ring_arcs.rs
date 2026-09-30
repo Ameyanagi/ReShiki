@@ -217,7 +217,7 @@ mod tests {
         let mut doc = Document::default();
         let ids = crate::editing::ring(&mut doc, Point::default(), 6, false, 0.);
         toggle(&mut doc, &ids).unwrap();
-        doc.bonds[0].color = [32, 80, 145];
+        doc.bonds[0].color = crate::palette::Color::Custom([32, 80, 145]);
         let strokes = render(&doc).primitives;
         assert_eq!(strokes.len(), 2);
         let ends: Vec<_> = strokes

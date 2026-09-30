@@ -4,6 +4,7 @@ use reshiki::{
     color_contrast::{Oklch, Rgb},
     document::Document,
     editing::ELEMENTS,
+    palette::{Palette, Row},
     ring_fills,
     theme_files::{self, ThemeFile},
 };
@@ -56,12 +57,11 @@ fn public_color_reference_matches_the_application_and_portable_themes() {
                 assert_eq!(element["number"], i + 1);
                 check_color(&element["label"], theme.element_color(symbol, mode));
             }
+            // Ring interiors use the theme's Tint row under the earlier slot names.
+            let tints = Palette::new(theme.tones(mode), Default::default(), mode);
             assert_eq!(palette["ring_fills"].as_object().unwrap().len(), 5);
-            for (name, key) in ring_fills::PALETTE {
-                check_color(
-                    &palette["ring_fills"][name],
-                    ring_fills::palette_color(key, mode),
-                );
+            for (name, _, hue) in ring_fills::PALETTE {
+                check_color(&palette["ring_fills"][name], tints.swatch(hue, Row::Tint));
             }
         }
         let file = ThemeFile::capture(&Document {

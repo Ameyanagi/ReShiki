@@ -102,7 +102,7 @@ pub struct Bond {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub secondary_display: Option<String>,
     #[serde(default)]
-    pub color: [u8; 3],
+    pub color: crate::palette::Color,
 }
 fn is_zero(value: &f32) -> bool {
     *value == 0.
@@ -180,6 +180,9 @@ pub struct Document {
     pub groups: Vec<crate::grouping::Group>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub reactions: Vec<crate::reactions::Reaction>,
+    /// Recent custom colors for the color picker, newest first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub recent_colors: Vec<crate::color_contrast::Rgb>,
 }
 impl Default for Document {
     fn default() -> Self {
@@ -200,6 +203,7 @@ impl Default for Document {
             graphics: vec![],
             groups: vec![],
             reactions: vec![],
+            recent_colors: vec![],
         }
     }
 }
@@ -300,7 +304,7 @@ impl Document {
                 stereo_atoms: vec![],
                 double_position: Default::default(),
                 secondary_display: None,
-                color: [0, 0, 0],
+                color: Default::default(),
             });
         }
     }
@@ -403,6 +407,9 @@ impl Document {
         }
         if let Some(layout) = &self.page_layout {
             layout.validate()?;
+        }
+        if self.recent_colors.len() > crate::palette::RECENT_LIMIT {
+            return Err("Too many recent colors".into());
         }
         self.validate_groups()?;
         crate::reactions::validate(self)?;
@@ -605,7 +612,7 @@ mod tests {
             stereo_atoms: vec![],
             double_position: Default::default(),
             secondary_display: None,
-            color: [0, 0, 0],
+            color: Default::default(),
         });
         assert!(doc.validate().is_err());
         doc.bonds.clear();

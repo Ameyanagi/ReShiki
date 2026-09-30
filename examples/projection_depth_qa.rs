@@ -129,7 +129,7 @@ fn main() -> Result<()> {
         let mut format = reshiki::typography::TextFormat::default();
         format.style.size_pt = 7.5;
         format.style.bold = true;
-        format.style.color = [41, 62, 56];
+        format.style.color = reshiki::palette::Color::Custom([41, 62, 56]);
         format.width_pt = Some(190.);
         gallery.annotations.push(Annotation {
             id: gallery.next_id(),

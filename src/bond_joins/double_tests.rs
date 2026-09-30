@@ -68,7 +68,9 @@ fn colored_branches_join_the_same_ring_outline_without_changing_chemistry() -> a
     ))?;
     for rotation in (0..360).step_by(17).map(|r| r as f32).chain([47., 130.]) {
         for reversed in [false, true] {
-            for color in [[43, 112, 97], [0, 0, 0], [180, 68, 32]] {
+            for color in
+                [[43, 112, 97], [0, 0, 0], [180, 68, 32]].map(crate::palette::Color::imported)
+            {
                 let mut doc = source.clone();
                 let fluorine = doc
                     .atoms
@@ -124,7 +126,7 @@ fn colored_branches_join_the_same_ring_outline_without_changing_chemistry() -> a
                 assert_eq!(doc, saved);
                 let mut uniform = doc.clone();
                 for bond in &mut uniform.bonds {
-                    bond.color = [0, 0, 0];
+                    bond.color = crate::palette::Color::Ink;
                 }
                 for (colored, plain) in doc.bonds.iter().zip(&uniform.bonds) {
                     let start = doc.atom(colored.a).context("Start")?.position;
@@ -236,7 +238,8 @@ fn junction_underpainting_keeps_nearby_crossing_clearance() -> anyhow::Result<()
         let end = doc.add_atom("C", Point::new(x, y));
         doc.add_bond(joint, end, 1, display);
     }
-    doc.bonds.last_mut().context("Colored branch")?.color = [43, 112, 97];
+    doc.bonds.last_mut().context("Colored branch")?.color =
+        crate::palette::Color::Custom([43, 112, 97]);
     let a = doc.add_atom("C", Point::new(5., -30.));
     let b = doc.add_atom("C", Point::new(5., 30.));
     doc.add_bond(a, b, 1, "plain");
@@ -311,7 +314,10 @@ fn automatic_bold_double_has_a_continuous_backbone_and_a_separate_thin_rail() ->
     for rotation in [0., 17., 83., 145.] {
         for reversed in [false, true] {
             for (thin, bold) in [(0.4, 1.5), (0.6, 2.), (1.2, 2.5)] {
-                for color in [[0, 0, 0], [180, 68, 32]] {
+                for color in [
+                    crate::palette::Color::Ink,
+                    crate::palette::Color::Custom([180, 68, 32]),
+                ] {
                     let mut doc = chain();
                     doc.drawing_style.line_width_pt = thin;
                     doc.drawing_style.bold_width_pt = bold;

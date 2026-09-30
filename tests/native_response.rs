@@ -338,7 +338,7 @@ async fn styles_high_ids_groups_abbreviations_and_reaction_warnings_survive() ->
         atom.position.y -= 0.2;
         atom.text_style = Some(reshiki::typography::TextStyle {
             size_pt: 11.3,
-            color: [14, 83, 167],
+            color: reshiki::palette::Color::Custom([14, 83, 167]),
             ..Default::default()
         });
         atom.cip_label = Some("R".into());
@@ -349,7 +349,7 @@ async fn styles_high_ids_groups_abbreviations_and_reaction_warnings_survive() ->
         for id in &mut bond.stereo_atoms {
             *id += offset;
         }
-        bond.color = [35, 156, 103];
+        bond.color = reshiki::palette::Color::Custom([35, 156, 103]);
         bond.z_order = -3;
     }
     document.drawing_style.name = "User style".into();
@@ -572,7 +572,7 @@ async fn native_drawing_precision_and_measurements_survive_the_real_transport() 
                 end: "試料 α".len(),
                 style: TextStyle {
                     bold: true,
-                    color: [70, 20, 30],
+                    color: reshiki::palette::Color::Custom([70, 20, 30]),
                     ..Default::default()
                 },
             }],

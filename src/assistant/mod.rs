@@ -171,7 +171,7 @@ pub struct DrawingSettings {
     pub drawing_style: crate::style::DrawingStyle,
     pub format: TextFormat,
     pub bond_length: f32,
-    pub bond_color: [u8; 3],
+    pub bond_color: crate::palette::Color,
     pub arrow_style: crate::arrows::ArrowStyle,
     pub labels: crate::atom_labels::Settings,
 }
@@ -181,7 +181,7 @@ impl Default for DrawingSettings {
             drawing_style: Default::default(),
             format: TextFormat::default(),
             bond_length: crate::style::DEFAULT.bond_length_world,
-            bond_color: [0; 3],
+            bond_color: crate::palette::Color::Ink,
             arrow_style: Default::default(),
             labels: Default::default(),
         }

@@ -60,7 +60,7 @@ fn main() -> Result<()> {
             .iter_mut()
             .find(|b| b.a == added || b.b == added)
         {
-            bond.color = [43, 112, 97];
+            bond.color = reshiki::palette::Color::Custom([43, 112, 97]);
         }
         fs::write(
             out.join(format!("case-{i}.rsk")),
@@ -82,7 +82,7 @@ fn main() -> Result<()> {
         let mut format = reshiki::typography::TextFormat::default();
         format.style.size_pt = 8.;
         format.style.bold = true;
-        format.style.color = [41, 62, 56];
+        format.style.color = reshiki::palette::Color::Custom([41, 62, 56]);
         gallery.annotations.push(Annotation {
             id: gallery.next_id(),
             position: Point::new(x, 255.),

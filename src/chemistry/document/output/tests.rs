@@ -30,7 +30,8 @@ fn output_keeps_presentation_and_can_be_undone_as_one_edit() -> anyhow::Result<(
     let a = original.add_atom("C", Point::new(-14., 10.));
     let b = original.add_atom("O", Point::new(14., 10.));
     original.add_bond(a, b, 1, "plain");
-    original.bonds.first_mut().context("Missing bond")?.color = [40, 70, 180];
+    original.bonds.first_mut().context("Missing bond")?.color =
+        crate::palette::Color::Custom([40, 70, 180]);
     let atom = original.atoms.get_mut(1).context("Missing oxygen")?;
     atom.label_h = 99;
     atom.text_style = Some(crate::typography::TextStyle {

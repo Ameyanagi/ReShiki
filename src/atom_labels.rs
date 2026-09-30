@@ -183,7 +183,7 @@ pub struct Number {
 pub struct AtomDisplay {
     /// Separate attached-H ink when preserving a themed label across paste/export.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub hydrogen_color: Option<[u8; 3]>,
+    pub hydrogen_color: Option<crate::palette::Color>,
     /// Explicit atom ink, including black, takes precedence over the element theme.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub color_override: bool,
@@ -401,7 +401,7 @@ impl Indicator {
             position: self.origin,
             text: self.text.clone(),
             size: self.height,
-            color: self.style.color,
+            color: self.style.color.rgb(),
             style: self.style.clone(),
         }
     }

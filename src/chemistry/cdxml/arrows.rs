@@ -72,7 +72,7 @@ impl NativeArrow {
                 head: s.head,
                 tail: s.tail,
                 shape: s.shape,
-                color: s.color.into_document()?,
+                color: s.color.into_color()?,
                 width_pt: s.width_pt as f32,
                 pattern: s.pattern,
                 head_length_pt: s.head_length_pt as f32,

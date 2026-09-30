@@ -1,5 +1,6 @@
 use super::*;
 use reshiki::abbreviations::LabelAlignment;
+use reshiki::palette::{Color as Paint, Palette};
 use reshiki::typography::{Script, StyleChange, TextAlign, TextFormat, TextStyle};
 use std::ops::Range;
 
@@ -121,7 +122,24 @@ impl App {
             &self.caption_format.style
         }
     }
-    pub(super) fn current_selection_color(&self) -> Option<[u8; 3]> {
+    /// An atom's color as a swatch: its explicit color, or its automatic theme
+    /// ink as Ink or an exact color.
+    fn atom_paint(&self, atom: &reshiki::document::Atom) -> Paint {
+        let explicit = atom.text_style.as_ref().map_or(Paint::Ink, |s| s.color);
+        if atom.display.color_override || explicit != Paint::Ink {
+            return explicit;
+        }
+        let rgb = self
+            .doc
+            .canvas_theme
+            .color(reshiki::canvas_theme::atom_color(&self.doc, atom));
+        if rgb == self.doc.canvas_theme.color([0; 3]) {
+            Paint::Ink
+        } else {
+            Paint::Custom(rgb)
+        }
+    }
+    pub(super) fn current_selection_color(&self) -> Option<Paint> {
         if self.color_scope == ColorScope::Rings {
             let cycles = reshiki::ring_fills::selected_cycles(&self.doc, &self.selected);
             let colors: Option<Vec<_>> = cycles
@@ -134,11 +152,7 @@ impl App {
                             fill.atoms.len() == atoms.len()
                                 && fill.atoms.iter().all(|id| atoms.contains(id))
                         })
-                        .map(|f| {
-                            self.doc
-                                .canvas_theme
-                                .color(reshiki::canvas_theme::fill_color(&self.doc, f))
-                        })
+                        .map(|f| f.color)
                 })
                 .collect();
             let colors = colors?;
@@ -162,7 +176,7 @@ impl App {
                     .atoms
                     .iter()
                     .filter(|a| self.selected.contains(&a.id))
-                    .map(|a| reshiki::canvas_theme::atom_color(&self.doc, a)),
+                    .map(|a| self.atom_paint(a)),
             );
             for a in self
                 .doc
@@ -210,10 +224,10 @@ impl App {
             .filter(|first| colors.iter().all(|c| c == first))
     }
     pub(super) fn sync_color_input(&mut self) {
+        let palette = Palette::of(&self.doc);
         self.text_color_input = self
             .current_selection_color()
-            .map(|color| self.doc.canvas_theme.color(color))
-            .map(|[r, g, b]| format!("#{r:02X}{g:02X}{b:02X}"))
+            .map(|color| reshiki::palette::hex(palette.rgb(color)))
             .unwrap_or_default();
     }
     pub(super) fn sync_typography(&mut self) {
@@ -388,22 +402,10 @@ impl App {
         self.changed(before);
         self.sync_style_inputs();
     }
-    pub(super) fn apply_ring_color(&mut self, color: Option<[u8; 3]>) {
-        self.apply_ring_color_kind(color, false);
-    }
-    pub(super) fn apply_ring_color_kind(&mut self, color: Option<[u8; 3]>, fixed: bool) {
+    pub(super) fn apply_ring_color(&mut self, color: Option<Paint>) {
         let before = self.doc.clone();
         let count = reshiki::ring_fills::apply(&mut self.doc, &self.selected, color);
-        if fixed {
-            let cycles = reshiki::ring_fills::selected_cycles(&self.doc, &self.selected);
-            for fill in &mut self.doc.ring_fills {
-                if cycles.iter().any(|ids| {
-                    ids.len() == fill.atoms.len() && ids.iter().all(|id| fill.atoms.contains(id))
-                }) {
-                    fill.fixed_color = true;
-                }
-            }
-        }
+        self.remember_custom(color, &before);
         self.changed(before);
         self.sync_color_input();
         self.status = if count == 0 {
@@ -419,7 +421,15 @@ impl App {
             )
         };
     }
-    pub(super) fn apply_selection_color(&mut self, color: [u8; 3]) {
+    /// Keep a custom color that was just used in the drawing for the picker.
+    pub(super) fn remember_custom(&mut self, color: Option<Paint>, before: &Document) {
+        if let Some(Paint::Custom(rgb)) = color
+            && self.doc != *before
+        {
+            self.doc.remember_color(rgb);
+        }
+    }
+    pub(super) fn apply_selection_color(&mut self, color: Paint) {
         if self.color_scope == ColorScope::Rings {
             self.apply_ring_color(Some(color));
             return;
@@ -501,13 +511,13 @@ impl App {
             }
         }
         let changed = before != self.doc;
+        self.remember_custom(Some(color), &before);
         self.changed(before);
         self.sync_style_inputs();
         self.sync_graphics();
         self.sync_arrows();
         self.sync_bonds();
-        let [r, g, b] = self.doc.canvas_theme.color(color);
-        self.text_color_input = format!("#{r:02X}{g:02X}{b:02X}");
+        self.text_color_input = reshiki::palette::hex(Palette::of(&self.doc).rgb(color));
         self.status = if text_only {
             "Text range recolored".into()
         } else if changed {

@@ -143,7 +143,7 @@ fn atom_label_runs(a: &Atom, doc: &Document) -> Vec<Primitive> {
                 position: origin.offset(run.position.x, run.position.y),
                 text: run.text,
                 size: run.style.size(),
-                color: run.style.color,
+                color: run.style.color.rgb(),
                 style: run.style,
             })
             .collect();
@@ -161,7 +161,7 @@ fn atom_label_runs(a: &Atom, doc: &Document) -> Vec<Primitive> {
         position,
         text: content,
         size,
-        color: style.color,
+        color: style.color.rgb(),
         style: style.clone(),
     };
     let size = STYLE.world(style.size_pt);
@@ -209,7 +209,7 @@ fn atom_label_runs(a: &Atom, doc: &Document) -> Vec<Primitive> {
                 position: run.position,
                 text: run.text,
                 size: run.style.size(),
-                color: run.style.color,
+                color: run.style.color.rgb(),
                 style: run.style,
             })
             .collect();
@@ -252,7 +252,7 @@ fn atom_label_runs(a: &Atom, doc: &Document) -> Vec<Primitive> {
         if let Some(hydrogen_color) = a.display.hydrogen_color {
             for part in &mut parts {
                 if let Primitive::Text { color, style, .. } = part {
-                    *color = hydrogen_color;
+                    *color = hydrogen_color.rgb();
                     style.color = hydrogen_color;
                 }
             }
@@ -564,8 +564,10 @@ fn ring_center(doc: &Document, from: u64, to: u64) -> Option<Point> {
     None
 }
 
+/// Drawing primitives with colors in canonical light-canvas bytes; renderers
+/// apply the canvas conversion once.
 pub fn primitives(doc: &Document) -> Vec<Primitive> {
-    let resolved = crate::canvas_theme::resolved_document(doc);
+    let resolved = crate::canvas_theme::canonical_document(doc);
     let doc = resolved.as_ref();
     let style = &doc.drawing_style;
     let mut out = vec![];
@@ -638,8 +640,10 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
         .collect();
     // Fill joined bond outlines together. Separate antialiased polygons leave
     // translucent seams even when their mathematical corners agree exactly.
-    let mut joined: std::collections::BTreeMap<[u8; 3], Vec<crate::graphics::PathCommand>> =
-        Default::default();
+    let mut joined: std::collections::BTreeMap<
+        crate::palette::Color,
+        Vec<crate::graphics::PathCommand>,
+    > = Default::default();
     for (bond_index, b) in doc
         .bonds
         .iter()
@@ -921,7 +925,7 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             }
             out.extend(secondary);
         }
-        if b.color != [0, 0, 0] {
+        if b.color.rgb() != [0, 0, 0] {
             for primitive in out.iter_mut().skip(bond_start) {
                 use crate::graphics::{GraphicStyle, PathCommand};
                 match primitive {
@@ -1041,7 +1045,7 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
                 position: a.position.offset(fragment.position.x, fragment.position.y),
                 text: fragment.text,
                 size: fragment.style.size(),
-                color: fragment.style.color,
+                color: fragment.style.color.rgb(),
                 style: fragment.style,
             });
         }
@@ -1169,11 +1173,11 @@ fn render_svg(doc: &Document, background: bool) -> String {
             }
             Primitive::Path {
                 commands,
-                mut style,
+                style,
                 filled,
             } => {
-                style.stroke = theme.color(style.stroke);
-                style.fill = style.fill.map(|color| theme.color(color));
+                let stroke = theme.color(style.stroke.rgb());
+                let fill = style.fill.map(|color| theme.color(color.rgb()));
                 use crate::graphics::PathCommand;
                 let mut path = String::new();
                 for c in commands {
@@ -1188,9 +1192,7 @@ fn render_svg(doc: &Document, background: bool) -> String {
                     }
                 }
                 let fill = if filled {
-                    style
-                        .fill
-                        .map(|c| format!("rgb({},{},{})", c[0], c[1], c[2]))
+                    fill.map(|c| format!("rgb({},{},{})", c[0], c[1], c[2]))
                         .unwrap_or_else(|| "none".into())
                 } else {
                     "none".into()
@@ -1206,7 +1208,7 @@ fn render_svg(doc: &Document, background: bool) -> String {
                 } else {
                     format!(" stroke-dasharray=\"{dashes}\"")
                 };
-                s.push_str(&format!("<path d=\"{path}\" fill=\"{fill}\" stroke=\"rgb({},{},{})\" stroke-width=\"{}\" stroke-linecap=\"round\" stroke-linejoin=\"round\"{dash}/>",style.stroke[0],style.stroke[1],style.stroke[2],style.width()));
+                s.push_str(&format!("<path d=\"{path}\" fill=\"{fill}\" stroke=\"rgb({},{},{})\" stroke-width=\"{}\" stroke-linecap=\"round\" stroke-linejoin=\"round\"{dash}/>",stroke[0],stroke[1],stroke[2],style.width()));
             }
             Primitive::Line(a, b, w) => {
                 s.push_str(&format!("<line x1=\"{}\" y1=\"{}\" x2=\"{}\" y2=\"{}\" stroke=\"{ink}\" stroke-width=\"{w}\" stroke-linecap=\"round\"/>",a.x,a.y,b.x,b.y));

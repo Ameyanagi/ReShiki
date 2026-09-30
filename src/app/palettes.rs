@@ -175,7 +175,7 @@ fn graphic_options(family: Family) -> Vec<(String, GraphicOption)> {
             ] {
                 let mut option = GraphicOption::new(kind);
                 option.style.pattern = pattern;
-                option.style.fill = filled.then_some([0; 3]);
+                option.style.fill = filled.then_some(reshiki::palette::Color::Ink);
                 options.push((format!("{name} {kind}"), option));
             }
         }
@@ -251,7 +251,8 @@ impl App {
                 self.palette = None;
                 self.arrow_style = preset;
                 self.arrows.style = style;
-                self.arrows.refresh_inputs();
+                self.arrows
+                    .refresh_inputs(&reshiki::palette::Palette::of(&self.doc));
                 return self.update(Message::Tool(Tool::Arrow));
             }
         }

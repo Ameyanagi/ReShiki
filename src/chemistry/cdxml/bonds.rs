@@ -91,10 +91,7 @@ impl NativeBond {
             z_order: self.z_order.decimal().parse().map_err(|_| Error::Layer)?,
             secondary_display: self.secondary_display,
             double_position: self.double_position,
-            color: self
-                .color
-                .into_document()
-                .map_err(|_| Error::ColorBoundary)?,
+            color: self.color.into_color().map_err(|_| Error::ColorBoundary)?,
             indicator: Default::default(),
             cip_label: None,
             stereo: None,

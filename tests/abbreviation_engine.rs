@@ -137,7 +137,7 @@ async fn all_presets_preserve_complete_app_responses_selection_and_undo() -> any
         let doc = imported.document.context("Missing imported document")?;
         let mut styled = serde_json::to_value(&doc)?;
         styled["atoms"][0]["text_style"] = serde_json::to_value(reshiki::typography::TextStyle {
-            color: [17, 126, 108],
+            color: reshiki::palette::Color::Custom([17, 126, 108]),
             size_pt: 12.,
             ..Default::default()
         })?;
@@ -265,7 +265,7 @@ async fn replacement_preserves_full_responses_geometry_selection_and_undo() -> a
             .context("No drawing")?;
         let mut value = serde_json::to_value(&doc)?;
         value["atoms"][0]["text_style"] = serde_json::to_value(reshiki::typography::TextStyle {
-            color: [17, 126, 108],
+            color: reshiki::palette::Color::Custom([17, 126, 108]),
             size_pt: 12.,
             ..Default::default()
         })?;

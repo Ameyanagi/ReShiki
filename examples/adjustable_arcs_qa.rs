@@ -37,7 +37,10 @@ fn main() -> anyhow::Result<()> {
             origin,
             origin.offset(145., 100.),
             GraphicStyle {
-                stroke: [32, 80, 145],
+                stroke: reshiki::palette::Color::Palette(
+                    reshiki::palette::Hue::Blue,
+                    reshiki::palette::Row::Strong,
+                ),
                 width_pt: 1.2,
                 ..Default::default()
             },

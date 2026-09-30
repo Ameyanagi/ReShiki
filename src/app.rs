@@ -399,7 +399,7 @@ impl App {
             attach_symbols: true,
             graphic_width_input: "0.6".into(),
             graphic_stroke_input: "#000000".into(),
-            graphic_fill_input: "#DCEFE9".into(),
+            graphic_fill_input: String::new(),
             bracket_sides: BracketSides::Both,
             doc: Document::default(),
             history: History::default(),
@@ -787,7 +787,7 @@ impl App {
                 self.arrows = Default::default();
                 self.graphic_width_input = reshiki::style::DEFAULT.line_width_pt.to_string();
                 self.graphic_stroke_input = "#000000".into();
-                self.graphic_fill_input = "#DCEFE9".into();
+                self.graphic_fill_input.clear();
                 self.color_scope = Default::default();
                 self.bond_color_input = "#000000".into();
                 self.tool = Tool::Select;
@@ -1226,13 +1226,15 @@ impl App {
             }
             Message::BondColor(value) => self.bond_color_input = value,
             Message::ApplyBondColor => {
-                if let Some(color) = graphics::parse_color(&self.bond_color_input) {
+                if let Some(rgb) = graphics::parse_color(&self.bond_color_input) {
+                    let color = reshiki::palette::Color::Custom(rgb);
                     let before = self.doc.clone();
                     for bond in &mut self.doc.bonds {
                         if self.selected.contains(&bond.a) && self.selected.contains(&bond.b) {
                             bond.color = color;
                         }
                     }
+                    self.remember_custom(Some(color), &before);
                     self.changed(before);
                 } else {
                     self.error = true;
@@ -1326,7 +1328,9 @@ impl App {
             Message::GraphicStroke(s) => self.graphic_stroke_input = s,
             Message::ApplyGraphicStroke => {
                 if let Some(c) = graphics::parse_color(&self.graphic_stroke_input) {
-                    self.apply_graphic_style(GraphicChange::Stroke(c));
+                    self.apply_graphic_style(GraphicChange::Stroke(
+                        reshiki::palette::Color::Custom(c),
+                    ));
                 } else {
                     self.error = true;
                     self.status = "Enter a six-digit hex color, such as #117E6C".into();
@@ -1335,7 +1339,9 @@ impl App {
             Message::GraphicFill(s) => self.graphic_fill_input = s,
             Message::ApplyGraphicFill => {
                 if let Some(c) = graphics::parse_color(&self.graphic_fill_input) {
-                    self.apply_graphic_style(GraphicChange::Fill(Some(c)));
+                    self.apply_graphic_style(GraphicChange::Fill(Some(
+                        reshiki::palette::Color::Custom(c),
+                    )));
                 } else {
                     self.error = true;
                     self.status = "Enter a six-digit hex color, such as #DCEFE9".into();
@@ -1572,17 +1578,11 @@ impl App {
             }
             Message::TextColor(value) => self.text_color_input = value,
             Message::ApplyTextColor => {
-                let hex = self.text_color_input.trim().trim_start_matches('#');
-                if hex.len() == 6
-                    && let Ok(value) = u32::from_str_radix(hex, 16)
-                {
-                    let color = self.doc.canvas_theme.color([
-                        (value >> 16) as u8,
-                        (value >> 8) as u8,
-                        value as u8,
-                    ]);
+                if let Some(rgb) = graphics::parse_color(&self.text_color_input) {
+                    // Typed colors are exact on both canvases.
+                    let color = reshiki::palette::Color::Custom(rgb);
                     if self.color_scope == typography::ColorScope::Rings {
-                        self.apply_ring_color_kind(Some(color), true);
+                        self.apply_ring_color(Some(color));
                     } else {
                         self.apply_text_style(reshiki::typography::StyleChange::Color(color));
                     }
@@ -3070,8 +3070,8 @@ impl App {
             .iter()
             .find(|b| self.selected.contains(&b.a) && self.selected.contains(&b.b))
         {
-            let [r, g, b] = b.color;
-            self.bond_color_input = format!("#{r:02X}{g:02X}{b:02X}");
+            self.bond_color_input =
+                reshiki::palette::hex(reshiki::palette::Palette::of(&self.doc).rgb(b.color));
         }
     }
     fn apply_current_bond_preset(&mut self, a: u64, b: u64) {
@@ -3152,8 +3152,8 @@ fn chemistry_changed(before: &Document, after: &Document) -> bool {
             let mut b = b.clone();
             a.z_order = 0;
             b.z_order = 0;
-            a.color = [0, 0, 0];
-            b.color = [0, 0, 0];
+            a.color = Default::default();
+            b.color = Default::default();
             a.double_position = Default::default();
             b.double_position = Default::default();
             a.secondary_display = None;
@@ -3404,7 +3404,7 @@ mod tests {
         let methyl = app.doc.add_atom("C", Point::new(36.373, 21.));
         app.doc.add_bond(c, o, 2, "plain");
         app.doc.add_bond(c, methyl, 1, "plain");
-        app.doc.bonds[0].color = [32, 80, 145];
+        app.doc.bonds[0].color = reshiki::palette::Color::Custom([32, 80, 145]);
         app.doc.atom_mut(c).unwrap().label_h = 1;
         let original = app.doc.clone();
         let mut scenes = std::collections::BTreeSet::new();
@@ -3713,18 +3713,20 @@ mod tests {
         app.selected = editing::ring(&mut app.doc, Point::default(), 6, true, 0.);
         let original = app.doc.clone();
         let _ = app.update(Message::ColorScope(typography::ColorScope::Rings));
+        let tint = reshiki::palette::Color::Palette(
+            reshiki::palette::Hue::Blue,
+            reshiki::palette::Row::Tint,
+        );
         let _ = app.update(Message::TextStyle(reshiki::typography::StyleChange::Color(
-            [201, 224, 248],
+            tint,
         )));
         assert_eq!(app.doc.ring_fills.len(), 1);
         assert_eq!(app.doc.atoms, original.atoms);
         assert_eq!(app.doc.bonds, original.bonds);
-        assert_eq!(
-            app.current_selection_color(),
-            Some(reshiki::ring_fills::palette_color(
-                [201, 224, 248],
-                app.doc.canvas_theme
-            ))
+        assert_eq!(app.current_selection_color(), Some(tint));
+        assert!(
+            app.doc.recent_colors.is_empty(),
+            "palette colors are not recent customs"
         );
         let colored = app.doc.clone();
         let _ = app.update(Message::ClearRingFill);
@@ -3747,8 +3749,8 @@ mod tests {
         let _ = app.update(Message::TextColor("#C9E0F8".into()));
         let _ = app.update(Message::ApplyTextColor);
         let fill = app.doc.ring_fills.first().unwrap();
-        assert!(fill.fixed_color);
-        assert_eq!(fill.visible_color(app.doc.canvas_theme), [201, 224, 248]);
+        assert_eq!(fill.color, reshiki::palette::Color::Custom([201, 224, 248]));
+        assert_eq!(app.doc.recent_colors, [[201, 224, 248]]);
         assert_eq!(app.text_color_input, "#C9E0F8");
         let _ = app.update(Message::Undo);
         assert_eq!(app.doc, original);
@@ -4157,7 +4159,7 @@ mod tests {
         app.graphic_style.width_pt = 3.;
         app.caption_format.style.family = "Times New Roman".into();
         app.caption_format.style.size_pt = 18.;
-        app.caption_format.style.color = [190, 30, 40];
+        app.caption_format.style.color = reshiki::palette::Color::Custom([190, 30, 40]);
         app.caption_format.style.bold = true;
         let _ = app.update(Message::DrawingLength("30".into()));
         let _ = app.update(Message::FixedLength(false));
@@ -4259,7 +4261,7 @@ mod tests {
             Point::new(0., 80.),
             Point::new(84., 120.),
             GraphicStyle {
-                fill: Some([200, 200, 200]),
+                fill: Some(reshiki::palette::Color::Custom([200, 200, 200])),
                 ..Default::default()
             },
             Default::default(),
@@ -4272,10 +4274,13 @@ mod tests {
         app.caption_action(Action::Select(Motion::Right));
         assert_eq!(app.text_range(), Some(0..2));
         let original = app.doc.clone();
-        let red = [180, 50, 55];
+        let red = reshiki::palette::Color::Custom([180, 50, 55]);
         let _ = app.update(Message::TextStyle(StyleChange::Color(red)));
         assert_eq!(app.doc.annotations[0].format.at(0).color, red);
-        assert_eq!(app.doc.annotations[0].format.at(3).color, [0; 3]);
+        assert_eq!(
+            app.doc.annotations[0].format.at(3).color,
+            reshiki::palette::Color::Ink
+        );
         assert_eq!(app.doc.graphics, original.graphics);
         let _ = app.update(Message::Undo);
         assert_eq!(app.doc, original);
@@ -4323,8 +4328,12 @@ mod tests {
             style: reshiki::atom_labels::number_style(),
         });
         let original = app.doc.clone();
-        let blue = [32, 80, 145];
-        let red = [180, 50, 55];
+        let blue = reshiki::palette::Color::Palette(
+            reshiki::palette::Hue::Blue,
+            reshiki::palette::Row::Strong,
+        );
+        // Typed colors are custom and exact.
+        let red = reshiki::palette::Color::Custom([180, 50, 55]);
         let _ = app.update(Message::SelectAll);
         let _ = app.update(Message::TextStyle(StyleChange::Color(blue)));
         assert!(
@@ -4393,7 +4402,10 @@ mod tests {
         let _ = app.update(Message::BondPosition(DoublePosition::Left));
         let _ = app.update(Message::BondColor("#205091".into()));
         let _ = app.update(Message::ApplyBondColor);
-        assert_eq!(app.doc.bonds[0].color, [32, 80, 145]);
+        assert_eq!(
+            app.doc.bonds[0].color,
+            reshiki::palette::Color::Custom([32, 80, 145])
+        );
         assert_eq!(app.doc.bonds[1], other);
         let _ = app.update(Message::ApplyBondPreset(BondPreset::HollowWedge));
         assert_eq!(app.doc.bonds[0].display, "hollow_wedge");
@@ -4559,7 +4571,9 @@ mod tests {
         ));
         let id = app.doc.graphics[0].id;
         assert_eq!(app.tool, Tool::Select);
-        app.apply_graphic_style(GraphicChange::Stroke([32, 80, 145]));
+        app.apply_graphic_style(GraphicChange::Stroke(reshiki::palette::Color::Custom([
+            32, 80, 145,
+        ])));
         let before = app.doc.clone();
         let _ = app.update(Message::Tool(Tool::EditPoints));
         app.edit(Edit::GraphicPoint(id, 1, Point::new(20., -50.)));
@@ -4575,7 +4589,9 @@ mod tests {
         assert!(app.analysis.is_some());
         let _ = app.update(Message::Tool(Tool::Graphic(GraphicKind::Ellipse)));
         assert!(app.selected.is_empty());
-        app.apply_graphic_style(GraphicChange::Stroke([180, 50, 55]));
+        app.apply_graphic_style(GraphicChange::Stroke(reshiki::palette::Color::Custom([
+            180, 50, 55,
+        ])));
         assert_eq!(
             app.doc, after,
             "new drawing style must not change the previous object"

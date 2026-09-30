@@ -2,7 +2,9 @@ use reshiki::{
     canvas_theme::{self, CanvasTheme},
     document::{Document, Point},
     document_styles::Preset,
-    exchange, export, scene,
+    exchange, export,
+    palette::{Color, Hue, Palette, Row},
+    scene,
 };
 
 fn sample() -> Document {
@@ -74,7 +76,7 @@ fn attached_hydrogens_follow_h_palette_in_figures_clipboard_and_chemdraw() {
     }
     doc.atom_mut(n).unwrap().display.color_override = true;
     doc.atom_mut(n).unwrap().text_style = Some(reshiki::typography::TextStyle {
-        color: [130, 30, 100],
+        color: Color::Custom([130, 30, 100]),
         ..Default::default()
     });
     let atom = doc.atom(n).unwrap();
@@ -180,7 +182,8 @@ fn pasting_across_canvas_modes_keeps_visible_colors_and_editable_atoms() {
     for source in CanvasTheme::ALL {
         let mut doc = sample();
         doc.canvas_theme = source;
-        doc.bonds[0].color = [180, 50, 55];
+        doc.bonds[0].color = Color::Palette(Hue::Red, Row::Strong);
+        let shown = Palette::of(&doc).rgb(doc.bonds[0].color);
         for target in CanvasTheme::ALL {
             let part = canvas_theme::for_paste(doc.clone(), target);
             part.validate().unwrap();
@@ -188,12 +191,16 @@ fn pasting_across_canvas_modes_keeps_visible_colors_and_editable_atoms() {
             assert_eq!(part.atoms.len(), doc.atoms.len());
             assert_eq!(part.bonds[0].order, 2);
             assert_eq!(part.drawing_style, doc.drawing_style);
-            assert_eq!(
-                target.color(part.bonds[0].color),
-                source.color(doc.bonds[0].color)
-            );
+            // Pasted colors are custom, so they look the same on either canvas.
+            assert_eq!(part.bonds[0].color, Color::Custom(shown));
+            // Ink stays Ink on the same canvas, so it follows later canvas changes.
             let ink = part.atoms[1].text_style.as_ref().unwrap().color;
-            assert_eq!(target.color(ink), source.color([0; 3]));
+            let expected = if source == target {
+                Color::Ink
+            } else {
+                Color::Custom(source.color([0; 3]))
+            };
+            assert_eq!(ink, expected);
             assert!(part.atoms[1].display.color_override);
             assert_eq!(
                 part.graphics, doc.graphics,
@@ -353,7 +360,7 @@ fn theme_changes_reset_atom_overrides_without_changing_geometry_or_fonts() {
     let font = doc.atoms[1].text_style.as_mut().unwrap();
     font.bold = true;
     font.size_pt = 14.;
-    font.color = [32, 80, 145];
+    font.color = Color::Palette(Hue::Blue, Row::Strong);
     let original = doc.clone();
     ColorTheme::Presentation.apply(&mut doc);
     assert_eq!(doc.drawing_style, original.drawing_style);
@@ -407,16 +414,22 @@ fn element_palettes_keep_legible_contrast_on_their_canvas() {
 }
 
 #[test]
-fn ring_highlights_have_their_own_palette_and_copy_the_visible_color() {
+fn ring_highlights_use_the_tint_row_and_copy_the_visible_color() {
     use reshiki::{canvas_theme::ColorTheme, ring_fills};
     for mode in CanvasTheme::ALL {
-        for (name, key) in ring_fills::PALETTE {
+        for hue in Hue::ALL {
+            let color = Color::Palette(hue, Row::Tint);
             let mut doc = reshiki::rings::Preset::Regular.document(42., false);
             doc.canvas_theme = mode;
             doc.color_theme = ColorTheme::Presentation;
             let ids = doc.all_ids();
-            ring_fills::apply(&mut doc, &ids, Some(key));
-            let expected = ring_fills::palette_color(key, mode);
+            ring_fills::apply(&mut doc, &ids, Some(color));
+            let expected = Palette::new(
+                ColorTheme::Presentation.tones(mode),
+                Default::default(),
+                mode,
+            )
+            .swatch(hue, Row::Tint);
             let actual = scene::primitives(&doc)
                 .into_iter()
                 .find_map(|p| match p {
@@ -424,12 +437,13 @@ fn ring_highlights_have_their_own_palette_and_copy_the_visible_color() {
                         filled: true,
                         style,
                         ..
-                    } => style.fill.map(|c| mode.color(c)),
+                    } => style.fill.map(|c| mode.color(c.rgb())),
                     _ => None,
                 })
                 .unwrap();
-            assert_eq!(actual, expected, "{name}/{mode}");
+            assert_eq!(actual, expected, "{hue:?}/{mode}");
             let resolved = canvas_theme::resolved_document(&doc).into_owned();
+            assert_eq!(resolved.ring_fills[0].color, Color::Custom(expected));
             assert_eq!(
                 canvas_theme::resolved_document(&resolved).as_ref(),
                 &resolved,
@@ -437,8 +451,7 @@ fn ring_highlights_have_their_own_palette_and_copy_the_visible_color() {
             );
             for target in CanvasTheme::ALL {
                 let pasted = canvas_theme::for_paste(doc.clone(), target);
-                assert_eq!(pasted.ring_fills[0].visible_color(target), expected);
-                assert!(pasted.ring_fills[0].fixed_color);
+                assert_eq!(pasted.ring_fills[0].color, Color::Custom(expected));
             }
             let png = image::load_from_memory(&export::clipboard_drawing(&doc, "png").unwrap())
                 .unwrap()
@@ -450,8 +463,8 @@ fn ring_highlights_have_their_own_palette_and_copy_the_visible_color() {
                 serde_json::from_slice(&serde_json::to_vec(&doc).unwrap()).unwrap();
             assert_eq!(saved, doc);
             assert_eq!(
-                doc.ring_fills[0].color, key,
-                "saved palette keys remain stable"
+                doc.ring_fills[0].color, color,
+                "saved palette references remain stable"
             );
         }
     }
@@ -473,15 +486,16 @@ fn dark_ring_highlights_keep_automatic_atom_labels_legible() {
             })
             .sum()
     };
-    for (_, key) in ring_fills::PALETTE {
+    for hue in Hue::ALL {
+        let color = Color::Palette(hue, Row::Tint);
         let mut doc = reshiki::rings::Preset::Regular.document(42., false);
         doc.canvas_theme = CanvasTheme::Dark;
         doc.color_theme = ColorTheme::Presentation;
         doc.atoms[0].element = "N".into();
         let ids = doc.all_ids();
-        ring_fills::apply(&mut doc, &ids, Some(key));
+        ring_fills::apply(&mut doc, &ids, Some(color));
         let original = doc.clone();
-        let fill = ring_fills::palette_color(key, CanvasTheme::Dark);
+        let fill = Palette::of(&doc).rgb(color);
         let ink = CanvasTheme::Dark.color(canvas_theme::atom_color(&doc, &doc.atoms[0]));
         assert!((luminance(ink) + 0.05) / (luminance(fill) + 0.05) >= 4.5);
         assert!(
@@ -490,7 +504,7 @@ fn dark_ring_highlights_keep_automatic_atom_labels_legible() {
         );
         let resolved = canvas_theme::resolved_document(&doc).into_owned();
         assert_eq!(
-            CanvasTheme::Dark.color(resolved.atoms[0].text_style.as_ref().unwrap().color),
+            Palette::of(&resolved).rgb(resolved.atoms[0].text_style.as_ref().unwrap().color),
             ink
         );
         let pasted = canvas_theme::for_paste(doc.clone(), CanvasTheme::Light);
@@ -500,7 +514,7 @@ fn dark_ring_highlights_keep_automatic_atom_labels_legible() {
         assert!(
             reshiki::color_contrast::contrast(
                 canvas_theme::atom_color(&doc, &doc.atoms[0]),
-                ring_fills::palette_color(key, CanvasTheme::Light)
+                Palette::of(&doc).rgb(color)
             ) >= reshiki::color_contrast::TEXT_TARGET
         );
         doc.canvas_theme = CanvasTheme::Dark;
@@ -513,7 +527,7 @@ fn dark_ring_highlights_keep_automatic_atom_labels_legible() {
 fn all_elements_meet_text_target_over_every_builtin_fill_and_overlaps() {
     use reshiki::{
         color_contrast::{TEXT_TARGET, contrast},
-        ring_fills::{self, RingFill},
+        ring_fills::RingFill,
     };
     let mut measured = 0;
     let mut minimum = 21_f64;
@@ -526,15 +540,15 @@ fn all_elements_meet_text_target_over_every_builtin_fill_and_overlaps() {
                     ..Default::default()
                 };
                 let id = doc.add_atom(element, Point::default());
-                for (_, key) in ring_fills::PALETTE {
+                let palette = Palette::of(&doc);
+                for hue in Hue::ALL {
                     doc.ring_fills.push(RingFill {
                         atoms: vec![id],
-                        color: key,
-                        fixed_color: false,
+                        color: Color::Palette(hue, Row::Tint),
                     });
                     let ink = mode.color(canvas_theme::atom_color(&doc, &doc.atoms[0]));
                     for background in std::iter::once(mode.background())
-                        .chain(doc.ring_fills.iter().map(|f| f.visible_color(mode)))
+                        .chain(doc.ring_fills.iter().map(|f| palette.rgb(f.color)))
                     {
                         let ratio = contrast(ink, background);
                         minimum = minimum.min(ratio);
@@ -566,24 +580,73 @@ fn custom_contrast_conflicts_are_reported_without_recoloring_user_ink_or_fills()
     doc.ring_fills = vec![
         RingFill {
             atoms: vec![id],
-            color: [0; 3],
-            fixed_color: true,
+            color: Color::Custom([0; 3]),
         },
         RingFill {
             atoms: vec![id],
-            color: [120; 3],
-            fixed_color: true,
+            color: Color::Custom([120; 3]),
         },
     ];
     let before = doc.clone();
     assert!(canvas_theme::label_contrast_issues(&doc).contains(&id));
     assert_eq!(doc, before);
     doc.atoms[1].text_style = Some(doc.drawing_style.text_style());
-    doc.atoms[1].text_style.as_mut().unwrap().color = [255, 255, 0];
+    doc.atoms[1].text_style.as_mut().unwrap().color = Color::Custom([255, 255, 0]);
     doc.atoms[1].display.color_override = true;
     assert_eq!(canvas_theme::atom_color(&doc, &doc.atoms[1]), [255, 255, 0]);
     assert!(canvas_theme::label_contrast_issues(&doc).contains(&id));
     let resolved = canvas_theme::resolved_document(&doc).into_owned();
     assert_eq!(resolved.ring_fills, doc.ring_fills);
     assert_eq!(resolved.atoms[1].text_style, doc.atoms[1].text_style);
+}
+
+#[test]
+fn old_light_canvas_documents_keep_their_chemdraw_output() {
+    // Written by the previous release: legacy byte colors, black bonds and
+    // custom label, bond, caption and arrow colors on the light canvas.
+    let doc: Document =
+        serde_json::from_str(include_str!("fixtures/palette/legacy-light.rsk")).unwrap();
+    assert_eq!(doc.bonds[0].color, Color::Ink);
+    assert_eq!(doc.bonds[1].color, Color::Custom([10, 120, 200]));
+    assert_eq!(
+        exchange::drawing::write(&doc, Default::default()).unwrap(),
+        include_str!("fixtures/palette/legacy-light.cdxml")
+    );
+    // Saving writes the current form, which reads back to the same drawing.
+    let saved: Document = serde_json::from_slice(&serde_json::to_vec(&doc).unwrap()).unwrap();
+    assert_eq!(saved, doc);
+}
+
+#[test]
+fn legacy_swatches_become_palette_colors_and_follow_the_theme() {
+    let mut doc: Document = serde_json::from_value(serde_json::json!({
+        "version": 15,
+        "atoms": [
+            {"id": 1, "element": "C", "position": {"x": 0.0, "y": 0.0}},
+            {"id": 2, "element": "C", "position": {"x": 42.0, "y": 0.0}}
+        ],
+        "bonds": [{"a": 1, "b": 2, "order": 1, "color": [32, 80, 145]}]
+    }))
+    .unwrap();
+    assert_eq!(doc.bonds[0].color, Color::Palette(Hue::Blue, Row::Strong));
+    let blue = |doc: &Document| {
+        scene::primitives(doc)
+            .into_iter()
+            .find_map(|p| match p {
+                scene::Primitive::Path { style, .. } => {
+                    Some(doc.canvas_theme.color(style.stroke.rgb()))
+                }
+                _ => None,
+            })
+            .unwrap()
+    };
+    let light = blue(&doc);
+    assert_eq!(light, Palette::of(&doc).swatch(Hue::Blue, Row::Strong));
+    doc.canvas_theme = CanvasTheme::Dark;
+    let dark = blue(&doc);
+    assert_eq!(dark, Palette::of(&doc).swatch(Hue::Blue, Row::Strong));
+    assert_ne!(light, dark, "palette colors follow the canvas");
+    // Custom colors stay exact on the dark canvas.
+    doc.bonds[0].color = Color::Custom([32, 80, 145]);
+    assert_eq!(blue(&doc), [32, 80, 145]);
 }

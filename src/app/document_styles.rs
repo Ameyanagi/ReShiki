@@ -663,7 +663,8 @@ impl App {
         self.graphic_style.width_pt = style.line_width_pt;
         self.graphic_width_input = style.line_width_pt.to_string();
         self.arrows.style.width_pt = style.line_width_pt;
-        self.arrows.refresh_inputs();
+        self.arrows
+            .refresh_inputs(&reshiki::palette::Palette::of(&self.doc));
         self.sync_style_inputs();
     }
 

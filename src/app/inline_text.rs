@@ -284,15 +284,19 @@ impl App {
             .on_action(Message::CaptionAction)
             .highlight_with::<CaptionHighlighter>(
                 {
+                    // The editor draws display colors directly.
+                    let palette = reshiki::palette::Palette::of(&self.doc);
                     let mut format = self.caption_format.clone();
-                    format.style.color = self.doc.canvas_theme.color(format.style.color);
+                    format.style.color =
+                        reshiki::palette::Color::Custom(palette.rgb(format.style.color));
                     for span in &mut format.spans {
-                        span.style.color = self.doc.canvas_theme.color(span.style.color);
+                        span.style.color =
+                            reshiki::palette::Color::Custom(palette.rgb(span.style.color));
                     }
                     (self.caption.clone(), format)
                 },
                 |style, _| {
-                    let [r, g, b] = style.color;
+                    let [r, g, b] = style.color.rgb();
                     iced::advanced::text::highlighter::Format {
                         color: Some(Color::from_rgb8(r, g, b)),
                         font: Some(iced::Font {
@@ -720,14 +724,19 @@ mod tests {
         assert!(!app.inspector_open);
         type_text(&mut app, "加熱 H2O");
         let _ = app.update(Message::TextStyle(StyleChange::Formula(true)));
-        let _ = app.update(Message::TextStyle(StyleChange::Color([30, 90, 70])));
+        let _ = app.update(Message::TextStyle(StyleChange::Color(
+            reshiki::palette::Color::Custom([30, 90, 70]),
+        )));
         assert_eq!(app.doc, before);
         assert!(app.dirty());
         let _ = app.update(Message::InlineText(Action::Finish(true)));
         let finished = app.doc.clone();
         assert_eq!(finished.annotations[0].text, "加熱 H2O");
         assert_eq!(finished.annotations[0].position, Point::new(60., 70.));
-        assert_eq!(finished.annotations[0].format.style.color, [30, 90, 70]);
+        assert_eq!(
+            finished.annotations[0].format.style.color,
+            reshiki::palette::Color::Custom([30, 90, 70])
+        );
         assert!(finished.annotations[0].format.style.formula);
         assert_eq!(app.selected, vec![finished.annotations[0].id]);
         assert!(!app.inspector_open);
@@ -936,10 +945,13 @@ mod tests {
         begin(&mut app, Some(id));
         let _ = app.update(Message::CaptionAction(Input::SelectAll));
         app.apply_text_style(StyleChange::Bold(true));
-        app.apply_selection_color([20, 70, 130]);
+        app.apply_selection_color(reshiki::palette::Color::Custom([20, 70, 130]));
         assert!(app.finish_inline(true));
         assert!(app.current_text_style().bold);
-        assert_eq!(app.current_selection_color(), Some([20, 70, 130]));
+        assert_eq!(
+            app.current_selection_color(),
+            Some(reshiki::palette::Color::Custom([20, 70, 130]))
+        );
     }
 
     #[test]

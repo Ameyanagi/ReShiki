@@ -51,10 +51,11 @@ fn utf8_ranges_survive_insert_replace_and_repeated_character_deletion() {
     f.validate("αβAA").unwrap();
 
     let mut f = TextFormat::default();
-    f.apply("AAA", Some(0..1), &StyleChange::Color([180, 50, 55]));
+    let red = reshiki::palette::Color::Custom([180, 50, 55]);
+    f.apply("AAA", Some(0..1), &StyleChange::Color(red));
     f.edited("AAA", "AA", 0..2);
-    assert_eq!(f.at(0).color, [180, 50, 55]);
-    assert_eq!(f.at(1).color, [0, 0, 0]);
+    assert_eq!(f.at(0).color, red);
+    assert_eq!(f.at(1).color, reshiki::palette::Color::Ink);
 }
 
 #[test]
@@ -119,7 +120,7 @@ fn styled_labels_survive_native_save_and_vector_and_raster_exports() {
         StyleChange::Bold(true),
         StyleChange::Italic(true),
         StyleChange::Underline(true),
-        StyleChange::Color([180, 50, 55]),
+        StyleChange::Color(reshiki::palette::Color::Custom([180, 50, 55])),
     ] {
         format.apply("α < H2O", None, &change);
     }

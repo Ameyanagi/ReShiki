@@ -35,7 +35,7 @@ fn repeated_tools_swap_equilibrium_preference_and_dipole_direction() {
     assert!(
         a.paths()
             .iter()
-            .any(|p| p.filled && p.style.fill == Some([0; 3]))
+            .any(|p| p.filled && p.style.fill == Some(reshiki::palette::Color::Ink))
     );
     assert!(a.apply_tool(Preset::Dipole, &a.appearance()));
     near(a.start, end);
@@ -50,7 +50,7 @@ fn half_heads_are_filled_and_repeated_clicks_mirror_only_the_head() {
         a.style.as_mut().unwrap().head = Head::Left;
         let original = a.clone();
         assert!(a.paths()[1].filled);
-        assert_eq!(a.paths()[1].style.fill, Some([0; 3]));
+        assert_eq!(a.paths()[1].style.fill, Some(reshiki::palette::Color::Ink));
         assert!(!a.apply_tool(preset, &a.appearance()));
         assert_eq!(a.appearance().head, Head::Right);
         near(a.point(0.5), original.point(0.5));
@@ -151,7 +151,7 @@ fn all_arrow_parts_participate_in_bounds_selection_and_exports() {
         doc.arrows.push(a);
     }
     doc.arrows[3].style.as_mut().unwrap().pattern = LinePattern::Dashed;
-    doc.arrows[0].style.as_mut().unwrap().color = [32, 80, 145];
+    doc.arrows[0].style.as_mut().unwrap().color = reshiki::palette::Color::Custom([32, 80, 145]);
     let svg = scene::svg(&doc);
     assert!(svg.contains("rgb(32,80,145)"));
     assert!(svg.contains("stroke-dasharray"));
@@ -242,7 +242,7 @@ async fn arrow_styles_and_controls_survive_chemistry_and_cdxml_round_trip() {
     let mut a = arrow(Preset::Fishhook);
     a.id = doc.next_id();
     a.edit_handle(2, p(60., -35.));
-    a.style.as_mut().unwrap().color = [32, 80, 145];
+    a.style.as_mut().unwrap().color = reshiki::palette::Color::Custom([32, 80, 145]);
     doc.arrows.push(a.clone());
     let clean = engine
         .request(Request::molecule("clean", doc.clone()))

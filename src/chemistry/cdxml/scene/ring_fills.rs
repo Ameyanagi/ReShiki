@@ -115,8 +115,7 @@ pub(super) fn read(
             source,
             crate::ring_fills::RingFill {
                 atoms: ids,
-                color,
-                fixed_color: true,
+                color: crate::palette::Color::Custom(color),
             },
         ));
     }
@@ -202,8 +201,7 @@ pub(super) fn read(
             source,
             crate::ring_fills::RingFill {
                 atoms: ids,
-                color,
-                fixed_color: true,
+                color: crate::palette::Color::Custom(color),
             },
         ));
     }

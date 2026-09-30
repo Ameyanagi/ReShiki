@@ -91,9 +91,10 @@ fn generated_palettes_survive_extreme_controls_and_retain_readable_labels() {
                 let mut doc = reshiki::rings::Preset::Regular.document(42., false);
                 doc.canvas_theme = mode;
                 theme.clone().apply(&mut doc).unwrap();
-                for (_, key) in reshiki::ring_fills::PALETTE {
+                for hue in reshiki::palette::Hue::ALL {
                     let ids = doc.all_ids();
-                    reshiki::ring_fills::apply(&mut doc, &ids, Some(key));
+                    let tint = reshiki::palette::Color::Palette(hue, reshiki::palette::Row::Tint);
+                    reshiki::ring_fills::apply(&mut doc, &ids, Some(tint));
                     for &element in reshiki::editing::ELEMENTS {
                         assert!(
                             contrast(theme.element_color(element, mode), mode.background())
@@ -101,7 +102,7 @@ fn generated_palettes_survive_extreme_controls_and_retain_readable_labels() {
                         );
                         doc.atoms[0].element = element.into();
                         let ink = mode.color(canvas_theme::atom_color(&doc, &doc.atoms[0]));
-                        let bg = canvas_theme::fill_color(&doc, &doc.ring_fills[0]);
+                        let bg = reshiki::palette::Palette::of(&doc).rgb(tint);
                         assert!(
                             contrast(ink, bg) >= TEXT_MIN,
                             "{lightness}/{chroma}/{mode}/{element}"

@@ -306,7 +306,8 @@ mod tests {
             typography::TextFormat,
         };
         let mut format = TextFormat::default();
-        format.style.color = [180, 50, 55];
+        // Custom colors are exact on both canvases.
+        format.style.color = crate::palette::Color::Custom([180, 50, 55]);
         let mut doc = Document::default();
         doc.annotations.push(Annotation {
             id: 1,
@@ -336,11 +337,7 @@ mod tests {
                     assert_eq!(&pixels[..3], &theme.background());
                     assert!(pixels.chunks_exact(4).all(|p| p[3] == 255));
                 }
-                assert!(
-                    pixels
-                        .chunks_exact(4)
-                        .any(|p| p[..3] == theme.color([180, 50, 55]))
-                );
+                assert!(pixels.chunks_exact(4).any(|p| p[..3] == [180, 50, 55]));
             }
         }
     }

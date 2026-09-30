@@ -38,7 +38,9 @@ async fn native_clipboard_round_trip_retains_editable_bold_arene() -> anyhow::Re
             .iter()
             .find(|b| b.a == fluorine || b.b == fluorine)
             .context("C–F")?;
-        ensure!(branch.color == [43, 112, 97] && branch.order == 1);
+        ensure!(
+            branch.color == reshiki::palette::Color::Custom([43, 112, 97]) && branch.order == 1
+        );
         ensure!(doc.atoms.iter().all(|a| a.stereo.is_none()));
         ensure!(response.analysis.context("Analysis")?.formula == "C6H5F");
     }

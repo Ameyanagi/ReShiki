@@ -182,7 +182,7 @@ async fn mixed_phase_graphics_export_as_grouped_colored_vectors() {
     let engine = LocalEngine::default();
     let mut doc = Document::default();
     let mut tool = drawing(GraphicKind::Orbital(OrbitalKind::Dxy));
-    tool.style.stroke = [32, 80, 145];
+    tool.style.stroke = reshiki::palette::Color::Custom([32, 80, 145]);
     tool.place(&mut doc, p(0., 0.), p(60., 0.), false, 2.)
         .unwrap();
     let mut request = Request::molecule("export", doc);
@@ -202,7 +202,50 @@ async fn mixed_phase_graphics_export_as_grouped_colored_vectors() {
             .count(),
         2
     );
-    assert!(doc.graphics.iter().all(|g| g.style.stroke == [32, 80, 145]));
+    assert!(
+        doc.graphics
+            .iter()
+            .all(|g| g.style.stroke == reshiki::palette::Color::Custom([32, 80, 145]))
+    );
     assert!(!doc.groups.is_empty());
     doc.validate().unwrap();
+}
+
+#[tokio::test]
+async fn palette_colored_orbitals_export_as_shown_on_the_dark_canvas() {
+    use reshiki::{
+        canvas_theme::{CanvasTheme, ColorTheme},
+        palette::{Color, Hue, Palette, Row},
+    };
+    let engine = LocalEngine::default();
+    let mut doc = Document {
+        canvas_theme: CanvasTheme::Dark,
+        color_theme: ColorTheme::Presentation,
+        ..Default::default()
+    };
+    let mut tool = drawing(GraphicKind::Orbital(OrbitalKind::Dxy));
+    tool.style.stroke = Color::Palette(Hue::Blue, Row::Strong);
+    tool.place(&mut doc, p(0., 0.), p(60., 0.), false, 2.)
+        .unwrap();
+    let blue = Palette::of(&doc).swatch(Hue::Blue, Row::Strong);
+    let mut request = Request::molecule("export", doc);
+    request.format = Some("cdxml".into());
+    let xml = engine.request(request).await.unwrap().output.unwrap();
+    let imported = engine
+        .request(Request::import("cdxml", &xml))
+        .await
+        .unwrap()
+        .document
+        .unwrap();
+    let orbitals: Vec<_> = imported
+        .graphics
+        .iter()
+        .filter(|g| g.style.stroke != Color::Ink)
+        .collect();
+    assert!(!orbitals.is_empty());
+    assert!(
+        orbitals
+            .iter()
+            .all(|g| g.style.stroke == Color::Custom(blue))
+    );
 }

@@ -426,7 +426,7 @@ async fn rust_ring_display_preserves_selected_scope_and_complete_response() -> T
             .document
             .context("Missing ring drawing")?;
         for bond in &mut original.bonds {
-            bond.color = [25, 60, 190];
+            bond.color = reshiki::palette::Color::Custom([25, 60, 190]);
         }
         original.annotations.push(reshiki::document::Annotation {
             id: 987654,
@@ -564,7 +564,7 @@ async fn rust_prepared_drawings_preserve_full_analysis_and_molecular_exports() -
             a.label_h = 99;
         }
         for b in &mut doc.bonds {
-            b.color = [75, 125, 160];
+            b.color = reshiki::palette::Color::Custom([75, 125, 160]);
         }
         for format in [None, Some("smiles"), Some("mol")] {
             let mut request = Request::molecule(
@@ -852,7 +852,7 @@ async fn exports_and_reimports_preserve_rdkit_chemistry_and_document_metadata() 
         let analysis = initial.analysis.context("Missing reference analysis")?;
         let mut document = initial.document.context("Missing reference drawing")?;
         for bond in &mut document.bonds {
-            bond.color = [180, 50, 55];
+            bond.color = reshiki::palette::Color::Custom([180, 50, 55]);
         }
         let mut request = Request::molecule("export", document);
         request.format = Some("cdx".into());
