@@ -80,6 +80,14 @@ impl App {
                 (label(Message::InvertSelection), "Invert selection"),
                 (label(Message::Duplicate), "Duplicate"),
                 (
+                    format!("{} drag", keys(command, "")),
+                    "Drag a copy, leaving the original in place",
+                ),
+                (
+                    format!("{} drag", keys(shift, "")),
+                    "Move horizontally or vertically only",
+                ),
+                (
                     keys(command | shift, "Right"),
                     "Reaction arrow and molecule copy",
                 ),

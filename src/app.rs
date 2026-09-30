@@ -2667,6 +2667,13 @@ impl App {
                     self.selected = ids;
                 }
             }
+            Edit::Duplicate(ids, dx, dy) => {
+                let part = editing::selection(&self.doc, &ids);
+                let copy = editing::append(&mut self.doc, &part, Point::new(dx, dy));
+                if !copy.is_empty() {
+                    self.selected = copy;
+                }
+            }
             Edit::Pan(dx, dy) => {
                 self.fit_to_view = false;
                 self.camera.center = self.camera.center.offset(-dx, -dy);
@@ -4749,6 +4756,44 @@ mod tests {
         assert_eq!(app.doc, before);
         let _ = app.update(Message::Redo);
         assert_eq!(app.doc, snapped);
+    }
+
+    #[test]
+    fn drag_duplicate_keeps_the_original_and_is_one_undoable_edit() {
+        let (mut app, _) = App::new();
+        let a = app.doc.add_atom("C", Point::default());
+        let b = app.doc.add_atom("O", Point::new(42.0, 0.0));
+        let c = app.doc.add_atom("N", Point::new(84.0, 0.0));
+        app.doc.add_bond(a, b, 2, "plain");
+        app.doc.add_bond(b, c, 1, "plain");
+        let before = app.doc.clone();
+        app.edit(Edit::Duplicate(vec![a, b], 0.0, 90.0));
+        let copied = app.doc.clone();
+        assert_eq!((copied.atoms.len(), copied.bonds.len()), (5, 3));
+        for id in [a, b, c] {
+            assert_eq!(copied.atom(id), before.atom(id), "originals stay in place");
+        }
+        assert_eq!(
+            app.selected.len(),
+            2,
+            "the copy of the two atoms is selected"
+        );
+        assert!(!app.selected.iter().any(|id| [a, b, c].contains(id)));
+        let symbols: Vec<_> = app
+            .selected
+            .iter()
+            .filter_map(|id| copied.atom(*id))
+            .map(|atom| (atom.element.as_str(), atom.position))
+            .collect();
+        assert_eq!(
+            symbols,
+            vec![("C", Point::new(0.0, 90.0)), ("O", Point::new(42.0, 90.0))]
+        );
+        copied.validate().unwrap();
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, before);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc, copied);
     }
 
     #[test]
