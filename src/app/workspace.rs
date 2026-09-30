@@ -10,8 +10,8 @@ use iced::widget::{
 };
 use iced::{Alignment, Border, Color, Element, Length, Theme};
 use reshiki::bonds::BondPreset;
-use reshiki::palette::{Color as Paint, Hue, Palette, Row};
-use reshiki::typography::{Script, StyleChange, TextAlign};
+use reshiki::palette::{Color as Paint, Palette, Row};
+use reshiki::typography::{Script, StyleChange};
 
 #[cfg(test)]
 mod layout_snapshots;
@@ -95,27 +95,26 @@ impl App {
                 .map(|g| g.kind)
                 .unwrap_or(GraphicKind::Rectangle),
         };
+        // The same palette rows as the color popover, on the canvas color.
         let palette = Palette::of(&self.doc);
-        let swatch = |color: Paint, fill: bool| {
-            let [r, g, b] = palette.rgb(color);
-            let swatch = button(Space::new().width(19).height(19))
-                .padding(3)
-                .style(move |_, _| button::Style {
-                    background: Some(Color::from_rgb8(r, g, b).into()),
-                    border: Border {
-                        color: Color::from_rgb8(186, 198, 195),
-                        width: 1.0,
-                        radius: 4.0.into(),
-                    },
-                    ..Default::default()
-                })
-                .on_press(Message::GraphicStyle(if fill {
-                    GraphicChange::Fill(Some(color))
-                } else {
-                    GraphicChange::Stroke(color)
-                }));
-            hover_hint(swatch, color.name(), tooltip::Position::Top)
-        };
+        let hues = reshiki::palette::Hues::of(&self.doc);
+        let style = &self.graphic_style;
+        let swatches =
+            |row: Row, first: (bool, Option<Message>), change: fn(Paint) -> GraphicChange| {
+                super::color_popover::paper(
+                    super::color_popover::palette_row(&palette, row, hues, 20., first, |hue| {
+                        let color = Paint::Palette(hue, row);
+                        let current = if row == Row::Strong {
+                            style.stroke == color
+                        } else {
+                            style.fill == Some(color)
+                        };
+                        (current, Some(Message::GraphicStyle(change(color))))
+                    }),
+                    self.doc.canvas_theme,
+                )
+                .padding([6, 6])
+            };
         let mut panel = column![
             section(if selected.is_empty() {
                 "DRAWING STYLE"
@@ -142,14 +141,14 @@ impl App {
             .spacing(6)
             .align_y(Alignment::Center),
             text("Stroke color").size(11).style(muted_text),
-            row![
-                swatch(Paint::Ink, false),
-                swatch(Paint::Palette(Hue::Blue, Row::Strong), false),
-                swatch(Paint::Palette(Hue::Teal, Row::Strong), false),
-                swatch(Paint::Palette(Hue::Red, Row::Strong), false),
-                swatch(Paint::Palette(Hue::Purple, Row::Strong), false)
-            ]
-            .spacing(6),
+            swatches(
+                Row::Strong,
+                (
+                    style.stroke == Paint::Ink,
+                    Some(Message::GraphicStyle(GraphicChange::Stroke(Paint::Ink)))
+                ),
+                GraphicChange::Stroke
+            ),
             crate::appearance::text_input("#RRGGBB", &self.graphic_stroke_input)
                 .on_input(Message::GraphicStroke)
                 .on_submit(Message::ApplyGraphicStroke)
@@ -198,28 +197,15 @@ impl App {
                 }))
         {
             panel = panel
-                .push(
-                    checkbox(self.graphic_style.fill.is_some())
-                        .label("Fill shape")
-                        .size(14)
-                        .text_size(12)
-                        .on_toggle(|v| {
-                            Message::GraphicStyle(GraphicChange::Fill(v.then(|| {
-                                super::graphics::parse_color(&self.graphic_fill_input)
-                                    .map_or(Paint::Palette(Hue::Teal, Row::Tint), Paint::Custom)
-                            })))
-                        }),
-                )
-                .push(
-                    row![
-                        swatch(Paint::Palette(Hue::Teal, Row::Tint), true),
-                        swatch(Paint::Palette(Hue::Blue, Row::Tint), true),
-                        swatch(Paint::Palette(Hue::Amber, Row::Tint), true),
-                        swatch(Paint::Palette(Hue::Red, Row::Tint), true),
-                        swatch(Paint::Custom([255, 255, 255]), true)
-                    ]
-                    .spacing(6),
-                )
+                .push(text("Fill color").size(11).style(muted_text))
+                .push(swatches(
+                    Row::Tint,
+                    (
+                        style.fill.is_none(),
+                        Some(Message::GraphicStyle(GraphicChange::Fill(None))),
+                    ),
+                    |color| GraphicChange::Fill(Some(color)),
+                ))
                 .push(
                     crate::appearance::text_input("#RRGGBB", &self.graphic_fill_input)
                         .on_input(Message::GraphicFill)
@@ -357,34 +343,12 @@ impl App {
         .spacing(4)
         .align_y(Alignment::Center);
         let group_alignment = self.selected_group_alignment();
-        let active_alignment = self.toolbar_alignment();
         let has_captions = self
             .doc
             .annotations
             .iter()
             .any(|a| self.selected.contains(&a.id));
-        for (label, align) in [
-            ("Left", TextAlign::Left),
-            ("Center", TextAlign::Center),
-            ("Right", TextAlign::Right),
-            ("Justify", TextAlign::Justified),
-        ] {
-            if align == TextAlign::Justified && group_alignment.is_some() && !has_captions {
-                continue;
-            }
-            tools = tools.push(hover_hint(
-                button(
-                    iced::widget::canvas(Glyph(Icon::TextAlign(align), true))
-                        .width(24)
-                        .height(24),
-                )
-                .padding(6)
-                .style(control(active_alignment == Some(align)))
-                .on_press(Message::TextAlign(align)),
-                label,
-                tooltip::Position::Bottom,
-            ));
-        }
+        tools = tools.push(self.alignment_menu(group_alignment.is_some() && !has_captions));
         if let Some(alignment) = group_alignment {
             use reshiki::abbreviations::LabelAlignment;
             tools = tools.push(hover_hint(
@@ -397,79 +361,11 @@ impl App {
                 .width(112)
                 .text_size(11)
                 .padding(6),
-                "Group labels: Automatic follows bonds; Stacked above places the nickname above its attachment. Left, Center and Right use the adjacent buttons.",
+                "Group labels: Automatic follows bonds; Stacked above places the nickname above its attachment. Left, Center and Right are in the alignment menu.",
                 tooltip::Position::Bottom,
             ));
         }
-        tools = tools
-            .push(divider())
-            .push(text("Color").size(11).style(muted_text))
-            .push(
-                crate::appearance::pick_list(
-                    super::typography::ColorScope::ALL,
-                    Some(self.color_scope),
-                    Message::ColorScope,
-                )
-                .width(112)
-                .text_size(11)
-                .padding(6),
-            );
-        let ring_colors = self.color_scope == super::typography::ColorScope::Rings;
-        let swatches = if ring_colors {
-            [Hue::Blue, Hue::Teal, Hue::Red, Hue::Purple, Hue::Amber]
-                .map(|hue| Paint::Palette(hue, Row::Tint))
-        } else {
-            [
-                Paint::Ink,
-                Paint::Palette(Hue::Blue, Row::Strong),
-                Paint::Palette(Hue::Teal, Row::Strong),
-                Paint::Palette(Hue::Red, Row::Strong),
-                Paint::Palette(Hue::Purple, Row::Strong),
-            ]
-        };
-        let palette = Palette::of(&self.doc);
-        let current_color = self.current_selection_color();
-        for color in swatches {
-            let shown = palette.rgb(color);
-            let active = current_color == Some(color);
-            tools = tools.push(hover_hint(
-                button(Space::new().width(12).height(12))
-                    .padding(4)
-                    .style(move |theme: &Theme, _| button::Style {
-                        background: Some(Color::from_rgb8(shown[0], shown[1], shown[2]).into()),
-                        border: Border {
-                            color: if active {
-                                Color::from_rgb8(132, 166, 159)
-                            } else {
-                                theme.palette().background
-                            },
-                            width: if active { 3.0 } else { 1.0 },
-                            radius: 5.0.into(),
-                        },
-                        ..Default::default()
-                    })
-                    .on_press(Message::TextStyle(StyleChange::Color(color))),
-                format!("{} · Apply to {}", color.name(), self.color_scope),
-                tooltip::Position::Bottom,
-            ));
-        }
-        tools = tools.push(hover_hint(
-            crate::appearance::text_input("Mixed / hex", &self.text_color_input)
-                .on_input(Message::TextColor)
-                .on_submit(Message::ApplyTextColor)
-                .width(76)
-                .size(11)
-                .padding(6),
-            format!("Custom color · Enter to apply to {}", self.color_scope),
-            tooltip::Position::Bottom,
-        ));
-        if ring_colors {
-            tools = tools.push(hover_hint(
-                command("Clear fill", Message::ClearRingFill),
-                "Remove the selected rings’ interior color",
-                tooltip::Position::Bottom,
-            ));
-        }
+        tools = tools.push(self.color_button());
         container(tools)
             .padding([7, 14])
             .width(Length::Fill)
@@ -2243,9 +2139,11 @@ impl App {
             )
             .into(),
             hover_hint(
-                crate::appearance::pick_list(themes, Some(theme), |choice| {
+                crate::appearance::pick_list(themes, Some(theme.clone()), |choice| {
                     Message::ThemeFile(super::theme_files::Action::Choose(choice))
                 })
+                // Sizes the list for an embedded theme's name, which is not an option.
+                .placeholder(theme.to_string())
                 .text_size(11)
                 .padding([4, 8]),
                 "Color theme",

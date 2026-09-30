@@ -213,6 +213,12 @@ impl Default for Hues {
     }
 }
 impl Hues {
+    /// The document theme's hues.
+    pub fn of(doc: &Document) -> Self {
+        doc.custom_theme
+            .as_ref()
+            .map_or_else(Self::default, |t| t.hues)
+    }
     pub fn is_default(&self) -> bool {
         *self == Self::default()
     }
@@ -250,6 +256,28 @@ pub struct Tones {
     pub strong: [f64; 2],
     pub tint: [f64; 2],
 }
+impl Tones {
+    /// The document's theme (built-in or embedded) on a canvas.
+    pub fn of(doc: &Document, canvas: CanvasTheme) -> Self {
+        doc.custom_theme.as_ref().map_or_else(
+            || doc.color_theme.tones(canvas),
+            |theme| theme.tones(canvas),
+        )
+    }
+    /// A row's color at any hue angle; chroma drops at fixed L and h to fit sRGB.
+    pub fn rgb(&self, row: Row, degrees: u16) -> Rgb {
+        let [l, c] = match row {
+            Row::Strong => self.strong,
+            Row::Tint => self.tint,
+        };
+        Oklch {
+            l,
+            c,
+            h: f64::from(degrees).to_radians(),
+        }
+        .to_rgb()
+    }
+}
 impl ColorTheme {
     pub fn tones(self, canvas: CanvasTheme) -> Tones {
         let (strong, tint) = match (self, canvas.is_dark()) {
@@ -276,20 +304,11 @@ pub struct Palette {
 }
 impl Palette {
     pub fn new(tones: Tones, hues: Hues, canvas: CanvasTheme) -> Self {
-        let row = |[l, c]: [f64; 2]| {
-            Hue::ALL.map(|hue| {
-                Oklch {
-                    l,
-                    c,
-                    h: f64::from(hues.get(hue)).to_radians(),
-                }
-                .to_rgb()
-            })
-        };
+        let row = |row| Hue::ALL.map(|hue| tones.rgb(row, hues.get(hue)));
         Self {
             canvas,
-            strong: row(tones.strong),
-            tint: row(tones.tint),
+            strong: row(Row::Strong),
+            tint: row(Row::Tint),
         }
     }
     /// The document's theme (built-in or embedded) on its own canvas.
@@ -297,10 +316,7 @@ impl Palette {
         Self::in_mode(doc, doc.canvas_theme)
     }
     pub fn in_mode(doc: &Document, canvas: CanvasTheme) -> Self {
-        doc.custom_theme.as_ref().map_or_else(
-            || Self::new(doc.color_theme.tones(canvas), Hues::default(), canvas),
-            |theme| Self::new(theme.tones(canvas), theme.hues, canvas),
-        )
+        Self::new(Tones::of(doc, canvas), Hues::of(doc), canvas)
     }
     pub fn swatch(&self, hue: Hue, row: Row) -> Rgb {
         slot(
@@ -322,6 +338,65 @@ impl Palette {
     /// Stored light-canvas bytes whose single canvas conversion shows `rgb(color)`.
     pub fn canonical(&self, color: Color) -> Rgb {
         self.canvas.color(self.rgb(color))
+    }
+    /// The palette color (Ink or a swatch) nearest to `rgb`, with its OKLab
+    /// distance ×100.
+    pub fn closest(&self, rgb: Rgb) -> (Color, f64) {
+        let swatches = Hue::ALL
+            .into_iter()
+            .flat_map(|hue| [Row::Strong, Row::Tint].map(|row| Color::Palette(hue, row)));
+        std::iter::once(Color::Ink)
+            .chain(swatches)
+            .map(|color| (color, crate::color_contrast::delta_e(rgb, self.rgb(color))))
+            .min_by(|a, b| a.1.total_cmp(&b.1))
+            .unwrap_or((Color::Ink, 0.))
+    }
+}
+
+/// A typed color: `#1F4E79`, `#17B`, `31, 78, 121`, `rgb(31 78 121)` or
+/// `oklch(0.42 0.09 250)`. OKLCH outside sRGB loses chroma at fixed L and h.
+pub fn parse_color(text: &str) -> Option<Rgb> {
+    let text = text.trim().to_ascii_lowercase();
+    let parts = |body: &str| -> Vec<String> {
+        body.split(|c: char| c.is_whitespace() || c == ',')
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned)
+            .collect()
+    };
+    if let Some(body) = text
+        .strip_prefix("oklch(")
+        .and_then(|s| s.strip_suffix(')'))
+    {
+        let [l, c, h] = parts(body).try_into().ok()?;
+        let l = match l.strip_suffix('%') {
+            Some(percent) => percent.parse::<f64>().ok()? / 100.,
+            None => l.parse().ok()?,
+        };
+        let c: f64 = c.parse().ok()?;
+        let h: f64 = h.strip_suffix("deg").unwrap_or(&h).parse().ok()?;
+        if !(0. ..=1.).contains(&l) || !(0. ..=0.4).contains(&c) || !(0. ..=360.).contains(&h) {
+            return None;
+        }
+        return Some(
+            Oklch {
+                l,
+                c,
+                h: h.to_radians(),
+            }
+            .to_rgb(),
+        );
+    }
+    let body = text
+        .strip_prefix("rgb(")
+        .and_then(|s| s.strip_suffix(')'))
+        .unwrap_or(&text);
+    if let Ok([r, g, b]) = <[String; 3]>::try_from(parts(body)) {
+        return Some([r.parse().ok()?, g.parse().ok()?, b.parse().ok()?]);
+    }
+    let hex = text.strip_prefix('#').unwrap_or(&text);
+    match hex.len() {
+        3 => parse_hex(&hex.chars().flat_map(|c| [c, c]).collect::<String>()),
+        _ => parse_hex(hex),
     }
 }
 
@@ -648,6 +723,67 @@ mod tests {
             c == Color::Ink
         }));
         assert_eq!(seen.get(), visited);
+    }
+
+    #[test]
+    fn typed_colors_parse_hex_rgb_and_oklch() {
+        for (text, rgb) in [
+            ("#1F4E79", [31, 78, 121]),
+            ("1f4e79", [31, 78, 121]),
+            (" #17B ", [17, 119, 187]),
+            ("31, 78, 121", [31, 78, 121]),
+            ("31 78 121", [31, 78, 121]),
+            ("rgb(31 78 121)", [31, 78, 121]),
+            ("RGB(31, 78, 121)", [31, 78, 121]),
+        ] {
+            assert_eq!(parse_color(text), Some(rgb), "{text}");
+        }
+        let oklch = parse_color("oklch(0.42 0.09 250)").unwrap();
+        let back = Oklch::from_rgb(oklch);
+        assert!((back.l - 0.42).abs() < 0.01 && (back.c - 0.09).abs() < 0.01);
+        assert_eq!(parse_color("oklch(42% 0.09 250deg)"), Some(oklch));
+        // Out-of-gamut chroma drops at the typed lightness.
+        let vivid = Oklch::from_rgb(parse_color("oklch(0.9 0.4 145)").unwrap());
+        assert!((vivid.l - 0.9).abs() < 0.01);
+        for bad in [
+            "",
+            "blue",
+            "#GG0000",
+            "12345",
+            "#1234567",
+            "αβγ",
+            "💚AB",
+            "256, 0, 0",
+            "1, 2",
+            "rgb(1 2 3 4)",
+            "oklch(1.2 0.1 30)",
+            "oklch(0.5 0.1)",
+            "oklch(nan 0.1 30)",
+        ] {
+            assert_eq!(parse_color(bad), None, "{bad}");
+        }
+    }
+
+    #[test]
+    fn the_closest_palette_color_uses_oklab_distance() {
+        let palette = Palette::new(
+            ColorTheme::Publication.tones(CanvasTheme::Light),
+            Hues::default(),
+            CanvasTheme::Light,
+        );
+        for color in [Color::Ink, Color::Palette(Hue::Teal, Row::Tint)] {
+            assert_eq!(palette.closest(palette.rgb(color)), (color, 0.));
+        }
+        let (near, distance) = palette.closest([31, 78, 121]);
+        assert_eq!(near, Color::Palette(Hue::Blue, Row::Strong));
+        assert!(distance > 0. && distance < 15., "{distance}");
+        assert!((crate::color_contrast::delta_e([0; 3], [255; 3]) - 100.).abs() < 0.1);
+        // Any hue angle resolves like the swatches.
+        let tones = ColorTheme::Publication.tones(CanvasTheme::Light);
+        assert_eq!(
+            tones.rgb(Row::Strong, 255),
+            palette.swatch(Hue::Blue, Row::Strong)
+        );
     }
 
     #[test]

@@ -596,7 +596,7 @@ impl App {
                 if !reshiki::ring_fills::selected_cycles(&self.doc, &self.selected).is_empty() {
                     entries.push(command(
                         "Color ring interior…",
-                        Message::ColorScope(super::typography::ColorScope::Rings),
+                        Message::StyleMenu(super::color_popover::Action::RingColor),
                         true,
                     ));
                     entries.push(command(

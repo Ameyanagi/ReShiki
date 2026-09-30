@@ -23,11 +23,12 @@ fn pass(
     let node = view
         .as_widget_mut()
         .layout(tree, renderer, &layout::Limits::new(size, size));
+    let redraw = Event::Window(iced::window::Event::RedrawRequested(
+        std::time::Instant::now(),
+    ));
     view.as_widget_mut().update(
         tree,
-        &Event::Window(iced::window::Event::RedrawRequested(
-            std::time::Instant::now(),
-        )),
+        &redraw,
         Layout::new(&node),
         mouse::Cursor::Unavailable,
         renderer,
@@ -35,6 +36,22 @@ fn pass(
         &mut iced::advanced::Shell::new(&mut messages),
         &viewport,
     );
+    // Overlay widgets, such as popover buttons, settle their status here too.
+    if let Some(element) =
+        view.as_widget_mut()
+            .overlay(tree, Layout::new(&node), renderer, &viewport, Vector::ZERO)
+    {
+        let mut nested = overlay::Nested::new(element);
+        let node = nested.layout(renderer, size);
+        nested.update(
+            &redraw,
+            Layout::new(&node),
+            mouse::Cursor::Unavailable,
+            renderer,
+            &mut iced::advanced::clipboard::Null,
+            &mut iced::advanced::Shell::new(&mut messages),
+        );
+    }
     let Some(output) = output else {
         return messages;
     };
@@ -183,9 +200,37 @@ fn recovery(app: &mut App) {
     app.status.clear();
 }
 
+/// The color popover for a selection in a custom color that is faint on the
+/// light canvas, with two recent custom colors.
+fn color_popover(app: &mut App) {
+    use reshiki::palette::Color as Paint;
+    mixed(app);
+    app.doc.remember_color([31, 78, 121]);
+    let _ = app.update(Message::TextStyle(StyleChange::Color(Paint::Custom([
+        232, 119, 34,
+    ]))));
+    let _ = app.update(Message::StyleMenu(
+        super::super::color_popover::Action::Color,
+    ));
+}
+
+/// Edit hues with Blue moved from 255° to 225°, recoloring the drawing.
+fn edit_hues(app: &mut App) {
+    use super::super::color_popover::Action;
+    use reshiki::palette::{Color as Paint, Hue, Row};
+    mixed(app);
+    let _ = app.update(Message::TextStyle(StyleChange::Color(Paint::Palette(
+        Hue::Blue,
+        Row::Strong,
+    ))));
+    for action in [Action::Color, Action::EditHues, Action::Chip(-3)] {
+        let _ = app.update(Message::StyleMenu(action));
+    }
+}
+
 type Setup = fn(&mut App);
 
-const STATES: [(&str, Setup); 9] = [
+const STATES: [(&str, Setup); 11] = [
     ("default", |_| {}),
     ("molecule", molecule),
     ("mixed", mixed),
@@ -195,6 +240,8 @@ const STATES: [(&str, Setup); 9] = [
     ("transform", transform),
     ("unsaved", unsaved),
     ("recovery", recovery),
+    ("color-popover", color_popover),
+    ("edit-hues", edit_hues),
 ];
 
 #[tokio::test]
@@ -225,6 +272,102 @@ async fn ui_layout_snapshots() {
             );
             eprintln!("{}", output.display());
         }
+    }
+}
+
+/// The color popover over the canvas swallows presses and scrolling on its
+/// bare areas (the canvas tracks the pointer itself), and a press outside only
+/// closes it.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn the_color_popover_keeps_pointer_input_from_the_canvas() {
+    let renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .unwrap();
+    let size = Size::new(1280., 820.);
+    let (mut app, _) = App::new();
+    color_popover(&mut app);
+    let mut view = app.view();
+    let mut tree = Tree::new(view.as_widget());
+    let node = view
+        .as_widget_mut()
+        .layout(&mut tree, &renderer, &layout::Limits::new(size, size));
+    let element = view
+        .as_widget_mut()
+        .overlay(
+            &mut tree,
+            Layout::new(&node),
+            &renderer,
+            &Rectangle::with_size(size),
+            Vector::ZERO,
+        )
+        .expect("The popover is open");
+    let mut popover = overlay::Nested::new(element);
+    let node = popover.layout(&renderer, size);
+    // The view's overlays form a group; find the popup by its width.
+    fn find(layout: Layout<'_>) -> Option<Rectangle> {
+        let bounds = layout.bounds();
+        if bounds.width == 336. {
+            return Some(bounds);
+        }
+        layout.children().find_map(find)
+    }
+    let popup = find(Layout::new(&node)).expect("Popup layout");
+    // The bottom-left padding corner holds no widget.
+    let bare = iced::Point::new(popup.x + 4., popup.y + popup.height - 4.);
+    let outside = iced::Point::new(popup.x - 40., popup.y + popup.height - 4.);
+    for (point, event, published) in [
+        (
+            bare,
+            mouse::Event::ButtonPressed(mouse::Button::Left),
+            vec![],
+        ),
+        (
+            bare,
+            mouse::Event::ButtonReleased(mouse::Button::Left),
+            vec![],
+        ),
+        (
+            bare,
+            mouse::Event::WheelScrolled {
+                delta: mouse::ScrollDelta::Lines { x: 0., y: 1. },
+            },
+            vec![],
+        ),
+        (
+            outside,
+            mouse::Event::ButtonPressed(mouse::Button::Left),
+            vec!["StyleMenu(Close)"],
+        ),
+    ] {
+        let mut messages = Vec::new();
+        let mut shell = iced::advanced::Shell::new(&mut messages);
+        popover.update(
+            &Event::Mouse(event),
+            Layout::new(&node),
+            mouse::Cursor::Available(point),
+            &renderer,
+            &mut iced::advanced::clipboard::Null,
+            &mut shell,
+        );
+        assert_eq!(
+            shell.event_status(),
+            iced::event::Status::Captured,
+            "{event:?}"
+        );
+        let published: Vec<_> = published.into_iter().map(String::from).collect();
+        assert_eq!(
+            messages
+                .iter()
+                .map(|m| format!("{m:?}"))
+                .collect::<Vec<_>>(),
+            published,
+            "{event:?}"
+        );
     }
 }
 

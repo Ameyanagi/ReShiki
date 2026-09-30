@@ -139,23 +139,28 @@ impl App {
             Paint::Custom(rgb)
         }
     }
+    /// The interior color of each selected ring; None where it has no fill.
+    pub(super) fn selected_ring_fills(&self) -> Vec<Option<Paint>> {
+        reshiki::ring_fills::selected_cycles(&self.doc, &self.selected)
+            .iter()
+            .map(|atoms| {
+                self.doc
+                    .ring_fills
+                    .iter()
+                    .find(|fill| {
+                        fill.atoms.len() == atoms.len()
+                            && fill.atoms.iter().all(|id| atoms.contains(id))
+                    })
+                    .map(|f| f.color)
+            })
+            .collect()
+    }
     pub(super) fn current_selection_color(&self) -> Option<Paint> {
         if self.color_scope == ColorScope::Rings {
-            let cycles = reshiki::ring_fills::selected_cycles(&self.doc, &self.selected);
-            let colors: Option<Vec<_>> = cycles
-                .iter()
-                .map(|atoms| {
-                    self.doc
-                        .ring_fills
-                        .iter()
-                        .find(|fill| {
-                            fill.atoms.len() == atoms.len()
-                                && fill.atoms.iter().all(|id| atoms.contains(id))
-                        })
-                        .map(|f| f.color)
-                })
-                .collect();
-            let colors = colors?;
+            let colors: Vec<_> = self
+                .selected_ring_fills()
+                .into_iter()
+                .collect::<Option<_>>()?;
             return colors
                 .first()
                 .copied()
@@ -229,6 +234,7 @@ impl App {
             .current_selection_color()
             .map(|color| reshiki::palette::hex(palette.rgb(color)))
             .unwrap_or_default();
+        self.flag_color_input(false);
     }
     pub(super) fn sync_typography(&mut self) {
         if self.inline_text.is_some() {

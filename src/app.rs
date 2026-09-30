@@ -16,6 +16,7 @@ mod atom_labels;
 mod atom_text;
 mod cleanup;
 mod clipboard;
+mod color_popover;
 mod context_menu;
 mod document_styles;
 mod figure_export;
@@ -38,6 +39,7 @@ mod object_toolbar;
 mod pages;
 mod palettes;
 mod pictures;
+mod popover;
 mod printing;
 mod reactions;
 mod shortcut_examples;
@@ -68,6 +70,7 @@ pub enum InspectorTab {
 #[derive(Debug, Clone)]
 pub enum Message {
     ContextMenu(context_menu::Action),
+    StyleMenu(color_popover::Action),
     ObjectToolbar(object_toolbar::Action),
     InspectorAction(inspector::Action),
     NumericTransform(numeric_transforms::Action),
@@ -263,6 +266,7 @@ struct CleanupPreview {
 
 pub struct App {
     context_menu: Option<context_menu::State>,
+    style_menu: Option<color_popover::Menu>,
     updates: updates::State,
     styles: document_styles::State,
     theme_library: theme_files::State,
@@ -387,6 +391,7 @@ impl App {
             refresh_due: None,
             chemistry_notice: None,
             context_menu: None,
+            style_menu: None,
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),
             drawing_length_input: reshiki::style::DEFAULT.bond_length_pt.to_string(),
@@ -862,6 +867,16 @@ impl App {
         if self.updates.restarting && !matches!(message, Message::Updates(_)) {
             return Task::none();
         }
+        // Before the atom label editor, which ignores other messages: it must
+        // never open under the popover.
+        if self.style_menu.is_some() {
+            if matches!(message, Message::Escape) {
+                return self.style_menu_action(self.style_menu_escape());
+            }
+            if !color_popover::keeps_open(&message) {
+                self.close_style_menu();
+            }
+        }
         if let Message::Imports(
             action @ (import::Action::Hovered(_)
             | import::Action::Dropped(_)
@@ -1076,6 +1091,7 @@ impl App {
             | Message::Join(_)
             | Message::Escape => {}
             Message::ContextKey(key) => return self.context_key(&key),
+            Message::StyleMenu(action) => return self.style_menu_action(action),
             Message::Shortcut(action) => return self.shortcut_action(action),
             Message::AromaticDisplay => {
                 if self.selected.is_empty() {
@@ -1571,14 +1587,15 @@ impl App {
                 self.color_scope = scope;
                 self.sync_color_input();
                 if scope == typography::ColorScope::Rings {
-                    self.status =
-                        "Ring interiors · Select a ring, then choose a color in the top toolbar"
-                            .into();
+                    self.status = "Ring interiors · Select a ring, then choose a Tint color".into();
                 }
             }
-            Message::TextColor(value) => self.text_color_input = value,
+            Message::TextColor(value) => {
+                self.text_color_input = value;
+                self.flag_color_input(false);
+            }
             Message::ApplyTextColor => {
-                if let Some(rgb) = graphics::parse_color(&self.text_color_input) {
+                if let Some(rgb) = reshiki::palette::parse_color(&self.text_color_input) {
                     // Typed colors are exact on both canvases.
                     let color = reshiki::palette::Color::Custom(rgb);
                     if self.color_scope == typography::ColorScope::Rings {
@@ -1588,7 +1605,8 @@ impl App {
                     }
                 } else {
                     self.error = true;
-                    self.status = "Enter a color such as #174A7E".into();
+                    self.status = color_popover::HINT.into();
+                    self.flag_color_input(true);
                 }
             }
             Message::TextAlign(alignment) => self.apply_paragraph(Some(alignment), None, None),
