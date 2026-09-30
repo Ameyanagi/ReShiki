@@ -1,15 +1,2151 @@
 {
   "label_context": "Automatic labels on plain paper, with no ring fills or explicit object overrides.",
   "oklch_units": "L: 0–1; C: chroma; h: degrees (0–360). Rounded to six decimals from final RGB.",
-  "reshiki_version": "0.9.1",
+  "palette_context": "Strong colors bonds, text and strokes; Tint colors fills, ring interiors and highlight boxes. Each row shares one OKLCH lightness and target chroma per theme and canvas. Default hue angles.",
+  "reshiki_version": "0.9.1-nightly",
   "rgb_space": "sRGB, 8-bit channels (0–255)",
   "sources": [
     "https://jmol.sourceforge.net/jscolors/",
     "https://bottosson.github.io/posts/oklab/",
     "https://github.com/Ameyanagi/ReShiki/blob/main/src/canvas_theme.rs",
+    "https://github.com/Ameyanagi/ReShiki/blob/main/src/palette.rs",
     "https://github.com/Ameyanagi/ReShiki/blob/main/src/color_contrast.rs"
   ],
   "themes": [
+    {
+      "id": "publication",
+      "modes": {
+        "dark": {
+          "elements": [
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 1,
+              "symbol": "H"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 2,
+              "symbol": "He"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 3,
+              "symbol": "Li"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 4,
+              "symbol": "Be"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 5,
+              "symbol": "B"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 6,
+              "symbol": "C"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 7,
+              "symbol": "N"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 8,
+              "symbol": "O"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 9,
+              "symbol": "F"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 10,
+              "symbol": "Ne"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 11,
+              "symbol": "Na"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 12,
+              "symbol": "Mg"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 13,
+              "symbol": "Al"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 14,
+              "symbol": "Si"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 15,
+              "symbol": "P"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 16,
+              "symbol": "S"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 17,
+              "symbol": "Cl"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 18,
+              "symbol": "Ar"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 19,
+              "symbol": "K"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 20,
+              "symbol": "Ca"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 21,
+              "symbol": "Sc"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 22,
+              "symbol": "Ti"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 23,
+              "symbol": "V"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 24,
+              "symbol": "Cr"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 25,
+              "symbol": "Mn"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 26,
+              "symbol": "Fe"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 27,
+              "symbol": "Co"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 28,
+              "symbol": "Ni"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 29,
+              "symbol": "Cu"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 30,
+              "symbol": "Zn"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 31,
+              "symbol": "Ga"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 32,
+              "symbol": "Ge"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 33,
+              "symbol": "As"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 34,
+              "symbol": "Se"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 35,
+              "symbol": "Br"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 36,
+              "symbol": "Kr"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 37,
+              "symbol": "Rb"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 38,
+              "symbol": "Sr"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 39,
+              "symbol": "Y"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 40,
+              "symbol": "Zr"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 41,
+              "symbol": "Nb"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 42,
+              "symbol": "Mo"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 43,
+              "symbol": "Tc"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 44,
+              "symbol": "Ru"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 45,
+              "symbol": "Rh"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 46,
+              "symbol": "Pd"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 47,
+              "symbol": "Ag"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 48,
+              "symbol": "Cd"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 49,
+              "symbol": "In"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 50,
+              "symbol": "Sn"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 51,
+              "symbol": "Sb"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 52,
+              "symbol": "Te"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 53,
+              "symbol": "I"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 54,
+              "symbol": "Xe"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 55,
+              "symbol": "Cs"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 56,
+              "symbol": "Ba"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 57,
+              "symbol": "La"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 58,
+              "symbol": "Ce"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 59,
+              "symbol": "Pr"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 60,
+              "symbol": "Nd"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 61,
+              "symbol": "Pm"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 62,
+              "symbol": "Sm"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 63,
+              "symbol": "Eu"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 64,
+              "symbol": "Gd"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 65,
+              "symbol": "Tb"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 66,
+              "symbol": "Dy"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 67,
+              "symbol": "Ho"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 68,
+              "symbol": "Er"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 69,
+              "symbol": "Tm"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 70,
+              "symbol": "Yb"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 71,
+              "symbol": "Lu"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 72,
+              "symbol": "Hf"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 73,
+              "symbol": "Ta"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 74,
+              "symbol": "W"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 75,
+              "symbol": "Re"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 76,
+              "symbol": "Os"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 77,
+              "symbol": "Ir"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 78,
+              "symbol": "Pt"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 79,
+              "symbol": "Au"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 80,
+              "symbol": "Hg"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 81,
+              "symbol": "Tl"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 82,
+              "symbol": "Pb"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 83,
+              "symbol": "Bi"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 84,
+              "symbol": "Po"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 85,
+              "symbol": "At"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 86,
+              "symbol": "Rn"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 87,
+              "symbol": "Fr"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 88,
+              "symbol": "Ra"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 89,
+              "symbol": "Ac"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 90,
+              "symbol": "Th"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 91,
+              "symbol": "Pa"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 92,
+              "symbol": "U"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 93,
+              "symbol": "Np"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 94,
+              "symbol": "Pu"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 95,
+              "symbol": "Am"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 96,
+              "symbol": "Cm"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 97,
+              "symbol": "Bk"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 98,
+              "symbol": "Cf"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 99,
+              "symbol": "Es"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 100,
+              "symbol": "Fm"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 101,
+              "symbol": "Md"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 102,
+              "symbol": "No"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 103,
+              "symbol": "Lr"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 104,
+              "symbol": "Rf"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 105,
+              "symbol": "Db"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 106,
+              "symbol": "Sg"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 107,
+              "symbol": "Bh"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 108,
+              "symbol": "Hs"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 109,
+              "symbol": "Mt"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 110,
+              "symbol": "Ds"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 111,
+              "symbol": "Rg"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 112,
+              "symbol": "Cn"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 113,
+              "symbol": "Nh"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 114,
+              "symbol": "Fl"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 115,
+              "symbol": "Mc"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 116,
+              "symbol": "Lv"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 117,
+              "symbol": "Ts"
+            },
+            {
+              "label": {
+                "oklch": [1.0, 0.0, 0.0],
+                "rgb": [255, 255, 255]
+              },
+              "number": 118,
+              "symbol": "Og"
+            }
+          ],
+          "ink": {
+            "oklch": [1.0, 0.0, 0.0],
+            "rgb": [255, 255, 255]
+          },
+          "paper": {
+            "oklch": [0.0, 0.0, 0.0],
+            "rgb": [0, 0, 0]
+          },
+          "strong": {
+            "colors": [
+              {
+                "degrees": 25,
+                "hue": "Red",
+                "oklch": [0.699412, 0.11991, 24.992251],
+                "rgb": [223, 127, 120]
+              },
+              {
+                "degrees": 55,
+                "hue": "Orange",
+                "oklch": [0.699696, 0.119573, 55.019386],
+                "rgb": [215, 137, 81]
+              },
+              {
+                "degrees": 85,
+                "hue": "Amber",
+                "oklch": [0.700725, 0.12004, 84.757739],
+                "rgb": [193, 152, 58]
+              },
+              {
+                "degrees": 145,
+                "hue": "Green",
+                "oklch": [0.700013, 0.119624, 145.105727],
+                "rgb": [108, 178, 111]
+              },
+              {
+                "degrees": 185,
+                "hue": "Teal",
+                "oklch": [0.699595, 0.120008, 185.007598],
+                "rgb": [23, 182, 168]
+              },
+              {
+                "degrees": 255,
+                "hue": "Blue",
+                "oklch": [0.700115, 0.120552, 254.958501],
+                "rgb": [105, 161, 232]
+              },
+              {
+                "degrees": 285,
+                "hue": "Indigo",
+                "oklch": [0.700053, 0.1202, 285.044939],
+                "rgb": [151, 147, 230]
+              },
+              {
+                "degrees": 320,
+                "hue": "Purple",
+                "oklch": [0.699651, 0.120213, 319.664402],
+                "rgb": [191, 133, 205]
+              }
+            ],
+            "lightness": 0.7,
+            "target_chroma": 0.12
+          },
+          "tint": {
+            "colors": [
+              {
+                "degrees": 25,
+                "hue": "Red",
+                "oklch": [0.490059, 0.063895, 24.969642],
+                "rgb": [129, 82, 78]
+              },
+              {
+                "degrees": 55,
+                "hue": "Orange",
+                "oklch": [0.488885, 0.064802, 54.300965],
+                "rgb": [125, 86, 60]
+              },
+              {
+                "degrees": 85,
+                "hue": "Amber",
+                "oklch": [0.490546, 0.065234, 86.147882],
+                "rgb": [113, 94, 51]
+              },
+              {
+                "degrees": 145,
+                "hue": "Green",
+                "oklch": [0.489241, 0.064515, 144.510581],
+                "rgb": [73, 106, 73]
+              },
+              {
+                "degrees": 185,
+                "hue": "Teal",
+                "oklch": [0.488551, 0.064855, 185.378617],
+                "rgb": [46, 108, 101]
+              },
+              {
+                "degrees": 255,
+                "hue": "Blue",
+                "oklch": [0.489761, 0.065142, 255.227463],
+                "rgb": [71, 98, 133]
+              },
+              {
+                "degrees": 285,
+                "hue": "Indigo",
+                "oklch": [0.489153, 0.065207, 284.835573],
+                "rgb": [92, 91, 132]
+              },
+              {
+                "degrees": 320,
+                "hue": "Purple",
+                "oklch": [0.489609, 0.066269, 319.671834],
+                "rgb": [113, 84, 120]
+              }
+            ],
+            "lightness": 0.49,
+            "target_chroma": 0.065
+          }
+        },
+        "light": {
+          "elements": [
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 1,
+              "symbol": "H"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 2,
+              "symbol": "He"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 3,
+              "symbol": "Li"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 4,
+              "symbol": "Be"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 5,
+              "symbol": "B"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 6,
+              "symbol": "C"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 7,
+              "symbol": "N"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 8,
+              "symbol": "O"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 9,
+              "symbol": "F"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 10,
+              "symbol": "Ne"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 11,
+              "symbol": "Na"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 12,
+              "symbol": "Mg"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 13,
+              "symbol": "Al"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 14,
+              "symbol": "Si"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 15,
+              "symbol": "P"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 16,
+              "symbol": "S"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 17,
+              "symbol": "Cl"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 18,
+              "symbol": "Ar"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 19,
+              "symbol": "K"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 20,
+              "symbol": "Ca"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 21,
+              "symbol": "Sc"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 22,
+              "symbol": "Ti"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 23,
+              "symbol": "V"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 24,
+              "symbol": "Cr"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 25,
+              "symbol": "Mn"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 26,
+              "symbol": "Fe"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 27,
+              "symbol": "Co"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 28,
+              "symbol": "Ni"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 29,
+              "symbol": "Cu"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 30,
+              "symbol": "Zn"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 31,
+              "symbol": "Ga"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 32,
+              "symbol": "Ge"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 33,
+              "symbol": "As"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 34,
+              "symbol": "Se"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 35,
+              "symbol": "Br"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 36,
+              "symbol": "Kr"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 37,
+              "symbol": "Rb"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 38,
+              "symbol": "Sr"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 39,
+              "symbol": "Y"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 40,
+              "symbol": "Zr"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 41,
+              "symbol": "Nb"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 42,
+              "symbol": "Mo"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 43,
+              "symbol": "Tc"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 44,
+              "symbol": "Ru"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 45,
+              "symbol": "Rh"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 46,
+              "symbol": "Pd"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 47,
+              "symbol": "Ag"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 48,
+              "symbol": "Cd"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 49,
+              "symbol": "In"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 50,
+              "symbol": "Sn"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 51,
+              "symbol": "Sb"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 52,
+              "symbol": "Te"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 53,
+              "symbol": "I"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 54,
+              "symbol": "Xe"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 55,
+              "symbol": "Cs"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 56,
+              "symbol": "Ba"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 57,
+              "symbol": "La"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 58,
+              "symbol": "Ce"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 59,
+              "symbol": "Pr"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 60,
+              "symbol": "Nd"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 61,
+              "symbol": "Pm"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 62,
+              "symbol": "Sm"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 63,
+              "symbol": "Eu"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 64,
+              "symbol": "Gd"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 65,
+              "symbol": "Tb"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 66,
+              "symbol": "Dy"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 67,
+              "symbol": "Ho"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 68,
+              "symbol": "Er"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 69,
+              "symbol": "Tm"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 70,
+              "symbol": "Yb"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 71,
+              "symbol": "Lu"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 72,
+              "symbol": "Hf"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 73,
+              "symbol": "Ta"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 74,
+              "symbol": "W"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 75,
+              "symbol": "Re"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 76,
+              "symbol": "Os"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 77,
+              "symbol": "Ir"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 78,
+              "symbol": "Pt"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 79,
+              "symbol": "Au"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 80,
+              "symbol": "Hg"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 81,
+              "symbol": "Tl"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 82,
+              "symbol": "Pb"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 83,
+              "symbol": "Bi"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 84,
+              "symbol": "Po"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 85,
+              "symbol": "At"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 86,
+              "symbol": "Rn"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 87,
+              "symbol": "Fr"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 88,
+              "symbol": "Ra"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 89,
+              "symbol": "Ac"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 90,
+              "symbol": "Th"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 91,
+              "symbol": "Pa"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 92,
+              "symbol": "U"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 93,
+              "symbol": "Np"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 94,
+              "symbol": "Pu"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 95,
+              "symbol": "Am"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 96,
+              "symbol": "Cm"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 97,
+              "symbol": "Bk"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 98,
+              "symbol": "Cf"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 99,
+              "symbol": "Es"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 100,
+              "symbol": "Fm"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 101,
+              "symbol": "Md"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 102,
+              "symbol": "No"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 103,
+              "symbol": "Lr"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 104,
+              "symbol": "Rf"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 105,
+              "symbol": "Db"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 106,
+              "symbol": "Sg"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 107,
+              "symbol": "Bh"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 108,
+              "symbol": "Hs"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 109,
+              "symbol": "Mt"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 110,
+              "symbol": "Ds"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 111,
+              "symbol": "Rg"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 112,
+              "symbol": "Cn"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 113,
+              "symbol": "Nh"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 114,
+              "symbol": "Fl"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 115,
+              "symbol": "Mc"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 116,
+              "symbol": "Lv"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 117,
+              "symbol": "Ts"
+            },
+            {
+              "label": {
+                "oklch": [0.0, 0.0, 0.0],
+                "rgb": [0, 0, 0]
+              },
+              "number": 118,
+              "symbol": "Og"
+            }
+          ],
+          "ink": {
+            "oklch": [0.0, 0.0, 0.0],
+            "rgb": [0, 0, 0]
+          },
+          "paper": {
+            "oklch": [1.0, 0.0, 0.0],
+            "rgb": [255, 255, 255]
+          },
+          "strong": {
+            "colors": [
+              {
+                "degrees": 25,
+                "hue": "Red",
+                "oklch": [0.499646, 0.129962, 24.714619],
+                "rgb": [160, 63, 60]
+              },
+              {
+                "degrees": 55,
+                "hue": "Orange",
+                "oklch": [0.499941, 0.12377, 55.011356],
+                "rgb": [151, 76, 0]
+              },
+              {
+                "degrees": 85,
+                "hue": "Amber",
+                "oklch": [0.501211, 0.102678, 85.330446],
+                "rgb": [126, 94, 0]
+              },
+              {
+                "degrees": 145,
+                "hue": "Green",
+                "oklch": [0.500946, 0.130723, 144.951061],
+                "rgb": [39, 118, 47]
+              },
+              {
+                "degrees": 185,
+                "hue": "Teal",
+                "oklch": [0.499631, 0.087878, 185.394251],
+                "rgb": [0, 115, 106]
+              },
+              {
+                "degrees": 255,
+                "hue": "Blue",
+                "oklch": [0.499131, 0.130121, 255.276002],
+                "rgb": [40, 99, 171]
+              },
+              {
+                "degrees": 285,
+                "hue": "Indigo",
+                "oklch": [0.499026, 0.130032, 284.983418],
+                "rgb": [93, 85, 169]
+              },
+              {
+                "degrees": 320,
+                "hue": "Purple",
+                "oklch": [0.500289, 0.130498, 319.797815],
+                "rgb": [131, 71, 145]
+              }
+            ],
+            "lightness": 0.5,
+            "target_chroma": 0.13
+          },
+          "tint": {
+            "colors": [
+              {
+                "degrees": 25,
+                "hue": "Red",
+                "oklch": [0.92923, 0.035791, 24.186994],
+                "rgb": [255, 223, 220]
+              },
+              {
+                "degrees": 55,
+                "hue": "Orange",
+                "oklch": [0.930741, 0.040036, 56.33099],
+                "rgb": [254, 226, 207]
+              },
+              {
+                "degrees": 85,
+                "hue": "Amber",
+                "oklch": [0.928838, 0.039935, 84.579196],
+                "rgb": [244, 230, 202]
+              },
+              {
+                "degrees": 145,
+                "hue": "Green",
+                "oklch": [0.928974, 0.039147, 145.251353],
+                "rgb": [216, 239, 216]
+              },
+              {
+                "degrees": 185,
+                "hue": "Teal",
+                "oklch": [0.92946, 0.040171, 184.901847],
+                "rgb": [203, 241, 235]
+              },
+              {
+                "degrees": 255,
+                "hue": "Blue",
+                "oklch": [0.930813, 0.033878, 253.707324],
+                "rgb": [217, 234, 255]
+              },
+              {
+                "degrees": 285,
+                "hue": "Indigo",
+                "oklch": [0.92978, 0.035087, 285.697563],
+                "rgb": [229, 229, 255]
+              },
+              {
+                "degrees": 320,
+                "hue": "Purple",
+                "oklch": [0.930172, 0.039564, 319.455933],
+                "rgb": [244, 224, 249]
+              }
+            ],
+            "lightness": 0.93,
+            "target_chroma": 0.04
+          }
+        }
+      },
+      "name": "Publication"
+    },
     {
       "id": "presentation",
       "modes": {
@@ -968,27 +3104,113 @@
             "oklch": [0.0, 0.0, 0.0],
             "rgb": [0, 0, 0]
           },
-          "ring_fills": {
-            "Lilac": {
-              "oklch": [0.450269, 0.08027, 319.992369],
-              "rgb": [105, 70, 113]
-            },
-            "Mint": {
-              "oklch": [0.449375, 0.07909, 185.260725],
-              "rgb": [0, 99, 91]
-            },
-            "Rose": {
-              "oklch": [0.449551, 0.080906, 24.930892],
-              "rgb": [124, 66, 62]
-            },
-            "Sand": {
-              "oklch": [0.449934, 0.079811, 84.157895],
-              "rgb": [106, 81, 24]
-            },
-            "Sky": {
-              "oklch": [0.450701, 0.079953, 254.465801],
-              "rgb": [53, 87, 129]
-            }
+          "strong": {
+            "colors": [
+              {
+                "degrees": 25,
+                "hue": "Red",
+                "oklch": [0.700395, 0.149518, 25.045645],
+                "rgb": [237, 117, 110]
+              },
+              {
+                "degrees": 55,
+                "hue": "Orange",
+                "oklch": [0.700819, 0.15001, 55.257021],
+                "rgb": [228, 130, 51]
+              },
+              {
+                "degrees": 85,
+                "hue": "Amber",
+                "oklch": [0.700502, 0.14354, 85.131834],
+                "rgb": [199, 150, 0]
+              },
+              {
+                "degrees": 145,
+                "hue": "Green",
+                "oklch": [0.699572, 0.149044, 145.073907],
+                "rgb": [91, 182, 97]
+              },
+              {
+                "degrees": 185,
+                "hue": "Teal",
+                "oklch": [0.700607, 0.123731, 184.567633],
+                "rgb": [0, 183, 168]
+              },
+              {
+                "degrees": 255,
+                "hue": "Blue",
+                "oklch": [0.699512, 0.149761, 255.087351],
+                "rgb": [89, 160, 249]
+              },
+              {
+                "degrees": 285,
+                "hue": "Indigo",
+                "oklch": [0.700563, 0.149556, 284.908581],
+                "rgb": [150, 143, 247]
+              },
+              {
+                "degrees": 320,
+                "hue": "Purple",
+                "oklch": [0.70005, 0.150386, 319.947345],
+                "rgb": [199, 125, 216]
+              }
+            ],
+            "lightness": 0.7,
+            "target_chroma": 0.15
+          },
+          "tint": {
+            "colors": [
+              {
+                "degrees": 25,
+                "hue": "Red",
+                "oklch": [0.449551, 0.080906, 24.930892],
+                "rgb": [124, 66, 62]
+              },
+              {
+                "degrees": 55,
+                "hue": "Orange",
+                "oklch": [0.449245, 0.080324, 54.880821],
+                "rgb": [119, 72, 38]
+              },
+              {
+                "degrees": 85,
+                "hue": "Amber",
+                "oklch": [0.449934, 0.079811, 84.157895],
+                "rgb": [106, 81, 24]
+              },
+              {
+                "degrees": 145,
+                "hue": "Green",
+                "oklch": [0.450465, 0.07963, 145.14446],
+                "rgb": [55, 97, 57]
+              },
+              {
+                "degrees": 185,
+                "hue": "Teal",
+                "oklch": [0.449375, 0.07909, 185.260725],
+                "rgb": [0, 99, 91]
+              },
+              {
+                "degrees": 255,
+                "hue": "Blue",
+                "oklch": [0.450701, 0.079953, 254.465801],
+                "rgb": [53, 87, 129]
+              },
+              {
+                "degrees": 285,
+                "hue": "Indigo",
+                "oklch": [0.449508, 0.080777, 285.399019],
+                "rgb": [81, 78, 128]
+              },
+              {
+                "degrees": 320,
+                "hue": "Purple",
+                "oklch": [0.450269, 0.08027, 319.992369],
+                "rgb": [105, 70, 113]
+              }
+            ],
+            "lightness": 0.45,
+            "target_chroma": 0.08
           }
         },
         "light": {
@@ -1946,27 +4168,113 @@
             "oklch": [1.0, 0.0, 0.0],
             "rgb": [255, 255, 255]
           },
-          "ring_fills": {
-            "Lilac": {
-              "oklch": [0.899959, 0.059186, 319.843181],
-              "rgb": [240, 210, 247]
-            },
-            "Mint": {
-              "oklch": [0.901052, 0.060106, 184.418424],
-              "rgb": [178, 236, 227]
-            },
-            "Rose": {
-              "oklch": [0.899145, 0.05239, 23.983378],
-              "rgb": [255, 209, 205]
-            },
-            "Sand": {
-              "oklch": [0.900172, 0.060334, 85.965772],
-              "rgb": [240, 220, 177]
-            },
-            "Sky": {
-              "oklch": [0.899595, 0.049328, 255.904395],
-              "rgb": [201, 224, 255]
-            }
+          "strong": {
+            "colors": [
+              {
+                "degrees": 25,
+                "hue": "Red",
+                "oklch": [0.500879, 0.170441, 24.8635],
+                "rgb": [176, 42, 45]
+              },
+              {
+                "degrees": 55,
+                "hue": "Orange",
+                "oklch": [0.499941, 0.12377, 55.011356],
+                "rgb": [151, 76, 0]
+              },
+              {
+                "degrees": 85,
+                "hue": "Amber",
+                "oklch": [0.501211, 0.102678, 85.330446],
+                "rgb": [126, 94, 0]
+              },
+              {
+                "degrees": 145,
+                "hue": "Green",
+                "oklch": [0.500725, 0.157279, 145.044578],
+                "rgb": [0, 121, 30]
+              },
+              {
+                "degrees": 185,
+                "hue": "Teal",
+                "oklch": [0.499631, 0.087878, 185.394251],
+                "rgb": [0, 115, 106]
+              },
+              {
+                "degrees": 255,
+                "hue": "Blue",
+                "oklch": [0.500424, 0.164997, 255.035769],
+                "rgb": [0, 97, 190]
+              },
+              {
+                "degrees": 285,
+                "hue": "Indigo",
+                "oklch": [0.499396, 0.17028, 284.862715],
+                "rgb": [93, 77, 190]
+              },
+              {
+                "degrees": 320,
+                "hue": "Purple",
+                "oklch": [0.500267, 0.170733, 320.085697],
+                "rgb": [140, 57, 158]
+              }
+            ],
+            "lightness": 0.5,
+            "target_chroma": 0.17
+          },
+          "tint": {
+            "colors": [
+              {
+                "degrees": 25,
+                "hue": "Red",
+                "oklch": [0.899145, 0.05239, 23.983378],
+                "rgb": [255, 209, 205]
+              },
+              {
+                "degrees": 55,
+                "hue": "Orange",
+                "oklch": [0.898968, 0.059505, 54.521017],
+                "rgb": [254, 212, 185]
+              },
+              {
+                "degrees": 85,
+                "hue": "Amber",
+                "oklch": [0.900172, 0.060334, 85.965772],
+                "rgb": [240, 220, 177]
+              },
+              {
+                "degrees": 145,
+                "hue": "Green",
+                "oklch": [0.899465, 0.059818, 145.057018],
+                "rgb": [198, 233, 198]
+              },
+              {
+                "degrees": 185,
+                "hue": "Teal",
+                "oklch": [0.901052, 0.060106, 184.418424],
+                "rgb": [178, 236, 227]
+              },
+              {
+                "degrees": 255,
+                "hue": "Blue",
+                "oklch": [0.899595, 0.049328, 255.904395],
+                "rgb": [201, 224, 255]
+              },
+              {
+                "degrees": 285,
+                "hue": "Indigo",
+                "oklch": [0.900028, 0.050464, 285.341758],
+                "rgb": [218, 218, 255]
+              },
+              {
+                "degrees": 320,
+                "hue": "Purple",
+                "oklch": [0.899959, 0.059186, 319.843181],
+                "rgb": [240, 210, 247]
+              }
+            ],
+            "lightness": 0.9,
+            "target_chroma": 0.06
           }
         }
       },
@@ -2930,27 +5238,113 @@
             "oklch": [0.0, 0.0, 0.0],
             "rgb": [0, 0, 0]
           },
-          "ring_fills": {
-            "Lilac": {
-              "oklch": [0.530317, 0.0383, 319.801187],
-              "rgb": [118, 101, 122]
-            },
-            "Mint": {
-              "oklch": [0.530796, 0.040694, 185.018561],
-              "rgb": [81, 116, 111]
-            },
-            "Rose": {
-              "oklch": [0.530104, 0.040697, 24.876182],
-              "rgb": [130, 99, 96]
-            },
-            "Sand": {
-              "oklch": [0.528656, 0.040012, 85.278725],
-              "rgb": [118, 106, 81]
-            },
-            "Sky": {
-              "oklch": [0.529091, 0.040381, 255.00098],
-              "rgb": [92, 109, 131]
-            }
+          "strong": {
+            "colors": [
+              {
+                "degrees": 25,
+                "hue": "Red",
+                "oklch": [0.83011, 0.059739, 24.892757],
+                "rgb": [236, 185, 180]
+              },
+              {
+                "degrees": 55,
+                "hue": "Orange",
+                "oklch": [0.83059, 0.059763, 55.089887],
+                "rgb": [231, 190, 163]
+              },
+              {
+                "degrees": 85,
+                "hue": "Amber",
+                "oklch": [0.829712, 0.060123, 85.462871],
+                "rgb": [217, 197, 155]
+              },
+              {
+                "degrees": 145,
+                "hue": "Green",
+                "oklch": [0.829715, 0.059237, 145.017412],
+                "rgb": [176, 210, 176]
+              },
+              {
+                "degrees": 185,
+                "hue": "Teal",
+                "oklch": [0.83072, 0.060819, 184.220078],
+                "rgb": [155, 213, 204]
+              },
+              {
+                "degrees": 255,
+                "hue": "Blue",
+                "oklch": [0.830374, 0.059141, 254.830141],
+                "rgb": [174, 202, 238]
+              },
+              {
+                "degrees": 285,
+                "hue": "Indigo",
+                "oklch": [0.831391, 0.059911, 285.023158],
+                "rgb": [195, 195, 238]
+              },
+              {
+                "degrees": 320,
+                "hue": "Purple",
+                "oklch": [0.829259, 0.060371, 319.847155],
+                "rgb": [217, 187, 224]
+              }
+            ],
+            "lightness": 0.83,
+            "target_chroma": 0.06
+          },
+          "tint": {
+            "colors": [
+              {
+                "degrees": 25,
+                "hue": "Red",
+                "oklch": [0.530104, 0.040697, 24.876182],
+                "rgb": [130, 99, 96]
+              },
+              {
+                "degrees": 55,
+                "hue": "Orange",
+                "oklch": [0.530435, 0.04037, 54.256653],
+                "rgb": [127, 102, 86]
+              },
+              {
+                "degrees": 85,
+                "hue": "Amber",
+                "oklch": [0.528656, 0.040012, 85.278725],
+                "rgb": [118, 106, 81]
+              },
+              {
+                "degrees": 145,
+                "hue": "Green",
+                "oklch": [0.529719, 0.038965, 144.999826],
+                "rgb": [94, 114, 94]
+              },
+              {
+                "degrees": 185,
+                "hue": "Teal",
+                "oklch": [0.530796, 0.040694, 185.018561],
+                "rgb": [81, 116, 111]
+              },
+              {
+                "degrees": 255,
+                "hue": "Blue",
+                "oklch": [0.529091, 0.040381, 255.00098],
+                "rgb": [92, 109, 131]
+              },
+              {
+                "degrees": 285,
+                "hue": "Indigo",
+                "oklch": [0.530482, 0.040544, 284.934781],
+                "rgb": [105, 105, 131]
+              },
+              {
+                "degrees": 320,
+                "hue": "Purple",
+                "oklch": [0.530317, 0.0383, 319.801187],
+                "rgb": [118, 101, 122]
+              }
+            ],
+            "lightness": 0.53,
+            "target_chroma": 0.04
           }
         },
         "light": {
@@ -3908,27 +6302,113 @@
             "oklch": [1.0, 0.0, 0.0],
             "rgb": [255, 255, 255]
           },
-          "ring_fills": {
-            "Lilac": {
-              "oklch": [0.949203, 0.030398, 320.872894],
-              "rgb": [248, 232, 251]
-            },
-            "Mint": {
-              "oklch": [0.95081, 0.030925, 184.179313],
-              "rgb": [217, 246, 241]
-            },
-            "Rose": {
-              "oklch": [0.950853, 0.024456, 26.917096],
-              "rgb": [255, 233, 230]
-            },
-            "Sand": {
-              "oklch": [0.94921, 0.030161, 83.633449],
-              "rgb": [248, 237, 216]
-            },
-            "Sky": {
-              "oklch": [0.950613, 0.023974, 253.948316],
-              "rgb": [228, 240, 255]
-            }
+          "strong": {
+            "colors": [
+              {
+                "degrees": 25,
+                "hue": "Red",
+                "oklch": [0.548893, 0.0699, 24.319835],
+                "rgb": [150, 97, 93]
+              },
+              {
+                "degrees": 55,
+                "hue": "Orange",
+                "oklch": [0.551237, 0.07044, 55.598966],
+                "rgb": [146, 103, 73]
+              },
+              {
+                "degrees": 85,
+                "hue": "Amber",
+                "oklch": [0.548588, 0.069348, 84.623488],
+                "rgb": [132, 110, 64]
+              },
+              {
+                "degrees": 145,
+                "hue": "Green",
+                "oklch": [0.550701, 0.071002, 145.161968],
+                "rgb": [87, 125, 88]
+              },
+              {
+                "degrees": 185,
+                "hue": "Teal",
+                "oklch": [0.550001, 0.070228, 185.201819],
+                "rgb": [59, 127, 119]
+              },
+              {
+                "degrees": 255,
+                "hue": "Blue",
+                "oklch": [0.550724, 0.069655, 253.957381],
+                "rgb": [85, 116, 154]
+              },
+              {
+                "degrees": 285,
+                "hue": "Indigo",
+                "oklch": [0.550139, 0.069523, 284.890067],
+                "rgb": [109, 108, 153]
+              },
+              {
+                "degrees": 320,
+                "hue": "Purple",
+                "oklch": [0.549498, 0.070243, 320.231632],
+                "rgb": [132, 100, 139]
+              }
+            ],
+            "lightness": 0.55,
+            "target_chroma": 0.07
+          },
+          "tint": {
+            "colors": [
+              {
+                "degrees": 25,
+                "hue": "Red",
+                "oklch": [0.950853, 0.024456, 26.917096],
+                "rgb": [255, 233, 230]
+              },
+              {
+                "degrees": 55,
+                "hue": "Orange",
+                "oklch": [0.950153, 0.029625, 56.004525],
+                "rgb": [255, 234, 220]
+              },
+              {
+                "degrees": 85,
+                "hue": "Amber",
+                "oklch": [0.94921, 0.030161, 83.633449],
+                "rgb": [248, 237, 216]
+              },
+              {
+                "degrees": 145,
+                "hue": "Green",
+                "oklch": [0.949645, 0.029864, 143.786468],
+                "rgb": [227, 244, 226]
+              },
+              {
+                "degrees": 185,
+                "hue": "Teal",
+                "oklch": [0.95081, 0.030925, 184.179313],
+                "rgb": [217, 246, 241]
+              },
+              {
+                "degrees": 255,
+                "hue": "Blue",
+                "oklch": [0.950613, 0.023974, 253.948316],
+                "rgb": [228, 240, 255]
+              },
+              {
+                "degrees": 285,
+                "hue": "Indigo",
+                "oklch": [0.950651, 0.024155, 283.388424],
+                "rgb": [236, 237, 255]
+              },
+              {
+                "degrees": 320,
+                "hue": "Purple",
+                "oklch": [0.949203, 0.030398, 320.872894],
+                "rgb": [248, 232, 251]
+              }
+            ],
+            "lightness": 0.95,
+            "target_chroma": 0.03
           }
         }
       },
@@ -4892,27 +7372,113 @@
             "oklch": [0.0, 0.0, 0.0],
             "rgb": [0, 0, 0]
           },
-          "ring_fills": {
-            "Lilac": {
-              "oklch": [0.489609, 0.066269, 319.671834],
-              "rgb": [113, 84, 120]
-            },
-            "Mint": {
-              "oklch": [0.488551, 0.064855, 185.378617],
-              "rgb": [46, 108, 101]
-            },
-            "Rose": {
-              "oklch": [0.490059, 0.063895, 24.969642],
-              "rgb": [129, 82, 78]
-            },
-            "Sand": {
-              "oklch": [0.490546, 0.065234, 86.147882],
-              "rgb": [113, 94, 51]
-            },
-            "Sky": {
-              "oklch": [0.489761, 0.065142, 255.227463],
-              "rgb": [71, 98, 133]
-            }
+          "strong": {
+            "colors": [
+              {
+                "degrees": 25,
+                "hue": "Red",
+                "oklch": [0.700416, 0.129844, 24.945837],
+                "rgb": [228, 124, 117]
+              },
+              {
+                "degrees": 55,
+                "hue": "Orange",
+                "oklch": [0.701193, 0.130314, 55.140625],
+                "rgb": [220, 135, 72]
+              },
+              {
+                "degrees": 85,
+                "hue": "Amber",
+                "oklch": [0.699625, 0.130054, 85.158757],
+                "rgb": [195, 151, 42]
+              },
+              {
+                "degrees": 145,
+                "hue": "Green",
+                "oklch": [0.69904, 0.129196, 144.872673],
+                "rgb": [103, 179, 106]
+              },
+              {
+                "degrees": 185,
+                "hue": "Teal",
+                "oklch": [0.700607, 0.123731, 184.567633],
+                "rgb": [0, 183, 168]
+              },
+              {
+                "degrees": 255,
+                "hue": "Blue",
+                "oklch": [0.700709, 0.130387, 254.968877],
+                "rgb": [100, 161, 238]
+              },
+              {
+                "degrees": 285,
+                "hue": "Indigo",
+                "oklch": [0.701164, 0.130026, 285.056099],
+                "rgb": [151, 146, 236]
+              },
+              {
+                "degrees": 320,
+                "hue": "Purple",
+                "oklch": [0.699091, 0.130459, 320.24972],
+                "rgb": [194, 130, 208]
+              }
+            ],
+            "lightness": 0.7,
+            "target_chroma": 0.13
+          },
+          "tint": {
+            "colors": [
+              {
+                "degrees": 25,
+                "hue": "Red",
+                "oklch": [0.490059, 0.063895, 24.969642],
+                "rgb": [129, 82, 78]
+              },
+              {
+                "degrees": 55,
+                "hue": "Orange",
+                "oklch": [0.488885, 0.064802, 54.300965],
+                "rgb": [125, 86, 60]
+              },
+              {
+                "degrees": 85,
+                "hue": "Amber",
+                "oklch": [0.490546, 0.065234, 86.147882],
+                "rgb": [113, 94, 51]
+              },
+              {
+                "degrees": 145,
+                "hue": "Green",
+                "oklch": [0.489241, 0.064515, 144.510581],
+                "rgb": [73, 106, 73]
+              },
+              {
+                "degrees": 185,
+                "hue": "Teal",
+                "oklch": [0.488551, 0.064855, 185.378617],
+                "rgb": [46, 108, 101]
+              },
+              {
+                "degrees": 255,
+                "hue": "Blue",
+                "oklch": [0.489761, 0.065142, 255.227463],
+                "rgb": [71, 98, 133]
+              },
+              {
+                "degrees": 285,
+                "hue": "Indigo",
+                "oklch": [0.489153, 0.065207, 284.835573],
+                "rgb": [92, 91, 132]
+              },
+              {
+                "degrees": 320,
+                "hue": "Purple",
+                "oklch": [0.489609, 0.066269, 319.671834],
+                "rgb": [113, 84, 120]
+              }
+            ],
+            "lightness": 0.49,
+            "target_chroma": 0.065
           }
         },
         "light": {
@@ -5870,32 +8436,118 @@
             "oklch": [1.0, 0.0, 0.0],
             "rgb": [255, 255, 255]
           },
-          "ring_fills": {
-            "Lilac": {
-              "oklch": [0.918779, 0.045902, 319.216416],
-              "rgb": [242, 219, 248]
-            },
-            "Mint": {
-              "oklch": [0.919903, 0.045347, 184.382604],
-              "rgb": [196, 239, 232]
-            },
-            "Rose": {
-              "oklch": [0.920388, 0.040608, 25.409923],
-              "rgb": [255, 219, 215]
-            },
-            "Sand": {
-              "oklch": [0.919646, 0.045188, 85.864817],
-              "rgb": [242, 227, 195]
-            },
-            "Sky": {
-              "oklch": [0.919293, 0.039253, 256.588291],
-              "rgb": [212, 230, 255]
-            }
+          "strong": {
+            "colors": [
+              {
+                "degrees": 25,
+                "hue": "Red",
+                "oklch": [0.500146, 0.139688, 25.150815],
+                "rgb": [164, 59, 56]
+              },
+              {
+                "degrees": 55,
+                "hue": "Orange",
+                "oklch": [0.499941, 0.12377, 55.011356],
+                "rgb": [151, 76, 0]
+              },
+              {
+                "degrees": 85,
+                "hue": "Amber",
+                "oklch": [0.501211, 0.102678, 85.330446],
+                "rgb": [126, 94, 0]
+              },
+              {
+                "degrees": 145,
+                "hue": "Green",
+                "oklch": [0.500523, 0.140579, 144.866104],
+                "rgb": [30, 119, 41]
+              },
+              {
+                "degrees": 185,
+                "hue": "Teal",
+                "oklch": [0.499631, 0.087878, 185.394251],
+                "rgb": [0, 115, 106]
+              },
+              {
+                "degrees": 255,
+                "hue": "Blue",
+                "oklch": [0.50008, 0.139141, 254.774306],
+                "rgb": [32, 99, 176]
+              },
+              {
+                "degrees": 285,
+                "hue": "Indigo",
+                "oklch": [0.498577, 0.140065, 285.116327],
+                "rgb": [93, 83, 174]
+              },
+              {
+                "degrees": 320,
+                "hue": "Purple",
+                "oklch": [0.499936, 0.139922, 319.836695],
+                "rgb": [133, 68, 148]
+              }
+            ],
+            "lightness": 0.5,
+            "target_chroma": 0.14
+          },
+          "tint": {
+            "colors": [
+              {
+                "degrees": 25,
+                "hue": "Red",
+                "oklch": [0.920388, 0.040608, 25.409923],
+                "rgb": [255, 219, 215]
+              },
+              {
+                "degrees": 55,
+                "hue": "Orange",
+                "oklch": [0.91887, 0.044575, 54.002339],
+                "rgb": [253, 221, 201]
+              },
+              {
+                "degrees": 85,
+                "hue": "Amber",
+                "oklch": [0.919646, 0.045188, 85.864817],
+                "rgb": [242, 227, 195]
+              },
+              {
+                "degrees": 145,
+                "hue": "Green",
+                "oklch": [0.920041, 0.044322, 145.203681],
+                "rgb": [211, 237, 211]
+              },
+              {
+                "degrees": 185,
+                "hue": "Teal",
+                "oklch": [0.919903, 0.045347, 184.382604],
+                "rgb": [196, 239, 232]
+              },
+              {
+                "degrees": 255,
+                "hue": "Blue",
+                "oklch": [0.919293, 0.039253, 256.588291],
+                "rgb": [212, 230, 255]
+              },
+              {
+                "degrees": 285,
+                "hue": "Indigo",
+                "oklch": [0.918962, 0.040643, 285.572723],
+                "rgb": [225, 225, 255]
+              },
+              {
+                "degrees": 320,
+                "hue": "Purple",
+                "oklch": [0.918779, 0.045902, 319.216416],
+                "rgb": [242, 219, 248]
+              }
+            ],
+            "lightness": 0.92,
+            "target_chroma": 0.045
           }
         }
       },
       "name": "Jmol"
     }
   ],
-  "version": 1
+  "version": 2
 }

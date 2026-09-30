@@ -38,7 +38,7 @@ const blocks = [
   ...css.matchAll(/\[data-reshiki-theme="([^"]+)"\]\[data-reshiki-mode="([^"]+)"\]\s*\{([^}]+)\}/g),
 ];
 const cssBlocks = new Map(blocks.map((block) => [block.slice(1, 3).join("/"), block[3]]));
-assert.equal(blocks.length, 6, "All three themes must include both modes");
+assert.equal(blocks.length, catalog.themes.length * 2, "Every theme must include both modes");
 assert.equal(cssBlocks.size, blocks.length, "Duplicate CSS palettes");
 
 let checked = 0;
@@ -53,13 +53,15 @@ for (const theme of catalog.themes) {
     const colors = [
       ["paper", "paper", "", "paper", palette.paper],
       ["ink", "ink", "", "ink", palette.ink],
-      ...Object.entries(palette.ring_fills).map(([name, color]) => [
-        "ring_fill",
-        name,
-        "",
-        `ring-${name.toLowerCase()}`,
-        color,
-      ]),
+      ...["strong", "tint"].flatMap((row) =>
+        palette[row].colors.map((color) => [
+          row,
+          color.hue,
+          "",
+          `${row}-${color.hue.toLowerCase()}`,
+          color,
+        ]),
+      ),
       ...palette.elements.map((element) => [
         "label",
         element.symbol,

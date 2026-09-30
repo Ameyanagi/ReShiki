@@ -65,7 +65,7 @@ The [0.9.0 validation record](release-0.9.0-validation.md) records the completed
 
 ## Publish a version
 
-1. Update the package version in `Cargo.toml`, update `Cargo.lock`, and record release changes.
+1. Update the package version in `Cargo.toml`, update `Cargo.lock`, and record release changes. If the website color reference is marked as Nightly, set `NIGHTLY` to `false` in `examples/theme_colors.rs`, regenerate it as the [theme guide](../presets/themes/README.md) describes, and remove the Nightly note from `website/src/content/docs/guide/color-palettes.mdx`.
 2. Run the checks and a manual release build. Review the resulting packages.
 3. Merge the release preparation pull request to `main`, then create and push a matching tag on its tested commit, for example `v0.9.0` for version `0.9.0`.
 

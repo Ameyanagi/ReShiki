@@ -6,12 +6,15 @@ use reshiki::{
     color_contrast::{Oklch, Rgb},
     document::Document,
     editing::ELEMENTS,
-    palette::{Palette, Row},
-    ring_fills,
+    palette::{Hue, Palette, Row},
     theme_files::{self, ThemeFile},
 };
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, path::Path};
+
+/// The reference describes Nightly builds until the palette ships in a stable
+/// release; set this to false when regenerating for that release.
+const NIGHTLY: bool = true;
 
 fn color(rgb: Rgb) -> Value {
     let lch = Oklch::from_rgb(rgb);
@@ -22,16 +25,26 @@ fn color(rgb: Rgb) -> Value {
     })
 }
 
+/// One palette row: its shared OKLCH tone and the eight hues in slot order.
+fn row(palette: &Palette, row: Row, [lightness, target_chroma]: [f64; 2]) -> Value {
+    let colors: Vec<_> = Hue::ALL
+        .into_iter()
+        .map(|hue| {
+            let mut value = color(palette.swatch(hue, row));
+            value["hue"] = json!(hue.name());
+            value["degrees"] = json!(hue.default_degrees());
+            value
+        })
+        .collect();
+    json!({ "lightness": lightness, "target_chroma": target_chroma, "colors": colors })
+}
+
 fn main() -> anyhow::Result<()> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let download = root.join("website/public/colors");
     std::fs::create_dir_all(&download)?;
     let mut themes = Vec::new();
-    for theme in [
-        ColorTheme::Presentation,
-        ColorTheme::Pastel,
-        ColorTheme::Jmol,
-    ] {
+    for theme in ColorTheme::ALL {
         let file = ThemeFile::capture(&Document {
             color_theme: theme,
             ..Default::default()
@@ -52,35 +65,35 @@ fn main() -> anyhow::Result<()> {
                         })
                     })
                     .collect();
-                // Ring interiors use the Tint row; keep the slot names readers know.
-                let palette = Palette::new(file.tones(mode), file.hues, mode);
-                let fills: BTreeMap<_, _> = ring_fills::PALETTE
-                    .iter()
-                    .map(|&(name, _, hue)| (name, color(palette.swatch(hue, Row::Tint))))
-                    .collect();
+                let tones = file.tones(mode);
+                let palette = Palette::new(tones, file.hues, mode);
                 (
                     mode.to_string().to_lowercase(),
                     json!({
                         "paper": color(mode.background()),
                         "ink": color(mode.color([0; 3])),
-                        "elements": elements,
-                        "ring_fills": fills
+                        "strong": row(&palette, Row::Strong, tones.strong),
+                        "tint": row(&palette, Row::Tint, tones.tint),
+                        "elements": elements
                     }),
                 )
             })
             .collect();
         themes.push(json!({ "id": file.id, "name": file.name, "modes": modes }));
     }
+    let version = env!("CARGO_PKG_VERSION");
     let catalog = json!({
-        "version": 1,
-        "reshiki_version": env!("CARGO_PKG_VERSION"),
+        "version": 2,
+        "reshiki_version": if NIGHTLY { format!("{version}-nightly") } else { version.into() },
         "rgb_space": "sRGB, 8-bit channels (0–255)",
         "oklch_units": "L: 0–1; C: chroma; h: degrees (0–360). Rounded to six decimals from final RGB.",
         "label_context": "Automatic labels on plain paper, with no ring fills or explicit object overrides.",
+        "palette_context": "Strong colors bonds, text and strokes; Tint colors fills, ring interiors and highlight boxes. Each row shares one OKLCH lightness and target chroma per theme and canvas. Default hue angles.",
         "sources": [
             "https://jmol.sourceforge.net/jscolors/",
             "https://bottosson.github.io/posts/oklab/",
             "https://github.com/Ameyanagi/ReShiki/blob/main/src/canvas_theme.rs",
+            "https://github.com/Ameyanagi/ReShiki/blob/main/src/palette.rs",
             "https://github.com/Ameyanagi/ReShiki/blob/main/src/color_contrast.rs"
         ],
         "themes": themes
@@ -92,7 +105,8 @@ fn main() -> anyhow::Result<()> {
         format!("{}\n", serde_json::to_string_pretty(&catalog)?),
     )?;
     println!(
-        "Exported 3 themes × 2 modes × 118 elements to {}",
+        "Exported {} themes × 2 modes × 118 elements and 17 palette colors to {}",
+        ColorTheme::ALL.len(),
         path.display()
     );
     Ok(())
