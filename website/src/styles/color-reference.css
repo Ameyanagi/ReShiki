@@ -24,6 +24,12 @@ body:has(.color-reference) .sl-markdown-content > :not(.color-reference) {
 body:has(.color-reference) .sl-markdown-content > h2 {
   margin-top: 3.5rem;
 }
+/* A note that introduces the explorer shares its left edge instead of the prose column. */
+body:has(.color-reference) .sl-markdown-content > .starlight-aside:has(+ .color-reference) {
+  max-width: none;
+  margin-inline: 0;
+  margin-bottom: 1.5rem;
+}
 
 .sl-markdown-content .color-reference {
   --cr-surface: var(--reshiki-surface);
