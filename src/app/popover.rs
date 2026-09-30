@@ -17,6 +17,7 @@ pub struct Popover<'a> {
     escape: Message,
     keys: fn(&keyboard::Key) -> Option<Message>,
     fit_anchor: bool,
+    align_end: bool,
 }
 
 /// `popup` is shown while it is Some; `close` is sent for a click outside it.
@@ -32,6 +33,7 @@ pub fn popover<'a>(
         close,
         keys: |_| None,
         fit_anchor: false,
+        align_end: false,
     }
 }
 impl Popover<'_> {
@@ -42,6 +44,11 @@ impl Popover<'_> {
     /// Makes the popup as wide as its anchor, like a drop-down list.
     pub fn fit_anchor(mut self) -> Self {
         self.fit_anchor = true;
+        self
+    }
+    /// Lines the popup up with the anchor's right edge instead of its left.
+    pub fn align_end(mut self) -> Self {
+        self.align_end = true;
         self
     }
     /// Keys the popup handles when none of its widgets does.
@@ -172,6 +179,7 @@ impl Widget<Message, Theme, Renderer> for Popover<'_> {
             escape: &self.escape,
             keys: self.keys,
             fit_anchor: self.fit_anchor,
+            align_end: self.align_end,
         })))
     }
 }
@@ -190,6 +198,7 @@ struct Popup<'a, 'b> {
     escape: &'b Message,
     keys: fn(&keyboard::Key) -> Option<Message>,
     fit_anchor: bool,
+    align_end: bool,
 }
 
 impl overlay::Overlay<Message, Theme, Renderer> for Popup<'_, '_> {
@@ -210,11 +219,12 @@ impl overlay::Overlay<Message, Theme, Renderer> for Popup<'_, '_> {
             .popup
             .as_widget_mut()
             .layout(self.tree, renderer, &limits);
-        let x = self
-            .anchor
-            .x
-            .min(bounds.width - node.size().width - MARGIN)
-            .max(MARGIN);
+        let x = if self.align_end {
+            self.anchor.x + self.anchor.width - node.size().width
+        } else {
+            self.anchor.x
+        };
+        let x = x.min(bounds.width - node.size().width - MARGIN).max(MARGIN);
         node.move_to(Point::new(x, top))
     }
     fn draw(

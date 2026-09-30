@@ -734,6 +734,41 @@ fn old_light_canvas_documents_keep_their_chemdraw_output() {
 }
 
 #[test]
+fn old_dark_canvas_documents_keep_their_appearance_once() {
+    // Written and rendered by the previous release on the dark canvas, which
+    // showed custom bond, label, caption, arrow, rectangle and ring-fill colors
+    // lightness-flipped.
+    let bytes = include_bytes!("fixtures/palette/legacy-dark.rsk");
+    let colors = |svg: &str| -> Vec<String> {
+        svg.split("rgb(")
+            .skip(1)
+            .filter_map(|s| s.split(')').next().map(str::to_owned))
+            .collect()
+    };
+    let expected = colors(include_str!("fixtures/palette/legacy-dark.svg"));
+    let doc = Document::from_json(bytes).unwrap();
+    assert_eq!(colors(&scene::svg_with_background(&doc)), expected);
+    assert_eq!(doc.bonds[1].color, Color::Custom([55, 165, 245]));
+    assert_eq!(doc.bonds[0].color, Color::Ink);
+    // Saving, copying or a recovery draft marks the current version, so reading
+    // it back does not flip the colors again.
+    let reopened = Document::from_json(&doc.file_json().unwrap()).unwrap();
+    assert_eq!(reopened, doc.current());
+    assert_eq!(colors(&scene::svg_with_background(&reopened)), expected);
+    // Only old drawings on the dark canvas convert.
+    let plain: Document = serde_json::from_slice(bytes).unwrap();
+    let mut current = serde_json::to_value(&plain).unwrap();
+    current["version"] = 17.into();
+    let current = serde_json::to_vec(&current).unwrap();
+    assert_eq!(Document::from_json(&current).unwrap().bonds, plain.bonds);
+    let light = include_bytes!("fixtures/palette/legacy-light.rsk");
+    assert_eq!(
+        Document::from_json(light).unwrap(),
+        serde_json::from_slice::<Document>(light).unwrap()
+    );
+}
+
+#[test]
 fn legacy_swatches_become_palette_colors_and_follow_the_theme() {
     let mut doc: Document = serde_json::from_value(serde_json::json!({
         "version": 15,

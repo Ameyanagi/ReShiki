@@ -231,17 +231,40 @@ impl Document {
         {
             return Err(newer_version(version));
         }
-        let doc: Self = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
+        let mut doc: Self = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
         doc.validate()?;
+        doc.migrate();
         Ok(doc)
+    }
+    /// Bring a drawing read from an earlier document version to the current
+    /// color form. Before version 17 custom colors were light-canvas bytes that
+    /// the dark canvas showed lightness-flipped; they are now exact on both
+    /// canvases, so a dark drawing stores what it showed. Ink and palette colors
+    /// already follow the canvas.
+    pub(crate) fn migrate(&mut self) {
+        const EXACT_COLORS: u32 = 17;
+        if self.version >= EXACT_COLORS || self.canvas_theme.is_light() {
+            return;
+        }
+        let canvas = self.canvas_theme;
+        crate::palette::for_each_color_mut(self, |color| {
+            if let crate::palette::Color::Custom(rgb) = *color {
+                *color = crate::palette::Color::Custom(canvas.color(rgb));
+            }
+        });
+        self.version = EXACT_COLORS;
     }
     /// Native file contents, marked with this build's document version.
     pub fn file_json(&self) -> Result<Vec<u8>, String> {
-        let file = Self {
+        serde_json::to_vec_pretty(&self.current()).map_err(|e| e.to_string())
+    }
+    /// A copy marked with this build's document version, for files, clipboard
+    /// data and recovery drafts, so reading them back never migrates again.
+    pub fn current(&self) -> Self {
+        Self {
             version: VERSION,
             ..self.clone()
-        };
-        serde_json::to_vec_pretty(&file).map_err(|e| e.to_string())
+        }
     }
     pub fn next_id(&self) -> u64 {
         self.atoms

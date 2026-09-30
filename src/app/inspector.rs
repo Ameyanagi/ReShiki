@@ -1261,8 +1261,8 @@ impl App {
         }
         if reshiki::printing::available() {
             pages = pages.push(
-                command(
-                    super::platform_shortcut("Print… · ⌘P", "Print… · Ctrl+P"),
+                keyed_command(
+                    "Print…",
                     Message::Printing(super::printing::Action::Start(
                         reshiki::printing::Scope::Document,
                     )),

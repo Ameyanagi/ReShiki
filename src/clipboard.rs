@@ -288,6 +288,11 @@ async fn prepare_copy(
             original
         }
     };
+    // Marked like a saved file, so pasting it never migrates its colors again.
+    let doc = Document {
+        version: crate::document::VERSION,
+        ..doc
+    };
     let mut representations = Vec::new();
     if !image_only {
         representations.push(Representation::new(
@@ -839,7 +844,7 @@ mod tests {
             ensure!(
                 Document::from_json(&native.bytes().map_err(anyhow::Error::msg)?)
                     .map_err(anyhow::Error::msg)?
-                    == doc
+                    == doc.current()
             );
             let binary = representations
                 .iter()
@@ -880,7 +885,7 @@ mod tests {
         ensure!(
             Document::from_json(&native.bytes().map_err(anyhow::Error::msg)?)
                 .map_err(anyhow::Error::msg)?
-                == source
+                == source.current()
         );
         let cdx = representations
             .iter()
@@ -988,6 +993,46 @@ mod tests {
             .map_err(anyhow::Error::msg)?;
             assert!(restored.native, "{kind}");
             assert_eq!(restored.document, expected);
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn old_dark_reshiki_clipboards_convert_colors_once() -> anyhow::Result<()> {
+        use crate::{canvas_theme::CanvasTheme, document::Point, palette::Color};
+        let mut doc = Document {
+            canvas_theme: CanvasTheme::Dark,
+            ..Default::default()
+        };
+        let c = doc.add_atom("C", Point::default());
+        let o = doc.add_atom("O", Point::new(42., 0.));
+        doc.add_bond(c, o, 1, "plain");
+        doc.bonds[0].color = Color::Custom([10, 120, 200]);
+        assert!(doc.version < crate::document::VERSION);
+        let (_, representations) = prepare_copy(Default::default(), doc, false)
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let copied = representations
+            .iter()
+            .find(|r| r.kind == NATIVE)
+            .ok_or_else(|| anyhow::anyhow!("no native data"))?
+            .bytes()
+            .map_err(anyhow::Error::msg)?;
+        // The previous release's dark drawing showed [10, 120, 200] flipped.
+        let old = include_bytes!("../tests/fixtures/palette/legacy-dark.rsk");
+        for (data, bond, color) in [
+            (copied.as_slice(), 0, [10, 120, 200]),
+            (old.as_slice(), 1, [55, 165, 245]),
+        ] {
+            let pasted = paste_packet_with_warnings(
+                LocalEngine::default(),
+                Packet {
+                    representations: vec![Representation::new(NATIVE, data)],
+                },
+            )
+            .await
+            .map_err(anyhow::Error::msg)?;
+            assert_eq!(pasted.document.bonds[bond].color, Color::Custom(color));
         }
         Ok(())
     }

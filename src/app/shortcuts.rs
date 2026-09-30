@@ -29,33 +29,49 @@ pub enum Action {
     },
 }
 
-/// The shortcut of a menu or context row command, shown with ⌘ symbols on
-/// macOS and as Ctrl+ elsewhere.
+/// The shortcut of a menu or context row command, as `keys` shows it.
 pub(super) fn label(message: &Message) -> Option<String> {
-    let (mods, key) = keys(message)?;
+    binding(message).map(|(mods, key)| keys(mods, key))
+}
+
+/// A shortcut as menus, tooltips and Help show it: key symbols on macOS
+/// (⇧R, ⌘G, ⌥⌘←, ↩, ⌫) and words elsewhere (Shift+R, Ctrl+G, Ctrl+Alt+Left,
+/// Enter, Delete). An empty key gives the modifiers alone, as in "⌥ drag".
+/// `Modifiers::COMMAND` is ⌘ on macOS and Ctrl elsewhere.
+pub(super) fn keys(mods: Modifiers, key: &str) -> String {
     let mac = cfg!(target_os = "macos");
     let key = match key {
-        "Delete" if mac => "⌫",
         "Enter" if mac => "↩",
+        "Delete" if mac => "⌫",
+        "Left" if mac => "←",
+        "Right" if mac => "→",
+        "Up" if mac => "↑",
+        "Down" if mac => "↓",
         key => key,
     };
-    Some(if mac {
-        [(mods.alt(), "⌥"), (mods.shift(), "⇧"), (mods.logo(), "⌘")]
-            .into_iter()
-            .filter_map(|(held, symbol)| held.then_some(symbol))
-            .chain([key])
-            .collect()
+    if mac {
+        [
+            (mods.control(), "⌃"),
+            (mods.alt(), "⌥"),
+            (mods.shift(), "⇧"),
+            (mods.logo(), "⌘"),
+        ]
+        .into_iter()
+        .filter_map(|(held, symbol)| held.then_some(symbol))
+        .chain([key])
+        .collect()
     } else {
         [
-            (mods.control(), "Ctrl+"),
-            (mods.alt(), "Alt+"),
-            (mods.shift(), "Shift+"),
+            (mods.control(), "Ctrl"),
+            (mods.alt(), "Alt"),
+            (mods.shift(), "Shift"),
         ]
         .into_iter()
         .filter_map(|(held, name)| held.then_some(name))
-        .chain([key])
-        .collect()
-    })
+        .chain((!key.is_empty()).then_some(key))
+        .collect::<Vec<_>>()
+        .join("+")
+    }
 }
 
 /// `keys` as rich text spans, with the macOS key symbols in Lucida Grande:
@@ -82,11 +98,19 @@ pub(super) fn symbol(c: char) -> bool {
     matches!(c, '⌘' | '⇧' | '⌥' | '⌃' | '⌫' | '↩')
 }
 
-/// Modifiers and key of the commands that have a shortcut in `key_message`.
-fn keys(message: &Message) -> Option<(Modifiers, &'static str)> {
+/// Modifiers and key of the commands that have a shortcut in `key_message`,
+/// or in `file_shortcuts` for the file commands.
+fn binding(message: &Message) -> Option<(Modifiers, &'static str)> {
     let command = Modifiers::COMMAND;
     let shift = command | Modifiers::SHIFT;
     Some(match message {
+        Message::New => (command, "N"),
+        Message::Open => (command, "O"),
+        Message::Save => (command, "S"),
+        Message::SaveAs => (shift, "S"),
+        Message::Printing(super::printing::Action::Start(reshiki::printing::Scope::Document)) => {
+            (command, "P")
+        }
         Message::Undo => (command, "Z"),
         Message::Redo => (shift, "Z"),
         Message::Copy(cut) => (command, if *cut { "X" } else { "C" }),
@@ -922,7 +946,7 @@ mod compatibility_tests {
             .map(Message::Arrange),
         );
         for message in messages {
-            let (mods, name) = keys(&message).expect("a shortcut");
+            let (mods, name) = binding(&message).expect("a shortcut");
             let (pressed, expected) = match name {
                 "Delete" => (Key::Named(Named::Delete), message.clone()),
                 "Enter" => (Key::Named(Named::Enter), Message::ContextKey(name.into())),
@@ -933,15 +957,34 @@ mod compatibility_tests {
             let actual = key_message(&pressed, &pressed, mods);
             assert_eq!(format!("{actual:?}"), format!("{:?}", Some(expected)));
         }
+        // File commands are routed before text fields see them.
+        for message in [
+            Message::New,
+            Message::Open,
+            Message::Save,
+            Message::SaveAs,
+            Message::Printing(crate::app::printing::Action::Start(
+                reshiki::printing::Scope::Document,
+            )),
+        ] {
+            let (mods, name) = binding(&message).expect("a shortcut");
+            let actual = crate::app::file_shortcuts::file_message(&key(&name.to_lowercase()), mods);
+            assert_eq!(format!("{actual:?}"), format!("{:?}", Some(message)));
+        }
         assert_eq!(label(&Message::Transform(Transform::Rotate(180.))), None);
         let label = |message| label(&message).unwrap_or_default();
         let edit_label = || Message::AtomText(crate::app::atom_text::Action::Begin(None));
+        let (command, alt) = (Modifiers::COMMAND, Modifiers::ALT);
         if cfg!(target_os = "macos") {
             assert_eq!(label(Message::Arrange(Arrange::AlignLeft)), "⌥⇧⌘L");
             assert_eq!(label(Message::Copy(true)), "⌘X");
             assert_eq!(label(Message::Delete), "⌫");
             assert_eq!(label(Message::ToggleSelectedRing), "⇧R");
             assert_eq!(label(edit_label()), "↩");
+            assert_eq!(label(Message::SaveAs), "⇧⌘S");
+            assert_eq!(keys(command | alt, "Left"), "⌥⌘←");
+            assert_eq!(keys(command, "Enter"), "⌘↩");
+            assert_eq!(keys(alt | Modifiers::SHIFT, ""), "⌥⇧");
         } else {
             assert_eq!(label(Message::ToggleSelectedRing), "Shift+R");
             assert_eq!(label(edit_label()), "Enter");
@@ -951,6 +994,10 @@ mod compatibility_tests {
             );
             assert_eq!(label(Message::Copy(true)), "Ctrl+X");
             assert_eq!(label(Message::Delete), "Delete");
+            assert_eq!(label(Message::SaveAs), "Ctrl+Shift+S");
+            assert_eq!(keys(command | alt, "Left"), "Ctrl+Alt+Left");
+            assert_eq!(keys(command, "Enter"), "Ctrl+Enter");
+            assert_eq!(keys(alt | Modifiers::SHIFT, ""), "Alt+Shift");
         }
     }
 

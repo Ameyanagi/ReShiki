@@ -7,6 +7,12 @@ use reshiki::{
     pages::{Layout, Preset},
 };
 
+fn print() -> Message {
+    Message::Printing(super::printing::Action::Start(
+        reshiki::printing::Scope::Document,
+    ))
+}
+
 fn command(label: &'static str) -> iced::widget::Button<'static, Message> {
     iced::widget::button(text(label).size(12))
         .padding([8, 10])
@@ -377,12 +383,9 @@ impl App {
                 );
             if reshiki::printing::available() {
                 body = body.push(
-                    command(super::platform_shortcut("Print… · ⌘P", "Print… · Ctrl+P"))
-                        .on_press_maybe(self.printing.active.is_none().then_some(
-                            Message::Printing(super::printing::Action::Start(
-                                reshiki::printing::Scope::Document,
-                            )),
-                        ))
+                    super::workspace::keyed_command("Print…", print())
+                        .padding([8, 10])
+                        .on_press_maybe(self.printing.active.is_none().then(print))
                         .width(Length::Fill),
                 );
             }
@@ -548,12 +551,9 @@ impl App {
                 );
             if reshiki::printing::available() {
                 body = body.push(
-                    command(super::platform_shortcut("Print… · ⌘P", "Print… · Ctrl+P"))
-                        .on_press_maybe(self.printing.active.is_none().then_some(
-                            Message::Printing(super::printing::Action::Start(
-                                reshiki::printing::Scope::Document,
-                            )),
-                        ))
+                    super::workspace::keyed_command("Print…", print())
+                        .padding([8, 10])
+                        .on_press_maybe(self.printing.active.is_none().then(print))
                         .width(Length::Fill),
                 );
             }

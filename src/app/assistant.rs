@@ -1,8 +1,8 @@
 use super::{App, InspectorTab, Message};
 use crate::canvas::layered::canvas;
 use iced::widget::{
-    Space, button, checkbox, column, container, mouse_area, opaque, row, scrollable, stack, text,
-    text_editor, tooltip,
+    Space, button, checkbox, column, container, mouse_area, opaque, rich_text, row, scrollable,
+    stack, text, text_editor, tooltip,
 };
 use iced::{Alignment, Border, Color, Element, Length, Task};
 use reshiki::assistant::settings::{Preferences, effort_label};
@@ -1660,10 +1660,11 @@ impl App {
                     );
                 }
                 options = options.push(
-                    text(super::platform_shortcut(
-                        "Paste with ⌘V · Send with ⌘Enter",
-                        "Paste with Ctrl+V · Send with Ctrl+Enter",
-                    ))
+                    rich_text(super::shortcuts::spans(&format!(
+                        "Paste with {} · Send with {}",
+                        super::shortcuts::label(&Message::Paste).unwrap_or_default(),
+                        super::shortcuts::keys(iced::keyboard::Modifiers::COMMAND, "Enter")
+                    )))
                     .size(11),
                 );
             }

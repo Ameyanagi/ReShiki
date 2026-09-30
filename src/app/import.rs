@@ -3,9 +3,7 @@ use super::workspace::{caret, hover_hint, muted_text};
 use super::{App, Message, Pending};
 use crate::canvas::Tool;
 use iced::widget::canvas::{self, Geometry, Path as Outline, Stroke};
-use iced::widget::{
-    Space, button, column, container, mouse_area, opaque, row, stack, text, text_editor, tooltip,
-};
+use iced::widget::{button, column, container, row, stack, text, text_editor, tooltip};
 use iced::{Alignment, Border, Color, Element, Length, Rectangle, Renderer, Task, Theme, mouse};
 use reshiki::document::{Document, Point};
 use reshiki::engine::{ChemistryEngine, LocalEngine, Request};
@@ -451,9 +449,9 @@ impl App {
         let ready = state.format.is_some() && !self.busy;
         let editor = text_editor(&state.input)
             .id(INPUT)
-            .placeholder(super::platform_shortcut(
-                "Paste SMILES, reaction SMILES, InChI, MOL, RXN or CDXML\n⌘↩ inserts",
-                "Paste SMILES, reaction SMILES, InChI, MOL, RXN or CDXML\nCtrl+Enter inserts",
+            .placeholder(format!(
+                "Paste SMILES, reaction SMILES, InChI, MOL, RXN or CDXML\n{} inserts",
+                super::shortcuts::keys(iced::keyboard::Modifiers::COMMAND, "Enter")
             ))
             .on_action(|a| Message::Imports(Action::Edit(a)))
             .key_binding(|key| {
@@ -501,13 +499,13 @@ impl App {
             row![
                 hover_hint(
                     split(text("Insert").size(12).into(), Message::InsertInput, true),
-                    super::platform_shortcut(
-                        "Insert into the drawing · ⌘↩",
-                        "Insert into the drawing · Ctrl+Enter"
+                    format!(
+                        "Insert into the drawing · {}",
+                        super::shortcuts::keys(iced::keyboard::Modifiers::COMMAND, "Enter")
                     ),
                     tooltip::Position::Top,
                 ),
-                hover_hint(
+                insert_menu(
                     split(
                         // As tall as the Insert label beside it.
                         caret(9.)
@@ -516,8 +514,8 @@ impl App {
                         Message::Imports(Action::Menu(!state.menu)),
                         false
                     ),
-                    "More ways to insert",
-                    tooltip::Position::Top,
+                    state.menu,
+                    ready
                 ),
             ]
             .spacing(1),
@@ -557,28 +555,7 @@ impl App {
             text("Or drop MOL, RXN, CDXML, CDX, SMILES or picture files anywhere on the drawing.")
                 .size(11)
                 .style(muted_text);
-        // The Insert ▾ menu floats over the rows below it.
-        let mut below = stack![column![files, hint].spacing(10)];
-        if state.menu {
-            let replace = button(text("Replace drawing").size(12))
-                .padding([6, 10])
-                .width(Length::Fill)
-                .style(button::text)
-                .on_press_maybe(ready.then_some(Message::Import));
-            below = below
-                .push(
-                    mouse_area(Space::new().width(Length::Fill).height(Length::Fill))
-                        .on_press(Message::Imports(Action::Menu(false))),
-                )
-                .push(
-                    container(opaque(
-                        container(replace).padding(5).width(170).style(menu_style),
-                    ))
-                    .width(Length::Fill)
-                    .align_x(Alignment::End),
-                );
-        }
-        column![editor, actions, below].spacing(10).into()
+        column![editor, actions, files, hint].spacing(10).into()
     }
 
     /// Outlines the canvas while files are dragged over the window.
@@ -648,16 +625,32 @@ fn editor_style(theme: &Theme, status: text_editor::Status) -> text_editor::Styl
     }
 }
 
-/// Matches the pick list menus beside it.
-fn menu_style(theme: &Theme) -> container::Style {
-    let menu = crate::appearance::dropdown_menu(theme);
-    container::Style {
-        background: Some(menu.background),
-        border: menu.border,
-        shadow: menu.shadow,
-        text_color: Some(menu.text_color),
-        ..Default::default()
-    }
+/// The Insert ▾ menu, floating under its button like the other menus.
+fn insert_menu(
+    anchor: iced::widget::Button<'_, Message>,
+    open: bool,
+    ready: bool,
+) -> Element<'_, Message> {
+    let popup = open.then(|| {
+        container(
+            button(text("Replace drawing").size(12))
+                .width(Length::Fill)
+                .padding([6, 10])
+                .style(super::workspace::control(false))
+                .on_press_maybe(ready.then_some(Message::Import)),
+        )
+        .width(170)
+        .padding(5)
+        .style(super::color_popover::surface)
+        .into()
+    });
+    super::popover::popover(
+        hover_hint(anchor, "More ways to insert", tooltip::Position::Top),
+        popup,
+        Message::Imports(Action::Menu(false)),
+    )
+    .align_end()
+    .into()
 }
 
 /// The dashed drop outline, colored for the canvas it covers.

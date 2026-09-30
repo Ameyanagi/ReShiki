@@ -1290,7 +1290,11 @@ impl App {
                         self.selected = ids;
                         self.changed(before);
                         self.tool = Tool::Select;
-                        self.status="Grouped · Option/Alt-click selects a member · Shift+Cmd/Ctrl+G ungroups".into();
+                        self.status = format!(
+                            "Grouped · {}-click selects a member · {} ungroups",
+                            shortcuts::keys(iced::keyboard::Modifiers::ALT, ""),
+                            shortcuts::label(&Message::Ungroup).unwrap_or_default()
+                        );
                     }
                     Err(e) => {
                         self.status = e;
@@ -1716,7 +1720,7 @@ impl App {
                     return Task::none();
                 }
                 let selection = editing::selection(&self.doc, &self.selected);
-                if let Ok(json) = serde_json::to_string(&selection) {
+                if let Ok(json) = serde_json::to_string(&selection.current()) {
                     if cut {
                         let before = self.doc.clone();
                         self.doc.delete(&self.selected);
@@ -3224,14 +3228,6 @@ async fn save_export(bytes: Vec<u8>, format: &'static str) -> Result<Option<Path
 }
 fn input_request(text: &str) -> Request {
     reshiki::clipboard::text_request(text)
-}
-
-fn platform_shortcut(macos: &'static str, other: &'static str) -> &'static str {
-    if cfg!(target_os = "macos") {
-        macos
-    } else {
-        other
-    }
 }
 
 #[cfg(test)]

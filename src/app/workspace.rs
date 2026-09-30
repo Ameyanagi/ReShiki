@@ -1,14 +1,15 @@
 use super::{
     App, InspectorTab, Message,
     icons::{Glyph, Icon},
+    shortcuts::keys,
 };
 use crate::canvas::layered::canvas;
 use crate::canvas::{Edit, MoleculeCanvas, Tool};
 use iced::widget::{
-    Space, button, checkbox, column, combo_box, container, responsive, rich_text, row, scrollable,
-    sensor, span, text, text_editor, tooltip,
+    Space, button, checkbox, column, combo_box, container, mouse_area, responsive, rich_text, row,
+    scrollable, sensor, span, text, text_editor, tooltip,
 };
-use iced::{Alignment, Border, Color, Element, Length, Theme};
+use iced::{Alignment, Border, Color, Element, Length, Theme, keyboard::Modifiers};
 use reshiki::bonds::BondPreset;
 use reshiki::palette::{Color as Paint, Palette, Row};
 use reshiki::typography::{Script, StyleChange};
@@ -640,19 +641,19 @@ impl App {
             divider(),
             icon_button(
                 Icon::New,
-                super::platform_shortcut("New · ⌘N", "New · Ctrl+N"),
+                keyed("New", &Message::New),
                 Some(Message::New),
                 false
             ),
             icon_button(
                 Icon::Open,
-                super::platform_shortcut("Open · ⌘O", "Open · Ctrl+O"),
+                keyed("Open", &Message::Open),
                 Some(Message::Open),
                 false
             ),
             icon_button(
                 Icon::Save,
-                super::platform_shortcut("Save · ⌘S", "Save · Ctrl+S"),
+                keyed("Save", &Message::Save),
                 Some(Message::Save),
                 false
             ),
@@ -660,7 +661,7 @@ impl App {
             divider(),
             icon_button(
                 Icon::Undo,
-                super::platform_shortcut("Undo · ⌘Z", "Undo · Ctrl+Z"),
+                keyed("Undo", &Message::Undo),
                 self.text_history_available(false)
                     .unwrap_or_else(|| self.history.can_undo())
                     .then_some(Message::Undo),
@@ -668,7 +669,7 @@ impl App {
             ),
             icon_button(
                 Icon::Redo,
-                super::platform_shortcut("Redo · ⇧⌘Z", "Redo · Ctrl+Shift+Z"),
+                keyed("Redo", &Message::Redo),
                 self.text_history_available(true)
                     .unwrap_or_else(|| self.history.can_redo())
                     .then_some(Message::Redo),
@@ -678,15 +679,13 @@ impl App {
             column![
                 text(title).size(12),
                 text(if self.dirty() {
-                    "Edited"
+                    "Edited".into()
                 } else if self.office_document() {
-                    "Office drawing · Ctrl+S updates Office"
+                    keyed("Office drawing", &Message::Save) + " updates Office"
+                } else if self.path.is_some() {
+                    "All changes saved".into()
                 } else {
-                    if self.path.is_some() {
-                        "All changes saved"
-                    } else {
-                        "Not saved to file"
-                    }
+                    "Not saved to file".into()
                 })
                 .size(10)
                 .style(muted_text)
@@ -734,6 +733,8 @@ impl App {
 
     fn tool_palette(&self) -> Element<'_, Message> {
         use reshiki::graphics::GraphicKind as G;
+        let ring = format!("Rings · r / Aromatic · {}", keys(Modifiers::SHIFT, "R"));
+        let chain = format!("Straight chain · {}", keys(Modifiers::SHIFT, "X"));
         let tools = [
             (Tool::Select, "Select / move · Space"),
             (Tool::Lasso, "Lasso select · l"),
@@ -747,11 +748,8 @@ impl App {
             (Tool::Bond(2), "Double bond · 2"),
             (Tool::Bond(3), "Triple bond · 3"),
             (self.toolbar.bond, "Other bonds"),
-            (self.toolbar.ring, "Rings · r / Aromatic · Shift R"),
-            (
-                Tool::Chain(reshiki::chains::ChainMode::Straight),
-                "Straight chain · Shift X",
-            ),
+            (self.toolbar.ring, ring.as_str()),
+            (Tool::Chain(reshiki::chains::ChainMode::Straight), &chain),
             (
                 Tool::Chain(reshiki::chains::ChainMode::Snaking),
                 "Snaking chain",
@@ -1050,7 +1048,7 @@ impl App {
         if let Some(summary) = summary.filter(|_| !fit.summary) {
             about.push(summary);
         }
-        about.push(hint.to_owned());
+        about.push(hint.into_owned());
         let mut row = row![hover_hint(
             text(if fit.short { short } else { name })
                 .size(12)
@@ -1130,8 +1128,11 @@ impl App {
 
     /// Options for the current tool, and the usage hint shown on the tool
     /// name. `summary` shows the selection summary of the selection tools.
-    fn tool_options(&self, summary: bool) -> (Vec<Element<'_, Message>>, &'static str) {
-        match self.tool {
+    fn tool_options(
+        &self,
+        summary: bool,
+    ) -> (Vec<Element<'_, Message>>, std::borrow::Cow<'static, str>) {
+        let (options, hint): (_, &'static str) = match self.tool {
             tool if tool.bond_preset().is_some() => (
                 vec![
                     crate::appearance::pick_list(BondPreset::ALL, tool.bond_preset(), |preset| {
@@ -1269,14 +1270,12 @@ impl App {
                     .into(),
                 ];
                 if preset != Preset::Regular {
-                    return (
-                        options,
-                        if preset == Preset::Cyclopentadiene {
-                            "Click / drag · Alt connects · Shift swaps double bonds"
-                        } else {
-                            "Click / drag · Alt connects by a bond"
-                        },
-                    );
+                    let hint = if preset == Preset::Cyclopentadiene {
+                        "Click / drag · Alt connects · Shift swaps double bonds"
+                    } else {
+                        "Click / drag · Alt connects by a bond"
+                    };
+                    return (options, hint.into());
                 }
                 options.extend([
                     text("Size").size(11).style(muted_text).into(),
@@ -1288,14 +1287,28 @@ impl App {
                     .text_size(12)
                     .padding(5)
                     .into(),
-                    checkbox(self.aromatic_ring)
-                        .label("Aromatic · Shift+R")
-                        .on_toggle(Message::AromaticRing)
-                        .size(14)
-                        .text_size(12)
-                        .into(),
+                    // A separate label draws the shortcut in the shortcut font.
+                    row![
+                        checkbox(self.aromatic_ring)
+                            .on_toggle(Message::AromaticRing)
+                            .size(14),
+                        mouse_area(keyed_text(
+                            "Aromatic",
+                            Some(keys(Modifiers::SHIFT, "R")),
+                            ""
+                        ))
+                        .on_press(Message::AromaticRing(!self.aromatic_ring))
+                        .interaction(iced::mouse::Interaction::Pointer),
+                    ]
+                    .spacing(8)
+                    .align_y(Alignment::Center)
+                    .into(),
                 ]);
-                (options, "Click / drag to attach · Shift+R keeps ring size")
+                let hint = format!(
+                    "Click / drag to attach · {} keeps ring size",
+                    keys(Modifiers::SHIFT, "R")
+                );
+                return (options, hint.into());
             }
             Tool::Arrow => (
                 vec![
@@ -1364,7 +1377,10 @@ impl App {
                     options.push(
                         hover_hint(
                             text(self.selection_summary()).size(11).style(muted_text),
-                            "Click a bond's middle to select it; Shift-click adds. Cmd/Ctrl+A selects the whole drawing.",
+                            format!(
+                                "Click a bond's middle to select it; Shift-click adds. {} selects the whole drawing.",
+                                keys(Modifiers::COMMAND, "A")
+                            ),
                             tooltip::Position::Bottom,
                         )
                         .into(),
@@ -1396,7 +1412,8 @@ impl App {
                 )
             }
             _ => (vec![], self.tool.hint()),
-        }
+        };
+        (options, hint.into())
     }
 
     pub(super) fn inspector_width(&self) -> f32 {
@@ -2070,32 +2087,43 @@ impl App {
 
     fn status_bar(&self) -> Element<'_, Message> {
         let summary = self.status.lines().next().unwrap_or(&self.status);
-        let message = text(summary)
-            .size(11)
-            .wrapping(text::Wrapping::None)
-            .style(|theme| iced::widget::text::Style {
-                color: Some(if self.error {
-                    crate::appearance::readable(
-                        crate::appearance::themed(theme, Color::from_rgb8(168, 52, 47)),
-                        &[theme.palette().background],
-                        reshiki::color_contrast::TEXT_TARGET,
-                    )
-                } else {
-                    crate::appearance::muted(theme)
-                }),
-            });
+        let error = self.error;
+        let style = move |theme: &Theme| iced::widget::text::Style {
+            color: Some(if error {
+                crate::appearance::readable(
+                    crate::appearance::themed(theme, Color::from_rgb8(168, 52, 47)),
+                    &[theme.palette().background],
+                    reshiki::color_contrast::TEXT_TARGET,
+                )
+            } else {
+                crate::appearance::muted(theme)
+            }),
+        };
+        // Key symbols, as in "⇧⌘G ungroups", use the shortcut font.
+        let message: Element<'_, Message> = if summary.contains(super::shortcuts::symbol) {
+            rich_text(super::shortcuts::spans(summary))
+                .size(11)
+                .wrapping(text::Wrapping::None)
+                .style(style)
+                .into()
+        } else {
+            text(summary)
+                .size(11)
+                .wrapping(text::Wrapping::None)
+                .style(style)
+                .into()
+        };
         // One line; the full text of long or multi-line messages is a tooltip.
         let room = if self.recovered.is_empty() {
             300.
         } else {
             160.
         };
-        let message: Element<'_, Message> =
-            if self.status.contains('\n') || text_width(summary, 11.) > room {
-                hover_hint(message, self.status.as_str(), tooltip::Position::Top).into()
-            } else {
-                message.into()
-            };
+        let message = if self.status.contains('\n') || text_width(summary, 11.) > room {
+            hover_hint(message, self.status.as_str(), tooltip::Position::Top).into()
+        } else {
+            message
+        };
         let mut status = row![].spacing(8).align_y(Alignment::Center);
         // Short enough to fit the minimum window beside Update available.
         if !self.recovered.is_empty() {
@@ -2470,6 +2498,13 @@ pub(super) fn command(label: &str, message: Message) -> button::Button<'_, Messa
         .on_press(message)
         .style(control(false))
 }
+/// `title · keys` with the shortcut of `message`, for plain-text hints.
+fn keyed(title: &str, message: &Message) -> String {
+    match super::shortcuts::label(message) {
+        Some(keys) => format!("{title} · {keys}"),
+        None => title.to_owned(),
+    }
+}
 /// A `command` labeled `label · keys` with the command's shortcut, in the
 /// notation of the menus.
 pub(super) fn keyed_command<'a>(label: &str, message: Message) -> button::Button<'a, Message> {
@@ -2480,7 +2515,7 @@ pub(super) fn keyed_command<'a>(label: &str, message: Message) -> button::Button
 }
 fn icon_button(
     icon: Icon,
-    hint: &'static str,
+    hint: impl Into<std::borrow::Cow<'static, str>>,
     message: Option<Message>,
     active: bool,
 ) -> Element<'static, Message> {
@@ -2488,7 +2523,7 @@ fn icon_button(
 }
 fn icon_button_at(
     icon: Icon,
-    hint: &'static str,
+    hint: impl Into<std::borrow::Cow<'static, str>>,
     message: Option<Message>,
     active: bool,
     position: tooltip::Position,

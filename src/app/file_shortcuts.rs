@@ -320,7 +320,7 @@ impl Operation for Fields {
     }
 }
 
-fn file_message(key: &keyboard::Key, modifiers: keyboard::Modifiers) -> Option<Message> {
+pub(super) fn file_message(key: &keyboard::Key, modifiers: keyboard::Modifiers) -> Option<Message> {
     if !modifiers.command() || modifiers.alt() {
         return None;
     }

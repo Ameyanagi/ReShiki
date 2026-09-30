@@ -29,8 +29,7 @@ fn main() -> iced::Result {
         }
         if std::env::args().any(|arg| arg == "--ole-server") {
             let result = reshiki_windows::run_office_server(|bytes| {
-                let document: reshiki::document::Document =
-                    serde_json::from_slice(bytes).map_err(|error| error.to_string())?;
+                let document = reshiki::document::Document::from_json(bytes)?;
                 reshiki::export::office_preview(&document)
             });
             if let Err(error) = result {

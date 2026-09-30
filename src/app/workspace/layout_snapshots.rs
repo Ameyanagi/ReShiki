@@ -166,6 +166,17 @@ fn import(app: &mut App) {
     let _ = app.update(Message::Inspector(InspectorTab::Import));
 }
 
+/// The Insert ▾ menu open over typed SMILES.
+fn import_menu(app: &mut App) {
+    use crate::app::import::Action;
+    import(app);
+    let paste = text_editor::Edit::Paste(std::sync::Arc::new("CCO".into()));
+    let _ = app.update(Message::Imports(Action::Edit(text_editor::Action::Edit(
+        paste,
+    ))));
+    let _ = app.update(Message::Imports(Action::Menu(true)));
+}
+
 /// The Transform section with tilt shown under More.
 fn transform(app: &mut App) {
     use crate::app::inspector::{Action, Section};
@@ -252,13 +263,15 @@ fn atom(app: &mut App) {
 
 type Setup = fn(&mut App);
 
-const STATES: [(&str, Setup); 15] = [
+const STATES: [(&str, Setup); 17] = [
     ("default", |_| {}),
     ("molecule", molecule),
     ("mixed", mixed),
     ("ring-tool", ring_tool),
     ("arc", arc),
     ("import", import),
+    ("import-menu", import_menu),
+    ("help", |app| app.help_open = true),
     ("transform", transform),
     ("unsaved", unsaved),
     ("recovery", recovery),
@@ -407,6 +420,93 @@ async fn the_color_popover_keeps_pointer_input_from_the_canvas() {
             "{event:?}"
         );
     }
+}
+
+/// The Import tab's Insert ▾ menu floats like the other menus: a press outside
+/// or Escape closes it, and choosing its item runs the command.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn the_insert_menu_closes_like_the_other_menus() {
+    use iced::keyboard::{self, Key, Modifiers, key};
+    let renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .unwrap();
+    let size = Size::new(1040., 680.);
+    let (mut app, _) = App::new();
+    import_menu(&mut app);
+    assert!(app.imports.menu);
+    let mut view = app.view();
+    let mut tree = Tree::new(view.as_widget());
+    let node = view
+        .as_widget_mut()
+        .layout(&mut tree, &renderer, &layout::Limits::new(size, size));
+    let element = view
+        .as_widget_mut()
+        .overlay(
+            &mut tree,
+            Layout::new(&node),
+            &renderer,
+            &Rectangle::with_size(size),
+            Vector::ZERO,
+        )
+        .expect("The menu is open");
+    let mut menu = overlay::Nested::new(element);
+    let node = menu.layout(&renderer, size);
+    fn find(layout: Layout<'_>) -> Option<Rectangle> {
+        let bounds = layout.bounds();
+        if bounds.width == 170. {
+            return Some(bounds);
+        }
+        layout.children().find_map(find)
+    }
+    let popup = find(Layout::new(&node)).expect("Menu layout");
+    assert!(popup.x + popup.width <= size.width, "{popup:?}");
+    let item = mouse::Cursor::Available(popup.center());
+    let outside = mouse::Cursor::Available(iced::Point::new(popup.x - 40., popup.center_y()));
+    let escape = Event::Keyboard(keyboard::Event::KeyPressed {
+        key: Key::Named(key::Named::Escape),
+        modified_key: Key::Named(key::Named::Escape),
+        physical_key: key::Physical::Code(key::Code::Escape),
+        location: keyboard::Location::Standard,
+        modifiers: Modifiers::empty(),
+        text: None,
+        repeat: false,
+    });
+    let press = Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left));
+    let release = Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left));
+    for (event, cursor, published) in [
+        (&press, outside, Some("Imports(Menu(false))")),
+        (&escape, item, Some("Imports(Menu(false))")),
+        (&press, item, None),
+        (&release, item, Some("Import")),
+    ] {
+        let mut messages = Vec::new();
+        let mut shell = iced::advanced::Shell::new(&mut messages);
+        menu.update(
+            event,
+            Layout::new(&node),
+            cursor,
+            &renderer,
+            &mut iced::advanced::clipboard::Null,
+            &mut shell,
+        );
+        assert_eq!(
+            shell.event_status(),
+            iced::event::Status::Captured,
+            "{event:?}"
+        );
+        let messages: Vec<_> = messages.iter().map(|m| format!("{m:?}")).collect();
+        assert_eq!(messages, Vec::from_iter(published), "{event:?}");
+    }
+    drop(menu);
+    drop(view);
+    // Choosing the item closes the menu, as the style bar and Export menus do.
+    let _ = app.update(Message::Import);
+    assert!(!app.imports.menu);
 }
 
 /// Every tool's context row fits the canvas of a 1040 px window with any

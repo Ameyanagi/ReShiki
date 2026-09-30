@@ -207,7 +207,10 @@ impl App {
                 self.hover = None;
                 self.fit_to_view = false;
                 self.error = false;
-                self.status = "Editing text · ⌘/Ctrl Enter applies · Escape cancels".into();
+                self.status = format!(
+                    "Editing text · {} applies · Escape cancels",
+                    super::shortcuts::keys(iced::keyboard::Modifiers::COMMAND, "Enter")
+                );
                 self.sync_style_inputs();
                 return iced::widget::operation::focus("inline-caption");
             }
@@ -419,11 +422,14 @@ impl App {
                     button(text("Done ↵").size(11))
                         .on_press(Message::InlineText(Action::Finish(true)))
                         .style(super::workspace::control(true)),
-                    text(super::platform_shortcut(
-                        "Apply · ⌘ Enter",
-                        "Apply · Ctrl Enter"
-                    ))
-                    .size(12),
+                    super::workspace::keyed_text(
+                        "Apply",
+                        Some(super::shortcuts::keys(
+                            iced::keyboard::Modifiers::COMMAND,
+                            "Enter"
+                        )),
+                        ""
+                    ),
                     iced::widget::tooltip::Position::Top,
                 )
             ]
