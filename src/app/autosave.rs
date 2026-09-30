@@ -1,4 +1,4 @@
-//! Ordered recovery operations. Only one worker may touch this window's file.
+//! Ordered recovery operations. Only one worker may touch a tab's draft file.
 use super::{App, Message};
 use iced::Task;
 use reshiki::{document::Document, recovery::Recovery};
@@ -13,6 +13,7 @@ pub struct Key {
     clear: bool,
 }
 
+/// A document's recovery draft.
 #[derive(Default)]
 pub(super) struct State {
     serial: u64,
@@ -21,30 +22,28 @@ pub(super) struct State {
     clear: bool,
     requested: bool,
     retire_candidate: Option<PathBuf>,
-    closing: Option<iced::window::Id>,
-    updating: bool,
 }
 
 impl State {
-    pub(super) fn cancel_close(&mut self) {
-        if self.closing() {
-            self.closing = None;
-            self.updating = false;
-            self.clear = false;
-            self.requested = true;
-        }
-    }
-
-    pub(super) fn closing(&self) -> bool {
-        self.closing.is_some() || self.updating
-    }
-
     pub(super) fn pending(&self) -> bool {
         self.pending.is_some()
     }
 
     pub(super) fn edited_draft(&mut self) {
         self.generation = self.generation.wrapping_add(1);
+    }
+}
+
+/// A window close or an update restart that waits for the recovery draft.
+#[derive(Default)]
+pub(super) struct Exit {
+    closing: Option<iced::window::Id>,
+    updating: bool,
+}
+
+impl Exit {
+    pub(super) fn closing(&self) -> bool {
+        self.closing.is_some() || self.updating
     }
 }
 
@@ -82,19 +81,27 @@ pub(super) async fn execute(path: PathBuf, work: Work) -> Result<Option<PathBuf>
 }
 
 impl App {
+    pub(super) fn cancel_close(&mut self) {
+        if self.exit.closing() {
+            self.exit = Exit::default();
+            self.tab.autosave.clear = false;
+            self.tab.autosave.requested = true;
+        }
+    }
+
     pub(super) fn clear_recovery(&mut self) {
-        self.autosave.edited_draft();
-        self.autosave.clear = self.recovery.is_some();
-        self.autosave.requested = false;
-        self.autosave.retire_candidate = None;
-        self.autosaved_revision = None;
-        self.autosave_status.clear();
+        self.tab.autosave.edited_draft();
+        self.tab.autosave.clear = self.tab.recovery.is_some();
+        self.tab.autosave.requested = false;
+        self.tab.autosave.retire_candidate = None;
+        self.tab.autosaved_revision = None;
+        self.tab.autosave_status.clear();
     }
 
     pub(super) fn request_autosave(&mut self) {
         if self.dirty() {
-            if self.autosaved_revision != Some(self.revision) {
-                self.autosave.requested = true;
+            if self.tab.autosaved_revision != Some(self.tab.revision) {
+                self.tab.autosave.requested = true;
             }
         } else {
             self.clear_recovery();
@@ -102,36 +109,36 @@ impl App {
     }
 
     pub(super) fn recover_candidate(&mut self, path: PathBuf) {
-        self.autosave.retire_candidate = Some(path);
-        self.autosave.requested = true;
-        self.autosaved_revision = None;
+        self.tab.autosave.retire_candidate = Some(path);
+        self.tab.autosave.requested = true;
+        self.tab.autosaved_revision = None;
     }
 
     pub(super) fn close_after_recovery(&mut self, id: iced::window::Id) -> Task<Message> {
         self.clear_recovery();
-        self.autosave.closing = Some(id);
+        self.exit.closing = Some(id);
         self.start_autosave()
     }
 
     pub(super) fn restart_after_recovery(&mut self) -> Task<Message> {
         self.clear_recovery();
-        self.autosave.updating = true;
+        self.exit.updating = true;
         self.start_autosave()
     }
 
     pub(super) fn start_autosave(&mut self) -> Task<Message> {
-        if self.autosave.closing() {
+        if self.exit.closing() {
             // Explicit saves and library writes must finish before the process
             // exits. Their completion messages are handled before this gate.
             if self.file_io.saving || self.templates.pending() {
                 return Task::none();
             }
-            if self.recovery.is_none() {
-                if self.autosave.updating {
-                    self.autosave.updating = false;
+            if self.tab.recovery.is_none() {
+                if self.exit.updating {
+                    self.exit.updating = false;
                     return Task::done(Message::Updates(super::updates::Action::RecoveryCleared));
                 }
-                if let Some(id) = self.autosave.closing.take() {
+                if let Some(id) = self.exit.closing.take() {
                     return iced::window::close(id);
                 }
             }
@@ -145,39 +152,39 @@ impl App {
     }
 
     fn prepare_autosave(&mut self) -> Option<(Key, PathBuf, Work)> {
-        if self.autosave.pending.is_some() {
+        if self.tab.autosave.pending.is_some() {
             return None;
         }
-        let Some(recovery) = &self.recovery else {
+        let Some(recovery) = &self.tab.recovery else {
             return None;
         };
         let path = recovery.session.clone();
-        let clear = self.autosave.clear;
+        let clear = self.tab.autosave.clear;
         let work = if clear {
-            self.autosave.clear = false;
+            self.tab.autosave.clear = false;
             Work::Clear
-        } else if self.autosave.requested {
-            self.autosave.requested = false;
-            if !self.dirty() || self.autosaved_revision == Some(self.revision) {
+        } else if self.tab.autosave.requested {
+            self.tab.autosave.requested = false;
+            if !self.dirty() || self.tab.autosaved_revision == Some(self.tab.revision) {
                 return None;
             }
             Work::Save {
                 document: Box::new(self.recovery_document()),
-                source: self.path.clone(),
-                retire_candidate: self.autosave.retire_candidate.clone(),
+                source: self.tab.path.clone(),
+                retire_candidate: self.tab.autosave.retire_candidate.clone(),
             }
         } else {
             return None;
         };
-        self.autosave.serial = self.autosave.serial.wrapping_add(1);
+        self.tab.autosave.serial = self.tab.autosave.serial.wrapping_add(1);
         let key = Key {
-            serial: self.autosave.serial,
-            generation: self.autosave.generation,
-            epoch: self.file_epoch,
-            revision: self.revision,
+            serial: self.tab.autosave.serial,
+            generation: self.tab.autosave.generation,
+            epoch: self.tab.file_epoch,
+            revision: self.tab.revision,
             clear,
         };
-        self.autosave.pending = Some(key);
+        self.tab.autosave.pending = Some(key);
         Some((key, path, work))
     }
 
@@ -186,14 +193,14 @@ impl App {
         key: Key,
         result: Result<Option<PathBuf>, String>,
     ) -> Task<Message> {
-        if self.autosave.pending != Some(key) {
+        if self.tab.autosave.pending != Some(key) {
             return Task::none();
         }
-        self.autosave.pending = None;
+        self.tab.autosave.pending = None;
         if let Ok(Some(path)) = &result {
             self.recovered.retain(|candidate| candidate.path != *path);
-            if self.autosave.retire_candidate.as_ref() == Some(path) {
-                self.autosave.retire_candidate = None;
+            if self.tab.autosave.retire_candidate.as_ref() == Some(path) {
+                self.tab.autosave.retire_candidate = None;
             }
         }
         if !key.clear && !self.dirty() {
@@ -204,47 +211,47 @@ impl App {
             self.clear_recovery();
             return Task::none();
         }
-        if key.generation != self.autosave.generation || key.epoch != self.file_epoch {
+        if key.generation != self.tab.autosave.generation || key.epoch != self.tab.file_epoch {
             return Task::none();
         }
         if key.clear {
             if result.is_ok()
-                && self.autosave.closing()
+                && self.exit.closing()
                 && (self.file_io.saving || self.templates.pending())
             {
-                self.autosave.clear = true;
+                self.tab.autosave.clear = true;
                 return Task::none();
             }
             match result {
                 Ok(_) => {
-                    if self.autosave.updating {
-                        self.autosave.updating = false;
+                    if self.exit.updating {
+                        self.exit.updating = false;
                         return Task::done(Message::Updates(
                             super::updates::Action::RecoveryCleared,
                         ));
                     }
-                    if let Some(id) = self.autosave.closing.take() {
+                    if let Some(id) = self.exit.closing.take() {
                         return iced::window::close(id);
                     }
                 }
                 Err(error) => {
-                    self.autosave.closing = None;
-                    if self.autosave.updating {
-                        self.autosave.updating = false;
+                    self.exit.closing = None;
+                    if self.exit.updating {
+                        self.exit.updating = false;
                         self.update_restart_failed(format!(
                             "Could not remove recovery draft: {error}"
                         ));
                     }
-                    self.autosave_status = format!("Could not remove recovery draft: {error}");
+                    self.tab.autosave_status = format!("Could not remove recovery draft: {error}");
                 }
             }
-        } else if key.revision == self.revision {
+        } else if key.revision == self.tab.revision {
             match result {
                 Ok(_) => {
-                    self.autosaved_revision = Some(self.revision);
-                    self.autosave_status = "Recovery draft saved".into();
+                    self.tab.autosaved_revision = Some(self.tab.revision);
+                    self.tab.autosave_status = "Recovery draft saved".into();
                 }
-                Err(error) => self.autosave_status = format!("Recovery save failed: {error}"),
+                Err(error) => self.tab.autosave_status = format!("Recovery save failed: {error}"),
             }
         }
         Task::none()
@@ -259,9 +266,9 @@ pub(super) mod tests {
     fn fixture() -> (App, tempfile::TempDir) {
         let (mut app, _) = App::new();
         let directory = tempfile::tempdir().unwrap();
-        app.recovery = Some(Recovery::in_directory(directory.path()).unwrap());
-        app.doc.add_atom("O", Point::default());
-        app.revision = 1;
+        app.tab.recovery = Some(Recovery::in_directory(directory.path()).unwrap());
+        app.tab.doc.add_atom("O", Point::default());
+        app.tab.revision = 1;
         (app, directory)
     }
 
@@ -276,17 +283,17 @@ pub(super) mod tests {
     }
 
     pub(in crate::app) fn finish_pending(app: &mut App) {
-        let key = app.autosave.pending.unwrap();
+        let key = app.tab.autosave.pending.unwrap();
         let work = if key.clear {
             Work::Clear
         } else {
             Work::Save {
                 document: Box::new(app.recovery_document()),
-                source: app.path.clone(),
+                source: app.tab.path.clone(),
                 retire_candidate: None,
             }
         };
-        let path = app.recovery.as_ref().unwrap().session.clone();
+        let path = app.tab.recovery.as_ref().unwrap().session.clone();
         let (key, result) = run((key, path, work));
         assert!(result.is_ok(), "{result:?}");
         let _ = app.update(Message::Autosaved(key, result));
@@ -299,8 +306,8 @@ pub(super) mod tests {
         let old = app.prepare_autosave().unwrap();
         let path = old.1.clone();
         app.clear_recovery();
-        app.file_epoch += 1;
-        app.doc.atoms[0].element = "N".into();
+        app.tab.file_epoch += 1;
+        app.tab.doc.atoms[0].element = "N".into();
         app.request_autosave();
         assert!(
             app.prepare_autosave().is_none(),
@@ -308,8 +315,8 @@ pub(super) mod tests {
         );
         let (key, result) = run(old);
         let _ = app.autosaved(key, result);
-        assert_eq!(app.autosaved_revision, None);
-        assert!(app.autosave_status.is_empty());
+        assert_eq!(app.tab.autosaved_revision, None);
+        assert!(app.tab.autosave_status.is_empty());
         let clear = app.prepare_autosave().unwrap();
         assert!(clear.0.clear);
         let (key, result) = run(clear);
@@ -321,7 +328,7 @@ pub(super) mod tests {
         let saved: reshiki::recovery::Snapshot =
             serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
         assert_eq!(saved.document.atoms[0].element, "N");
-        assert_eq!(app.autosaved_revision, Some(app.revision));
+        assert_eq!(app.tab.autosaved_revision, Some(app.tab.revision));
     }
 
     #[test]
@@ -330,19 +337,19 @@ pub(super) mod tests {
         app.request_autosave();
         let first = app.prepare_autosave().unwrap();
         for element in ["N", "S", "C"] {
-            app.doc.atoms[0].element = element.into();
-            app.revision += 1;
+            app.tab.doc.atoms[0].element = element.into();
+            app.tab.revision += 1;
             app.request_autosave();
             assert!(app.prepare_autosave().is_none());
         }
         let _ = app.autosaved(first.0, Err("obsolete error".into()));
-        assert!(app.autosave_status.is_empty());
+        assert!(app.tab.autosave_status.is_empty());
         let latest = app.prepare_autosave().unwrap();
         let (key, result) = run(latest);
         let _ = app.autosaved(key, result);
-        assert_eq!(app.autosaved_revision, Some(4));
+        assert_eq!(app.tab.autosaved_revision, Some(4));
         assert!(app.prepare_autosave().is_none());
-        let path = app.recovery.as_ref().unwrap().session.clone();
+        let path = app.tab.recovery.as_ref().unwrap().session.clone();
         let saved: reshiki::recovery::Snapshot =
             serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
         assert_eq!(saved.document.atoms[0].element, "C");
@@ -351,17 +358,17 @@ pub(super) mod tests {
     #[test]
     fn undo_to_saved_state_clears_an_in_flight_first_save() {
         let (mut app, directory) = fixture();
-        app.history.commit(app.saved.clone(), &app.doc);
+        app.tab.history.commit(app.tab.saved.clone(), &app.tab.doc);
         let other = Recovery::in_directory(directory.path()).unwrap();
-        other.save(&app.doc, None).unwrap();
+        other.save(&app.tab.doc, None).unwrap();
         let other_contents = std::fs::read(&other.session).unwrap();
         app.request_autosave();
         let old = app.prepare_autosave().unwrap();
         let path = old.1.clone();
         let _ = app.update(Message::Undo);
         assert!(!app.dirty());
-        assert_ne!(app.revision, old.0.revision);
-        assert_eq!(app.autosaved_revision, None);
+        assert_ne!(app.tab.revision, old.0.revision);
+        assert_eq!(app.tab.autosaved_revision, None);
         assert!(app.prepare_autosave().is_none(), "Wait for the old writer");
 
         let (key, result) = run(old);
@@ -369,14 +376,14 @@ pub(super) mod tests {
         assert!(path.exists(), "The old worker persisted the undone drawing");
         let _ = app.update(Message::Autosaved(key, result));
         assert!(
-            app.autosave.pending.unwrap().clear,
+            app.tab.autosave.pending.unwrap().clear,
             "No further Tick is needed"
         );
         finish_pending(&mut app);
         assert!(!path.exists());
         assert_eq!(std::fs::read(other.session).unwrap(), other_contents);
-        assert_eq!(app.autosaved_revision, None);
-        assert!(!app.autosave.pending());
+        assert_eq!(app.tab.autosaved_revision, None);
+        assert!(!app.tab.autosave.pending());
     }
 
     #[test]
@@ -384,7 +391,7 @@ pub(super) mod tests {
         use iced::widget::text_editor::{Action, Edit};
         for cancel in [false, true] {
             let (mut app, _directory) = fixture();
-            app.saved = app.doc.clone();
+            app.tab.saved = app.tab.doc.clone();
             let _ = app.update(Message::InlineText(
                 super::super::inline_text::Action::Begin(None, Point::default()),
             ));
@@ -400,35 +407,40 @@ pub(super) mod tests {
                 Message::Undo
             });
             assert!(!app.dirty());
-            assert_eq!(app.revision, old.0.revision);
-            assert_ne!(app.autosave.generation, old.0.generation);
+            assert_eq!(app.tab.revision, old.0.revision);
+            assert_ne!(app.tab.autosave.generation, old.0.generation);
             let (key, result) = run(old);
             assert!(result.is_ok());
             let snapshot: reshiki::recovery::Snapshot =
                 serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
             assert_eq!(snapshot.document.annotations[0].text, "Unsaved caption");
             let _ = app.update(Message::Autosaved(key, result));
-            assert!(app.autosave.pending.unwrap().clear);
+            assert!(app.tab.autosave.pending.unwrap().clear);
             finish_pending(&mut app);
             assert!(!path.exists());
-            assert_eq!(app.doc, app.saved);
-            assert_eq!(app.inline_text.is_some(), !cancel);
+            assert_eq!(app.tab.doc, app.tab.saved);
+            assert_eq!(app.tab.inline_text.is_some(), !cancel);
         }
     }
 
     #[test]
     fn stale_failed_save_after_undo_still_queues_recovery_cleanup() {
         let (mut app, _directory) = fixture();
-        app.history.commit(app.saved.clone(), &app.doc);
-        app.recovery.as_ref().unwrap().save(&app.doc, None).unwrap();
+        app.tab.history.commit(app.tab.saved.clone(), &app.tab.doc);
+        app.tab
+            .recovery
+            .as_ref()
+            .unwrap()
+            .save(&app.tab.doc, None)
+            .unwrap();
         app.request_autosave();
         let old = app.prepare_autosave().unwrap();
         let _ = app.update(Message::Undo);
         let status = app.status.clone();
         let _ = app.update(Message::Autosaved(old.0, Err("obsolete error".into())));
-        assert!(app.autosave.pending.unwrap().clear);
+        assert!(app.tab.autosave.pending.unwrap().clear);
         assert_eq!(app.status, status);
-        assert!(app.autosave_status.is_empty());
+        assert!(app.tab.autosave_status.is_empty());
         finish_pending(&mut app);
         assert!(!old.1.exists());
     }
@@ -436,7 +448,7 @@ pub(super) mod tests {
     #[test]
     fn redo_during_stale_save_cleanup_preserves_latest_recovery() {
         let (mut app, _directory) = fixture();
-        app.history.commit(app.saved.clone(), &app.doc);
+        app.tab.history.commit(app.tab.saved.clone(), &app.tab.doc);
         app.request_autosave();
         let old = app.prepare_autosave().unwrap();
         let path = old.1.clone();
@@ -464,7 +476,7 @@ pub(super) mod tests {
         let snapshot: reshiki::recovery::Snapshot =
             serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
         assert_eq!(snapshot.document.atoms[0].element, "O");
-        assert_eq!(app.autosaved_revision, Some(app.revision));
+        assert_eq!(app.tab.autosaved_revision, Some(app.tab.revision));
     }
 
     #[test]
@@ -472,10 +484,10 @@ pub(super) mod tests {
         let (mut app, _directory) = fixture();
         app.request_autosave();
         let first = app.prepare_autosave().unwrap();
-        app.autosave.edited_draft();
+        app.tab.autosave.edited_draft();
         let (key, result) = run(first);
         let _ = app.autosaved(key, result);
-        assert_eq!(app.autosaved_revision, None);
+        assert_eq!(app.tab.autosaved_revision, None);
     }
 
     #[test]
@@ -490,16 +502,16 @@ pub(super) mod tests {
         let clear = app.prepare_autosave().unwrap();
         let (key, result) = run(clear);
         assert!(app.autosaved(key, result).units() > 0);
-        assert!(!app.autosave.closing());
+        assert!(!app.exit.closing());
 
         let _ = app.close_after_recovery(id);
-        let key = app.autosave.pending.unwrap();
+        let key = app.tab.autosave.pending.unwrap();
         assert_eq!(
             app.autosaved(key, Err("permission denied".into())).units(),
             0
         );
-        assert!(!app.autosave.closing());
-        assert!(app.autosave_status.contains("permission denied"));
+        assert!(!app.exit.closing());
+        assert!(app.tab.autosave_status.contains("permission denied"));
     }
 
     #[test]
@@ -509,7 +521,7 @@ pub(super) mod tests {
         std::fs::write(&original, "original recovery").unwrap();
         let missing = directory.path().join("missing/draft.json");
         let work = Work::Save {
-            document: Box::new(app.doc.clone()),
+            document: Box::new(app.tab.doc.clone()),
             source: None,
             retire_candidate: Some(original.clone()),
         };
@@ -526,7 +538,7 @@ pub(super) mod tests {
         assert_eq!(result.as_ref().unwrap(), &Some(original.clone()));
         let _ = app.autosaved(key, result);
         assert!(!original.exists());
-        assert!(app.recovery.as_ref().unwrap().session.exists());
+        assert!(app.tab.recovery.as_ref().unwrap().session.exists());
     }
 
     #[test]
@@ -548,7 +560,7 @@ pub(super) mod tests {
         let _ = app.autosaved(key, result);
         assert!(!original.exists());
         assert!(path.exists());
-        assert!(app.autosave.retire_candidate.is_none());
+        assert!(app.tab.autosave.retire_candidate.is_none());
     }
 
     #[test]
@@ -557,7 +569,7 @@ pub(super) mod tests {
         app.request_autosave();
         let old = app.prepare_autosave().unwrap();
         assert_eq!(app.restart_after_recovery().units(), 0);
-        assert!(app.autosave.closing());
+        assert!(app.exit.closing());
         let (key, result) = run(old);
         assert_eq!(app.autosaved(key, result).units(), 0);
         let (key, result) = run(app.prepare_autosave().unwrap());
@@ -570,13 +582,13 @@ pub(super) mod tests {
         app.file_io.saving = true;
         let id = iced::window::Id::unique();
         assert_eq!(app.close_after_recovery(id).units(), 0);
-        assert!(!app.autosave.pending());
-        let before = app.doc.clone();
+        assert!(!app.tab.autosave.pending());
+        let before = app.tab.doc.clone();
         let _ = app.update(Message::ContextKey("n".into()));
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         app.file_io.saving = false;
         assert!(app.start_autosave().units() > 0);
-        assert!(app.autosave.pending.unwrap().clear);
+        assert!(app.tab.autosave.pending.unwrap().clear);
     }
 
     #[test]
@@ -585,19 +597,19 @@ pub(super) mod tests {
         app.file_io.saving = true;
         let _ = app.close_after_recovery(iced::window::Id::unique());
         let _ = app.update(Message::Saved(
-            app.file_epoch,
-            Box::new(app.doc.clone()),
+            app.tab.file_epoch,
+            Box::new(app.tab.doc.clone()),
             Err("disk full".into()),
         ));
-        assert!(!app.autosave.closing());
+        assert!(!app.exit.closing());
         assert!(app.error);
         assert_eq!(app.status, "disk full");
         assert!(
-            !app.autosave.pending.unwrap().clear,
+            !app.tab.autosave.pending.unwrap().clear,
             "Closing failure must save, not discard recovery"
         );
         finish_pending(&mut app);
-        assert!(app.recovery.as_ref().unwrap().session.exists());
+        assert!(app.tab.recovery.as_ref().unwrap().session.exists());
     }
 
     #[test]
@@ -605,11 +617,11 @@ pub(super) mod tests {
         let (mut app, _directory) = fixture();
         app.updates.restarting = true;
         let _ = app.restart_after_recovery();
-        let key = app.autosave.pending.unwrap();
+        let key = app.tab.autosave.pending.unwrap();
         assert_eq!(app.autosaved(key, Err("access denied".into())).units(), 0);
         assert!(!app.updates.restarting);
-        assert!(!app.autosave.closing());
-        assert!(app.autosave_status.contains("access denied"));
+        assert!(!app.exit.closing());
+        assert!(app.tab.autosave_status.contains("access denied"));
     }
 
     #[test]
@@ -635,30 +647,31 @@ pub(super) mod tests {
                 .unwrap();
         for copies in [1, 4] {
             let (mut app, _directory) = fixture();
-            app.doc = Document::default();
+            app.tab.doc = Document::default();
             for copy in 0..copies {
                 reshiki::editing::append(
-                    &mut app.doc,
+                    &mut app.tab.doc,
                     &gallery,
                     Point::new(copy as f32 * 1800., 0.),
                 );
             }
             measure(&format!("gallery_{copies}x_recovery_synchronous"), || {
-                app.recovery
+                app.tab
+                    .recovery
                     .as_ref()
                     .unwrap()
-                    .save(&app.recovery_document(), app.path.clone())
+                    .save(&app.recovery_document(), app.tab.path.clone())
                     .unwrap();
             });
             measure(&format!("gallery_{copies}x_recovery_dispatch"), || {
-                app.autosave.pending = None;
-                app.autosaved_revision = None;
+                app.tab.autosave.pending = None;
+                app.tab.autosaved_revision = None;
                 let _ = black_box(app.update(Message::Tick));
             });
             let runtime = tokio::runtime::Runtime::new().unwrap();
             measure(&format!("gallery_{copies}x_recovery_roundtrip"), || {
-                app.autosave.pending = None;
-                app.autosaved_revision = None;
+                app.tab.autosave.pending = None;
+                app.tab.autosaved_revision = None;
                 app.request_autosave();
                 let (key, path, work) = app.prepare_autosave().unwrap();
                 let result = runtime.block_on(execute(path, work));

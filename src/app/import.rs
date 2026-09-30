@@ -292,17 +292,17 @@ impl App {
                 }
                 Plan::Open(path) => return self.pending(Pending::Open(Some(path))),
                 Plan::Insert(paths) => {
-                    if self.busy {
+                    if self.tab.busy {
                         self.error = true;
                         self.status = "Wait for the current operation, then import again".into();
                         return Task::none();
                     }
-                    self.busy = true;
+                    self.tab.busy = true;
                     self.error = false;
                     self.status = "Importing…".into();
                     let ticket = Ticket {
-                        epoch: self.file_epoch,
-                        revision: self.revision,
+                        epoch: self.tab.file_epoch,
+                        revision: self.tab.revision,
                     };
                     return Task::perform(load(self.engine.clone(), paths), move |result| {
                         Message::Imports(Action::Loaded(ticket, Box::new(result)))
@@ -310,15 +310,15 @@ impl App {
                 }
             },
             Action::Loaded(ticket, result) => {
-                self.busy = false;
-                if ticket.epoch != self.file_epoch {
+                self.tab.busy = false;
+                if ticket.epoch != self.tab.file_epoch {
                     return Task::none();
                 }
-                if ticket.revision != self.revision
-                    || self.inline_text.is_some()
-                    || self.atom_text.is_some()
-                    || self.joining.is_some()
-                    || self.cleanup.is_some()
+                if ticket.revision != self.tab.revision
+                    || self.tab.inline_text.is_some()
+                    || self.tab.atom_text.is_some()
+                    || self.tab.joining.is_some()
+                    || self.tab.cleanup.is_some()
                 {
                     self.status =
                         "Drawing changed while importing · Import again when ready".into();
@@ -351,7 +351,7 @@ impl App {
             self.status = format!("{} contains no drawing", batch.label);
             return;
         }
-        let gap = self.doc.drawing_style.bond_length_world;
+        let gap = self.tab.doc.drawing_style.bond_length_world;
         let width = parts.iter().map(|(_, (lo, hi))| hi.x - lo.x).sum::<f32>()
             + gap * (parts.len() - 1) as f32;
         let height = parts
@@ -359,14 +359,14 @@ impl App {
             .map(|(_, (lo, hi))| hi.y - lo.y)
             .fold(0., f32::max);
         let at = self.drop_point(width, height);
-        let before = self.doc.clone();
+        let before = self.tab.doc.clone();
         let mut x = at.x - width / 2.;
         let mut selected = vec![];
         for (drawing, (lo, hi)) in parts {
             let offset = Point::new(x - lo.x, at.y - (lo.y + hi.y) / 2.);
-            let ids = reshiki::editing::append(&mut self.doc, drawing, offset);
+            let ids = reshiki::editing::append(&mut self.tab.doc, drawing, offset);
             if ids.is_empty() {
-                self.doc = before;
+                self.tab.doc = before;
                 self.error = true;
                 self.status = format!("Could not insert {}", batch.label);
                 return;
@@ -374,11 +374,11 @@ impl App {
             selected.extend(ids);
             x += hi.x - lo.x + gap;
         }
-        self.selected = selected;
+        self.tab.selected = selected;
         self.error = false;
         self.changed(before);
         if self.error {
-            self.selected.clear();
+            self.tab.selected.clear();
             return;
         }
         self.tool = Tool::Select;
@@ -403,12 +403,13 @@ impl App {
     /// system reports it again after the drop.
     fn drop_point(&self, width: f32, height: f32) -> Point {
         let at = self
+            .tab
             .hover
-            .filter(|&(_, epoch)| epoch == self.file_epoch)
-            .map_or(self.camera.center, |(at, _)| at);
+            .filter(|&(_, epoch)| epoch == self.tab.file_epoch)
+            .map_or(self.tab.camera.center, |(at, _)| at);
         let canvas = Rectangle::with_size(self.viewport);
         let paper = self.guides.paper(canvas);
-        let camera = self.camera;
+        let camera = self.tab.camera;
         let world = |x: f32, y: f32| {
             Point::new(
                 (x - canvas.width / 2.) / camera.zoom + camera.center.x,
@@ -432,13 +433,14 @@ impl App {
 
     /// Moves the view only when the new selection would be clipped.
     fn reveal_inserted(&mut self) {
-        let Some((lo, hi)) = reshiki::scene::selection_bounds(&self.doc, &self.selected) else {
+        let Some((lo, hi)) = reshiki::scene::selection_bounds(&self.tab.doc, &self.tab.selected)
+        else {
             return;
         };
         let canvas = Rectangle::with_size(self.viewport);
         let paper = self.guides.paper(canvas);
-        if !(paper.contains(self.camera.screen(lo, canvas))
-            && paper.contains(self.camera.screen(hi, canvas)))
+        if !(paper.contains(self.tab.camera.screen(lo, canvas))
+            && paper.contains(self.tab.camera.screen(hi, canvas)))
         {
             self.reveal_bounds(lo, hi);
         }
@@ -446,7 +448,7 @@ impl App {
 
     pub(super) fn import_panel(&self) -> Element<'_, Message> {
         let state = &self.imports;
-        let ready = state.format.is_some() && !self.busy;
+        let ready = state.format.is_some() && !self.tab.busy;
         let editor = text_editor(&state.input)
             .id(INPUT)
             .placeholder(format!(
@@ -535,7 +537,7 @@ impl App {
                 tooltip::Position::Top,
             ),
             field("Paste picture").on_press_maybe(
-                (reshiki::clipboard::available() && !self.clipboard_busy)
+                (reshiki::clipboard::available() && !self.tab.clipboard_busy)
                     .then_some(Message::PastePicture)
             ),
             crate::appearance::pick_list(EXAMPLES, None::<Example>, |e| Message::Example(e.1))
@@ -570,7 +572,7 @@ impl App {
         let plan = plan(&self.imports.hovered);
         let zone = Zone {
             error: matches!(plan, Plan::Reject(_)),
-            dark: self.doc.canvas_theme.is_dark(),
+            dark: self.tab.doc.canvas_theme.is_dark(),
         };
         let accent = zone.colors(false).0;
         let tag = container(text(plan.label()).size(12))
@@ -718,7 +720,7 @@ mod tests {
     }
     fn ready() -> App {
         let (mut app, _) = App::new();
-        app.busy = false;
+        app.tab.busy = false;
         app
     }
 
@@ -812,26 +814,26 @@ mod tests {
         }
         assert_eq!(app.imports.hovered, paths(&["a.mol", "b.png"]));
         let _ = app.update(Message::Imports(Action::Dropped("a.mol".into())));
-        assert!(!app.busy, "Waits for the second file");
+        assert!(!app.tab.busy, "Waits for the second file");
         assert_eq!(app.imports.hovered.len(), 2);
         assert!(
             app.update(Message::Imports(Action::Dropped("b.png".into())))
                 .units()
                 > 0
         );
-        assert!(app.busy && app.imports.hovered.is_empty() && app.imports.dropped.is_empty());
+        assert!(app.tab.busy && app.imports.hovered.is_empty() && app.imports.dropped.is_empty());
         assert_eq!(app.status, "Importing…");
 
         let mut app = ready();
-        app.doc.add_atom("C", Point::default());
-        let before = app.doc.clone();
+        app.tab.doc.add_atom("C", Point::default());
+        let before = app.tab.doc.clone();
         let _ = app.update(Message::Imports(Action::Hovered("notes.docx".into())));
         let _ = app.update(Message::Imports(Action::Left));
         assert!(app.imports.hovered.is_empty());
         let _ = app.update(Message::Imports(Action::Hovered("notes.docx".into())));
         let _ = app.update(Message::Imports(Action::Dropped("notes.docx".into())));
-        assert_eq!(app.doc, before);
-        assert!(app.error && !app.busy);
+        assert_eq!(app.tab.doc, before);
+        assert!(app.error && !app.tab.busy);
         assert_eq!(app.status, "Can't import .docx");
     }
 
@@ -845,7 +847,7 @@ mod tests {
                 > 0
         );
         assert!(app.pending.is_none(), "A saved drawing opens at once");
-        app.doc.add_atom("O", Point::default());
+        app.tab.doc.add_atom("O", Point::default());
         let _ = app.update(Message::Imports(Action::Files(vec![path.clone()])));
         assert!(matches!(&app.pending, Some(Pending::Open(Some(p))) if *p == path));
     }
@@ -871,48 +873,49 @@ mod tests {
 
         let mut app = ready();
         app.viewport = iced::Size::new(900., 600.);
-        app.doc.add_atom("N", Point::new(-300., 0.));
+        app.tab.doc.add_atom("N", Point::new(-300., 0.));
         let at = Point::new(40., 25.);
         let _ = app.update(Message::Canvas(Edit::Hover(Some(at))));
-        let before = app.doc.clone();
+        let before = app.tab.doc.clone();
         let ticket = Ticket {
-            epoch: app.file_epoch,
-            revision: app.revision,
+            epoch: app.tab.file_epoch,
+            revision: app.tab.revision,
         };
-        app.busy = true;
+        app.tab.busy = true;
         let loaded = |ticket, batch: &Batch| {
             Message::Imports(Action::Loaded(ticket, Box::new(Ok(batch.clone()))))
         };
         let _ = app.update(loaded(ticket, &batch));
-        assert!(!app.busy && !app.error, "{}", app.status);
-        let after = app.doc.clone();
+        assert!(!app.tab.busy && !app.error, "{}", app.status);
+        let after = app.tab.doc.clone();
         assert!(before.atoms.iter().all(|a| after.atom(a.id) == Some(a)));
         assert_eq!(after.graphics.len(), 1);
-        let (lo, hi) = reshiki::scene::selection_bounds(&after, &app.selected).ok_or("bounds")?;
+        let (lo, hi) =
+            reshiki::scene::selection_bounds(&after, &app.tab.selected).ok_or("bounds")?;
         assert!(((lo.x + hi.x) / 2. - at.x).abs() < 1. && ((lo.y + hi.y) / 2. - at.y).abs() < 1.);
         // Left to right in file order.
         let x = |ids: &[u64]| reshiki::scene::selection_bounds(&after, ids).map(|(lo, _)| lo.x);
-        let mol: Vec<_> = app.selected.iter().copied().take(3).collect();
+        let mol: Vec<_> = app.tab.selected.iter().copied().take(3).collect();
         let picture = [after.graphics[0].id];
         assert!(x(&mol) < x(&picture));
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, after);
+        assert_eq!(app.tab.doc, after);
 
         // A newer drawing or file wins over a late result.
         for new_file in [false, true] {
             let ticket = Ticket {
-                epoch: app.file_epoch,
-                revision: app.revision,
+                epoch: app.tab.file_epoch,
+                revision: app.tab.revision,
             };
             if new_file {
-                app.file_epoch += 1;
+                app.tab.file_epoch += 1;
             } else {
-                app.revision += 1;
+                app.tab.revision += 1;
             }
             let _ = app.update(loaded(ticket, &batch));
-            assert_eq!(app.doc, after);
+            assert_eq!(app.tab.doc, after);
         }
         // A pointer that left the canvas, as it does to reach Finder or the
         // Import tab, leaves files at the view center.
@@ -920,15 +923,15 @@ mod tests {
         let _ = app.update(Message::Canvas(Edit::Hover(Some(at))));
         assert_eq!(app.drop_point(0., 0.), at);
         let _ = app.update(Message::Canvas(Edit::Hover(None)));
-        assert_eq!(app.drop_point(0., 0.), app.camera.center);
+        assert_eq!(app.drop_point(0., 0.), app.tab.camera.center);
         // Drawings dropped near an edge move inward rather than scroll the view.
-        let edge = app.camera.center.x + app.viewport.width / 2. / app.camera.zoom;
+        let edge = app.tab.camera.center.x + app.viewport.width / 2. / app.tab.camera.zoom;
         let _ = app.update(Message::Canvas(Edit::Hover(Some(Point::new(
             edge - 1.,
             at.y,
         )))));
         let x = app.drop_point(200., 0.).x;
-        assert!(x + 100. < edge && x > app.camera.center.x, "{x}");
+        assert!(x + 100. < edge && x > app.tab.camera.center.x, "{x}");
         Ok(())
     }
 
@@ -952,7 +955,7 @@ mod tests {
                 .units()
                 > 0
         );
-        assert!(app.busy, "{}", app.status);
+        assert!(app.tab.busy, "{}", app.status);
         assert!(!response.document.ok_or("drawing")?.atoms.is_empty());
         Ok(())
     }

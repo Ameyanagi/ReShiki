@@ -197,18 +197,20 @@ fn card<'a>(body: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
 }
 impl App {
     fn property_key(&self) -> Option<PropertyKey> {
-        if self.selected.is_empty() {
+        if self.tab.selected.is_empty() {
             return None;
         }
         let ids: HashSet<_> = self
+            .tab
             .doc
-            .expand_abbreviation_selection(&self.selected)
+            .expand_abbreviation_selection(&self.tab.selected)
             .into_iter()
             .collect();
         Some(PropertyKey {
-            revision: self.revision,
-            epoch: self.file_epoch,
+            revision: self.tab.revision,
+            epoch: self.tab.file_epoch,
             atoms: self
+                .tab
                 .doc
                 .atoms
                 .iter()
@@ -219,25 +221,26 @@ impl App {
     }
 
     fn property_document(&self, key: &PropertyKey) -> Document {
-        let mut part = reshiki::editing::selection(&self.doc, &key.atoms);
+        let mut part = reshiki::editing::selection(&self.tab.doc, &key.atoms);
         reshiki::atom_labels::clear_computed(&mut part);
         part
     }
 
     fn property_request_key(&self) -> PropertyKey {
         self.property_key().unwrap_or_else(|| PropertyKey {
-            revision: self.revision,
-            epoch: self.file_epoch,
-            atoms: self.doc.atoms.iter().map(|a| a.id).collect(),
+            revision: self.tab.revision,
+            epoch: self.tab.file_epoch,
+            atoms: self.tab.doc.atoms.iter().map(|a| a.id).collect(),
         })
     }
 
     pub(super) fn property_analysis(&self) -> Option<&Analysis> {
-        if self.selected.is_empty() && self.analysis.is_some() {
-            return self.analysis.as_ref();
+        if self.tab.selected.is_empty() && self.tab.analysis.is_some() {
+            return self.tab.analysis.as_ref();
         }
         let key = self.property_request_key();
-        self.inspector_ui
+        self.tab
+            .inspector_ui
             .properties
             .as_ref()
             .filter(|(saved, _)| *saved == key)
@@ -245,13 +248,13 @@ impl App {
     }
 
     pub(super) fn properties_subscription(&self) -> Subscription<Message> {
-        if reshiki::attachments::present(&self.doc)
+        if reshiki::attachments::present(&self.tab.doc)
             || !self.inspector_open
             || self.inspector_tab != InspectorTab::Properties
-            || self.busy
-            || self.erase_stroke
-            || self.cleanup.is_some()
-            || self.inspector_ui.pending.is_some()
+            || self.tab.busy
+            || self.tab.erase_stroke
+            || self.tab.cleanup.is_some()
+            || self.tab.inspector_ui.pending.is_some()
         {
             return Subscription::none();
         }
@@ -260,6 +263,7 @@ impl App {
             return Subscription::none();
         }
         if self
+            .tab
             .inspector_ui
             .properties
             .as_ref()
@@ -276,8 +280,8 @@ impl App {
     pub(super) fn inspector_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::RingArc => {
-                let before = self.doc.clone();
-                match reshiki::ring_arcs::toggle(&mut self.doc, &self.selected) {
+                let before = self.tab.doc.clone();
+                match reshiki::ring_arcs::toggle(&mut self.tab.doc, &self.tab.selected) {
                     Ok(on) => {
                         self.changed(before);
                         self.status = if on {
@@ -296,10 +300,10 @@ impl App {
                 Task::none()
             }
             Action::Centroid => {
-                let before = self.doc.clone();
-                match reshiki::projection::add_centroid(&mut self.doc, &self.selected) {
+                let before = self.tab.doc.clone();
+                match reshiki::projection::add_centroid(&mut self.tab.doc, &self.tab.selected) {
                     Ok(id) => {
-                        self.selected = vec![id];
+                        self.tab.selected = vec![id];
                         self.changed(before);
                         self.status =
                             "Centroid added · Draw a dashed contact from this point".into();
@@ -312,10 +316,10 @@ impl App {
                 Task::none()
             }
             Action::Attachment(kind) => {
-                let before = self.doc.clone();
-                match reshiki::attachments::add(&mut self.doc, &self.selected, kind) {
+                let before = self.tab.doc.clone();
+                match reshiki::attachments::add(&mut self.tab.doc, &self.tab.selected, kind) {
                     Ok(id) => {
-                        self.selected = vec![id];
+                        self.tab.selected = vec![id];
                         self.changed(before);
                         self.status = "Attachment point added · Draw a bond from * to the metal or substituent".into();
                         self.error = false;
@@ -328,19 +332,19 @@ impl App {
                 Task::none()
             }
             Action::DepthBonds => {
-                let before = self.doc.clone();
-                reshiki::projection::depth_bonds(&mut self.doc, &self.selected);
+                let before = self.tab.doc.clone();
+                reshiki::projection::depth_bonds(&mut self.tab.doc, &self.tab.selected);
                 self.changed(before);
                 Task::none()
             }
             Action::RefreshProperties => {
                 let key = self.property_request_key();
-                if key.atoms.is_empty() || self.inspector_ui.pending.is_some() {
+                if key.atoms.is_empty() || self.tab.inspector_ui.pending.is_some() {
                     return Task::none();
                 }
                 let request = Request::molecule("analyze", self.property_document(&key));
-                self.inspector_ui.pending = Some(key.clone());
-                self.inspector_ui.properties = None;
+                self.tab.inspector_ui.pending = Some(key.clone());
+                self.tab.inspector_ui.properties = None;
                 let engine = self.engine.clone();
                 Task::perform(
                     async move {
@@ -359,24 +363,24 @@ impl App {
                 )
             }
             Action::PropertiesCalculated(key, result) => {
-                if self.inspector_ui.pending.as_ref() == Some(&key) {
-                    self.inspector_ui.pending = None;
+                if self.tab.inspector_ui.pending.as_ref() == Some(&key) {
+                    self.tab.inspector_ui.pending = None;
                     if self.property_request_key() == key {
                         // Never apply fragment labels or hydrogen counts to the original drawing.
-                        self.inspector_ui.properties = Some((key, *result));
+                        self.tab.inspector_ui.properties = Some((key, *result));
                     }
                 }
                 Task::none()
             }
             other => {
-                self.inspector_ui.update(other);
+                self.tab.inspector_ui.update(other);
                 Task::none()
             }
         }
     }
 
     fn property_summary(&self) -> String {
-        let scope = if self.selected.is_empty() {
+        let scope = if self.tab.selected.is_empty() {
             "Whole drawing"
         } else {
             "Selection"
@@ -410,6 +414,7 @@ impl App {
         content: impl FnOnce() -> Content,
     ) -> Element<'a, Message> {
         let expanded = self
+            .tab
             .inspector_ui
             .expanded
             .get(&section)
@@ -450,9 +455,9 @@ impl App {
     }
 
     pub(super) fn properties_panel(&self) -> Element<'_, Message> {
-        let selected: HashSet<_> = self.selected.iter().copied().collect();
+        let selected: HashSet<_> = self.tab.selected.iter().copied().collect();
         let mut body = column![
-            text(if self.selected.is_empty() {
+            text(if self.tab.selected.is_empty() {
                 if self.tool.selects() {
                     "Select an object to edit its properties."
                 } else {
@@ -466,13 +471,13 @@ impl App {
             .style(muted_text)
         ]
         .spacing(10);
-        let color_issues = reshiki::canvas_theme::label_contrast_issues(&self.doc);
+        let color_issues = reshiki::canvas_theme::label_contrast_issues(&self.tab.doc);
         if !color_issues.is_empty() {
             body = body.push(text(format!(
                 "{} atom label(s) have low contrast against the canvas or a ring fill. Adjust the label or fill color.", color_issues.len()
             )).size(11).style(muted_text));
         }
-        let molecular_first = self.selected.is_empty()
+        let molecular_first = self.tab.selected.is_empty()
             || self.property_key().is_some_and(|key| !key.atoms.is_empty());
         if molecular_first {
             body = body.push(self.molecular_section());
@@ -501,7 +506,7 @@ impl App {
                         text(preset.to_string()).size(14),
                         hover_hint(
                             crate::canvas::layered::canvas(crate::canvas::DrawingThumbnail(
-                                preset.document(self.bond_drawing.length, false)
+                                preset.document(self.tab.bond_drawing.length, false)
                             ))
                             .width(Length::Fill)
                             .height(90),
@@ -519,6 +524,7 @@ impl App {
         }
         if matches!(self.tool, Tool::Graphic(_))
             || self
+                .tab
                 .doc
                 .graphics
                 .iter()
@@ -527,6 +533,7 @@ impl App {
             body = body.push(card(container(self.graphic_panel()).padding(12)));
         }
         if self
+            .tab
             .doc
             .graphics
             .iter()
@@ -534,21 +541,23 @@ impl App {
         {
             body = body.push(card(container(self.picture_panel()).padding(12)));
         }
-        if self.tool == Tool::Arrow || self.doc.arrows.iter().any(|a| selected.contains(&a.id)) {
+        if self.tool == Tool::Arrow || self.tab.doc.arrows.iter().any(|a| selected.contains(&a.id))
+        {
             body = body.push(card(container(self.arrow_panel()).padding(12)));
         }
         if self.tool == Tool::Text
-            || (self.selected.len() == 1
+            || (self.tab.selected.len() == 1
                 && self
+                    .tab
                     .caption_target
-                    .is_some_and(|id| self.selected.contains(&id)))
+                    .is_some_and(|id| self.tab.selected.contains(&id)))
         {
             body = body.push(card(container(self.text_panel()).padding(12)));
         }
-        if !self.selected.is_empty() {
+        if !self.tab.selected.is_empty() {
             body = body.push(self.selection_panel(&selected));
         }
-        if let Some(error) = &self.chemistry_notice {
+        if let Some(error) = &self.tab.chemistry_notice {
             body = body.push(
                 text(error)
                     .size(12)
@@ -579,7 +588,7 @@ impl App {
                     ),
                 ]
                 .spacing(3);
-                if self.doc.atoms.iter().any(|a| selected.contains(&a.id)) {
+                if self.tab.doc.atoms.iter().any(|a| selected.contains(&a.id)) {
                     chemistry.push(self.attachment_points())
                 } else {
                     chemistry
@@ -590,15 +599,15 @@ impl App {
             self.inspector_section(
                 Section::DrawingStyle,
                 "Drawing style",
-                &self.doc.drawing_style.name,
+                &self.tab.doc.drawing_style.name,
                 false,
                 column![
                     text(format!(
                         "{} {} pt\nBonds {} pt · Lines {} pt\nPNG up to 1200 dpi",
-                        self.doc.drawing_style.font_family,
-                        self.doc.drawing_style.font_size_pt,
-                        self.doc.drawing_style.bond_length_pt,
-                        self.doc.drawing_style.line_width_pt
+                        self.tab.doc.drawing_style.font_family,
+                        self.tab.doc.drawing_style.font_size_pt,
+                        self.tab.doc.drawing_style.bond_length_pt,
+                        self.tab.doc.drawing_style.line_width_pt
                     ))
                     .size(12)
                     .style(muted_text),
@@ -624,10 +633,10 @@ impl App {
     }
 
     fn molecular_properties(&self) -> Element<'_, Message> {
-        if reshiki::attachments::present(&self.doc) {
-            let selected = (!self.selected.is_empty())
-                .then(|| reshiki::editing::selection(&self.doc, &self.selected));
-            let doc = selected.as_ref().unwrap_or(&self.doc);
+        if reshiki::attachments::present(&self.tab.doc) {
+            let selected = (!self.tab.selected.is_empty())
+                .then(|| reshiki::editing::selection(&self.tab.doc, &self.tab.selected));
+            let doc = selected.as_ref().unwrap_or(&self.tab.doc);
             let mut body = column![
                 text(reshiki::attachments::ANALYSIS_NOTICE)
                     .size(11)
@@ -662,14 +671,15 @@ impl App {
         let (atoms, bonds) = if key.is_some() {
             (
                 ids.len(),
-                self.doc
+                self.tab
+                    .doc
                     .bonds
                     .iter()
                     .filter(|b| ids.contains(&b.a) && ids.contains(&b.b))
                     .count(),
             )
         } else {
-            (self.doc.atoms.len(), self.doc.bonds.len())
+            (self.tab.doc.atoms.len(), self.tab.doc.bonds.len())
         };
         let mut body = column![
             text(format!("{} atoms · {} bonds", atoms, bonds))
@@ -679,6 +689,7 @@ impl App {
         .spacing(8);
         if key.is_some()
             && self
+                .tab
                 .doc
                 .bonds
                 .iter()
@@ -727,6 +738,7 @@ impl App {
         } else if atoms == 0 {
             return body.push(text(if key.is_some() { "Select atoms or bonds to calculate their properties. Clear the selection to use the whole drawing." } else { "Draw or import a molecule to calculate its properties." }).size(12).style(muted_text)).into();
         } else if let Some((_, Err(error))) = self
+            .tab
             .inspector_ui
             .properties
             .as_ref()
@@ -758,7 +770,7 @@ impl App {
                 Message::InspectorAction(Action::RefreshProperties),
             )
             .on_press_maybe(
-                (!self.busy && self.inspector_ui.pending.is_none())
+                (!self.tab.busy && self.tab.inspector_ui.pending.is_none())
                     .then_some(Message::InspectorAction(Action::RefreshProperties)),
             ),
         )
@@ -766,21 +778,22 @@ impl App {
     }
 
     pub(super) fn alignment_count(&self) -> usize {
-        if self.selected.len() <= 1 {
-            return self.selected.len();
+        if self.tab.selected.len() <= 1 {
+            return self.tab.selected.len();
         }
-        reshiki::editing::groups(&self.doc, &self.selected).len()
+        reshiki::editing::groups(&self.tab.doc, &self.tab.selected).len()
     }
 
     fn has_selected_ring(&self) -> bool {
-        if self.selected.len() < 3 {
+        if self.tab.selected.len() < 3 {
             return false;
         }
         // Ring detection does linear atom lookups for each selected ID. Reject
         // large chemical selections before doing that work, while retaining
         // selections that include extra nonchemical objects or dummy points.
-        let selected: HashSet<_> = self.selected.iter().copied().collect();
+        let selected: HashSet<_> = self.tab.selected.iter().copied().collect();
         let ring_atoms = self
+            .tab
             .doc
             .atoms
             .iter()
@@ -788,18 +801,19 @@ impl App {
             .take(9)
             .count();
         (3..=8).contains(&ring_atoms)
-            && reshiki::rings::selected_cycle(&self.doc, &self.selected).is_some()
+            && reshiki::rings::selected_cycle(&self.tab.doc, &self.tab.selected).is_some()
     }
 
     /// The one section a selection opens. Sections the user opened or
     /// closed keep that state.
     fn opened_section(&self) -> Option<Section> {
-        if self.selected.is_empty() {
-            return (self.tool == Tool::Select && !self.doc.atoms.is_empty())
+        if self.tab.selected.is_empty() {
+            return (self.tool == Tool::Select && !self.tab.doc.atoms.is_empty())
                 .then_some(Section::Molecule);
         }
-        let selected: HashSet<_> = self.selected.iter().copied().collect();
+        let selected: HashSet<_> = self.tab.selected.iter().copied().collect();
         if self
+            .tab
             .doc
             .bonds
             .iter()
@@ -808,6 +822,7 @@ impl App {
             return Some(Section::Bonds);
         }
         let atoms: Vec<_> = self
+            .tab
             .doc
             .atoms
             .iter()
@@ -824,13 +839,16 @@ impl App {
     /// selected atoms; the rules match the right-click menu.
     fn attachment_points(&self) -> Element<'_, Message> {
         let atoms = self
+            .tab
             .doc
             .atoms
             .iter()
-            .filter(|a| self.selected.contains(&a.id) && a.element != "*" && a.centroid.is_empty())
+            .filter(|a| {
+                self.tab.selected.contains(&a.id) && a.element != "*" && a.centroid.is_empty()
+            })
             .count();
         let centroid = (2..=300).contains(&atoms);
-        let attachment = centroid && atoms == self.selected.len();
+        let attachment = centroid && atoms == self.tab.selected.len();
         let item = |label, message: Message, enabled: bool, hint: &'static str, reason| {
             hover_hint(
                 command(label, message.clone())
@@ -890,12 +908,14 @@ impl App {
     fn selection_panel(&self, selected: &HashSet<u64>) -> Element<'_, Message> {
         let opened = self.opened_section();
         let atoms: Vec<_> = self
+            .tab
             .doc
             .atoms
             .iter()
             .filter(|a| selected.contains(&a.id))
             .collect();
         let bonds: Vec<_> = self
+            .tab
             .doc
             .bonds
             .iter()
@@ -952,7 +972,7 @@ impl App {
                 .push(text("Color").size(11).style(muted_text))
                 .push(
                     row![
-                        crate::appearance::text_input("#000000", &self.bond_color_input)
+                        crate::appearance::text_input("#000000", &self.tab.bond_color_input)
                             .on_input(Message::BondColor)
                             .on_submit(Message::ApplyBondColor)
                             .size(12)
@@ -966,7 +986,7 @@ impl App {
                     row![
                         hover_hint(
                             command("Aromatic circle", Message::AromaticDisplay)
-                                .on_press_maybe((!self.busy).then_some(Message::AromaticDisplay))
+                                .on_press_maybe((!self.tab.busy).then_some(Message::AromaticDisplay))
                                 .width(Length::Fill),
                             "Toggle the aromatic circle",
                             tooltip::Position::Top,
@@ -1027,7 +1047,7 @@ impl App {
                 .spacing(6)
                 .align_y(Alignment::Center),
                 row![
-                    crate::appearance::text_input("Isotope mass", &self.isotope)
+                    crate::appearance::text_input("Isotope mass", &self.tab.isotope)
                         .on_input(Message::Isotope)
                         .on_submit(Message::ApplyIsotope)
                         .size(12)
@@ -1096,7 +1116,7 @@ impl App {
             "",
             false,
             || {
-                let groups = self.doc.outer_selected_groups(&self.selected);
+                let groups = self.tab.doc.outer_selected_groups(&self.tab.selected);
                 let mut grouping = column![
                     row![
                         command("Group", Message::Group)
@@ -1127,6 +1147,7 @@ impl App {
                 .spacing(6);
                 if !groups.is_empty() {
                     let integral = self
+                        .tab
                         .doc
                         .groups
                         .iter()
@@ -1160,7 +1181,7 @@ impl App {
 
     /// The figure format, chosen from a menu grouped into vector and raster.
     fn figure_menu(&self, figure: FigureFormat) -> Element<'_, Message> {
-        let open = self.inspector_ui.figure_menu;
+        let open = self.tab.inspector_ui.figure_menu;
         let anchor = button(
             row![
                 text(format!("{} · {figure}", figure.kind()))
@@ -1206,8 +1227,8 @@ impl App {
     }
 
     pub(super) fn export_panel(&self) -> Element<'_, Message> {
-        let figure = self.inspector_ui.figure;
-        let chemical = self.inspector_ui.chemical;
+        let figure = self.tab.inspector_ui.figure;
+        let chemical = self.tab.inspector_ui.chemical;
         let mut figures = column![
             self.figure_menu(figure),
             text(figure.description()).size(12).style(muted_text),
@@ -1222,7 +1243,8 @@ impl App {
             .padding(10)
             .width(Length::Fill)
             .on_press_maybe(
-                (!self.busy && !self.figure_exporting).then_some(Message::Export(figure.code()))
+                (!self.tab.busy && !self.figure_exporting)
+                    .then_some(Message::Export(figure.code()))
             ),
         ]
         .spacing(9);
@@ -1230,11 +1252,11 @@ impl App {
             figures = figures
                 .push(
                     keyed_command("Copy image", Message::CopyImage)
-                        .on_press_maybe((!self.clipboard_busy).then_some(Message::CopyImage))
+                        .on_press_maybe((!self.tab.clipboard_busy).then_some(Message::CopyImage))
                         .width(Length::Fill),
                 )
                 .push(
-                    text(if self.selected.is_empty() {
+                    text(if self.tab.selected.is_empty() {
                         "Copy image uses the full drawing."
                     } else {
                         "Copy image uses the selected objects."
@@ -1251,7 +1273,7 @@ impl App {
             self.inspector_section(
                 Section::ExportFigure,
                 "Figure",
-                &self.doc.drawing_style.name,
+                &self.tab.doc.drawing_style.name,
                 true,
                 figures
             ),
@@ -1271,7 +1293,9 @@ impl App {
                     button(text(format!("Export {}…", chemical.code().to_uppercase())).size(13))
                         .padding(10)
                         .width(Length::Fill)
-                        .on_press_maybe((!self.busy).then_some(Message::Export(chemical.code()))),
+                        .on_press_maybe(
+                            (!self.tab.busy).then_some(Message::Export(chemical.code()))
+                        ),
                     command(
                         "Reaction roles & export…",
                         Message::Reaction(super::reactions::Action::Open)
@@ -1286,7 +1310,7 @@ impl App {
             Message::Pages(super::pages::Action::Show)
         )]
         .spacing(6);
-        if self.doc.page_layout.is_some() {
+        if self.tab.doc.page_layout.is_some() {
             pages = pages.push(
                 command(
                     "PDF · all pages",
@@ -1311,7 +1335,7 @@ impl App {
                 )))
                 .width(Length::Fill),
             );
-            if !self.selected.is_empty() {
+            if !self.tab.selected.is_empty() {
                 pages = pages.push(
                     command(
                         "Print selection…",
@@ -1330,7 +1354,7 @@ impl App {
             Section::ExportPages,
             "Pages & printing",
             "",
-            self.doc.page_layout.is_some(),
+            self.tab.doc.page_layout.is_some(),
             pages,
         ));
         body.push(self.inspector_section(
@@ -1358,9 +1382,10 @@ mod tests {
             (false, Some(true), 1),
             (true, None, 1),
         ] {
-            app.inspector_ui.expanded.clear();
+            app.tab.inspector_ui.expanded.clear();
             if let Some(expanded) = override_value {
-                app.inspector_ui
+                app.tab
+                    .inspector_ui
                     .expanded
                     .insert(Section::Molecule, expanded);
             }
@@ -1377,22 +1402,24 @@ mod tests {
     #[test]
     fn selection_summary_and_alignment_keep_group_and_point_semantics() {
         let (mut app, _) = App::new();
-        app.doc = Document::default();
-        let c = app.doc.add_atom("C", Default::default());
+        app.tab.doc = Document::default();
+        let c = app.tab.doc.add_atom("C", Default::default());
         let o = app
+            .tab
             .doc
             .add_atom("O", reshiki::document::Point::new(42., 0.));
         let point = app
+            .tab
             .doc
             .add_atom("*", reshiki::document::Point::new(21., 24.));
-        app.doc.add_bond(c, o, 1, "plain");
+        app.tab.doc.add_bond(c, o, 1, "plain");
         assert_eq!(app.selection_summary(), "No selection");
         assert_eq!(app.alignment_count(), 0);
-        app.selected = vec![o];
+        app.tab.selected = vec![o];
         assert_eq!(app.selection_summary(), "1 atom");
         assert_eq!(app.alignment_count(), 1);
         assert!(!app.can_group());
-        app.selected = vec![c, o, point];
+        app.tab.selected = vec![c, o, point];
         assert_eq!(app.selection_summary(), "2 atoms · 1 point · 1 bond");
         assert_eq!(app.alignment_count(), 2);
         assert!(app.can_group());
@@ -1408,20 +1435,20 @@ mod tests {
     #[test]
     fn ring_controls_reject_large_selections_without_dropping_nonchemical_members() {
         let (mut app, _) = App::new();
-        app.doc = reshiki::rings::Preset::Benzene.document(42., false);
-        app.selected = app.doc.all_ids();
+        app.tab.doc = reshiki::rings::Preset::Benzene.document(42., false);
+        app.tab.selected = app.tab.doc.all_ids();
         assert!(app.has_selected_ring());
         for _ in 0..20 {
-            let id = app.doc.add_atom("*", Default::default());
-            app.selected.push(id);
+            let id = app.tab.doc.add_atom("*", Default::default());
+            app.tab.selected.push(id);
         }
         assert!(
             app.has_selected_ring(),
             "Dummy points do not change the ring atoms"
         );
         for _ in 0..3 {
-            let id = app.doc.add_atom("C", Default::default());
-            app.selected.push(id);
+            let id = app.tab.doc.add_atom("C", Default::default());
+            app.tab.selected.push(id);
         }
         assert!(
             !app.has_selected_ring(),
@@ -1452,33 +1479,39 @@ mod tests {
                 .unwrap();
         for copies in [1, 4] {
             let (mut app, _) = App::new();
-            app.doc = Document::default();
+            app.tab.doc = Document::default();
             for copy in 0..copies {
                 reshiki::editing::append(
-                    &mut app.doc,
+                    &mut app.tab.doc,
                     &gallery,
                     reshiki::document::Point::new(copy as f32 * 1800., 0.),
                 );
             }
             let endpoint = app
+                .tab
                 .doc
                 .add_atom("O", reshiki::document::Point::new(-100., -100.));
             app.inspector_open = true;
             app.inspector_tab = InspectorTab::Properties;
             for selection in ["none", "single", "all"] {
-                app.selected = match selection {
+                app.tab.selected = match selection {
                     "none" => vec![],
                     "single" => vec![endpoint],
-                    _ => app.doc.all_ids(),
+                    _ => app.tab.doc.all_ids(),
                 };
                 for expanded in [false, true] {
-                    app.inspector_ui
+                    app.tab
+                        .inspector_ui
                         .expanded
                         .insert(Section::Molecule, expanded);
-                    app.inspector_ui
+                    app.tab
+                        .inspector_ui
                         .expanded
                         .insert(Section::Transform, expanded);
-                    app.inspector_ui.expanded.insert(Section::Groups, expanded);
+                    app.tab
+                        .inspector_ui
+                        .expanded
+                        .insert(Section::Groups, expanded);
                     let name = format!(
                         "gallery_{copies}x_{selection}_{}",
                         if expanded { "expanded" } else { "collapsed" }
@@ -1511,9 +1544,9 @@ mod tests {
     #[tokio::test]
     async fn whole_drawing_properties_are_lazy_cached_and_never_modify_labels() {
         let (mut app, _) = App::new();
-        app.doc.add_atom("O", Default::default());
-        app.selected.clear();
-        let before = app.doc.clone();
+        app.tab.doc.add_atom("O", Default::default());
+        app.tab.selected.clear();
+        let before = app.tab.doc.clone();
         let subscriptions = |app: &App| {
             iced::advanced::subscription::into_recipes(app.properties_subscription()).len()
         };
@@ -1523,9 +1556,9 @@ mod tests {
         assert_eq!(subscriptions(&app), 1);
         calculate(&mut app).await;
         assert_eq!(app.property_analysis().unwrap().formula, "H2O");
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         assert_eq!(subscriptions(&app), 0);
-        app.revision += 1;
+        app.tab.revision += 1;
         assert!(app.property_analysis().is_none());
     }
 
@@ -1533,20 +1566,20 @@ mod tests {
     fn inner_curve_is_one_undo_step_and_keeps_chemical_orders() {
         let (mut app, _) = App::new();
         let ids = reshiki::editing::ring(
-            &mut app.doc,
+            &mut app.tab.doc,
             reshiki::document::Point::default(),
             5,
             false,
             0.,
         );
-        app.selected = ids[..3].to_vec();
-        let original = app.doc.clone();
+        app.tab.selected = ids[..3].to_vec();
+        let original = app.tab.doc.clone();
         let _ = app.inspector_action(Action::RingArc);
-        assert_eq!(app.doc.bonds.iter().filter(|b| b.ring_arc).count(), 2);
-        assert!(app.history.undo(&mut app.doc));
-        assert_eq!(app.doc, original);
-        assert!(app.history.redo(&mut app.doc));
-        assert_eq!(reshiki::ring_arcs::render(&app.doc).primitives.len(), 1);
+        assert_eq!(app.tab.doc.bonds.iter().filter(|b| b.ring_arc).count(), 2);
+        assert!(app.tab.history.undo(&mut app.tab.doc));
+        assert_eq!(app.tab.doc, original);
+        assert!(app.tab.history.redo(&mut app.tab.doc));
+        assert_eq!(reshiki::ring_arcs::render(&app.tab.doc).primitives.len(), 1);
     }
 
     #[tokio::test]
@@ -1557,31 +1590,31 @@ mod tests {
             .execute(Request::import_smiles("CCO.CN"))
             .await
             .unwrap();
-        app.doc = result.document.unwrap();
-        app.analysis = result.analysis;
-        let whole = app.analysis.as_ref().unwrap().formula.clone();
-        let before = app.doc.clone();
-        app.selected = app.doc.atoms[..3].iter().map(|a| a.id).collect();
+        app.tab.doc = result.document.unwrap();
+        app.tab.analysis = result.analysis;
+        let whole = app.tab.analysis.as_ref().unwrap().formula.clone();
+        let before = app.tab.doc.clone();
+        app.tab.selected = app.tab.doc.atoms[..3].iter().map(|a| a.id).collect();
         calculate(&mut app).await;
         assert_eq!(app.property_analysis().unwrap().formula, "C2H6O");
         assert_eq!(app.property_analysis().unwrap().smiles, "CCO");
-        app.selected.pop();
+        app.tab.selected.pop();
         assert!(
             app.property_analysis().is_none(),
             "Old results must disappear immediately"
         );
         calculate(&mut app).await;
         assert_eq!(app.property_analysis().unwrap().formula, "C2H6");
-        app.selected.clear();
+        app.tab.selected.clear();
         assert_eq!(app.property_analysis().unwrap().formula, whole);
-        app.selected = vec![u64::MAX];
+        app.tab.selected = vec![u64::MAX];
         assert!(
             app.property_analysis().is_none(),
             "Artwork selection must not show whole-drawing values"
         );
-        assert_eq!(app.doc, before);
-        assert!(!app.history.can_undo());
-        assert_eq!(app.revision, 0);
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
+        assert_eq!(app.tab.revision, 0);
     }
 
     #[tokio::test]
@@ -1592,24 +1625,24 @@ mod tests {
             .execute(Request::import_smiles("CCO"))
             .await
             .unwrap();
-        app.doc = result.document.unwrap();
+        app.tab.doc = result.document.unwrap();
         let analysis = result.analysis.unwrap();
-        app.selected = vec![app.doc.atoms[0].id];
+        app.tab.selected = vec![app.tab.doc.atoms[0].id];
         let old = app.property_key().unwrap();
         let _ = app.inspector_action(Action::RefreshProperties);
-        app.selected = vec![app.doc.atoms[2].id];
+        app.tab.selected = vec![app.tab.doc.atoms[2].id];
         let _ = app.inspector_action(Action::PropertiesCalculated(
             old,
             Box::new(Ok(analysis.clone())),
         ));
-        assert!(app.inspector_ui.pending.is_none());
+        assert!(app.tab.inspector_ui.pending.is_none());
         assert!(app.property_analysis().is_none());
         let old = app.property_key().unwrap();
         let _ = app.inspector_action(Action::RefreshProperties);
-        app.file_epoch += 1;
+        app.tab.file_epoch += 1;
         let _ = app.inspector_action(Action::PropertiesCalculated(old, Box::new(Ok(analysis))));
         assert!(app.property_analysis().is_none());
-        assert!(app.inspector_ui.pending.is_none());
+        assert!(app.tab.inspector_ui.pending.is_none());
     }
 
     #[test]
@@ -1625,52 +1658,52 @@ mod tests {
             assert_eq!(app.ring_size, size);
             assert!(!app.aromatic_ring);
         }
-        app.selected = reshiki::editing::ring(
-            &mut app.doc,
+        app.tab.selected = reshiki::editing::ring(
+            &mut app.tab.doc,
             reshiki::document::Point::default(),
             5,
             false,
             5.,
         );
         app.tool = Tool::Select;
-        let before = app.doc.clone();
+        let before = app.tab.doc.clone();
         let _ = app.update(Message::ToggleAromaticRing);
-        assert_eq!(app.doc.atoms.len(), 5);
-        assert!(app.doc.bonds.iter().all(|b| b.order == 4));
+        assert_eq!(app.tab.doc.atoms.len(), 5);
+        assert!(app.tab.doc.bonds.iter().all(|b| b.order == 4));
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
     }
 
     #[test]
     fn tilted_ring_and_centroid_are_atomic_undoable_edits() {
         let (mut app, _) = App::new();
-        app.selected = reshiki::editing::ring(
-            &mut app.doc,
+        app.tab.selected = reshiki::editing::ring(
+            &mut app.tab.doc,
             reshiki::document::Point::new(100., 100.),
             5,
             false,
             5.,
         );
-        let planar = app.doc.clone();
-        let ring = app.selected.clone();
+        let planar = app.tab.doc.clone();
+        let ring = app.tab.selected.clone();
         let _ = app.update(Message::Transform(Transform::TiltX(60.)));
-        let tilted = app.doc.clone();
+        let tilted = app.tab.doc.clone();
         assert!(tilted.atoms.iter().any(|a| a.depth.abs() > 1.));
         assert_eq!(tilted.bonds, planar.bonds);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, planar);
+        assert_eq!(app.tab.doc, planar);
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, tilted);
-        app.selected = ring;
+        assert_eq!(app.tab.doc, tilted);
+        app.tab.selected = ring;
         let _ = app.update(Message::InspectorAction(Action::Centroid));
-        assert_eq!(app.doc.atoms.len(), 6);
-        let centroid = app.selected[0];
-        assert_eq!(app.doc.atom(centroid).unwrap().centroid.len(), 5);
+        assert_eq!(app.tab.doc.atoms.len(), 6);
+        let centroid = app.tab.selected[0];
+        assert_eq!(app.tab.doc.atom(centroid).unwrap().centroid.len(), 5);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, tilted);
+        assert_eq!(app.tab.doc, tilted);
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc.atom(centroid).unwrap().element, "*");
-        app.doc.validate().unwrap();
+        assert_eq!(app.tab.doc.atom(centroid).unwrap().element, "*");
+        app.tab.doc.validate().unwrap();
     }
 
     #[test]
@@ -1680,25 +1713,25 @@ mod tests {
             reshiki::attachments::Kind::Variable,
         ] {
             let (mut app, _) = App::new();
-            app.selected = reshiki::editing::ring(
-                &mut app.doc,
+            app.tab.selected = reshiki::editing::ring(
+                &mut app.tab.doc,
                 reshiki::document::Point::new(100., 100.),
                 6,
                 true,
                 5.,
             );
-            let before = app.doc.clone();
+            let before = app.tab.doc.clone();
             let _ = app.update(Message::InspectorAction(Action::Attachment(kind)));
-            let id = *app.selected.first().ok_or("No point selected")?;
-            let point = app.doc.atom(id).ok_or("Missing point")?;
+            let id = *app.tab.selected.first().ok_or("No point selected")?;
+            let point = app.tab.doc.atom(id).ok_or("Missing point")?;
             assert_eq!(point.attachment, Some(kind));
             assert_eq!(point.centroid.len(), 6);
-            let after = app.doc.clone();
+            let after = app.tab.doc.clone();
             let _ = app.update(Message::Undo);
-            assert_eq!(app.doc, before);
+            assert_eq!(app.tab.doc, before);
             let _ = app.update(Message::Redo);
-            assert_eq!(app.doc, after);
-            app.doc.validate()?;
+            assert_eq!(app.tab.doc, after);
+            app.tab.doc.validate()?;
         }
         Ok(())
     }
@@ -1708,14 +1741,14 @@ mod tests {
         let (mut app, _) = App::new();
         assert_eq!(app.opened_section(), None);
         let ring = reshiki::editing::ring(
-            &mut app.doc,
+            &mut app.tab.doc,
             reshiki::document::Point::default(),
             6,
             false,
             0.,
         );
-        let arrow = app.doc.next_id();
-        app.doc.arrows.push(reshiki::document::Arrow::new(
+        let arrow = app.tab.doc.next_id();
+        app.tab.doc.arrows.push(reshiki::document::Arrow::new(
             arrow,
             reshiki::document::Point::new(80., 0.),
             reshiki::document::Point::new(160., 0.),
@@ -1723,28 +1756,29 @@ mod tests {
             Default::default(),
         ));
         assert_eq!(app.opened_section(), Some(Section::Molecule));
-        app.selected = ring.iter().copied().chain([arrow]).collect();
+        app.tab.selected = ring.iter().copied().chain([arrow]).collect();
         assert!(app.alignment_count() >= 2);
         assert_eq!(app.opened_section(), Some(Section::Bonds));
-        app.selected = vec![ring[0]];
+        app.tab.selected = vec![ring[0]];
         assert_eq!(app.opened_section(), Some(Section::Atoms));
-        app.selected = vec![ring[0], ring[2]];
+        app.tab.selected = vec![ring[0], ring[2]];
         assert_eq!(app.opened_section(), None);
-        app.selected = vec![arrow];
+        app.tab.selected = vec![arrow];
         assert_eq!(app.opened_section(), None);
     }
 
     #[test]
     fn inspector_preferences_preserve_drawing_selection_and_history() {
         let (mut app, _) = App::new();
-        let a = app.doc.add_atom("C", Default::default());
+        let a = app.tab.doc.add_atom("C", Default::default());
         let b = app
+            .tab
             .doc
             .add_atom("N", reshiki::document::Point::new(42., 0.));
-        app.doc.add_bond(a, b, 1, "plain");
-        app.selected = vec![a, b];
-        let before = app.doc.clone();
-        let revision = app.revision;
+        app.tab.doc.add_bond(a, b, 1, "plain");
+        app.tab.selected = vec![a, b];
+        let before = app.tab.doc.clone();
+        let revision = app.tab.revision;
         for action in [
             Action::Section(Section::Atoms, true),
             Action::Section(Section::Transform, true),
@@ -1753,12 +1787,12 @@ mod tests {
         ] {
             let _ = app.update(Message::InspectorAction(action));
         }
-        assert_eq!(app.doc, before);
-        assert_eq!(app.selected, [a, b]);
-        assert_eq!(app.revision, revision);
-        assert!(!app.history.can_undo());
-        assert_eq!(app.inspector_ui.figure, FigureFormat::Png);
-        assert_eq!(app.inspector_ui.chemical, ChemicalFormat::Cdxml);
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.selected, [a, b]);
+        assert_eq!(app.tab.revision, revision);
+        assert!(!app.tab.history.can_undo());
+        assert_eq!(app.tab.inspector_ui.figure, FigureFormat::Png);
+        assert_eq!(app.tab.inspector_ui.chemical, ChemicalFormat::Cdxml);
         let _ = app.properties_panel();
         let _ = app.export_panel();
     }
@@ -1773,14 +1807,14 @@ mod tests {
         );
         let (mut app, _) = App::new();
         let _ = app.update(Message::InspectorAction(Action::FigureMenu(true)));
-        assert!(app.inspector_ui.figure_menu);
+        assert!(app.tab.inspector_ui.figure_menu);
         let _ = app.export_panel();
         let _ = app.update(Message::InspectorAction(Action::Figure(FigureFormat::Svg)));
-        assert!(!app.inspector_ui.figure_menu);
-        assert_eq!(app.inspector_ui.figure, FigureFormat::Svg);
+        assert!(!app.tab.inspector_ui.figure_menu);
+        assert_eq!(app.tab.inspector_ui.figure, FigureFormat::Svg);
         // Leaving the tab by shortcut must not leave it open behind the tab.
         let _ = app.update(Message::InspectorAction(Action::FigureMenu(true)));
         let _ = app.update(Message::Inspector(InspectorTab::Import));
-        assert!(!app.inspector_ui.figure_menu);
+        assert!(!app.tab.inspector_ui.figure_menu);
     }
 }

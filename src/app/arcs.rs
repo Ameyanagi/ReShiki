@@ -38,12 +38,13 @@ impl Editor {
 impl App {
     pub(super) fn sync_arc(&mut self) {
         if let Some(graphic) = self
+            .tab
             .doc
             .graphics
             .iter()
-            .find(|g| self.selected.contains(&g.id) && g.kind == GraphicKind::Arc)
+            .find(|g| self.tab.selected.contains(&g.id) && g.kind == GraphicKind::Arc)
         {
-            self.arc_editor.set(graphic.arc.unwrap_or_default());
+            self.tab.arc_editor.set(graphic.arc.unwrap_or_default());
         }
     }
 
@@ -51,24 +52,24 @@ impl App {
         let preset_only = matches!(action, Action::Preset(_));
         let geometry = match action {
             Action::Start(input) => {
-                self.arc_editor.start = input;
+                self.tab.arc_editor.start = input;
                 return;
             }
             Action::Sweep(input) => {
-                self.arc_editor.sweep = input;
+                self.tab.arc_editor.sweep = input;
                 return;
             }
             Action::Preset(sweep_degrees) => ArcGeometry {
                 sweep_degrees,
-                ..self.arc_editor.geometry
+                ..self.tab.arc_editor.geometry
             },
             Action::Apply => {
-                let Ok(start_degrees) = self.arc_editor.start.trim().parse::<f32>() else {
+                let Ok(start_degrees) = self.tab.arc_editor.start.trim().parse::<f32>() else {
                     self.status = "Arc start must be a finite angle in degrees".into();
                     self.error = true;
                     return;
                 };
-                let Ok(sweep_degrees) = self.arc_editor.sweep.trim().parse::<f32>() else {
+                let Ok(sweep_degrees) = self.tab.arc_editor.sweep.trim().parse::<f32>() else {
                     self.status = "Arc sweep must be 0.1–360°".into();
                     self.error = true;
                     return;
@@ -88,10 +89,10 @@ impl App {
             start_degrees: geometry.start_degrees.rem_euclid(360.),
             ..geometry
         };
-        self.arc_editor.set(geometry);
-        let before = self.doc.clone();
-        for graphic in &mut self.doc.graphics {
-            if self.selected.contains(&graphic.id) && graphic.kind == GraphicKind::Arc {
+        self.tab.arc_editor.set(geometry);
+        let before = self.tab.doc.clone();
+        for graphic in &mut self.tab.doc.graphics {
+            if self.tab.selected.contains(&graphic.id) && graphic.kind == GraphicKind::Arc {
                 graphic.set_arc(ArcGeometry {
                     start_degrees: if preset_only {
                         graphic.arc.unwrap_or_default().start_degrees
@@ -111,7 +112,7 @@ impl App {
     /// Sweep presets as one segmented strip marking the current sweep.
     /// `fill` spreads it across the inspector.
     pub(super) fn arc_presets(&self, fill: bool) -> Element<'_, Message> {
-        let sweep = self.arc_editor.geometry.sweep_degrees;
+        let sweep = self.tab.arc_editor.geometry.sweep_degrees;
         let strip = row(ArcGeometry::PRESETS.into_iter().map(|degrees| {
             button(text(format!("{degrees:.0}°")).size(12).center())
                 .width(if fill { Length::Fill } else { Length::Shrink })
@@ -168,13 +169,13 @@ impl App {
             row![
                 field(
                     "Start",
-                    &self.arc_editor.start,
+                    &self.tab.arc_editor.start,
                     "Clockwise from the right · Enter applies",
                     |s| Message::Arc(Action::Start(s))
                 ),
                 field(
                     "Sweep",
-                    &self.arc_editor.sweep,
+                    &self.tab.arc_editor.sweep,
                     "0.1–360° · Enter applies",
                     |s| Message::Arc(Action::Sweep(s))
                 ),
@@ -206,20 +207,20 @@ mod tests {
     fn arc_presets_apply_to_new_drawings_and_numeric_edits_undo_as_one_action() {
         let mut app = drawing();
         assert_eq!(app.tool, Tool::Select);
-        assert_eq!(app.doc.graphics[0].arc.unwrap().sweep_degrees, 270.);
-        let before = app.doc.clone();
+        assert_eq!(app.tab.doc.graphics[0].arc.unwrap().sweep_degrees, 270.);
+        let before = app.tab.doc.clone();
         app.update_arc(Action::Start("-45.5".into()));
         app.update_arc(Action::Sweep("123.4".into()));
-        assert_eq!(app.doc, before, "typing must not change the drawing");
+        assert_eq!(app.tab.doc, before, "typing must not change the drawing");
         app.update_arc(Action::Apply);
-        let after = app.doc.clone();
+        let after = app.tab.doc.clone();
         assert_eq!(after.graphics[0].arc.unwrap().start_degrees, 314.5);
         assert_eq!(after.graphics[0].arc.unwrap().sweep_degrees, 123.4);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
-        assert_eq!(app.arc_editor.geometry.sweep_degrees, 270.);
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.arc_editor.geometry.sweep_degrees, 270.);
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, after);
+        assert_eq!(app.tab.doc, after);
     }
 
     #[test]
@@ -229,17 +230,17 @@ mod tests {
         app.update_arc(Action::Start("32".into()));
         app.update_arc(Action::Apply);
         app.update_arc(Action::Preset(360.));
-        let arc = app.doc.graphics[0].arc.unwrap();
+        let arc = app.tab.doc.graphics[0].arc.unwrap();
         assert_eq!((arc.start_degrees, arc.sweep_degrees), (32., 360.));
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc.graphics[0].arc.unwrap().sweep_degrees, 270.);
+        assert_eq!(app.tab.doc.graphics[0].arc.unwrap().sweep_degrees, 270.);
     }
 
     #[test]
     fn invalid_arc_input_is_rejected_atomically() {
         let mut app = drawing();
-        let before = app.doc.clone();
-        let parameters = app.arc_editor.geometry;
+        let before = app.tab.doc.clone();
+        let parameters = app.tab.arc_editor.geometry;
         for (start, sweep) in [
             ("NaN", "90"),
             ("0", "NaN"),
@@ -251,27 +252,28 @@ mod tests {
             app.update_arc(Action::Sweep(sweep.into()));
             app.update_arc(Action::Apply);
             assert!(app.error);
-            assert_eq!(app.doc, before);
-            assert_eq!(app.arc_editor.geometry, parameters);
+            assert_eq!(app.tab.doc, before);
+            assert_eq!(app.tab.arc_editor.geometry, parameters);
         }
     }
 
     #[test]
     fn applying_a_preset_to_multiple_arcs_preserves_each_start_angle() {
         let mut app = drawing();
-        let mut second = app.doc.graphics[0].clone();
-        second.id = app.doc.next_id();
+        let mut second = app.tab.doc.graphics[0].clone();
+        second.id = app.tab.doc.next_id();
         second.set_arc(ArcGeometry {
             start_degrees: 37.,
             sweep_degrees: 120.,
         });
-        app.doc.graphics.push(second);
-        app.selected = app.doc.all_ids();
+        app.tab.doc.graphics.push(second);
+        app.tab.selected = app.tab.doc.all_ids();
         app.update_arc(Action::Preset(90.));
-        assert_eq!(app.doc.graphics[0].arc.unwrap().start_degrees, 180.);
-        assert_eq!(app.doc.graphics[1].arc.unwrap().start_degrees, 37.);
+        assert_eq!(app.tab.doc.graphics[0].arc.unwrap().start_degrees, 180.);
+        assert_eq!(app.tab.doc.graphics[1].arc.unwrap().start_degrees, 37.);
         assert!(
-            app.doc
+            app.tab
+                .doc
                 .graphics
                 .iter()
                 .all(|g| g.arc.unwrap().sweep_degrees == 90.)
@@ -281,18 +283,18 @@ mod tests {
     #[test]
     fn endpoint_drag_and_undo_keep_arc_type_selection_and_inspector_values() {
         let mut app = drawing();
-        let id = app.doc.graphics[0].id;
-        let before = app.doc.clone();
+        let id = app.tab.doc.graphics[0].id;
+        let before = app.tab.doc.clone();
         let _ = app.update(Message::Tool(Tool::EditPoints));
         app.edit(Edit::GraphicPoint(id, 1, Point::new(180., 70.)));
-        assert_eq!(app.doc.graphics[0].kind, GraphicKind::Arc);
-        assert_eq!(app.arc_editor.geometry.sweep_degrees, 180.);
-        assert_eq!(app.selected, vec![id]);
-        let after = app.doc.clone();
+        assert_eq!(app.tab.doc.graphics[0].kind, GraphicKind::Arc);
+        assert_eq!(app.tab.arc_editor.geometry.sweep_degrees, 180.);
+        assert_eq!(app.tab.selected, vec![id]);
+        let after = app.tab.doc.clone();
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
-        assert_eq!(app.arc_editor.geometry.sweep_degrees, 270.);
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.arc_editor.geometry.sweep_degrees, 270.);
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, after);
+        assert_eq!(app.tab.doc, after);
     }
 }

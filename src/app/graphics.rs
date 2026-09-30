@@ -15,15 +15,16 @@ impl App {
         self.sync_pictures();
         self.sync_arc();
         if let Some(g) = self
+            .tab
             .doc
             .graphics
             .iter()
-            .find(|g| self.selected.contains(&g.id))
+            .find(|g| self.tab.selected.contains(&g.id))
         {
-            self.graphic_style = g.style.clone();
-            self.orbital_phase = g.phase;
-            self.phase_flipped = g.phase_flipped;
-            self.bracket_sides = g.sides;
+            self.tab.graphic_style = g.style.clone();
+            self.tab.orbital_phase = g.phase;
+            self.tab.phase_flipped = g.phase_flipped;
+            self.tab.bracket_sides = g.sides;
             if !matches!(
                 self.inspector_tab,
                 InspectorTab::Templates
@@ -35,19 +36,19 @@ impl App {
                 self.inspector_tab = InspectorTab::Properties;
             }
         }
-        self.graphic_width_input = self.graphic_style.width_pt.to_string();
-        let palette = reshiki::palette::Palette::of(&self.doc);
+        self.tab.graphic_width_input = self.tab.graphic_style.width_pt.to_string();
+        let palette = reshiki::palette::Palette::of(&self.tab.doc);
         let hex = |c| reshiki::palette::hex(palette.rgb(c));
-        self.graphic_stroke_input = hex(self.graphic_style.stroke);
-        if let Some(c) = self.graphic_style.fill {
-            self.graphic_fill_input = hex(c);
+        self.tab.graphic_stroke_input = hex(self.tab.graphic_style.stroke);
+        if let Some(c) = self.tab.graphic_style.fill {
+            self.tab.graphic_fill_input = hex(c);
         }
     }
     pub(super) fn apply_graphic_style(&mut self, change: GraphicChange) {
-        change.apply(&mut self.graphic_style);
-        let before = self.doc.clone();
-        for g in &mut self.doc.graphics {
-            if self.selected.contains(&g.id) && g.picture.is_none() {
+        change.apply(&mut self.tab.graphic_style);
+        let before = self.tab.doc.clone();
+        for g in &mut self.tab.doc.graphics {
+            if self.tab.selected.contains(&g.id) && g.picture.is_none() {
                 change.apply(&mut g.style);
             }
         }

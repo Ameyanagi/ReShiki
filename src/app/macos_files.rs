@@ -41,20 +41,20 @@ pub(super) fn subscription() -> Subscription<Message> {
 
 impl App {
     fn can_open_in_startup_window(&self) -> bool {
-        self.path.is_none()
-            && self.file_epoch == 0
-            && self.revision == 0
-            && self.doc.all_ids().is_empty()
+        self.tab.path.is_none()
+            && self.tab.file_epoch == 0
+            && self.tab.revision == 0
+            && self.tab.doc.all_ids().is_empty()
             && !self.dirty()
-            && !self.busy
+            && !self.tab.busy
             && !self.native_opening
-            && !self.autosave.closing()
+            && !self.exit.closing()
             && !self.updates.restarting
-            && self.atom_text.is_none()
-            && self.inline_text.is_none()
+            && self.tab.atom_text.is_none()
+            && self.tab.inline_text.is_none()
             && self.pending.is_none()
             && self.imports.is_blank()
-            && self.styles.editor.is_none()
+            && self.tab.styles.editor.is_none()
     }
 
     pub(super) fn mac_file_action(&mut self, action: Action) -> Task<Message> {
@@ -195,7 +195,7 @@ mod tests {
         );
         assert!(task.units() > 0);
         assert!(
-            app.path.is_none(),
+            app.tab.path.is_none(),
             "Finder dispatch waits for the parse worker"
         );
         assert!(
@@ -204,8 +204,8 @@ mod tests {
         );
         super::super::files::finish_dispatched_open(&mut app, path.clone(), Ok(contents));
         assert!(!app.native_opening);
-        assert_eq!(app.path, Some(path));
-        assert_eq!(app.doc.atoms.len(), 1);
+        assert_eq!(app.tab.path, Some(path));
+        assert_eq!(app.tab.doc.atoms.len(), 1);
         assert!(!app.error);
         Ok(())
     }
@@ -227,8 +227,8 @@ mod tests {
         assert!(app.native_opening);
         assert!(app.file_request_is_current(key));
         super::super::files::finish_dispatched_open(&mut app, path.clone(), Ok(contents));
-        assert_eq!(app.path, Some(path));
-        assert_eq!(app.doc.atoms[0].element, "N");
+        assert_eq!(app.tab.path, Some(path));
+        assert_eq!(app.tab.doc.atoms[0].element, "N");
         assert!(!app.native_opening);
         Ok(())
     }
@@ -245,13 +245,13 @@ mod tests {
             let key = begin_read(&mut app, &path);
             let _ = app.mac_file_action(Action::Loaded(key, path.clone(), Ok(contents.clone())));
             if edit {
-                let before = app.doc.clone();
-                app.doc.add_atom("C", Point::default());
+                let before = app.tab.doc.clone();
+                app.tab.doc.add_atom("C", Point::default());
                 app.changed(before);
             } else {
                 let _ = app.file_request_key();
             }
-            let original = app.doc.clone();
+            let original = app.tab.doc.clone();
             app.status = "Current drawing".into();
             let runtime = tokio::runtime::Runtime::new().unwrap();
             let opened =
@@ -261,8 +261,8 @@ mod tests {
                 followup.units() > 0,
                 "Dispatch a separate window for the Finder file"
             );
-            assert_eq!(app.doc, original);
-            assert!(app.path.is_none());
+            assert_eq!(app.tab.doc, original);
+            assert!(app.tab.path.is_none());
             assert_eq!(app.status, "Current drawing");
             assert!(!app.error);
             assert!(!app.native_opening);
@@ -291,7 +291,7 @@ mod tests {
         assert!(followup.units() > 0, "Dispatch a separate Finder window");
         assert!(!app.native_opening);
         assert!(app.file_request_is_current(menu_key));
-        assert!(app.doc.all_ids().is_empty());
+        assert!(app.tab.doc.all_ids().is_empty());
         let menu_path = PathBuf::from("/tmp/menu.rsk");
         let runtime = tokio::runtime::Runtime::new().unwrap();
         let opened = runtime.block_on(super::super::files::prepare_contents(
@@ -299,8 +299,8 @@ mod tests {
             Ok(contents),
         ));
         let _ = app.update(Message::FilePrepared(menu_key, opened));
-        assert_eq!(app.path, Some(menu_path));
-        assert_eq!(app.doc.atoms[0].element, "N");
+        assert_eq!(app.tab.path, Some(menu_path));
+        assert_eq!(app.tab.doc.atoms[0].element, "N");
         assert!(!app.error);
         Ok(())
     }
@@ -311,15 +311,15 @@ mod tests {
         assert!(app.can_open_in_startup_window());
         let key = begin_read(&mut app, std::path::Path::new("/tmp/other.rsk"));
         assert!(!app.can_open_in_startup_window());
-        app.doc.add_atom("C", Point::default());
-        let original = app.doc.clone();
+        app.tab.doc.add_atom("C", Point::default());
+        let original = app.tab.doc.clone();
         let _ = app.mac_file_action(Action::Loaded(
             key,
             PathBuf::from("/tmp/other.rsk"),
             Ok(b"{}".to_vec()),
         ));
-        assert_eq!(app.doc, original);
-        assert!(app.path.is_none());
+        assert_eq!(app.tab.doc, original);
+        assert!(app.tab.path.is_none());
     }
 
     #[test]
@@ -343,25 +343,25 @@ mod tests {
                         None,
                         Point::default(),
                     ));
-                    app.caption = "Uncommitted caption".into();
+                    app.tab.caption = "Uncommitted caption".into();
                 }
                 "atom draft" => {
-                    let id = app.doc.add_atom("N", Point::default());
+                    let id = app.tab.doc.add_atom("N", Point::default());
                     let _ = app.atom_text_action(super::super::atom_text::Action::Begin(Some(id)));
                     let _ =
                         app.atom_text_action(super::super::atom_text::Action::Input("OH".into()));
                 }
                 "closing" => {
-                    app.recovery = Some(reshiki::recovery::Recovery {
+                    app.tab.recovery = Some(reshiki::recovery::Recovery {
                         session: dir.path().join("session.json"),
                     });
                     let _ = app.close_after_recovery(iced::window::Id::unique());
-                    assert!(app.autosave.closing());
+                    assert!(app.exit.closing());
                 }
                 "restarting" => app.updates.restarting = true,
                 _ => unreachable!(),
             }
-            let original = app.doc.clone();
+            let original = app.tab.doc.clone();
             app.status = "Current drawing".into();
             let runtime = tokio::runtime::Runtime::new().unwrap();
             let opened =
@@ -372,13 +372,13 @@ mod tests {
                 followup.units() > 0,
                 "Open Finder file separately: {context}"
             );
-            assert_eq!(app.doc, original, "{context}");
-            assert_eq!(app.inline_text.is_some(), context == "inline draft");
-            assert_eq!(app.atom_text.is_some(), context == "atom draft");
+            assert_eq!(app.tab.doc, original, "{context}");
+            assert_eq!(app.tab.inline_text.is_some(), context == "inline draft");
+            assert_eq!(app.tab.atom_text.is_some(), context == "atom draft");
             if context == "inline draft" {
-                assert_eq!(app.caption, "Uncommitted caption");
+                assert_eq!(app.tab.caption, "Uncommitted caption");
             }
-            assert!(app.path.is_none());
+            assert!(app.tab.path.is_none());
             assert_eq!(app.status, "Current drawing");
             assert!(!app.native_opening);
         }
@@ -388,17 +388,17 @@ mod tests {
     #[test]
     fn invalid_native_files_report_errors_without_panicking_or_changing_the_drawing() {
         let (mut app, _) = App::new();
-        let original = app.doc.clone();
+        let original = app.tab.doc.clone();
         let path = PathBuf::from("/tmp/bad.rsk");
         let key = begin_read(&mut app, &path);
         let task = app.mac_file_action(Action::Loaded(key, path.clone(), Ok(b"not json".to_vec())));
         assert!(task.units() > 0);
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
         assert!(!app.error, "Validation has not run on the event loop");
         super::super::files::finish_dispatched_open(&mut app, path, Ok(b"not json".to_vec()));
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
         assert!(app.error);
-        assert!(app.path.is_none());
+        assert!(app.tab.path.is_none());
         assert!(!app.native_opening);
     }
 }

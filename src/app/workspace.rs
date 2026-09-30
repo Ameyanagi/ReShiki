@@ -21,9 +21,10 @@ mod selection_canvas_qa;
 
 impl App {
     pub(super) fn selection_summary(&self) -> String {
-        let selected: std::collections::HashSet<_> = self.selected.iter().copied().collect();
-        let groups = self.doc.outer_selected_groups(&self.selected);
+        let selected: std::collections::HashSet<_> = self.tab.selected.iter().copied().collect();
+        let groups = self.tab.doc.outer_selected_groups(&self.tab.selected);
         let covered: std::collections::HashSet<_> = self
+            .tab
             .doc
             .groups
             .iter()
@@ -31,12 +32,14 @@ impl App {
             .flat_map(|g| &g.members)
             .collect();
         let atoms = self
+            .tab
             .doc
             .atoms
             .iter()
             .filter(|a| selected.contains(&a.id))
             .count();
         let points = self
+            .tab
             .doc
             .atoms
             .iter()
@@ -45,12 +48,13 @@ impl App {
             })
             .count();
         let bonds = self
+            .tab
             .doc
             .bonds
             .iter()
             .filter(|b| selected.contains(&b.a) && selected.contains(&b.b))
             .count();
-        let objects = self.selected.len().saturating_sub(atoms);
+        let objects = self.tab.selected.len().saturating_sub(atoms);
         let mut parts = Vec::new();
         let mut add = |count: usize, label: &str| {
             if count > 0 {
@@ -60,7 +64,7 @@ impl App {
                 ));
             }
         };
-        if !groups.is_empty() && self.selected.iter().all(|id| covered.contains(id)) {
+        if !groups.is_empty() && self.tab.selected.iter().all(|id| covered.contains(id)) {
             add(groups.len(), "group");
         } else {
             add(atoms.saturating_sub(points), "atom");
@@ -76,22 +80,23 @@ impl App {
     }
 
     pub(super) fn can_group(&self) -> bool {
-        if self.selected.len() <= 1 {
+        if self.tab.selected.len() <= 1 {
             return false;
         }
-        let selected: std::collections::HashSet<_> = self.selected.iter().copied().collect();
-        !self.doc.groups.iter().any(|g| {
-            g.members.len() == self.selected.len()
+        let selected: std::collections::HashSet<_> = self.tab.selected.iter().copied().collect();
+        !self.tab.doc.groups.iter().any(|g| {
+            g.members.len() == self.tab.selected.len()
                 && g.members.iter().all(|id| selected.contains(id))
         })
     }
     pub(super) fn graphic_panel(&self) -> Element<'_, Message> {
         use reshiki::graphics::{BracketSides, GraphicChange, GraphicKind, LinePattern};
         let selected: Vec<_> = self
+            .tab
             .doc
             .graphics
             .iter()
-            .filter(|g| self.selected.contains(&g.id) && g.picture.is_none())
+            .filter(|g| self.tab.selected.contains(&g.id) && g.picture.is_none())
             .collect();
         let kind = match self.tool {
             Tool::Graphic(k) => k,
@@ -101,9 +106,9 @@ impl App {
                 .unwrap_or(GraphicKind::Rectangle),
         };
         // The same palette rows as the color popover, on the canvas color.
-        let palette = Palette::of(&self.doc);
-        let hues = reshiki::palette::Hues::of(&self.doc);
-        let style = &self.graphic_style;
+        let palette = Palette::of(&self.tab.doc);
+        let hues = reshiki::palette::Hues::of(&self.tab.doc);
+        let style = &self.tab.graphic_style;
         let swatches =
             |row: Row, first: (bool, Option<Message>), change: fn(Paint) -> GraphicChange| {
                 super::color_popover::paper(
@@ -116,7 +121,7 @@ impl App {
                         };
                         (current, Some(Message::GraphicStyle(change(color))))
                     }),
-                    self.doc.canvas_theme,
+                    self.tab.doc.canvas_theme,
                 )
                 .padding([6, 6])
             };
@@ -129,7 +134,7 @@ impl App {
             text(kind.to_string()).size(14),
             row![
                 text("Line (pt)").size(11),
-                crate::appearance::text_input("0.6", &self.graphic_width_input)
+                crate::appearance::text_input("0.6", &self.tab.graphic_width_input)
                     .on_input(Message::GraphicWidth)
                     .on_submit(Message::ApplyGraphicWidth)
                     .size(12)
@@ -137,7 +142,7 @@ impl App {
                     .width(48),
                 crate::appearance::pick_list(
                     [LinePattern::Solid, LinePattern::Dashed, LinePattern::Dotted],
-                    Some(self.graphic_style.pattern),
+                    Some(self.tab.graphic_style.pattern),
                     |p| Message::GraphicStyle(GraphicChange::Pattern(p))
                 )
                 .text_size(12)
@@ -154,7 +159,7 @@ impl App {
                 ),
                 GraphicChange::Stroke
             ),
-            crate::appearance::text_input("#RRGGBB", &self.graphic_stroke_input)
+            crate::appearance::text_input("#RRGGBB", &self.tab.graphic_stroke_input)
                 .on_input(Message::GraphicStroke)
                 .on_submit(Message::ApplyGraphicStroke)
                 .size(12)
@@ -168,13 +173,13 @@ impl App {
                     kind,
                     reshiki::document::Point::default(),
                     reshiki::document::Point::default(),
-                    self.graphic_style.clone(),
-                    self.bracket_sides,
+                    self.tab.graphic_style.clone(),
+                    self.tab.bracket_sides,
                     false,
                 )
             });
-            preview.phase = self.orbital_phase;
-            preview.phase_flipped = self.phase_flipped;
+            preview.phase = self.tab.orbital_phase;
+            preview.phase_flipped = self.tab.phase_flipped;
             panel = panel.push(container(
                 canvas(crate::canvas::ScientificPreview(preview))
                     .width(Length::Fill)
@@ -184,12 +189,12 @@ impl App {
         match kind {
             GraphicKind::Symbol(kind) => {
                 panel=panel.push(crate::appearance::pick_list(reshiki::scientific::SymbolKind::ALL,Some(kind),|k|Message::ScientificKind(GraphicKind::Symbol(k))).text_size(12).padding(6).width(Length::Fill))
-                    .push(hover_hint(checkbox(self.attach_symbols).label("Attach to atoms").on_toggle(Message::AttachSymbols).size(14).text_size(12), "Attached charges and radicals update chemistry. Lone pairs annotate the atom. H and attachment symbols use free placement.", tooltip::Position::Top));
+                    .push(hover_hint(checkbox(self.tab.attach_symbols).label("Attach to atoms").on_toggle(Message::AttachSymbols).size(14).text_size(12), "Attached charges and radicals update chemistry. Lone pairs annotate the atom. H and attachment symbols use free placement.", tooltip::Position::Top));
             }
             GraphicKind::Orbital(kind) => {
                 panel=panel.push(hover_hint(crate::appearance::pick_list(reshiki::scientific::OrbitalKind::ALL,Some(kind),|k|Message::ScientificKind(GraphicKind::Orbital(k))).text_size(12).padding(6).width(Length::Fill), "Drag from the orbital node to set direction and size. Click uses one bond length. Shift snaps to 15°. Group with a molecule to move them together.", tooltip::Position::Top))
-                    .push(crate::appearance::pick_list(reshiki::scientific::Phase::ALL,Some(self.orbital_phase),Message::OrbitalPhase).text_size(12).padding(6).width(Length::Fill))
-                    .push(checkbox(self.phase_flipped).label("Reverse phases").on_toggle_maybe((!matches!(kind, reshiki::scientific::OrbitalKind::S | reshiki::scientific::OrbitalKind::Sigma | reshiki::scientific::OrbitalKind::Lobe)).then_some(Message::FlipPhase)).size(14).text_size(12));
+                    .push(crate::appearance::pick_list(reshiki::scientific::Phase::ALL,Some(self.tab.orbital_phase),Message::OrbitalPhase).text_size(12).padding(6).width(Length::Fill))
+                    .push(checkbox(self.tab.phase_flipped).label("Reverse phases").on_toggle_maybe((!matches!(kind, reshiki::scientific::OrbitalKind::S | reshiki::scientific::OrbitalKind::Sigma | reshiki::scientific::OrbitalKind::Lobe)).then_some(Message::FlipPhase)).size(14).text_size(12));
             }
             _ => {}
         }
@@ -212,7 +217,7 @@ impl App {
                     |color| GraphicChange::Fill(Some(color)),
                 ))
                 .push(
-                    crate::appearance::text_input("#RRGGBB", &self.graphic_fill_input)
+                    crate::appearance::text_input("#RRGGBB", &self.tab.graphic_fill_input)
                         .on_input(Message::GraphicFill)
                         .on_submit(Message::ApplyGraphicFill)
                         .size(12)
@@ -226,7 +231,7 @@ impl App {
             panel = panel.push(
                 crate::appearance::pick_list(
                     [BracketSides::Both, BracketSides::Left, BracketSides::Right],
-                    Some(self.bracket_sides),
+                    Some(self.tab.bracket_sides),
                     Message::GraphicSides,
                 )
                 .text_size(12)
@@ -292,7 +297,7 @@ impl App {
             .size(12)
             .padding(6),
             hover_hint(
-                crate::appearance::text_input("pt", &self.font_size_input)
+                crate::appearance::text_input("pt", &self.tab.font_size_input)
                     .on_input(Message::FontSize)
                     .on_submit(Message::ApplyFontSize)
                     .width(46)
@@ -349,10 +354,11 @@ impl App {
         .align_y(Alignment::Center);
         let group_alignment = self.selected_group_alignment();
         let has_captions = self
+            .tab
             .doc
             .annotations
             .iter()
-            .any(|a| self.selected.contains(&a.id));
+            .any(|a| self.tab.selected.contains(&a.id));
         tools = tools.push(self.alignment_menu(group_alignment.is_some() && !has_captions));
         if let Some(alignment) = group_alignment {
             use reshiki::abbreviations::LabelAlignment;
@@ -379,7 +385,7 @@ impl App {
     }
 
     pub(super) fn text_panel(&self) -> Element<'_, Message> {
-        if self.inline_text.is_some() {
+        if self.tab.inline_text.is_some() {
             return column![
                 section("EDITING ON CANVAS"),
                 text("Select text in the canvas editor, then use the Style toolbar to format it.")
@@ -400,7 +406,7 @@ impl App {
                     text("Line spacing").size(11).width(Length::Fill),
                     crate::appearance::pick_list(
                         [1.0_f32, 1.2, 1.5, 2.0],
-                        Some(self.caption_format.line_spacing),
+                        Some(self.tab.caption_format.line_spacing),
                         Message::TextSpacing
                     )
                     .text_size(12)
@@ -408,7 +414,7 @@ impl App {
                 ],
                 row![
                     text("Wrap width (pt)").size(11).width(Length::Fill),
-                    crate::appearance::text_input("Auto", &self.text_width_input)
+                    crate::appearance::text_input("Auto", &self.tab.text_width_input)
                         .on_input(Message::TextWidth)
                         .on_submit(Message::ApplyTextWidth)
                         .size(12)
@@ -435,8 +441,9 @@ impl App {
             .into();
         }
         let selected = self
+            .tab
             .caption_target
-            .is_some_and(|id| self.selected.contains(&id));
+            .is_some_and(|id| self.tab.selected.contains(&id));
         column![
             section(if selected { "EDIT TEXT" } else { "NEW TEXT" }),
             text(if selected {
@@ -446,7 +453,7 @@ impl App {
             })
             .size(11)
             .style(muted_text),
-            text_editor(&self.caption_editor)
+            text_editor(&self.tab.caption_editor)
                 .on_action(Message::CaptionAction)
                 .placeholder("Reaction conditions, labels, notes…")
                 .height(116)
@@ -485,7 +492,7 @@ impl App {
                 text("Line spacing").size(11).width(Length::Fill),
                 crate::appearance::pick_list(
                     [1.0_f32, 1.2, 1.5, 2.0],
-                    Some(self.caption_format.line_spacing),
+                    Some(self.tab.caption_format.line_spacing),
                     Message::TextSpacing
                 )
                 .text_size(12)
@@ -494,7 +501,7 @@ impl App {
             .align_y(Alignment::Center),
             row![
                 text("Wrap width (pt)").size(11).width(Length::Fill),
-                crate::appearance::text_input("Auto", &self.text_width_input)
+                crate::appearance::text_input("Auto", &self.tab.text_width_input)
                     .on_input(Message::TextWidth)
                     .on_submit(Message::ApplyTextWidth)
                     .size(12)
@@ -515,42 +522,44 @@ impl App {
         let mut content = column![self.command_bar(), self.style_bar()];
         let drawing: Element<'_, Edit> = canvas(MoleculeCanvas {
             element: &self.element,
-            joining: self.joining.as_ref().map(|s| &s.prepared),
+            joining: self.tab.joining.as_ref().map(|s| &s.prepared),
             hidden_annotation: self.inline_label_id(),
-            bond_drawing: self.bond_drawing,
-            chain_drawing: self.chain_drawing,
+            bond_drawing: self.tab.bond_drawing,
+            chain_drawing: self.tab.chain_drawing,
             graphic_constrain: self.toolbar.graphic(self.tool).is_some_and(|p| p.constrain),
-            graphic_arc: self.arc_editor.geometry,
-            graphic_style: &self.graphic_style,
-            orbital_phase: self.orbital_phase,
-            phase_flipped: self.phase_flipped,
-            attach_symbols: self.attach_symbols,
-            arrow_preset: self.arrow_style,
-            arrow_style: &self.arrows.style,
-            bracket_sides: self.bracket_sides,
+            graphic_arc: self.tab.arc_editor.geometry,
+            graphic_style: &self.tab.graphic_style,
+            orbital_phase: self.tab.orbital_phase,
+            phase_flipped: self.tab.phase_flipped,
+            attach_symbols: self.tab.attach_symbols,
+            arrow_preset: self.tab.arrow_style,
+            arrow_style: &self.tab.arrows.style,
+            bracket_sides: self.tab.bracket_sides,
             doc: self.display_document(),
-            selected: if self.cleanup.is_some() || self.inline_text.is_some() {
+            selected: if self.tab.cleanup.is_some() || self.tab.inline_text.is_some() {
                 &[]
             } else {
-                &self.selected
+                &self.tab.selected
             },
-            tool: if self.cleanup.is_some() {
+            tool: if self.tab.cleanup.is_some() {
                 Tool::Select
             } else {
                 self.tool
             },
-            camera: self.camera,
+            camera: self.tab.camera,
             grid: self.grid,
             guides: self.guides,
             smart_guides: self.appearance.smart_guides,
             ring_size: self.ring_size,
             aromatic_ring: self.aromatic_ring,
             template_connection: self
+                .tab
                 .joining
                 .as_ref()
                 .map(|s| s.mode)
                 .unwrap_or(self.templates.connection),
             template: self
+                .tab
                 .joining
                 .as_ref()
                 .map(|s| (&s.prepared.fragment, s.anchor))
@@ -571,7 +580,7 @@ impl App {
                 .on_resize(Message::Viewport)
                 .into(),
         );
-        let context: Element<'_, Message> = if let Some(preview) = &self.cleanup {
+        let context: Element<'_, Message> = if let Some(preview) = &self.tab.cleanup {
             use reshiki::cleanup::Scope;
             let scopes = vec![Scope::SelectedAtoms, Scope::SelectedMolecules];
             let mut bar = column![
@@ -592,7 +601,7 @@ impl App {
                     Space::new().width(Length::Fill),
                     command("Cancel", Message::CancelCleanup),
                     button(text("Apply").size(12))
-                        .on_press_maybe((!self.busy).then_some(Message::ApplyCleanup))
+                        .on_press_maybe((!self.tab.busy).then_some(Message::ApplyCleanup))
                         .style(crate::appearance::primary),
                 ]
                 .spacing(10)
@@ -668,7 +677,7 @@ impl App {
                 Icon::Undo,
                 keyed("Undo", &Message::Undo),
                 self.text_history_available(false)
-                    .unwrap_or_else(|| self.history.can_undo())
+                    .unwrap_or_else(|| self.tab.history.can_undo())
                     .then_some(Message::Undo),
                 false
             ),
@@ -676,7 +685,7 @@ impl App {
                 Icon::Redo,
                 keyed("Redo", &Message::Redo),
                 self.text_history_available(true)
-                    .unwrap_or_else(|| self.history.can_redo())
+                    .unwrap_or_else(|| self.tab.history.can_redo())
                     .then_some(Message::Redo),
                 false
             ),
@@ -687,7 +696,7 @@ impl App {
                     "Edited".into()
                 } else if self.office_document() {
                     keyed("Office drawing", &Message::Save) + " updates Office"
-                } else if self.path.is_some() {
+                } else if self.tab.path.is_some() {
                     "All changes saved".into()
                 } else {
                     "Not saved to file".into()
@@ -712,12 +721,16 @@ impl App {
                 self.inspector_open && self.inspector_tab == InspectorTab::Import
             ),
             command(
-                if self.busy { "Checking…" } else { "Check" },
+                if self.tab.busy {
+                    "Checking…"
+                } else {
+                    "Check"
+                },
                 Message::Analyze
             )
-            .on_press_maybe((!self.busy).then_some(Message::Analyze)),
+            .on_press_maybe((!self.tab.busy).then_some(Message::Analyze)),
             command("Clean up…", Message::Clean)
-                .on_press_maybe((!self.busy).then_some(Message::Clean)),
+                .on_press_maybe((!self.tab.busy).then_some(Message::Clean)),
             action(
                 Icon::Export,
                 "Export",
@@ -786,7 +799,7 @@ impl App {
                 let icon = if *tool == Tool::Ring {
                     Icon::Ring(self.ring_size, self.aromatic_ring)
                 } else if *tool == Tool::Arrow {
-                    Icon::Arrow(self.arrow_style)
+                    Icon::Arrow(self.tab.arrow_style)
                 } else {
                     Icon::Tool(*tool)
                 };
@@ -833,7 +846,7 @@ impl App {
                         .on_press(Message::Element(symbol.into()))
                         .style(element_control(
                             self.tool == Tool::Atom && self.element == symbol,
-                            &self.doc,
+                            &self.tab.doc,
                             symbol,
                         )),
                 );
@@ -879,10 +892,10 @@ impl App {
 
     /// Bond length and angle constraints differ from the document's.
     fn bond_drawing_changed(&self) -> bool {
-        (self.bond_drawing.length - self.doc.drawing_style.bond_length_world).abs() > 0.001
-            || self.chain_drawing.angle != 120.
-            || !self.bond_drawing.fixed_length
-            || !self.bond_drawing.fixed_angles
+        (self.tab.bond_drawing.length - self.tab.doc.drawing_style.bond_length_world).abs() > 0.001
+            || self.tab.chain_drawing.angle != 120.
+            || !self.tab.bond_drawing.fixed_length
+            || !self.tab.bond_drawing.fixed_angles
     }
 
     /// Width of `bond_constraints`: two checkboxes (13 px box, 8 px gap), the
@@ -895,18 +908,18 @@ impl App {
     /// row command, so that it can fold into ⋯.
     fn bond_constraints(&self) -> Element<'_, Message> {
         row![
-            checkbox(self.bond_drawing.fixed_length)
+            checkbox(self.tab.bond_drawing.fixed_length)
                 .label("Length")
                 .on_toggle(Message::FixedLength)
                 .size(13)
                 .text_size(11),
             container(unit_field(
-                crate::appearance::text_input("14.4", &self.drawing_length_input)
+                crate::appearance::text_input("14.4", &self.tab.drawing_length_input)
                     .on_input(Message::DrawingLength),
                 "pt",
             ))
             .width(UNIT_FIELD),
-            checkbox(self.bond_drawing.fixed_angles)
+            checkbox(self.tab.bond_drawing.fixed_angles)
                 .label("Angles")
                 .on_toggle(Message::FixedAngles)
                 .size(13)
@@ -949,8 +962,12 @@ impl App {
     /// A partial selection drags bonded atoms along, following Length / Angles.
     fn moving_bonded_selection(&self) -> bool {
         matches!(self.tool, Tool::Select | Tool::Lasso) && {
-            let selected = self.doc.expand_abbreviation_selection(&self.selected);
-            self.doc
+            let selected = self
+                .tab
+                .doc
+                .expand_abbreviation_selection(&self.tab.selected);
+            self.tab
+                .doc
                 .bonds
                 .iter()
                 .any(|bond| selected.contains(&bond.a) != selected.contains(&bond.b))
@@ -972,7 +989,7 @@ impl App {
                 enabled: true,
             });
         }
-        if !matches!(self.tool, Tool::Select | Tool::Lasso) || self.selected.is_empty() {
+        if !matches!(self.tool, Tool::Select | Tool::Lasso) || self.tab.selected.is_empty() {
             return commands;
         }
         commands.extend([
@@ -981,7 +998,11 @@ impl App {
                 menu: "Move & attach…",
                 hint: "Join the selection to another structure at an atom or bond",
                 message: Message::Join(super::joining::Action::Begin),
-                enabled: self.selected.iter().any(|id| self.doc.atom(*id).is_some()),
+                enabled: self
+                    .tab
+                    .selected
+                    .iter()
+                    .any(|id| self.tab.doc.atom(*id).is_some()),
             },
             RowCommand {
                 label: "Group",
@@ -991,7 +1012,12 @@ impl App {
                 enabled: self.can_group(),
             },
         ]);
-        if !self.doc.outer_selected_groups(&self.selected).is_empty() {
+        if !self
+            .tab
+            .doc
+            .outer_selected_groups(&self.tab.selected)
+            .is_empty()
+        {
             commands.push(RowCommand {
                 label: "Ungroup",
                 menu: "Ungroup",
@@ -1004,7 +1030,7 @@ impl App {
     }
 
     pub(super) fn context_bar(&self) -> Element<'_, Message> {
-        if self.joining.is_some() {
+        if self.tab.joining.is_some() {
             return self.join_bar();
         }
         container(responsive(move |size| self.context_row(size.width)).height(Length::Shrink))
@@ -1030,7 +1056,7 @@ impl App {
             super::object_toolbar::GROUP_WIDTH,
             super::object_toolbar::COMPACT_WIDTH,
         ));
-        let summary = (select && !self.selected.is_empty()).then(|| self.selection_summary());
+        let summary = (select && !self.tab.selected.is_empty()).then(|| self.selection_summary());
         let options = self.options_width();
         let fit = fit(
             width,
@@ -1164,7 +1190,7 @@ impl App {
                     hover_hint(
                         row![
                             text(chain_atoms_label(mode)).size(11),
-                            crate::appearance::text_input("Auto", &self.chain_atoms_input)
+                            crate::appearance::text_input("Auto", &self.tab.chain_atoms_input)
                                 .on_input(Message::ChainAtoms)
                                 .width(49)
                                 .size(12)
@@ -1179,7 +1205,7 @@ impl App {
                     row![
                         text("Angle").size(11),
                         container(unit_field(
-                            crate::appearance::text_input("120", &self.chain_angle_input)
+                            crate::appearance::text_input("120", &self.tab.chain_angle_input)
                                 .on_input(Message::ChainAngle),
                             "°",
                         ))
@@ -1319,7 +1345,7 @@ impl App {
                 vec![
                     crate::appearance::pick_list(
                         reshiki::arrows::Preset::ALL,
-                        Some(self.arrow_style),
+                        Some(self.tab.arrow_style),
                         Message::ArrowStyle,
                     )
                     .text_size(12)
@@ -1347,7 +1373,7 @@ impl App {
                 "Click an atom to name it · Click empty space for a caption · Escape cancels",
             ),
             Tool::Tilt => {
-                let enabled = crate::canvas::tilt::available(&self.doc, &self.selected);
+                let enabled = crate::canvas::tilt::available(&self.tab.doc, &self.tab.selected);
                 let mut tilts = row![].spacing(4);
                 for (label, transform) in [
                     ("X −15°", reshiki::editing::Transform::TiltX(-15.)),
@@ -1378,7 +1404,7 @@ impl App {
             }
             Tool::Select | Tool::Lasso => {
                 let mut options = Vec::new();
-                if summary && !self.selected.is_empty() {
+                if summary && !self.tab.selected.is_empty() {
                     options.push(
                         hover_hint(
                             text(self.selection_summary()).size(11).style(muted_text),
@@ -1483,7 +1509,7 @@ impl App {
             InspectorTab::Pages => self.pages_panel(),
             InspectorTab::DrawingStyle => self.drawing_style_panel(),
             InspectorTab::ThemeGenerator => self.theme_generator_panel(),
-            InspectorTab::Properties if self.joining.is_some() => self.join_panel(),
+            InspectorTab::Properties if self.tab.joining.is_some() => self.join_panel(),
             InspectorTab::Properties => self.properties_panel(),
             InspectorTab::Labels => self.atom_labels_panel(),
             InspectorTab::Abbreviations => self.abbreviations_panel(),
@@ -1543,7 +1569,7 @@ impl App {
                 button(text("Save selection as template").size(12))
                     .padding(7)
                     .width(Length::Fill)
-                    .on_press_maybe((!self.selected.is_empty()).then(|| action(A::BeginSave))),
+                    .on_press_maybe((!self.tab.selected.is_empty()).then(|| action(A::BeginSave))),
             );
             body = body.push(
                 row![
@@ -1672,7 +1698,7 @@ impl App {
                         button(text("Replace from selection").size(11))
                             .padding(6)
                             .on_press_maybe(
-                                (!self.selected.is_empty()).then(|| action(A::Replace)),
+                                (!self.tab.selected.is_empty()).then(|| action(A::Replace)),
                             ),
                     )
                     .push(command("Remove template", action(A::Remove)));
@@ -1780,10 +1806,11 @@ impl App {
         use super::abbreviations::Action as A;
         let action = Message::Abbreviations;
         let selected: Vec<_> = self
+            .tab
             .doc
             .abbreviations
             .iter()
-            .filter(|g| g.members.iter().any(|id| self.selected.contains(id)))
+            .filter(|g| g.members.iter().any(|id| self.tab.selected.contains(id)))
             .collect();
         let choices: Vec<String> = reshiki::abbreviations::PRESETS
             .iter()
@@ -1807,7 +1834,7 @@ impl App {
             text("Compact labels with the complete molecule inside.").size(12).style(muted_text),
             row![
                 item("Expand selected", action(A::Expand), !selected.is_empty(), "Restore the atoms and bonds of the selected abbreviations", "Select an abbreviation first"),
-                item("Expand all", action(A::ExpandAll), !self.doc.abbreviations.is_empty(), "Restore every abbreviation in the drawing", "The drawing has no abbreviations"),
+                item("Expand all", action(A::ExpandAll), !self.tab.doc.abbreviations.is_empty(), "Restore every abbreviation in the drawing", "The drawing has no abbreviations"),
             ]
             .spacing(6),
             horizontal_line(),
@@ -1816,19 +1843,19 @@ impl App {
             item(
                 "Replace selected endpoint",
                 action(A::Replace),
-                !self.busy && !self.selected.is_empty(),
+                !self.tab.busy && !self.tab.selected.is_empty(),
                 "Replaces one terminal atom or an existing abbreviation. Its connecting bond stays in place.",
-                if self.busy { wait } else { "Select one terminal atom or an existing abbreviation" },
+                if self.tab.busy { wait } else { "Select one terminal atom or an existing abbreviation" },
             ),
             horizontal_line(),
             item(
                 "Contract common groups",
                 action(A::Find),
-                !self.busy && !self.doc.atoms.is_empty(),
+                !self.tab.busy && !self.tab.doc.atoms.is_empty(),
                 "Contracts recognized common groups into labels",
-                if self.busy { wait } else { "Draw or import a molecule first" },
+                if self.tab.busy { wait } else { "Draw or import a molecule first" },
             ),
-            text(if self.selected.is_empty() { "Searches the whole drawing." } else { "Complete groups in the selection only." }).size(11).style(muted_text),
+            text(if self.tab.selected.is_empty() { "Searches the whole drawing." } else { "Complete groups in the selection only." }).size(11).style(muted_text),
             horizontal_line(),
             text("NAME A SELECTED FRAGMENT").size(11).style(muted_text),
             crate::appearance::text_input("Label, e.g. Ar", &self.abbreviations.label).on_input(move |s| action(A::Label(s))).on_submit(action(A::Contract)).size(13),
@@ -1836,9 +1863,9 @@ impl App {
             item(
                 "Contract selection",
                 action(A::Contract),
-                !self.selected.is_empty() && !label.is_empty(),
+                !self.tab.selected.is_empty() && !label.is_empty(),
                 "Select a connected fragment whose outside bonds meet one selected atom. A custom name does not change its chemistry.",
-                if self.selected.is_empty() { "Select a connected fragment first" } else { "Enter a label first" },
+                if self.tab.selected.is_empty() { "Select a connected fragment first" } else { "Enter a label first" },
             ),
             horizontal_line(),
         ].spacing(10);
@@ -1846,7 +1873,7 @@ impl App {
             let atoms = group
                 .members
                 .iter()
-                .filter(|id| self.doc.atom(**id).is_some_and(|a| a.element != "*"))
+                .filter(|id| self.tab.doc.atom(**id).is_some_and(|a| a.element != "*"))
                 .count();
             body = body.push(
                 text(format!(
@@ -1869,6 +1896,7 @@ impl App {
         use reshiki::atom_labels::{Carbons, HydrogenPosition};
         let ids = self.label_ids();
         let atoms: Vec<_> = self
+            .tab
             .doc
             .atoms
             .iter()
@@ -1876,10 +1904,14 @@ impl App {
             .collect();
         let carbon_values: Vec<_> = atoms
             .iter()
-            .map(|a| a.display.carbons.unwrap_or(self.doc.atom_labels.carbons))
+            .map(|a| {
+                a.display
+                    .carbons
+                    .unwrap_or(self.tab.doc.atom_labels.carbons)
+            })
             .collect();
         let carbons = if atoms.is_empty() {
-            Some(self.doc.atom_labels.carbons)
+            Some(self.tab.doc.atom_labels.carbons)
         } else {
             carbon_values
                 .first()
@@ -1887,18 +1919,21 @@ impl App {
                 .filter(|c| carbon_values.iter().all(|v| v == c))
         };
         let hydrogens = if atoms.is_empty() {
-            self.doc.atom_labels.hydrogens
+            self.tab.doc.atom_labels.hydrogens
         } else {
             atoms
                 .iter()
-                .all(|a| reshiki::atom_labels::hydrogens(a, &self.doc))
+                .all(|a| reshiki::atom_labels::hydrogens(a, &self.tab.doc))
         };
         let stereo = if atoms.is_empty() {
-            self.doc.atom_labels.stereo
+            self.tab.doc.atom_labels.stereo
         } else {
-            atoms
-                .iter()
-                .all(|a| a.display.stereo.show.unwrap_or(self.doc.atom_labels.stereo))
+            atoms.iter().all(|a| {
+                a.display
+                    .stereo
+                    .show
+                    .unwrap_or(self.tab.doc.atom_labels.stereo)
+            })
         };
         let position = atoms
             .first()
@@ -1912,7 +1947,7 @@ impl App {
             section("ATOM LABELS"),
             crate::appearance::pick_list(
                 [Scope::Drawing, Scope::Selection],
-                Some(self.labels.scope),
+                Some(self.tab.labels.scope),
                 |s| Message::Labels(A::Scope(s))
             )
             .text_size(12)
@@ -1946,7 +1981,7 @@ impl App {
             horizontal_line(),
             section("ATOM NUMBERS"),
             row![
-                crate::appearance::text_input("1, atom1, a, α…", &self.labels.seed)
+                crate::appearance::text_input("1, atom1, a, α…", &self.tab.labels.seed)
                     .on_input(|s| Message::Labels(A::Seed(s)))
                     .on_submit(Message::Labels(A::Number))
                     .size(12)
@@ -1964,7 +1999,7 @@ impl App {
         if ids.len() == 1 {
             body = body.push(text("Custom atom number").size(12)).push(
                 row![
-                    crate::appearance::text_input("e.g. Cα or 12a", &self.labels.number)
+                    crate::appearance::text_input("e.g. Cα or 12a", &self.tab.labels.number)
                         .on_input(|s| Message::Labels(A::Text(s)))
                         .on_submit(Message::Labels(A::ApplyText))
                         .size(12)
@@ -1988,7 +2023,7 @@ impl App {
                     .size(11)
                     .style(muted_text),
             );
-        if let Some(error) = &self.chemistry_notice {
+        if let Some(error) = &self.tab.chemistry_notice {
             body = body.push(
                 text(error)
                     .size(11)
@@ -1999,7 +2034,7 @@ impl App {
             .push(section("INDICATOR APPEARANCE"))
             .push(
                 row![
-                    crate::appearance::text_input("Size in pt", &self.labels.size)
+                    crate::appearance::text_input("Size in pt", &self.tab.labels.size)
                         .on_input(|s| Message::Labels(A::Size(s)))
                         .on_submit(Message::Labels(A::ApplySize))
                         .size(12)
@@ -2171,8 +2206,8 @@ impl App {
                 .style(control(true)),
             );
         }
-        if !self.autosave_status.is_empty() {
-            let failed = self.autosave_status.starts_with("Recovery save failed");
+        if !self.tab.autosave_status.is_empty() {
+            let failed = self.tab.autosave_status.starts_with("Recovery save failed");
             status = status.push(hover_hint(
                 container(
                     container(Space::new().width(7).height(7)).style(move |theme| {
@@ -2197,7 +2232,7 @@ impl App {
                     }),
                 )
                 .padding(5),
-                self.autosave_status.as_str(),
+                self.tab.autosave_status.as_str(),
                 tooltip::Position::Top,
             ));
         }
@@ -2207,7 +2242,7 @@ impl App {
             .push(command("View", Message::ToggleView).style(control(self.view_open)))
             .push(command("−", Message::Zoom(0.8)))
             .push(
-                text(format!("{:.0}%", self.camera.zoom * 100.0))
+                text(format!("{:.0}%", self.tab.camera.zoom * 100.0))
                     .size(11)
                     .width(38)
                     .center(),
@@ -2224,11 +2259,11 @@ impl App {
         use reshiki::document_styles::Preset;
         let current = Preset::ALL
             .into_iter()
-            .find(|p| p.style() == self.doc.drawing_style)
+            .find(|p| p.style() == self.tab.doc.drawing_style)
             .map(Choice::Journal)
             .unwrap_or(Choice::Custom);
         let (themes, theme) = self.theme_choices();
-        let dark = self.doc.canvas_theme.is_dark();
+        let dark = self.tab.doc.canvas_theme.is_dark();
         [
             hover_hint(
                 crate::appearance::pick_list(
@@ -2266,7 +2301,7 @@ impl App {
                 )
                 .padding(3)
                 .style(control(false))
-                .on_press(Message::CanvasTheme(self.doc.canvas_theme.toggled())),
+                .on_press(Message::CanvasTheme(self.tab.doc.canvas_theme.toggled())),
                 if dark {
                     "Dark canvas · Switch to light"
                 } else {
@@ -2833,9 +2868,9 @@ mod selection_tests {
     #[test]
     fn row_commands_leave_clipboard_to_menus_and_shortcuts() {
         let (mut app, _) = App::new();
-        app.doc = reshiki::rings::Preset::Regular.document(42., false);
+        app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
         assert!(app.context_commands().is_empty());
-        app.selected = app.doc.all_ids();
+        app.tab.selected = app.tab.doc.all_ids();
         let labels: Vec<_> = app.context_commands().iter().map(|c| c.label).collect();
         assert_eq!(labels, ["Move & attach…", "Group"]);
         let _ = app.update(Message::Group);
@@ -2858,34 +2893,38 @@ mod selection_tests {
                 app.inspector_open = open;
                 app.inspector_tab = tab;
                 app.viewport = iced::Size::new(1000. - app.inspector_width(), 600.);
-                app.camera.zoom = zoom;
-                app.camera.center = Point::new(42., -20.);
-                app.fit_to_view = true;
+                app.tab.camera.zoom = zoom;
+                app.tab.camera.center = Point::new(42., -20.);
+                app.tab.fit_to_view = true;
                 let at = Point::new(-120., 30.);
-                app.doc.annotations.push(Annotation {
+                app.tab.doc.annotations.push(Annotation {
                     id: 1,
                     position: at,
                     text: "Conditions".into(),
                     format: Default::default(),
                 });
-                let before = app.doc.clone();
+                let before = app.tab.doc.clone();
                 let screen = app
+                    .tab
                     .camera
                     .screen(at, iced::Rectangle::with_size(app.viewport));
                 let _ = app.update(Message::Canvas(Edit::Select(vec![1])));
                 let size = app.viewport;
                 let _ = app.update(Message::Viewport(size));
-                assert_eq!(app.camera.zoom, zoom, "Selection must not refit");
+                assert_eq!(app.tab.camera.zoom, zoom, "Selection must not refit");
                 assert_eq!(
-                    app.camera.screen(at, iced::Rectangle::with_size(size)),
+                    app.tab.camera.screen(at, iced::Rectangle::with_size(size)),
                     screen,
                     "Inspector {open:?}/{tab:?}, zoom {zoom}"
                 );
-                assert_eq!(app.doc, before);
-                assert!(!app.history.can_undo());
-                assert!(app.fit_to_view, "A real resize should still refit later");
+                assert_eq!(app.tab.doc, before);
+                assert!(!app.tab.history.can_undo());
+                assert!(
+                    app.tab.fit_to_view,
+                    "A real resize should still refit later"
+                );
                 let _ = app.update(Message::Viewport(iced::Size::new(500., 400.)));
-                assert_ne!(app.camera.zoom, zoom, "A real resize still refits");
+                assert_ne!(app.tab.camera.zoom, zoom, "A real resize still refits");
             }
         }
     }
@@ -2895,7 +2934,7 @@ mod selection_tests {
         let (mut app, _) = App::new();
         app.inspector_open = false;
         app.viewport = iced::Size::new(1000., 600.);
-        app.doc.arrows.push(reshiki::document::Arrow::new(
+        app.tab.doc.arrows.push(reshiki::document::Arrow::new(
             1,
             Point::new(-100., 0.),
             Point::new(100., 0.),
@@ -2904,28 +2943,30 @@ mod selection_tests {
         ));
         app.edit(Edit::Pan(60., -20.));
         app.edit(Edit::Zoom(1.5, Point::new(-40., 10.)));
-        let at = app.doc.arrows[0].start;
+        let at = app.tab.doc.arrows[0].start;
         let before = app
+            .tab
             .camera
             .screen(at, iced::Rectangle::with_size(app.viewport));
         app.edit(Edit::Select(vec![1]));
         assert_eq!(
-            app.camera
+            app.tab
+                .camera
                 .screen(at, iced::Rectangle::with_size(app.viewport)),
             before
         );
-        let camera = app.camera;
+        let camera = app.tab.camera;
         let _ = app.update(Message::Viewport(app.viewport));
-        assert_eq!(app.camera.center, camera.center);
-        assert_eq!(app.camera.zoom, camera.zoom);
+        assert_eq!(app.tab.camera.center, camera.center);
+        assert_eq!(app.tab.camera.zoom, camera.zoom);
         app.edit(Edit::Pan(10., 20.));
-        assert_eq!(app.camera.center, camera.center.offset(-10., -20.));
+        assert_eq!(app.tab.camera.center, camera.center.offset(-10., -20.));
         let _ = app.update(Message::Fit);
-        let zoom = app.camera.zoom;
+        let zoom = app.tab.camera.zoom;
         let _ = app.update(Message::ToggleInspector);
         let _ = app.update(Message::Viewport(iced::Size::new(1000., 600.)));
         assert!(
-            app.camera.zoom > zoom,
+            app.tab.camera.zoom > zoom,
             "Explicit inspector toggle still refits"
         );
     }

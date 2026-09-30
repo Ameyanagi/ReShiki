@@ -25,7 +25,7 @@ impl App {
             return;
         }
         self.printing.active = None;
-        if ticket.epoch != self.file_epoch || ticket.revision != self.revision {
+        if ticket.epoch != self.tab.file_epoch || ticket.revision != self.tab.revision {
             return;
         }
         match result {
@@ -63,7 +63,8 @@ impl App {
                         return Task::none();
                     }
                 };
-                let snapshot = match reshiki::printing::snapshot(&source, &self.selected, scope) {
+                let snapshot = match reshiki::printing::snapshot(&source, &self.tab.selected, scope)
+                {
                     Ok(doc) => doc,
                     Err(error) => {
                         if source.page_layout.is_none() && !source.all_ids().is_empty() {
@@ -77,13 +78,14 @@ impl App {
                 self.printing.next = self.printing.next.wrapping_add(1);
                 let ticket = Ticket {
                     serial: self.printing.next,
-                    epoch: self.file_epoch,
-                    revision: self.revision,
+                    epoch: self.tab.file_epoch,
+                    revision: self.tab.revision,
                 };
                 self.printing.active = Some(ticket.serial);
                 self.error = false;
                 self.status = "Preparing print preview…".into();
                 let mut title = self
+                    .tab
                     .path
                     .as_ref()
                     .and_then(|p| p.file_stem())
@@ -109,7 +111,9 @@ impl App {
                 }
                 match result {
                     Ok(job) => {
-                        if ticket.epoch == self.file_epoch && ticket.revision == self.revision {
+                        if ticket.epoch == self.tab.file_epoch
+                            && ticket.revision == self.tab.revision
+                        {
                             self.status = "Print dialog open".into();
                         }
                         return Task::perform(reshiki::printing::show_dialog(job), move |result| {
@@ -131,17 +135,17 @@ mod tests {
     use reshiki::document::{Document, Point};
     fn ready() -> App {
         let (mut app, _) = App::new();
-        app.busy = false;
-        app.doc = Document::default();
-        app.doc.add_atom("O", Point::default());
-        app.saved = app.doc.clone();
+        app.tab.busy = false;
+        app.tab.doc = Document::default();
+        app.tab.doc.add_atom("O", Point::default());
+        app.tab.saved = app.tab.doc.clone();
         app
     }
     fn ticket(app: &App, serial: u64) -> Ticket {
         Ticket {
             serial,
-            epoch: app.file_epoch,
-            revision: app.revision,
+            epoch: app.tab.file_epoch,
+            revision: app.tab.revision,
         }
     }
     #[test]
@@ -152,16 +156,16 @@ mod tests {
             Err("Unavailable printer".into()),
         ] {
             let mut app = ready();
-            let before = app.doc.clone();
-            app.selected = app.doc.all_ids();
+            let before = app.tab.doc.clone();
+            app.tab.selected = app.tab.doc.all_ids();
             app.printing.active = Some(1);
             let ticket = ticket(&app, 1);
             let _ = app.update(Message::Printing(Action::Finished(ticket, outcome)));
             assert!(app.printing.active.is_none());
-            assert_eq!(app.doc, before);
-            assert_eq!(app.selected, before.all_ids());
+            assert_eq!(app.tab.doc, before);
+            assert_eq!(app.tab.selected, before.all_ids());
             assert!(!app.dirty());
-            assert!(!app.history.can_undo());
+            assert!(!app.tab.history.can_undo());
         }
     }
     #[test]
@@ -175,9 +179,9 @@ mod tests {
             let current = ticket(&app, 2);
             app.printing.active = Some(2);
             if changed_file {
-                app.file_epoch += 1;
+                app.tab.file_epoch += 1;
             } else {
-                app.revision += 1;
+                app.tab.revision += 1;
             }
             app.status = "Newer editing status".into();
             let _ = app.print_action(Action::Finished(current, Ok(Outcome { completed: true })));
@@ -196,25 +200,25 @@ mod tests {
         assert!(app.printing.active.is_none());
         assert!(app.error);
         assert!(app.status.contains("Invalid snapshot"));
-        assert!(!app.history.can_undo());
+        assert!(!app.tab.history.can_undo());
     }
     #[test]
     fn printing_uses_valid_page_drafts_without_applying_them() {
         use crate::app::pages::{Action as Pages, Field};
         let mut app = ready();
-        let before = app.doc.clone();
+        let before = app.tab.doc.clone();
         let _ = app.page_action(Pages::Open);
         let _ = app.page_action(Pages::Input(Field::Columns, "2".into()));
         let snapshot = app.print_document().unwrap();
         assert_eq!(snapshot.page_layout.as_ref().unwrap().count(), 2);
-        assert_eq!(app.doc, before);
-        assert!(!app.history.can_undo());
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
         let _ = app.page_action(Pages::Input(Field::Width, "invalid".into()));
         assert!(app.print_document().is_err());
         let _ = app.page_action(Pages::Cancel);
         assert_eq!(app.print_document().unwrap(), before);
         let _ = app.page_action(Pages::Open);
-        app.file_epoch += 1;
+        app.tab.file_epoch += 1;
         assert!(app.print_document().is_err());
     }
 }

@@ -82,26 +82,27 @@ pub enum Action {
 }
 impl App {
     pub(super) fn apply_arrow_tool(&mut self, id: u64) {
-        let Some(arrow) = self.doc.arrows.iter_mut().find(|a| a.id == id) else {
+        let Some(arrow) = self.tab.doc.arrows.iter_mut().find(|a| a.id == id) else {
             return;
         };
-        if arrow.apply_tool(self.arrow_style, &self.arrows.style) {
-            for reaction in self.doc.reactions.iter_mut().filter(|r| r.arrow == id) {
+        if arrow.apply_tool(self.tab.arrow_style, &self.tab.arrows.style) {
+            for reaction in self.tab.doc.reactions.iter_mut().filter(|r| r.arrow == id) {
                 std::mem::swap(&mut reaction.reactants, &mut reaction.products);
             }
         }
-        self.selected = vec![id];
+        self.tab.selected = vec![id];
         self.sync_arrows();
     }
     pub(super) fn sync_arrows(&mut self) {
         if let Some(a) = self
+            .tab
             .doc
             .arrows
             .iter()
-            .find(|a| self.selected.contains(&a.id))
+            .find(|a| self.tab.selected.contains(&a.id))
         {
-            self.arrow_style = Preset::from_kind(&a.kind);
-            self.arrows.style = a.appearance();
+            self.tab.arrow_style = Preset::from_kind(&a.kind);
+            self.tab.arrows.style = a.appearance();
             if !matches!(
                 self.inspector_tab,
                 InspectorTab::Templates
@@ -113,19 +114,20 @@ impl App {
                 self.inspector_tab = InspectorTab::Properties;
             }
         }
-        self.arrows
-            .refresh_inputs(&reshiki::palette::Palette::of(&self.doc));
+        self.tab
+            .arrows
+            .refresh_inputs(&reshiki::palette::Palette::of(&self.tab.doc));
     }
     pub(super) fn arrow_action(&mut self, action: Action) {
         match action {
             Action::Number(field, s) => {
-                if let Some(value) = self.arrows.numbers.get_mut(field as usize) {
+                if let Some(value) = self.tab.arrows.numbers.get_mut(field as usize) {
                     *value = s;
                 }
                 return;
             }
             Action::Color(s) => {
-                self.arrows.color = s;
+                self.tab.arrows.color = s;
                 return;
             }
             _ => {}
@@ -140,13 +142,14 @@ impl App {
                 Action::Dipole(v) => s.dipole = v,
                 Action::ApplyColor => {
                     s.color = reshiki::palette::Color::Custom(
-                        graphics::parse_color(&self.arrows.color)
+                        graphics::parse_color(&self.tab.arrows.color)
                             .ok_or("Use a six-digit hex color, for example #205091")?,
                     )
                 }
                 Action::ApplyNumber(f) => f.set(
                     s,
-                    self.arrows
+                    self.tab
+                        .arrows
                         .numbers
                         .get(f as usize)
                         .ok_or("Unknown arrow property")?
@@ -154,24 +157,24 @@ impl App {
                         .map_err(|_| "Enter a number and press Return")?,
                 ),
                 Action::Reset => {
-                    *s = ArrowStyle::preset(self.arrow_style);
-                    s.width_pt = self.doc.drawing_style.line_width_pt;
+                    *s = ArrowStyle::preset(self.tab.arrow_style);
+                    s.width_pt = self.tab.doc.drawing_style.line_width_pt;
                 }
                 _ => {}
             }
             s.validate()
         };
-        let mut style = self.arrows.style.clone();
+        let mut style = self.tab.arrows.style.clone();
         if let Err(error) = change(&mut style) {
             self.status = error;
             self.error = true;
             return;
         }
-        let mut next = self.doc.clone();
+        let mut next = self.tab.doc.clone();
         for a in next
             .arrows
             .iter_mut()
-            .filter(|a| self.selected.contains(&a.id))
+            .filter(|a| self.tab.selected.contains(&a.id))
         {
             match action {
                 Action::Reverse => a.reverse(),
@@ -190,16 +193,16 @@ impl App {
         }
         if matches!(action, Action::Reverse) {
             for reaction in &mut next.reactions {
-                if self.selected.contains(&reaction.arrow) {
+                if self.tab.selected.contains(&reaction.arrow) {
                     std::mem::swap(&mut reaction.reactants, &mut reaction.products);
                 }
             }
         }
-        let before = std::mem::replace(&mut self.doc, next);
+        let before = std::mem::replace(&mut self.tab.doc, next);
         if matches!(action, Action::ApplyColor) {
             self.remember_custom(Some(style.color), &before);
         }
-        self.arrows.style = style;
+        self.tab.arrows.style = style;
         self.changed(before);
         self.sync_arrows();
         self.error = false;
@@ -209,18 +212,20 @@ impl App {
         use super::workspace::{muted_text, section};
         use iced::widget::{button, checkbox, column, row, text};
         use iced::{Alignment, Length};
-        let s = &self.arrows.style;
+        let s = &self.tab.arrows.style;
         let has_selection = self
+            .tab
             .doc
             .arrows
             .iter()
-            .any(|a| self.selected.contains(&a.id));
+            .any(|a| self.tab.selected.contains(&a.id));
         let number = |label: &'static str, field: Field| {
             row![
                 text(label).size(11).width(Length::Fill),
                 crate::appearance::text_input(
                     "",
-                    self.arrows
+                    self.tab
+                        .arrows
                         .numbers
                         .get(field as usize)
                         .map(String::as_str)
@@ -243,25 +248,30 @@ impl App {
             }),
             canvas(crate::canvas::ArrowPreview {
                 arrow: self
+                    .tab
                     .doc
                     .arrows
                     .iter()
-                    .find(|a| self.selected.contains(&a.id))
+                    .find(|a| self.tab.selected.contains(&a.id))
                     .cloned()
                     .unwrap_or_else(|| Arrow::new(
                         1,
                         Point::new(-65., 0.),
                         Point::new(65., 0.),
-                        self.arrow_style,
+                        self.tab.arrow_style,
                         s.clone()
                     ))
             })
             .width(Length::Fill)
             .height(70),
-            crate::appearance::pick_list(Preset::ALL, Some(self.arrow_style), Message::ArrowStyle)
-                .text_size(12)
-                .padding(6)
-                .width(Length::Fill),
+            crate::appearance::pick_list(
+                Preset::ALL,
+                Some(self.tab.arrow_style),
+                Message::ArrowStyle
+            )
+            .text_size(12)
+            .padding(6)
+            .width(Length::Fill),
             row![
                 text("End").size(11).width(44),
                 crate::appearance::pick_list(Head::ALL, Some(s.head), |v| Message::ArrowAction(
@@ -290,7 +300,7 @@ impl App {
                 )
                 .text_size(12)
                 .padding(5),
-                crate::appearance::text_input("#RRGGBB", &self.arrows.color)
+                crate::appearance::text_input("#RRGGBB", &self.tab.arrows.color)
                     .on_input(|v| Message::ArrowAction(Action::Color(v)))
                     .on_submit(Message::ArrowAction(Action::ApplyColor))
                     .size(12)
@@ -314,10 +324,10 @@ impl App {
             number("Head notch (0–0.9)", Field::Notch),
         ]
         .spacing(8);
-        if self.arrow_style == Preset::Equilibrium {
+        if self.tab.arrow_style == Preset::Equilibrium {
             geometry = geometry.push(number("Reverse length (0.2–1)", Field::Ratio));
         }
-        if matches!(self.arrow_style, Preset::Equilibrium | Preset::Retro) {
+        if matches!(self.tab.arrow_style, Preset::Equilibrium | Preset::Retro) {
             geometry = geometry.push(number("Shaft separation (pt)", Field::Gap));
         }
         geometry = geometry

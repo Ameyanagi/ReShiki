@@ -28,55 +28,55 @@ pub(super) async fn calculate(
 
 impl App {
     pub(super) fn start_label_refresh(&mut self) -> Task<Message> {
-        if !self.labels_dirty
-            || self.label_refresh.pending.is_some()
-            || self.busy
-            || self.cleanup.is_some()
-            || self.erase_stroke
+        if !self.tab.labels_dirty
+            || self.tab.label_refresh.pending.is_some()
+            || self.tab.busy
+            || self.tab.cleanup.is_some()
+            || self.tab.erase_stroke
         {
             return Task::none();
         }
-        self.labels_dirty = false;
-        if self.doc.atoms.is_empty() {
-            self.label_refresh.cache = Arc::default();
+        self.tab.labels_dirty = false;
+        if self.tab.doc.atoms.is_empty() {
+            self.tab.label_refresh.cache = Arc::default();
             return Task::none();
         }
         let key = Key {
-            revision: self.revision,
-            epoch: self.file_epoch,
+            revision: self.tab.revision,
+            epoch: self.tab.file_epoch,
         };
-        self.label_refresh.pending = Some(key);
-        let previous = Arc::clone(&self.label_refresh.cache);
-        let source = self.doc.clone();
+        self.tab.label_refresh.pending = Some(key);
+        let previous = Arc::clone(&self.tab.label_refresh.cache);
+        let source = self.tab.doc.clone();
         Task::perform(calculate(source, previous), move |result| {
             Message::LabelsReady(key, result)
         })
     }
 
     pub(super) fn labels_ready(&mut self, key: Key, result: Result<Arc<Refresh>, String>) {
-        if self.label_refresh.pending != Some(key) {
+        if self.tab.label_refresh.pending != Some(key) {
             return;
         }
-        self.label_refresh.pending = None;
-        if key.epoch != self.file_epoch {
-            self.label_refresh.cache = Arc::default();
+        self.tab.label_refresh.pending = None;
+        if key.epoch != self.tab.file_epoch {
+            self.tab.label_refresh.cache = Arc::default();
             return;
         }
         if let Ok(computed) = &result {
             // A stale calculation may seed exact component-cache hits, but it
             // can never publish labels or notices into a newer drawing.
-            self.label_refresh.cache = Arc::clone(computed);
+            self.tab.label_refresh.cache = Arc::clone(computed);
         }
-        if key.revision != self.revision {
-            self.labels_dirty = true;
+        if key.revision != self.tab.revision {
+            self.tab.labels_dirty = true;
             return;
         }
         match result {
             Ok(computed) => {
-                computed.apply(&mut self.doc);
-                self.chemistry_notice.clone_from(&computed.notice);
+                computed.apply(&mut self.tab.doc);
+                self.tab.chemistry_notice.clone_from(&computed.notice);
             }
-            Err(error) => self.chemistry_notice = Some(error),
+            Err(error) => self.tab.chemistry_notice = Some(error),
         }
     }
 }
@@ -89,16 +89,16 @@ mod tests {
 
     fn fixture() -> (App, u64) {
         let (mut app, _) = App::new();
-        app.doc = Document::default();
-        let carbon = app.doc.add_atom("C", Point::default());
-        let oxygen = app.doc.add_atom("C", Point::new(42., 0.));
-        app.doc.add_bond(carbon, oxygen, 1, "plain");
-        app.selected = vec![oxygen];
+        app.tab.doc = Document::default();
+        let carbon = app.tab.doc.add_atom("C", Point::default());
+        let oxygen = app.tab.doc.add_atom("C", Point::new(42., 0.));
+        app.tab.doc.add_bond(carbon, oxygen, 1, "plain");
+        app.tab.selected = vec![oxygen];
         (app, oxygen)
     }
 
     fn compute(app: &App) -> Result<Arc<Refresh>, String> {
-        Refresh::calculate(&app.doc, &app.label_refresh.cache).map(Arc::new)
+        Refresh::calculate(&app.tab.doc, &app.tab.label_refresh.cache).map(Arc::new)
     }
 
     #[test]
@@ -106,11 +106,11 @@ mod tests {
         let (mut app, oxygen) = fixture();
         let task = app.update(Message::ContextKey("o".into()));
         assert!(task.units() > 0, "No timer before starting chemistry");
-        assert!(!app.busy, "Labels must not disable editing commands");
-        let key = app.label_refresh.pending.unwrap();
-        let drawing = app.doc.clone();
-        app.saved = drawing.clone();
-        let selected = app.selected.clone();
+        assert!(!app.tab.busy, "Labels must not disable editing commands");
+        let key = app.tab.label_refresh.pending.unwrap();
+        let drawing = app.tab.doc.clone();
+        app.tab.saved = drawing.clone();
+        let selected = app.tab.selected.clone();
         app.edit(crate::canvas::Edit::ContextMenu {
             position: iced::Point::ORIGIN,
             selected: selected.clone(),
@@ -121,15 +121,15 @@ mod tests {
             app.context_menu.is_some(),
             "Background labels leave menus open"
         );
-        assert_eq!(app.doc.atom(oxygen).unwrap().label_h, 1);
-        assert_eq!(app.selected, selected);
-        assert_eq!(app.revision, key.revision);
-        assert!(same_drawing(&drawing, &app.doc));
+        assert_eq!(app.tab.doc.atom(oxygen).unwrap().label_h, 1);
+        assert_eq!(app.tab.selected, selected);
+        assert_eq!(app.tab.revision, key.revision);
+        assert!(same_drawing(&drawing, &app.tab.doc));
         assert!(!app.dirty());
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc.atom(oxygen).unwrap().element, "C");
+        assert_eq!(app.tab.doc.atom(oxygen).unwrap().element, "C");
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc.atom(oxygen).unwrap().label_h, 1);
+        assert_eq!(app.tab.doc.atom(oxygen).unwrap().label_h, 1);
     }
 
     #[test]
@@ -137,7 +137,7 @@ mod tests {
         for failure in [false, true] {
             let (mut app, id) = fixture();
             let _ = app.update(Message::ContextKey("o".into()));
-            let old = app.label_refresh.pending.unwrap();
+            let old = app.tab.label_refresh.pending.unwrap();
             let result = if failure {
                 Err("stale error".into())
             } else {
@@ -145,18 +145,18 @@ mod tests {
             };
             let _ = app.update(Message::ContextKey("n".into()));
             let _ = app.update(Message::ContextKey("s".into()));
-            assert_eq!(app.label_refresh.pending, Some(old));
-            let latest = app.revision;
+            assert_eq!(app.tab.label_refresh.pending, Some(old));
+            let latest = app.tab.revision;
             let _ = app.update(Message::LabelsReady(old, result));
-            assert_eq!(app.doc.atom(id).unwrap().element, "S");
-            assert_eq!(app.doc.atom(id).unwrap().label_h, 0);
-            assert!(app.chemistry_notice.is_none());
-            let key = app.label_refresh.pending.unwrap();
+            assert_eq!(app.tab.doc.atom(id).unwrap().element, "S");
+            assert_eq!(app.tab.doc.atom(id).unwrap().label_h, 0);
+            assert!(app.tab.chemistry_notice.is_none());
+            let key = app.tab.label_refresh.pending.unwrap();
             assert_eq!(key.revision, latest);
             let result = compute(&app);
             let _ = app.update(Message::LabelsReady(key, result));
-            assert_eq!(app.doc.atom(id).unwrap().label_h, 1);
-            assert!(app.label_refresh.pending.is_none());
+            assert_eq!(app.tab.doc.atom(id).unwrap().label_h, 1);
+            assert!(app.tab.label_refresh.pending.is_none());
         }
     }
 
@@ -164,13 +164,13 @@ mod tests {
     fn document_replacement_rejects_old_labels_even_with_reused_ids_and_revision() {
         let (mut app, _) = fixture();
         let _ = app.update(Message::ContextKey("o".into()));
-        let old = app.label_refresh.pending.unwrap();
+        let old = app.tab.label_refresh.pending.unwrap();
         let result = compute(&app);
         let _ = app.perform(Pending::New);
-        let id = app.doc.add_atom("N", Point::default());
-        app.revision = old.revision;
+        let id = app.tab.doc.add_atom("N", Point::default());
+        app.tab.revision = old.revision;
         let _ = app.update(Message::LabelsReady(old, result));
-        assert_eq!(app.doc.atom(id).unwrap().label_h, 0);
-        assert!(app.chemistry_notice.is_none());
+        assert_eq!(app.tab.doc.atom(id).unwrap().label_h, 0);
+        assert!(app.tab.chemistry_notice.is_none());
     }
 }

@@ -163,19 +163,19 @@ impl super::App {
     ) -> iced::Task<super::Message> {
         self.file_io.saving = false;
         if result.is_err() {
-            self.autosave.cancel_close();
+            self.cancel_close();
         }
         match result {
             Ok(Some(path)) => {
                 // Continue the save dialog's action only when nothing is left unsaved.
                 let pending = self.pending.take();
-                if epoch != self.file_epoch {
+                if epoch != self.tab.file_epoch {
                     self.status = "Previous document saved".into();
                     return iced::Task::none();
                 }
-                self.saved = *snapshot;
-                self.path = Some(path);
-                self.untitled_name = None;
+                self.tab.saved = *snapshot;
+                self.tab.path = Some(path);
+                self.tab.untitled_name = None;
                 self.status = if self.office_document() {
                     "Drawing updated in Office. Save the Office document to keep it."
                 } else {
@@ -194,7 +194,7 @@ impl super::App {
             Ok(None) => self.pending = None,
             Err(e) => {
                 self.pending = None;
-                if epoch == self.file_epoch {
+                if epoch == self.tab.file_epoch {
                     self.status = e;
                     self.error = true;
                 }
@@ -207,13 +207,13 @@ impl super::App {
         self.file_io.serial = self.file_io.serial.wrapping_add(1);
         Key {
             serial: self.file_io.serial,
-            epoch: self.file_epoch,
-            revision: self.revision,
+            epoch: self.tab.file_epoch,
+            revision: self.tab.revision,
         }
     }
 
     pub(super) fn file_request_is_current(&self, key: Key) -> bool {
-        key.serial == self.file_io.serial && key.epoch == self.file_epoch
+        key.serial == self.file_io.serial && key.epoch == self.tab.file_epoch
     }
 
     pub(super) fn file_prepared(&mut self, key: Key, opened: Opened) -> iced::Task<super::Message> {
@@ -228,12 +228,12 @@ impl super::App {
         }
         // Opening is deliberately not a global busy state. An intervening edit,
         // text draft or chemistry operation wins over a slow read/parse result.
-        if key.revision != self.revision
-            || self.inline_text.is_some()
-            || self.atom_text.is_some()
-            || self.busy
-            || self.cleanup.is_some()
-            || self.erase_stroke
+        if key.revision != self.tab.revision
+            || self.tab.inline_text.is_some()
+            || self.tab.atom_text.is_some()
+            || self.tab.busy
+            || self.tab.cleanup.is_some()
+            || self.tab.erase_stroke
         {
             self.status = "Drawing changed while the file was opening. Open the file again.".into();
             self.error = true;
@@ -252,21 +252,21 @@ impl super::App {
             }
             Ok(Prepared::Native(doc)) => {
                 self.clear_recovery();
-                self.file_epoch = self.file_epoch.wrapping_add(1);
-                self.doc = *doc;
+                self.tab.file_epoch = self.tab.file_epoch.wrapping_add(1);
+                self.tab.doc = *doc;
                 self.sync_drawing_defaults();
-                self.styles.editor = None;
+                self.tab.styles.editor = None;
                 self.theme_library.editor = None;
-                self.saved = self.doc.clone();
-                self.path = Some(path);
-                self.untitled_name = None;
-                self.history = super::History::default();
-                self.revision = self.revision.wrapping_add(1);
-                self.analysis = None;
-                self.labels_dirty = true;
-                self.selected.clear();
-                self.pages = super::pages::State::default();
-                if self.doc.page_layout.is_some() {
+                self.tab.saved = self.tab.doc.clone();
+                self.tab.path = Some(path);
+                self.tab.untitled_name = None;
+                self.tab.history = super::History::default();
+                self.tab.revision = self.tab.revision.wrapping_add(1);
+                self.tab.analysis = None;
+                self.tab.labels_dirty = true;
+                self.tab.selected.clear();
+                self.tab.pages = super::pages::State::default();
+                if self.tab.doc.page_layout.is_some() {
                     self.fit_pages(Some(0));
                 } else {
                     self.fit();
@@ -285,8 +285,8 @@ pub(super) fn dispatched_open_key(app: &super::App) -> Key {
     assert_ne!(app.file_io.serial, 0, "An open must be dispatched first");
     Key {
         serial: app.file_io.serial,
-        epoch: app.file_epoch,
-        revision: app.revision,
+        epoch: app.tab.file_epoch,
+        revision: app.tab.revision,
     }
 }
 
@@ -338,17 +338,17 @@ mod tests {
             if inline {
                 let _ = app.inline_action(inline_text::Action::Begin(None, Point::default()));
             } else {
-                let before = app.doc.clone();
-                app.doc.add_atom("N", Point::default());
+                let before = app.tab.doc.clone();
+                app.tab.doc.add_atom("N", Point::default());
                 app.changed(before);
             }
-            let expected = app.doc.clone();
+            let expected = app.tab.doc.clone();
             let _ = app.update(Message::FilePrepared(key, prepared()));
-            assert_eq!(app.doc, expected);
-            assert_eq!(app.inline_text.is_some(), inline);
+            assert_eq!(app.tab.doc, expected);
+            assert_eq!(app.tab.inline_text.is_some(), inline);
             assert!(app.error);
             assert!(app.status.contains("Open the file again"));
-            assert!(app.path.is_none());
+            assert!(app.tab.path.is_none());
         }
     }
 
@@ -371,8 +371,8 @@ mod tests {
                 };
                 let _ = app.update(Message::FilePrepared(key, old_result));
                 assert_eq!(app.status, "Current context");
-                assert!(app.doc.atoms.is_empty());
-                assert!(app.path.is_none());
+                assert!(app.tab.doc.atoms.is_empty());
+                assert!(app.tab.path.is_none());
             }
         }
     }
@@ -416,7 +416,7 @@ mod tests {
         let (mut app, _) = App::new();
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("drawing.rsk");
-        app.path = Some(path.clone());
+        app.tab.path = Some(path.clone());
         let task = app.update(Message::Save);
         assert!(task.units() > 0);
         assert!(app.file_io.saving);
@@ -427,8 +427,8 @@ mod tests {
         let second = app.update(Message::Save);
         assert_eq!(second.units(), 0);
         let _ = app.update(Message::Saved(
-            app.file_epoch,
-            Box::new(app.doc.clone()),
+            app.tab.file_epoch,
+            Box::new(app.tab.doc.clone()),
             Ok(None),
         ));
         assert!(!app.file_io.saving);

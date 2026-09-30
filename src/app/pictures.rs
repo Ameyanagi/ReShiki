@@ -61,10 +61,11 @@ fn millimetres(world: f32) -> f32 {
 impl App {
     fn selected_picture(&self) -> Option<&Graphic> {
         let mut pictures = self
+            .tab
             .doc
             .graphics
             .iter()
-            .filter(|g| g.picture.is_some() && self.selected.contains(&g.id));
+            .filter(|g| g.picture.is_some() && self.tab.selected.contains(&g.id));
         let first = pictures.next()?;
         pictures.next().is_none().then_some(first)
     }
@@ -76,22 +77,22 @@ impl App {
             )
         });
         if let Some((width, height)) = dimensions {
-            self.pictures.width = format!("{:.2}", millimetres(width));
-            self.pictures.height = format!("{:.2}", millimetres(height));
+            self.tab.pictures.width = format!("{:.2}", millimetres(width));
+            self.tab.pictures.height = format!("{:.2}", millimetres(height));
         }
     }
     fn picture_loaded(&mut self, ticket: Ticket, result: Result<Option<Picture>, String>) {
-        if self.pictures.active != Some(ticket.serial) {
+        if self.tab.pictures.active != Some(ticket.serial) {
             return;
         }
-        self.pictures.active = None;
-        if ticket.epoch != self.file_epoch {
+        self.tab.pictures.active = None;
+        if ticket.epoch != self.tab.file_epoch {
             return;
         }
-        if ticket.revision != self.revision
-            || self.inline_text.is_some()
-            || self.joining.is_some()
-            || self.cleanup.is_some()
+        if ticket.revision != self.tab.revision
+            || self.tab.inline_text.is_some()
+            || self.tab.joining.is_some()
+            || self.tab.cleanup.is_some()
         {
             self.status =
                 "Drawing changed while loading the picture · Replace it again when ready".into();
@@ -109,8 +110,9 @@ impl App {
                 return;
             }
         };
-        let before = self.doc.clone();
+        let before = self.tab.doc.clone();
         let Some(g) = self
+            .tab
             .doc
             .graphics
             .iter_mut()
@@ -131,13 +133,13 @@ impl App {
             return;
         }
         g.picture = Some(picture);
-        if let Err(error) = self.doc.validate() {
-            self.doc = before;
+        if let Err(error) = self.tab.doc.validate() {
+            self.tab.doc = before;
             self.error = true;
             self.status = format!("Could not replace picture: {error}");
             return;
         }
-        self.selected = vec![ticket.target];
+        self.tab.selected = vec![ticket.target];
         self.changed(before);
         self.tool = Tool::Select;
         self.inspector_open = true;
@@ -150,6 +152,7 @@ impl App {
     }
     pub(super) fn reveal_picture(&mut self, id: u64) {
         if let Some(g) = self
+            .tab
             .doc
             .graphics
             .iter()
@@ -163,34 +166,35 @@ impl App {
     pub(super) fn reveal_bounds(&mut self, lo: Point, hi: Point) {
         let paper = self.guides.paper(iced::Rectangle::with_size(self.viewport));
         if paper.width > 100. && paper.height > 100. {
-            self.camera.zoom = self
+            self.tab.camera.zoom = self
+                .tab
                 .camera
                 .zoom
                 .min((paper.width - 80.) / (hi.x - lo.x))
                 .min((paper.height - 80.) / (hi.y - lo.y))
                 .max(0.001);
         }
-        self.camera.center = lo.offset((hi.x - lo.x) / 2., (hi.y - lo.y) / 2.);
-        self.fit_to_view = false;
-        self.pages.fit = None;
+        self.tab.camera.center = lo.offset((hi.x - lo.x) / 2., (hi.y - lo.y) / 2.);
+        self.tab.fit_to_view = false;
+        self.tab.pages.fit = None;
     }
     pub(super) fn picture_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Replace => {
-                if self.pictures.active.is_some() {
+                if self.tab.pictures.active.is_some() {
                     return Task::none();
                 }
                 let Some(target) = self.selected_picture().map(|g| g.id) else {
                     return Task::none();
                 };
-                self.pictures.next = self.pictures.next.wrapping_add(1);
+                self.tab.pictures.next = self.tab.pictures.next.wrapping_add(1);
                 let ticket = Ticket {
-                    serial: self.pictures.next,
-                    epoch: self.file_epoch,
-                    revision: self.revision,
+                    serial: self.tab.pictures.next,
+                    epoch: self.tab.file_epoch,
+                    revision: self.tab.revision,
                     target,
                 };
-                self.pictures.active = Some(ticket.serial);
+                self.tab.pictures.active = Some(ticket.serial);
                 self.error = false;
                 self.status = "Choose a picture…".into();
                 return Task::perform(choose_picture(), move |result| {
@@ -198,14 +202,14 @@ impl App {
                 });
             }
             Action::Loaded(ticket, result) => self.picture_loaded(ticket, result),
-            Action::Width(value) => self.pictures.width = value,
-            Action::Height(value) => self.pictures.height = value,
-            Action::Lock(value) => self.pictures.locked = value,
+            Action::Width(value) => self.tab.pictures.width = value,
+            Action::Height(value) => self.tab.pictures.height = value,
+            Action::Lock(value) => self.tab.pictures.locked = value,
             Action::Resize(width_changed) => {
                 let text = if width_changed {
-                    &self.pictures.width
+                    &self.tab.pictures.width
                 } else {
-                    &self.pictures.height
+                    &self.tab.pictures.height
                 };
                 let size = text
                     .parse::<f32>()
@@ -227,7 +231,7 @@ impl App {
                 let dimensions = if width_changed {
                     (
                         size,
-                        if self.pictures.locked {
+                        if self.tab.pictures.locked {
                             height * size / width
                         } else {
                             height
@@ -235,7 +239,7 @@ impl App {
                     )
                 } else {
                     (
-                        if self.pictures.locked {
+                        if self.tab.pictures.locked {
                             width * size / height
                         } else {
                             width
@@ -267,8 +271,8 @@ impl App {
         let Some(id) = self.selected_picture().map(|g| g.id) else {
             return;
         };
-        let before = self.doc.clone();
-        if let Some(g) = self.doc.graphics.iter_mut().find(|g| g.id == id)
+        let before = self.tab.doc.clone();
+        if let Some(g) = self.tab.doc.graphics.iter_mut().find(|g| g.id == id)
             && let Err(error) = reshiki::pictures::resize(g, width, height)
         {
             self.error = true;
@@ -296,7 +300,7 @@ impl App {
                 .push(
                     row![
                         text("Width").size(12).width(45),
-                        crate::appearance::text_input("mm", &self.pictures.width)
+                        crate::appearance::text_input("mm", &self.tab.pictures.width)
                             .on_input(move |v| message(Action::Width(v)))
                             .on_submit(message(Action::Resize(true)))
                             .padding(6)
@@ -309,7 +313,7 @@ impl App {
                 .push(
                     row![
                         text("Height").size(12).width(45),
-                        crate::appearance::text_input("mm", &self.pictures.height)
+                        crate::appearance::text_input("mm", &self.tab.pictures.height)
                             .on_input(move |v| message(Action::Height(v)))
                             .on_submit(message(Action::Resize(false)))
                             .padding(6)
@@ -320,7 +324,7 @@ impl App {
                     .align_y(Alignment::Center),
                 )
                 .push(
-                    checkbox(self.pictures.locked)
+                    checkbox(self.tab.pictures.locked)
                         .label("Link width and height")
                         .on_toggle(move |v| message(Action::Lock(v)))
                         .size(14)
@@ -332,7 +336,8 @@ impl App {
                 ))
                 .push(
                     command("Replace picture…", message(Action::Replace)).on_press_maybe(
-                        self.pictures
+                        self.tab
+                            .pictures
                             .active
                             .is_none()
                             .then_some(message(Action::Replace)),
@@ -359,27 +364,30 @@ mod tests {
     }
     fn ready() -> App {
         let (mut app, _) = App::new();
-        app.busy = false;
-        app.doc = Document::default();
-        app.doc.add_atom("O", Point::new(200., 0.));
+        app.tab.busy = false;
+        app.tab.doc = Document::default();
+        app.tab.doc.add_atom("O", Point::new(200., 0.));
         app
     }
     /// Inserts a selected picture, as the Import tab does.
     fn insert(app: &mut App, picture: Picture) -> u64 {
-        let before = app.doc.clone();
-        let id = app.doc.next_id();
-        app.doc.graphics.push(picture.graphic(id, Point::default()));
-        app.selected = vec![id];
+        let before = app.tab.doc.clone();
+        let id = app.tab.doc.next_id();
+        app.tab
+            .doc
+            .graphics
+            .push(picture.graphic(id, Point::default()));
+        app.tab.selected = vec![id];
         app.changed(before);
         id
     }
     fn ticket(app: &mut App, target: u64) -> Ticket {
-        app.pictures.next += 1;
-        app.pictures.active = Some(app.pictures.next);
+        app.tab.pictures.next += 1;
+        app.tab.pictures.active = Some(app.tab.pictures.next);
         Ticket {
-            serial: app.pictures.next,
-            epoch: app.file_epoch,
-            revision: app.revision,
+            serial: app.tab.pictures.next,
+            epoch: app.tab.file_epoch,
+            revision: app.tab.revision,
             target,
         }
     }
@@ -390,25 +398,25 @@ mod tests {
     fn asynchronous_replacement_never_changes_a_newer_drawing() {
         let mut app = ready();
         let id = insert(&mut app, picture(120, 80));
-        let after = app.doc.clone();
+        let after = app.tab.doc.clone();
         for new_file in [false, true] {
             let job = ticket(&mut app, id);
             if new_file {
-                app.file_epoch += 1;
+                app.tab.file_epoch += 1;
             } else {
-                app.revision += 1;
+                app.tab.revision += 1;
             }
             finish(&mut app, job, picture(10, 20));
-            assert_eq!(app.doc, after);
-            assert!(app.pictures.active.is_none());
+            assert_eq!(app.tab.doc, after);
+            assert!(app.tab.pictures.active.is_none());
         }
         let job = ticket(&mut app, id);
         let _ = app.update(Message::InlineText(
             super::super::inline_text::Action::Begin(None, Point::default()),
         ));
         finish(&mut app, job, picture(10, 20));
-        assert!(app.inline_text.is_some());
-        assert_eq!(app.doc, after);
+        assert!(app.tab.inline_text.is_some());
+        assert_eq!(app.tab.doc, after);
     }
     #[test]
     fn replacement_retains_center_rotation_and_layer_and_undo_restores_the_pixels() {
@@ -418,7 +426,7 @@ mod tests {
         let _ = app.update(Message::Transform(
             reshiki::editing::Transform::FlipHorizontal,
         ));
-        let before = app.doc.clone();
+        let before = app.tab.doc.clone();
         let old = &before.graphics[0];
         let center = old.origin.offset(
             (old.axis_x.x + old.axis_y.x) / 2.,
@@ -426,7 +434,7 @@ mod tests {
         );
         let job = ticket(&mut app, old.id);
         finish(&mut app, job, picture(60, 100));
-        let g = &app.doc.graphics[0];
+        let g = &app.tab.doc.graphics[0];
         assert_eq!((g.id, g.layer), (old.id, old.layer));
         assert!(
             center.distance(g.origin.offset(
@@ -440,53 +448,53 @@ mod tests {
                 < 0.001
         );
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
     }
     #[test]
     fn numeric_sizes_keep_proportions_and_reject_invalid_input_without_edits() {
         let mut app = ready();
         insert(&mut app, picture(120, 80));
-        let before = app.doc.clone();
+        let before = app.tab.doc.clone();
         for invalid in ["NaN", "-1", "inf", "0", "wrong"] {
             let _ = app.update(Message::Pictures(Action::Width(invalid.into())));
             let _ = app.update(Message::Pictures(Action::Resize(true)));
-            assert_eq!(app.doc, before);
+            assert_eq!(app.tab.doc, before);
         }
         let _ = app.update(Message::Pictures(Action::Width("60".into())));
         let _ = app.update(Message::Pictures(Action::Resize(true)));
-        let g = &app.doc.graphics[0];
+        let g = &app.tab.doc.graphics[0];
         assert!((millimetres(g.axis_x.distance(Point::default())) - 60.).abs() < 0.001);
         assert!((millimetres(g.axis_y.distance(Point::default())) - 40.).abs() < 0.001);
         let _ = app.update(Message::Pictures(Action::Lock(false)));
         let _ = app.update(Message::Pictures(Action::Height("70".into())));
         let _ = app.update(Message::Pictures(Action::Resize(false)));
-        assert_eq!(app.pictures.width, "60.00");
-        assert_eq!(app.pictures.height, "70.00");
+        assert_eq!(app.tab.pictures.width, "60.00");
+        assert_eq!(app.tab.pictures.height, "70.00");
         let _ = app.update(Message::Pictures(Action::RestoreAspect));
-        assert_eq!(app.pictures.height, "40.00");
-        let restored = app.doc.clone();
+        assert_eq!(app.tab.pictures.height, "40.00");
+        let restored = app.tab.doc.clone();
         app.apply_graphic_style(reshiki::graphics::GraphicChange::Stroke(
             reshiki::palette::Color::Custom([255, 0, 0]),
         ));
-        assert_eq!(app.doc, restored);
-        assert_eq!(app.doc.atoms, before.atoms);
+        assert_eq!(app.tab.doc, restored);
+        assert_eq!(app.tab.doc.atoms, before.atoms);
     }
     #[test]
     fn cancellation_failure_and_old_job_completion_leave_the_drawing_untouched() {
         let mut app = ready();
         let id = insert(&mut app, picture(20, 20));
-        let before = app.doc.clone();
+        let before = app.tab.doc.clone();
         for result in [Ok(None), Err("Broken image".into())] {
             let job = ticket(&mut app, id);
             let _ = app.update(Message::Pictures(Action::Loaded(job, result)));
-            assert_eq!(app.doc, before);
-            assert!(app.pictures.active.is_none());
+            assert_eq!(app.tab.doc, before);
+            assert!(app.tab.pictures.active.is_none());
         }
         let old = ticket(&mut app, id);
         let current = ticket(&mut app, id);
         finish(&mut app, old, picture(20, 20));
-        assert_eq!(app.pictures.active, Some(current.serial));
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.pictures.active, Some(current.serial));
+        assert_eq!(app.tab.doc, before);
     }
 
     /// The context row's Order menu stacks pictures; the panel has no own row.
@@ -495,12 +503,12 @@ mod tests {
         use super::super::object_toolbar::Command;
         let mut app = ready();
         insert(&mut app, picture(20, 20));
-        let initial = app.doc.graphics[0].layer;
+        let initial = app.tab.doc.graphics[0].layer;
         for front in [false, true] {
             let command = Command::Layer(front);
             assert!(command.enabled(&app, app.alignment_count()));
             let _ = app.update(command.message());
-            let layer = app.doc.graphics[0].layer;
+            let layer = app.tab.doc.graphics[0].layer;
             assert!(if front {
                 layer > 0
             } else {
@@ -508,22 +516,22 @@ mod tests {
             });
         }
         let _ = app.update(Message::Undo);
-        assert!(app.doc.graphics[0].layer < initial.min(0));
+        assert!(app.tab.doc.graphics[0].layer < initial.min(0));
     }
     #[test]
     fn canvas_handle_resizing_refreshes_the_picture_dimensions() {
         let mut app = ready();
         insert(&mut app, picture(600, 360));
-        assert_eq!(app.pictures.width, "50.80");
+        assert_eq!(app.tab.pictures.width, "50.80");
         app.edit(crate::canvas::Edit::Transform {
-            ids: app.selected.clone(),
+            ids: app.tab.selected.clone(),
             pivot: Point::default(),
             scale: 0.5,
             rotation: 32.,
         });
-        assert_eq!(app.pictures.width, "25.40");
-        assert_eq!(app.pictures.height, "15.24");
+        assert_eq!(app.tab.pictures.width, "25.40");
+        assert_eq!(app.tab.pictures.height, "15.24");
         let _ = app.update(Message::Undo);
-        assert_eq!(app.pictures.width, "50.80");
+        assert_eq!(app.tab.pictures.width, "50.80");
     }
 }

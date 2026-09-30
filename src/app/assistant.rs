@@ -291,7 +291,7 @@ impl App {
                 }
                 self.assistant.image_serial = self.assistant.image_serial.wrapping_add(1);
                 let serial = self.assistant.image_serial;
-                let epoch = self.file_epoch;
+                let epoch = self.tab.file_epoch;
                 self.assistant.reading_image = true;
                 if !reshiki::clipboard::available() {
                     return iced::clipboard::read().map(move |text| {
@@ -318,7 +318,7 @@ impl App {
                 }
                 self.assistant.image_serial = self.assistant.image_serial.wrapping_add(1);
                 let serial = self.assistant.image_serial;
-                let epoch = self.file_epoch;
+                let epoch = self.tab.file_epoch;
                 self.assistant.reading_image = true;
                 return Task::perform(
                     async {
@@ -357,7 +357,7 @@ impl App {
                     return Task::none();
                 }
                 self.assistant.reading_image = false;
-                if epoch != self.file_epoch {
+                if epoch != self.tab.file_epoch {
                     return Task::none();
                 }
                 match result {
@@ -403,7 +403,7 @@ impl App {
                     return Task::none();
                 }
                 self.assistant.reading_image = false;
-                if epoch == self.file_epoch
+                if epoch == self.tab.file_epoch
                     && let Some(text) = text
                 {
                     self.assistant.input.perform(text_editor::Action::Edit(
@@ -567,8 +567,8 @@ impl App {
             }
             Action::Poll => {
                 if self.assistant.waiting_for_canvas_edit
-                    && self.inline_text.is_none()
-                    && self.joining.is_none()
+                    && self.tab.inline_text.is_none()
+                    && self.tab.joining.is_none()
                 {
                     self.assistant.waiting_for_canvas_edit = false;
                     return self.assistant_action(Action::Apply);
@@ -576,15 +576,15 @@ impl App {
                 if self.assistant.busy
                     && let Some(canvas) = &self.assistant.canvas
                     && let Ok(mut snapshot) = canvas.write()
-                    && (snapshot.revision != self.revision
-                        || snapshot.epoch != self.file_epoch
-                        || snapshot.selected != self.selected)
+                    && (snapshot.revision != self.tab.revision
+                        || snapshot.epoch != self.tab.file_epoch
+                        || snapshot.selected != self.tab.selected)
                 {
                     *snapshot = assistant::canvas_tools::Snapshot {
-                        document: self.doc.clone(),
-                        selected: self.selected.clone(),
-                        revision: self.revision,
-                        epoch: self.file_epoch,
+                        document: self.tab.doc.clone(),
+                        selected: self.tab.selected.clone(),
+                        revision: self.tab.revision,
+                        epoch: self.tab.file_epoch,
                     };
                 }
                 if let Some(progress) = &mut self.assistant.progress {
@@ -668,10 +668,10 @@ impl App {
             }
             Action::Apply => {
                 scroll = self.assistant.follow_chat;
-                if self.assistant.busy || self.cleanup.is_some() {
+                if self.assistant.busy || self.tab.cleanup.is_some() {
                     return Task::none();
                 }
-                if self.inline_text.is_some() || self.joining.is_some() {
+                if self.tab.inline_text.is_some() || self.tab.joining.is_some() {
                     self.assistant.waiting_for_canvas_edit = true;
                     self.assistant.status =
                         "Ready · Finish or cancel the current canvas edit to apply".into();
@@ -680,18 +680,18 @@ impl App {
                 let Some(draft) = &self.assistant.draft else {
                     return Task::none();
                 };
-                if draft.epoch != self.file_epoch
-                    || (!draft.replace.is_empty() && draft.revision != self.revision)
+                if draft.epoch != self.tab.file_epoch
+                    || (!draft.replace.is_empty() && draft.revision != self.tab.revision)
                 {
                     self.assistant.status = "This proposal targets a drawing or selection that changed. Send a follow-up to refresh it.".into();
                     self.assistant.error = true;
                     return Task::none();
                 }
-                match assistant::candidate(&self.doc, &draft.fragment, &draft.replace) {
+                match assistant::candidate(&self.tab.doc, &draft.fragment, &draft.replace) {
                     Ok((document, ids)) => {
-                        let before = self.doc.clone();
-                        self.doc = document;
-                        self.selected = ids;
+                        let before = self.tab.doc.clone();
+                        self.tab.doc = document;
+                        self.tab.selected = ids;
                         self.changed(before);
                         self.assistant.completed = self
                             .assistant
@@ -701,19 +701,19 @@ impl App {
                         self.assistant.draft = None;
                         self.tool = crate::canvas::Tool::Select;
                         if let Some((lo, hi)) =
-                            reshiki::scene::selection_bounds(&self.doc, &self.selected)
+                            reshiki::scene::selection_bounds(&self.tab.doc, &self.tab.selected)
                         {
-                            self.camera.center = reshiki::document::Point::new(
+                            self.tab.camera.center = reshiki::document::Point::new(
                                 (lo.x + hi.x) / 2.,
                                 (lo.y + hi.y) / 2.,
                             );
                             let paper =
                                 self.guides.paper(iced::Rectangle::with_size(self.viewport));
-                            self.camera.zoom = ((paper.width - 70.).max(100.)
+                            self.tab.camera.zoom = ((paper.width - 70.).max(100.)
                                 / (hi.x - lo.x).max(240.))
                             .min((paper.height - 70.).max(100.) / (hi.y - lo.y).max(180.))
                             .clamp(0.05, 2.5);
-                            self.fit_to_view = false;
+                            self.tab.fit_to_view = false;
                         }
                         self.assistant.record(
                             "ReShiki",
@@ -762,7 +762,8 @@ impl App {
             action @ (Action::Send | Action::Improve) => {
                 let improving = matches!(action, Action::Improve);
 
-                if self.assistant.busy || self.assistant.reading_image || self.cleanup.is_some() {
+                if self.assistant.busy || self.assistant.reading_image || self.tab.cleanup.is_some()
+                {
                     return Task::none();
                 }
                 let prompt = self.assistant.input.text().trim().to_string();
@@ -783,15 +784,15 @@ impl App {
                         "Please shorten your request to 12,000 characters".into();
                     return Task::none();
                 }
-                if !improving && self.assistant.replace && self.selected.is_empty() {
+                if !improving && self.assistant.replace && self.tab.selected.is_empty() {
                     self.assistant.error = true;
                     self.assistant.status = "Select the objects to replace first".into();
                     return Task::none();
                 }
-                let context = if self.selected.is_empty() {
-                    self.doc.clone()
+                let context = if self.tab.selected.is_empty() {
+                    self.tab.doc.clone()
                 } else {
-                    reshiki::editing::selection(&self.doc, &self.selected)
+                    reshiki::editing::selection(&self.tab.doc, &self.tab.selected)
                 };
                 if context.atoms.len() > 1000 {
                     self.assistant.error = true;
@@ -800,24 +801,24 @@ impl App {
                     return Task::none();
                 }
                 let settings = DrawingSettings {
-                    drawing_style: self.doc.drawing_style.clone(),
-                    format: self.caption_format.clone(),
-                    bond_length: self.bond_drawing.length,
+                    drawing_style: self.tab.doc.drawing_style.clone(),
+                    format: self.tab.caption_format.clone(),
+                    bond_length: self.tab.bond_drawing.length,
                     // The field shows display colors; the canvas ink stays Ink.
-                    bond_color: super::graphics::parse_color(&self.bond_color_input)
-                        .filter(|rgb| *rgb != self.doc.canvas_theme.color([0; 3]))
+                    bond_color: super::graphics::parse_color(&self.tab.bond_color_input)
+                        .filter(|rgb| *rgb != self.tab.doc.canvas_theme.color([0; 3]))
                         .map_or(
                             reshiki::palette::Color::Ink,
                             reshiki::palette::Color::Custom,
                         ),
-                    arrow_style: self.arrows.style.clone(),
-                    labels: self.doc.atom_labels.clone(),
+                    arrow_style: self.tab.arrows.style.clone(),
+                    labels: self.tab.doc.atom_labels.clone(),
                 };
-                let request = json!({"request":prompt,"conversation":self.assistant.conversation(),"previous_proposal":self.assistant.draft.as_ref().map(|d|&d.proposal),"drawing_summary":{"atoms":context.atoms.len(),"bonds":context.bonds.len(),"arrows":context.arrows.len()},"selected_ids":self.selected,"placement":if self.assistant.replace {"replace selected objects"} else {"add new drawing objects"},"style":{"name":self.doc.drawing_style.name,"bond_length_pt":self.bond_drawing.length * reshiki::style::DEFAULT.points_per_world(),"text":settings.format,"bond_color":settings.bond_color}}).to_string();
+                let request = json!({"request":prompt,"conversation":self.assistant.conversation(),"previous_proposal":self.assistant.draft.as_ref().map(|d|&d.proposal),"drawing_summary":{"atoms":context.atoms.len(),"bonds":context.bonds.len(),"arrows":context.arrows.len()},"selected_ids":self.tab.selected,"placement":if self.assistant.replace {"replace selected objects"} else {"add new drawing objects"},"style":{"name":self.tab.doc.drawing_style.name,"bond_length_pt":self.tab.bond_drawing.length * reshiki::style::DEFAULT.points_per_world(),"text":settings.format,"bond_color":settings.bond_color}}).to_string();
                 let seed = if improving {
                     Some(if let Some(draft) = &self.assistant.draft {
-                        if draft.epoch != self.file_epoch
-                            || (!draft.replace.is_empty() && draft.revision != self.revision)
+                        if draft.epoch != self.tab.file_epoch
+                            || (!draft.replace.is_empty() && draft.revision != self.tab.revision)
                         {
                             self.assistant.status = "Your drawing changed. Discard this draft, then review the current selection.".into();
                             self.assistant.error = true;
@@ -829,7 +830,7 @@ impl App {
                             review: Default::default(),
                         }
                     } else {
-                        let ids = assistant::review::scope(&self.doc, &self.selected);
+                        let ids = assistant::review::scope(&self.tab.doc, &self.tab.selected);
                         let mut proposal = Proposal {
                             replace_ids: ids.clone(),
                             ..Default::default()
@@ -837,7 +838,7 @@ impl App {
                         proposal.composition.preserve_details = true;
                         assistant::review::Outcome {
                             proposal,
-                            document: assistant::review::fragment(&self.doc, &ids),
+                            document: assistant::review::fragment(&self.tab.doc, &ids),
                             review: Default::default(),
                         }
                     })
@@ -856,9 +857,13 @@ impl App {
                         .draft
                         .as_ref()
                         .map(|d| d.replace.clone())
-                        .unwrap_or_else(|| assistant::review::scope(&self.doc, &self.selected))
+                        .unwrap_or_else(|| {
+                            assistant::review::scope(&self.tab.doc, &self.tab.selected)
+                        })
                 } else if self.assistant.replace {
-                    self.doc.expand_abbreviation_selection(&self.selected)
+                    self.tab
+                        .doc
+                        .expand_abbreviation_selection(&self.tab.selected)
                 } else {
                     vec![]
                 };
@@ -887,19 +892,19 @@ impl App {
                 self.assistant.checking = 0;
                 self.assistant.last_activity = Some(std::time::Instant::now());
                 self.assistant.pending_scope =
-                    Some((self.file_epoch, self.revision, replace.clone()));
+                    Some((self.tab.file_epoch, self.tab.revision, replace.clone()));
                 let (tx, rx) = tokio::sync::mpsc::channel(32);
                 self.assistant.progress = Some(rx);
                 let cancel = self.assistant.cancel.clone();
                 let serial = self.assistant.serial;
-                let revision = self.revision;
-                let epoch = self.file_epoch;
+                let revision = self.tab.revision;
+                let epoch = self.tab.file_epoch;
                 let preferences = self.assistant.preferences.clone();
                 let source_image = self.assistant.source_image.clone();
                 let shared = std::sync::Arc::new(std::sync::RwLock::new(
                     assistant::canvas_tools::Snapshot {
-                        document: self.doc.clone(),
-                        selected: self.selected.clone(),
+                        document: self.tab.doc.clone(),
+                        selected: self.tab.selected.clone(),
                         revision,
                         epoch,
                     },
@@ -1273,8 +1278,8 @@ impl App {
             );
         }
         if let Some(draft) = &state.draft {
-            let current = draft.epoch == self.file_epoch
-                && (draft.replace.is_empty() || draft.revision == self.revision);
+            let current = draft.epoch == self.tab.file_epoch
+                && (draft.replace.is_empty() || draft.revision == self.tab.revision);
             let mut proposal = column![
                 text(if draft.review.can_auto_apply() {
                     "Quality checked"
@@ -1314,7 +1319,7 @@ impl App {
                 row![
                     action("Apply", Action::Apply)
                         .on_press_maybe(
-                            (current && !state.busy && self.cleanup.is_none())
+                            (current && !state.busy && self.tab.cleanup.is_none())
                                 .then_some(Message::Assistant(Action::Apply))
                         )
                         .style(crate::appearance::primary),
@@ -1355,9 +1360,9 @@ impl App {
                     .style(|theme| crate::appearance::container(theme, card())),
             );
         }
-        if !state.busy && state.draft.is_none() && !self.doc.all_ids().is_empty() {
+        if !state.busy && state.draft.is_none() && !self.tab.doc.all_ids().is_empty() {
             chat = chat.push(action(
-                if self.selected.is_empty() {
+                if self.tab.selected.is_empty() {
                     "Improve drawing layout"
                 } else {
                     "Improve selected layout"
@@ -1489,7 +1494,7 @@ impl App {
                 .on_press_maybe(
                     ((!state.input.text().trim().is_empty() || state.source_image.is_some())
                         && !state.reading_image
-                        && self.cleanup.is_none())
+                        && self.tab.cleanup.is_none())
                     .then_some(Message::Assistant(Action::Send)),
                 )
         };
@@ -1932,18 +1937,18 @@ mod tests {
     #[test]
     fn pasting_image_attaches_until_send_without_mutating_the_canvas() {
         let (mut app, _) = App::new();
-        let before = app.doc.clone();
+        let before = app.tab.doc.clone();
         let picture = source_picture();
         let task = app.assistant_action(Action::ImageRead {
             serial: app.assistant.image_serial,
-            epoch: app.file_epoch,
+            epoch: app.tab.file_epoch,
             image_only: false,
             result: Ok(Some(picture.clone())),
         });
         assert_eq!(task.units(), 0);
         assert!(!app.assistant.busy);
         assert_eq!(app.assistant.source_image, Some(picture));
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         assert!(app.assistant.messages.is_empty());
         let task = app.assistant_action(Action::Send);
         assert!(task.units() > 0);
@@ -1964,7 +1969,7 @@ mod tests {
     fn late_clipboard_results_cannot_restart_reset_or_stopped_work() {
         let (mut app, _) = App::new();
         let serial = app.assistant.image_serial;
-        let epoch = app.file_epoch;
+        let epoch = app.tab.file_epoch;
         let _ = app.assistant_action(Action::Reset);
         let _ = app.assistant_action(Action::ImageRead {
             serial,
@@ -1995,9 +2000,9 @@ mod tests {
     #[test]
     fn text_paste_and_stale_document_image_keep_the_canvas_unchanged() {
         let (mut app, _) = App::new();
-        let before = app.doc.clone();
+        let before = app.tab.doc.clone();
         let serial = app.assistant.image_serial;
-        let epoch = app.file_epoch;
+        let epoch = app.tab.file_epoch;
         let _ = app.assistant_action(Action::TextPasted {
             serial,
             epoch,
@@ -2012,12 +2017,12 @@ mod tests {
         });
         assert!(app.assistant.source_image.is_none());
         assert!(!app.assistant.busy);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
     }
     #[test]
     fn menus_and_completion_preserve_history_scroll_until_jump_is_requested() {
         let (mut app, _) = App::new();
-        app.busy = false;
+        app.tab.busy = false;
         let _ = app.assistant_action(Action::ChatScrolled {
             follow: false,
             offset: 240.,
@@ -2050,27 +2055,27 @@ mod tests {
             typography::StyleChange,
         };
         let (mut app, _) = App::new();
-        app.busy = false;
-        let carbon = app.doc.add_atom("C", Point::default());
-        let oxygen = app.doc.add_atom("O", Point::new(42., 0.));
-        app.doc.add_bond(carbon, oxygen, 1, "plain");
-        let caption = app.doc.next_id();
-        app.doc.annotations.push(Annotation {
+        app.tab.busy = false;
+        let carbon = app.tab.doc.add_atom("C", Point::default());
+        let oxygen = app.tab.doc.add_atom("O", Point::new(42., 0.));
+        app.tab.doc.add_bond(carbon, oxygen, 1, "plain");
+        let caption = app.tab.doc.next_id();
+        app.tab.doc.annotations.push(Annotation {
             id: caption,
             position: Point::new(80., -30.),
             text: "Reaction conditions".into(),
             format: Default::default(),
         });
-        let arrow = app.doc.next_id();
-        app.doc.arrows.push(Arrow::new(
+        let arrow = app.tab.doc.next_id();
+        app.tab.doc.arrows.push(Arrow::new(
             arrow,
             Point::new(70., 0.),
             Point::new(140., 0.),
             Preset::Forward,
             ArrowStyle::default(),
         ));
-        let graphic = app.doc.next_id();
-        app.doc.graphics.push(Graphic::dragged(
+        let graphic = app.tab.doc.next_id();
+        app.tab.doc.graphics.push(Graphic::dragged(
             graphic,
             GraphicKind::Rectangle,
             Point::new(-30., -50.),
@@ -2087,10 +2092,10 @@ mod tests {
         let _ = app.assistant_action(Action::AutoApply(true));
         let _ = app.assistant_action(Action::Replace(true));
         let _ = app.assistant_action(Action::Example("Replace this scheme"));
-        let original = app.doc.clone();
-        let revision = app.revision;
+        let original = app.tab.doc.clone();
+        let revision = app.tab.revision;
         let _ = app.update(Message::SelectAll);
-        assert_eq!(app.selected, original.all_ids());
+        assert_eq!(app.tab.selected, original.all_ids());
         assert_eq!(app.inspector_tab, InspectorTab::Assistant);
         for ids in [
             vec![carbon, oxygen],
@@ -2100,12 +2105,12 @@ mod tests {
             vec![],
         ] {
             let _ = app.update(Message::Canvas(Edit::Select(ids.clone())));
-            assert_eq!(app.selected, ids);
+            assert_eq!(app.tab.selected, ids);
             assert!(app.inspector_open);
             assert_eq!(app.inspector_tab, InspectorTab::Assistant);
-            assert_eq!(app.doc, original);
-            assert_eq!(app.revision, revision);
-            assert!(!app.history.can_undo());
+            assert_eq!(app.tab.doc, original);
+            assert_eq!(app.tab.revision, revision);
+            assert!(!app.tab.history.can_undo());
             assert!(app.assistant.preferences.auto_apply && app.assistant.replace);
             assert_eq!(app.assistant.input.text(), "Replace this scheme");
         }
@@ -2113,27 +2118,27 @@ mod tests {
         let _ = app.update(Message::TextStyle(StyleChange::Color(
             reshiki::palette::Color::Custom([32, 80, 145]),
         )));
-        let colored = app.doc.clone();
+        let colored = app.tab.doc.clone();
         assert_ne!(colored, original);
         assert_eq!(app.inspector_tab, InspectorTab::Assistant);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
         assert_eq!(app.inspector_tab, InspectorTab::Assistant);
-        assert!(!app.history.can_undo());
+        assert!(!app.tab.history.can_undo());
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, colored);
+        assert_eq!(app.tab.doc, colored);
         assert_eq!(app.inspector_tab, InspectorTab::Assistant);
         // Explicit navigation still opens the ordinary selection controls.
         let _ = app.update(Message::Inspector(InspectorTab::Properties));
         let _ = app.update(Message::Canvas(Edit::Select(vec![caption])));
         assert_eq!(app.inspector_tab, InspectorTab::Properties);
-        assert_eq!(app.caption_target, Some(caption));
+        assert_eq!(app.tab.caption_target, Some(caption));
     }
 
     #[test]
     fn automatic_canvas_edits_wait_for_a_text_draft_and_keep_separate_undo_steps() {
         let (mut app, _) = App::new();
-        app.busy = false;
+        app.tab.busy = false;
         app.assistant.preferences.auto_apply = true;
         let _ = app.inline_action(super::super::inline_text::Action::Begin(
             None,
@@ -2143,18 +2148,18 @@ mod tests {
             String::from("Current label").into(),
         )));
         ready(&mut app);
-        assert!(app.doc.atoms.is_empty());
+        assert!(app.tab.doc.atoms.is_empty());
         assert!(app.assistant.waiting_for_canvas_edit);
-        assert_eq!(app.caption, "Current label");
+        assert_eq!(app.tab.caption, "Current label");
         assert!(app.finish_inline(true));
-        let text_document = app.doc.clone();
+        let text_document = app.tab.doc.clone();
         let _ = app.assistant_action(Action::Poll);
-        assert_eq!(app.doc.atoms.len(), 1);
-        assert_eq!(app.doc.annotations, text_document.annotations);
+        assert_eq!(app.tab.doc.atoms.len(), 1);
+        assert_eq!(app.tab.doc.annotations, text_document.annotations);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, text_document);
+        assert_eq!(app.tab.doc, text_document);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, Document::default());
+        assert_eq!(app.tab.doc, Document::default());
     }
     fn ready(app: &mut App) {
         let mut fragment = Document::default();
@@ -2175,8 +2180,8 @@ mod tests {
         };
         let _ = app.assistant_action(Action::Done {
             serial: app.assistant.serial,
-            epoch: app.file_epoch,
-            revision: app.revision,
+            epoch: app.tab.file_epoch,
+            revision: app.tab.revision,
             replace: vec![],
             result: Box::new(Ok(assistant::review::Outcome {
                 proposal,
@@ -2191,46 +2196,50 @@ mod tests {
     #[test]
     fn proposal_apply_is_one_undo_and_reject_is_nonmutating() {
         let (mut app, _) = App::new();
-        app.busy = false;
-        app.doc.add_atom("C", reshiki::document::Point::default());
-        let before = app.doc.clone();
+        app.tab.busy = false;
+        app.tab
+            .doc
+            .add_atom("C", reshiki::document::Point::default());
+        let before = app.tab.doc.clone();
         ready(&mut app);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         let _ = app.assistant_action(Action::Reject);
-        assert_eq!(app.doc, before);
-        assert!(!app.history.undo(&mut app.doc));
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.undo(&mut app.tab.doc));
         ready(&mut app);
         let _ = app.assistant_action(Action::Apply);
-        assert_eq!(app.doc.atoms.len(), 2);
-        assert!(app.history.undo(&mut app.doc));
-        assert_eq!(app.doc, before);
-        assert!(app.history.redo(&mut app.doc));
-        assert_eq!(app.doc.atoms.len(), 2);
+        assert_eq!(app.tab.doc.atoms.len(), 2);
+        assert!(app.tab.history.undo(&mut app.tab.doc));
+        assert_eq!(app.tab.doc, before);
+        assert!(app.tab.history.redo(&mut app.tab.doc));
+        assert_eq!(app.tab.doc.atoms.len(), 2);
     }
     #[test]
     fn edits_new_documents_and_cancelled_requests_cannot_be_overwritten() {
         let (mut app, _) = App::new();
         ready(&mut app);
-        let before = app.doc.clone();
-        app.doc.add_atom("N", reshiki::document::Point::default());
+        let before = app.tab.doc.clone();
+        app.tab
+            .doc
+            .add_atom("N", reshiki::document::Point::default());
         app.changed(before);
-        let edited = app.doc.clone();
+        let edited = app.tab.doc.clone();
         if let Some(draft) = &mut app.assistant.draft {
             draft.replace = edited.all_ids();
         }
         let _ = app.assistant_action(Action::Apply);
-        assert_eq!(app.doc, edited);
+        assert_eq!(app.tab.doc, edited);
         assert!(app.assistant.draft.is_some());
         ready(&mut app);
-        app.file_epoch += 1;
+        app.tab.file_epoch += 1;
         let _ = app.assistant_action(Action::Apply);
-        assert_eq!(app.doc, edited);
+        assert_eq!(app.tab.doc, edited);
         let serial = app.assistant.serial;
         let _ = app.assistant_action(Action::Reset);
         let _ = app.assistant_action(Action::Done {
             serial,
-            epoch: app.file_epoch,
-            revision: app.revision,
+            epoch: app.tab.file_epoch,
+            revision: app.tab.revision,
             replace: vec![],
             result: Box::new(Err("late".into())),
         });
@@ -2240,17 +2249,18 @@ mod tests {
     #[test]
     fn async_progress_does_not_block_editing_and_additive_proposals_rebase_safely() {
         let (mut app, _) = App::new();
-        app.busy = false;
+        app.tab.busy = false;
         let _ = app.assistant_action(Action::Example("Draw water"));
         let _ = app.assistant_action(Action::Send);
         assert!(app.assistant.busy);
         let serial = app.assistant.serial;
-        let before = app.doc.clone();
+        let before = app.tab.doc.clone();
         let atom = app
+            .tab
             .doc
             .add_atom("N", reshiki::document::Point::new(120., 120.));
         app.changed(before);
-        let edited = app.doc.clone();
+        let edited = app.tab.doc.clone();
         let _ = app.assistant_action(Action::Example("Next request while waiting"));
         assert!(app.assistant.busy);
         assert_eq!(app.assistant.input.text(), "Next request while waiting");
@@ -2258,56 +2268,56 @@ mod tests {
         assert!(!app.assistant.busy);
         let _ = app.assistant_action(Action::Done {
             serial,
-            epoch: app.file_epoch,
-            revision: app.revision,
+            epoch: app.tab.file_epoch,
+            revision: app.tab.revision,
             replace: vec![],
             result: Box::new(Err("late response".into())),
         });
-        assert_eq!(app.doc, edited);
+        assert_eq!(app.tab.doc, edited);
         ready(&mut app);
-        app.revision += 1;
+        app.tab.revision += 1;
         let _ = app.assistant_action(Action::Apply);
-        assert_eq!(app.doc.atom(atom), edited.atom(atom));
-        assert_eq!(app.doc.atoms.len(), edited.atoms.len() + 1);
-        assert!(app.history.undo(&mut app.doc));
-        assert_eq!(app.doc, edited);
+        assert_eq!(app.tab.doc.atom(atom), edited.atom(atom));
+        assert_eq!(app.tab.doc.atoms.len(), edited.atoms.len() + 1);
+        assert!(app.tab.history.undo(&mut app.tab.doc));
+        assert_eq!(app.tab.doc, edited);
     }
     #[test]
     fn accept_all_applies_valid_proposals_as_one_undo_and_respects_changed_selection() {
         let (mut app, _) = App::new();
-        app.busy = false;
-        let original = app.doc.clone();
+        app.tab.busy = false;
+        let original = app.tab.doc.clone();
         let _ = app.assistant_action(Action::AutoApply(true));
         ready(&mut app);
         assert!(app.assistant.draft.is_none());
-        assert_eq!(app.doc.atoms.len(), original.atoms.len() + 1);
-        assert!(app.history.undo(&mut app.doc));
-        assert_eq!(app.doc, original);
-        assert!(app.history.redo(&mut app.doc));
+        assert_eq!(app.tab.doc.atoms.len(), original.atoms.len() + 1);
+        assert!(app.tab.history.undo(&mut app.tab.doc));
+        assert_eq!(app.tab.doc, original);
+        assert!(app.tab.history.redo(&mut app.tab.doc));
         let _ = app.assistant_action(Action::AutoApply(false));
-        let before = app.doc.clone();
+        let before = app.tab.doc.clone();
         ready(&mut app);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         if let Some(draft) = &mut app.assistant.draft {
             draft.replace = before.all_ids();
-            draft.revision = app.revision.wrapping_sub(1);
+            draft.revision = app.tab.revision.wrapping_sub(1);
         }
         let _ = app.assistant_action(Action::AutoApply(true));
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         assert!(app.assistant.draft.is_some());
         assert!(app.assistant.error);
     }
     #[test]
     fn immediate_activity_stop_retains_preview_and_unverified_drafts_require_review() {
         let (mut app, _) = App::new();
-        app.busy = false;
+        app.tab.busy = false;
         let _ = app.assistant_action(Action::Example("Draw water"));
         let start = std::time::Instant::now();
         let _ = app.assistant_action(Action::Send);
         assert!(start.elapsed() < std::time::Duration::from_millis(200));
         assert!(app.assistant.busy && app.assistant.started.is_some());
         assert_eq!(app.assistant.status, "Preparing your scheme…");
-        let original = app.doc.clone();
+        let original = app.tab.doc.clone();
         let mut preview = Document::default();
         preview.add_atom("O", reshiki::document::Point::default());
         app.assistant.preview = Some(preview.clone());
@@ -2315,7 +2325,7 @@ mod tests {
         assert!(!app.assistant.busy);
         assert_eq!(app.assistant.draft.as_ref().unwrap().fragment, preview);
         let _ = app.assistant_action(Action::AutoApply(true));
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
         assert!(app.assistant.draft.is_some());
         let _ = app.assistant_action(Action::PreviewEdit(assistant::review::Edit::Move {
             target: "molecule:0".into(),
@@ -2326,6 +2336,6 @@ mod tests {
             app.assistant.draft.as_ref().unwrap().fragment.atoms[0].position,
             preview.atoms[0].position
         );
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
     }
 }

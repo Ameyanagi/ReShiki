@@ -129,11 +129,11 @@ impl App {
             }
             Action::EditHues => {
                 let current = self.current_selection_color();
-                let hues = Hues::of(&self.doc);
+                let hues = Hues::of(&self.tab.doc);
                 if let Some(Menu::Color { edit, .. }) = &mut self.style_menu {
                     *edit = Some(HueEdit {
-                        theme: self.doc.custom_theme.clone(),
-                        version: self.doc.version,
+                        theme: self.tab.doc.custom_theme.clone(),
+                        version: self.tab.doc.version,
                         original: hues,
                         hues,
                         slot: match current {
@@ -221,10 +221,10 @@ impl App {
         else {
             return;
         };
-        self.doc.custom_theme = edit.theme.clone();
-        self.doc.version = edit.version;
+        self.tab.doc.custom_theme = edit.theme.clone();
+        self.tab.doc.version = edit.version;
         if edit.hues != edit.original {
-            reshiki::palette::set_hues(&mut self.doc, edit.hues);
+            reshiki::palette::set_hues(&mut self.tab.doc, edit.hues);
         }
         self.sync_color_input();
     }
@@ -238,35 +238,36 @@ impl App {
             return;
         };
         if keep {
-            let mut before = self.doc.clone();
+            let mut before = self.tab.doc.clone();
             before.custom_theme = edit.theme;
             before.version = edit.version;
-            if before != self.doc {
+            if before != self.tab.doc {
                 self.changed(before);
-                if let Some(theme) = &self.doc.custom_theme {
+                if let Some(theme) = &self.tab.doc.custom_theme {
                     self.status = format!("Hues saved in “{}”", theme.name);
                 }
             }
         } else {
-            self.doc.custom_theme = edit.theme;
-            self.doc.version = edit.version;
+            self.tab.doc.custom_theme = edit.theme;
+            self.tab.doc.version = edit.version;
         }
         self.sync_color_input();
     }
 
     /// Ring interiors are the target and every selected ring is unfilled.
     fn rings_unfilled(&self) -> bool {
-        self.color_scope == ColorScope::Rings && {
+        self.tab.color_scope == ColorScope::Rings && {
             let fills = self.selected_ring_fills();
             !fills.is_empty() && fills.iter().all(Option::is_none)
         }
     }
 
     fn theme_name(&self) -> String {
-        self.doc
+        self.tab
+            .doc
             .custom_theme
             .as_ref()
-            .map_or_else(|| self.doc.color_theme.to_string(), |t| t.name.clone())
+            .map_or_else(|| self.tab.doc.color_theme.to_string(), |t| t.name.clone())
     }
 
     pub(super) fn alignment_menu(&self, groups_only: bool) -> Element<'_, Message> {
@@ -334,9 +335,9 @@ impl App {
     }
 
     pub(super) fn color_button(&self) -> Element<'_, Message> {
-        let palette = Palette::of(&self.doc);
+        let palette = Palette::of(&self.tab.doc);
         let current = self.current_selection_color();
-        let canvas_theme = self.doc.canvas_theme;
+        let canvas_theme = self.tab.doc.canvas_theme;
         // A mixed selection shows an empty chip.
         let shown = current.map(|c| palette.rgb(c));
         let fill = crate::appearance::from_rgb(shown.unwrap_or(canvas_theme.background()));
@@ -372,7 +373,7 @@ impl App {
                     }),
                     Paint::name
                 ),
-                self.color_scope
+                self.tab.color_scope
             ),
             tooltip::Position::Bottom,
         );
@@ -394,9 +395,9 @@ impl App {
     }
 
     fn color_picker(&self, invalid: bool) -> Element<'_, Message> {
-        let palette = Palette::of(&self.doc);
-        let hues = Hues::of(&self.doc);
-        let canvas_theme = self.doc.canvas_theme;
+        let palette = Palette::of(&self.tab.doc);
+        let hues = Hues::of(&self.tab.doc);
+        let canvas_theme = self.tab.doc.canvas_theme;
         let current = self.current_selection_color();
         let pick = |color: Paint| Message::TextStyle(StyleChange::Color(color));
         let chosen = |color: Paint| (current == Some(color), Some(pick(color)));
@@ -404,7 +405,7 @@ impl App {
             text("Apply to").size(12).style(muted_text),
             crate::appearance::pick_list(
                 ColorScope::ALL,
-                Some(self.color_scope),
+                Some(self.tab.color_scope),
                 Message::ColorScope
             )
             .text_size(12)
@@ -415,7 +416,7 @@ impl App {
         .align_y(Alignment::Center);
         let no_fill = (
             self.rings_unfilled(),
-            (self.color_scope == ColorScope::Rings).then_some(Message::ClearRingFill),
+            (self.tab.color_scope == ColorScope::Rings).then_some(Message::ClearRingFill),
         );
         let mut custom = row![hover_hint(
             button(
@@ -439,7 +440,7 @@ impl App {
         )]
         .spacing(SWATCH / 4.);
         for i in 0..reshiki::palette::RECENT_LIMIT {
-            custom = custom.push(match self.doc.recent_colors.get(i) {
+            custom = custom.push(match self.tab.doc.recent_colors.get(i) {
                 Some(&rgb) => {
                     let (active, message) = chosen(Paint::Custom(rgb));
                     swatch(
@@ -484,7 +485,7 @@ impl App {
             text("Color").size(12).style(muted_text),
             crate::appearance::text_input(
                 "#1F4E79 · 31, 78, 121 · oklch(…)",
-                &self.text_color_input
+                &self.tab.text_color_input
             )
             .id(INPUT)
             .on_input(Message::TextColor)
@@ -566,14 +567,14 @@ impl App {
     }
 
     fn hue_editor(&self, edit: &HueEdit) -> Element<'_, Message> {
-        let palette = Palette::of(&self.doc);
-        let canvas_theme = self.doc.canvas_theme;
+        let palette = Palette::of(&self.tab.doc);
+        let canvas_theme = self.tab.doc.canvas_theme;
         let slot = edit.slot;
         let degrees = edit.hues.get(slot);
         let theme = edit
             .theme
             .as_ref()
-            .map_or_else(|| self.doc.color_theme.to_string(), |t| t.name.clone());
+            .map_or_else(|| self.tab.doc.color_theme.to_string(), |t| t.name.clone());
         let select = |hue: Hue| (hue == slot, Some(Message::StyleMenu(Action::Slot(hue))));
         let rows = paper(
             column![
@@ -617,7 +618,7 @@ impl App {
         ]
         .spacing(6)
         .align_y(Alignment::Center);
-        let tones = Tones::of(&self.doc, canvas_theme);
+        let tones = Tones::of(&self.tab.doc, canvas_theme);
         let at = |k: i32| (i32::from(degrees) + (k + edit.shift) * 10).rem_euclid(360) as u16;
         let chips = (-6..=6).map(|k| {
             let hue = at(k);
@@ -679,7 +680,7 @@ impl App {
         ]
         .padding([0, 26]);
         let preview = |canvas: CanvasTheme| {
-            let tones = Tones::of(&self.doc, canvas);
+            let tones = Tones::of(&self.tab.doc, canvas);
             column![
                 iced::widget::canvas(HuePreview {
                     background: canvas.background(),
@@ -1005,9 +1006,9 @@ mod tests {
 
     fn app() -> App {
         let (mut app, _) = App::new();
-        app.doc = reshiki::rings::Preset::Benzene.document(42., false);
-        app.selected = app.doc.all_ids();
-        app.history = History::default();
+        app.tab.doc = reshiki::rings::Preset::Benzene.document(42., false);
+        app.tab.selected = app.tab.doc.all_ids();
+        app.tab.history = History::default();
         app
     }
     fn act(app: &mut App, action: Action) {
@@ -1037,7 +1038,7 @@ mod tests {
         let _ = app.update(Message::ColorScope(ColorScope::Bonds));
         let _ = app.update(Message::TextStyle(StyleChange::Color(blue)));
         assert!(app.style_menu.is_some(), "Picking keeps the popover open");
-        assert!(app.doc.bonds.iter().all(|b| b.color == blue));
+        assert!(app.tab.doc.bonds.iter().all(|b| b.color == blue));
         // The edit restarts the delayed property refresh, which must not close it.
         let _ = app.update(Message::InspectorAction(
             super::super::inspector::Action::RefreshProperties,
@@ -1055,7 +1056,7 @@ mod tests {
         let _ = app.update(Message::SelectAll);
         assert!(app.style_menu.is_none(), "Other commands close it");
         act(&mut app, Action::RingColor);
-        assert_eq!(app.color_scope, ColorScope::Rings);
+        assert_eq!(app.tab.color_scope, ColorScope::Rings);
         assert!(matches!(app.style_menu, Some(Menu::Color { .. })));
         assert!(app.rings_unfilled(), "No fill is the current swatch");
         let teal = Paint::Palette(Hue::Teal, Row::Tint);
@@ -1063,11 +1064,11 @@ mod tests {
         assert_eq!(app.current_selection_color(), Some(teal));
         assert!(!app.rings_unfilled() && app.style_menu.is_some());
         // The atom label editor ignores other messages, so it closes the popover.
-        let atom = app.doc.atoms.first().map(|a| a.id);
+        let atom = app.tab.doc.atoms.first().map(|a| a.id);
         let _ = app.update(Message::AtomText(super::super::atom_text::Action::Begin(
             atom,
         )));
-        assert!(app.atom_text.is_some() && app.style_menu.is_none());
+        assert!(app.tab.atom_text.is_some() && app.style_menu.is_none());
     }
 
     #[test]
@@ -1091,8 +1092,8 @@ mod tests {
         let Some(Paint::Custom(rgb)) = app.current_selection_color() else {
             panic!("custom color");
         };
-        assert_eq!(app.doc.recent_colors, [rgb, [31, 78, 121]]);
-        assert_eq!(app.text_color_input, reshiki::palette::hex(rgb));
+        assert_eq!(app.tab.doc.recent_colors, [rgb, [31, 78, 121]]);
+        assert_eq!(app.tab.text_color_input, reshiki::palette::hex(rgb));
         assert!(app.style_menu.is_some());
     }
 
@@ -1101,66 +1102,66 @@ mod tests {
         let mut app = app();
         let blue = Paint::Palette(Hue::Blue, Row::Strong);
         let _ = app.update(Message::TextStyle(StyleChange::Color(blue)));
-        let before = app.doc.clone();
-        let shown = Palette::of(&app.doc).rgb(blue);
+        let before = app.tab.doc.clone();
+        let shown = Palette::of(&app.tab.doc).rgb(blue);
         act(&mut app, Action::Color);
         act(&mut app, Action::EditHues);
         assert_eq!(editing(&app).map(|e| e.slot), Some(Hue::Blue));
         act(&mut app, Action::Chip(-3));
-        assert_eq!(Hues::of(&app.doc).get(Hue::Blue), 225);
-        assert_ne!(Palette::of(&app.doc).rgb(blue), shown, "Live recolor");
+        assert_eq!(Hues::of(&app.tab.doc).get(Hue::Blue), 225);
+        assert_ne!(Palette::of(&app.tab.doc).rgb(blue), shown, "Live recolor");
         assert_eq!(
-            app.doc.custom_theme.as_ref().map(|t| t.name.as_str()),
+            app.tab.doc.custom_theme.as_ref().map(|t| t.name.as_str()),
             Some("Publication · custom hues")
         );
         // The strip stays in place: the clicked chip is now the current hue.
         assert_eq!(editing(&app).map(|e| e.shift), Some(3));
         act(&mut app, Action::Step(1));
-        assert_eq!(Hues::of(&app.doc).get(Hue::Blue), 235);
+        assert_eq!(Hues::of(&app.tab.doc).get(Hue::Blue), 235);
         act(&mut app, Action::Slot(Hue::Red));
         act(&mut app, Action::Step(-1));
-        assert_eq!(Hues::of(&app.doc).get(Hue::Red), 15);
+        assert_eq!(Hues::of(&app.tab.doc).get(Hue::Red), 15);
         act(&mut app, Action::Done);
         assert!(editing(&app).is_none() && app.style_menu.is_some());
-        let after = app.doc.clone();
+        let after = app.tab.doc.clone();
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before, "The whole session is one step");
+        assert_eq!(app.tab.doc, before, "The whole session is one step");
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, after);
+        assert_eq!(app.tab.doc, after);
     }
 
     #[test]
     fn cancel_and_escape_restore_the_theme_and_closing_keeps_edits() {
         let mut app = app();
-        let before = app.doc.clone();
+        let before = app.tab.doc.clone();
         act(&mut app, Action::Color);
         act(&mut app, Action::EditHues);
         act(&mut app, Action::Chip(4));
-        assert_ne!(app.doc, before);
+        assert_ne!(app.tab.doc, before);
         act(&mut app, Action::Cancel);
-        assert_eq!(app.doc, before);
-        assert!(!app.history.can_undo());
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
         act(&mut app, Action::EditHues);
         act(&mut app, Action::Chip(4));
         let _ = app.update(Message::Escape);
-        assert_eq!(app.doc, before, "Escape cancels the session");
+        assert_eq!(app.tab.doc, before, "Escape cancels the session");
         assert!(app.style_menu.is_some(), "and returns to picking");
         // Default hues on a built-in theme leave the drawing unchanged.
         act(&mut app, Action::EditHues);
         act(&mut app, Action::Chip(4));
         act(&mut app, Action::RestoreHues);
         act(&mut app, Action::Done);
-        assert_eq!(app.doc, before);
-        assert!(!app.history.can_undo());
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
         // A click outside keeps the edits, as Done does.
         act(&mut app, Action::EditHues);
         act(&mut app, Action::ResetHue);
         act(&mut app, Action::Chip(-6));
         act(&mut app, Action::Close);
         assert!(app.style_menu.is_none());
-        assert_eq!(Hues::of(&app.doc).get(Hue::Blue), 195);
+        assert_eq!(Hues::of(&app.tab.doc).get(Hue::Blue), 195);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
     }
 
     #[test]
@@ -1181,6 +1182,6 @@ mod tests {
         for _ in 0..3 {
             act(&mut app, Action::Step(-1));
         }
-        assert_eq!(Hues::of(&app.doc).get(Hue::Red), 355, "Hues wrap at 0°");
+        assert_eq!(Hues::of(&app.tab.doc).get(Hue::Red), 355, "Hues wrap at 0°");
     }
 }

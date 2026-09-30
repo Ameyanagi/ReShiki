@@ -142,14 +142,13 @@ impl App {
             id: t.id.clone(),
             name: t.name.clone(),
         }));
-        let selected =
-            self.doc
-                .custom_theme
-                .as_ref()
-                .map_or(Choice::Builtin(self.doc.color_theme), |t| Choice::Library {
-                    id: t.id.clone(),
-                    name: t.name.clone(),
-                });
+        let selected = self.tab.doc.custom_theme.as_ref().map_or(
+            Choice::Builtin(self.tab.doc.color_theme),
+            |t| Choice::Library {
+                id: t.id.clone(),
+                name: t.name.clone(),
+            },
+        );
         // A document may retain a deleted theme; show its name as selected,
         // without adding that embedded snapshot back to the saved library menu.
         choices.push(Choice::Manage);
@@ -171,7 +170,8 @@ impl App {
                     .find(|t| t.id == id)
                     .cloned()
                     .or_else(|| {
-                        self.doc
+                        self.tab
+                            .doc
                             .custom_theme
                             .as_deref()
                             .filter(|t| t.id == id)
@@ -186,7 +186,7 @@ impl App {
                     return Task::none();
                 }
                 self.theme_library.serial = self.theme_library.serial.wrapping_add(1);
-                let (epoch, serial) = (self.file_epoch, self.theme_library.serial);
+                let (epoch, serial) = (self.tab.file_epoch, self.theme_library.serial);
                 return Task::perform(
                     async {
                         let Some(file) = rfd::AsyncFileDialog::new()
@@ -207,7 +207,7 @@ impl App {
                 );
             }
             Action::Loaded(epoch, serial, result) => {
-                if epoch != self.file_epoch || serial != self.theme_library.serial {
+                if epoch != self.tab.file_epoch || serial != self.theme_library.serial {
                     return Task::none();
                 }
                 match result {
@@ -240,8 +240,8 @@ impl App {
             return false;
         }
         let name = theme.name.clone();
-        let before = self.doc.clone();
-        match theme.apply(&mut self.doc) {
+        let before = self.tab.doc.clone();
+        match theme.apply(&mut self.tab.doc) {
             Ok(()) => {
                 self.changed(before);
                 self.sync_color_input();
@@ -332,41 +332,41 @@ mod tests {
     #[test]
     fn importing_previews_until_saved_and_stale_dialogs_do_not_change_drawings() {
         let (mut app, _) = App::new();
-        let original = app.doc.clone();
+        let original = app.tab.doc.clone();
         let _ = app.theme_generator_action(super::super::theme_generator::Action::Open);
         let serial = app.theme_library.serial;
         let theme = theme_files::bundled().unwrap().remove(0);
         let _ = app.theme_file_action(Action::Loaded(
-            app.file_epoch + 1,
+            app.tab.file_epoch + 1,
             serial,
             Ok(Some(Box::new(theme.clone()))),
         ));
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
         let _ = app.theme_file_action(Action::Loaded(
-            app.file_epoch,
+            app.tab.file_epoch,
             serial,
             Ok(Some(Box::new(theme.clone()))),
         ));
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
         assert!(app.theme_library.themes().is_empty());
         let _ = app.theme_generator_action(super::super::theme_generator::Action::Apply);
-        let themed = app.doc.clone();
+        let themed = app.tab.doc.clone();
         assert!(themed.custom_theme.is_some());
         assert_eq!(themed.drawing_style, original.drawing_style);
         assert_eq!(themed.canvas_theme, original.canvas_theme);
         assert!(!super::super::same_drawing(&themed, &original));
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, themed);
+        assert_eq!(app.tab.doc, themed);
         let _ = app.update(Message::QuickDrawingStyle(
             super::super::document_styles::Choice::Journal(
                 reshiki::document_styles::Preset::Nature,
             ),
         ));
-        assert!(app.doc.custom_theme.is_some());
-        assert_eq!(app.doc.version, 16);
+        assert!(app.tab.doc.custom_theme.is_some());
+        assert_eq!(app.tab.doc.version, 16);
         let _ = app.update(Message::ColorTheme(ColorTheme::Jmol));
-        assert!(app.doc.custom_theme.is_none());
+        assert!(app.tab.doc.custom_theme.is_none());
     }
 }

@@ -148,8 +148,8 @@ impl App {
         ) {
             // Focused widgets normally capture keys before subscription dispatch.
             // These guards also cover an unfocused, still-open text draft.
-            if self.inline_text.is_some()
-                || self.atom_text.is_some()
+            if self.tab.inline_text.is_some()
+                || self.tab.atom_text.is_some()
                 || self.help_open
                 || self.updates.open
             {
@@ -159,12 +159,13 @@ impl App {
                 && (self.tool != Tool::Select
                     || self.palette.is_some()
                     || self.assistant.menu.is_some()
-                    || self.cleanup.is_some()
-                    || self.joining.is_some())
+                    || self.tab.cleanup.is_some()
+                    || self.tab.joining.is_some())
             {
                 return Some(Message::Tool(Tool::Select));
             }
-            if matches!(message, Message::Shortcut(Action::ReactionCopy)) && self.joining.is_some()
+            if matches!(message, Message::Shortcut(Action::ReactionCopy))
+                && self.tab.joining.is_some()
             {
                 return None;
             }
@@ -173,7 +174,10 @@ impl App {
     }
 
     pub(super) fn select_recent_shortcut(&mut self) {
-        let ids = self.recent_molecules.selection(&self.doc, self.file_epoch);
+        let ids = self
+            .tab
+            .recent_molecules
+            .selection(&self.tab.doc, self.tab.file_epoch);
         if ids.is_empty() {
             self.status = "No recently edited molecule in this drawing".into();
             self.error = false;
@@ -187,9 +191,13 @@ impl App {
     }
 
     pub(super) fn reaction_copy_shortcut(&mut self) {
-        match reaction_copy(&self.doc, &self.selected, self.bond_drawing.length) {
+        match reaction_copy(
+            &self.tab.doc,
+            &self.tab.selected,
+            self.tab.bond_drawing.length,
+        ) {
             Ok((doc, ids)) => {
-                let before = std::mem::replace(&mut self.doc, doc);
+                let before = std::mem::replace(&mut self.tab.doc, doc);
                 self.changed(before);
                 if !self.error {
                     self.tool = Tool::Select;
@@ -302,7 +310,7 @@ mod tests {
 
     fn app() -> App {
         let (mut app, _) = App::new();
-        app.doc = Document::default();
+        app.tab.doc = Document::default();
         app
     }
 
@@ -349,43 +357,43 @@ mod tests {
     #[test]
     fn reaction_expands_partial_molecule_remaps_ids_and_undoes_once() -> Result<(), String> {
         let mut app = app();
-        let original_ids = chain(&mut app.doc, 0., 0.);
-        app.selected = vec![original_ids[1]];
-        let original = app.doc.clone();
+        let original_ids = chain(&mut app.tab.doc, 0., 0.);
+        app.tab.selected = vec![original_ids[1]];
+        let original = app.tab.doc.clone();
         let _ = app.update(Message::Shortcut(Action::ReactionCopy));
         assert!(!app.error, "{}", app.status);
-        assert_eq!(app.doc.atoms.len(), 6);
-        assert_eq!(app.doc.bonds.len(), 4);
-        assert_eq!(app.doc.arrows.len(), 1);
-        assert_eq!(app.doc.reactions[0].reactants[0].atoms, original_ids);
-        let copied = app.selected.clone();
-        assert_eq!(app.doc.reactions[0].products[0].atoms, copied);
+        assert_eq!(app.tab.doc.atoms.len(), 6);
+        assert_eq!(app.tab.doc.bonds.len(), 4);
+        assert_eq!(app.tab.doc.arrows.len(), 1);
+        assert_eq!(app.tab.doc.reactions[0].reactants[0].atoms, original_ids);
+        let copied = app.tab.selected.clone();
+        assert_eq!(app.tab.doc.reactions[0].products[0].atoms, copied);
         assert!(copied.iter().all(|id| !original_ids.contains(id)));
-        assert_eq!(&app.doc.atoms[..3], original.atoms);
-        let arrow = &app.doc.arrows[0];
+        assert_eq!(&app.tab.doc.atoms[..3], original.atoms);
+        let arrow = &app.tab.doc.arrows[0];
         let (_, source_hi) = reshiki::scene::selection_bounds(&original, &original_ids).unwrap();
-        let (product_lo, _) = reshiki::scene::selection_bounds(&app.doc, &copied).unwrap();
+        let (product_lo, _) = reshiki::scene::selection_bounds(&app.tab.doc, &copied).unwrap();
         assert!(arrow.start.x > source_hi.x && arrow.end.x < product_lo.x);
-        let result = app.doc.clone();
+        let result = app.tab.doc.clone();
         let json = serde_json::to_string(&result).unwrap();
         assert_eq!(serde_json::from_str::<Document>(&json).unwrap(), result);
-        app.doc.validate()?;
-        app.selected.clear();
+        app.tab.doc.validate()?;
+        app.tab.selected.clear();
         space(&mut app);
-        assert_eq!(app.selected, copied);
+        assert_eq!(app.tab.selected, copied);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, original);
-        assert!(!app.history.can_undo());
+        assert_eq!(app.tab.doc, original);
+        assert!(!app.tab.history.can_undo());
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, result);
-        app.selected.clear();
+        assert_eq!(app.tab.doc, result);
+        app.tab.selected.clear();
         space(&mut app);
-        assert_eq!(app.selected, copied);
+        assert_eq!(app.tab.selected, copied);
         // The copied product is the source for a second arrow in a scheme.
         let _ = app.update(Message::Shortcut(Action::ReactionCopy));
         assert!(!app.error, "{}", app.status);
-        assert_eq!(app.doc.reactions.len(), 2);
-        assert_eq!(app.doc.reactions[1].reactants[0].atoms, copied);
+        assert_eq!(app.tab.doc.reactions.len(), 2);
+        assert_eq!(app.tab.doc.reactions[1].reactants[0].atoms, copied);
         Ok(())
     }
 
@@ -430,24 +438,24 @@ mod tests {
     #[test]
     fn ambiguous_or_obstructed_reaction_does_not_change_history() {
         let mut app = app();
-        let ids = chain(&mut app.doc, 0., 0.);
-        let obstacle = chain(&mut app.doc, 255., 0.);
+        let ids = chain(&mut app.tab.doc, 0., 0.);
+        let obstacle = chain(&mut app.tab.doc, 255., 0.);
         for selected in [vec![], ids.clone()] {
-            app.selected = selected;
-            let before = app.doc.clone();
+            app.tab.selected = selected;
+            let before = app.tab.doc.clone();
             let _ = app.update(Message::Shortcut(Action::ReactionCopy));
             assert!(app.error);
-            assert_eq!(app.doc, before);
-            assert!(!app.history.can_undo());
+            assert_eq!(app.tab.doc, before);
+            assert!(!app.tab.history.can_undo());
         }
-        app.doc.delete(&obstacle);
-        app.selected = ids;
+        app.tab.doc.delete(&obstacle);
+        app.tab.selected = ids;
         let _ = app.update(Message::Shortcut(Action::ReactionCopy));
-        let before = app.doc.clone();
-        app.selected.push(app.doc.arrows[0].id);
+        let before = app.tab.doc.clone();
+        app.tab.selected.push(app.tab.doc.arrows[0].id);
         let _ = app.update(Message::Shortcut(Action::ReactionCopy));
         assert!(app.error);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
     }
 
     #[test]
@@ -481,170 +489,170 @@ mod tests {
     #[test]
     fn space_tracks_edits_instead_of_selection_and_follows_history() {
         let mut app = app();
-        let before = app.doc.clone();
-        let first = chain(&mut app.doc, 0., 0.);
+        let before = app.tab.doc.clone();
+        let first = chain(&mut app.tab.doc, 0., 0.);
         app.changed(before);
-        let before = app.doc.clone();
-        let second = chain(&mut app.doc, 0., 100.);
+        let before = app.tab.doc.clone();
+        let second = chain(&mut app.tab.doc, 0., 100.);
         app.changed(before);
-        app.selected = first.clone();
+        app.tab.selected = first.clone();
         space(&mut app);
-        assert_eq!(app.selected, second);
+        assert_eq!(app.tab.selected, second);
         let _ = app.update(Message::Undo);
-        app.selected.clear();
+        app.tab.selected.clear();
         space(&mut app);
-        assert_eq!(app.selected, first);
+        assert_eq!(app.tab.selected, first);
         let _ = app.update(Message::Redo);
-        app.selected.clear();
+        app.tab.selected.clear();
         space(&mut app);
-        assert_eq!(app.selected, second);
-        let before = app.doc.clone();
-        app.doc.bonds[0].order = 2;
+        assert_eq!(app.tab.selected, second);
+        let before = app.tab.doc.clone();
+        app.tab.doc.bonds[0].order = 2;
         app.changed(before);
         space(&mut app);
-        assert_eq!(app.selected, first);
-        let before = app.doc.clone();
-        app.doc.annotations.push(reshiki::document::Annotation {
-            id: app.doc.next_id(),
+        assert_eq!(app.tab.selected, first);
+        let before = app.tab.doc.clone();
+        app.tab.doc.annotations.push(reshiki::document::Annotation {
+            id: app.tab.doc.next_id(),
             position: Point::new(0., 200.),
             text: "Caption".into(),
             format: Default::default(),
         });
         app.changed(before);
-        app.selected.clear();
+        app.tab.selected.clear();
         space(&mut app);
-        assert_eq!(app.selected, first);
+        assert_eq!(app.tab.selected, first);
         let _ = app.update(Message::Delete);
-        app.selected.clear();
+        app.tab.selected.clear();
         space(&mut app);
-        assert!(app.selected.is_empty());
+        assert!(app.tab.selected.is_empty());
         let _ = app.update(Message::Undo);
         space(&mut app);
-        assert_eq!(app.selected, first);
+        assert_eq!(app.tab.selected, first);
     }
 
     #[test]
     fn continuous_and_multi_molecule_edits_have_matching_selection_history() {
         let mut app = app();
-        let before = app.doc.clone();
-        let first = chain(&mut app.doc, 0., 0.);
-        let second = chain(&mut app.doc, 0., 100.);
+        let before = app.tab.doc.clone();
+        let first = chain(&mut app.tab.doc, 0., 0.);
+        let second = chain(&mut app.tab.doc, 0., 100.);
         app.changed(before);
-        app.selected.clear();
+        app.tab.selected.clear();
         space(&mut app);
-        assert_eq!(app.selected, [first.clone(), second.clone()].concat());
+        assert_eq!(app.tab.selected, [first.clone(), second.clone()].concat());
         for continuing in [false, true, true] {
-            let before = app.doc.clone();
-            app.doc.translate(&first, 1., 0.);
+            let before = app.tab.doc.clone();
+            app.tab.doc.translate(&first, 1., 0.);
             app.changed_continuing(before, continuing);
         }
         space(&mut app);
-        assert_eq!(app.selected, first);
+        assert_eq!(app.tab.selected, first);
         let _ = app.update(Message::Undo);
         space(&mut app);
-        assert_eq!(app.selected, [first.clone(), second.clone()].concat());
+        assert_eq!(app.tab.selected, [first.clone(), second.clone()].concat());
         let _ = app.update(Message::Redo);
         space(&mut app);
-        assert_eq!(app.selected, first);
+        assert_eq!(app.tab.selected, first);
         // A rejected edit and a selection-only action cannot steal context.
-        let before = app.doc.clone();
-        app.doc.atoms.last_mut().unwrap().position.x = f32::NAN;
+        let before = app.tab.doc.clone();
+        app.tab.doc.atoms.last_mut().unwrap().position.x = f32::NAN;
         app.changed(before);
         let _ = app.update(Message::Canvas(Edit::Select(second)));
         space(&mut app);
-        assert_eq!(app.selected, first);
+        assert_eq!(app.tab.selected, first);
     }
 
     #[test]
     fn erase_stroke_recalls_every_affected_molecule_without_previous_edits() {
         for caption_first in [false, true] {
             let mut app = app();
-            app.busy = false;
-            app.camera.zoom = 1.;
-            let first = chain(&mut app.doc, 0., 0.);
-            let second = chain(&mut app.doc, 0., 100.);
-            let unrelated = chain(&mut app.doc, 300., 0.);
-            let before = app.doc.clone();
-            app.doc.atom_mut(unrelated[2]).unwrap().element = "N".into();
+            app.tab.busy = false;
+            app.tab.camera.zoom = 1.;
+            let first = chain(&mut app.tab.doc, 0., 0.);
+            let second = chain(&mut app.tab.doc, 0., 100.);
+            let unrelated = chain(&mut app.tab.doc, 300., 0.);
+            let before = app.tab.doc.clone();
+            app.tab.doc.atom_mut(unrelated[2]).unwrap().element = "N".into();
             app.changed(before);
             if caption_first {
-                app.doc.annotations.push(reshiki::document::Annotation {
-                    id: app.doc.next_id(),
+                app.tab.doc.annotations.push(reshiki::document::Annotation {
+                    id: app.tab.doc.next_id(),
                     position: Point::new(0., -100.),
                     text: "Caption".into(),
                     format: Default::default(),
                 });
             }
-            let original = app.doc.clone();
-            let a = app.doc.atom(first[0]).unwrap().position;
-            let b = app.doc.atom(second[0]).unwrap().position;
+            let original = app.tab.doc.clone();
+            let a = app.tab.doc.atom(first[0]).unwrap().position;
+            let b = app.tab.doc.atom(second[0]).unwrap().position;
             let _ = app.update(Message::Tool(Tool::Erase));
             if caption_first {
                 let p = Point::new(0., -100.);
                 let _ = app.update(Message::Canvas(Edit::EraseStart(p)));
-                assert!(app.doc.annotations.is_empty());
+                assert!(app.tab.doc.annotations.is_empty());
                 let _ = app.update(Message::Canvas(Edit::EraseTo(p, a)));
             } else {
                 let _ = app.update(Message::Canvas(Edit::EraseStart(a)));
             }
             let _ = app.update(Message::Canvas(Edit::EraseTo(a, b)));
             let _ = app.update(Message::Canvas(Edit::EraseEnd));
-            assert!(app.doc.atom(first[0]).is_none() && app.doc.atom(second[0]).is_none());
+            assert!(app.tab.doc.atom(first[0]).is_none() && app.tab.doc.atom(second[0]).is_none());
             let expected = [first[1..].to_vec(), second[1..].to_vec()].concat();
-            let erased = app.doc.clone();
+            let erased = app.tab.doc.clone();
             let _ = app.update(Message::Tool(Tool::Select));
             space(&mut app);
-            assert_eq!(app.selected, expected);
+            assert_eq!(app.tab.selected, expected);
             let _ = app.update(Message::Undo);
             assert_eq!(
-                app.doc, original,
+                app.tab.doc, original,
                 "One Undo restores the complete erase stroke"
             );
             space(&mut app);
-            assert_eq!(app.selected, unrelated);
+            assert_eq!(app.tab.selected, unrelated);
             let _ = app.update(Message::Redo);
-            assert_eq!(app.doc, erased);
+            assert_eq!(app.tab.doc, erased);
             space(&mut app);
-            assert_eq!(app.selected, expected);
+            assert_eq!(app.tab.selected, expected);
         }
     }
 
     #[test]
     fn fresh_file_and_non_select_tools_do_not_reuse_stale_context() {
         let mut app = app();
-        let before = app.doc.clone();
-        let ids = chain(&mut app.doc, 0., 0.);
+        let before = app.tab.doc.clone();
+        let ids = chain(&mut app.tab.doc, 0., 0.);
         app.changed(before);
-        app.selected.clear();
+        app.tab.selected.clear();
         app.tool = Tool::Bond(1);
         space(&mut app);
         assert_eq!(app.tool, Tool::Select);
-        assert!(app.selected.is_empty());
+        assert!(app.tab.selected.is_empty());
         space(&mut app);
-        assert_eq!(app.selected, ids);
-        app.file_epoch += 1;
-        app.selected.clear();
+        assert_eq!(app.tab.selected, ids);
+        app.tab.file_epoch += 1;
+        app.tab.selected.clear();
         space(&mut app);
-        assert!(app.selected.is_empty());
+        assert!(app.tab.selected.is_empty());
         assert!(app.status.contains("No recently edited"));
     }
 
     #[test]
     fn paste_is_recalled_but_open_and_new_clear_atom_id_context() {
         let mut app = app();
-        let before = app.doc.clone();
-        let original = chain(&mut app.doc, 0., 0.);
+        let before = app.tab.doc.clone();
+        let original = chain(&mut app.tab.doc, 0., 0.);
         app.changed(before);
-        let contents = serde_json::to_string(&app.doc).unwrap();
+        let contents = serde_json::to_string(&app.tab.doc).unwrap();
         let _ = app.update(Message::Pasted(Some(format!(
             "{}{contents}",
             editing::CLIPBOARD_PREFIX
         ))));
-        let pasted = app.selected.clone();
+        let pasted = app.tab.selected.clone();
         assert!(pasted.iter().all(|id| !original.contains(id)));
-        app.selected.clear();
+        app.tab.selected.clear();
         space(&mut app);
-        assert_eq!(app.selected, pasted);
+        assert_eq!(app.tab.selected, pasted);
         let task = app.update(Message::Opened(Some((
             "different.rsk".into(),
             Ok(contents.clone().into_bytes()),
@@ -656,32 +664,32 @@ mod tests {
             Ok(contents.into_bytes()),
         );
         space(&mut app);
-        assert!(app.selected.is_empty());
-        assert!(!app.history.can_undo());
-        let before = app.doc.clone();
-        app.doc.atoms[0].charge = 1;
+        assert!(app.tab.selected.is_empty());
+        assert!(!app.tab.history.can_undo());
+        let before = app.tab.doc.clone();
+        app.tab.doc.atoms[0].charge = 1;
         app.changed(before);
         space(&mut app);
-        assert_eq!(app.selected, original);
+        assert_eq!(app.tab.selected, original);
         let _ = app.perform(super::super::Pending::New);
         space(&mut app);
-        assert!(app.selected.is_empty());
-        assert!(app.doc.atoms.is_empty());
+        assert!(app.tab.selected.is_empty());
+        assert!(app.tab.doc.atoms.is_empty());
     }
 
     #[test]
     fn splitting_a_molecule_recalls_both_remaining_components() {
         let mut app = app();
-        let before = app.doc.clone();
-        let ids = chain(&mut app.doc, 0., 0.);
+        let before = app.tab.doc.clone();
+        let ids = chain(&mut app.tab.doc, 0., 0.);
         app.changed(before);
-        app.selected = vec![ids[1]];
+        app.tab.selected = vec![ids[1]];
         let _ = app.update(Message::Delete);
         space(&mut app);
-        assert_eq!(app.selected, [ids[0], ids[2]]);
+        assert_eq!(app.tab.selected, [ids[0], ids[2]]);
         let _ = app.update(Message::Undo);
         space(&mut app);
-        assert_eq!(app.selected, ids);
+        assert_eq!(app.tab.selected, ids);
     }
 
     #[test]
@@ -730,8 +738,8 @@ mod tests {
     fn text_drafts_keep_both_shortcuts_out_of_the_drawing() {
         for atom_text in [false, true] {
             let mut app = app();
-            let ids = chain(&mut app.doc, 0., 0.);
-            app.selected = vec![ids[0]];
+            let ids = chain(&mut app.tab.doc, 0., 0.);
+            app.tab.selected = vec![ids[0]];
             let _ = if atom_text {
                 app.update(Message::AtomText(super::super::atom_text::Action::Begin(
                     Some(ids[0]),
@@ -741,15 +749,15 @@ mod tests {
                     super::super::inline_text::Action::Begin(None, Point::new(100., 100.)),
                 ))
             };
-            let before = app.doc.clone();
-            let selected = app.selected.clone();
+            let before = app.tab.doc.clone();
+            let selected = app.tab.selected.clone();
             space(&mut app);
             let _ = app.update(Message::Shortcut(Action::ReactionCopy));
-            assert_eq!(app.doc, before);
-            assert_eq!(app.selected, selected);
-            assert_eq!(app.atom_text.is_some(), atom_text);
-            assert_eq!(app.inline_text.is_some(), !atom_text);
-            assert!(!app.history.can_undo());
+            assert_eq!(app.tab.doc, before);
+            assert_eq!(app.tab.selected, selected);
+            assert_eq!(app.tab.atom_text.is_some(), atom_text);
+            assert_eq!(app.tab.inline_text.is_some(), !atom_text);
+            assert!(!app.tab.history.can_undo());
         }
     }
 
@@ -760,22 +768,22 @@ mod tests {
         let mut app = app();
         app.inspector_open = false;
         app.grid = false;
-        let ids = chain(&mut app.doc, -170., 0.);
-        app.selected = ids;
+        let ids = chain(&mut app.tab.doc, -170., 0.);
+        app.tab.selected = ids;
         let directory = std::path::Path::new("docs/images/reaction-selection-shortcuts");
         std::fs::create_dir_all(directory).unwrap();
         let fixtures = std::path::Path::new("docs/changes/fixtures");
         std::fs::create_dir_all(fixtures).unwrap();
         std::fs::write(
             fixtures.join("reaction-shortcuts-input.rsk"),
-            serde_json::to_vec_pretty(&app.doc).unwrap(),
+            serde_json::to_vec_pretty(&app.tab.doc).unwrap(),
         )
         .unwrap();
         let _ = app.update(Message::Shortcut(Action::ReactionCopy));
         assert!(!app.error, "{}", app.status);
         std::fs::write(
             fixtures.join("reaction-shortcuts-output.rsk"),
-            serde_json::to_vec_pretty(&app.doc).unwrap(),
+            serde_json::to_vec_pretty(&app.tab.doc).unwrap(),
         )
         .unwrap();
         let mut renderer = <iced::Renderer as Headless>::new(
@@ -796,11 +804,11 @@ mod tests {
             ),
         ] {
             if name == "space-selection" {
-                let before = app.doc.clone();
-                let atom = *app.selected.last().unwrap();
-                app.doc.atom_mut(atom).unwrap().element = "N".into();
+                let before = app.tab.doc.clone();
+                let atom = *app.tab.selected.last().unwrap();
+                app.tab.doc.atom_mut(atom).unwrap().element = "N".into();
                 app.changed(before);
-                app.selected.clear();
+                app.tab.selected.clear();
                 space(&mut app);
             }
             app.status = title.into();

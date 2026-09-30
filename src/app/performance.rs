@@ -64,9 +64,9 @@ fn editing_workloads() {
             );
         }
         let (mut app, _) = App::new();
-        app.doc = doc;
-        app.selected = vec![endpoint];
-        app.hover = None;
+        app.tab.doc = doc;
+        app.tab.selected = vec![endpoint];
+        app.tab.hover = None;
         measure(&format!("gallery_{copies}x_oxygen_hotkey"), || {
             let _ = black_box(app.update(Message::ContextKey("o".into())));
             let _ = black_box(app.update(Message::ContextKey("c".into())));
@@ -84,15 +84,15 @@ fn editing_workloads() {
                 black_box(
                     runtime.block_on(
                         app.engine
-                            .execute(Request::molecule("analyze", app.doc.clone())),
+                            .execute(Request::molecule("analyze", app.tab.doc.clone())),
                     ),
                 )
                 .unwrap();
             });
             measure("methanol_drawing_labels", || {
-                let molecule = reshiki::chemistry::document::prepare(&app.doc).unwrap();
+                let molecule = reshiki::chemistry::document::prepare(&app.tab.doc).unwrap();
                 let drawing =
-                    reshiki::chemistry::document::for_drawing(&molecule, &app.doc).unwrap();
+                    reshiki::chemistry::document::for_drawing(&molecule, &app.tab.doc).unwrap();
                 black_box(drawing.labels()).unwrap();
             });
         }

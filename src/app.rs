@@ -20,6 +20,8 @@ mod clipboard;
 mod color_popover;
 mod context_menu;
 mod document_styles;
+mod document_tab;
+use document_tab::DocumentTab;
 mod figure_export;
 mod file_shortcuts;
 mod files;
@@ -284,103 +286,44 @@ struct CleanupPreview {
 }
 
 pub struct App {
+    /// The active document; see `document_tab` for what is per document.
+    tab: DocumentTab,
     context_menu: Option<context_menu::State>,
     style_menu: Option<color_popover::Menu>,
     updates: updates::State,
-    styles: document_styles::State,
     theme_library: theme_files::State,
     palette: Option<palettes::Family>,
     toolbar: palettes::Memory,
-    erase_stroke: bool,
-    erase_committed: bool,
     assistant: assistant::State,
-    hover: Option<(Point, u64)>,
-    cleanup: Option<CleanupPreview>,
-    cleanup_serial: u64,
     abbreviations: abbreviations::State,
-    labels: atom_labels::State,
-    labels_dirty: bool,
-    label_refresh: label_refresh::State,
-    chemistry_notice: Option<String>,
-    bond_drawing: reshiki::chains::BondDrawing,
-    chain_drawing: reshiki::chains::ChainDrawing,
-    drawing_length_input: String,
-    chain_atoms_input: String,
-    chain_angle_input: String,
-    arc_editor: arcs::Editor,
-    graphic_style: GraphicStyle,
-    orbital_phase: reshiki::scientific::Phase,
-    phase_flipped: bool,
-    attach_symbols: bool,
-    graphic_width_input: String,
-    graphic_stroke_input: String,
-    graphic_fill_input: String,
-    bracket_sides: BracketSides,
-    doc: Document,
-    history: History,
-    recent_molecules: molecule_shortcuts::Recent,
-    selected: Vec<u64>,
-    camera: Camera,
     tool: Tool,
     element: String,
-    caption: String,
-    caption_editor: iced::widget::text_editor::Content,
-    caption_format: reshiki::typography::TextFormat,
-    caption_target: Option<u64>,
-    inline_text: Option<inline_text::State>,
-    atom_text: Option<atom_text::State>,
-    joining: Option<joining::State>,
-    pages: pages::State,
-    reactions: reactions::State,
     printing: printing::State,
-    pictures: pictures::State,
     font_options: iced::widget::combo_box::State<String>,
-    font_size_input: String,
-    text_color_input: String,
-    color_scope: typography::ColorScope,
-    text_width_input: String,
-    bond_color_input: String,
     imports: import::State,
-    isotope: String,
     grid: bool,
     guides: canvas::guides::Guides,
     view_open: bool,
     appearance: crate::appearance::Settings,
-    analysis: Option<Analysis>,
     engine: LocalEngine,
-    revision: u64,
-    busy: bool,
-    clipboard_busy: bool,
     figure_exporting: bool,
     status: String,
     error: bool,
-    path: Option<PathBuf>,
     file_io: files::State,
-    untitled_name: Option<&'static str>,
     #[cfg(target_os = "macos")]
     native_opening: bool,
     #[cfg(windows)]
     office_path: Option<PathBuf>,
-    saved: Document,
     pending: Option<Pending>,
-    file_epoch: u64,
     ring_size: u8,
     aromatic_ring: bool,
-    arrow_style: reshiki::arrows::Preset,
-    arrows: arrows::State,
     custom_element: String,
-    recovery: Option<Recovery>,
     recovered: Vec<Candidate>,
-    autosave: autosave::State,
-    autosaved_revision: Option<u64>,
-    autosave_status: String,
+    exit: autosave::Exit,
     inspector_open: bool,
-    inspector_ui: inspector::State,
-    numeric_transforms: numeric_transforms::State,
     inspector_tab: InspectorTab,
     help_open: bool,
     viewport: iced::Size,
-    fit_to_view: bool,
     template_index: usize,
     templates: template_library::State,
 }
@@ -396,109 +339,49 @@ impl App {
             .map(|r| r.candidates())
             .unwrap_or_default();
         let mut app = Self {
+            tab: DocumentTab::new(recovery),
             updates: updates::State::new(),
-            styles: Default::default(),
             theme_library: theme_files::State::load(),
-            reactions: Default::default(),
             palette: None,
             toolbar: palettes::Memory::default(),
-            erase_stroke: false,
-            erase_committed: false,
             assistant: assistant::State::new(),
-            hover: None,
-            cleanup: None,
-            cleanup_serial: 0,
-            labels: Default::default(),
             abbreviations: Default::default(),
-            labels_dirty: false,
-            label_refresh: Default::default(),
-            chemistry_notice: None,
             context_menu: None,
             style_menu: None,
-            bond_drawing: Default::default(),
-            chain_drawing: Default::default(),
-            drawing_length_input: reshiki::style::DEFAULT.bond_length_pt.to_string(),
-            chain_atoms_input: String::new(),
-            chain_angle_input: "120".into(),
-            arc_editor: arcs::Editor::default(),
-            graphic_style: GraphicStyle::default(),
-            orbital_phase: Default::default(),
-            phase_flipped: false,
-            attach_symbols: true,
-            graphic_width_input: "0.6".into(),
-            graphic_stroke_input: "#000000".into(),
-            graphic_fill_input: String::new(),
-            bracket_sides: BracketSides::Both,
-            doc: Document::default(),
-            history: History::default(),
-            recent_molecules: Default::default(),
-            selected: vec![],
-            camera: Camera::default(),
             tool: Tool::Select,
             element: "C".into(),
-            caption: "Reaction conditions".into(),
-            caption_editor: iced::widget::text_editor::Content::with_text("Reaction conditions"),
-            caption_format: Default::default(),
-            caption_target: None,
-            inline_text: None,
-            atom_text: None,
-            joining: None,
-            pages: pages::State::default(),
             printing: printing::State::default(),
-            pictures: pictures::State::default(),
             font_options: iced::widget::combo_box::State::new(
                 reshiki::style::font_families()
                     .iter()
                     .map(|s| (*s).to_owned())
                     .collect(),
             ),
-            font_size_input: "10".into(),
-            text_color_input: "#000000".into(),
-            color_scope: Default::default(),
-            bond_color_input: "#000000".into(),
-            text_width_input: String::new(),
             imports: Default::default(),
-            isotope: String::new(),
             grid: false,
             guides: Default::default(),
             view_open: false,
             appearance: crate::appearance::Settings::load(),
-            analysis: None,
             engine: LocalEngine::default(),
-            revision: 0,
-            busy: false,
-            clipboard_busy: false,
             figure_exporting: false,
             // A recovery offer in the status bar is the launch message.
             status: if recovered.is_empty() { READY } else { "" }.into(),
             error: false,
-            path: None,
             file_io: files::State::default(),
-            untitled_name: None,
             #[cfg(target_os = "macos")]
             native_opening: false,
             #[cfg(windows)]
             office_path: None,
-            saved: Document::default(),
             pending: None,
-            file_epoch: 0,
             ring_size: 6,
             aromatic_ring: false,
-            arrow_style: Default::default(),
-            arrows: Default::default(),
             custom_element: String::new(),
-            recovery,
             recovered,
-            autosave: autosave::State::default(),
-            autosaved_revision: None,
-            autosave_status: String::new(),
+            exit: autosave::Exit::default(),
             inspector_open: true,
-            inspector_ui: inspector::State::default(),
-            numeric_transforms: numeric_transforms::State::default(),
             inspector_tab: InspectorTab::Properties,
             help_open: false,
             viewport: iced::Size::new(850.0, 600.0),
-            fit_to_view: false,
             template_index: 0,
             templates: template_library::State::load(),
         };
@@ -539,14 +422,15 @@ impl App {
         )
     }
     fn document_name(&self) -> String {
-        self.path
+        self.tab
+            .path
             .as_ref()
             .and_then(|p| p.file_name())
             .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| self.untitled_name.unwrap_or("Untitled").into())
+            .unwrap_or_else(|| self.tab.untitled_name.unwrap_or("Untitled").into())
     }
     pub fn theme(&self) -> Theme {
-        if self.appearance.mode.is_dark(self.doc.canvas_theme) {
+        if self.appearance.mode.is_dark(self.tab.doc.canvas_theme) {
             return Theme::custom(
                 "ReShiki Dark",
                 iced::theme::Palette {
@@ -583,10 +467,10 @@ impl App {
             } else {
                 Subscription::none()
             },
-            if self.recovery.is_some()
-                && !self.autosave.pending()
-                && ((self.dirty() && self.autosaved_revision != Some(self.revision))
-                    || (!self.dirty() && self.autosaved_revision.is_some()))
+            if self.tab.recovery.is_some()
+                && !self.tab.autosave.pending()
+                && ((self.dirty() && self.tab.autosaved_revision != Some(self.tab.revision))
+                    || (!self.dirty() && self.tab.autosaved_revision.is_some()))
             {
                 iced::time::every(std::time::Duration::from_secs(5)).map(|_| Message::Tick)
             } else {
@@ -619,12 +503,12 @@ impl App {
         ])
     }
     fn dirty(&self) -> bool {
-        self.inline_changed() || !same_drawing(&self.doc, &self.saved)
+        self.inline_changed() || !same_drawing(&self.tab.doc, &self.tab.saved)
     }
     fn office_document(&self) -> bool {
         #[cfg(windows)]
         {
-            self.path.is_some() && self.path == self.office_path
+            self.tab.path.is_some() && self.tab.path == self.office_path
         }
         #[cfg(not(windows))]
         {
@@ -632,14 +516,14 @@ impl App {
         }
     }
     fn run(&mut self, request: Request, kind: Job) -> Task<Message> {
-        if self.busy {
+        if self.tab.busy {
             return Task::none();
         }
-        self.busy = true;
+        self.tab.busy = true;
         self.error = false;
         self.status = "Working…".into();
         let engine = self.engine.clone();
-        let revision = self.revision;
+        let revision = self.tab.revision;
         let aromatic_selection = matches!(kind, Job::AromaticDisplay);
         Task::perform(
             async move {
@@ -657,47 +541,49 @@ impl App {
         )
     }
     fn changed(&mut self, before: Document) {
-        if self.doc != before {
-            self.erase_stroke = false;
+        if self.tab.doc != before {
+            self.tab.erase_stroke = false;
         }
         self.changed_continuing(before, false);
     }
     fn changed_continuing(&mut self, before: Document, continuing: bool) {
-        reshiki::projection::sync_centroids(&mut self.doc);
-        reshiki::ring_fills::prune(&mut self.doc);
-        self.cleanup = None;
-        self.doc.reconcile_abbreviations(&before);
-        if let Err(error) = reshiki::reactions::reconcile(&mut self.doc) {
-            self.doc = before;
+        reshiki::projection::sync_centroids(&mut self.tab.doc);
+        reshiki::ring_fills::prune(&mut self.tab.doc);
+        self.tab.cleanup = None;
+        self.tab.doc.reconcile_abbreviations(&before);
+        if let Err(error) = reshiki::reactions::reconcile(&mut self.tab.doc) {
+            self.tab.doc = before;
             self.error = true;
             self.status = error;
             return;
         }
-        if self.doc != before {
-            if let Err(error) = self.doc.validate() {
-                self.doc = before;
+        if self.tab.doc != before {
+            if let Err(error) = self.tab.doc.validate() {
+                self.tab.doc = before;
                 self.error = true;
                 self.status = format!("Edit cancelled: {error}");
                 return;
             }
-            self.doc.reconcile_molecule_groups();
+            self.tab.doc.reconcile_molecule_groups();
         }
-        let drawing_style_changed = before.drawing_style != self.doc.drawing_style;
-        self.recent_molecules
-            .record(&before, &self.doc, self.file_epoch, continuing);
-        let chemistry_changed = chemistry_changed(&before, &self.doc);
+        let drawing_style_changed = before.drawing_style != self.tab.doc.drawing_style;
+        self.tab
+            .recent_molecules
+            .record(&before, &self.tab.doc, self.tab.file_epoch, continuing);
+        let chemistry_changed = chemistry_changed(&before, &self.tab.doc);
         if chemistry_changed {
-            reshiki::atom_labels::clear_computed(&mut self.doc);
-            self.labels_dirty = true;
-            self.chemistry_notice = None;
+            reshiki::atom_labels::clear_computed(&mut self.tab.doc);
+            self.tab.labels_dirty = true;
+            self.tab.chemistry_notice = None;
         }
         if self
+            .tab
             .history
-            .commit_continuing(before, &self.doc, continuing)
+            .commit_continuing(before, &self.tab.doc, continuing)
         {
-            self.revision = self.revision.wrapping_add(1);
+            self.tab.revision = self.tab.revision.wrapping_add(1);
             if chemistry_changed {
-                self.analysis = None;
+                self.tab.analysis = None;
             }
             self.error = false;
             self.status = if chemistry_changed {
@@ -711,23 +597,23 @@ impl App {
         if drawing_style_changed {
             self.sync_drawing_defaults();
         }
-        let existing: std::collections::HashSet<_> = self.doc.all_ids().into_iter().collect();
-        self.selected.retain(|id| existing.contains(id));
+        let existing: std::collections::HashSet<_> = self.tab.doc.all_ids().into_iter().collect();
+        self.tab.selected.retain(|id| existing.contains(id));
     }
     fn fit(&mut self) {
-        self.pages.fit = None;
+        self.tab.pages.fit = None;
         if self.display_document().all_ids().is_empty() {
-            self.camera = Camera::default();
-            self.fit_to_view = false;
+            self.tab.camera = Camera::default();
+            self.tab.fit_to_view = false;
             return;
         }
         let (lo, hi) = self.display_document().bounds();
-        self.camera.center = Point::new((lo.x + hi.x) / 2.0, (lo.y + hi.y) / 2.0);
+        self.tab.camera.center = Point::new((lo.x + hi.x) / 2.0, (lo.y + hi.y) / 2.0);
         let viewport = self.guides.paper(iced::Rectangle::with_size(self.viewport));
-        self.camera.zoom = ((viewport.width - 80.0).max(100.0) / (hi.x - lo.x).max(240.0))
+        self.tab.camera.zoom = ((viewport.width - 80.0).max(100.0) / (hi.x - lo.x).max(240.0))
             .min((viewport.height - 80.0).max(100.0) / (hi.y - lo.y).max(200.0))
             .clamp(0.005, 2.5);
-        self.fit_to_view = true;
+        self.tab.fit_to_view = true;
     }
     fn pending(&mut self, action: Pending) -> Task<Message> {
         // The save dialog, or the save it started, still answers an earlier request.
@@ -748,46 +634,46 @@ impl App {
     fn perform(&mut self, action: Pending) -> Task<Message> {
         match action {
             Pending::New => {
-                self.labels = Default::default();
-                self.labels_dirty = false;
-                self.chemistry_notice = None;
+                self.tab.labels = Default::default();
+                self.tab.labels_dirty = false;
+                self.tab.chemistry_notice = None;
                 self.clear_recovery();
-                self.file_epoch = self.file_epoch.wrapping_add(1);
-                self.revision = self.revision.wrapping_add(1);
-                let before = self.doc.clone();
-                self.doc = Document::default();
+                self.tab.file_epoch = self.tab.file_epoch.wrapping_add(1);
+                self.tab.revision = self.tab.revision.wrapping_add(1);
+                let before = self.tab.doc.clone();
+                self.tab.doc = Document::default();
                 self.changed(before);
-                self.saved = self.doc.clone();
-                self.path = None;
-                self.untitled_name = None;
-                self.selected.clear();
-                self.camera = Camera::default();
-                self.pages = pages::State::default();
-                self.styles.editor = None;
+                self.tab.saved = self.tab.doc.clone();
+                self.tab.path = None;
+                self.tab.untitled_name = None;
+                self.tab.selected.clear();
+                self.tab.camera = Camera::default();
+                self.tab.pages = pages::State::default();
+                self.tab.styles.editor = None;
                 self.theme_library.editor = None;
-                self.fit_to_view = false;
-                self.analysis = None;
+                self.tab.fit_to_view = false;
+                self.tab.analysis = None;
                 self.error = false;
-                self.bond_drawing = Default::default();
-                self.chain_drawing = Default::default();
-                self.drawing_length_input = reshiki::style::DEFAULT.bond_length_pt.to_string();
-                self.chain_atoms_input.clear();
-                self.chain_angle_input = "120".into();
-                self.caption_format = Default::default();
-                self.caption = "Reaction conditions".into();
-                self.caption_target = None;
-                self.graphic_style = Default::default();
-                self.arc_editor = Default::default();
-                self.orbital_phase = Default::default();
-                self.phase_flipped = false;
-                self.attach_symbols = true;
-                self.arrow_style = Default::default();
-                self.arrows = Default::default();
-                self.graphic_width_input = reshiki::style::DEFAULT.line_width_pt.to_string();
-                self.graphic_stroke_input = "#000000".into();
-                self.graphic_fill_input.clear();
-                self.color_scope = Default::default();
-                self.bond_color_input = "#000000".into();
+                self.tab.bond_drawing = Default::default();
+                self.tab.chain_drawing = Default::default();
+                self.tab.drawing_length_input = reshiki::style::DEFAULT.bond_length_pt.to_string();
+                self.tab.chain_atoms_input.clear();
+                self.tab.chain_angle_input = "120".into();
+                self.tab.caption_format = Default::default();
+                self.tab.caption = "Reaction conditions".into();
+                self.tab.caption_target = None;
+                self.tab.graphic_style = Default::default();
+                self.tab.arc_editor = Default::default();
+                self.tab.orbital_phase = Default::default();
+                self.tab.phase_flipped = false;
+                self.tab.attach_symbols = true;
+                self.tab.arrow_style = Default::default();
+                self.tab.arrows = Default::default();
+                self.tab.graphic_width_input = reshiki::style::DEFAULT.line_width_pt.to_string();
+                self.tab.graphic_stroke_input = "#000000".into();
+                self.tab.graphic_fill_input.clear();
+                self.tab.color_scope = Default::default();
+                self.tab.bond_color_input = "#000000".into();
                 self.tool = Tool::Select;
                 self.sync_typography();
                 self.status = "New document".into();
@@ -821,11 +707,14 @@ impl App {
         }
     }
     fn display_document(&self) -> &Document {
-        self.cleanup
+        self.tab
+            .cleanup
             .as_ref()
-            .filter(|p| !p.original && p.revision == self.revision && p.epoch == self.file_epoch)
+            .filter(|p| {
+                !p.original && p.revision == self.tab.revision && p.epoch == self.tab.file_epoch
+            })
             .map(|p| &p.document)
-            .unwrap_or(&self.doc)
+            .unwrap_or(&self.tab.doc)
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
         #[cfg(target_os = "macos")]
@@ -874,7 +763,7 @@ impl App {
             }
             return self.template_action(action);
         }
-        if self.autosave.closing() {
+        if self.exit.closing() {
             return Task::none();
         }
         if let Message::LabelsReady(key, result) = message {
@@ -911,7 +800,7 @@ impl App {
         if let Message::AtomText(action) = message {
             return self.atom_text_action(action);
         }
-        if self.atom_text.is_some() {
+        if self.tab.atom_text.is_some() {
             if matches!(message, Message::Escape) {
                 return self.atom_text_action(atom_text::Action::Cancel);
             }
@@ -946,7 +835,7 @@ impl App {
                 | Message::Imports(import::Action::Loaded(..))
         ) {
             self.context_menu = None;
-            self.inspector_ui.close_menu();
+            self.tab.inspector_ui.close_menu();
             if !matches!(message, Message::Imports(import::Action::Menu(_))) {
                 self.imports.menu = false;
             }
@@ -964,12 +853,12 @@ impl App {
         if let Message::Join(action) = message {
             return self.join_action(action);
         }
-        if self.joining.is_some()
+        if self.tab.joining.is_some()
             && matches!(message, Message::Escape | Message::TemplateNavigate(false))
         {
             return self.join_action(joining::Action::Cancel);
         }
-        if self.joining.is_some() && joining::cancels_draft(&message) {
+        if self.tab.joining.is_some() && joining::cancels_draft(&message) {
             self.cancel_join();
         }
         if let Message::InlineText(action) = message {
@@ -981,18 +870,18 @@ impl App {
         }
         if matches!(message, Message::Escape)
             && self.inspector_tab == InspectorTab::DrawingStyle
-            && self.styles.editor.is_some()
+            && self.tab.styles.editor.is_some()
         {
             return self.drawing_style_action(document_styles::Action::Cancel);
         }
         if matches!(message, Message::Escape) {
-            return if self.inline_text.is_some() {
+            return if self.tab.inline_text.is_some() {
                 self.inline_action(inline_text::Action::Finish(false))
             } else {
                 self.update(Message::Tool(Tool::Select))
             };
         }
-        if self.inline_text.is_some() && matches!(message, Message::Undo | Message::Redo) {
+        if self.tab.inline_text.is_some() && matches!(message, Message::Undo | Message::Redo) {
             return self.inline_action(inline_text::Action::Undo(matches!(message, Message::Redo)));
         }
         if let Message::Canvas(Edit::BeginText(id)) = message {
@@ -1001,13 +890,13 @@ impl App {
         if let Message::Canvas(Edit::Click(p)) = message
             && self.tool == Tool::Text
         {
-            if let Some(id) = canvas::hit_object(&self.doc, p, 8. / self.camera.zoom)
-                .filter(|id| self.doc.atom(*id).is_some())
+            if let Some(id) = canvas::hit_object(&self.tab.doc, p, 8. / self.tab.camera.zoom)
+                .filter(|id| self.tab.doc.atom(*id).is_some())
             {
                 return self.atom_text_action(atom_text::Action::Begin(Some(id)));
             }
-            let id = canvas::hit_object(&self.doc, p, 8. / self.camera.zoom)
-                .filter(|id| self.doc.annotations.iter().any(|a| a.id == *id));
+            let id = canvas::hit_object(&self.tab.doc, p, 8. / self.tab.camera.zoom)
+                .filter(|id| self.tab.doc.annotations.iter().any(|a| a.id == *id));
             return self.inline_action(inline_text::Action::Begin(id, p));
         }
         if inline_text::commits_draft(&message) && !self.finish_inline(true) {
@@ -1027,7 +916,7 @@ impl App {
         if let Message::Assistant(action) = message {
             return self.assistant_action(action);
         }
-        if self.cleanup.is_some() {
+        if self.tab.cleanup.is_some() {
             if matches!(message, Message::Tool(Tool::Select)) {
                 return self.update(Message::CancelCleanup);
             }
@@ -1081,10 +970,11 @@ impl App {
             &message,
             Message::Charge(_) | Message::AtomRadical(_) | Message::ApplyIsotope
         ) && self
+            .tab
             .doc
             .abbreviations
             .iter()
-            .any(|g| g.members.iter().any(|id| self.selected.contains(id)))
+            .any(|g| g.members.iter().any(|id| self.tab.selected.contains(id)))
         {
             self.status =
                 "Expand the selected abbreviation before changing individual atom properties"
@@ -1100,7 +990,7 @@ impl App {
                     Tool::Arrow | Tool::Graphic(_) | Tool::EditPoints | Tool::RingPreset(_)
                 )
         ) || (self.inspector_tab != InspectorTab::Templates
-            && matches!(&message, Message::Canvas(Edit::Select(ids)) if ids.iter().any(|id| self.doc.annotations.iter().any(|a| a.id == *id) || self.doc.graphics.iter().any(|g|g.id==*id))));
+            && matches!(&message, Message::Canvas(Edit::Select(ids)) if ids.iter().any(|id| self.tab.doc.annotations.iter().any(|a| a.id == *id) || self.tab.doc.graphics.iter().any(|g|g.id==*id))));
         match message {
             Message::DrawingStyle(action) => return self.drawing_style_action(action),
             Message::Imports(action) => return self.import_action(action),
@@ -1118,12 +1008,12 @@ impl App {
             Message::StyleMenu(action) => return self.style_menu_action(action),
             Message::Shortcut(action) => return self.shortcut_action(action),
             Message::AromaticDisplay => {
-                if self.selected.is_empty() {
+                if self.tab.selected.is_empty() {
                     self.status = "Select an aromatic ring first".into();
                     return Task::none();
                 }
-                let mut request = Request::molecule("aromatic", self.doc.clone());
-                request.selected_ids = Some(self.selected.clone());
+                let mut request = Request::molecule("aromatic", self.tab.doc.clone());
+                request.selected_ids = Some(self.tab.selected.clone());
                 return self.run(request, Job::AromaticDisplay);
             }
             Message::Abbreviations(action) => return self.abbreviation_action(action),
@@ -1151,26 +1041,27 @@ impl App {
                 return self.template_action(action);
             }
             Message::ResetBondDrawing => {
-                self.bond_drawing = Default::default();
-                self.bond_drawing.length = self.doc.drawing_style.bond_length_world;
-                self.drawing_length_input = self.doc.drawing_style.bond_length_pt.to_string();
-                self.chain_drawing.angle = 120.;
-                self.chain_angle_input = "120".into();
+                self.tab.bond_drawing = Default::default();
+                self.tab.bond_drawing.length = self.tab.doc.drawing_style.bond_length_world;
+                self.tab.drawing_length_input =
+                    self.tab.doc.drawing_style.bond_length_pt.to_string();
+                self.tab.chain_drawing.angle = 120.;
+                self.tab.chain_angle_input = "120".into();
                 self.status = format!(
                     "{} bond defaults · {} pt length · 120° chain angle",
-                    self.doc.drawing_style.name, self.doc.drawing_style.bond_length_pt
+                    self.tab.doc.drawing_style.name, self.tab.doc.drawing_style.bond_length_pt
                 );
                 self.error = false;
             }
-            Message::FixedLength(on) => self.bond_drawing.fixed_length = on,
-            Message::FixedAngles(on) => self.bond_drawing.fixed_angles = on,
+            Message::FixedLength(on) => self.tab.bond_drawing.fixed_length = on,
+            Message::FixedAngles(on) => self.tab.bond_drawing.fixed_angles = on,
             Message::DrawingLength(value) => {
-                self.drawing_length_input = value;
-                if let Ok(points) = self.drawing_length_input.parse::<f32>()
+                self.tab.drawing_length_input = value;
+                if let Ok(points) = self.tab.drawing_length_input.parse::<f32>()
                     && points.is_finite()
                     && (1.0..=300.0).contains(&points)
                 {
-                    self.bond_drawing.length = reshiki::style::DEFAULT.world(points);
+                    self.tab.bond_drawing.length = reshiki::style::DEFAULT.world(points);
                     self.error = false;
                 } else {
                     self.status = "Bond length must be between 1 and 300 pt".into();
@@ -1178,14 +1069,14 @@ impl App {
                 }
             }
             Message::ChainAtoms(value) => {
-                self.chain_atoms_input = value;
-                if self.chain_atoms_input.is_empty() {
-                    self.chain_drawing.atoms = None;
+                self.tab.chain_atoms_input = value;
+                if self.tab.chain_atoms_input.is_empty() {
+                    self.tab.chain_drawing.atoms = None;
                     self.error = false;
-                } else if let Ok(count) = self.chain_atoms_input.parse::<usize>()
+                } else if let Ok(count) = self.tab.chain_atoms_input.parse::<usize>()
                     && (1..=reshiki::chains::MAX_ATOMS).contains(&count)
                 {
-                    self.chain_drawing.atoms = Some(count);
+                    self.tab.chain_drawing.atoms = Some(count);
                     self.error = false;
                 } else {
                     self.status =
@@ -1194,12 +1085,12 @@ impl App {
                 }
             }
             Message::ChainAngle(value) => {
-                self.chain_angle_input = value;
-                if let Ok(angle) = self.chain_angle_input.parse::<f32>()
+                self.tab.chain_angle_input = value;
+                if let Ok(angle) = self.tab.chain_angle_input.parse::<f32>()
                     && angle.is_finite()
                     && (1.0..=179.0).contains(&angle)
                 {
-                    self.chain_drawing.angle = angle;
+                    self.tab.chain_drawing.angle = angle;
                     self.error = false;
                 } else {
                     self.status = "Chain angle must be between 1° and 179°".into();
@@ -1208,55 +1099,58 @@ impl App {
             }
             Message::ApplyBondPreset(preset) => {
                 if preset == reshiki::bonds::BondPreset::Dotted
-                    && self.doc.bonds.iter().any(|b| {
-                        self.selected.contains(&b.a)
-                            && self.selected.contains(&b.b)
-                            && !reshiki::bonds::hydrogen_endpoints(&self.doc, b.a, b.b)
+                    && self.tab.doc.bonds.iter().any(|b| {
+                        self.tab.selected.contains(&b.a)
+                            && self.tab.selected.contains(&b.b)
+                            && !reshiki::bonds::hydrogen_endpoints(&self.tab.doc, b.a, b.b)
                     })
                 {
                     self.status = "Hydrogen bonds need a bonded explicit H and an acceptor".into();
                     self.error = true;
                     return Task::none();
                 }
-                let before = self.doc.clone();
+                let before = self.tab.doc.clone();
                 let affected: Vec<_> = self
+                    .tab
                     .doc
                     .bonds
                     .iter()
                     .filter(|bond| {
-                        self.selected.contains(&bond.a)
-                            && self.selected.contains(&bond.b)
+                        self.tab.selected.contains(&bond.a)
+                            && self.tab.selected.contains(&bond.b)
                             && !preset.preserves_chemistry(bond)
                     })
                     .flat_map(|bond| [bond.a, bond.b])
                     .collect();
-                self.doc.invalidate_chemistry(&affected);
-                for bond in &mut self.doc.bonds {
-                    if self.selected.contains(&bond.a) && self.selected.contains(&bond.b) {
+                self.tab.doc.invalidate_chemistry(&affected);
+                for bond in &mut self.tab.doc.bonds {
+                    if self.tab.selected.contains(&bond.a) && self.tab.selected.contains(&bond.b) {
                         preset.apply(bond);
                     }
                 }
                 self.changed(before);
             }
             Message::BondPosition(position) => {
-                let before = self.doc.clone();
-                for bond in &mut self.doc.bonds {
+                let before = self.tab.doc.clone();
+                for bond in &mut self.tab.doc.bonds {
                     if [2, 7].contains(&bond.order)
-                        && self.selected.contains(&bond.a)
-                        && self.selected.contains(&bond.b)
+                        && self.tab.selected.contains(&bond.a)
+                        && self.tab.selected.contains(&bond.b)
                     {
                         bond.double_position = position;
                     }
                 }
                 self.changed(before);
             }
-            Message::BondColor(value) => self.bond_color_input = value,
+            Message::BondColor(value) => self.tab.bond_color_input = value,
             Message::ApplyBondColor => {
-                if let Some(rgb) = graphics::parse_color(&self.bond_color_input) {
+                if let Some(rgb) = graphics::parse_color(&self.tab.bond_color_input) {
                     let color = reshiki::palette::Color::Custom(rgb);
-                    let before = self.doc.clone();
-                    for bond in &mut self.doc.bonds {
-                        if self.selected.contains(&bond.a) && self.selected.contains(&bond.b) {
+                    let before = self.tab.doc.clone();
+                    for bond in &mut self.tab.doc.bonds {
+                        if self.tab.selected.contains(&bond.a)
+                            && self.tab.selected.contains(&bond.b)
+                        {
                             bond.color = color;
                         }
                     }
@@ -1268,26 +1162,26 @@ impl App {
                 }
             }
             Message::AddFrame(kind) => {
-                let mut ids = self.doc.complete_selection(&self.selected);
-                if let Some((lo, hi)) = reshiki::scene::selection_bounds(&self.doc, &ids) {
-                    let before = self.doc.clone();
-                    let id = self.doc.next_id();
+                let mut ids = self.tab.doc.complete_selection(&self.tab.selected);
+                if let Some((lo, hi)) = reshiki::scene::selection_bounds(&self.tab.doc, &ids) {
+                    let before = self.tab.doc.clone();
+                    let id = self.tab.doc.next_id();
                     let padding = reshiki::style::DEFAULT.world(6.0);
-                    self.doc.graphics.push(Graphic::dragged(
+                    self.tab.doc.graphics.push(Graphic::dragged(
                         id,
                         kind,
                         lo.offset(-padding, -padding),
                         hi.offset(padding, padding),
                         GraphicStyle {
-                            width_pt: self.doc.drawing_style.line_width_pt,
+                            width_pt: self.tab.doc.drawing_style.line_width_pt,
                             ..Default::default()
                         },
                         BracketSides::Both,
                         false,
                     ));
                     ids.push(id);
-                    if let Ok(ids) = self.doc.group_selection(&ids) {
-                        self.selected = ids;
+                    if let Ok(ids) = self.tab.doc.group_selection(&ids) {
+                        self.tab.selected = ids;
                     }
                     self.changed(before);
                     self.tool = Tool::Select;
@@ -1295,10 +1189,10 @@ impl App {
                 }
             }
             Message::Group => {
-                let before = self.doc.clone();
-                match self.doc.group_selection(&self.selected) {
+                let before = self.tab.doc.clone();
+                match self.tab.doc.group_selection(&self.tab.selected) {
                     Ok(ids) => {
-                        self.selected = ids;
+                        self.tab.selected = ids;
                         self.changed(before);
                         self.tool = Tool::Select;
                         self.status = format!(
@@ -1314,16 +1208,16 @@ impl App {
                 }
             }
             Message::Ungroup => {
-                let before = self.doc.clone();
-                if self.doc.ungroup_selection(&self.selected) {
+                let before = self.tab.doc.clone();
+                if self.tab.doc.ungroup_selection(&self.tab.selected) {
                     self.changed(before);
                     self.status = "Ungrouped one level".into();
                 }
             }
             Message::IntegralGroup(integral) => {
-                let before = self.doc.clone();
-                let ids = self.doc.outer_selected_groups(&self.selected);
-                for g in &mut self.doc.groups {
+                let before = self.tab.doc.clone();
+                let ids = self.tab.doc.outer_selected_groups(&self.tab.selected);
+                for g in &mut self.tab.doc.groups {
                     if ids.contains(&g.id) {
                         g.integral = integral;
                     }
@@ -1331,8 +1225,9 @@ impl App {
                 self.changed(before);
             }
             Message::InvertSelection => {
-                let selected = self.doc.expand_groups(&self.selected);
-                self.selected = self
+                let selected = self.tab.doc.expand_groups(&self.tab.selected);
+                self.tab.selected = self
+                    .tab
                     .doc
                     .all_ids()
                     .into_iter()
@@ -1345,8 +1240,8 @@ impl App {
             }
             Message::Arc(action) => self.update_arc(action),
             Message::GraphicStyle(change) => self.apply_graphic_style(change),
-            Message::GraphicWidth(s) => self.graphic_width_input = s,
-            Message::ApplyGraphicWidth => match self.graphic_width_input.parse::<f32>() {
+            Message::GraphicWidth(s) => self.tab.graphic_width_input = s,
+            Message::ApplyGraphicWidth => match self.tab.graphic_width_input.parse::<f32>() {
                 Ok(w) if w.is_finite() && (0.1..=12.0).contains(&w) => {
                     self.apply_graphic_style(GraphicChange::Width(w))
                 }
@@ -1355,9 +1250,9 @@ impl App {
                     self.status = "Line width must be 0.1–12 pt".into();
                 }
             },
-            Message::GraphicStroke(s) => self.graphic_stroke_input = s,
+            Message::GraphicStroke(s) => self.tab.graphic_stroke_input = s,
             Message::ApplyGraphicStroke => {
-                if let Some(c) = graphics::parse_color(&self.graphic_stroke_input) {
+                if let Some(c) = graphics::parse_color(&self.tab.graphic_stroke_input) {
                     self.apply_graphic_style(GraphicChange::Stroke(
                         reshiki::palette::Color::Custom(c),
                     ));
@@ -1366,9 +1261,9 @@ impl App {
                     self.status = "Enter a six-digit hex color, such as #117E6C".into();
                 }
             }
-            Message::GraphicFill(s) => self.graphic_fill_input = s,
+            Message::GraphicFill(s) => self.tab.graphic_fill_input = s,
             Message::ApplyGraphicFill => {
-                if let Some(c) = graphics::parse_color(&self.graphic_fill_input) {
+                if let Some(c) = graphics::parse_color(&self.tab.graphic_fill_input) {
                     self.apply_graphic_style(GraphicChange::Fill(Some(
                         reshiki::palette::Color::Custom(c),
                     )));
@@ -1379,12 +1274,13 @@ impl App {
             }
             Message::ScientificKind(kind) => {
                 self.toolbar.remember(Tool::Graphic(kind));
-                let before = self.doc.clone();
+                let before = self.tab.doc.clone();
                 for g in self
+                    .tab
                     .doc
                     .graphics
                     .iter_mut()
-                    .filter(|g| self.selected.contains(&g.id))
+                    .filter(|g| self.tab.selected.contains(&g.id))
                 {
                     if matches!(
                         (g.kind, kind),
@@ -1403,35 +1299,37 @@ impl App {
                 self.changed(before);
             }
             Message::OrbitalPhase(phase) => {
-                self.orbital_phase = phase;
-                let before = self.doc.clone();
+                self.tab.orbital_phase = phase;
+                let before = self.tab.doc.clone();
                 for g in self
+                    .tab
                     .doc
                     .graphics
                     .iter_mut()
-                    .filter(|g| self.selected.contains(&g.id))
+                    .filter(|g| self.tab.selected.contains(&g.id))
                 {
                     g.phase = phase;
                 }
                 self.changed(before);
             }
             Message::FlipPhase(value) => {
-                self.phase_flipped = value;
-                let before = self.doc.clone();
+                self.tab.phase_flipped = value;
+                let before = self.tab.doc.clone();
                 for g in self
+                    .tab
                     .doc
                     .graphics
                     .iter_mut()
-                    .filter(|g| self.selected.contains(&g.id))
+                    .filter(|g| self.tab.selected.contains(&g.id))
                 {
                     g.phase_flipped = value;
                 }
                 self.changed(before);
             }
-            Message::AttachSymbols(value) => self.attach_symbols = value,
+            Message::AttachSymbols(value) => self.tab.attach_symbols = value,
             Message::RotateMark(id, index) => {
-                let before = self.doc.clone();
-                if let Some(a) = self.doc.atom_mut(id)
+                let before = self.tab.doc.clone();
+                if let Some(a) = self.tab.doc.atom_mut(id)
                     && let Some(m) = a.marks.get_mut(index)
                 {
                     m.angle = (m.angle + 45.).rem_euclid(360.);
@@ -1439,8 +1337,8 @@ impl App {
                 self.changed(before);
             }
             Message::RemoveMark(id, index) => {
-                let before = self.doc.clone();
-                if let Some(a) = self.doc.atom_mut(id)
+                let before = self.tab.doc.clone();
+                if let Some(a) = self.tab.doc.atom_mut(id)
                     && index < a.marks.len()
                 {
                     let mark = a.marks.remove(index);
@@ -1453,19 +1351,20 @@ impl App {
                     if mark.kind.charge() || mark.kind.radical() {
                         a.explicit_h = 0;
                         a.no_implicit = false;
-                        self.doc.invalidate_chemistry(&[id]);
+                        self.tab.doc.invalidate_chemistry(&[id]);
                     }
                 }
                 self.changed(before);
             }
             Message::AtomRadical(value) => {
-                let before = self.doc.clone();
-                self.doc.invalidate_chemistry(&self.selected);
+                let before = self.tab.doc.clone();
+                self.tab.doc.invalidate_chemistry(&self.tab.selected);
                 for atom in self
+                    .tab
                     .doc
                     .atoms
                     .iter_mut()
-                    .filter(|a| self.selected.contains(&a.id))
+                    .filter(|a| self.tab.selected.contains(&a.id))
                 {
                     atom.radical_electrons = value;
                     atom.explicit_h = 0;
@@ -1474,10 +1373,10 @@ impl App {
                 self.changed(before);
             }
             Message::GraphicSides(sides) => {
-                let before = self.doc.clone();
-                self.bracket_sides = sides;
-                for g in &mut self.doc.graphics {
-                    if self.selected.contains(&g.id) {
+                let before = self.tab.doc.clone();
+                self.tab.bracket_sides = sides;
+                for g in &mut self.tab.doc.graphics {
+                    if self.tab.selected.contains(&g.id) {
                         g.sides = sides;
                     }
                 }
@@ -1494,21 +1393,22 @@ impl App {
                     self.theme_library.editor = None;
                 }
                 if tab != InspectorTab::DrawingStyle {
-                    self.styles.editor = None;
+                    self.tab.styles.editor = None;
                 }
                 if tab == InspectorTab::Labels {
                     let atoms: Vec<_> = self
+                        .tab
                         .doc
                         .atoms
                         .iter()
-                        .filter(|a| self.selected.contains(&a.id))
+                        .filter(|a| self.tab.selected.contains(&a.id))
                         .collect();
-                    self.labels.scope = if atoms.is_empty() {
+                    self.tab.labels.scope = if atoms.is_empty() {
                         atom_labels::Scope::Drawing
                     } else {
                         atom_labels::Scope::Selection
                     };
-                    self.labels.number = if let [atom] = atoms.as_slice() {
+                    self.tab.labels.number = if let [atom] = atoms.as_slice() {
                         atom.display
                             .number
                             .as_ref()
@@ -1546,27 +1446,27 @@ impl App {
             Message::Viewport(size) => {
                 if self.viewport != size {
                     self.viewport = size;
-                    if let Some(index) = self.pages.fit {
+                    if let Some(index) = self.tab.pages.fit {
                         self.fit_pages(index);
-                    } else if self.fit_to_view {
+                    } else if self.tab.fit_to_view {
                         self.fit();
                     }
                 }
             }
             Message::InspectorAction(_) | Message::ContextMenu(_) => {}
             Message::Tool(tool) => {
-                self.erase_stroke = false;
+                self.tab.erase_stroke = false;
                 self.palette = None;
                 self.toolbar.remember(tool);
                 if let Some(option) = self.toolbar.graphic(tool) {
-                    self.graphic_style = option.style.clone();
-                    self.bracket_sides = option.sides;
-                    self.graphic_width_input = self.graphic_style.width_pt.to_string();
+                    self.tab.graphic_style = option.style.clone();
+                    self.tab.bracket_sides = option.sides;
+                    self.tab.graphic_width_input = self.tab.graphic_style.width_pt.to_string();
                 }
                 self.tool = tool;
                 self.error = false;
                 if matches!(tool, Tool::Graphic(_) | Tool::RingPreset(_)) {
-                    self.selected.clear();
+                    self.tab.selected.clear();
                 }
                 if matches!(
                     tool,
@@ -1585,8 +1485,8 @@ impl App {
             }
             Message::CaptionAction(action) => self.caption_action(action),
             Message::TextStyle(change) => self.apply_text_style(change),
-            Message::FontSize(value) => self.font_size_input = value,
-            Message::ApplyFontSize => match self.font_size_input.parse::<f32>() {
+            Message::FontSize(value) => self.tab.font_size_input = value,
+            Message::ApplyFontSize => match self.tab.font_size_input.parse::<f32>() {
                 Ok(size) if size.is_finite() && (4.0..=144.0).contains(&size) => {
                     self.apply_text_style(reshiki::typography::StyleChange::Size(size))
                 }
@@ -1597,21 +1497,21 @@ impl App {
             },
             Message::ClearRingFill => self.apply_ring_color(None),
             Message::ColorScope(scope) => {
-                self.color_scope = scope;
+                self.tab.color_scope = scope;
                 self.sync_color_input();
                 if scope == typography::ColorScope::Rings {
                     self.status = "Ring interiors · Select a ring, then choose a Tint color".into();
                 }
             }
             Message::TextColor(value) => {
-                self.text_color_input = value;
+                self.tab.text_color_input = value;
                 self.flag_color_input(false);
             }
             Message::ApplyTextColor => {
-                if let Some(rgb) = reshiki::palette::parse_color(&self.text_color_input) {
+                if let Some(rgb) = reshiki::palette::parse_color(&self.tab.text_color_input) {
                     // Typed colors are exact on both canvases.
                     let color = reshiki::palette::Color::Custom(rgb);
-                    if self.color_scope == typography::ColorScope::Rings {
+                    if self.tab.color_scope == typography::ColorScope::Rings {
                         self.apply_ring_color(Some(color));
                     } else {
                         self.apply_text_style(reshiki::typography::StyleChange::Color(color));
@@ -1625,9 +1525,9 @@ impl App {
             Message::TextAlign(alignment) => self.apply_paragraph(Some(alignment), None, None),
             Message::GroupLabelAlign(alignment) => self.apply_group_alignment(alignment),
             Message::TextSpacing(spacing) => self.apply_paragraph(None, Some(spacing), None),
-            Message::TextWidth(value) => self.text_width_input = value,
+            Message::TextWidth(value) => self.tab.text_width_input = value,
             Message::ApplyTextWidth => {
-                let width = self.text_width_input.trim();
+                let width = self.tab.text_width_input.trim();
                 if width.is_empty() {
                     self.apply_paragraph(None, None, Some(None));
                 } else if let Ok(width) = width.parse::<f32>()
@@ -1641,7 +1541,7 @@ impl App {
                         "Text width must be 10–2000 pt, or blank for automatic width".into();
                 }
             }
-            Message::Isotope(s) => self.isotope = s,
+            Message::Isotope(s) => self.tab.isotope = s,
             Message::RingSize(n) => {
                 self.toolbar.ring = Tool::Ring;
                 self.ring_size = n;
@@ -1654,15 +1554,18 @@ impl App {
             }
             Message::ToggleAromaticRing => {
                 if self.tool.selects()
-                    && reshiki::rings::selected_cycle(&self.doc, &self.selected).is_some()
+                    && reshiki::rings::selected_cycle(&self.tab.doc, &self.tab.selected).is_some()
                 {
                     return self.update(Message::ToggleSelectedRing);
                 }
                 return self.update(Message::AromaticRing(!self.aromatic_ring));
             }
             Message::ToggleSelectedRing => {
-                let before = self.doc.clone();
-                match reshiki::rings::toggle_selected_aromatic(&mut self.doc, &self.selected) {
+                let before = self.tab.doc.clone();
+                match reshiki::rings::toggle_selected_aromatic(
+                    &mut self.tab.doc,
+                    &self.tab.selected,
+                ) {
                     Ok(aromatic) => {
                         self.changed(before);
                         self.status = if aromatic {
@@ -1679,18 +1582,18 @@ impl App {
                 }
             }
             Message::ArrowStyle(style) => {
-                self.arrow_style = style;
-                self.arrows.style = reshiki::arrows::ArrowStyle::preset(style);
-                self.arrows.style.width_pt = self.doc.drawing_style.line_width_pt;
+                self.tab.arrow_style = style;
+                self.tab.arrows.style = reshiki::arrows::ArrowStyle::preset(style);
+                self.tab.arrows.style.width_pt = self.tab.doc.drawing_style.line_width_pt;
                 self.tool = Tool::Arrow;
                 self.inspector_open = true;
                 self.inspector_tab = InspectorTab::Properties;
-                let before = self.doc.clone();
-                for a in &mut self.doc.arrows {
-                    if self.selected.contains(&a.id) {
+                let before = self.tab.doc.clone();
+                for a in &mut self.tab.doc.arrows {
+                    if self.tab.selected.contains(&a.id) {
                         a.kind = style.kind().into();
                         a.control = None;
-                        a.style = Some(self.arrows.style.clone());
+                        a.style = Some(self.tab.arrows.style.clone());
                     }
                 }
                 self.changed(before);
@@ -1726,16 +1629,16 @@ impl App {
                 if reshiki::clipboard::available() {
                     return self.copy_native(cut, false);
                 }
-                if self.selected.is_empty() {
+                if self.tab.selected.is_empty() {
                     self.status = "Select objects to copy".into();
                     return Task::none();
                 }
-                let selection = editing::selection(&self.doc, &self.selected);
+                let selection = editing::selection(&self.tab.doc, &self.tab.selected);
                 if let Ok(json) = serde_json::to_string(&selection.current()) {
                     if cut {
-                        let before = self.doc.clone();
-                        self.doc.delete(&self.selected);
-                        self.selected.clear();
+                        let before = self.tab.doc.clone();
+                        self.tab.doc.delete(&self.tab.selected);
+                        self.tab.selected.clear();
                         self.changed(before);
                     }
                     self.status = if cut {
@@ -1761,16 +1664,16 @@ impl App {
                             Ok(part) => {
                                 let part = reshiki::canvas_theme::for_native_paste(
                                     part,
-                                    self.doc.canvas_theme,
+                                    self.tab.doc.canvas_theme,
                                 );
                                 let center = editing::center(&part, &part.all_ids());
-                                let before = self.doc.clone();
-                                self.selected = editing::append(
-                                    &mut self.doc,
+                                let before = self.tab.doc.clone();
+                                self.tab.selected = editing::append(
+                                    &mut self.tab.doc,
                                     &part,
                                     Point::new(
-                                        self.camera.center.x - center.x + 24.0,
-                                        self.camera.center.y - center.y + 24.0,
+                                        self.tab.camera.center.x - center.x + 24.0,
+                                        self.tab.camera.center.y - center.y + 24.0,
                                     ),
                                 );
                                 self.changed(before);
@@ -1788,29 +1691,30 @@ impl App {
                 }
             }
             Message::Duplicate => {
-                let part = editing::selection(&self.doc, &self.selected);
-                let before = self.doc.clone();
-                self.selected = editing::append(&mut self.doc, &part, Point::new(28.0, 28.0));
+                let part = editing::selection(&self.tab.doc, &self.tab.selected);
+                let before = self.tab.doc.clone();
+                self.tab.selected =
+                    editing::append(&mut self.tab.doc, &part, Point::new(28.0, 28.0));
                 self.changed(before);
                 self.tool = Tool::Select;
             }
             Message::Transform(transform) => {
-                let before = self.doc.clone();
-                editing::transform(&mut self.doc, &self.selected, transform);
+                let before = self.tab.doc.clone();
+                editing::transform(&mut self.tab.doc, &self.tab.selected, transform);
                 self.changed(before);
             }
             Message::NumericTransform(action) => return self.numeric_transform_action(action),
             Message::Arrange(arrange) => {
-                let before = self.doc.clone();
-                editing::arrange(&mut self.doc, &self.selected, arrange);
+                let before = self.tab.doc.clone();
+                editing::arrange(&mut self.tab.doc, &self.tab.selected, arrange);
                 self.changed(before);
             }
             Message::BondDepth(front) => self.layer_objects(front, false, true),
             Message::ReverseBonds => {
-                let before = self.doc.clone();
-                self.doc.invalidate_chemistry(&self.selected);
-                for b in &mut self.doc.bonds {
-                    if self.selected.contains(&b.a) && self.selected.contains(&b.b) {
+                let before = self.tab.doc.clone();
+                self.tab.doc.invalidate_chemistry(&self.tab.selected);
+                for b in &mut self.tab.doc.bonds {
+                    if self.tab.selected.contains(&b.a) && self.tab.selected.contains(&b.b) {
                         b.reverse();
                     }
                 }
@@ -1852,20 +1756,20 @@ impl App {
                     return Task::none();
                 }
                 if let Some(candidate) = self.recovered.first().cloned() {
-                    let before = self.doc.clone();
-                    self.doc = candidate.snapshot.document;
-                    self.doc.version = self.doc.version.max(15);
+                    let before = self.tab.doc.clone();
+                    self.tab.doc = candidate.snapshot.document;
+                    self.tab.doc.version = self.tab.doc.version.max(15);
                     self.sync_drawing_defaults();
-                    self.styles.editor = None;
+                    self.tab.styles.editor = None;
                     self.theme_library.editor = None;
-                    self.path = None;
-                    self.untitled_name = None;
-                    self.saved = Document::default();
-                    self.file_epoch = self.file_epoch.wrapping_add(1);
+                    self.tab.path = None;
+                    self.tab.untitled_name = None;
+                    self.tab.saved = Document::default();
+                    self.tab.file_epoch = self.tab.file_epoch.wrapping_add(1);
                     self.changed(before);
-                    self.revision = self.revision.wrapping_add(1);
+                    self.tab.revision = self.tab.revision.wrapping_add(1);
                     self.fit();
-                    self.selected.clear();
+                    self.tab.selected.clear();
                     self.recover_candidate(candidate.path);
                     self.status = "Recovered drawing · Save to keep a new copy".into();
                 }
@@ -1889,8 +1793,8 @@ impl App {
                 if !self.finish_inline(true) {
                     return Task::none();
                 }
-                let before = self.doc.clone();
-                theme.apply(&mut self.doc);
+                let before = self.tab.doc.clone();
+                theme.apply(&mut self.tab.doc);
                 self.changed(before);
                 self.sync_color_input();
                 self.status = format!(
@@ -1901,9 +1805,9 @@ impl App {
                 if !self.finish_inline(true) {
                     return Task::none();
                 }
-                if self.doc.canvas_theme != theme {
-                    let before = self.doc.clone();
-                    self.doc.canvas_theme = theme;
+                if self.tab.doc.canvas_theme != theme {
+                    let before = self.tab.doc.clone();
+                    self.tab.doc.canvas_theme = theme;
                     self.changed(before);
                     self.sync_color_input();
                     self.status = format!(
@@ -1926,7 +1830,7 @@ impl App {
             Message::ObjectToolbar(action) => self.object_toolbar_action(action),
             Message::Rulers(enabled) => {
                 self.guides.rulers = enabled;
-                if self.fit_to_view {
+                if self.tab.fit_to_view {
                     self.fit();
                 }
             }
@@ -1934,9 +1838,9 @@ impl App {
             Message::RulerUnit(unit) => self.guides.unit = unit,
             Message::Fit => self.fit(),
             Message::Zoom(f) => {
-                self.pages.fit = None;
-                self.fit_to_view = false;
-                self.camera.zoom = (self.camera.zoom * f).clamp(0.005, 5.0);
+                self.tab.pages.fit = None;
+                self.tab.fit_to_view = false;
+                self.tab.camera.zoom = (self.tab.camera.zoom * f).clamp(0.005, 5.0);
             }
             Message::Import => {
                 return self.run(input_request(&self.imports.input.text()), Job::Import);
@@ -1946,35 +1850,39 @@ impl App {
                 return self.run(Request::import_smiles(smiles), Job::Insert);
             }
             Message::Analyze => {
-                return self.run(Request::molecule("analyze", self.doc.clone()), Job::Analyze);
+                return self.run(
+                    Request::molecule("analyze", self.tab.doc.clone()),
+                    Job::Analyze,
+                );
             }
             Message::CleanupScope(scope) => return self.begin_cleanup(Some(scope), None),
             Message::CleanupOrientation(on) => return self.begin_cleanup(None, Some(on)),
             Message::CleanupOriginal(original) => {
-                if let Some(preview) = &mut self.cleanup {
+                if let Some(preview) = &mut self.tab.cleanup {
                     preview.original = original;
                 }
             }
             Message::CancelCleanup => {
-                self.cleanup_serial = self.cleanup_serial.wrapping_add(1);
-                self.cleanup = None;
+                self.tab.cleanup_serial = self.tab.cleanup_serial.wrapping_add(1);
+                self.tab.cleanup = None;
                 self.status = "Cleanup cancelled · Drawing unchanged".into();
                 self.error = false;
             }
             Message::ApplyCleanup => {
-                if self.busy {
+                if self.tab.busy {
                     return Task::none();
                 }
-                if let Some(preview) = self.cleanup.take() {
-                    if preview.revision != self.revision || preview.epoch != self.file_epoch {
+                if let Some(preview) = self.tab.cleanup.take() {
+                    if preview.revision != self.tab.revision || preview.epoch != self.tab.file_epoch
+                    {
                         self.status = "Drawing changed · Run cleanup again".into();
                         return Task::none();
                     }
-                    let before = self.doc.clone();
-                    self.doc = preview.document;
+                    let before = self.tab.doc.clone();
+                    self.tab.doc = preview.document;
                     self.changed(before);
                     if !self.error {
-                        self.analysis = preview.analysis;
+                        self.tab.analysis = preview.analysis;
                         self.status = "Cleanup applied · Undo restores the original layout".into();
                     }
                 }
@@ -1985,8 +1893,8 @@ impl App {
                 kind,
                 result,
             } => {
-                self.busy = false;
-                if matches!(&kind, Job::Clean(job) if job.serial != self.cleanup_serial || job.epoch != self.file_epoch)
+                self.tab.busy = false;
+                if matches!(&kind, Job::Clean(job) if job.serial != self.tab.cleanup_serial || job.epoch != self.tab.file_epoch)
                 {
                     return Task::none();
                 }
@@ -1999,7 +1907,7 @@ impl App {
                         if let Job::Export(format) = kind {
                             return export_file(response.output.unwrap_or_default(), format);
                         }
-                        if self.revision != revision {
+                        if self.tab.revision != revision {
                             self.status="Operation finished; newer edits were preserved. Run it again to update.".into();
                             return Task::none();
                         }
@@ -2009,13 +1917,13 @@ impl App {
                                     self.status = error;
                                     self.error = true;
                                 } else {
-                                    self.cleanup = Some(CleanupPreview {
+                                    self.tab.cleanup = Some(CleanupPreview {
                                         job: job.clone(),
                                         warnings: response.warnings,
                                         document,
                                         analysis: response.analysis,
                                         revision,
-                                        epoch: self.file_epoch,
+                                        epoch: self.tab.file_epoch,
                                         original: false,
                                     });
                                     self.status = "Cleanup preview · Compare with the original, then Apply or Cancel".into();
@@ -2026,23 +1934,25 @@ impl App {
                         }
                         if matches!(kind, Job::Insert) {
                             if let Some(document) = response.document {
-                                let before = self.doc.clone();
+                                let before = self.tab.doc.clone();
                                 let center = editing::center(&document, &document.all_ids());
-                                let offset = if self.doc.all_ids().is_empty() {
+                                let offset = if self.tab.doc.all_ids().is_empty() {
                                     Point::new(
-                                        self.camera.center.x - center.x,
-                                        self.camera.center.y - center.y,
+                                        self.tab.camera.center.x - center.x,
+                                        self.tab.camera.center.y - center.y,
                                     )
                                 } else {
-                                    let (_, existing_max) = self.doc.bounds();
+                                    let (_, existing_max) = self.tab.doc.bounds();
                                     let (insert_min, _) = document.bounds();
                                     Point::new(
-                                        existing_max.x + self.doc.drawing_style.bond_length_world
+                                        existing_max.x
+                                            + self.tab.doc.drawing_style.bond_length_world
                                             - insert_min.x,
-                                        self.camera.center.y - center.y,
+                                        self.tab.camera.center.y - center.y,
                                     )
                                 };
-                                self.selected = editing::append(&mut self.doc, &document, offset);
+                                self.tab.selected =
+                                    editing::append(&mut self.tab.doc, &document, offset);
                                 self.changed(before);
                                 self.fit();
                                 self.tool = Tool::Select;
@@ -2057,15 +1967,18 @@ impl App {
                         }
                         if matches!(kind, Job::AromaticDisplay) {
                             if let Some(document) = response.document {
-                                let before = self.doc.clone();
-                                self.doc = document.clone();
+                                let before = self.tab.doc.clone();
+                                self.tab.doc = document.clone();
                                 self.changed(before);
                                 if self.error {
                                     return Task::none();
                                 }
-                                reshiki::atom_labels::refresh_computed(&mut self.doc, &document);
-                                self.labels_dirty = false;
-                                self.analysis = response.analysis;
+                                reshiki::atom_labels::refresh_computed(
+                                    &mut self.tab.doc,
+                                    &document,
+                                );
+                                self.tab.labels_dirty = false;
+                                self.tab.analysis = response.analysis;
                                 self.tool = Tool::Select;
                                 self.status =
                                     "Aromatic display changed · Molecular identity retained".into();
@@ -2074,13 +1987,15 @@ impl App {
                         }
                         if matches!(kind, Job::Abbreviate) {
                             if let Some(document) = response.document {
-                                let before = self.doc.clone();
+                                let before = self.tab.doc.clone();
                                 let count = document.abbreviations.len();
-                                self.doc = document;
-                                self.selected =
-                                    self.doc.expand_abbreviation_selection(&self.selected);
+                                self.tab.doc = document;
+                                self.tab.selected = self
+                                    .tab
+                                    .doc
+                                    .expand_abbreviation_selection(&self.tab.selected);
                                 self.changed(before);
-                                self.analysis = response.analysis;
+                                self.tab.analysis = response.analysis;
                                 self.tool = Tool::Select;
                                 self.status = if count == 0 {
                                     "No matching common groups in this selection".into()
@@ -2098,10 +2013,13 @@ impl App {
                             // computed H labels without rewriting the user's bond
                             // orders/stereo or inserting a step into Undo/Redo.
                             if let Some(document) = response.document {
-                                reshiki::atom_labels::refresh_computed(&mut self.doc, &document);
+                                reshiki::atom_labels::refresh_computed(
+                                    &mut self.tab.doc,
+                                    &document,
+                                );
                             }
-                            self.analysis = response.analysis;
-                            self.chemistry_notice = None;
+                            self.tab.analysis = response.analysis;
+                            self.tab.chemistry_notice = None;
                             if matches!(kind, Job::Analyze) {
                                 self.status = "No chemistry errors found".into();
                                 self.error = false;
@@ -2109,24 +2027,24 @@ impl App {
                             return Task::none();
                         }
                         if let Some(document) = response.document {
-                            let before = self.doc.clone();
-                            self.doc = document.clone();
+                            let before = self.tab.doc.clone();
+                            self.tab.doc = document.clone();
                             self.changed(before);
-                            reshiki::atom_labels::refresh_computed(&mut self.doc, &document);
-                            self.labels_dirty = false;
-                            self.chemistry_notice = None;
-                            self.selected.clear();
+                            reshiki::atom_labels::refresh_computed(&mut self.tab.doc, &document);
+                            self.tab.labels_dirty = false;
+                            self.tab.chemistry_notice = None;
+                            self.tab.selected.clear();
                             if matches!(kind, Job::Import | Job::ImportFile) {
                                 self.fit();
                             }
                             if matches!(kind, Job::ImportFile) {
-                                self.path = None;
-                                self.untitled_name = None;
-                                self.saved = Document::default();
-                                self.file_epoch = self.file_epoch.wrapping_add(1);
+                                self.tab.path = None;
+                                self.tab.untitled_name = None;
+                                self.tab.saved = Document::default();
+                                self.tab.file_epoch = self.tab.file_epoch.wrapping_add(1);
                             }
                         }
-                        self.analysis = response.analysis;
+                        self.tab.analysis = response.analysis;
                         self.status = match kind {
                             Job::Clean(_) => "Structure cleaned",
                             Job::Analyze => "No chemistry errors found",
@@ -2142,60 +2060,64 @@ impl App {
                 }
             }
             Message::Undo | Message::Redo => {
-                self.erase_stroke = false;
-                self.cleanup = None;
-                let before = self.doc.clone();
-                let selected_group = !before.outer_selected_groups(&self.selected).is_empty();
+                self.tab.erase_stroke = false;
+                self.tab.cleanup = None;
+                let before = self.tab.doc.clone();
+                let selected_group = !before.outer_selected_groups(&self.tab.selected).is_empty();
                 let changed = if matches!(message, Message::Undo) {
-                    self.history.undo(&mut self.doc)
+                    self.tab.history.undo(&mut self.tab.doc)
                 } else {
-                    self.history.redo(&mut self.doc)
+                    self.tab.history.redo(&mut self.tab.doc)
                 };
                 if changed {
-                    self.recent_molecules
-                        .restore(matches!(message, Message::Redo), self.file_epoch);
-                    self.revision = self.revision.wrapping_add(1);
-                    if chemistry_changed(&before, &self.doc) {
-                        self.analysis = None;
-                        reshiki::atom_labels::clear_computed(&mut self.doc);
-                        self.labels_dirty = true;
+                    self.tab
+                        .recent_molecules
+                        .restore(matches!(message, Message::Redo), self.tab.file_epoch);
+                    self.tab.revision = self.tab.revision.wrapping_add(1);
+                    if chemistry_changed(&before, &self.tab.doc) {
+                        self.tab.analysis = None;
+                        reshiki::atom_labels::clear_computed(&mut self.tab.doc);
+                        self.tab.labels_dirty = true;
                     }
-                    let ids = self.doc.all_ids();
-                    self.selected.retain(|id| ids.contains(id));
+                    let ids = self.tab.doc.all_ids();
+                    self.tab.selected.retain(|id| ids.contains(id));
                     let previous_ids = before.all_ids();
-                    let restored_group = self.doc.groups.iter().any(|group| {
-                        group.members.iter().any(|id| self.selected.contains(id))
-                            && group
-                                .members
-                                .iter()
-                                .all(|id| self.selected.contains(id) || !previous_ids.contains(id))
+                    let restored_group = self.tab.doc.groups.iter().any(|group| {
+                        group
+                            .members
+                            .iter()
+                            .any(|id| self.tab.selected.contains(id))
+                            && group.members.iter().all(|id| {
+                                self.tab.selected.contains(id) || !previous_ids.contains(id)
+                            })
                     });
                     if selected_group || restored_group {
-                        self.selected = self.doc.expand_groups(&self.selected);
+                        self.tab.selected = self.tab.doc.expand_groups(&self.tab.selected);
                     }
-                    if self.selected.is_empty()
-                        && let Some(id) = self.caption_target.filter(|id| ids.contains(id))
+                    if self.tab.selected.is_empty()
+                        && let Some(id) = self.tab.caption_target.filter(|id| ids.contains(id))
                     {
-                        self.selected.push(id);
+                        self.tab.selected.push(id);
                     }
                     self.sync_typography();
                     self.sync_graphics();
                     self.sync_arrows();
                     self.sync_bonds();
-                    if before.drawing_style != self.doc.drawing_style {
+                    if before.drawing_style != self.tab.doc.drawing_style {
                         self.sync_drawing_defaults();
-                        self.styles.editor = None;
+                        self.tab.styles.editor = None;
                     }
-                    if before.page_layout != self.doc.page_layout {
-                        self.pages.editor = self
+                    if before.page_layout != self.tab.doc.page_layout {
+                        self.tab.pages.editor = self
+                            .tab
                             .pages
                             .editor
                             .as_ref()
-                            .map(|_| pages::Editor::new(&self.doc, self.file_epoch));
-                        if let Some(layout) = &self.doc.page_layout {
-                            self.pages.active =
-                                self.pages.active.min(layout.count().saturating_sub(1));
-                            self.fit_pages(Some(self.pages.active));
+                            .map(|_| pages::Editor::new(&self.tab.doc, self.tab.file_epoch));
+                        if let Some(layout) = &self.tab.doc.page_layout {
+                            self.tab.pages.active =
+                                self.tab.pages.active.min(layout.count().saturating_sub(1));
+                            self.fit_pages(Some(self.tab.pages.active));
                         } else {
                             self.fit();
                         }
@@ -2205,12 +2127,12 @@ impl App {
                 }
             }
             Message::Delete => {
-                let before = self.doc.clone();
-                self.doc.delete(&self.selected);
+                let before = self.tab.doc.clone();
+                self.tab.doc.delete(&self.tab.selected);
                 self.changed(before);
             }
             Message::SelectAll => {
-                self.selected = self.doc.all_ids();
+                self.tab.selected = self.tab.doc.all_ids();
                 self.tool = Tool::Select;
                 self.sync_typography();
                 self.sync_graphics();
@@ -2218,10 +2140,10 @@ impl App {
                 self.sync_bonds();
             }
             Message::Charge(delta) => {
-                let before = self.doc.clone();
-                self.doc.invalidate_chemistry(&self.selected);
-                for id in &self.selected {
-                    if let Some(a) = self.doc.atom_mut(*id) {
+                let before = self.tab.doc.clone();
+                self.tab.doc.invalidate_chemistry(&self.tab.selected);
+                for id in &self.tab.selected {
+                    if let Some(a) = self.tab.doc.atom_mut(*id) {
                         a.charge = a.charge.saturating_add(delta).clamp(-8, 8);
                         a.explicit_h = 0;
                         a.no_implicit = false;
@@ -2229,11 +2151,11 @@ impl App {
                 }
                 self.changed(before);
             }
-            Message::ApplyIsotope => match self.isotope.parse::<u32>() {
+            Message::ApplyIsotope => match self.tab.isotope.parse::<u32>() {
                 Ok(value) if value <= 300 => {
-                    let before = self.doc.clone();
-                    for id in &self.selected {
-                        if let Some(a) = self.doc.atom_mut(*id) {
+                    let before = self.tab.doc.clone();
+                    for id in &self.tab.selected {
+                        if let Some(a) = self.tab.doc.atom_mut(*id) {
                             a.isotope = value;
                         }
                     }
@@ -2275,16 +2197,16 @@ impl App {
                 let path = if matches!(message, Message::SaveAs) {
                     None
                 } else {
-                    self.path.clone()
+                    self.tab.path.clone()
                 };
                 if self.file_io.saving {
                     self.status = "A document save is already in progress".into();
                     return Task::none();
                 }
                 self.file_io.saving = true;
-                let snapshot = std::sync::Arc::new(self.doc.clone());
+                let snapshot = std::sync::Arc::new(self.tab.doc.clone());
                 let save_snapshot = std::sync::Arc::clone(&snapshot);
-                let suggested_name = if self.path.is_some() {
+                let suggested_name = if self.tab.path.is_some() {
                     self.document_name()
                 } else {
                     format!(
@@ -2293,7 +2215,7 @@ impl App {
                         reshiki::compatibility::NATIVE_EXTENSION
                     )
                 };
-                let epoch = self.file_epoch;
+                let epoch = self.tab.file_epoch;
                 return Task::perform(
                     async move {
                         let path = if let Some(p) = path {
@@ -2339,7 +2261,7 @@ impl App {
                 if ["svg", "pdf", "png"].contains(&format) || cfg!(windows) && format == "emf" {
                     return self.export_figure(format, false);
                 }
-                let mut request = Request::molecule("export", self.doc.clone());
+                let mut request = Request::molecule("export", self.tab.doc.clone());
                 request.format = Some(format.into());
                 return self.run(request, Job::Export(format));
             }
@@ -2370,8 +2292,8 @@ impl App {
     }
     fn edit(&mut self, edit: Edit) {
         if let Edit::ContextMenu { position, selected } = edit {
-            if self.cleanup.is_none() {
-                self.selected = selected;
+            if self.tab.cleanup.is_none() {
+                self.tab.selected = selected;
                 self.tool = Tool::Select;
                 self.sync_typography();
                 self.context_menu = Some(context_menu::State {
@@ -2383,55 +2305,56 @@ impl App {
         }
         match edit {
             Edit::EraseStart(p) => {
-                self.erase_stroke = self.tool == Tool::Erase && self.cleanup.is_none();
-                self.erase_committed = false;
-                if self.erase_stroke {
+                self.tab.erase_stroke = self.tool == Tool::Erase && self.tab.cleanup.is_none();
+                self.tab.erase_committed = false;
+                if self.tab.erase_stroke {
                     self.erase_segment(p, p);
                 }
                 return;
             }
             Edit::EraseTo(from, to) => {
-                if self.erase_stroke && self.tool == Tool::Erase {
+                if self.tab.erase_stroke && self.tool == Tool::Erase {
                     self.erase_segment(from, to);
                 }
                 return;
             }
             Edit::EraseEnd => {
-                self.erase_stroke = false;
-                self.hover = None;
+                self.tab.erase_stroke = false;
+                self.tab.hover = None;
                 return;
             }
             Edit::Hover(_) | Edit::ContextMenu { .. } => {}
-            _ => self.erase_stroke = false,
+            _ => self.tab.erase_stroke = false,
         }
         if matches!(edit, Edit::Pan(..) | Edit::Zoom(..)) {
-            self.pages.fit = None;
+            self.tab.pages.fit = None;
         }
         if let Edit::Hover(point) = edit {
-            self.hover = point.map(|p| (p, self.file_epoch));
+            self.tab.hover = point.map(|p| (p, self.tab.file_epoch));
             return;
         }
         if matches!(edit, Edit::Pan(..) | Edit::Zoom(..)) {
-            self.hover = None;
+            self.tab.hover = None;
         }
-        if self.cleanup.is_some() {
+        if self.tab.cleanup.is_some() {
             match edit {
                 Edit::Pan(dx, dy) => {
-                    self.camera.center = self
+                    self.tab.camera.center = self
+                        .tab
                         .camera
                         .center
-                        .offset(-dx / self.camera.zoom, -dy / self.camera.zoom);
-                    self.fit_to_view = false;
+                        .offset(-dx / self.tab.camera.zoom, -dy / self.tab.camera.zoom);
+                    self.tab.fit_to_view = false;
                 }
                 Edit::Zoom(factor, _) => {
-                    self.camera.zoom = (self.camera.zoom * factor).clamp(0.005, 5.);
-                    self.fit_to_view = false;
+                    self.tab.camera.zoom = (self.tab.camera.zoom * factor).clamp(0.005, 5.);
+                    self.tab.fit_to_view = false;
                 }
                 _ => {}
             }
             return;
         }
-        let before = self.doc.clone();
+        let before = self.tab.doc.clone();
         match edit {
             Edit::ContextMenu { .. } => return,
             Edit::Hover(_)
@@ -2446,15 +2369,15 @@ impl App {
                 target,
             } => {
                 match reshiki::chains::place(
-                    &self.doc,
+                    &self.tab.doc,
                     &points,
                     source,
                     target,
-                    10.0 / self.camera.zoom,
+                    10.0 / self.tab.camera.zoom,
                 ) {
                     Ok((doc, ids)) => {
-                        self.doc = doc;
-                        self.selected = ids;
+                        self.tab.doc = doc;
+                        self.tab.selected = ids;
                     }
                     Err(error) => {
                         self.status = error;
@@ -2472,19 +2395,19 @@ impl App {
                     ) {
                         let drawing = reshiki::scientific::Drawing {
                             kind,
-                            style: self.graphic_style.clone(),
-                            phase: self.orbital_phase,
-                            flipped: self.phase_flipped,
-                            attach: self.attach_symbols,
+                            style: self.tab.graphic_style.clone(),
+                            phase: self.tab.orbital_phase,
+                            flipped: self.tab.phase_flipped,
+                            attach: self.tab.attach_symbols,
                         };
                         match drawing.place(
-                            &mut self.doc,
+                            &mut self.tab.doc,
                             start,
                             end,
                             constrain,
-                            10. / self.camera.zoom,
+                            10. / self.tab.camera.zoom,
                         ) {
-                            Ok(id) => self.selected = vec![id],
+                            Ok(id) => self.tab.selected = vec![id],
                             Err(error) => {
                                 self.status = error;
                                 self.error = true;
@@ -2492,53 +2415,53 @@ impl App {
                             }
                         }
                     } else {
-                        let id = self.doc.next_id();
-                        self.doc.graphics.push(
+                        let id = self.tab.doc.next_id();
+                        self.tab.doc.graphics.push(
                             Graphic::dragged(
                                 id,
                                 kind,
                                 start,
                                 end,
-                                self.graphic_style.clone(),
-                                self.bracket_sides,
+                                self.tab.graphic_style.clone(),
+                                self.tab.bracket_sides,
                                 constrain,
                             )
-                            .with_arc(self.arc_editor.geometry),
+                            .with_arc(self.tab.arc_editor.geometry),
                         );
-                        self.selected = vec![id];
+                        self.tab.selected = vec![id];
                     }
                     self.tool = Tool::Select;
                 }
             }
             Edit::AtomIndicator(owner, p) => {
-                if let Some(anchor) = owner.anchor(&self.doc) {
+                if let Some(anchor) = owner.anchor(&self.tab.doc) {
                     owner.set_offset(
-                        &mut self.doc,
+                        &mut self.tab.doc,
                         Some(Point::new(p.x - anchor.x, p.y - anchor.y)),
                     );
                 }
             }
             Edit::AtomMark(id, index, p) => {
-                if let Some(a) = self.doc.atom_mut(id)
+                if let Some(a) = self.tab.doc.atom_mut(id)
                     && let Some(mark) = a.marks.get_mut(index)
                 {
                     mark.offset = Point::new(p.x - a.position.x, p.y - a.position.y);
                 }
             }
             Edit::ArrowHandle(id, index, p) => {
-                if let Some(a) = self.doc.arrows.iter_mut().find(|a| a.id == id) {
+                if let Some(a) = self.tab.doc.arrows.iter_mut().find(|a| a.id == id) {
                     a.edit_handle(index, p);
                 }
             }
             Edit::GraphicPoint(id, index, p) => {
-                if let Some(g) = self.doc.graphics.iter_mut().find(|g| g.id == id) {
+                if let Some(g) = self.tab.doc.graphics.iter_mut().find(|g| g.id == id) {
                     g.edit_point(index, p);
                 }
                 self.sync_arc();
             }
             Edit::Template(anchor, direction) => {
-                if let Some(state) = &self.joining {
-                    if state.revision != self.revision || state.epoch != self.file_epoch {
+                if let Some(state) = &self.tab.joining {
+                    if state.revision != self.tab.revision || state.epoch != self.tab.file_epoch {
                         self.cancel_join();
                         self.status = "The drawing changed. Start Move & attach again.".into();
                         self.error = true;
@@ -2547,14 +2470,14 @@ impl App {
                     match state.prepared.place(
                         anchor,
                         direction,
-                        10. / self.camera.zoom,
+                        10. / self.tab.camera.zoom,
                         state.anchor,
                         state.mode,
                     ) {
                         Ok((document, selected)) => {
-                            self.doc = document;
-                            self.selected = selected;
-                            self.joining = None;
+                            self.tab.doc = document;
+                            self.tab.selected = selected;
+                            self.tab.joining = None;
                             self.tool = Tool::Select;
                             self.changed(before);
                             self.status =
@@ -2575,17 +2498,17 @@ impl App {
                     return;
                 };
                 match reshiki::templates::place_with_mode(
-                    &self.doc,
+                    &self.tab.doc,
                     &template.document,
                     anchor,
                     direction,
-                    10.0 / self.camera.zoom,
+                    10.0 / self.tab.camera.zoom,
                     self.templates.anchor,
                     self.templates.connection,
                 ) {
                     Ok((document, selected)) => {
-                        self.doc = document;
-                        self.selected = selected;
+                        self.tab.doc = document;
+                        self.tab.selected = selected;
                         if !self.templates.repeat {
                             self.tool = Tool::Select;
                         }
@@ -2603,28 +2526,28 @@ impl App {
                 scale,
                 rotation,
             } => {
-                editing::transform_about(&mut self.doc, &ids, pivot, scale, rotation);
-                self.selected = ids;
+                editing::transform_about(&mut self.tab.doc, &ids, pivot, scale, rotation);
+                self.tab.selected = ids;
             }
             Edit::Tilt { ids, x, y } => {
-                crate::canvas::tilt::apply(&mut self.doc, &ids, x, y);
-                self.selected = ids;
+                crate::canvas::tilt::apply(&mut self.tab.doc, &ids, x, y);
+                self.tab.selected = ids;
             }
             Edit::ScaleAxes { ids, pivot, x, y } => {
-                editing::scale_axes_about(&mut self.doc, &ids, pivot, x, y);
-                self.selected = ids;
+                editing::scale_axes_about(&mut self.tab.doc, &ids, pivot, x, y);
+                self.tab.selected = ids;
             }
             Edit::RingPreset(preset, anchor, direction, connect, alternate) => {
                 let drawing = reshiki::rings::Drawing {
                     preset,
-                    length: self.bond_drawing.length,
+                    length: self.tab.bond_drawing.length,
                     alternate,
                     connect,
                 };
-                match drawing.place(&self.doc, anchor, direction, 10. / self.camera.zoom) {
+                match drawing.place(&self.tab.doc, anchor, direction, 10. / self.tab.camera.zoom) {
                     Ok((doc, ids)) => {
-                        self.doc = doc;
-                        self.selected = ids;
+                        self.tab.doc = doc;
+                        self.tab.selected = ids;
                     }
                     Err(error) => {
                         self.status = error.into();
@@ -2639,14 +2562,14 @@ impl App {
                     _ => (self.ring_size, self.aromatic_ring),
                 };
                 match editing::ring_oriented(
-                    &mut self.doc,
+                    &mut self.tab.doc,
                     anchor,
                     size,
                     aromatic,
-                    10.0 / self.camera.zoom,
+                    10.0 / self.tab.camera.zoom,
                     direction,
                 ) {
-                    Ok(ids) => self.selected = ids,
+                    Ok(ids) => self.tab.selected = ids,
                     Err(error) => {
                         self.status = error.into();
                         self.error = true;
@@ -2656,7 +2579,7 @@ impl App {
             }
             Edit::Select(ids) => {
                 let inspector_width = self.inspector_width();
-                self.selected = ids;
+                self.tab.selected = ids;
                 self.sync_typography();
                 self.sync_graphics();
                 self.sync_arrows();
@@ -2666,41 +2589,41 @@ impl App {
                 // for the centered camera's horizontal shift. Record the new
                 // size now so its sensor event does not also trigger Fit.
                 let width_change = inspector_width - self.inspector_width();
-                self.camera.center.x += width_change / (2. * self.camera.zoom);
+                self.tab.camera.center.x += width_change / (2. * self.tab.camera.zoom);
                 self.viewport.width += width_change;
             }
             Edit::Move(ids, dx, dy) => {
                 if let Some(snapped) = editing::snap_ring(
-                    &mut self.doc,
+                    &mut self.tab.doc,
                     &ids,
                     Point::new(dx, dy),
-                    14.0 / self.camera.zoom,
+                    14.0 / self.tab.camera.zoom,
                 ) {
-                    self.selected = snapped;
+                    self.tab.selected = snapped;
                 } else {
-                    self.doc.translate(&ids, dx, dy);
-                    self.selected = ids;
+                    self.tab.doc.translate(&ids, dx, dy);
+                    self.tab.selected = ids;
                 }
             }
             Edit::Duplicate(ids, dx, dy) => {
-                let part = editing::selection(&self.doc, &ids);
-                let copy = editing::append(&mut self.doc, &part, Point::new(dx, dy));
+                let part = editing::selection(&self.tab.doc, &ids);
+                let copy = editing::append(&mut self.tab.doc, &part, Point::new(dx, dy));
                 if !copy.is_empty() {
-                    self.selected = copy;
+                    self.tab.selected = copy;
                 }
             }
             Edit::Pan(dx, dy) => {
-                self.fit_to_view = false;
-                self.camera.center = self.camera.center.offset(-dx, -dy);
+                self.tab.fit_to_view = false;
+                self.tab.camera.center = self.tab.camera.center.offset(-dx, -dy);
             }
             Edit::Zoom(f, at) => {
-                self.fit_to_view = false;
-                let old = self.camera.zoom;
-                self.camera.zoom = (old * f).clamp(0.005, 5.0);
-                let ratio = old / self.camera.zoom;
-                self.camera.center = Point::new(
-                    at.x + (self.camera.center.x - at.x) * ratio,
-                    at.y + (self.camera.center.y - at.y) * ratio,
+                self.tab.fit_to_view = false;
+                let old = self.tab.camera.zoom;
+                self.tab.camera.zoom = (old * f).clamp(0.005, 5.0);
+                let ratio = old / self.tab.camera.zoom;
+                self.tab.camera.center = Point::new(
+                    at.x + (self.tab.camera.center.x - at.x) * ratio,
+                    at.y + (self.tab.camera.center.y - at.y) * ratio,
                 );
             }
             Edit::PlaneBond(start, end) => {
@@ -2718,10 +2641,11 @@ impl App {
                 } else {
                     "C"
                 };
-                match reshiki::projection::growth::place(&self.doc, start, end, element, preset) {
+                match reshiki::projection::growth::place(&self.tab.doc, start, end, element, preset)
+                {
                     Ok((doc, id)) => {
-                        self.doc = doc;
-                        self.selected = vec![id];
+                        self.tab.doc = doc;
+                        self.tab.selected = vec![id];
                     }
                     Err(error) => {
                         self.status = error;
@@ -2732,9 +2656,9 @@ impl App {
             }
             Edit::Bond(start, end, a, b) => {
                 if self.tool.bond_preset() == Some(reshiki::bonds::BondPreset::Dotted)
-                    && !a
-                        .zip(b)
-                        .is_some_and(|(a, b)| reshiki::bonds::hydrogen_endpoints(&self.doc, a, b))
+                    && !a.zip(b).is_some_and(|(a, b)| {
+                        reshiki::bonds::hydrogen_endpoints(&self.tab.doc, a, b)
+                    })
                 {
                     self.status =
                         "Drag from a bonded explicit H to an existing N, O, F or S acceptor".into();
@@ -2745,12 +2669,12 @@ impl App {
                     let result = a
                         .ok_or_else(|| "Start the drag on an existing atom".to_string())
                         .and_then(|id| {
-                            editing::add_bonded_atom(&self.doc, id, end, b, &self.element)
+                            editing::add_bonded_atom(&self.tab.doc, id, end, b, &self.element)
                         });
                     match result {
                         Ok((doc, id)) => {
-                            self.doc = doc;
-                            self.selected = vec![id];
+                            self.tab.doc = doc;
+                            self.tab.selected = vec![id];
                         }
                         Err(error) => {
                             self.status = error;
@@ -2761,24 +2685,24 @@ impl App {
                 } else if self.tool == Tool::Arrow {
                     self.place_arrow(start, end);
                 } else {
-                    let a = a.unwrap_or_else(|| self.doc.add_atom("C", start));
-                    let b = b.unwrap_or_else(|| self.doc.add_atom("C", end));
+                    let a = a.unwrap_or_else(|| self.tab.doc.add_atom("C", start));
+                    let b = b.unwrap_or_else(|| self.tab.doc.add_atom("C", end));
                     if let Some(preset) = self.tool.bond_preset() {
-                        preset.place(&mut self.doc, a, b);
+                        preset.place(&mut self.tab.doc, a, b);
                     } else {
                         let (order, display) = self.bond_style();
-                        self.doc.add_bond(a, b, order, display);
+                        self.tab.doc.add_bond(a, b, order, display);
                     }
-                    self.selected = vec![b];
+                    self.tab.selected = vec![b];
                 }
             }
             Edit::Click(p) => {
-                let hit = canvas::hit_object(&self.doc, p, 10.0 / self.camera.zoom);
+                let hit = canvas::hit_object(&self.tab.doc, p, 10.0 / self.tab.camera.zoom);
                 match self.tool {
                     Tool::Atom => {
-                        if let Some(id) = self.doc.nearest(p, 10.0 / self.camera.zoom) {
-                            self.doc.invalidate_chemistry(&[id]);
-                            if let Some(a) = self.doc.atom_mut(id) {
+                        if let Some(id) = self.tab.doc.nearest(p, 10.0 / self.tab.camera.zoom) {
+                            self.tab.doc.invalidate_chemistry(&[id]);
+                            if let Some(a) = self.tab.doc.atom_mut(id) {
                                 a.element = self.element.clone();
                                 a.display.variable = None;
                                 a.explicit_h = 0;
@@ -2786,10 +2710,10 @@ impl App {
                                 a.charge = 0;
                                 a.isotope = 0;
                             }
-                            self.selected = vec![id];
+                            self.tab.selected = vec![id];
                         } else {
-                            let id = self.doc.add_atom(&self.element, p);
-                            self.selected = vec![id];
+                            let id = self.tab.doc.add_atom(&self.element, p);
+                            self.tab.selected = vec![id];
                         }
                     }
                     tool if tool.bond_preset() == Some(reshiki::bonds::BondPreset::Dotted) => {
@@ -2799,20 +2723,23 @@ impl App {
                         return;
                     }
                     Tool::Bond(_) | Tool::StyledBond(_) | Tool::Wedge | Tool::Hash | Tool::Wavy => {
-                        let atom = self.doc.nearest(p, 10.0 / self.camera.zoom);
-                        let bond =
-                            self.doc
-                                .bonds
-                                .iter()
-                                .find(|b| {
-                                    self.doc.atom(b.a).zip(self.doc.atom(b.b)).is_some_and(
-                                        |(a, z)| {
-                                            canvas::distance_to_segment(p, a.position, z.position)
-                                                < 7.0 / self.camera.zoom
-                                        },
-                                    )
-                                })
-                                .cloned();
+                        let atom = self.tab.doc.nearest(p, 10.0 / self.tab.camera.zoom);
+                        let bond = self
+                            .tab
+                            .doc
+                            .bonds
+                            .iter()
+                            .find(|b| {
+                                self.tab
+                                    .doc
+                                    .atom(b.a)
+                                    .zip(self.tab.doc.atom(b.b))
+                                    .is_some_and(|(a, z)| {
+                                        canvas::distance_to_segment(p, a.position, z.position)
+                                            < 7.0 / self.tab.camera.zoom
+                                    })
+                            })
+                            .cloned();
                         if let Some(b) = bond.filter(|_| atom.is_none()) {
                             let shift_double = self.tool.bond_preset().is_some_and(|preset| {
                                 use reshiki::bonds::BondPreset as P;
@@ -2823,9 +2750,10 @@ impl App {
                             });
                             if shift_double {
                                 let position =
-                                    reshiki::scene::effective_double_position(&self.doc, &b)
+                                    reshiki::scene::effective_double_position(&self.tab.doc, &b)
                                         .cycled();
                                 if let Some(bond) = self
+                                    .tab
                                     .doc
                                     .bonds
                                     .iter_mut()
@@ -2833,7 +2761,7 @@ impl App {
                                 {
                                     bond.double_position = position;
                                 }
-                                self.selected = vec![b.a, b.b];
+                                self.tab.selected = vec![b.a, b.b];
                                 self.changed(before);
                                 self.status = format!(
                                     "Double bond: {position} · Click again to shift its lines"
@@ -2872,13 +2800,14 @@ impl App {
                                 .bond_preset()
                                 .filter(|p| p.preserves_chemistry(&b))
                             {
-                                preset.place(&mut self.doc, b.a, b.b);
+                                preset.place(&mut self.tab.doc, b.a, b.b);
                             } else {
-                                self.doc.add_bond(b.a, b.b, order, display);
+                                self.tab.doc.add_bond(b.a, b.b, order, display);
                                 self.apply_current_bond_preset(b.a, b.b);
                             }
                             if reverse
                                 && let Some(bond) = self
+                                    .tab
                                     .doc
                                     .bonds
                                     .iter_mut()
@@ -2886,29 +2815,33 @@ impl App {
                             {
                                 bond.reverse();
                             }
-                            self.selected = vec![b.a, b.b];
+                            self.tab.selected = vec![b.a, b.b];
                         } else {
                             let (order, display) = self.bond_style();
-                            let a = atom.unwrap_or_else(|| self.doc.add_atom("C", p));
-                            let Some(start) = self.doc.atom(a).map(|a| a.position) else {
+                            let a = atom.unwrap_or_else(|| self.tab.doc.add_atom("C", p));
+                            let Some(start) = self.tab.doc.atom(a).map(|a| a.position) else {
                                 self.status = "The bond's starting atom is unavailable".into();
                                 self.error = true;
                                 return;
                             };
                             if let Some(endpoint) =
-                                reshiki::projection::growth::Plane::at(&self.doc, a)
-                                    .and_then(|plane| plane.outward(self.bond_drawing.length))
+                                reshiki::projection::growth::Plane::at(&self.tab.doc, a)
+                                    .and_then(|plane| plane.outward(self.tab.bond_drawing.length))
                             {
                                 let preset = self
                                     .tool
                                     .bond_preset()
                                     .unwrap_or(reshiki::bonds::BondPreset::Single);
                                 match reshiki::projection::growth::place(
-                                    &self.doc, a, endpoint, "C", preset,
+                                    &self.tab.doc,
+                                    a,
+                                    endpoint,
+                                    "C",
+                                    preset,
                                 ) {
                                     Ok((doc, id)) => {
-                                        self.doc = doc;
-                                        self.selected = vec![id];
+                                        self.tab.doc = doc;
+                                        self.tab.selected = vec![id];
                                     }
                                     Err(error) => {
                                         self.status = error;
@@ -2917,15 +2850,16 @@ impl App {
                                     }
                                 }
                             } else {
-                                let end = editing::bond_extension(&self.doc, start, Some(a), order);
-                                let ratio = self.bond_drawing.length
+                                let end =
+                                    editing::bond_extension(&self.tab.doc, start, Some(a), order);
+                                let ratio = self.tab.bond_drawing.length
                                     / reshiki::style::DEFAULT.bond_length_world;
                                 let end = start
                                     .offset((end.x - start.x) * ratio, (end.y - start.y) * ratio);
-                                let b = self.doc.add_atom("C", end);
-                                self.doc.add_bond(a, b, order, display);
+                                let b = self.tab.doc.add_atom("C", end);
+                                self.tab.doc.add_bond(a, b, order, display);
                                 self.apply_current_bond_preset(a, b);
-                                self.selected = vec![b];
+                                self.tab.selected = vec![b];
                             }
                         }
                     }
@@ -2934,79 +2868,81 @@ impl App {
                     }
                     Tool::Text => {
                         if let Some(label) =
-                            hit.filter(|id| self.doc.annotations.iter().any(|a| a.id == *id))
+                            hit.filter(|id| self.tab.doc.annotations.iter().any(|a| a.id == *id))
                         {
-                            self.selected = vec![label];
+                            self.tab.selected = vec![label];
                             self.sync_typography();
                             return;
                         }
-                        if !self.caption.trim().is_empty() {
-                            let id = self.doc.next_id();
-                            self.doc.annotations.push(Annotation {
+                        if !self.tab.caption.trim().is_empty() {
+                            let id = self.tab.doc.next_id();
+                            self.tab.doc.annotations.push(Annotation {
                                 id,
                                 position: p,
-                                text: self.caption.clone(),
-                                format: self.caption_format.clone(),
+                                text: self.tab.caption.clone(),
+                                format: self.tab.caption_format.clone(),
                             });
-                            self.selected = vec![id];
-                            self.caption_target = Some(id);
+                            self.tab.selected = vec![id];
+                            self.tab.caption_target = Some(id);
                             self.tool = Tool::Select;
                         }
                     }
                     Tool::Arrow => {
                         if let Some(id) =
-                            hit.filter(|id| self.doc.arrows.iter().any(|a| a.id == *id))
+                            hit.filter(|id| self.tab.doc.arrows.iter().any(|a| a.id == *id))
                         {
                             self.apply_arrow_tool(id);
                         } else {
-                            let length = self.doc.drawing_style.bond_length_world * 2.;
+                            let length = self.tab.doc.drawing_style.bond_length_world * 2.;
                             self.place_arrow(p, p.offset(length, 0.));
                         }
                     }
                     Tool::Erase => {
-                        reshiki::erasing::stroke(&mut self.doc, p, p, 7. / self.camera.zoom)
+                        reshiki::erasing::stroke(&mut self.tab.doc, p, p, 7. / self.tab.camera.zoom)
                     }
-                    _ => self.selected = hit.into_iter().collect(),
+                    _ => self.tab.selected = hit.into_iter().collect(),
                 }
             }
         }
         self.changed(before);
     }
     fn place_arrow(&mut self, start: Point, end: Point) {
-        let id = self.doc.next_id();
-        self.doc.arrows.push(Arrow::new(
+        let id = self.tab.doc.next_id();
+        self.tab.doc.arrows.push(Arrow::new(
             id,
             start,
             end,
-            self.arrow_style,
-            self.arrows.style.clone(),
+            self.tab.arrow_style,
+            self.tab.arrows.style.clone(),
         ));
-        self.selected = vec![id];
+        self.tab.selected = vec![id];
     }
     fn erase_segment(&mut self, from: Point, to: Point) {
-        let before = self.doc.clone();
-        reshiki::erasing::stroke(&mut self.doc, from, to, 7. / self.camera.zoom);
-        if self.doc != before {
-            self.selected.clear();
-            let revision = self.revision;
-            self.changed_continuing(before, self.erase_committed);
-            self.erase_committed |= self.revision != revision;
+        let before = self.tab.doc.clone();
+        reshiki::erasing::stroke(&mut self.tab.doc, from, to, 7. / self.tab.camera.zoom);
+        if self.tab.doc != before {
+            self.tab.selected.clear();
+            let revision = self.tab.revision;
+            self.changed_continuing(before, self.tab.erase_committed);
+            self.tab.erase_committed |= self.tab.revision != revision;
         }
     }
     fn sync_bonds(&mut self) {
         if let Some(b) = self
+            .tab
             .doc
             .bonds
             .iter()
-            .find(|b| self.selected.contains(&b.a) && self.selected.contains(&b.b))
+            .find(|b| self.tab.selected.contains(&b.a) && self.tab.selected.contains(&b.b))
         {
-            self.bond_color_input =
-                reshiki::palette::hex(reshiki::palette::Palette::of(&self.doc).rgb(b.color));
+            self.tab.bond_color_input =
+                reshiki::palette::hex(reshiki::palette::Palette::of(&self.tab.doc).rgb(b.color));
         }
     }
     fn apply_current_bond_preset(&mut self, a: u64, b: u64) {
         if let Tool::StyledBond(preset) = self.tool
             && let Some(bond) = self
+                .tab
                 .doc
                 .bonds
                 .iter_mut()
@@ -3148,8 +3084,8 @@ mod tests {
     #[test]
     fn atom_drag_and_click_are_separate_undoable_actions() -> Result<(), String> {
         let (mut app, _) = App::new();
-        let source = app.doc.add_atom("C", Point::default());
-        let initial = app.doc.clone();
+        let source = app.tab.doc.add_atom("C", Point::default());
+        let initial = app.tab.doc.clone();
         app.tool = Tool::Atom;
         app.element = "O".into();
         app.edit(Edit::Bond(
@@ -3158,16 +3094,16 @@ mod tests {
             Some(source),
             None,
         ));
-        assert_eq!(app.doc.atoms.len(), 2);
-        assert_eq!(app.doc.atom(source).ok_or("Source")?.element, "C");
-        assert_eq!(app.doc.atoms.last().ok_or("Oxygen")?.element, "O");
+        assert_eq!(app.tab.doc.atoms.len(), 2);
+        assert_eq!(app.tab.doc.atom(source).ok_or("Source")?.element, "C");
+        assert_eq!(app.tab.doc.atoms.last().ok_or("Oxygen")?.element, "O");
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, initial);
+        assert_eq!(app.tab.doc, initial);
         app.edit(Edit::Click(Point::default()));
-        assert_eq!(app.doc.atoms.len(), 1);
-        assert_eq!(app.doc.atom(source).ok_or("Replacement")?.element, "O");
+        assert_eq!(app.tab.doc.atoms.len(), 1);
+        assert_eq!(app.tab.doc.atom(source).ok_or("Replacement")?.element, "O");
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, initial);
+        assert_eq!(app.tab.doc, initial);
         Ok(())
     }
 
@@ -3184,8 +3120,8 @@ mod tests {
         };
         for preset in [Preset::HaworthFive, Preset::HaworthSix] {
             let (mut app, _) = App::new();
-            app.doc = Document::default();
-            let before = app.doc.clone();
+            app.tab.doc = Document::default();
+            let before = app.tab.doc.clone();
             app.edit(Edit::RingPreset(
                 preset,
                 Point::default(),
@@ -3194,40 +3130,40 @@ mod tests {
                 false,
             ));
             assert!(!app.error, "{}", app.status);
-            let placed = app.doc.clone();
+            let placed = app.tab.doc.clone();
             assert!(placed.bonds.iter().all(|b| b.projection));
             let _ = app.update(Message::Undo);
-            assert_eq!(app.doc, before);
+            assert_eq!(app.tab.doc, before);
             let _ = app.update(Message::Redo);
-            assert_eq!(app.doc, placed);
+            assert_eq!(app.tab.doc, placed);
         }
         for preset in [P::Wedge, P::HashedWedge, P::Bold, P::Single] {
             let (mut app, _) = App::new();
-            app.doc =
+            app.tab.doc =
                 sugar_document(Sugar::Glucose, Anomer::Alpha, 42.).map_err(anyhow::Error::msg)?;
-            app.doc.reconcile_molecule_groups();
-            let source = app.doc.clone();
+            app.tab.doc.reconcile_molecule_groups();
+            let source = app.tab.doc.clone();
             let bond = source
                 .bonds
                 .iter()
                 .find(|b| b.display == "bold")
                 .context("Front edge")?;
-            app.selected = vec![bond.a, bond.b];
+            app.tab.selected = vec![bond.a, bond.b];
             let _ = app.update(Message::ApplyBondPreset(preset));
             assert!(!app.error, "{}", app.status);
-            assert_eq!(app.doc.atoms, source.atoms);
-            assert!(!chemistry_changed(&source, &app.doc));
-            if app.doc != source {
+            assert_eq!(app.tab.doc.atoms, source.atoms);
+            assert!(!chemistry_changed(&source, &app.tab.doc));
+            if app.tab.doc != source {
                 let _ = app.update(Message::Undo);
-                assert_eq!(app.doc, source);
+                assert_eq!(app.tab.doc, source);
             }
             let a = source.atom(bond.a).context("Front atom")?.position;
             let b = source.atom(bond.b).context("Front atom")?.position;
             app.tool = Tool::StyledBond(preset);
             app.edit(Edit::Click(Point::new((a.x + b.x) / 2., (a.y + b.y) / 2.)));
             assert!(!app.error, "{}", app.status);
-            assert_eq!(app.doc.atoms, source.atoms);
-            assert!(!chemistry_changed(&source, &app.doc));
+            assert_eq!(app.tab.doc.atoms, source.atoms);
+            assert!(!chemistry_changed(&source, &app.tab.doc));
         }
         Ok(())
     }
@@ -3235,7 +3171,7 @@ mod tests {
     #[test]
     fn inspector_changes_reset_scrolling_but_normal_updates_keep_the_position() {
         let (mut app, _) = App::new();
-        app.busy = false;
+        app.tab.busy = false;
         assert_eq!(app.inspector_tab, InspectorTab::Properties);
         // Reaction handlers previously bypassed the normal tab navigation task.
         let task = app.update(Message::Reaction(reactions::Action::Open));
@@ -3256,7 +3192,7 @@ mod tests {
     #[test]
     fn idle_windows_stop_polling_and_pending_work_restarts_timers() -> Result<(), String> {
         let (mut app, _) = App::new();
-        app.busy = false;
+        app.tab.busy = false;
         let idle = subscriptions(&app);
         // Window close and keyboard/mouse events, plus the event-driven
         // Finder receiver on macOS. None of these schedules a polling timer.
@@ -3264,31 +3200,32 @@ mod tests {
         app.assistant.busy = true;
         assert_eq!(subscriptions(&app), idle + 1);
         app.assistant.busy = false;
-        app.labels_dirty = true;
+        app.tab.labels_dirty = true;
         assert_eq!(subscriptions(&app), idle); // Labels use a task, not a polling timer.
-        app.busy = true;
+        app.tab.busy = true;
         assert_eq!(subscriptions(&app), idle);
-        app.busy = false;
-        app.labels_dirty = false;
+        app.tab.busy = false;
+        app.tab.labels_dirty = false;
 
         let directory = tempfile::tempdir().map_err(|e| e.to_string())?;
-        app.recovery = Some(Recovery::in_directory(directory.path())?);
+        app.tab.recovery = Some(Recovery::in_directory(directory.path())?);
         app.inspector_open = false;
         assert_eq!(subscriptions(&app), idle);
-        app.doc.add_atom("O", Point::default());
+        app.tab.doc.add_atom("O", Point::default());
         assert_eq!(subscriptions(&app), idle + 1);
         let _ = app.update(Message::Tick);
         assert_eq!(subscriptions(&app), idle);
         autosave::tests::finish_pending(&mut app);
         assert_eq!(subscriptions(&app), idle);
         let path = app
+            .tab
             .recovery
             .as_ref()
             .ok_or("Missing recovery")?
             .session
             .clone();
         assert!(path.exists());
-        app.saved = app.doc.clone();
+        app.tab.saved = app.tab.doc.clone();
         assert_eq!(subscriptions(&app), idle + 1);
         let _ = app.update(Message::Tick);
         autosave::tests::finish_pending(&mut app);
@@ -3323,7 +3260,7 @@ mod tests {
     }
 
     fn checked_labels(app: &mut App) {
-        let mut checked = app.doc.clone();
+        let mut checked = app.tab.doc.clone();
         for atom in &mut checked.atoms {
             atom.label_h = 2;
         }
@@ -3332,7 +3269,7 @@ mod tests {
             bond.order = 4;
         }
         let _ = app.update(Message::EngineDone {
-            revision: app.revision,
+            revision: app.tab.revision,
             kind: Job::Analyze,
             result: Box::new(Ok(Response {
                 document: Some(checked),
@@ -3348,46 +3285,46 @@ mod tests {
     fn double_tool_cycles_only_line_position_and_preserves_chemistry() {
         use reshiki::bonds::DoublePosition as P;
         let (mut app, _) = App::new();
-        app.busy = false;
+        app.tab.busy = false;
         app.tool = Tool::Bond(2);
-        let c = app.doc.add_atom("C", Point::default());
-        let o = app.doc.add_atom("O", Point::new(0., -42.));
-        let methyl = app.doc.add_atom("C", Point::new(36.373, 21.));
-        app.doc.add_bond(c, o, 2, "plain");
-        app.doc.add_bond(c, methyl, 1, "plain");
-        app.doc.bonds[0].color = reshiki::palette::Color::Custom([32, 80, 145]);
-        app.doc.atom_mut(c).unwrap().label_h = 1;
-        let original = app.doc.clone();
+        let c = app.tab.doc.add_atom("C", Point::default());
+        let o = app.tab.doc.add_atom("O", Point::new(0., -42.));
+        let methyl = app.tab.doc.add_atom("C", Point::new(36.373, 21.));
+        app.tab.doc.add_bond(c, o, 2, "plain");
+        app.tab.doc.add_bond(c, methyl, 1, "plain");
+        app.tab.doc.bonds[0].color = reshiki::palette::Color::Custom([32, 80, 145]);
+        app.tab.doc.atom_mut(c).unwrap().label_h = 1;
+        let original = app.tab.doc.clone();
         let mut scenes = std::collections::BTreeSet::new();
         for position in [P::Left, P::Right, P::Center] {
             app.edit(Edit::Click(Point::new(0., -21.)));
             let mut expected = original.clone();
             expected.bonds[0].double_position = position;
-            assert_eq!(app.doc, expected);
-            assert!(!chemistry_changed(&original, &app.doc));
-            scenes.insert(reshiki::scene::svg(&app.doc));
+            assert_eq!(app.tab.doc, expected);
+            assert!(!chemistry_changed(&original, &app.tab.doc));
+            scenes.insert(reshiki::scene::svg(&app.tab.doc));
         }
         assert_eq!(scenes.len(), 3);
         for _ in 0..3 {
             let _ = app.update(Message::Undo);
         }
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc.bonds[0].double_position, P::Left);
-        app.doc.bonds[0].order = 1;
+        assert_eq!(app.tab.doc.bonds[0].double_position, P::Left);
+        app.tab.doc.bonds[0].order = 1;
         app.edit(Edit::Click(Point::new(0., -21.)));
-        assert_eq!(app.doc.bonds[0].order, 2);
+        assert_eq!(app.tab.doc.bonds[0].order, 2);
     }
 
     #[test]
     fn cancelling_a_running_cleanup_refresh_prevents_late_preview_or_apply() {
         let (mut app, _) = App::new();
-        app.busy = false;
-        let a = app.doc.add_atom("C", Point::default());
-        let b = app.doc.add_atom("C", Point::new(80., 0.));
-        app.doc.add_bond(a, b, 1, "plain");
-        app.selected = vec![b];
-        let original = app.doc.clone();
+        app.tab.busy = false;
+        let a = app.tab.doc.add_atom("C", Point::default());
+        let b = app.tab.doc.add_atom("C", Point::new(80., 0.));
+        app.tab.doc.add_bond(a, b, 1, "plain");
+        app.tab.selected = vec![b];
+        let original = app.tab.doc.clone();
         let _ = app.update(Message::Clean);
         let job = cleanup::CleanupJob {
             options: reshiki::cleanup::Options {
@@ -3395,8 +3332,8 @@ mod tests {
                 ..Default::default()
             },
             selection: vec![b],
-            serial: app.cleanup_serial,
-            epoch: app.file_epoch,
+            serial: app.tab.cleanup_serial,
+            epoch: app.tab.file_epoch,
         };
         let response = || {
             Box::new(Ok(Response {
@@ -3408,68 +3345,68 @@ mod tests {
             }))
         };
         let _ = app.update(Message::EngineDone {
-            revision: app.revision,
+            revision: app.tab.revision,
             kind: Job::Clean(job.clone()),
             result: response(),
         });
         assert_eq!(
-            app.cleanup.as_ref().unwrap().job.options.scope,
+            app.tab.cleanup.as_ref().unwrap().job.options.scope,
             reshiki::cleanup::Scope::SelectedAtoms
         );
         let _ = app.update(Message::CleanupScope(
             reshiki::cleanup::Scope::SelectedMolecules,
         ));
-        assert!(app.busy);
+        assert!(app.tab.busy);
         let mut pending = job;
-        pending.serial = app.cleanup_serial;
+        pending.serial = app.tab.cleanup_serial;
         let _ = app.update(Message::ApplyCleanup);
-        assert_eq!(app.doc, original);
-        assert!(app.cleanup.is_some());
+        assert_eq!(app.tab.doc, original);
+        assert!(app.tab.cleanup.is_some());
         let _ = app.update(Message::CancelCleanup);
         let _ = app.update(Message::EngineDone {
-            revision: app.revision,
+            revision: app.tab.revision,
             kind: Job::Clean(pending),
             result: response(),
         });
-        assert!(app.cleanup.is_none());
-        assert_eq!(app.doc, original);
-        assert!(!app.history.can_undo());
+        assert!(app.tab.cleanup.is_none());
+        assert_eq!(app.tab.doc, original);
+        assert!(!app.tab.history.can_undo());
     }
 
     #[test]
     fn abbreviation_display_changes_are_unsaved_and_undoable() {
         let (mut app, _) = App::new();
-        app.busy = false;
-        let a = app.doc.add_atom("C", Point::default());
-        let b = app.doc.add_atom("O", Point::new(42., 0.));
-        let c = app.doc.add_atom("C", Point::new(63., 36.));
-        app.doc.add_bond(a, b, 1, "plain");
-        app.doc.add_bond(b, c, 1, "plain");
-        app.doc.contract(&[b, c], "OMe", "MeO").unwrap();
-        app.saved = app.doc.clone();
-        let saved = app.doc.clone();
+        app.tab.busy = false;
+        let a = app.tab.doc.add_atom("C", Point::default());
+        let b = app.tab.doc.add_atom("O", Point::new(42., 0.));
+        let c = app.tab.doc.add_atom("C", Point::new(63., 36.));
+        app.tab.doc.add_bond(a, b, 1, "plain");
+        app.tab.doc.add_bond(b, c, 1, "plain");
+        app.tab.doc.contract(&[b, c], "OMe", "MeO").unwrap();
+        app.tab.saved = app.tab.doc.clone();
+        let saved = app.tab.doc.clone();
         let _ = app.update(Message::Abbreviations(abbreviations::Action::ExpandAll));
         assert!(app.dirty());
         assert!(app.title().contains('•'));
-        assert!(app.doc.abbreviations.is_empty());
+        assert!(app.tab.doc.abbreviations.is_empty());
         let _ = app.update(Message::Undo);
         assert!(!app.dirty());
-        assert_eq!(app.doc, saved);
+        assert_eq!(app.tab.doc, saved);
         let _ = app.update(Message::Redo);
         assert!(app.dirty());
-        assert!(app.doc.abbreviations.is_empty());
+        assert!(app.tab.doc.abbreviations.is_empty());
     }
 
     #[test]
     fn cleanup_requires_apply_can_cancel_and_rejects_stale_results() {
         let (mut app, _) = App::new();
-        app.busy = false;
-        let a = app.doc.add_atom("C", Point::default());
-        let b = app.doc.add_atom("O", Point::new(70., 12.));
-        app.doc.add_bond(a, b, 1, "plain");
-        app.saved = app.doc.clone();
-        app.selected = vec![a, b];
-        let original = app.doc.clone();
+        app.tab.busy = false;
+        let a = app.tab.doc.add_atom("C", Point::default());
+        let b = app.tab.doc.add_atom("O", Point::new(70., 12.));
+        app.tab.doc.add_bond(a, b, 1, "plain");
+        app.tab.saved = app.tab.doc.clone();
+        app.tab.selected = vec![a, b];
+        let original = app.tab.doc.clone();
         let mut cleaned = original.clone();
         cleaned.atom_mut(b).unwrap().position = Point::new(42., 0.);
         let response = || {
@@ -3482,53 +3419,53 @@ mod tests {
             }))
         };
         let _ = app.update(Message::EngineDone {
-            revision: app.revision,
+            revision: app.tab.revision,
             kind: Job::Clean(cleanup::CleanupJob {
                 options: Default::default(),
                 selection: vec![a, b],
-                serial: app.cleanup_serial,
-                epoch: app.file_epoch,
+                serial: app.tab.cleanup_serial,
+                epoch: app.tab.file_epoch,
             }),
             result: response(),
         });
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
         assert_eq!(app.display_document(), &cleaned);
         assert!(!app.dirty());
         let _ = app.update(Message::Delete);
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
         let _ = app.update(Message::CleanupOriginal(true));
         assert_eq!(app.display_document(), &original);
         let _ = app.update(Message::CancelCleanup);
-        assert_eq!(app.doc, original);
-        assert!(!app.history.can_undo());
+        assert_eq!(app.tab.doc, original);
+        assert!(!app.tab.history.can_undo());
         let _ = app.update(Message::EngineDone {
-            revision: app.revision,
+            revision: app.tab.revision,
             kind: Job::Clean(cleanup::CleanupJob {
                 options: Default::default(),
                 selection: vec![a, b],
-                serial: app.cleanup_serial,
-                epoch: app.file_epoch,
+                serial: app.tab.cleanup_serial,
+                epoch: app.tab.file_epoch,
             }),
             result: response(),
         });
         let _ = app.update(Message::ApplyCleanup);
-        assert_eq!(app.doc, cleaned);
-        assert_eq!(app.selected, vec![a, b]);
+        assert_eq!(app.tab.doc, cleaned);
+        assert_eq!(app.tab.selected, vec![a, b]);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, cleaned);
+        assert_eq!(app.tab.doc, cleaned);
         let _ = app.update(Message::EngineDone {
-            revision: app.revision.wrapping_sub(1),
+            revision: app.tab.revision.wrapping_sub(1),
             kind: Job::Clean(cleanup::CleanupJob {
                 options: Default::default(),
                 selection: vec![a, b],
-                serial: app.cleanup_serial,
-                epoch: app.file_epoch,
+                serial: app.tab.cleanup_serial,
+                epoch: app.tab.file_epoch,
             }),
             result: response(),
         });
-        assert!(app.cleanup.is_none());
+        assert!(app.tab.cleanup.is_none());
     }
 
     #[test]
@@ -3537,15 +3474,16 @@ mod tests {
         use reshiki::atom_labels::{Carbons, Owner};
         let (mut app, _) = App::new();
         let _ = app.perform(Pending::New);
-        let a = app.doc.add_atom("N", Point::default());
-        app.history = History::default();
-        let original = app.doc.clone();
+        let a = app.tab.doc.add_atom("N", Point::default());
+        app.tab.history = History::default();
+        let original = app.tab.doc.clone();
         app.label_action(Action::Number);
-        assert!(!chemistry_changed(&original, &app.doc));
-        let numbered = app.doc.clone();
+        assert!(!chemistry_changed(&original, &app.tab.doc));
+        let numbered = app.tab.doc.clone();
         app.edit(Edit::AtomIndicator(Owner::Number(a), Point::new(20., -30.)));
         assert_eq!(
-            app.doc
+            app.tab
+                .doc
                 .atom(a)
                 .unwrap()
                 .display
@@ -3556,16 +3494,16 @@ mod tests {
             Some(Point::new(20., -30.))
         );
         let _ = app.update(Message::Undo);
-        assert!(same_drawing(&app.doc, &numbered));
+        assert!(same_drawing(&app.tab.doc, &numbered));
         let _ = app.update(Message::Undo);
-        assert!(same_drawing(&app.doc, &original));
+        assert!(same_drawing(&app.tab.doc, &original));
         let _ = app.update(Message::Redo);
-        assert!(same_drawing(&app.doc, &numbered));
+        assert!(same_drawing(&app.tab.doc, &numbered));
         app.label_action(Action::Carbons(Carbons::All));
         app.label_action(Action::Hydrogens(false));
         app.label_action(Action::Stereo(true));
         let _ = app.perform(Pending::New);
-        assert_eq!(app.doc.atom_labels, Default::default());
+        assert_eq!(app.tab.doc.atom_labels, Default::default());
         assert_eq!(app.current_text_style().size_pt, 10.);
         assert_eq!(app.current_text_style().family, "Arial");
     }
@@ -3574,14 +3512,14 @@ mod tests {
     fn invalid_edit_is_rolled_back_without_an_undo_entry() {
         let (mut app, _) = App::new();
         let _ = app.perform(Pending::New);
-        app.doc.add_atom("C", Point::default());
-        app.history = History::default();
-        let before = app.doc.clone();
-        app.doc.atoms[0].position.x = f32::NAN;
+        app.tab.doc.add_atom("C", Point::default());
+        app.tab.history = History::default();
+        let before = app.tab.doc.clone();
+        app.tab.doc.atoms[0].position.x = f32::NAN;
         app.changed(before.clone());
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         assert!(app.error);
-        assert!(!app.history.undo(&mut app.doc));
+        assert!(!app.tab.history.undo(&mut app.tab.doc));
         for color in ["αβγ", "💚AB", "#GG0000", "12345", "1234567"] {
             assert!(graphics::parse_color(color).is_none());
         }
@@ -3599,19 +3537,19 @@ mod tests {
             false,
             false,
         ));
-        let first = app.doc.clone();
-        let selected = app.selected.clone();
-        let revision = app.revision;
+        let first = app.tab.doc.clone();
+        let selected = app.tab.selected.clone();
+        let revision = app.tab.revision;
         checked_labels(&mut app);
-        assert_eq!(app.revision, revision);
-        assert_eq!(app.selected, selected);
-        assert!(same_drawing(&first, &app.doc));
-        assert!(app.doc.atoms.iter().all(|atom| atom.label_h == 2));
-        let checked_first = app.doc.clone();
+        assert_eq!(app.tab.revision, revision);
+        assert_eq!(app.tab.selected, selected);
+        assert!(same_drawing(&first, &app.tab.doc));
+        assert!(app.tab.doc.atoms.iter().all(|atom| atom.label_h == 2));
+        let checked_first = app.tab.doc.clone();
         let _ = app.update(Message::Undo);
-        assert!(app.doc.atoms.is_empty());
+        assert!(app.tab.doc.atoms.is_empty());
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, checked_first);
+        assert_eq!(app.tab.doc, checked_first);
         app.edit(Edit::RingPreset(
             Preset::ChairDown,
             Point::new(300., 0.),
@@ -3619,18 +3557,18 @@ mod tests {
             false,
             false,
         ));
-        let second = app.doc.clone();
+        let second = app.tab.doc.clone();
         let _ = app.update(Message::Undo);
         checked_labels(&mut app);
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, second);
+        assert_eq!(app.tab.doc, second);
     }
 
     #[test]
     fn ring_color_toolbar_changes_only_fills_and_undo_restores_them() -> Result<(), String> {
         let (mut app, _) = App::new();
-        app.selected = editing::ring(&mut app.doc, Point::default(), 6, true, 0.);
-        let original = app.doc.clone();
+        app.tab.selected = editing::ring(&mut app.tab.doc, Point::default(), 6, true, 0.);
+        let original = app.tab.doc.clone();
         let _ = app.update(Message::ColorScope(typography::ColorScope::Rings));
         let tint = reshiki::palette::Color::Palette(
             reshiki::palette::Hue::Blue,
@@ -3639,40 +3577,40 @@ mod tests {
         let _ = app.update(Message::TextStyle(reshiki::typography::StyleChange::Color(
             tint,
         )));
-        assert_eq!(app.doc.ring_fills.len(), 1);
-        assert_eq!(app.doc.atoms, original.atoms);
-        assert_eq!(app.doc.bonds, original.bonds);
+        assert_eq!(app.tab.doc.ring_fills.len(), 1);
+        assert_eq!(app.tab.doc.atoms, original.atoms);
+        assert_eq!(app.tab.doc.bonds, original.bonds);
         assert_eq!(app.current_selection_color(), Some(tint));
         assert!(
-            app.doc.recent_colors.is_empty(),
+            app.tab.doc.recent_colors.is_empty(),
             "palette colors are not recent customs"
         );
-        let colored = app.doc.clone();
+        let colored = app.tab.doc.clone();
         let _ = app.update(Message::ClearRingFill);
-        assert!(app.doc.ring_fills.is_empty());
+        assert!(app.tab.doc.ring_fills.is_empty());
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, colored);
+        assert_eq!(app.tab.doc, colored);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, original);
-        app.doc.validate()?;
+        assert_eq!(app.tab.doc, original);
+        app.tab.doc.validate()?;
         Ok(())
     }
 
     #[test]
     fn custom_ring_hex_is_exact_in_dark_mode_and_undoable() {
         let (mut app, _) = App::new();
-        app.selected = editing::ring(&mut app.doc, Point::default(), 6, false, 0.);
-        app.doc.canvas_theme = reshiki::canvas_theme::CanvasTheme::Dark;
+        app.tab.selected = editing::ring(&mut app.tab.doc, Point::default(), 6, false, 0.);
+        app.tab.doc.canvas_theme = reshiki::canvas_theme::CanvasTheme::Dark;
         let _ = app.update(Message::ColorScope(typography::ColorScope::Rings));
-        let original = app.doc.clone();
+        let original = app.tab.doc.clone();
         let _ = app.update(Message::TextColor("#C9E0F8".into()));
         let _ = app.update(Message::ApplyTextColor);
-        let fill = app.doc.ring_fills.first().unwrap();
+        let fill = app.tab.doc.ring_fills.first().unwrap();
         assert_eq!(fill.color, reshiki::palette::Color::Custom([201, 224, 248]));
-        assert_eq!(app.doc.recent_colors, [[201, 224, 248]]);
-        assert_eq!(app.text_color_input, "#C9E0F8");
+        assert_eq!(app.tab.doc.recent_colors, [[201, 224, 248]]);
+        assert_eq!(app.tab.text_color_input, "#C9E0F8");
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
     }
 
     #[test]
@@ -3680,16 +3618,16 @@ mod tests {
         use reshiki::rings::Preset;
         let (mut app, _) = App::new();
         let _ = app.perform(Pending::New);
-        app.doc = Preset::ChairUp.document(42., false);
-        app.saved = app.doc.clone();
+        app.tab.doc = Preset::ChairUp.document(42., false);
+        app.tab.saved = app.tab.doc.clone();
         checked_labels(&mut app);
         assert!(!app.dirty());
-        assert!(!app.history.can_undo());
-        assert_ne!(app.doc, app.saved);
-        app.doc.atoms[0].charge = 1;
+        assert!(!app.tab.history.can_undo());
+        assert_ne!(app.tab.doc, app.tab.saved);
+        app.tab.doc.atoms[0].charge = 1;
         assert!(app.dirty());
-        app.doc = app.saved.clone();
-        app.doc.atoms[0].position.x += 1.;
+        app.tab.doc = app.tab.saved.clone();
+        app.tab.doc.atoms[0].position.x += 1.;
         assert!(app.dirty());
     }
 
@@ -3697,33 +3635,33 @@ mod tests {
     fn circle_palette_and_modifier_share_atomic_attachment_and_history() {
         for modifier in [false, true] {
             let (mut app, _) = App::new();
-            app.doc = reshiki::rings::Preset::Benzene.document(42., false);
+            app.tab.doc = reshiki::rings::Preset::Benzene.document(42., false);
             app.aromatic_ring = true;
             app.ring_size = 6;
-            let anchor = app.doc.atoms[0].position;
+            let anchor = app.tab.doc.atoms[0].position;
             let edit = if modifier {
                 Edit::DelocalizedRing(anchor, None, 6)
             } else {
                 Edit::Ring(anchor, None)
             };
-            let original = app.doc.clone();
+            let original = app.tab.doc.clone();
             app.edit(edit.clone());
             assert!(!app.error, "{}", app.status);
-            assert_eq!((app.doc.atoms.len(), app.doc.bonds.len()), (12, 13));
-            assert!(!reshiki::aromatic::circles(&app.doc).is_empty());
-            reshiki::chemistry::document::prepare(&app.doc).unwrap();
-            let placed = app.doc.clone();
-            let selected = app.selected.clone();
-            let revision = app.revision;
+            assert_eq!((app.tab.doc.atoms.len(), app.tab.doc.bonds.len()), (12, 13));
+            assert!(!reshiki::aromatic::circles(&app.tab.doc).is_empty());
+            reshiki::chemistry::document::prepare(&app.tab.doc).unwrap();
+            let placed = app.tab.doc.clone();
+            let selected = app.tab.selected.clone();
+            let revision = app.tab.revision;
             app.edit(edit); // The same host carbon has no remaining valence.
             assert!(app.error);
-            assert_eq!(app.doc, placed);
-            assert_eq!(app.selected, selected);
-            assert_eq!(app.revision, revision);
+            assert_eq!(app.tab.doc, placed);
+            assert_eq!(app.tab.selected, selected);
+            assert_eq!(app.tab.revision, revision);
             let _ = app.update(Message::Undo);
-            assert_eq!(app.doc, original);
+            assert_eq!(app.tab.doc, original);
             let _ = app.update(Message::Redo);
-            assert_eq!(app.doc, placed);
+            assert_eq!(app.tab.doc, placed);
         }
     }
 
@@ -3735,66 +3673,66 @@ mod tests {
             app.tool = Tool::Ring;
             app.aromatic_ring = false;
             app.ring_size = 6;
-            let carbon = app.doc.add_atom("C", Point::default());
-            app.doc.atom_mut(carbon).unwrap().explicit_h = 4;
-            let original = app.doc.clone();
+            let carbon = app.tab.doc.add_atom("C", Point::default());
+            app.tab.doc.atom_mut(carbon).unwrap().explicit_h = 4;
+            let original = app.tab.doc.clone();
             // A valid placement is one history entry; an invalid attempt after
             // Undo must leave that entry available to Redo.
             app.edit(Edit::Ring(Point::new(300., 0.), None));
             assert!(!app.error, "{}", app.status);
-            let placed = app.doc.clone();
+            let placed = app.tab.doc.clone();
             let _ = app.update(Message::Undo);
-            assert_eq!(app.doc, original);
-            app.selected = vec![carbon];
-            let revision = app.revision;
+            assert_eq!(app.tab.doc, original);
+            app.tab.selected = vec![carbon];
+            let revision = app.tab.revision;
             app.edit(if legacy_click {
                 Edit::Click(Point::default())
             } else {
                 Edit::Ring(Point::default(), None)
             });
             assert!(app.error);
-            assert_eq!(app.doc, original);
-            assert_eq!(app.selected, vec![carbon]);
-            assert_eq!(app.revision, revision);
-            assert!(!app.history.can_undo());
-            assert!(app.history.can_redo());
+            assert_eq!(app.tab.doc, original);
+            assert_eq!(app.tab.selected, vec![carbon]);
+            assert_eq!(app.tab.revision, revision);
+            assert!(!app.tab.history.can_undo());
+            assert!(app.tab.history.can_redo());
             let _ = app.update(Message::Redo);
-            assert_eq!(app.doc, placed);
+            assert_eq!(app.tab.doc, placed);
         }
 
         let (mut app, _) = App::new();
         let _ = app.perform(Pending::New);
-        app.doc = reshiki::rings::Preset::Regular.document(42., false);
+        app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
         app.aromatic_ring = false;
         app.ring_size = 6;
-        app.selected = app.doc.all_ids();
-        let original = app.doc.clone();
-        let selected = app.selected.clone();
-        let a = app.doc.atom(app.doc.bonds[0].a).unwrap().position;
-        let b = app.doc.atom(app.doc.bonds[0].b).unwrap().position;
+        app.tab.selected = app.tab.doc.all_ids();
+        let original = app.tab.doc.clone();
+        let selected = app.tab.selected.clone();
+        let a = app.tab.doc.atom(app.tab.doc.bonds[0].a).unwrap().position;
+        let b = app.tab.doc.atom(app.tab.doc.bonds[0].b).unwrap().position;
         let p = Point::new((a.x + b.x) / 2., (a.y + b.y) / 2.);
-        let revision = app.revision;
+        let revision = app.tab.revision;
         app.edit(Edit::Ring(p, Some(Point::default())));
         assert!(app.error);
-        assert_eq!(app.doc, original);
-        assert_eq!(app.selected, selected);
-        assert_eq!(app.revision, revision);
-        assert!(!app.history.can_undo());
+        assert_eq!(app.tab.doc, original);
+        assert_eq!(app.tab.selected, selected);
+        assert_eq!(app.tab.revision, revision);
+        assert!(!app.tab.history.can_undo());
         app.edit(Edit::Ring(p, Some(Point::new(p.x * 2., p.y * 2.))));
-        assert_eq!((app.doc.atoms.len(), app.doc.bonds.len()), (10, 11));
-        let placed = app.doc.clone();
+        assert_eq!((app.tab.doc.atoms.len(), app.tab.doc.bonds.len()), (10, 11));
+        let placed = app.tab.doc.clone();
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, placed);
+        assert_eq!(app.tab.doc, placed);
     }
 
     #[test]
     fn ring_presets_use_atomic_history_and_leave_invalid_hosts_untouched() {
         use reshiki::rings::Preset;
         let (mut app, _) = App::new();
-        app.doc = Document::default();
-        let before = app.doc.clone();
+        app.tab.doc = Document::default();
+        let before = app.tab.doc.clone();
         app.edit(Edit::RingPreset(
             Preset::ChairUp,
             Point::default(),
@@ -3802,12 +3740,12 @@ mod tests {
             false,
             false,
         ));
-        let placed = app.doc.clone();
+        let placed = app.tab.doc.clone();
         assert_eq!(placed.atoms.len(), 6);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, placed);
+        assert_eq!(app.tab.doc, placed);
         app.edit(Edit::RingPreset(
             Preset::ChairDown,
             Point::new(300., 0.),
@@ -3815,16 +3753,16 @@ mod tests {
             false,
             false,
         ));
-        assert_eq!(app.doc.atoms.len(), 12);
+        assert_eq!(app.tab.doc.atoms.len(), 12);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, placed);
+        assert_eq!(app.tab.doc, placed);
         let _ = app.update(Message::Tool(Tool::RingPreset(Preset::ChairUp)));
         let _ = app.perform(Pending::New);
         assert_eq!(app.tool, Tool::Select);
-        assert_eq!(app.bond_drawing.length, 42.);
-        let c = app.doc.add_atom("C", Point::default());
-        app.doc.atom_mut(c).unwrap().radical_electrons = 1;
-        let before = app.doc.clone();
+        assert_eq!(app.tab.bond_drawing.length, 42.);
+        let c = app.tab.doc.add_atom("C", Point::default());
+        app.tab.doc.atom_mut(c).unwrap().radical_electrons = 1;
+        let before = app.tab.doc.clone();
         app.edit(Edit::RingPreset(
             Preset::ChairUp,
             Point::default(),
@@ -3832,7 +3770,7 @@ mod tests {
             false,
             false,
         ));
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         assert!(app.error);
     }
 
@@ -3842,7 +3780,7 @@ mod tests {
         use reshiki::graphics::LinePattern;
         for zoom in [0.5, 2.5] {
             let (mut app, _) = App::new();
-            app.camera.zoom = zoom;
+            app.tab.camera.zoom = zoom;
             let style = ArrowStyle {
                 pattern: LinePattern::Dashed,
                 ..ArrowStyle::preset(Preset::Forward)
@@ -3851,34 +3789,34 @@ mod tests {
                 Preset::Forward,
                 style.clone(),
             )));
-            let blank = app.doc.clone();
+            let blank = app.tab.doc.clone();
             let start = Point::new(-100., 30.);
             app.edit(Edit::Click(start));
-            assert_eq!(app.doc.arrows.len(), 1);
-            let arrow = app.doc.arrows[0].clone();
+            assert_eq!(app.tab.doc.arrows.len(), 1);
+            let arrow = app.tab.doc.arrows[0].clone();
             assert_eq!(arrow.start, start);
             assert_eq!(
                 arrow.end,
                 start.offset(blank.drawing_style.bond_length_world * 2., 0.)
             );
             assert_eq!(arrow.appearance(), style);
-            assert_eq!(app.selected, [arrow.id]);
-            let placed = app.doc.clone();
-            app.selected.clear();
+            assert_eq!(app.tab.selected, [arrow.id]);
+            let placed = app.tab.doc.clone();
+            app.tab.selected.clear();
             app.edit(Edit::Click(arrow.point(0.5)));
-            assert_eq!(app.doc.arrows.len(), 1);
-            assert_eq!(app.doc.arrows[0].start, arrow.end);
-            assert_eq!(app.doc.arrows[0].end, arrow.start);
-            assert_eq!(app.selected, [arrow.id]);
-            let reversed = app.doc.clone();
+            assert_eq!(app.tab.doc.arrows.len(), 1);
+            assert_eq!(app.tab.doc.arrows[0].start, arrow.end);
+            assert_eq!(app.tab.doc.arrows[0].end, arrow.start);
+            assert_eq!(app.tab.selected, [arrow.id]);
+            let reversed = app.tab.doc.clone();
             let _ = app.update(Message::Undo);
-            assert_eq!(app.doc, placed);
+            assert_eq!(app.tab.doc, placed);
             let _ = app.update(Message::Undo);
-            assert_eq!(app.doc, blank);
+            assert_eq!(app.tab.doc, blank);
             let _ = app.update(Message::Redo);
-            assert_eq!(app.doc, placed);
+            assert_eq!(app.tab.doc, placed);
             let _ = app.update(Message::Redo);
-            assert_eq!(app.doc, reversed);
+            assert_eq!(app.tab.doc, reversed);
         }
     }
 
@@ -3888,7 +3826,7 @@ mod tests {
         let (mut app, _) = App::new();
         let _ = app.update(Message::Tool(Tool::Arrow));
         app.edit(Edit::Click(Point::default()));
-        let before = app.doc.clone();
+        let before = app.tab.doc.clone();
         let style = ArrowStyle {
             head: Head::Left,
             ..ArrowStyle::default()
@@ -3897,29 +3835,29 @@ mod tests {
             Preset::Forward,
             style.clone(),
         )));
-        let midpoint = app.doc.arrows[0].point(0.5);
+        let midpoint = app.tab.doc.arrows[0].point(0.5);
         app.edit(Edit::Click(midpoint));
-        assert_eq!(app.doc.arrows.len(), 1);
-        assert_eq!(app.doc.arrows[0].appearance(), style);
+        assert_eq!(app.tab.doc.arrows.len(), 1);
+        assert_eq!(app.tab.doc.arrows[0].appearance(), style);
         app.edit(Edit::Click(midpoint));
-        assert_eq!(app.doc.arrows[0].appearance().head, Head::Right);
+        assert_eq!(app.tab.doc.arrows[0].appearance().head, Head::Right);
         app.edit(Edit::Click(midpoint));
-        assert_eq!(app.doc.arrows[0].appearance().head, Head::Left);
+        assert_eq!(app.tab.doc.arrows[0].appearance().head, Head::Left);
         for _ in 0..3 {
             let _ = app.update(Message::Undo);
         }
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
     }
 
     #[test]
     fn repeated_arrow_click_reverses_reaction_roles_and_undo_restores_them() {
         use reshiki::reactions::{Participant, Reaction};
         let (mut app, _) = App::new();
-        let reactant = app.doc.add_atom("O", Point::new(-100., 0.));
-        let product = app.doc.add_atom("N", Point::new(200., 0.));
+        let reactant = app.tab.doc.add_atom("O", Point::new(-100., 0.));
+        let product = app.tab.doc.add_atom("N", Point::new(200., 0.));
         let _ = app.update(Message::Tool(Tool::Arrow));
         app.edit(Edit::Click(Point::default()));
-        let arrow = &app.doc.arrows[0];
+        let arrow = &app.tab.doc.arrows[0];
         let midpoint = arrow.point(0.5);
         let mut reaction = Reaction::new(arrow.id);
         reaction.reactants.push(Participant {
@@ -3930,13 +3868,19 @@ mod tests {
             atoms: vec![product],
             coefficient: 1,
         });
-        app.doc.reactions.push(reaction);
-        let before = app.doc.clone();
+        app.tab.doc.reactions.push(reaction);
+        let before = app.tab.doc.clone();
         app.edit(Edit::Click(midpoint));
-        assert_eq!(app.doc.reactions[0].reactants, before.reactions[0].products);
-        assert_eq!(app.doc.reactions[0].products, before.reactions[0].reactants);
+        assert_eq!(
+            app.tab.doc.reactions[0].reactants,
+            before.reactions[0].products
+        );
+        assert_eq!(
+            app.tab.doc.reactions[0].products,
+            before.reactions[0].reactants
+        );
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
     }
 
     #[test]
@@ -3944,8 +3888,8 @@ mod tests {
         use arrows::{Action, Field};
         use reshiki::arrows::{ArrowStyle, Head, Preset};
         let (mut app, _) = App::new();
-        app.doc = Document::default();
-        app.saved = app.doc.clone();
+        app.tab.doc = Document::default();
+        app.tab.saved = app.tab.doc.clone();
         let _ = app.update(Message::ArrowStyle(Preset::Fishhook));
         app.edit(Edit::Bond(
             Point::new(0., 0.),
@@ -3953,35 +3897,35 @@ mod tests {
             None,
             None,
         ));
-        let id = app.selected[0];
+        let id = app.tab.selected[0];
         app.edit(Edit::ArrowHandle(id, 2, Point::new(60., -50.)));
-        let bent = app.doc.clone();
+        let bent = app.tab.doc.clone();
         app.arrow_action(Action::Number(Field::Line, "1.5".into()));
         app.arrow_action(Action::ApplyNumber(Field::Line));
-        assert_eq!(app.doc.arrows[0].appearance().width_pt, 1.5);
-        assert_eq!(app.doc.arrows[0].control, bent.arrows[0].control);
+        assert_eq!(app.tab.doc.arrows[0].appearance().width_pt, 1.5);
+        assert_eq!(app.tab.doc.arrows[0].control, bent.arrows[0].control);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, bent);
+        assert_eq!(app.tab.doc, bent);
         let _ = app.update(Message::Redo);
-        assert_eq!(app.arrows.style.width_pt, 1.5);
+        assert_eq!(app.tab.arrows.style.width_pt, 1.5);
         app.arrow_action(Action::Tail(Head::Full));
         app.arrow_action(Action::Reverse);
-        assert_eq!(app.doc.arrows[0].end, Point::default());
+        assert_eq!(app.tab.doc.arrows[0].end, Point::default());
         app.arrow_action(Action::Number(Field::Length, "NaN".into()));
-        let before = app.doc.clone();
+        let before = app.tab.doc.clone();
         app.arrow_action(Action::ApplyNumber(Field::Length));
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         assert!(app.error);
         let _ = app.perform(Pending::New);
-        assert_eq!(app.arrows.style, ArrowStyle::default());
-        assert_eq!(app.arrow_style, Preset::Forward);
-        assert_eq!(app.caption_format.style.family, "Arial");
-        assert_eq!(app.caption_format.style.size_pt, 10.);
+        assert_eq!(app.tab.arrows.style, ArrowStyle::default());
+        assert_eq!(app.tab.arrow_style, Preset::Forward);
+        assert_eq!(app.tab.caption_format.style.family, "Arial");
+        assert_eq!(app.tab.caption_format.style.size_pt, 10.);
         assert_eq!(
-            app.bond_drawing.length,
+            app.tab.bond_drawing.length,
             reshiki::style::DEFAULT.bond_length_world
         );
-        assert!(app.doc.arrows.is_empty());
+        assert!(app.tab.doc.arrows.is_empty());
     }
 
     #[test]
@@ -3989,19 +3933,19 @@ mod tests {
         use reshiki::templates::Anchor;
         use template_library::Action as A;
         let (mut app, _) = App::new();
-        let a = app.doc.add_atom("C", Point::default());
-        let b = app.doc.add_atom("O", Point::new(42., 0.));
-        app.doc.add_bond(a, b, 1, "plain");
-        app.selected = vec![a, b];
-        let before = app.doc.clone();
-        let revision = app.revision;
+        let a = app.tab.doc.add_atom("C", Point::default());
+        let b = app.tab.doc.add_atom("O", Point::new(42., 0.));
+        app.tab.doc.add_bond(a, b, 1, "plain");
+        app.tab.selected = vec![a, b];
+        let before = app.tab.doc.clone();
+        let revision = app.tab.revision;
         let _ = app.update(Message::Templates(A::BeginSave));
-        app.selected.clear();
+        app.tab.selected.clear();
         let _ = app.update(Message::Templates(A::Name("Methanol".into())));
         let _ = app.update(Message::Templates(A::SaveDetails));
         assert_eq!(app.templates.library.templates[0].document, before);
-        assert_eq!(app.doc, before);
-        assert_eq!(app.revision, revision);
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.revision, revision);
         let index = app.template_index;
         let _ = app.update(Message::InsertTemplate(index));
         let _ = app.update(Message::Templates(A::Anchor(Anchor::Atom(b))));
@@ -4017,18 +3961,18 @@ mod tests {
         let _ = app.update(Message::Templates(A::Repeat(true)));
         app.edit(Edit::Template(Point::new(250., 100.), None));
         assert_eq!(app.tool, Tool::Template);
-        assert_eq!(app.doc.atoms.len(), 4);
-        assert_eq!(app.doc.atoms[3].position, Point::new(250., 100.));
+        assert_eq!(app.tab.doc.atoms.len(), 4);
+        assert_eq!(app.tab.doc.atoms[3].position, Point::new(250., 100.));
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         let _ = app.update(Message::Templates(A::Remove));
         assert!(app.templates.library.templates.is_empty());
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         let _ = app.update(Message::Templates(A::Restore));
         assert_eq!(app.templates.library.templates.len(), 1);
         assert_eq!(app.templates.library.templates[0].anchor, Anchor::Atom(b));
-        let caption = app.doc.next_id();
-        app.doc.annotations.push(Annotation {
+        let caption = app.tab.doc.next_id();
+        app.tab.doc.annotations.push(Annotation {
             id: caption,
             position: Point::new(0., 60.),
             text: "Label".into(),
@@ -4043,82 +3987,82 @@ mod tests {
     fn attached_marks_are_single_history_edits_and_removal_updates_chemistry() {
         use reshiki::scientific::{MarkKind, SymbolKind};
         let (mut app, _) = App::new();
-        app.doc = Document::default();
-        let id = app.doc.add_atom("N", Point::default());
-        let before = app.doc.clone();
+        app.tab.doc = Document::default();
+        let id = app.tab.doc.add_atom("N", Point::default());
+        let before = app.tab.doc.clone();
         app.tool = Tool::Graphic(reshiki::graphics::GraphicKind::Symbol(
             SymbolKind::CirclePlus,
         ));
         app.edit(Edit::Graphic(Point::default(), Point::default(), false));
-        assert_eq!(app.selected, vec![id]);
-        assert_eq!(app.doc.atoms[0].charge, 1);
-        assert_eq!(app.doc.atoms[0].marks[0].kind, MarkKind::CircledCharge);
-        let attached = app.doc.clone();
+        assert_eq!(app.tab.selected, vec![id]);
+        assert_eq!(app.tab.doc.atoms[0].charge, 1);
+        assert_eq!(app.tab.doc.atoms[0].marks[0].kind, MarkKind::CircledCharge);
+        let attached = app.tab.doc.clone();
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, attached);
+        assert_eq!(app.tab.doc, attached);
         app.edit(Edit::AtomMark(id, 0, Point::new(-30., 20.)));
-        assert_eq!(app.doc.atoms[0].marks[0].offset, Point::new(-30., 20.));
+        assert_eq!(app.tab.doc.atoms[0].marks[0].offset, Point::new(-30., 20.));
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, attached);
+        assert_eq!(app.tab.doc, attached);
         let _ = app.update(Message::RemoveMark(id, 0));
-        assert_eq!(app.doc.atoms[0].charge, 0);
-        assert!(app.doc.atoms[0].marks.is_empty());
+        assert_eq!(app.tab.doc.atoms[0].charge, 0);
+        assert!(app.tab.doc.atoms[0].marks.is_empty());
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, attached);
+        assert_eq!(app.tab.doc, attached);
     }
 
     #[test]
     fn every_new_document_starts_with_jacs_drawing_and_typography_defaults() {
         let (mut app, _) = App::new();
-        app.orbital_phase = reshiki::scientific::Phase::Shaded;
-        app.phase_flipped = true;
-        app.attach_symbols = false;
-        app.graphic_style.width_pt = 3.;
-        app.caption_format.style.family = "Times New Roman".into();
-        app.caption_format.style.size_pt = 18.;
-        app.caption_format.style.color = reshiki::palette::Color::Custom([190, 30, 40]);
-        app.caption_format.style.bold = true;
+        app.tab.orbital_phase = reshiki::scientific::Phase::Shaded;
+        app.tab.phase_flipped = true;
+        app.tab.attach_symbols = false;
+        app.tab.graphic_style.width_pt = 3.;
+        app.tab.caption_format.style.family = "Times New Roman".into();
+        app.tab.caption_format.style.size_pt = 18.;
+        app.tab.caption_format.style.color = reshiki::palette::Color::Custom([190, 30, 40]);
+        app.tab.caption_format.style.bold = true;
         let _ = app.update(Message::DrawingLength("30".into()));
         let _ = app.update(Message::FixedLength(false));
         let _ = app.update(Message::FixedAngles(false));
         let _ = app.update(Message::ChainAngle("90".into()));
         let _ = app.perform(Pending::New);
         assert_eq!(
-            app.caption_format.style,
+            app.tab.caption_format.style,
             reshiki::typography::TextStyle::default()
         );
-        assert_eq!(app.caption_format.style.family, "Arial");
-        assert_eq!(app.font_size_input, "10");
-        assert_eq!(app.text_color_input, "#000000");
-        assert_eq!(app.drawing_length_input, "14.4");
-        assert_eq!(app.bond_drawing.length, 42.);
-        assert_eq!(app.graphic_width_input, "0.6");
-        assert_eq!(app.orbital_phase, reshiki::scientific::Phase::Solid);
-        assert!(!app.phase_flipped && app.attach_symbols);
-        assert_eq!(app.graphic_style.width_pt, 0.6);
-        assert_eq!(app.chain_drawing.angle, 120.);
-        assert!(app.bond_drawing.fixed_angles && app.bond_drawing.fixed_length);
+        assert_eq!(app.tab.caption_format.style.family, "Arial");
+        assert_eq!(app.tab.font_size_input, "10");
+        assert_eq!(app.tab.text_color_input, "#000000");
+        assert_eq!(app.tab.drawing_length_input, "14.4");
+        assert_eq!(app.tab.bond_drawing.length, 42.);
+        assert_eq!(app.tab.graphic_width_input, "0.6");
+        assert_eq!(app.tab.orbital_phase, reshiki::scientific::Phase::Solid);
+        assert!(!app.tab.phase_flipped && app.tab.attach_symbols);
+        assert_eq!(app.tab.graphic_style.width_pt, 0.6);
+        assert_eq!(app.tab.chain_drawing.angle, 120.);
+        assert!(app.tab.bond_drawing.fixed_angles && app.tab.bond_drawing.fixed_length);
         assert_eq!(app.tool, Tool::Select);
     }
 
     #[test]
     fn entire_chain_is_one_history_step_and_draw_settings_do_not_edit_the_document() {
         let (mut app, _) = App::new();
-        app.doc = Document::default();
-        let before = app.doc.clone();
+        app.tab.doc = Document::default();
+        let before = app.tab.doc.clone();
         let _ = app.update(Message::ChainAtoms("8".into()));
         let _ = app.update(Message::DrawingLength("20".into()));
         let _ = app.update(Message::ChainAngle("110".into()));
-        assert_eq!(app.doc, before);
-        assert_eq!(app.revision, 0);
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.revision, 0);
         let points = reshiki::chains::straight(
             Point::default(),
             Point::new(350., 0.),
             false,
-            app.bond_drawing,
-            app.chain_drawing,
+            app.tab.bond_drawing,
+            app.tab.chain_drawing,
             false,
         );
         app.tool = Tool::Chain(reshiki::chains::ChainMode::Straight);
@@ -4127,38 +4071,38 @@ mod tests {
             source: None,
             target: None,
         });
-        assert_eq!((app.doc.atoms.len(), app.doc.bonds.len()), (8, 7));
-        let drawn = app.doc.clone();
+        assert_eq!((app.tab.doc.atoms.len(), app.tab.doc.bonds.len()), (8, 7));
+        let drawn = app.tab.doc.clone();
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, drawn);
+        assert_eq!(app.tab.doc, drawn);
         app.edit(Edit::Chain {
             points: vec![Point::default(), Point::new(42., 0.)],
             source: None,
             target: None,
         });
         assert!(app.error);
-        assert_eq!(app.doc, drawn);
+        assert_eq!(app.tab.doc, drawn);
         app.tool = Tool::Bond(1);
-        let last = app.doc.atoms.last().unwrap().position;
+        let last = app.tab.doc.atoms.last().unwrap().position;
         app.edit(Edit::Click(last));
         assert!(
-            (app.doc.atoms.last().unwrap().position.distance(last)
+            (app.tab.doc.atoms.last().unwrap().position.distance(last)
                 - reshiki::style::DEFAULT.world(20.))
             .abs()
                 < 0.001
         );
-        let drawing = app.doc.clone();
+        let drawing = app.tab.doc.clone();
         let _ = app.update(Message::ResetBondDrawing);
         assert_eq!(
-            app.bond_drawing.length,
+            app.tab.bond_drawing.length,
             reshiki::style::DEFAULT.bond_length_world
         );
-        assert_eq!(app.drawing_length_input, "14.4");
-        assert_eq!(app.chain_drawing.angle, 120.);
-        assert!(app.bond_drawing.fixed_length && app.bond_drawing.fixed_angles);
-        assert_eq!(app.doc, drawing);
+        assert_eq!(app.tab.drawing_length_input, "14.4");
+        assert_eq!(app.tab.chain_drawing.angle, 120.);
+        assert!(app.tab.bond_drawing.fixed_length && app.tab.bond_drawing.fixed_angles);
+        assert_eq!(app.tab.doc, drawing);
     }
 
     #[test]
@@ -4167,14 +4111,14 @@ mod tests {
         use reshiki::typography::StyleChange;
         use typography::ColorScope;
         let (mut app, _) = App::new();
-        app.doc = Document::default();
-        app.doc.annotations.push(Annotation {
+        app.tab.doc = Document::default();
+        app.tab.doc.annotations.push(Annotation {
             id: 1,
             position: Point::default(),
             text: "AB CD".into(),
             format: Default::default(),
         });
-        app.doc.graphics.push(Graphic::dragged(
+        app.tab.doc.graphics.push(Graphic::dragged(
             2,
             reshiki::graphics::GraphicKind::Rectangle,
             Point::new(0., 80.),
@@ -4186,35 +4130,35 @@ mod tests {
             Default::default(),
             false,
         ));
-        app.selected = vec![1];
+        app.tab.selected = vec![1];
         app.sync_typography();
         app.caption_action(Action::Move(Motion::DocumentStart));
         app.caption_action(Action::Select(Motion::Right));
         app.caption_action(Action::Select(Motion::Right));
         assert_eq!(app.text_range(), Some(0..2));
-        let original = app.doc.clone();
+        let original = app.tab.doc.clone();
         let red = reshiki::palette::Color::Custom([180, 50, 55]);
         let _ = app.update(Message::TextStyle(StyleChange::Color(red)));
-        assert_eq!(app.doc.annotations[0].format.at(0).color, red);
+        assert_eq!(app.tab.doc.annotations[0].format.at(0).color, red);
         assert_eq!(
-            app.doc.annotations[0].format.at(3).color,
+            app.tab.doc.annotations[0].format.at(3).color,
             reshiki::palette::Color::Ink
         );
-        assert_eq!(app.doc.graphics, original.graphics);
+        assert_eq!(app.tab.doc.graphics, original.graphics);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
         // A stale range in the inspector must not constrain Select All.
         let _ = app.update(Message::SelectAll);
         let _ = app.update(Message::ColorScope(ColorScope::Text));
         let _ = app.update(Message::TextStyle(StyleChange::Color(red)));
-        assert_eq!(app.doc.graphics, original.graphics);
-        assert_eq!(app.doc.annotations[0].format.at(3).color, red);
+        assert_eq!(app.tab.doc.graphics, original.graphics);
+        assert_eq!(app.tab.doc.annotations[0].format.at(3).color, red);
         let _ = app.update(Message::ColorScope(ColorScope::All));
         let _ = app.update(Message::TextStyle(StyleChange::Color(red)));
-        assert_eq!(app.doc.graphics[0].style.stroke, red);
-        assert_eq!(app.doc.graphics[0].style.fill, Some(red));
+        assert_eq!(app.tab.doc.graphics[0].style.stroke, red);
+        assert_eq!(app.tab.doc.graphics[0].style.fill, Some(red));
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc.graphics, original.graphics);
+        assert_eq!(app.tab.doc.graphics, original.graphics);
     }
 
     #[test]
@@ -4222,31 +4166,31 @@ mod tests {
         use reshiki::typography::StyleChange;
         use typography::ColorScope;
         let (mut app, _) = App::new();
-        app.doc = Document::default();
-        let a = app.doc.add_atom("C", Point::default());
-        let b = app.doc.add_atom("O", Point::new(42., 0.));
-        let c = app.doc.add_atom("N", Point::new(84., 0.));
-        app.doc.add_bond(a, b, 1, "plain");
-        app.doc.add_bond(b, c, 2, "plain");
-        app.doc.arrows.push(Arrow::new(
+        app.tab.doc = Document::default();
+        let a = app.tab.doc.add_atom("C", Point::default());
+        let b = app.tab.doc.add_atom("O", Point::new(42., 0.));
+        let c = app.tab.doc.add_atom("N", Point::new(84., 0.));
+        app.tab.doc.add_bond(a, b, 1, "plain");
+        app.tab.doc.add_bond(b, c, 2, "plain");
+        app.tab.doc.arrows.push(Arrow::new(
             4,
             Point::new(0., 80.),
             Point::new(84., 80.),
             Default::default(),
             Default::default(),
         ));
-        app.doc.annotations.push(Annotation {
+        app.tab.doc.annotations.push(Annotation {
             id: 5,
             position: Point::new(0., 120.),
             text: "Label".into(),
             format: Default::default(),
         });
-        app.doc.atom_mut(b).unwrap().display.number = Some(reshiki::atom_labels::Number {
+        app.tab.doc.atom_mut(b).unwrap().display.number = Some(reshiki::atom_labels::Number {
             text: "2".into(),
             offset: None,
             style: reshiki::atom_labels::number_style(),
         });
-        let original = app.doc.clone();
+        let original = app.tab.doc.clone();
         let blue = reshiki::palette::Color::Palette(
             reshiki::palette::Hue::Blue,
             reshiki::palette::Row::Strong,
@@ -4256,19 +4200,22 @@ mod tests {
         let _ = app.update(Message::SelectAll);
         let _ = app.update(Message::TextStyle(StyleChange::Color(blue)));
         assert!(
-            app.doc
+            app.tab
+                .doc
                 .bonds
                 .iter()
                 .all(|b| b.color == blue && b.indicator.style.color == blue)
         );
         assert!(
-            app.doc
+            app.tab
+                .doc
                 .atoms
                 .iter()
                 .all(|a| a.text_style.as_ref().unwrap().color == blue)
         );
         assert_eq!(
-            app.doc
+            app.tab
+                .doc
                 .atom(b)
                 .unwrap()
                 .display
@@ -4279,64 +4226,67 @@ mod tests {
                 .color,
             blue
         );
-        assert_eq!(app.doc.arrows[0].appearance().color, blue);
-        assert_eq!(app.doc.annotations[0].format.style.color, blue);
-        let recolored = app.doc.clone();
+        assert_eq!(app.tab.doc.arrows[0].appearance().color, blue);
+        assert_eq!(app.tab.doc.annotations[0].format.style.color, blue);
+        let recolored = app.tab.doc.clone();
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, recolored);
-        app.selected = vec![a, b];
+        assert_eq!(app.tab.doc, recolored);
+        app.tab.selected = vec![a, b];
         let _ = app.update(Message::ColorScope(ColorScope::Bonds));
         let _ = app.update(Message::TextColor("#B43237".into()));
         let _ = app.update(Message::ApplyTextColor);
-        assert_eq!(app.doc.bonds[0].color, red);
-        assert_eq!(app.doc.bonds[1].color, blue);
-        assert_eq!(app.doc.atoms[1].text_style.as_ref().unwrap().color, blue);
-        assert_eq!(app.doc.arrows, recolored.arrows);
+        assert_eq!(app.tab.doc.bonds[0].color, red);
+        assert_eq!(app.tab.doc.bonds[1].color, blue);
+        assert_eq!(
+            app.tab.doc.atoms[1].text_style.as_ref().unwrap().color,
+            blue
+        );
+        assert_eq!(app.tab.doc.arrows, recolored.arrows);
         let _ = app.update(Message::ColorScope(ColorScope::Text));
         let _ = app.update(Message::TextStyle(StyleChange::Color(red)));
-        assert_eq!(app.doc.atoms[0].text_style.as_ref().unwrap().color, red);
-        assert_eq!(app.doc.atoms[2], recolored.atoms[2]);
-        assert_eq!(app.doc.bonds[1].color, blue);
-        assert_eq!(app.doc.arrows, recolored.arrows);
+        assert_eq!(app.tab.doc.atoms[0].text_style.as_ref().unwrap().color, red);
+        assert_eq!(app.tab.doc.atoms[2], recolored.atoms[2]);
+        assert_eq!(app.tab.doc.bonds[1].color, blue);
+        assert_eq!(app.tab.doc.arrows, recolored.arrows);
         // Selecting only one end of a bond does not recolor that bond.
-        app.selected = vec![c];
+        app.tab.selected = vec![c];
         let _ = app.update(Message::ColorScope(ColorScope::All));
         let _ = app.update(Message::TextStyle(StyleChange::Color(red)));
-        assert_eq!(app.doc.bonds[1].color, blue);
+        assert_eq!(app.tab.doc.bonds[1].color, blue);
     }
 
     #[test]
     fn bond_styles_position_color_and_direction_are_undoable() {
         use reshiki::bonds::{BondPreset, DoublePosition};
         let (mut app, _) = App::new();
-        app.doc.add_atom("C", Point::new(0., 0.));
-        app.doc.add_atom("C", Point::new(84., 0.));
-        app.doc.add_atom("C", Point::new(168., 0.));
-        app.doc.add_bond(1, 2, 2, "plain");
-        app.doc.add_bond(2, 3, 1, "plain");
-        app.selected = vec![1, 2];
-        let other = app.doc.bonds[1].clone();
+        app.tab.doc.add_atom("C", Point::new(0., 0.));
+        app.tab.doc.add_atom("C", Point::new(84., 0.));
+        app.tab.doc.add_atom("C", Point::new(168., 0.));
+        app.tab.doc.add_bond(1, 2, 2, "plain");
+        app.tab.doc.add_bond(2, 3, 1, "plain");
+        app.tab.selected = vec![1, 2];
+        let other = app.tab.doc.bonds[1].clone();
         let _ = app.update(Message::BondPosition(DoublePosition::Left));
         let _ = app.update(Message::BondColor("#205091".into()));
         let _ = app.update(Message::ApplyBondColor);
         assert_eq!(
-            app.doc.bonds[0].color,
+            app.tab.doc.bonds[0].color,
             reshiki::palette::Color::Custom([32, 80, 145])
         );
-        assert_eq!(app.doc.bonds[1], other);
+        assert_eq!(app.tab.doc.bonds[1], other);
         let _ = app.update(Message::ApplyBondPreset(BondPreset::HollowWedge));
-        assert_eq!(app.doc.bonds[0].display, "hollow_wedge");
+        assert_eq!(app.tab.doc.bonds[0].display, "hollow_wedge");
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc.bonds[0].order, 2);
+        assert_eq!(app.tab.doc.bonds[0].order, 2);
         let _ = app.update(Message::Redo);
         app.tool = Tool::StyledBond(BondPreset::HollowWedge);
         app.edit(Edit::Click(Point::new(42., 0.)));
-        assert_eq!((app.doc.bonds[0].a, app.doc.bonds[0].b), (2, 1));
+        assert_eq!((app.tab.doc.bonds[0].a, app.tab.doc.bonds[0].b), (2, 1));
         let _ = app.update(Message::Undo);
-        assert_eq!((app.doc.bonds[0].a, app.doc.bonds[0].b), (1, 2));
-        let before = app.doc.clone();
+        assert_eq!((app.tab.doc.bonds[0].a, app.tab.doc.bonds[0].b), (1, 2));
+        let before = app.tab.doc.clone();
         app.tool = Tool::StyledBond(BondPreset::Dotted);
         app.edit(Edit::Bond(
             Point::new(0., 0.),
@@ -4345,7 +4295,7 @@ mod tests {
             Some(3),
         ));
         assert!(app.error);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
     }
 
     #[test]
@@ -4354,15 +4304,15 @@ mod tests {
         use reshiki::bonds::BondPreset as P;
         for preset in [P::Wedge, P::HashedWedge, P::HollowWedge, P::Bold, P::Hashed] {
             let (mut app, _) = App::new();
-            let ids = editing::ring(&mut app.doc, Point::default(), 6, true, 0.);
-            reshiki::projection::tilt(&mut app.doc, &ids, 35., true);
-            app.doc.reconcile_molecule_groups();
-            let source = app.doc.clone();
+            let ids = editing::ring(&mut app.tab.doc, Point::default(), 6, true, 0.);
+            reshiki::projection::tilt(&mut app.tab.doc, &ids, 35., true);
+            app.tab.doc.reconcile_molecule_groups();
+            let source = app.tab.doc.clone();
             let bond = source.bonds.first().context("Missing ring edge")?;
             let a = source.atom(bond.a).context("Missing ring atom")?.position;
             let b = source.atom(bond.b).context("Missing ring atom")?.position;
             let midpoint = Point::new((a.x + b.x) / 2., (a.y + b.y) / 2.);
-            app.camera.zoom = 2.;
+            app.tab.camera.zoom = 2.;
             app.tool = match preset {
                 P::Wedge => Tool::Wedge,
                 P::HashedWedge => Tool::Hash,
@@ -4370,29 +4320,35 @@ mod tests {
             };
             app.edit(Edit::Click(midpoint));
             assert!(!app.error, "{}", app.status);
-            assert_eq!(app.doc.bonds[0].display, preset.parts().1);
-            assert!(app.doc.bonds.iter().all(|b| b.order == 4));
-            assert_eq!(reshiki::aromatic::circles(&app.doc).len(), 1);
-            assert!(!chemistry_changed(&source, &app.doc));
-            assert_eq!(app.doc.atoms, source.atoms);
-            let styled = app.doc.clone();
+            assert_eq!(app.tab.doc.bonds[0].display, preset.parts().1);
+            assert!(app.tab.doc.bonds.iter().all(|b| b.order == 4));
+            assert_eq!(reshiki::aromatic::circles(&app.tab.doc).len(), 1);
+            assert!(!chemistry_changed(&source, &app.tab.doc));
+            assert_eq!(app.tab.doc.atoms, source.atoms);
+            let styled = app.tab.doc.clone();
             app.edit(Edit::Click(midpoint));
-            assert_eq!((app.doc.bonds[0].a, app.doc.bonds[0].b), (bond.b, bond.a));
-            assert_eq!(reshiki::aromatic::circles(&app.doc).len(), 1);
-            assert!(!chemistry_changed(&source, &app.doc));
+            assert_eq!(
+                (app.tab.doc.bonds[0].a, app.tab.doc.bonds[0].b),
+                (bond.b, bond.a)
+            );
+            assert_eq!(reshiki::aromatic::circles(&app.tab.doc).len(), 1);
+            assert!(!chemistry_changed(&source, &app.tab.doc));
             let _ = app.update(Message::Undo);
-            assert_eq!(app.doc, styled);
+            assert_eq!(app.tab.doc, styled);
             let _ = app.update(Message::Undo);
-            assert_eq!(app.doc, source);
+            assert_eq!(app.tab.doc, source);
             let _ = app.update(Message::Redo);
-            assert_eq!(app.doc, styled);
+            assert_eq!(app.tab.doc, styled);
             app.tool = Tool::Bond(1);
             app.edit(Edit::Click(midpoint));
-            assert_eq!(app.doc, source, "Plain appearance retains aromatic order");
+            assert_eq!(
+                app.tab.doc, source,
+                "Plain appearance retains aromatic order"
+            );
             app.tool = Tool::Bond(2);
             app.edit(Edit::Click(midpoint));
             assert_eq!(
-                app.doc.bonds[0].order, 2,
+                app.tab.doc.bonds[0].order, 2,
                 "Explicit double order still works"
             );
         }
@@ -4413,20 +4369,26 @@ mod tests {
             P::Single,
         ] {
             let (mut app, _) = App::new();
-            app.selected = editing::ring(&mut app.doc, Point::default(), 6, true, 0.);
-            reshiki::projection::tilt(&mut app.doc, &app.selected, 65., true);
-            app.doc.reconcile_molecule_groups();
-            let source = app.doc.clone();
+            app.tab.selected = editing::ring(&mut app.tab.doc, Point::default(), 6, true, 0.);
+            reshiki::projection::tilt(&mut app.tab.doc, &app.tab.selected, 65., true);
+            app.tab.doc.reconcile_molecule_groups();
+            let source = app.tab.doc.clone();
             let _ = app.update(Message::ApplyBondPreset(preset));
             assert!(!app.error, "{}", app.status);
-            assert!(app.doc.bonds.iter().all(|b| b.order == 4));
-            assert!(app.doc.bonds.iter().all(|b| b.display == preset.parts().1));
-            assert_eq!(reshiki::aromatic::circles(&app.doc).len(), 1);
-            assert!(!chemistry_changed(&source, &app.doc));
-            assert_eq!(app.doc.atoms, source.atoms);
+            assert!(app.tab.doc.bonds.iter().all(|b| b.order == 4));
+            assert!(
+                app.tab
+                    .doc
+                    .bonds
+                    .iter()
+                    .all(|b| b.display == preset.parts().1)
+            );
+            assert_eq!(reshiki::aromatic::circles(&app.tab.doc).len(), 1);
+            assert!(!chemistry_changed(&source, &app.tab.doc));
+            assert_eq!(app.tab.doc.atoms, source.atoms);
             if preset != P::Single {
                 let _ = app.update(Message::Undo);
-                assert_eq!(app.doc, source);
+                assert_eq!(app.tab.doc, source);
             }
             let bond = source.bonds.first().context("Missing ring bond")?;
             let a = source.atom(bond.a).context("Missing ring atom")?.position;
@@ -4434,12 +4396,15 @@ mod tests {
             app.tool = Tool::StyledBond(preset);
             app.edit(Edit::Bond(b, a, Some(bond.b), Some(bond.a)));
             assert!(!app.error, "{}", app.status);
-            assert_eq!((app.doc.bonds[0].a, app.doc.bonds[0].b), (bond.b, bond.a));
-            assert!(app.doc.bonds.iter().all(|b| b.order == 4));
-            assert_eq!(reshiki::aromatic::circles(&app.doc).len(), 1);
-            assert!(!chemistry_changed(&source, &app.doc));
+            assert_eq!(
+                (app.tab.doc.bonds[0].a, app.tab.doc.bonds[0].b),
+                (bond.b, bond.a)
+            );
+            assert!(app.tab.doc.bonds.iter().all(|b| b.order == 4));
+            assert_eq!(reshiki::aromatic::circles(&app.tab.doc).len(), 1);
+            assert!(!chemistry_changed(&source, &app.tab.doc));
             let _ = app.update(Message::Undo);
-            assert_eq!(app.doc, source);
+            assert_eq!(app.tab.doc, source);
         }
         Ok(())
     }
@@ -4447,28 +4412,28 @@ mod tests {
     #[test]
     fn group_frame_and_ungroup_are_individually_undoable() {
         let (mut app, _) = App::new();
-        let a = app.doc.add_atom("C", Point::default());
-        let b = app.doc.add_atom("O", Point::new(42., 0.));
-        app.doc.add_bond(a, b, 1, "plain");
-        app.selected = vec![a];
-        let initial = app.doc.clone();
+        let a = app.tab.doc.add_atom("C", Point::default());
+        let b = app.tab.doc.add_atom("O", Point::new(42., 0.));
+        app.tab.doc.add_bond(a, b, 1, "plain");
+        app.tab.selected = vec![a];
+        let initial = app.tab.doc.clone();
         let _ = app.update(Message::AddFrame(reshiki::graphics::GraphicKind::Brackets));
-        assert_eq!(app.doc.groups.len(), 1);
-        assert_eq!(app.doc.graphics.len(), 1);
-        assert_eq!(app.selected.len(), 3);
-        assert_eq!(app.doc.atoms, initial.atoms);
-        let framed = app.doc.clone();
+        assert_eq!(app.tab.doc.groups.len(), 1);
+        assert_eq!(app.tab.doc.graphics.len(), 1);
+        assert_eq!(app.tab.selected.len(), 3);
+        assert_eq!(app.tab.doc.atoms, initial.atoms);
+        let framed = app.tab.doc.clone();
         let _ = app.update(Message::Ungroup);
-        assert!(app.doc.groups.is_empty());
+        assert!(app.tab.doc.groups.is_empty());
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, framed);
+        assert_eq!(app.tab.doc, framed);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, initial);
+        assert_eq!(app.tab.doc, initial);
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, framed);
-        assert_eq!(app.selected.len(), 3);
+        assert_eq!(app.tab.doc, framed);
+        assert_eq!(app.tab.selected.len(), 3);
         let _ = app.update(Message::InvertSelection);
-        assert!(app.selected.is_empty());
+        assert!(app.tab.selected.is_empty());
     }
 
     #[tokio::test]
@@ -4480,39 +4445,39 @@ mod tests {
             .execute(Request::import_smiles("CCO"))
             .await
             .unwrap();
-        app.doc = result.document.unwrap();
-        app.analysis = result.analysis;
+        app.tab.doc = result.document.unwrap();
+        app.tab.analysis = result.analysis;
         let _ = app.update(Message::Tool(Tool::Graphic(GraphicKind::Curve)));
         app.edit(Edit::Graphic(
             Point::default(),
             Point::new(100., 40.),
             false,
         ));
-        let id = app.doc.graphics[0].id;
+        let id = app.tab.doc.graphics[0].id;
         assert_eq!(app.tool, Tool::Select);
         app.apply_graphic_style(GraphicChange::Stroke(reshiki::palette::Color::Custom([
             32, 80, 145,
         ])));
-        let before = app.doc.clone();
+        let before = app.tab.doc.clone();
         let _ = app.update(Message::Tool(Tool::EditPoints));
         app.edit(Edit::GraphicPoint(id, 1, Point::new(20., -50.)));
-        assert_eq!(app.doc.graphics[0].kind, GraphicKind::Path);
-        let after = app.doc.clone();
+        assert_eq!(app.tab.doc.graphics[0].kind, GraphicKind::Path);
+        let after = app.tab.doc.clone();
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
-        assert_eq!(app.selected, vec![id]);
-        assert_eq!(app.analysis.as_ref().unwrap().formula, "C2H6O");
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.selected, vec![id]);
+        assert_eq!(app.tab.analysis.as_ref().unwrap().formula, "C2H6O");
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, after);
-        assert_eq!(app.selected, vec![id]);
-        assert!(app.analysis.is_some());
+        assert_eq!(app.tab.doc, after);
+        assert_eq!(app.tab.selected, vec![id]);
+        assert!(app.tab.analysis.is_some());
         let _ = app.update(Message::Tool(Tool::Graphic(GraphicKind::Ellipse)));
-        assert!(app.selected.is_empty());
+        assert!(app.tab.selected.is_empty());
         app.apply_graphic_style(GraphicChange::Stroke(reshiki::palette::Color::Custom([
             180, 50, 55,
         ])));
         assert_eq!(
-            app.doc, after,
+            app.tab.doc, after,
             "new drawing style must not change the previous object"
         );
     }
@@ -4522,68 +4487,68 @@ mod tests {
         use iced::widget::text_editor::{Action, Edit as TextEdit, Motion};
         use reshiki::typography::{StyleChange, TextFormat};
         let (mut app, _) = App::new();
-        app.doc.annotations.push(Annotation {
+        app.tab.doc.annotations.push(Annotation {
             id: 1,
             position: Point::default(),
             text: "AAA".into(),
             format: TextFormat::default(),
         });
-        app.selected = vec![1];
+        app.tab.selected = vec![1];
         app.sync_typography();
         app.caption_action(Action::Move(Motion::DocumentStart));
         app.caption_action(Action::Move(Motion::Right));
         app.caption_action(Action::Select(Motion::Right));
         assert_eq!(app.text_range(), Some(1..2));
         app.apply_text_style(StyleChange::Bold(true));
-        assert!(!app.doc.annotations[0].format.at(0).bold);
-        assert!(app.doc.annotations[0].format.at(1).bold);
-        let styled = app.doc.clone();
+        assert!(!app.tab.doc.annotations[0].format.at(0).bold);
+        assert!(app.tab.doc.annotations[0].format.at(1).bold);
+        let styled = app.tab.doc.clone();
         app.caption_action(Action::Move(Motion::DocumentStart));
         app.caption_action(Action::Move(Motion::Right));
         app.caption_action(Action::Edit(TextEdit::Backspace));
-        assert_eq!(app.doc.annotations[0].text, "AA");
-        assert!(app.doc.annotations[0].format.at(0).bold);
-        assert!(!app.doc.annotations[0].format.at(1).bold);
-        let edited = app.doc.clone();
+        assert_eq!(app.tab.doc.annotations[0].text, "AA");
+        assert!(app.tab.doc.annotations[0].format.at(0).bold);
+        assert!(!app.tab.doc.annotations[0].format.at(1).bold);
+        let edited = app.tab.doc.clone();
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, styled);
-        assert_eq!(app.caption, "AAA");
+        assert_eq!(app.tab.doc, styled);
+        assert_eq!(app.tab.caption, "AAA");
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, edited);
-        assert_eq!(app.caption, "AA");
+        assert_eq!(app.tab.doc, edited);
+        assert_eq!(app.tab.caption, "AA");
     }
 
     #[test]
     fn one_off_template_choice_is_nonmutating_and_attachment_is_one_undo_step() {
         let (mut app, _) = App::new();
-        app.busy = false;
-        let a = app.doc.add_atom("C", Point::new(-30.0, 0.0));
-        let b = app.doc.add_atom("C", Point::new(30.0, 0.0));
-        app.doc.add_bond(a, b, 1, "plain");
-        app.saved = app.doc.clone();
-        let before = app.doc.clone();
+        app.tab.busy = false;
+        let a = app.tab.doc.add_atom("C", Point::new(-30.0, 0.0));
+        let b = app.tab.doc.add_atom("C", Point::new(30.0, 0.0));
+        app.tab.doc.add_bond(a, b, 1, "plain");
+        app.tab.saved = app.tab.doc.clone();
+        let before = app.tab.doc.clone();
         let index = reshiki::templates::LIBRARY
             .iter()
             .position(|t| t.name == "Cyclopentane")
             .unwrap();
         let _ = app.update(Message::InsertTemplate(index));
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         assert!(!app.dirty());
         assert_eq!(app.tool, Tool::Template);
         let _ = app.update(Message::Templates(template_library::Action::Repeat(false)));
         app.templates.connection = reshiki::templates::Connection::FuseBond;
         app.edit(Edit::Template(Point::default(), None));
         assert_eq!(app.tool, Tool::Select);
-        let placed = app.doc.clone();
+        let placed = app.tab.doc.clone();
         assert_eq!(placed.atoms.len(), 5);
         assert_eq!(placed.bonds.len(), 5);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, placed);
+        assert_eq!(app.tab.doc, placed);
         let _ = app.update(Message::Tool(Tool::Select));
         app.edit(Edit::Template(Point::new(500.0, 500.0), None));
-        assert_eq!(app.doc, placed);
+        assert_eq!(app.tab.doc, placed);
     }
 
     #[test]
@@ -4591,10 +4556,10 @@ mod tests {
         use reshiki::templates::{Anchor, Connection};
         use template_library::Action as A;
         let (mut app, _) = App::new();
-        app.busy = false;
-        let a = app.doc.add_atom("C", Point::new(0., -21.));
-        let b = app.doc.add_atom("C", Point::new(0., 21.));
-        app.doc.add_bond(a, b, 1, "plain");
+        app.tab.busy = false;
+        let a = app.tab.doc.add_atom("C", Point::new(0., -21.));
+        let b = app.tab.doc.add_atom("C", Point::new(0., 21.));
+        app.tab.doc.add_bond(a, b, 1, "plain");
         let index = reshiki::templates::LIBRARY
             .iter()
             .position(|t| t.name == "Cyclohexane")
@@ -4604,56 +4569,60 @@ mod tests {
         let _ = app.update(Message::InsertTemplate(index));
         let _ = app.update(Message::Templates(A::Anchor(anchor)));
         assert!(app.templates.repeat);
-        let mut snapshots = vec![app.doc.clone()];
+        let mut snapshots = vec![app.tab.doc.clone()];
         for (atoms, bonds) in [(6, 6), (10, 11), (14, 16)] {
             let point = app
+                .tab
                 .doc
                 .bonds
                 .iter()
                 .map(|bond| {
-                    let p = app.doc.atom(bond.a).unwrap().position;
-                    let q = app.doc.atom(bond.b).unwrap().position;
+                    let p = app.tab.doc.atom(bond.a).unwrap().position;
+                    let q = app.tab.doc.atom(bond.b).unwrap().position;
                     Point::new((p.x + q.x) / 2., (p.y + q.y) / 2.)
                 })
                 .max_by(|p, q| p.x.total_cmp(&q.x))
                 .unwrap();
             app.edit(Edit::Template(point, None));
             assert!(!app.error, "{}", app.status);
-            assert_eq!((app.doc.atoms.len(), app.doc.bonds.len()), (atoms, bonds));
+            assert_eq!(
+                (app.tab.doc.atoms.len(), app.tab.doc.bonds.len()),
+                (atoms, bonds)
+            );
             assert_eq!(app.tool, Tool::Template);
             assert_eq!(app.templates.anchor, anchor);
             assert_eq!(app.templates.connection, Connection::FuseBond);
-            app.doc.validate().unwrap();
-            snapshots.push(app.doc.clone());
+            app.tab.doc.validate().unwrap();
+            snapshots.push(app.tab.doc.clone());
         }
         // A misplaced click must preserve both the drawing and placement mode.
-        app.edit(Edit::Template(app.doc.atoms[0].position, None));
+        app.edit(Edit::Template(app.tab.doc.atoms[0].position, None));
         assert!(app.error);
-        assert_eq!(app.doc, snapshots[3]);
+        assert_eq!(app.tab.doc, snapshots[3]);
         assert_eq!(app.tool, Tool::Template);
         for document in snapshots[..3].iter().rev() {
             let _ = app.update(Message::Undo);
-            assert_eq!(&app.doc, document);
+            assert_eq!(&app.tab.doc, document);
             assert_eq!(app.tool, Tool::Template);
         }
         for document in &snapshots[1..] {
             let _ = app.update(Message::Redo);
-            assert_eq!(&app.doc, document);
+            assert_eq!(&app.tab.doc, document);
         }
         let _ = app.update(Message::Escape);
         assert_eq!(app.tool, Tool::Select);
         app.edit(Edit::Template(Point::new(500., 500.), None));
-        assert_eq!(app.doc, snapshots[3]);
+        assert_eq!(app.tab.doc, snapshots[3]);
     }
 
     #[test]
     fn axis_resize_has_one_step_undo_and_ignores_invalid_scales() -> Result<(), String> {
         let (mut app, _) = App::new();
-        let a = app.doc.add_atom("C", Point::new(-20., -10.));
-        let b = app.doc.add_atom("C", Point::new(20., 10.));
-        let remote = app.doc.add_atom("O", Point::new(150., 80.));
-        app.doc.add_bond(a, b, 1, "wedge");
-        let original = app.doc.clone();
+        let a = app.tab.doc.add_atom("C", Point::new(-20., -10.));
+        let b = app.tab.doc.add_atom("C", Point::new(20., 10.));
+        let remote = app.tab.doc.add_atom("O", Point::new(150., 80.));
+        app.tab.doc.add_bond(a, b, 1, "wedge");
+        let original = app.tab.doc.clone();
         app.edit(Edit::ScaleAxes {
             ids: vec![a, b],
             pivot: Point::new(-20., -10.),
@@ -4661,16 +4630,16 @@ mod tests {
             y: 1.,
         });
         assert_eq!(
-            app.doc.atom(b).ok_or("Atom")?.position,
+            app.tab.doc.atom(b).ok_or("Atom")?.position,
             Point::new(60., 10.)
         );
-        assert_eq!(app.doc.atom(remote), original.atom(remote));
-        assert_eq!(app.doc.bonds, original.bonds);
-        let resized = app.doc.clone();
+        assert_eq!(app.tab.doc.atom(remote), original.atom(remote));
+        assert_eq!(app.tab.doc.bonds, original.bonds);
+        let resized = app.tab.doc.clone();
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, resized);
+        assert_eq!(app.tab.doc, resized);
         for (x, y) in [(1., 1.), (f32::NAN, 1.), (0., 1.), (1., -1.)] {
             app.edit(Edit::ScaleAxes {
                 ids: vec![a, b],
@@ -4678,28 +4647,31 @@ mod tests {
                 x,
                 y,
             });
-            assert_eq!(app.doc, resized);
+            assert_eq!(app.tab.doc, resized);
         }
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, original, "No-op drags do not consume undo steps");
+        assert_eq!(
+            app.tab.doc, original,
+            "No-op drags do not consume undo steps"
+        );
         Ok(())
     }
 
     #[test]
     fn selection_handle_transforms_preserve_other_objects_and_undo_in_one_step() {
         let (mut app, _) = App::new();
-        let a = app.doc.add_atom("C", Point::new(-20.0, -10.0));
-        let b = app.doc.add_atom("C", Point::new(20.0, 10.0));
-        let other = app.doc.add_atom("O", Point::new(150.0, 80.0));
-        app.doc.add_bond(a, b, 1, "wedge");
-        let original = app.doc.clone();
+        let a = app.tab.doc.add_atom("C", Point::new(-20.0, -10.0));
+        let b = app.tab.doc.add_atom("C", Point::new(20.0, 10.0));
+        let other = app.tab.doc.add_atom("O", Point::new(150.0, 80.0));
+        app.tab.doc.add_bond(a, b, 1, "wedge");
+        let original = app.tab.doc.clone();
         app.edit(Edit::Transform {
             ids: vec![a, b],
             pivot: Point::new(-20.0, -10.0),
             scale: 2.0,
             rotation: 0.0,
         });
-        let resized = app.doc.clone();
+        let resized = app.tab.doc.clone();
         assert_eq!(
             resized.atom(a).unwrap().position,
             original.atom(a).unwrap().position
@@ -4711,7 +4683,7 @@ mod tests {
             scale: 1.0,
             rotation: 90.0,
         });
-        let rotated = app.doc.clone();
+        let rotated = app.tab.doc.clone();
         assert!(
             rotated
                 .atom(b)
@@ -4722,14 +4694,14 @@ mod tests {
         );
         assert_eq!(rotated.atom(other), original.atom(other));
         assert_eq!(rotated.bonds, original.bonds);
-        assert_eq!(app.selected, vec![a, b]);
+        assert_eq!(app.tab.selected, vec![a, b]);
         for expected in [&resized, &original] {
             let _ = app.update(Message::Undo);
-            assert_eq!(&app.doc, expected);
+            assert_eq!(&app.tab.doc, expected);
         }
         for expected in [&resized, &rotated] {
             let _ = app.update(Message::Redo);
-            assert_eq!(&app.doc, expected);
+            assert_eq!(&app.tab.doc, expected);
         }
         app.edit(Edit::Transform {
             ids: vec![a, b],
@@ -4739,38 +4711,38 @@ mod tests {
         });
         let _ = app.update(Message::Undo);
         assert_eq!(
-            app.doc, resized,
+            app.tab.doc, resized,
             "clicking a handle without dragging adds no history"
         );
         app.tool = Tool::Ring;
         let _ = app.update(Message::SelectAll);
         assert_eq!(app.tool, Tool::Select);
-        assert_eq!(app.selected, app.doc.all_ids());
+        assert_eq!(app.tab.selected, app.tab.doc.all_ids());
     }
 
     #[test]
     fn snapping_a_ring_is_one_undoable_edit_with_original_atom_ids_restored() {
         let (mut app, _) = App::new();
-        let a = app.doc.add_atom("C", Point::default());
-        let b = app.doc.add_atom("C", Point::new(60.0, 0.0));
-        app.doc.add_bond(a, b, 1, "plain");
-        let ids = editing::ring(&mut app.doc, Point::new(200.0, 200.0), 5, false, 5.0);
-        let p = app.doc.atom(ids[0]).unwrap().position;
-        let q = app.doc.atom(ids[1]).unwrap().position;
-        let before = app.doc.clone();
+        let a = app.tab.doc.add_atom("C", Point::default());
+        let b = app.tab.doc.add_atom("C", Point::new(60.0, 0.0));
+        app.tab.doc.add_bond(a, b, 1, "plain");
+        let ids = editing::ring(&mut app.tab.doc, Point::new(200.0, 200.0), 5, false, 5.0);
+        let p = app.tab.doc.atom(ids[0]).unwrap().position;
+        let q = app.tab.doc.atom(ids[1]).unwrap().position;
+        let before = app.tab.doc.clone();
         app.edit(Edit::Move(
             ids,
             30.0 - (p.x + q.x) / 2.0,
             -(p.y + q.y) / 2.0,
         ));
-        let snapped = app.doc.clone();
+        let snapped = app.tab.doc.clone();
         assert_eq!((snapped.atoms.len(), snapped.bonds.len()), (5, 5));
-        assert_eq!(app.selected.len(), 5);
-        assert!(app.selected.contains(&a) && app.selected.contains(&b));
+        assert_eq!(app.tab.selected.len(), 5);
+        assert!(app.tab.selected.contains(&a) && app.tab.selected.contains(&b));
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, snapped);
+        assert_eq!(app.tab.doc, snapped);
     }
 
     #[test]
@@ -4778,8 +4750,8 @@ mod tests {
         use reshiki::graphics::{Graphic, GraphicKind};
         let (mut app, _) = App::new();
         for (lo, hi) in [((-150., -100.), (-90., -60.)), ((0., 0.), (60., 40.))] {
-            let id = app.doc.next_id();
-            app.doc.graphics.push(Graphic::dragged(
+            let id = app.tab.doc.next_id();
+            app.tab.doc.graphics.push(Graphic::dragged(
                 id,
                 GraphicKind::Rectangle,
                 Point::new(lo.0, lo.1),
@@ -4789,8 +4761,8 @@ mod tests {
                 false,
             ));
         }
-        let moving = app.doc.graphics[1].id;
-        let before = app.doc.clone();
+        let moving = app.tab.doc.graphics[1].id;
+        let before = app.tab.doc.clone();
         let edits = crate::canvas::select_drag(
             &before,
             &[],
@@ -4803,36 +4775,37 @@ mod tests {
         }
         let mut expected = before.clone();
         expected.translate(&[moving], -3., -100.);
-        assert_eq!(app.doc, expected, "the top edges snapped together");
-        assert_eq!(app.selected, [moving]);
+        assert_eq!(app.tab.doc, expected, "the top edges snapped together");
+        assert_eq!(app.tab.selected, [moving]);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, expected);
+        assert_eq!(app.tab.doc, expected);
     }
 
     #[test]
     fn drag_duplicate_keeps_the_original_and_is_one_undoable_edit() {
         let (mut app, _) = App::new();
-        let a = app.doc.add_atom("C", Point::default());
-        let b = app.doc.add_atom("O", Point::new(42.0, 0.0));
-        let c = app.doc.add_atom("N", Point::new(84.0, 0.0));
-        app.doc.add_bond(a, b, 2, "plain");
-        app.doc.add_bond(b, c, 1, "plain");
-        let before = app.doc.clone();
+        let a = app.tab.doc.add_atom("C", Point::default());
+        let b = app.tab.doc.add_atom("O", Point::new(42.0, 0.0));
+        let c = app.tab.doc.add_atom("N", Point::new(84.0, 0.0));
+        app.tab.doc.add_bond(a, b, 2, "plain");
+        app.tab.doc.add_bond(b, c, 1, "plain");
+        let before = app.tab.doc.clone();
         app.edit(Edit::Duplicate(vec![a, b], 0.0, 90.0));
-        let copied = app.doc.clone();
+        let copied = app.tab.doc.clone();
         assert_eq!((copied.atoms.len(), copied.bonds.len()), (5, 3));
         for id in [a, b, c] {
             assert_eq!(copied.atom(id), before.atom(id), "originals stay in place");
         }
         assert_eq!(
-            app.selected.len(),
+            app.tab.selected.len(),
             2,
             "the copy of the two atoms is selected"
         );
-        assert!(!app.selected.iter().any(|id| [a, b, c].contains(id)));
+        assert!(!app.tab.selected.iter().any(|id| [a, b, c].contains(id)));
         let symbols: Vec<_> = app
+            .tab
             .selected
             .iter()
             .filter_map(|id| copied.atom(*id))
@@ -4844,9 +4817,9 @@ mod tests {
         );
         copied.validate().unwrap();
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, copied);
+        assert_eq!(app.tab.doc, copied);
     }
 
     #[test]
@@ -4854,27 +4827,27 @@ mod tests {
         for tool in [Tool::Bond(1), Tool::Bond(3)] {
             let (mut app, _) = App::new();
             app.tool = tool;
-            let a = app.doc.add_atom("C", Point::default());
-            let b = app.doc.add_atom("C", Point::new(42.0, 0.0));
-            app.doc.add_bond(a, b, 1, "plain");
-            let original = app.doc.clone();
+            let a = app.tab.doc.add_atom("C", Point::default());
+            let b = app.tab.doc.add_atom("C", Point::new(42.0, 0.0));
+            app.tab.doc.add_bond(a, b, 1, "plain");
+            let original = app.tab.doc.clone();
             for order in [2, 3, 1] {
                 app.edit(Edit::Click(Point::new(21.0, 0.0)));
-                assert_eq!(app.doc.atoms, original.atoms);
-                assert_eq!(app.doc.bonds.len(), 1);
-                assert_eq!(app.doc.bonds[0].order, order);
-                assert_eq!(app.doc.bonds[0].display, "plain");
+                assert_eq!(app.tab.doc.atoms, original.atoms);
+                assert_eq!(app.tab.doc.bonds.len(), 1);
+                assert_eq!(app.tab.doc.bonds[0].order, order);
+                assert_eq!(app.tab.doc.bonds[0].display, "plain");
             }
-            assert_eq!(app.doc, original);
+            assert_eq!(app.tab.doc, original);
             for order in [3, 2, 1] {
                 let _ = app.update(Message::Undo);
-                assert_eq!(app.doc.bonds[0].order, order);
+                assert_eq!(app.tab.doc.bonds[0].order, order);
             }
-            assert_eq!(app.doc, original);
+            assert_eq!(app.tab.doc, original);
             app.tool = Tool::Wedge;
             app.edit(Edit::Click(Point::new(21.0, 0.0)));
-            assert_eq!(app.doc.bonds[0].order, 1);
-            assert_eq!(app.doc.bonds[0].display, "wedge");
+            assert_eq!(app.tab.doc.bonds[0].order, 1);
+            assert_eq!(app.tab.doc.bonds[0].display, "wedge");
         }
     }
 
@@ -4885,14 +4858,15 @@ mod tests {
         app.edit(Edit::Click(Point::default()));
         for _ in 0..5 {
             let endpoint = app
+                .tab
                 .doc
-                .atom(*app.selected.first().unwrap())
+                .atom(*app.tab.selected.first().unwrap())
                 .unwrap()
                 .position;
             app.edit(Edit::Click(endpoint));
         }
-        assert_eq!((app.doc.atoms.len(), app.doc.bonds.len()), (7, 6));
-        for three in app.doc.atoms.windows(3) {
+        assert_eq!((app.tab.doc.atoms.len(), app.tab.doc.bonds.len()), (7, 6));
+        for three in app.tab.doc.atoms.windows(3) {
             let a = three[0].position;
             let b = three[1].position;
             let c = three[2].position;
@@ -4902,11 +4876,11 @@ mod tests {
             assert!(c.x > b.x && b.x > a.x, "chain must keep extending forward");
             assert!((a.y - c.y).abs() < 0.001, "successive turns must alternate");
         }
-        let complete = app.doc.clone();
+        let complete = app.tab.doc.clone();
         let _ = app.update(Message::Undo);
-        assert_eq!((app.doc.atoms.len(), app.doc.bonds.len()), (6, 5));
+        assert_eq!((app.tab.doc.atoms.len(), app.tab.doc.bonds.len()), (6, 5));
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, complete);
+        assert_eq!(app.tab.doc, complete);
         let analysis = app
             .engine
             .execute(Request::molecule("analyze", complete))
@@ -4922,26 +4896,26 @@ mod tests {
     fn aromatic_plane_bond_matches_preview_and_undo_restores_xyz() -> Result<(), String> {
         use reshiki::projection::growth::{self, Plane};
         let (mut app, _) = App::new();
-        app.doc = reshiki::rings::Preset::Benzene.document(42., false);
-        let ids = app.doc.all_ids();
-        reshiki::projection::tilt(&mut app.doc, &ids, 55., false);
-        let id = app.doc.atoms.get(1).ok_or("Carbon")?.id;
-        let end = Plane::at(&app.doc, id)
+        app.tab.doc = reshiki::rings::Preset::Benzene.document(42., false);
+        let ids = app.tab.doc.all_ids();
+        reshiki::projection::tilt(&mut app.tab.doc, &ids, 55., false);
+        let id = app.tab.doc.atoms.get(1).ok_or("Carbon")?.id;
+        let end = Plane::at(&app.tab.doc, id)
             .ok_or("Plane")?
             .outward(42.)
             .ok_or("Endpoint")?;
-        let before = app.doc.clone();
+        let before = app.tab.doc.clone();
         app.tool = Tool::Atom;
         app.element = "O".into();
         let (preview, added) =
             growth::place(&before, id, end, "O", reshiki::bonds::BondPreset::Single)?;
         app.edit(Edit::PlaneBond(id, end));
-        assert_eq!(app.doc, preview);
-        assert_eq!(app.selected, vec![added]);
+        assert_eq!(app.tab.doc, preview);
+        assert_eq!(app.tab.selected, vec![added]);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, preview);
+        assert_eq!(app.tab.doc, preview);
         Ok(())
     }
 
@@ -4950,50 +4924,50 @@ mod tests {
         let (mut app, _) = App::new();
         let _ = app.update(Message::Element("O".into()));
         app.edit(Edit::Click(Point::default()));
-        let oxygen = app.doc.atoms[0].id;
+        let oxygen = app.tab.doc.atoms[0].id;
         let _ = app.update(Message::Tool(Tool::Bond(1)));
         app.edit(Edit::Click(Point::default()));
-        let carbon = app.doc.atoms[1].clone();
+        let carbon = app.tab.doc.atoms[1].clone();
         assert_eq!(carbon.element, "C");
-        assert_eq!(app.doc.atom(oxygen).unwrap().element, "O");
+        assert_eq!(app.tab.doc.atom(oxygen).unwrap().element, "O");
         app.edit(Edit::Bond(
             carbon.position,
             carbon.position.offset(36.373066, 21.0),
             Some(carbon.id),
             None,
         ));
-        assert_eq!(app.doc.atoms[2].element, "C");
+        assert_eq!(app.tab.doc.atoms[2].element, "C");
         app.tool = Tool::Bond(2);
         app.edit(Edit::Click(Point::new(
             carbon.position.x / 2.0,
             carbon.position.y / 2.0,
         )));
-        assert_eq!((app.doc.atoms.len(), app.doc.bonds.len()), (3, 2));
-        assert_eq!(app.doc.bonds[0].order, 2);
+        assert_eq!((app.tab.doc.atoms.len(), app.tab.doc.bonds.len()), (3, 2));
+        assert_eq!(app.tab.doc.bonds[0].order, 2);
     }
 
     #[test]
     fn blank_drawings_keep_starting_zoom_through_resize_and_first_edits() {
         let (mut app, _) = App::new();
-        assert_eq!(app.camera.zoom, 1.0);
+        assert_eq!(app.tab.camera.zoom, 1.0);
         let _ = app.update(Message::Viewport(iced::Size::new(1000., 700.)));
-        assert_eq!(app.camera.zoom, 1.0);
+        assert_eq!(app.tab.camera.zoom, 1.0);
 
         let _ = app.update(Message::Tool(Tool::Atom));
         app.edit(Edit::Click(Point::default()));
-        assert!(!app.doc.all_ids().is_empty());
+        assert!(!app.tab.doc.all_ids().is_empty());
         let _ = app.update(Message::Viewport(iced::Size::new(700., 500.)));
-        assert_eq!(app.camera.zoom, 1.0);
+        assert_eq!(app.tab.camera.zoom, 1.0);
 
         let _ = app.update(Message::Zoom(1.2));
         let _ = app.update(Message::Viewport(iced::Size::new(1000., 700.)));
-        assert_eq!(app.camera.zoom, 1.2);
+        assert_eq!(app.tab.camera.zoom, 1.2);
 
         let _ = app.perform(Pending::New);
-        assert!(app.doc.all_ids().is_empty());
-        assert_eq!(app.camera.zoom, 1.0);
+        assert!(app.tab.doc.all_ids().is_empty());
+        assert_eq!(app.tab.camera.zoom, 1.0);
         let _ = app.update(Message::Viewport(iced::Size::new(700., 500.)));
-        assert_eq!(app.camera.zoom, 1.0);
+        assert_eq!(app.tab.camera.zoom, 1.0);
     }
 
     #[test]
@@ -5002,42 +4976,42 @@ mod tests {
         app.edit(Edit::Pan(60., -20.));
         let _ = app.update(Message::Zoom(2.));
         let _ = app.update(Message::Fit);
-        assert_eq!(app.camera.zoom, 1.0);
-        assert_eq!(app.camera.center, Point::default());
+        assert_eq!(app.tab.camera.zoom, 1.0);
+        assert_eq!(app.tab.camera.center, Point::default());
         let _ = app.update(Message::Viewport(iced::Size::new(1000., 700.)));
-        assert_eq!(app.camera.zoom, 1.0);
+        assert_eq!(app.tab.camera.zoom, 1.0);
     }
 
     #[test]
     fn fit_uses_available_canvas_and_respects_manual_pan() {
         let (mut app, _) = App::new();
-        app.doc.add_atom("C", Point::new(-250.0, -100.0));
-        app.doc.add_atom("O", Point::new(250.0, 100.0));
-        let document = app.doc.clone();
+        app.tab.doc.add_atom("C", Point::new(-250.0, -100.0));
+        app.tab.doc.add_atom("O", Point::new(250.0, 100.0));
+        let document = app.tab.doc.clone();
         let _ = app.update(Message::Viewport(iced::Size::new(600.0, 400.0)));
         let _ = app.update(Message::Fit);
-        let small_zoom = app.camera.zoom;
+        let small_zoom = app.tab.camera.zoom;
         let _ = app.update(Message::Viewport(iced::Size::new(1000.0, 700.0)));
-        assert!(app.camera.zoom > small_zoom);
+        assert!(app.tab.camera.zoom > small_zoom);
         app.edit(Edit::Pan(60.0, -20.0));
-        let camera = app.camera;
+        let camera = app.tab.camera;
         let _ = app.update(Message::Viewport(iced::Size::new(700.0, 500.0)));
-        assert_eq!(app.camera.center, camera.center);
-        assert_eq!(app.camera.zoom, camera.zoom);
-        assert_eq!(app.doc, document);
+        assert_eq!(app.tab.camera.center, camera.center);
+        assert_eq!(app.tab.camera.zoom, camera.zoom);
+        assert_eq!(app.tab.doc, document);
     }
 
     #[test]
     fn view_aids_preserve_drawing_selection_history_and_manual_camera() {
         let (mut app, _) = App::new();
-        let id = app.doc.add_atom("O", Point::new(50., 20.));
-        app.selected = vec![id];
+        let id = app.tab.doc.add_atom("O", Point::new(50., 20.));
+        app.tab.selected = vec![id];
         app.edit(Edit::Pan(60., -20.));
-        let document = app.doc.clone();
-        let camera = app.camera;
-        let revision = app.revision;
-        let history = app.history.can_undo();
-        let export = reshiki::export::drawing(&app.doc, "svg").expect("SVG before view change");
+        let document = app.tab.doc.clone();
+        let camera = app.tab.camera;
+        let revision = app.tab.revision;
+        let history = app.tab.history.can_undo();
+        let export = reshiki::export::drawing(&app.tab.doc, "svg").expect("SVG before view change");
         for message in [
             Message::ToggleView,
             Message::Rulers(true),
@@ -5053,14 +5027,14 @@ mod tests {
         let legacy: crate::appearance::Settings =
             serde_json::from_str(r#"{"mode":"light","arrange_controls":false}"#).unwrap();
         assert!(legacy.smart_guides && !legacy.arrange_controls);
-        assert_eq!(app.doc, document);
-        assert_eq!(app.selected, [id]);
-        assert_eq!(app.revision, revision);
-        assert_eq!(app.history.can_undo(), history);
-        assert_eq!(app.camera.center, camera.center);
-        assert_eq!(app.camera.zoom, camera.zoom);
+        assert_eq!(app.tab.doc, document);
+        assert_eq!(app.tab.selected, [id]);
+        assert_eq!(app.tab.revision, revision);
+        assert_eq!(app.tab.history.can_undo(), history);
+        assert_eq!(app.tab.camera.center, camera.center);
+        assert_eq!(app.tab.camera.zoom, camera.zoom);
         assert_eq!(
-            reshiki::export::drawing(&app.doc, "svg").expect("SVG after view change"),
+            reshiki::export::drawing(&app.tab.doc, "svg").expect("SVG after view change"),
             export
         );
     }
@@ -5087,20 +5061,20 @@ mod tests {
             ));
             let _ = app.update(Message::FilePrepared(key, opened));
             assert!(!app.error && !app.dirty(), "{extension}: {}", app.status);
-            assert_eq!(app.doc, document);
-            assert_eq!(app.path, Some(path));
+            assert_eq!(app.tab.doc, document);
+            assert_eq!(app.tab.path, Some(path));
             assert_eq!(app.status, "Document opened");
-            assert!(app.fit_to_view);
-            assert!(app.camera.zoom > Camera::default().zoom);
-            assert!(app.camera.zoom <= 2.5);
+            assert!(app.tab.fit_to_view);
+            assert!(app.tab.camera.zoom > Camera::default().zoom);
+            assert!(app.tab.camera.zoom <= 2.5);
         }
     }
 
     #[test]
     fn drawings_from_a_newer_reshiki_ask_for_an_update_and_keep_the_current_drawing() {
         let (mut app, _) = App::new();
-        app.doc.add_atom("O", Point::default());
-        let before = app.doc.clone();
+        app.tab.doc.add_atom("O", Point::default());
+        let before = app.tab.doc.clone();
         let newer = format!(
             r#"{{"version": {}, "atoms": [], "bonds": [], "future": "blue.strong"}}"#,
             reshiki::document::VERSION + 1
@@ -5121,15 +5095,15 @@ mod tests {
             "{}",
             app.status
         );
-        assert_eq!(app.doc, before);
-        assert_eq!(app.path, None);
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.path, None);
     }
 
     #[test]
     fn late_save_does_not_mark_newer_edits_as_saved() {
         let (mut app, _) = App::new();
-        let snapshot = app.doc.clone();
-        app.doc.add_atom("O", Point::default());
+        let snapshot = app.tab.doc.clone();
+        app.tab.doc.add_atom("O", Point::default());
         let _ = app.update(Message::Saved(
             0,
             Box::new(snapshot),
@@ -5141,8 +5115,8 @@ mod tests {
     #[test]
     fn unsaved_changes_wait_for_one_save_dialog_answer() {
         let (mut app, _) = App::new();
-        app.doc.add_atom("O", Point::default());
-        let edited = app.doc.clone();
+        app.tab.doc.add_atom("O", Point::default());
+        let edited = app.tab.doc.clone();
         let window = iced::window::Id::unique();
         assert!(app.update(Message::Close(window)).units() > 0);
         assert!(matches!(app.pending, Some(Pending::Close(id)) if id == window));
@@ -5153,41 +5127,45 @@ mod tests {
         assert!(matches!(app.pending, Some(Pending::Close(_))));
         let _ = app.update(Message::Cancel);
         assert!(app.pending.is_none());
-        assert_eq!(app.doc, edited);
+        assert_eq!(app.tab.doc, edited);
         let _ = app.update(Message::New);
         let _ = app.update(Message::Discard);
         assert!(app.pending.is_none());
-        assert!(app.doc.all_ids().is_empty());
+        assert!(app.tab.doc.all_ids().is_empty());
     }
 
     #[test]
     fn save_answer_continues_only_after_the_drawing_is_saved() {
         let (mut app, _) = App::new();
-        app.doc.add_atom("O", Point::default());
+        app.tab.doc.add_atom("O", Point::default());
         let _ = app.update(Message::New);
         // Cancelling Save As cancels New too, so a later save does not continue it.
-        let epoch = app.file_epoch;
-        let _ = app.update(Message::Saved(epoch, Box::new(app.doc.clone()), Ok(None)));
+        let epoch = app.tab.file_epoch;
+        let _ = app.update(Message::Saved(
+            epoch,
+            Box::new(app.tab.doc.clone()),
+            Ok(None),
+        ));
         assert!(app.pending.is_none());
         let saved = Ok(Some(PathBuf::from("drawing.reshiki")));
         let _ = app.update(Message::Saved(
             epoch,
-            Box::new(app.doc.clone()),
+            Box::new(app.tab.doc.clone()),
             saved.clone(),
         ));
-        assert_eq!(app.doc.atoms.len(), 1);
-        app.doc.add_atom("N", Point::new(80., 0.));
+        assert_eq!(app.tab.doc.atoms.len(), 1);
+        app.tab.doc.add_atom("N", Point::new(80., 0.));
         let _ = app.update(Message::New);
-        let _ = app.update(Message::Saved(epoch, Box::new(app.doc.clone()), saved));
+        let _ = app.update(Message::Saved(epoch, Box::new(app.tab.doc.clone()), saved));
         assert!(app.pending.is_none());
-        assert!(app.doc.all_ids().is_empty() && app.path.is_none());
+        assert!(app.tab.doc.all_ids().is_empty() && app.tab.path.is_none());
     }
 
     #[test]
     fn save_answer_passes_an_open_atom_editor() {
         let (mut app, _) = App::new();
-        let atom = app.doc.add_atom("C", Point::default());
-        app.selected = vec![atom];
+        let atom = app.tab.doc.add_atom("C", Point::default());
+        app.tab.selected = vec![atom];
         let _ = app.update(Message::AtomText(atom_text::Action::Begin(None)));
         assert_eq!(app.update(Message::Save).units(), 0);
         let _ = app.update(Message::Close(iced::window::Id::unique()));
@@ -5198,30 +5176,30 @@ mod tests {
     #[test]
     fn late_save_does_not_retarget_another_document() {
         let (mut app, _) = App::new();
-        let snapshot = app.doc.clone();
+        let snapshot = app.tab.doc.clone();
         let _ = app.perform(Pending::New);
         let _ = app.update(Message::Saved(
             0,
             Box::new(snapshot),
             Ok(Some("previous.reshiki".into())),
         ));
-        assert!(app.path.is_none());
+        assert!(app.tab.path.is_none());
     }
 
     #[test]
     fn startup_is_a_blank_saved_canvas_without_an_import_job() {
         let (app, _) = App::new();
-        assert_eq!(app.doc, Document::default());
-        assert!(app.doc.all_ids().is_empty());
-        assert!(!app.busy && !app.dirty() && !app.history.can_undo());
-        assert!(app.analysis.is_none() && app.path.is_none());
+        assert_eq!(app.tab.doc, Document::default());
+        assert!(app.tab.doc.all_ids().is_empty());
+        assert!(!app.tab.busy && !app.dirty() && !app.tab.history.can_undo());
+        assert!(app.tab.analysis.is_none() && app.tab.path.is_none());
         assert!(app.imports.is_blank());
     }
 
     #[test]
     fn new_document_invalidates_inflight_import_even_when_empty() {
         let (mut app, _) = App::new();
-        let revision = app.revision;
+        let revision = app.tab.revision;
         let _ = app.perform(Pending::New);
         let mut old = Document::default();
         old.add_atom("O", Point::default());
@@ -5236,6 +5214,6 @@ mod tests {
                 warnings: vec![],
             })),
         });
-        assert!(app.doc.atoms.is_empty());
+        assert!(app.tab.doc.atoms.is_empty());
     }
 }

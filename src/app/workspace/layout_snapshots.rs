@@ -113,12 +113,12 @@ fn benzene() -> Document {
 }
 
 fn open(app: &mut App, doc: Document) {
-    app.doc = doc;
-    app.saved = app.doc.clone();
+    app.tab.doc = doc;
+    app.tab.saved = app.tab.doc.clone();
 }
 
 fn select_all(app: &mut App) {
-    let _ = app.update(Message::Canvas(Edit::Select(app.doc.all_ids())));
+    let _ = app.update(Message::Canvas(Edit::Select(app.tab.doc.all_ids())));
 }
 
 fn molecule(app: &mut App) {
@@ -145,7 +145,7 @@ fn mixed(app: &mut App) {
         false,
     ));
     open(app, doc);
-    app.camera.center = World::new(110., 0.);
+    app.tab.camera.center = World::new(110., 0.);
     select_all(app);
 }
 
@@ -192,7 +192,7 @@ fn transform(app: &mut App) {
 /// New on an edited drawing waits for the native save dialog, which the
 /// headless renderer cannot show; nothing may appear above the canvas.
 fn unsaved(app: &mut App) {
-    app.doc = benzene();
+    app.tab.doc = benzene();
     let _ = app.update(Message::New);
     assert!(app.pending.is_some());
 }
@@ -216,7 +216,7 @@ fn recovery(app: &mut App) {
 fn color_popover(app: &mut App) {
     use reshiki::palette::Color as Paint;
     mixed(app);
-    app.doc.remember_color([31, 78, 121]);
+    app.tab.doc.remember_color([31, 78, 121]);
     let _ = app.update(Message::TextStyle(StyleChange::Color(Paint::Custom([
         232, 119, 34,
     ]))));
@@ -250,15 +250,15 @@ fn chain(app: &mut App) {
     let _ = app.update(Message::Tool(Tool::Chain(
         reshiki::chains::ChainMode::Snaking,
     )));
-    app.bond_drawing.fixed_angles = false;
+    app.tab.bond_drawing.fixed_angles = false;
 }
 
 /// One selected atom moves its bonded neighbors: constraints and Reset show.
 fn atom(app: &mut App) {
     open(app, benzene());
-    let id = app.doc.atoms[0].id;
+    let id = app.tab.doc.atoms[0].id;
     let _ = app.update(Message::Canvas(Edit::Select(vec![id])));
-    app.bond_drawing.fixed_angles = false;
+    app.tab.bond_drawing.fixed_angles = false;
 }
 
 /// A reaction scheme in one row with a molecule waiting below it, selected,
@@ -290,11 +290,11 @@ fn smart_guides_scheme(app: &mut App) -> (World, World) {
     let (_, x) = place(&arrow, x - 25., 0.);
     place(&benzene(), x, 0.);
     open(app, doc);
-    let grab = app.doc.atom(ids[0]).unwrap().position;
+    let grab = app.tab.doc.atom(ids[0]).unwrap().position;
     let _ = app.update(Message::Canvas(Edit::Select(ids)));
     app.grid = true;
     app.view_open = true;
-    app.camera.center = World::new(-40., 70.);
+    app.tab.camera.center = World::new(-40., 70.);
     (World::new(-25., -170.), grab)
 }
 
@@ -343,7 +343,7 @@ fn smart_guides(renderer: &mut iced::Renderer, size: Size, output: &Path) {
     };
     let (_, canvas) = send(&app, mouse::Event::CursorLeft, iced::Point::ORIGIN);
     let canvas = canvas.expect("Canvas layout");
-    let camera = app.camera;
+    let camera = app.tab.camera;
     let screen = |p: World| {
         iced::Point::new(
             canvas.x + (p.x - camera.center.x) * camera.zoom + canvas.width / 2.,
@@ -679,8 +679,8 @@ async fn every_context_row_fits_the_minimum_window() {
             let (mut app, _) = App::new();
             open(&mut app, benzene());
             app.tool = tool;
-            app.selected = app.doc.all_ids().into_iter().take(selected).collect();
-            app.bond_drawing.fixed_angles = !reset;
+            app.tab.selected = app.tab.doc.all_ids().into_iter().take(selected).collect();
+            app.tab.bond_drawing.fixed_angles = !reset;
             app.inspector_open = tab.is_some();
             app.inspector_tab = tab.unwrap_or(app.inspector_tab);
             let width = 1040. - PALETTE_WIDTH - app.inspector_width() - 2. * CONTEXT_PADDING;
@@ -907,7 +907,7 @@ async fn command_keys_never_type_into_fields_and_enter_leaves_them() {
             "72".into(),
         ),
     ));
-    let before = app.doc.clone();
+    let before = app.tab.doc.clone();
     let mut tree = Tree::empty();
     let field = locate(&app, &renderer, &mut tree, viewport, false, "72");
     let (_, _, focused) = send(
@@ -947,7 +947,7 @@ async fn command_keys_never_type_into_fields_and_enter_leaves_them() {
     assert_eq!(messages.len(), 1, "{messages:?}");
     assert!(messages[0].contains("Apply(Rotation)"), "{messages:?}");
     assert!(!focused, "Enter leaves the field");
-    assert_ne!(app.doc, before);
+    assert_ne!(app.tab.doc, before);
     let (messages, status, _) = send(
         &mut app,
         &renderer,

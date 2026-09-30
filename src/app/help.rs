@@ -451,18 +451,22 @@ mod tests {
         let (mut app, _) = App::new();
         app.tool = crate::canvas::Tool::Ring;
         app.inspector_tab = crate::app::InspectorTab::Import;
-        app.selected = vec![app.doc.add_atom("O", reshiki::document::Point::default())];
-        app.camera.zoom = 5.;
-        let before = app.doc.clone();
-        let selected = app.selected.clone();
+        app.tab.selected = vec![
+            app.tab
+                .doc
+                .add_atom("O", reshiki::document::Point::default()),
+        ];
+        app.tab.camera.zoom = 5.;
+        let before = app.tab.doc.clone();
+        let selected = app.tab.selected.clone();
         let _ = app.update(Message::ToggleHelp);
         assert!(app.help_open);
         assert_eq!(app.inspector_tab, crate::app::InspectorTab::Import);
         let _ = app.update(Message::Escape);
         assert!(!app.help_open);
         assert_eq!(app.tool, crate::canvas::Tool::Ring);
-        assert_eq!(app.selected, selected);
-        assert_eq!(app.camera.zoom, 5.);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.selected, selected);
+        assert_eq!(app.tab.camera.zoom, 5.);
+        assert_eq!(app.tab.doc, before);
     }
 }

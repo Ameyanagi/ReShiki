@@ -19,50 +19,56 @@ mod tests {
     #[test]
     fn role_edits_are_undoable_and_arrow_reversal_swaps_roles() {
         let (mut app, _) = App::new();
-        app.busy = false;
-        let a = app.doc.add_atom("C", Point::default());
-        let b = app.doc.add_atom("O", Point::new(42., 0.));
-        app.doc.add_bond(a, b, 1, "plain");
-        let c = app.doc.add_atom("C", Point::new(300., 0.));
-        app.doc.arrows.push(Arrow::new(
+        app.tab.busy = false;
+        let a = app.tab.doc.add_atom("C", Point::default());
+        let b = app.tab.doc.add_atom("O", Point::new(42., 0.));
+        app.tab.doc.add_bond(a, b, 1, "plain");
+        let c = app.tab.doc.add_atom("C", Point::new(300., 0.));
+        app.tab.doc.arrows.push(Arrow::new(
             4,
             Point::new(100., 0.),
             Point::new(240., 0.),
             Default::default(),
             Default::default(),
         ));
-        app.saved = app.doc.clone();
-        let original = app.doc.clone();
-        app.selected = vec![a];
+        app.tab.saved = app.tab.doc.clone();
+        let original = app.tab.doc.clone();
+        app.tab.selected = vec![a];
         let _ = app.update(Message::Reaction(Action::Assign(Role::Reactant)));
-        assert_eq!(app.doc.reactions[0].reactants[0].atoms, [a, b]);
+        assert_eq!(app.tab.doc.reactions[0].reactants[0].atoms, [a, b]);
         assert!(app.dirty());
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
         let _ = app.update(Message::Redo);
-        app.selected = vec![c];
+        app.tab.selected = vec![c];
         let _ = app.update(Message::Reaction(Action::Assign(Role::Product)));
-        let ready = app.doc.clone();
-        app.selected = vec![4];
+        let ready = app.tab.doc.clone();
+        app.tab.selected = vec![4];
         app.sync_arrows();
         assert_eq!(app.inspector_tab, InspectorTab::Reactions);
         let _ = app.update(Message::ArrowAction(super::super::arrows::Action::Reverse));
-        assert_eq!(app.doc.reactions[0].reactants, ready.reactions[0].products);
-        assert_eq!(app.doc.reactions[0].products, ready.reactions[0].reactants);
+        assert_eq!(
+            app.tab.doc.reactions[0].reactants,
+            ready.reactions[0].products
+        );
+        assert_eq!(
+            app.tab.doc.reactions[0].products,
+            ready.reactions[0].reactants
+        );
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, ready);
+        assert_eq!(app.tab.doc, ready);
         // An incompatible chemistry edit is rejected as a whole.
-        app.doc.add_bond(a, c, 1, "plain");
+        app.tab.doc.add_bond(a, c, 1, "plain");
         app.changed(ready.clone());
         assert!(app.error);
-        assert_eq!(app.doc, ready);
+        assert_eq!(app.tab.doc, ready);
         let _ = app.update(Message::Reaction(Action::SelectAll));
-        assert_eq!(app.selected.len(), 4);
+        assert_eq!(app.tab.selected.len(), 4);
         let _ = app.update(Message::Reaction(Action::Unlink));
-        assert!(app.doc.reactions.is_empty());
-        assert_eq!(app.doc.atoms, ready.atoms);
+        assert!(app.tab.doc.reactions.is_empty());
+        assert_eq!(app.tab.doc.atoms, ready.atoms);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, ready);
+        assert_eq!(app.tab.doc, ready);
     }
 
     #[tokio::test]
@@ -70,7 +76,7 @@ mod tests {
     async fn reaction_headless_snapshot() {
         use iced::advanced::{layout, mouse, renderer::Headless, widget::Tree};
         let (mut app, _) = App::new();
-        app.doc = LocalEngine::default()
+        app.tab.doc = LocalEngine::default()
             .execute(Request::import(
                 "rsmi",
                 "CC(=O)O.CCO>OS(=O)(=O)O>CCOC(C)=O.O",
@@ -79,14 +85,14 @@ mod tests {
             .unwrap()
             .document
             .unwrap();
-        app.busy = false;
+        app.tab.busy = false;
         app.status = "Reaction roles ready · Editable molecules and reaction data".into();
         let _ = app.update(Message::Reaction(Action::Open));
         let directory = std::path::Path::new("artifacts/reaction-qa");
         std::fs::create_dir_all(directory).unwrap();
         std::fs::write(
             directory.join("esterification.rsk"),
-            serde_json::to_vec_pretty(&app.doc).unwrap(),
+            serde_json::to_vec_pretty(&app.tab.doc).unwrap(),
         )
         .unwrap();
         for (name, width, height) in [("desktop", 1280, 820), ("compact", 1040, 680)] {
@@ -183,24 +189,25 @@ pub enum Action {
 impl App {
     fn reaction_arrow(&self) -> Option<u64> {
         let selected: Vec<_> = self
+            .tab
             .doc
             .arrows
             .iter()
-            .filter(|a| self.selected.contains(&a.id))
+            .filter(|a| self.tab.selected.contains(&a.id))
             .collect();
         if let [arrow] = selected.as_slice() {
             return Some(arrow.id);
         }
-        if self.reactions.epoch == self.file_epoch
-            && let Some(id) = self.reactions.arrow
-            && self.doc.arrows.iter().any(|a| a.id == id)
+        if self.tab.reactions.epoch == self.tab.file_epoch
+            && let Some(id) = self.tab.reactions.arrow
+            && self.tab.doc.arrows.iter().any(|a| a.id == id)
         {
             return Some(id);
         }
-        if let [reaction] = self.doc.reactions.as_slice() {
+        if let [reaction] = self.tab.doc.reactions.as_slice() {
             return Some(reaction.arrow);
         }
-        if let [arrow] = self.doc.arrows.as_slice() {
+        if let [arrow] = self.tab.doc.arrows.as_slice() {
             return Some(arrow.id);
         }
         None
@@ -210,34 +217,34 @@ impl App {
         self.inspector_tab = InspectorTab::Reactions;
         self.tool = Tool::Select;
         if let Action::Choose(id) = action {
-            self.reactions = State {
+            self.tab.reactions = State {
                 arrow: Some(id),
-                epoch: self.file_epoch,
+                epoch: self.tab.file_epoch,
             };
-            self.selected = vec![id];
+            self.tab.selected = vec![id];
             return Task::none();
         }
         let Some(arrow) = self.reaction_arrow() else {
             return Task::none();
         };
-        self.reactions = State {
+        self.tab.reactions = State {
             arrow: Some(arrow),
-            epoch: self.file_epoch,
+            epoch: self.tab.file_epoch,
         };
         if let Action::Export(format) = action {
-            if self.busy {
+            if self.tab.busy {
                 return Task::none();
             }
-            let mut request = Request::molecule("export", self.doc.clone());
+            let mut request = Request::molecule("export", self.tab.doc.clone());
             request.selected_ids = Some(vec![arrow]);
             request.format = Some(format.into());
             return self.run(request, Job::Export(format));
         }
-        let before = self.doc.clone();
+        let before = self.tab.doc.clone();
         match action {
             Action::Assign(role) => {
                 if let Err(error) =
-                    reshiki::reactions::assign(&mut self.doc, arrow, &self.selected, role)
+                    reshiki::reactions::assign(&mut self.tab.doc, arrow, &self.tab.selected, role)
                 {
                     self.error = true;
                     self.status = error;
@@ -245,29 +252,31 @@ impl App {
                 }
             }
             Action::ClearSelected => {
-                if let Some(reaction) = self.doc.reactions.iter_mut().find(|r| r.arrow == arrow) {
+                if let Some(reaction) = self.tab.doc.reactions.iter_mut().find(|r| r.arrow == arrow)
+                {
                     for role in Role::ALL {
                         reaction
                             .participants_mut(role)
-                            .retain(|p| !p.atoms.iter().any(|id| self.selected.contains(id)));
+                            .retain(|p| !p.atoms.iter().any(|id| self.tab.selected.contains(id)));
                     }
                 }
             }
-            Action::Unlink => self.doc.reactions.retain(|r| r.arrow != arrow),
+            Action::Unlink => self.tab.doc.reactions.retain(|r| r.arrow != arrow),
             Action::SelectAll => {
-                if let Some(reaction) = self.doc.reactions.iter().find(|r| r.arrow == arrow) {
-                    self.selected = reaction.ids();
+                if let Some(reaction) = self.tab.doc.reactions.iter().find(|r| r.arrow == arrow) {
+                    self.tab.selected = reaction.ids();
                 }
             }
             Action::SelectParticipant(role, index) => {
                 if let Some(participant) = self
+                    .tab
                     .doc
                     .reactions
                     .iter()
                     .find(|r| r.arrow == arrow)
                     .and_then(|r| r.participants(role).get(index))
                 {
-                    self.selected = participant.atoms.clone();
+                    self.tab.selected = participant.atoms.clone();
                 }
             }
             _ => {}
@@ -279,14 +288,15 @@ impl App {
         use super::workspace::{command, muted_text, panel};
         let ready = self
             .reaction_arrow()
-            .and_then(|arrow| self.doc.reactions.iter().find(|r| r.arrow == arrow))
+            .and_then(|arrow| self.tab.doc.reactions.iter().find(|r| r.arrow == arrow))
             .is_some_and(Reaction::ready);
         let mut exports = row![].spacing(8);
         for (label, format) in [("RXN · V3000", "rxn"), ("Reaction SMILES", "rsmi")] {
             exports = exports.push(
                 command(label, Message::Reaction(Action::Export(format)))
                     .on_press_maybe(
-                        (ready && !self.busy).then_some(Message::Reaction(Action::Export(format))),
+                        (ready && !self.tab.busy)
+                            .then_some(Message::Reaction(Action::Export(format))),
                     )
                     .width(Length::Fill),
             );
@@ -334,13 +344,13 @@ impl App {
         ]
         .spacing(12);
         let active = self.reaction_arrow();
-        if self.doc.arrows.is_empty() {
+        if self.tab.doc.arrows.is_empty() {
             return body
                 .push(text("Add a reaction arrow with A to begin.").size(13))
                 .into();
         }
-        for (index, arrow) in self.doc.arrows.iter().enumerate() {
-            let reaction = self.doc.reactions.iter().find(|r| r.arrow == arrow.id);
+        for (index, arrow) in self.tab.doc.arrows.iter().enumerate() {
+            let reaction = self.tab.doc.reactions.iter().find(|r| r.arrow == arrow.id);
             let summary = reaction
                 .map(|r| format!("{} → {}", r.reactants.len(), r.products.len()))
                 .unwrap_or_else(|| "Assign roles".into());
@@ -362,12 +372,17 @@ impl App {
         };
         let empty = Reaction::new(arrow);
         let reaction = self
+            .tab
             .doc
             .reactions
             .iter()
             .find(|r| r.arrow == arrow)
             .unwrap_or(&empty);
-        let has_atoms = self.selected.iter().any(|id| self.doc.atom(*id).is_some());
+        let has_atoms = self
+            .tab
+            .selected
+            .iter()
+            .any(|id| self.tab.doc.atom(*id).is_some());
         for role in Role::ALL {
             let parts = reaction.participants(role);
             let mut card = column![row![
@@ -376,10 +391,10 @@ impl App {
             ]]
             .spacing(5);
             for (index, part) in parts.iter().enumerate() {
-                let selected = part.atoms.iter().all(|id| self.selected.contains(id));
-                let mut preview = reshiki::editing::selection(&self.doc, &part.atoms);
+                let selected = part.atoms.iter().all(|id| self.tab.selected.contains(id));
+                let mut preview = reshiki::editing::selection(&self.tab.doc, &part.atoms);
                 for atom in &mut preview.atoms {
-                    if let Some(source) = self.doc.atom(atom.id) {
+                    if let Some(source) = self.tab.doc.atom(atom.id) {
                         atom.label_h = source.label_h;
                     }
                 }
@@ -454,7 +469,7 @@ impl App {
             ]
             .spacing(4),
         );
-        if !self.doc.reactions.is_empty() {
+        if !self.tab.doc.reactions.is_empty() {
             body = body.push(command(
                 "Remove reaction roles",
                 Message::Reaction(Action::Unlink),

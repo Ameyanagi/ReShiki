@@ -122,21 +122,22 @@ async fn selection_layout_and_double_click_regression() {
         for inspector in [false, true] {
             for zoom in [0.7, 1., 1.7] {
                 let (mut app, _) = App::new();
-                app.doc = reshiki::rings::Preset::Regular.document(42., false);
-                app.doc.atoms[0].element = "N".into();
-                app.saved = app.doc.clone();
-                app.busy = false;
+                app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
+                app.tab.doc.atoms[0].element = "N".into();
+                app.tab.saved = app.tab.doc.clone();
+                app.tab.busy = false;
                 app.status = "Ready".into();
                 app.appearance.mode = crate::appearance::Mode::Light;
                 app.inspector_open = inspector;
-                app.camera.zoom = zoom;
-                app.camera.center = reshiki::document::Point::new(-20., 10.);
-                let atom = app.doc.atoms[0].clone();
+                app.tab.camera.zoom = zoom;
+                app.tab.camera.center = reshiki::document::Point::new(-20., 10.);
+                let atom = app.tab.doc.atoms[0].clone();
                 let size = Size::new(width as f32, height as f32);
                 let mut tree = Tree::empty();
                 let before = frame(&mut app, &mut renderer, &mut tree, size, None, None);
                 let position = |app: &App, bounds: Rectangle| {
-                    app.camera.screen(atom.position, bounds) + iced::Vector::new(bounds.x, bounds.y)
+                    app.tab.camera.screen(atom.position, bounds)
+                        + iced::Vector::new(bounds.x, bounds.y)
                 };
                 let point = position(&app, before);
                 let capture = inspector && zoom == 1. && width <= 1280;
@@ -144,7 +145,7 @@ async fn selection_layout_and_double_click_regression() {
                 if capture {
                     std::fs::write(
                         directory.join("selection-fixture.rsk"),
-                        serde_json::to_vec_pretty(&app.doc).unwrap(),
+                        serde_json::to_vec_pretty(&app.tab.doc).unwrap(),
                     )
                     .unwrap();
                     frame(
@@ -157,7 +158,7 @@ async fn selection_layout_and_double_click_regression() {
                     );
                 }
                 click(&mut app, &mut renderer, &mut tree, size, point);
-                assert_eq!(app.selected, [atom.id]);
+                assert_eq!(app.tab.selected, [atom.id]);
                 let after = frame(&mut app, &mut renderer, &mut tree, size, None, None);
                 let after_point = position(&app, after);
                 if !baseline {
@@ -173,13 +174,13 @@ async fn selection_layout_and_double_click_regression() {
                 click(&mut app, &mut renderer, &mut tree, size, point);
                 if !baseline {
                     assert_eq!(
-                        app.selected.len(),
-                        app.doc.atoms.len(),
+                        app.tab.selected.len(),
+                        app.tab.doc.atoms.len(),
                         "Second click selects the molecule at {width}, zoom {zoom}"
                     );
-                    assert_eq!(app.camera.zoom, zoom);
-                    assert_eq!(app.doc, app.saved);
-                    assert!(!app.history.can_undo());
+                    assert_eq!(app.tab.camera.zoom, zoom);
+                    assert_eq!(app.tab.doc, app.tab.saved);
+                    assert!(!app.tab.history.can_undo());
                 }
                 if capture {
                     frame(
@@ -213,33 +214,33 @@ async fn selection_layout_and_double_click_regression() {
     // inspector. Compare the actual object position across the width change.
     for (width, height) in [(1040, 680), (1280, 820)] {
         let (mut app, _) = App::new();
-        app.doc = reshiki::rings::Preset::Regular.document(42., false);
-        let id = app.doc.next_id();
+        app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
+        let id = app.tab.doc.next_id();
         let at = reshiki::document::Point::new(-120., 100.);
-        app.doc.annotations.push(reshiki::document::Annotation {
+        app.tab.doc.annotations.push(reshiki::document::Annotation {
             id,
             position: at,
             text: "Reaction conditions".into(),
             format: Default::default(),
         });
-        app.saved = app.doc.clone();
-        app.busy = false;
+        app.tab.saved = app.tab.doc.clone();
+        app.tab.busy = false;
         app.status = "Ready".into();
         app.appearance.mode = crate::appearance::Mode::Light;
         app.inspector_open = false;
-        app.camera.center = reshiki::document::Point::new(-20., 10.);
+        app.tab.camera.center = reshiki::document::Point::new(-20., 10.);
         let size = Size::new(width as f32, height as f32);
         let mut tree = Tree::empty();
         let bounds = frame(&mut app, &mut renderer, &mut tree, size, None, None);
-        let point = app.camera.screen(at, bounds) + iced::Vector::new(bounds.x, bounds.y);
+        let point = app.tab.camera.screen(at, bounds) + iced::Vector::new(bounds.x, bounds.y);
         let prefix = if baseline { "before" } else { "after" };
         std::fs::write(
             directory.join("inspector-fixture.rsk"),
-            serde_json::to_vec_pretty(&app.doc).unwrap(),
+            serde_json::to_vec_pretty(&app.tab.doc).unwrap(),
         )
         .unwrap();
         click(&mut app, &mut renderer, &mut tree, size, point);
-        assert_eq!(app.selected, [id]);
+        assert_eq!(app.tab.selected, [id]);
         assert!(app.inspector_open);
         let bounds = frame(
             &mut app,
@@ -249,15 +250,15 @@ async fn selection_layout_and_double_click_regression() {
             None,
             Some(&directory.join(format!("{prefix}-inspector-{width}-selected.png"))),
         );
-        let after_point = app.camera.screen(at, bounds) + iced::Vector::new(bounds.x, bounds.y);
+        let after_point = app.tab.camera.screen(at, bounds) + iced::Vector::new(bounds.x, bounds.y);
         eprintln!("{prefix} inspector {width}×{height}: target {point:?} -> {after_point:?}");
         if !baseline {
             assert_eq!(
                 point, after_point,
                 "Auto-revealing Properties keeps the caption in place"
             );
-            assert_eq!(app.doc, app.saved);
-            assert!(!app.history.can_undo());
+            assert_eq!(app.tab.doc, app.tab.saved);
+            assert!(!app.tab.history.can_undo());
         }
     }
 }
