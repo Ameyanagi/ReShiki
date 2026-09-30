@@ -649,7 +649,7 @@ impl App {
                 .context_commands()
                 .into_iter()
                 .take(folded)
-                .map(|c| command(c.label, c.message, c.enabled))
+                .map(|c| command(c.menu, c.message, c.enabled))
                 .collect(),
             Page::Attachments => vec![
                 submenu("‹ Back", Page::Main),

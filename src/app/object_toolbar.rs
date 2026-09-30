@@ -534,13 +534,23 @@ mod tests {
     }
 
     #[test]
-    fn existing_layer_commands_keep_their_individual_domains() {
+    fn bond_depth_changes_only_bonds() {
         let mut app = fixture();
-        let before = app.doc.clone();
-        let _ = app.update(Message::GraphicLayer(true));
-        assert_eq!(app.doc, before);
+        let id = app.doc.next_id();
+        app.doc.graphics.push(Graphic::dragged(
+            id,
+            GraphicKind::Rectangle,
+            Point::new(10., 10.),
+            Point::new(100., 100.),
+            GraphicStyle::default(),
+            BracketSides::Both,
+            false,
+        ));
+        app.selected.push(id);
+        let graphics = app.doc.graphics.clone();
         let _ = app.update(Message::BondDepth(true));
         assert!(app.doc.bonds.iter().all(|b| b.z_order == 1));
+        assert_eq!(app.doc.graphics, graphics);
     }
 
     #[test]

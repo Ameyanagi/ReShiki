@@ -867,7 +867,7 @@ impl App {
         .spacing(8)
         .align_x(Alignment::Center);
         container(palette)
-            .width(104)
+            .width(PALETTE_WIDTH)
             .height(Length::Fill)
             .padding([14, 8])
             .style(panel)
@@ -883,34 +883,26 @@ impl App {
     }
 
     /// Width of `bond_constraints`: two checkboxes (13 px box, 8 px gap), the
-    /// 48 px field, 6 px gaps and the measured labels.
-    fn constraints_width(&self) -> f32 {
-        let mut width = 2. * 21.
-            + 48.
-            + 18.
-            + ["Length", "pt", "Angles"]
-                .map(|s| text_width(s, 11.))
-                .iter()
-                .sum::<f32>();
-        if self.bond_drawing_changed() {
-            width += 6. + text_width("Reset", 12.) + 18.;
-        }
-        width
+    /// Length field, 6 px gaps and the measured labels.
+    fn constraints_width() -> f32 {
+        2. * 21. + UNIT_FIELD + 12. + text_width("Length", 11.) + text_width("Angles", 11.)
     }
 
+    /// Length and Angles for drawing and bonded movement; their Reset is a
+    /// row command, so that it can fold into ⋯.
     fn bond_constraints(&self) -> Element<'_, Message> {
-        let mut constraints = row![
+        row![
             checkbox(self.bond_drawing.fixed_length)
                 .label("Length")
                 .on_toggle(Message::FixedLength)
                 .size(13)
                 .text_size(11),
-            crate::appearance::text_input("14.4", &self.drawing_length_input)
-                .on_input(Message::DrawingLength)
-                .width(48)
-                .size(12)
-                .padding(5),
-            text("pt").size(11).style(muted_text),
+            container(unit_field(
+                crate::appearance::text_input("14.4", &self.drawing_length_input)
+                    .on_input(Message::DrawingLength),
+                "pt",
+            ))
+            .width(UNIT_FIELD),
             checkbox(self.bond_drawing.fixed_angles)
                 .label("Angles")
                 .on_toggle(Message::FixedAngles)
@@ -918,15 +910,37 @@ impl App {
                 .text_size(11),
         ]
         .spacing(6)
-        .align_y(Alignment::Center);
-        if self.bond_drawing_changed() {
-            constraints = constraints.push(hover_hint(
-                command("Reset", Message::ResetBondDrawing),
-                "Reset bonds · Restore this document's bond length and drawing constraints",
-                tooltip::Position::Bottom,
-            ));
+        .align_y(Alignment::Center)
+        .into()
+    }
+
+    /// Width of the tool options before the row commands, from their leading
+    /// divider, for the rows that fold. The selection summary is separate.
+    fn options_width(&self) -> f32 {
+        let lead = 2. * CONTEXT_GAP + DIVIDER;
+        match self.tool {
+            tool if tool.bond_preset().is_some() => {
+                let preset = BondPreset::ALL
+                    .iter()
+                    .map(|p| text_width(&p.to_string(), 12.))
+                    .fold(0., f32::max);
+                // A shrinking pick list: label, handle (text size) and padding.
+                lead + preset + 12. + 15. + CONTEXT_GAP + Self::constraints_width()
+            }
+            Tool::Chain(mode) => {
+                lead + text_width(chain_atoms_label(mode), 11.)
+                    + 4.
+                    + 49.
+                    + CONTEXT_GAP
+                    + text_width("Angle", 11.)
+                    + 4.
+                    + UNIT_FIELD
+                    + CONTEXT_GAP
+                    + Self::constraints_width()
+            }
+            _ if self.moving_bonded_selection() => lead + Self::constraints_width(),
+            _ => 0.,
         }
-        constraints.into()
     }
 
     /// A partial selection drags bonded atoms along, following Length / Angles.
@@ -942,26 +956,42 @@ impl App {
 
     /// Context row commands in fold order: the first ones fold into ⋯ first.
     pub(super) fn context_commands(&self) -> Vec<RowCommand> {
-        if !matches!(self.tool, Tool::Select | Tool::Lasso) || self.selected.is_empty() {
-            return Vec::new();
+        let mut commands = Vec::new();
+        let constraints = self.tool.bond_preset().is_some()
+            || matches!(self.tool, Tool::Chain(_))
+            || self.moving_bonded_selection();
+        if constraints && self.bond_drawing_changed() {
+            commands.push(RowCommand {
+                label: "Reset",
+                menu: "Reset bonds",
+                hint: "Reset bonds · Restore this document's bond length and drawing constraints",
+                message: Message::ResetBondDrawing,
+                enabled: true,
+            });
         }
-        let mut commands = vec![
+        if !matches!(self.tool, Tool::Select | Tool::Lasso) || self.selected.is_empty() {
+            return commands;
+        }
+        commands.extend([
             RowCommand {
                 label: "Move & attach…",
+                menu: "Move & attach…",
                 hint: "Join the selection to another structure at an atom or bond",
                 message: Message::Join(super::joining::Action::Begin),
                 enabled: self.selected.iter().any(|id| self.doc.atom(*id).is_some()),
             },
             RowCommand {
                 label: "Group",
+                menu: "Group",
                 hint: "Group",
                 message: Message::Group,
                 enabled: self.can_group(),
             },
-        ];
+        ]);
         if !self.doc.outer_selected_groups(&self.selected).is_empty() {
             commands.push(RowCommand {
                 label: "Ungroup",
+                menu: "Ungroup",
                 hint: "Ungroup",
                 message: Message::Ungroup,
                 enabled: true,
@@ -986,23 +1016,7 @@ impl App {
     /// Tool name, options and commands, plus the arrange group for selection
     /// tools. A short row folds commands into ⋯ instead of scrolling.
     fn context_row(&self, width: f32) -> Element<'_, Message> {
-        let name = tool_name(self.tool);
-        let (options, hint) = self.tool_options();
-        let mut row = row![hover_hint(
-            text(name)
-                .size(12)
-                .style(crate::appearance::text_color(ink())),
-            hint,
-            tooltip::Position::Bottom,
-        )]
-        .spacing(CONTEXT_GAP)
-        .align_y(Alignment::Center);
-        if !options.is_empty() {
-            row = row.push(divider());
-        }
-        for option in options {
-            row = row.push(option);
-        }
+        let (name, short) = tool_name(self.tool);
         let commands = self.context_commands();
         let widths: Vec<f32> = commands
             .iter()
@@ -1013,19 +1027,47 @@ impl App {
             super::object_toolbar::GROUP_WIDTH,
             super::object_toolbar::COMPACT_WIDTH,
         ));
-        // Only the Select row folds. Its fixed part is measured text.
-        let mut fixed = 0.;
-        if select {
-            fixed = text_width(name, 12.);
-            if !self.selected.is_empty() {
-                fixed += 2. * CONTEXT_GAP + DIVIDER + text_width(&self.selection_summary(), 11.);
-            }
-            if self.moving_bonded_selection() {
-                fixed += 2. * CONTEXT_GAP + DIVIDER + self.constraints_width();
-            }
+        let summary = (select && !self.selected.is_empty()).then(|| self.selection_summary());
+        let options = self.options_width();
+        let fit = fit(
+            width,
+            &Fold {
+                name: (text_width(name, 12.), text_width(short, 12.)),
+                options,
+                summary: summary
+                    .as_ref()
+                    .map_or(0., |s| 2. * CONTEXT_GAP + DIVIDER + text_width(s, 11.)),
+                commands: &widths,
+                arrange,
+            },
+        );
+        let (options_list, hint) = self.tool_options(fit.summary);
+        // A shortened name or hidden summary stays in the name's tooltip.
+        let mut about = vec![];
+        if fit.short {
+            about.push(name.to_owned());
         }
-        let (folded, compact) = fold(width, fixed, &widths, arrange);
-        let mut x = CONTEXT_PADDING + fixed;
+        if let Some(summary) = summary.filter(|_| !fit.summary) {
+            about.push(summary);
+        }
+        about.push(hint.to_owned());
+        let mut row = row![hover_hint(
+            text(if fit.short { short } else { name })
+                .size(12)
+                .style(crate::appearance::text_color(ink())),
+            about.join(" · "),
+            tooltip::Position::Bottom,
+        )]
+        .spacing(CONTEXT_GAP)
+        .align_y(Alignment::Center);
+        if !options_list.is_empty() {
+            row = row.push(divider());
+        }
+        for option in options_list {
+            row = row.push(option);
+        }
+        let (folded, compact) = (fit.folded, fit.compact);
+        let mut x = CONTEXT_PADDING + fit.fixed;
         for (c, w) in commands.iter().zip(&widths).skip(folded) {
             row = row.push(hover_keys(
                 command(c.label, c.message.clone())
@@ -1037,7 +1079,7 @@ impl App {
             x += CONTEXT_GAP + w;
         }
         if folded > 0 {
-            let labels: Vec<_> = commands.iter().take(folded).map(|c| c.label).collect();
+            let labels: Vec<_> = commands.iter().take(folded).map(|c| c.menu).collect();
             let page = super::context_menu::Page::More(folded);
             row = row.push(
                 self.menu_anchor(
@@ -1086,8 +1128,9 @@ impl App {
         hover_hint(anchor, hint, tooltip::Position::Bottom).into()
     }
 
-    /// Options for the current tool, and the usage hint shown on the tool name.
-    fn tool_options(&self) -> (Vec<Element<'_, Message>>, &'static str) {
+    /// Options for the current tool, and the usage hint shown on the tool
+    /// name. `summary` shows the selection summary of the selection tools.
+    fn tool_options(&self, summary: bool) -> (Vec<Element<'_, Message>>, &'static str) {
         match self.tool {
             tool if tool.bond_preset().is_some() => (
                 vec![
@@ -1114,12 +1157,7 @@ impl App {
                 vec![
                     hover_hint(
                         row![
-                            text(if mode == reshiki::chains::ChainMode::Snaking {
-                                "Max atoms"
-                            } else {
-                                "Atoms"
-                            })
-                            .size(11),
+                            text(chain_atoms_label(mode)).size(11),
                             crate::appearance::text_input("Auto", &self.chain_atoms_input)
                                 .on_input(Message::ChainAtoms)
                                 .width(49)
@@ -1134,12 +1172,12 @@ impl App {
                     .into(),
                     row![
                         text("Angle").size(11),
-                        crate::appearance::text_input("120", &self.chain_angle_input)
-                            .on_input(Message::ChainAngle)
-                            .width(44)
-                            .size(12)
-                            .padding(5),
-                        text("°").size(11),
+                        container(unit_field(
+                            crate::appearance::text_input("120", &self.chain_angle_input)
+                                .on_input(Message::ChainAngle),
+                            "°",
+                        ))
+                        .width(UNIT_FIELD),
                     ]
                     .spacing(4)
                     .align_y(Alignment::Center)
@@ -1322,7 +1360,7 @@ impl App {
             }
             Tool::Select | Tool::Lasso => {
                 let mut options = Vec::new();
-                if !self.selected.is_empty() {
+                if summary && !self.selected.is_empty() {
                     options.push(
                         hover_hint(
                             text(self.selection_summary()).size(11).style(muted_text),
@@ -1336,7 +1374,9 @@ impl App {
                 // second row would move the canvas between the two clicks
                 // used to select a molecule.
                 if self.moving_bonded_selection() {
-                    options.push(divider());
+                    if !options.is_empty() {
+                        options.push(divider());
+                    }
                     options.push(
                         hover_hint(
                             self.bond_constraints(),
@@ -2197,45 +2237,103 @@ impl App {
     }
 }
 
+const PALETTE_WIDTH: f32 = 104.;
 const CONTEXT_PADDING: f32 = 14.;
 const CONTEXT_GAP: f32 = 10.;
 const DIVIDER: f32 = 11.;
 const MORE_WIDTH: f32 = 30.;
+/// A context row field with its unit inside.
+const UNIT_FIELD: f32 = 54.;
 
 /// A context row command that can fold into the ⋯ menu.
 pub(super) struct RowCommand {
     pub label: &'static str,
+    /// The label in the ⋯ menu, away from the controls it belongs to.
+    pub menu: &'static str,
     /// Tooltip text, followed by the shortcut if there is one.
     pub hint: &'static str,
     pub message: Message,
     pub enabled: bool,
 }
 
-/// How many commands fold into ⋯ (from the front) and whether the arrange
-/// group collapses, so that a row with `fixed` leading content fits `width`.
-/// The group collapses only after every command has folded.
-fn fold(width: f32, fixed: f32, commands: &[f32], arrange: Option<(f32, f32)>) -> (usize, bool) {
-    let total = |folded: usize, compact: bool| {
-        fixed
-            + commands
+/// Measured widths of a context row's parts.
+struct Fold<'a> {
+    /// The tool name and its short form.
+    name: (f32, f32),
+    /// Tool options from their leading divider, without the summary.
+    options: f32,
+    /// The selection summary with its divider and gaps, or 0.
+    summary: f32,
+    commands: &'a [f32],
+    /// The full and collapsed arrange group.
+    arrange: Option<(f32, f32)>,
+}
+
+/// How a context row fits its width.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Fit {
+    /// Commands folded into ⋯, from the front.
+    folded: usize,
+    /// The arrange group is one Arrange ▾ button.
+    compact: bool,
+    /// The selection summary is shown.
+    summary: bool,
+    /// The tool name is its short form.
+    short: bool,
+    /// Width of the name, options and summary, before the commands.
+    fixed: f32,
+}
+
+/// A short row gives way in this order until it fits `width`: commands fold
+/// into ⋯ one by one, the arrange group collapses, the selection summary
+/// hides, and the tool name shortens.
+fn fit(width: f32, row: &Fold<'_>) -> Fit {
+    let n = row.commands.len();
+    let with = |folded, compact, summary: bool, short: bool| {
+        let name = if short { row.name.1 } else { row.name.0 };
+        Fit {
+            folded,
+            compact,
+            summary,
+            short,
+            fixed: name + row.options + if summary { row.summary } else { 0. },
+        }
+    };
+    let total = |fit: &Fit| {
+        fit.fixed
+            + row
+                .commands
                 .iter()
-                .skip(folded)
+                .skip(fit.folded)
                 .map(|w| CONTEXT_GAP + w)
                 .sum::<f32>()
-            + if folded > 0 {
+            + if fit.folded > 0 {
                 CONTEXT_GAP + MORE_WIDTH
             } else {
                 0.
             }
-            + arrange.map_or(0., |(full, short)| {
-                CONTEXT_GAP + if compact { short } else { full }
+            + row.arrange.map_or(0., |(full, short)| {
+                CONTEXT_GAP + if fit.compact { short } else { full }
             })
     };
-    (0..=commands.len())
-        .map(|folded| (folded, false))
-        .chain(arrange.map(|_| (commands.len(), true)))
-        .find(|&(folded, compact)| total(folded, compact) <= width)
-        .unwrap_or((commands.len(), arrange.is_some()))
+    let compact = row.arrange.is_some();
+    let summary = row.summary > 0.;
+    let short = row.name.1 < row.name.0;
+    (0..=n)
+        .map(|folded| with(folded, false, true, false))
+        .chain(compact.then(|| with(n, true, true, false)))
+        .chain(summary.then(|| with(n, compact, false, false)))
+        .chain(short.then(|| with(n, compact, !summary, true)))
+        .find(|fit| total(fit) <= width)
+        .unwrap_or_else(|| with(n, compact, !summary, short))
+}
+
+fn chain_atoms_label(mode: reshiki::chains::ChainMode) -> &'static str {
+    if mode == reshiki::chains::ChainMode::Snaking {
+        "Max atoms"
+    } else {
+        "Atoms"
+    }
 }
 
 /// Returns to Select, like Escape.
@@ -2281,7 +2379,14 @@ pub(super) fn hover_hint<'a>(
     label: impl Into<std::borrow::Cow<'a, str>>,
     position: tooltip::Position,
 ) -> tooltip::Tooltip<'a, Message> {
-    hint_tooltip(content, text(label.into()).size(12), position)
+    let label = label.into();
+    // Key symbols, as in "Redo · ⇧⌘Z", use the shortcut font.
+    let label: Element<'a, Message> = if label.contains(super::shortcuts::symbol) {
+        rich_text(super::shortcuts::spans(&label)).size(12).into()
+    } else {
+        text(label).size(12).into()
+    };
+    hint_tooltip(content, label, position)
 }
 
 /// A hover hint whose first line ends with a shortcut, drawn in the
@@ -2361,6 +2466,14 @@ pub(super) fn unit_field<'a>(
 
 pub(super) fn command(label: &str, message: Message) -> button::Button<'_, Message> {
     button(text(label).size(12))
+        .padding([7, 9])
+        .on_press(message)
+        .style(control(false))
+}
+/// A `command` labeled `label · keys` with the command's shortcut, in the
+/// notation of the menus.
+pub(super) fn keyed_command<'a>(label: &str, message: Message) -> button::Button<'a, Message> {
+    button(keyed_text(label, super::shortcuts::label(&message), ""))
         .padding([7, 9])
         .on_press(message)
         .style(control(false))
@@ -2595,14 +2708,16 @@ fn tip(_: &Theme) -> container::Style {
         ..Default::default()
     }
 }
-fn tool_name(tool: Tool) -> &'static str {
-    match tool {
-        Tool::Select => "Select / move",
-        Tool::Lasso => "Lasso select",
+/// The context row's tool name and the short form a short row uses.
+fn tool_name(tool: Tool) -> (&'static str, &'static str) {
+    let name = match tool {
+        Tool::Select => return ("Select / move", "Select"),
+        Tool::Lasso => return ("Lasso select", "Lasso"),
+        Tool::Chain(reshiki::chains::ChainMode::Straight) => return ("Straight chain", "Chain"),
+        // "Max atoms" beside it still marks the snaking mode.
+        Tool::Chain(_) => return ("Snaking chain", "Chain"),
         Tool::Tilt => "3D tilt",
         Tool::Atom => "Atom label",
-        Tool::Chain(reshiki::chains::ChainMode::Straight) => "Straight chain",
-        Tool::Chain(_) => "Snaking chain",
         // The bond pick list beside it names the preset.
         Tool::Bond(_) | Tool::StyledBond(_) | Tool::Wedge | Tool::Hash | Tool::Wavy => "Bond",
         Tool::Ring | Tool::RingPreset(_) => "Ring",
@@ -2612,7 +2727,8 @@ fn tool_name(tool: Tool) -> &'static str {
         Tool::Erase => "Eraser",
         Tool::Graphic(_) => "Drawing object",
         Tool::EditPoints => "Edit points",
-    }
+    };
+    (name, name)
 }
 
 #[cfg(test)]
@@ -2621,18 +2737,48 @@ mod selection_tests {
     use reshiki::document::{Annotation, Point};
 
     #[test]
-    fn short_rows_fold_commands_before_collapsing_the_arrange_group() {
+    fn short_rows_fold_commands_then_arrange_then_summary_then_name() {
         let commands = [120., 56.];
-        let arrange = Some((227., 80.));
+        let row = Fold {
+            name: (80., 40.),
+            options: 70.,
+            summary: 50.,
+            commands: &commands,
+            arrange: Some((227., 80.)),
+        };
+        let steps = |width| {
+            let fit = fit(width, &row);
+            (fit.folded, fit.compact, fit.summary, fit.short)
+        };
         // Fixed part, two commands with gaps, and the group after one gap.
         let full = 200. + 130. + 66. + 237.;
-        assert_eq!(fold(full, 200., &commands, arrange), (0, false));
-        assert_eq!(fold(full - 1., 200., &commands, arrange), (1, false));
-        assert_eq!(fold(542., 200., &commands, arrange), (2, false));
-        assert_eq!(fold(476., 200., &commands, arrange), (2, true));
-        assert_eq!(fold(100., 200., &commands, arrange), (2, true));
-        assert_eq!(fold(300., 200., &commands, None), (2, false));
-        assert_eq!(fold(300., 0., &[], None), (0, false));
+        assert_eq!(steps(full), (0, false, true, false));
+        assert_eq!(steps(full - 1.), (1, false, true, false));
+        assert_eq!(steps(542.), (2, false, true, false));
+        assert_eq!(steps(476.), (2, true, true, false));
+        assert_eq!(steps(330.), (2, true, true, false));
+        assert_eq!(steps(329.), (2, true, false, false));
+        assert_eq!(steps(279.), (2, true, false, true));
+        assert_eq!(steps(100.), (2, true, false, true));
+        assert_eq!(fit(329., &row).fixed, 150.);
+        assert_eq!(fit(279., &row).fixed, 110.);
+        // Rows without an arrange group, summary or short name.
+        let plain = |commands: &[f32], width| {
+            let fit = fit(
+                width,
+                &Fold {
+                    name: (80., 80.),
+                    options: 120.,
+                    summary: 0.,
+                    commands,
+                    arrange: None,
+                },
+            );
+            (fit.folded, fit.compact, fit.short)
+        };
+        assert_eq!(plain(&[56.], 300.), (0, false, false));
+        assert_eq!(plain(&[56.], 250.), (1, false, false));
+        assert_eq!(plain(&[], 100.), (0, false, false));
     }
 
     #[test]

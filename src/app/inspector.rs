@@ -1,5 +1,5 @@
 //! Selection-focused properties and task-based export controls.
-use super::workspace::{command, hover_hint, muted_text};
+use super::workspace::{command, hover_hint, keyed_command, muted_text};
 use super::{App, InspectorTab, Message};
 use crate::canvas::Tool;
 use iced::widget::{button, checkbox, column, container, row, text, tooltip};
@@ -868,8 +868,8 @@ impl App {
         let mut body = column![].spacing(10);
         if self.atom_text_target().is_some() {
             body = body.push(
-                command(
-                    "Edit atom label… · Enter",
+                keyed_command(
+                    "Edit atom label…",
                     Message::AtomText(super::atom_text::Action::Begin(None)),
                 )
                 .width(Length::Fill),
@@ -947,11 +947,8 @@ impl App {
             }
             if reshiki::rings::selected_cycle(&self.doc, &self.selected).is_some() {
                 controls = controls.push(
-                    command(
-                        "Saturated ↔ Aromatic · Shift+R",
-                        Message::ToggleSelectedRing,
-                    )
-                    .width(Length::Fill),
+                    keyed_command("Saturated ↔ Aromatic", Message::ToggleSelectedRing)
+                        .width(Length::Fill),
                 );
             }
             body = body.push(self.inspector_section(
@@ -1193,15 +1190,9 @@ impl App {
         if reshiki::clipboard::available() {
             figures = figures
                 .push(
-                    button(super::workspace::keyed_text(
-                        "Copy image",
-                        super::shortcuts::label(&Message::CopyImage),
-                        "",
-                    ))
-                    .padding([7, 9])
-                    .style(super::workspace::control(false))
-                    .on_press_maybe((!self.clipboard_busy).then_some(Message::CopyImage))
-                    .width(Length::Fill),
+                    keyed_command("Copy image", Message::CopyImage)
+                        .on_press_maybe((!self.clipboard_busy).then_some(Message::CopyImage))
+                        .width(Length::Fill),
                 )
                 .push(
                     text(if self.selected.is_empty() {

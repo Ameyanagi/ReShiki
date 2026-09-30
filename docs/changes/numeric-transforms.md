@@ -3,10 +3,13 @@
 Issue: [#65](https://github.com/Ameyanagi/ReShiki/issues/65).
 
 Select objects, open **Properties → Transform**, and enter a value. Enter in a
-field applies just that field as one Undo step; the **Apply** button applies
-every edited field, in the order rotate, tilt, scale, size, as one Undo step.
-Typing alone does not change the drawing. Changing the selection, undoing, or
-applying an edit refreshes the displayed values. Hovering a field explains it.
+field applies just that field as one Undo step and leaves the field, so
+**Cmd/Ctrl+Z** then undoes it; values typed in other fields stay until their
+own Enter or **Apply**. The **Apply** button applies every edited field, in the
+order rotate, tilt, scale, size, as one Undo step, including a tilt typed before
+**More** was closed (the closed **More** then reads “edited”). Typing alone does
+not change the drawing. Changing the selection, undoing, or applying with
+**Apply** refreshes the displayed values. Hovering a field explains it.
 (Issue #78 replaced the original six rows, each with its own Apply, with this
 compact grid.)
 
@@ -17,7 +20,8 @@ compact grid.)
   tilt controls, atoms and shapes tilt; arrows and upright captions do not.
 - **W / H** (pt) specify the canvas selection bounds in publication points,
   including labels. The lock beside **H** scales coordinates uniformly; unlock
-  it to change one axis independently.
+  it to change one axis independently. With the lock on, one size decides the
+  scale: if both W and H are edited, **Apply** uses the one edited last.
 - **Scale** (%) is relative uniform coordinate scaling: `125` enlarges by 25%.
   It resets to `100` after applying; angles reset to `0`.
 

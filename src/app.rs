@@ -53,6 +53,9 @@ mod updates;
 mod workspace;
 pub(crate) use workspace::text_width;
 
+/// The status bar's idle message.
+const READY: &str = "Ready · Choose a tool to start drawing";
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum InspectorTab {
     Reactions,
@@ -122,7 +125,6 @@ pub enum Message {
     RemoveMark(u64, usize),
     RotateMark(u64, usize),
     AtomRadical(u8),
-    GraphicLayer(bool),
     ToggleInspector,
     Inspector(InspectorTab),
     Imports(import::Action),
@@ -448,12 +450,7 @@ impl App {
             clipboard_busy: false,
             figure_exporting: false,
             // A recovery offer in the status bar is the launch message.
-            status: if recovered.is_empty() {
-                "Ready · Choose a tool to start drawing"
-            } else {
-                ""
-            }
-            .into(),
+            status: if recovered.is_empty() { READY } else { "" }.into(),
             error: false,
             path: None,
             untitled_name: None,
@@ -1471,7 +1468,6 @@ impl App {
                 }
                 self.changed(before);
             }
-            Message::GraphicLayer(front) => self.layer_objects(front, true, false),
             Message::ToggleInspector => {
                 self.inspector_open = !self.inspector_open;
                 if self.inspector_open && self.inspector_tab == InspectorTab::Assistant {
@@ -1879,6 +1875,9 @@ impl App {
             }
             Message::DismissRecovery => {
                 self.recovered.clear();
+                if self.status.is_empty() {
+                    self.status = READY.into();
+                }
             }
             Message::Canvas(edit) => self.edit(edit),
             Message::Appearance(mode) => {
@@ -3383,6 +3382,31 @@ mod tests {
         assert!(!path.exists());
         assert_eq!(subscriptions(&app), idle);
         Ok(())
+    }
+
+    #[test]
+    fn dismissing_the_recovery_offer_restores_the_ready_message() {
+        use reshiki::recovery::Snapshot;
+        let (mut app, _) = App::new();
+        let candidate = Candidate {
+            path: "draft.json".into(),
+            snapshot: Snapshot {
+                document: Document::default(),
+                source: None,
+                saved_at: 0,
+            },
+        };
+        // At launch the offer replaces the ready message.
+        app.recovered = vec![candidate.clone()];
+        app.status.clear();
+        let _ = app.update(Message::DismissRecovery);
+        assert!(app.recovered.is_empty());
+        assert_eq!(app.status, READY);
+        // A newer message stays.
+        app.recovered = vec![candidate];
+        app.status = "Drawing updated".into();
+        let _ = app.update(Message::DismissRecovery);
+        assert_eq!(app.status, "Drawing updated");
     }
 
     fn checked_labels(app: &mut App) {

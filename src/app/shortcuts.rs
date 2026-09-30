@@ -61,7 +61,6 @@ pub(super) fn label(message: &Message) -> Option<String> {
 /// `keys` as rich text spans, with the macOS key symbols in Lucida Grande:
 /// the interface font lacks ⌥, ⌫ and ↩ and draws ⇧ as a hairline.
 pub(super) fn spans(keys: &str) -> Vec<iced::widget::text::Span<'static>> {
-    let symbol = |c: char| matches!(c, '⌘' | '⇧' | '⌥' | '⌃' | '⌫' | '↩');
     let mut spans = vec![];
     let mut rest = keys;
     while let Some(first) = rest.chars().next() {
@@ -76,6 +75,11 @@ pub(super) fn spans(keys: &str) -> Vec<iced::widget::text::Span<'static>> {
         rest = &rest[end..];
     }
     spans
+}
+
+/// A macOS key symbol that `spans` draws in the shortcut font.
+pub(super) fn symbol(c: char) -> bool {
+    matches!(c, '⌘' | '⇧' | '⌥' | '⌃' | '⌫' | '↩')
 }
 
 /// Modifiers and key of the commands that have a shortcut in `key_message`.
@@ -931,11 +935,16 @@ mod compatibility_tests {
         }
         assert_eq!(label(&Message::Transform(Transform::Rotate(180.))), None);
         let label = |message| label(&message).unwrap_or_default();
+        let edit_label = || Message::AtomText(crate::app::atom_text::Action::Begin(None));
         if cfg!(target_os = "macos") {
             assert_eq!(label(Message::Arrange(Arrange::AlignLeft)), "⌥⇧⌘L");
             assert_eq!(label(Message::Copy(true)), "⌘X");
             assert_eq!(label(Message::Delete), "⌫");
+            assert_eq!(label(Message::ToggleSelectedRing), "⇧R");
+            assert_eq!(label(edit_label()), "↩");
         } else {
+            assert_eq!(label(Message::ToggleSelectedRing), "Shift+R");
+            assert_eq!(label(edit_label()), "Enter");
             assert_eq!(
                 label(Message::Arrange(Arrange::AlignLeft)),
                 "Ctrl+Alt+Shift+L"
@@ -969,6 +978,16 @@ mod compatibility_tests {
             ]
         );
         assert_eq!(runs("Ctrl+Shift+D"), [("Ctrl+Shift+D".to_owned(), false)]);
+        // Tooltips such as the toolbar's Redo use the same runs.
+        assert_eq!(
+            runs("Redo · ⇧⌘Z"),
+            [
+                ("Redo · ".to_owned(), false),
+                ("⇧⌘".to_owned(), true),
+                ("Z".to_owned(), false),
+            ]
+        );
+        assert!("Redo · ⇧⌘Z".contains(symbol) && !"Redo · Ctrl+Shift+Z".contains(symbol));
         assert!(runs("").is_empty());
     }
 

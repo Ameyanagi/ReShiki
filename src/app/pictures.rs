@@ -341,8 +341,7 @@ impl App {
         } else {
             panel = panel.push(text("Multiple pictures selected").size(12));
         }
-        panel.push(row![command("Send to back", Message::GraphicLayer(false)), command("Bring to front", Message::GraphicLayer(true))].spacing(4))
-            .push(text("Drag the corner handles to resize; use the handle above to rotate. Enter applies dimensions. Pictures are saved inside your drawing.").size(11).style(muted_text)).into()
+        panel.push(text("Drag the corner handles to resize; use the handle above to rotate. Enter applies dimensions. Pictures are saved inside your drawing.").size(11).style(muted_text)).into()
     }
 }
 
@@ -490,6 +489,27 @@ mod tests {
         assert_eq!(app.doc, before);
     }
 
+    /// The context row's Order menu stacks pictures; the panel has no own row.
+    #[test]
+    fn order_commands_stack_a_selected_picture() {
+        use super::super::object_toolbar::Command;
+        let mut app = ready();
+        insert(&mut app, picture(20, 20));
+        let initial = app.doc.graphics[0].layer;
+        for front in [false, true] {
+            let command = Command::Layer(front);
+            assert!(command.enabled(&app, app.alignment_count()));
+            let _ = app.update(command.message());
+            let layer = app.doc.graphics[0].layer;
+            assert!(if front {
+                layer > 0
+            } else {
+                layer < initial.min(0)
+            });
+        }
+        let _ = app.update(Message::Undo);
+        assert!(app.doc.graphics[0].layer < initial.min(0));
+    }
     #[test]
     fn canvas_handle_resizing_refreshes_the_picture_dimensions() {
         let mut app = ready();

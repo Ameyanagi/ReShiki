@@ -641,7 +641,6 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::ReverseBonds
             | Message::BondDepth(_)
             | Message::GraphicStyle(_)
-            | Message::GraphicLayer(_)
             | Message::ArrowAction(_)
             | Message::Assistant(super::assistant::Action::Send)
     ) || matches!(message, Message::Canvas(edit) if !matches!(edit, crate::canvas::Edit::Hover(_) | crate::canvas::Edit::Pan(..) | crate::canvas::Edit::Zoom(..)))

@@ -21,7 +21,7 @@ The canvas fills the drawing area. Rulers reserve only their top and left gutter
 
 Lowercase and uppercase are different: **m** inserts Me at an atom; **M** means **Shift+m** and inserts MgBr. Keys depend on what is under the pointer. A single selected atom, or a selected bond's two endpoints, can also provide the target. A hovered target takes precedence. Clear the selection and move to empty canvas before choosing a tool.
 
-Text fields keep ordinary typing. **Cmd** means Command on macOS; **Ctrl** is the corresponding modifier on Windows and Linux. **Alt** is Option on macOS. Uppercase letters in modified shortcuts, such as **Cmd/Ctrl+C**, do not imply Shift unless it is written explicitly.
+Text fields keep ordinary typing, and Cmd/Ctrl shortcuts never type their letter into a field. Enter applies a field and leaves it, so **Cmd/Ctrl+Z** then undoes the drawing; while a field is still focused, Undo and Redo do nothing. **Cmd** means Command on macOS; **Ctrl** is the corresponding modifier on Windows and Linux. **Alt** is Option on macOS. Uppercase letters in modified shortcuts, such as **Cmd/Ctrl+C**, do not imply Shift unless it is written explicitly.
 
 ## Two quick ring gestures
 

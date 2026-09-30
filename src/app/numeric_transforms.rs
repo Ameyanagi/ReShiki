@@ -99,6 +99,8 @@ pub(super) struct State {
     dimensions: (String, String),
     scale: String,
     proportional: bool,
+    /// W or H, whichever was typed last; it wins when both are locked.
+    last_size: Field,
     more: bool,
     error: Option<String>,
 }
@@ -115,6 +117,7 @@ impl Default for State {
             dimensions: Default::default(),
             scale: "100".into(),
             proportional: true,
+            last_size: Field::Width,
             more: false,
             error: None,
         }
@@ -144,21 +147,39 @@ impl State {
         }
     }
 
-    /// Visible fields that differ from their reset value or readout.
+    /// Fields that differ from their reset value or readout, including tilt
+    /// hidden under a closed More.
     fn edited(&self) -> Vec<Field> {
         Field::ALL
             .into_iter()
             .filter(|&field| {
                 let value = self.value(field).trim();
                 match field {
-                    Field::Rotation => value != "0",
-                    Field::TiltX | Field::TiltY => self.more && value != "0",
+                    Field::Rotation | Field::TiltX | Field::TiltY => value != "0",
                     Field::Scale => value != "100",
                     Field::Width => value != self.dimensions.0,
                     Field::Height => value != self.dimensions.1,
                 }
             })
             .collect()
+    }
+
+    /// What Apply applies: every edited field, except that locked proportions
+    /// keep only the size typed last, since W and H cannot both be met.
+    fn to_apply(&self) -> Vec<Field> {
+        let mut fields = self.edited();
+        let both = [Field::Width, Field::Height]
+            .iter()
+            .all(|field| fields.contains(field));
+        if self.proportional && both {
+            let other = if self.last_size == Field::Width {
+                Field::Height
+            } else {
+                Field::Width
+            };
+            fields.retain(|&field| field != other);
+        }
+        fields
     }
 }
 
@@ -348,11 +369,15 @@ impl App {
             return;
         }
         let State {
-            proportional, more, ..
+            proportional,
+            last_size,
+            more,
+            ..
         } = self.numeric_transforms;
         self.numeric_transforms = State {
             key: Some(key),
             proportional,
+            last_size,
             more,
             ..State::default()
         };
@@ -417,21 +442,35 @@ impl App {
             Action::Input(field, input) => {
                 *self.numeric_transforms.value_mut(field) = input;
                 self.numeric_transforms.error = None;
+                if matches!(field, Field::Width | Field::Height) {
+                    self.numeric_transforms.last_size = field;
+                }
             }
             Action::Proportional(lock) => self.numeric_transforms.proportional = lock,
             Action::More(open) => self.numeric_transforms.more = open,
-            Action::Apply(field) => self.apply_numeric_transforms(&[field]),
-            Action::ApplyAll => self.apply_numeric_transforms(&self.numeric_transforms.edited()),
+            Action::Apply(field) => self.apply_numeric_transforms(&[field], true),
+            Action::ApplyAll => {
+                self.apply_numeric_transforms(&self.numeric_transforms.to_apply(), false)
+            }
         }
         Task::none()
     }
 
-    fn apply_numeric_transforms(&mut self, fields: &[Field]) {
+    /// Applies `fields`; with `keep`, values typed in other fields stay for
+    /// their own Enter or Apply.
+    fn apply_numeric_transforms(&mut self, fields: &[Field], keep: bool) {
         match self.numeric_transform_candidate(fields) {
             Ok(document) => {
                 if document.is_some() && !self.finish_inline(true) {
                     return;
                 }
+                let state = &self.numeric_transforms;
+                let pending: Vec<_> = state
+                    .edited()
+                    .into_iter()
+                    .filter(|field| keep && !fields.contains(field))
+                    .map(|field| (field, state.value(field).to_owned()))
+                    .collect();
                 self.numeric_transforms.error = None;
                 self.numeric_transforms.key = None;
                 self.error = false;
@@ -443,6 +482,10 @@ impl App {
                 if let Some(document) = document {
                     let before = std::mem::replace(&mut self.doc, document);
                     self.changed(before);
+                }
+                self.sync_numeric_transforms();
+                for (field, value) in pending {
+                    *self.numeric_transforms.value_mut(field) = value;
                 }
             }
             Err(error) => {
@@ -502,7 +545,7 @@ impl App {
                 !state.proportional,
             ))),
             if state.proportional {
-                "Proportions locked · W and H scale together"
+                "Proportions locked · W and H scale together\nIf both are edited, Apply uses the one edited last"
             } else {
                 "Proportions unlocked · W and H change one axis"
             },
@@ -538,14 +581,19 @@ impl App {
         if state.more {
             body = body.push(pair(Field::TiltX, label(Field::TiltY).into(), Field::TiltY));
         }
-        let edited = selected && !state.edited().is_empty();
+        let pending = state.to_apply();
+        let edited = selected && !pending.is_empty();
+        let hidden_tilt = !state.more
+            && pending
+                .iter()
+                .any(|f| matches!(f, Field::TiltX | Field::TiltY));
         body = body.push(
             row![
                 command(
-                    if state.more {
-                        "▾ More: tilt X / Y"
-                    } else {
-                        "▸ More: tilt X / Y"
+                    match (state.more, hidden_tilt) {
+                        (true, _) => "▾ More: tilt X / Y",
+                        (false, false) => "▸ More: tilt X / Y",
+                        (false, true) => "▸ More: tilt X / Y · edited",
                     },
                     Message::NumericTransform(Action::More(!state.more)),
                 ),
@@ -558,9 +606,13 @@ impl App {
                             edited.then_some(Message::NumericTransform(Action::ApplyAll))
                         ),
                     if edited {
-                        "Apply every edited field as one Undo step · Enter applies only its field"
+                        let names: Vec<_> = pending.iter().map(|f| f.name()).collect();
+                        format!(
+                            "Apply {} as one Undo step · Enter applies only its field",
+                            names.join(", ")
+                        )
                     } else {
-                        "Edit a value first · Enter applies only its field"
+                        "Edit a value first · Enter applies only its field".to_owned()
                     },
                     tooltip::Position::Top,
                 ),
@@ -716,17 +768,106 @@ mod tests {
             app.numeric_transforms.more,
             "More stays open across selections"
         );
-        // Closed More hides tilt, so Apply leaves a typed tilt alone.
-        for (field, input) in [(Field::Rotation, "72"), (Field::TiltX, "90")] {
-            let _ = app.update(Message::NumericTransform(Action::Input(
-                field,
-                input.into(),
-            )));
+    }
+
+    fn input(app: &mut App, field: Field, value: &str) {
+        let _ = app.update(Message::NumericTransform(Action::Input(
+            field,
+            value.into(),
+        )));
+    }
+
+    #[test]
+    fn enter_applies_its_field_and_keeps_values_typed_in_others() {
+        let mut app = fixture();
+        let original = app.doc.clone();
+        for (field, value) in [
+            (Field::Rotation, "72"),
+            (Field::Scale, "125"),
+            (Field::Width, "160"),
+        ] {
+            input(&mut app, field, value);
         }
+        let _ = app.update(Message::NumericTransform(Action::Apply(Field::Rotation)));
+        assert!(!app.error, "{}", app.status);
+        let state = &app.numeric_transforms;
+        assert_eq!(state.rotation, "0");
+        assert_eq!((state.scale.as_str(), state.width.as_str()), ("125", "160"));
+        assert_ne!(state.dimensions.0, "160");
+        // Enter on an unchanged field keeps them too.
+        let _ = app.update(Message::NumericTransform(Action::Apply(Field::Rotation)));
+        assert_eq!(app.numeric_transforms.scale, "125");
+        let _ = app.update(Message::NumericTransform(Action::Apply(Field::Scale)));
+        let _ = app.update(Message::NumericTransform(Action::Apply(Field::Width)));
+        assert!(!app.error, "{}", app.status);
+        assert_eq!(
+            app.numeric_transforms.width,
+            app.numeric_transforms.dimensions.0
+        );
+        assert_eq!(app.numeric_transforms.width, "160.00");
+        for _ in 0..3 {
+            let _ = app.update(Message::Undo);
+        }
+        assert_eq!(app.doc, original);
+        assert!(!app.history.can_undo(), "Each Enter is one Undo step");
+    }
+
+    #[test]
+    fn locked_apply_uses_the_size_edited_last_and_clears_the_other() {
+        for last in [Field::Width, Field::Height] {
+            let mut app = fixture();
+            let (width, height) = (
+                extent(&app.doc, &app.selected, Field::Width).unwrap(),
+                extent(&app.doc, &app.selected, Field::Height).unwrap(),
+            );
+            let first = if last == Field::Width {
+                Field::Height
+            } else {
+                Field::Width
+            };
+            let target = |field| if field == Field::Width { width } else { height } * 1.5;
+            input(&mut app, first, &format!("{:.2}", target(first) * 2.));
+            input(&mut app, last, &format!("{:.2}", target(last)));
+            let _ = app.update(Message::NumericTransform(Action::ApplyAll));
+            assert!(!app.error, "{}", app.status);
+            let reached = extent(&app.doc, &app.selected, last).unwrap();
+            assert!((reached - target(last)).abs() < 0.01, "{last:?}: {reached}");
+            let state = &app.numeric_transforms;
+            assert_eq!(state.width, state.dimensions.0);
+            assert_eq!(state.height, state.dimensions.1);
+            let _ = app.update(Message::Undo);
+            assert!(!app.history.can_undo(), "One Apply is one Undo step");
+        }
+        // Unlocked, both sizes apply.
+        let mut app = fixture();
+        let _ = app.update(Message::NumericTransform(Action::Proportional(false)));
+        input(&mut app, Field::Width, "150");
+        input(&mut app, Field::Height, "90");
+        assert_eq!(
+            app.numeric_transforms.to_apply(),
+            [Field::Width, Field::Height]
+        );
+    }
+
+    #[test]
+    fn apply_includes_tilt_typed_before_more_was_closed() {
+        let mut app = fixture();
+        let original = app.doc.clone();
+        let mut sequential = fixture();
+        apply(&mut sequential, Field::Rotation, "72");
+        apply(&mut sequential, Field::TiltX, "20");
+        let _ = app.update(Message::NumericTransform(Action::More(true)));
+        input(&mut app, Field::Rotation, "72");
+        input(&mut app, Field::TiltX, "20");
         let _ = app.update(Message::NumericTransform(Action::More(false)));
+        assert_eq!(
+            app.numeric_transforms.to_apply(),
+            [Field::Rotation, Field::TiltX]
+        );
         let _ = app.update(Message::NumericTransform(Action::ApplyAll));
         assert!(!app.error, "{}", app.status);
-        assert_ne!(app.doc, original);
+        assert_eq!(app.doc, sequential.doc);
+        assert_eq!(app.numeric_transforms.tilt_x, "0");
         let _ = app.update(Message::Undo);
         assert_eq!(app.doc, original);
         assert!(!app.history.can_undo());

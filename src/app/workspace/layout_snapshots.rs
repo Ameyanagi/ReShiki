@@ -228,9 +228,31 @@ fn edit_hues(app: &mut App) {
     }
 }
 
+/// The widest inspector tab.
+fn assistant(app: &mut App) {
+    app.inspector_open = true;
+    app.inspector_tab = InspectorTab::Assistant;
+}
+
+/// A snaking chain with changed constraints, so that Reset shows.
+fn chain(app: &mut App) {
+    let _ = app.update(Message::Tool(Tool::Chain(
+        reshiki::chains::ChainMode::Snaking,
+    )));
+    app.bond_drawing.fixed_angles = false;
+}
+
+/// One selected atom moves its bonded neighbors: constraints and Reset show.
+fn atom(app: &mut App) {
+    open(app, benzene());
+    let id = app.doc.atoms[0].id;
+    let _ = app.update(Message::Canvas(Edit::Select(vec![id])));
+    app.bond_drawing.fixed_angles = false;
+}
+
 type Setup = fn(&mut App);
 
-const STATES: [(&str, Setup); 11] = [
+const STATES: [(&str, Setup); 15] = [
     ("default", |_| {}),
     ("molecule", molecule),
     ("mixed", mixed),
@@ -242,6 +264,22 @@ const STATES: [(&str, Setup); 11] = [
     ("recovery", recovery),
     ("color-popover", color_popover),
     ("edit-hues", edit_hues),
+    ("ring-tool-assistant", |app| {
+        ring_tool(app);
+        assistant(app);
+    }),
+    ("molecule-assistant", |app| {
+        molecule(app);
+        assistant(app);
+    }),
+    ("chain-assistant", |app| {
+        chain(app);
+        assistant(app);
+    }),
+    ("atom-assistant", |app| {
+        atom(app);
+        assistant(app);
+    }),
 ];
 
 #[tokio::test]
@@ -371,8 +409,8 @@ async fn the_color_popover_keeps_pointer_input_from_the_canvas() {
     }
 }
 
-/// Every tool's context row fits the canvas of a 1040 px window with the
-/// default inspector, including Reset and bonded-movement controls.
+/// Every tool's context row fits the canvas of a 1040 px window with any
+/// inspector tab or none, including Reset and bonded-movement controls.
 #[tokio::test]
 #[ignore = "Opt-in renderer layout check"]
 async fn every_context_row_fits_the_minimum_window() {
@@ -406,14 +444,25 @@ async fn every_context_row_fits_the_minimum_window() {
     tools.extend(BondPreset::ALL.map(Tool::StyledBond));
     tools.extend(Preset::ALL.iter().map(|&p| Tool::RingPreset(p)));
     tools.extend(GraphicKind::DRAWABLE.map(Tool::Graphic));
-    let width = 636. - 2. * CONTEXT_PADDING;
+    let tabs = [
+        None,
+        Some(InspectorTab::Templates),
+        Some(InspectorTab::Properties),
+        Some(InspectorTab::DrawingStyle),
+        Some(InspectorTab::Assistant),
+    ];
     for tool in tools {
-        for (selected, reset) in [(0, false), (0, true), (1, true), (6, true)] {
+        for (tab, (selected, reset)) in tabs.into_iter().flat_map(|tab| {
+            [(0, false), (0, true), (1, true), (2, true), (6, true)].map(|case| (tab, case))
+        }) {
             let (mut app, _) = App::new();
             open(&mut app, benzene());
             app.tool = tool;
             app.selected = app.doc.all_ids().into_iter().take(selected).collect();
             app.bond_drawing.fixed_angles = !reset;
+            app.inspector_open = tab.is_some();
+            app.inspector_tab = tab.unwrap_or(app.inspector_tab);
+            let width = 1040. - PALETTE_WIDTH - app.inspector_width() - 2. * CONTEXT_PADDING;
             // Lay out without a width limit; the arrange group sits in a
             // filling container, so count the group itself.
             let mut row = app.context_row(width);
@@ -436,8 +485,304 @@ async fn every_context_row_fits_the_minimum_window() {
                 + CONTEXT_GAP * (children.len() - 1) as f32;
             assert!(
                 natural <= width,
-                "{tool:?} with {selected} selected, reset {reset}: {natural} > {width}"
+                "{tool:?} with {selected} selected, reset {reset}, {tab:?}: {natural} > {width}"
             );
         }
     }
+}
+
+/// Command keys never type into a field, Undo and Redo do nothing while one
+/// is focused, and Enter applies a field and leaves it, so that ⌘Z then
+/// reaches the drawing. Overlay fields, like the color popover's, too.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn command_keys_never_type_into_fields_and_enter_leaves_them() {
+    use iced::advanced::widget::{
+        Id, Operation,
+        operation::{Focusable, TextInput},
+    };
+    use iced::keyboard::{self, Key, Modifiers, key};
+    /// The bounds of the field showing `text` (any field if empty), and
+    /// whether some field is focused.
+    struct Find(&'static str, Option<Rectangle>, bool);
+    impl Operation for Find {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+        fn text_input(&mut self, _: Option<&Id>, bounds: Rectangle, state: &mut dyn TextInput) {
+            if self.1.is_none() && (self.0.is_empty() || state.text() == self.0) {
+                self.1 = Some(bounds);
+            }
+        }
+        fn focusable(&mut self, _: Option<&Id>, _: Rectangle, state: &mut dyn Focusable) {
+            self.2 |= state.is_focused();
+        }
+    }
+    let renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .unwrap();
+    let size = Size::new(1280., 820.);
+    let viewport = Rectangle::with_size(size);
+    let command = if cfg!(target_os = "macos") {
+        Modifiers::LOGO
+    } else {
+        Modifiers::CTRL
+    };
+    let press = |key: Key, code, modifiers, text: Option<&str>| {
+        Event::Keyboard(keyboard::Event::KeyPressed {
+            modified_key: key.clone(),
+            key,
+            physical_key: key::Physical::Code(code),
+            location: keyboard::Location::Standard,
+            modifiers,
+            text: text.map(Into::into),
+            repeat: false,
+        })
+    };
+    // macOS reports the letter as text for ⌘Z.
+    let undo = press(
+        Key::Character("z".into()),
+        key::Code::KeyZ,
+        command,
+        Some("z"),
+    );
+    let enter = press(
+        Key::Named(key::Named::Enter),
+        key::Code::Enter,
+        Modifiers::empty(),
+        None,
+    );
+    let click = |at: Rectangle| {
+        let cursor = mouse::Cursor::Available(at.center());
+        [
+            (
+                Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+                cursor,
+            ),
+            (
+                Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                cursor,
+            ),
+        ]
+    };
+    let modifiers = |modifiers| {
+        (
+            Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)),
+            mouse::Cursor::Unavailable,
+        )
+    };
+    // Sends events to the view, or its overlay, and applies the messages;
+    // returns them with the last event's status and whether a field is focused.
+    fn send(
+        app: &mut App,
+        renderer: &iced::Renderer,
+        tree: &mut Tree,
+        viewport: Rectangle,
+        overlay_only: bool,
+        events: &[(Event, mouse::Cursor)],
+    ) -> (Vec<String>, iced::event::Status, bool) {
+        let mut messages = Vec::new();
+        let mut status = iced::event::Status::Ignored;
+        let mut view = app.view();
+        tree.diff(view.as_widget());
+        let node = view.as_widget_mut().layout(
+            tree,
+            renderer,
+            &layout::Limits::new(viewport.size(), viewport.size()),
+        );
+        for (event, cursor) in events {
+            let mut shell = iced::advanced::Shell::new(&mut messages);
+            if overlay_only {
+                let element = view
+                    .as_widget_mut()
+                    .overlay(tree, Layout::new(&node), renderer, &viewport, Vector::ZERO)
+                    .expect("An overlay");
+                let mut nested = overlay::Nested::new(element);
+                let node = nested.layout(renderer, viewport.size());
+                nested.update(
+                    event,
+                    Layout::new(&node),
+                    *cursor,
+                    renderer,
+                    &mut iced::advanced::clipboard::Null,
+                    &mut shell,
+                );
+            } else {
+                view.as_widget_mut().update(
+                    tree,
+                    event,
+                    Layout::new(&node),
+                    *cursor,
+                    renderer,
+                    &mut iced::advanced::clipboard::Null,
+                    &mut shell,
+                    &viewport,
+                );
+            }
+            status = shell.event_status();
+        }
+        let mut find = Find("", None, false);
+        if overlay_only {
+            let element = view
+                .as_widget_mut()
+                .overlay(tree, Layout::new(&node), renderer, &viewport, Vector::ZERO)
+                .expect("An overlay");
+            let mut nested = overlay::Nested::new(element);
+            let node = nested.layout(renderer, viewport.size());
+            nested.operate(Layout::new(&node), renderer, &mut find);
+        } else {
+            view.as_widget_mut()
+                .operate(tree, Layout::new(&node), renderer, &mut find);
+        }
+        drop(view);
+        let names = messages.iter().map(|m| format!("{m:?}")).collect();
+        for message in messages {
+            let _ = app.update(message);
+        }
+        (names, status, find.2)
+    }
+    // Locates a field by its text in the view or its overlay.
+    fn locate(
+        app: &App,
+        renderer: &iced::Renderer,
+        tree: &mut Tree,
+        viewport: Rectangle,
+        overlay_only: bool,
+        text: &'static str,
+    ) -> Rectangle {
+        let mut view = app.view();
+        tree.diff(view.as_widget());
+        let node = view.as_widget_mut().layout(
+            tree,
+            renderer,
+            &layout::Limits::new(viewport.size(), viewport.size()),
+        );
+        let mut find = Find(text, None, false);
+        if overlay_only {
+            let element = view
+                .as_widget_mut()
+                .overlay(tree, Layout::new(&node), renderer, &viewport, Vector::ZERO)
+                .expect("An overlay");
+            let mut nested = overlay::Nested::new(element);
+            let node = nested.layout(renderer, viewport.size());
+            nested.operate(Layout::new(&node), renderer, &mut find);
+        } else {
+            view.as_widget_mut()
+                .operate(tree, Layout::new(&node), renderer, &mut find);
+        }
+        find.1.expect("The field")
+    }
+
+    // The Transform panel's Rotate field.
+    let (mut app, _) = App::new();
+    transform(&mut app);
+    let _ = app.update(Message::NumericTransform(
+        crate::app::numeric_transforms::Action::Input(
+            crate::app::numeric_transforms::Field::Rotation,
+            "72".into(),
+        ),
+    ));
+    let before = app.doc.clone();
+    let mut tree = Tree::empty();
+    let field = locate(&app, &renderer, &mut tree, viewport, false, "72");
+    let (_, _, focused) = send(
+        &mut app,
+        &renderer,
+        &mut tree,
+        viewport,
+        false,
+        &click(field),
+    );
+    assert!(focused);
+    let (messages, status, focused) = send(
+        &mut app,
+        &renderer,
+        &mut tree,
+        viewport,
+        false,
+        &[
+            modifiers(command),
+            (undo.clone(), mouse::Cursor::Unavailable),
+        ],
+    );
+    assert!(messages.is_empty(), "{messages:?}");
+    assert_eq!(status, iced::event::Status::Captured, "Undo does nothing");
+    assert!(focused);
+    let (messages, _, focused) = send(
+        &mut app,
+        &renderer,
+        &mut tree,
+        viewport,
+        false,
+        &[
+            modifiers(Modifiers::empty()),
+            (enter.clone(), mouse::Cursor::Unavailable),
+        ],
+    );
+    assert_eq!(messages.len(), 1, "{messages:?}");
+    assert!(messages[0].contains("Apply(Rotation)"), "{messages:?}");
+    assert!(!focused, "Enter leaves the field");
+    assert_ne!(app.doc, before);
+    let (messages, status, _) = send(
+        &mut app,
+        &renderer,
+        &mut tree,
+        viewport,
+        false,
+        &[
+            modifiers(command),
+            (undo.clone(), mouse::Cursor::Unavailable),
+        ],
+    );
+    assert!(messages.is_empty(), "{messages:?}");
+    assert_eq!(
+        status,
+        iced::event::Status::Ignored,
+        "⌘Z reaches the drawing's Undo"
+    );
+
+    // The color popover's Color field, in an overlay.
+    let (mut app, _) = App::new();
+    color_popover(&mut app);
+    let mut tree = Tree::empty();
+    let field = locate(&app, &renderer, &mut tree, viewport, true, "");
+    let (_, _, focused) = send(
+        &mut app,
+        &renderer,
+        &mut tree,
+        viewport,
+        true,
+        &click(field),
+    );
+    assert!(focused);
+    let (messages, status, _) = send(
+        &mut app,
+        &renderer,
+        &mut tree,
+        viewport,
+        true,
+        &[modifiers(command), (undo, mouse::Cursor::Unavailable)],
+    );
+    assert!(messages.is_empty(), "{messages:?}");
+    assert_eq!(status, iced::event::Status::Captured);
+    let (messages, _, focused) = send(
+        &mut app,
+        &renderer,
+        &mut tree,
+        viewport,
+        true,
+        &[
+            modifiers(Modifiers::empty()),
+            (enter, mouse::Cursor::Unavailable),
+        ],
+    );
+    assert!(
+        messages.iter().any(|m| m.contains("ApplyTextColor")),
+        "{messages:?}"
+    );
+    assert!(!focused);
 }
