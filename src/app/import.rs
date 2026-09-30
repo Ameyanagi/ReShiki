@@ -75,6 +75,8 @@ pub struct State {
     dropped: Vec<PathBuf>,
 }
 impl State {
+    // Only macOS Finder opens ask whether the Import box is blank.
+    #[cfg(any(test, target_os = "macos"))]
     pub fn is_blank(&self) -> bool {
         self.format.is_none()
     }
