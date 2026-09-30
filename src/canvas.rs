@@ -195,6 +195,13 @@ pub struct State {
     last_click: Option<(std::time::Instant, u64)>,
     modifiers: iced::keyboard::Modifiers,
 }
+impl State {
+    /// Every drag ends here, so a Ctrl/Cmd drag copy never outlives its drag.
+    fn end_gesture(&mut self) -> Option<Gesture> {
+        self.scene.get_mut().release_copy();
+        self.gesture.take()
+    }
+}
 #[derive(Debug)]
 enum Gesture {
     Erase {
@@ -483,13 +490,13 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                 key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
                 ..
             }) => {
-                if matches!(state.gesture.take(), Some(Gesture::Erase { .. })) {
+                if matches!(state.end_gesture(), Some(Gesture::Erase { .. })) {
                     return Some(Action::publish(Edit::EraseEnd));
                 }
                 Some(Action::request_redraw())
             }
             Event::Window(iced::window::Event::Unfocused) => {
-                let erasing = matches!(state.gesture.take(), Some(Gesture::Erase { .. }));
+                let erasing = matches!(state.end_gesture(), Some(Gesture::Erase { .. }));
                 state.last_click = None;
                 state.cursor = None;
                 Some(Action::publish(if erasing {
@@ -551,7 +558,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                 } else {
                     hit
                 };
-                state.gesture = None;
+                state.end_gesture();
                 state.last_click = None;
                 let position = point?
                     + iced::Vector::new(bounds.x - canvas_bounds.x, bounds.y - canvas_bounds.y);
@@ -866,7 +873,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                 }
             }
             Event::Mouse(mouse::Event::ButtonReleased(_)) => {
-                let gesture = state.gesture.take()?;
+                let gesture = state.end_gesture()?;
                 if matches!(gesture, Gesture::Erase { .. }) {
                     return Some(Action::publish(Edit::EraseEnd).and_capture());
                 }
@@ -4975,6 +4982,57 @@ mod tests {
             pointer_gesture_with(&canvas, Point::new(221.0, 171.0), Point::new(251.0, 181.0), Modifiers::SHIFT | Modifiers::ALT),
             Edit::Move(ids, 30.0, 0.0) if ids.len() == 2 && partial.iter().all(|id| ids.contains(id))
         ));
+    }
+
+    #[test]
+    fn ending_a_command_drag_releases_its_copy() {
+        use iced::keyboard::{Event as Key, Location, Modifiers, key};
+        let mut doc = Document::default();
+        let a = doc.add_atom("C", World::new(-21.0, 0.0));
+        let b = doc.add_atom("O", World::new(21.0, 0.0));
+        doc.add_bond(a, b, 1, "plain");
+        let selected = [a, b];
+        let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+        canvas.tool = Tool::Select;
+        canvas.selected = &selected;
+        let bounds = Rectangle::with_size(iced::Size::new(400., 300.));
+        let start = canvas.camera.screen(World::new(-21.0, 0.0), bounds);
+        let end = start + Vector::new(60., 30.);
+        let cursor = mouse::Cursor::Available(end);
+        let escape = key::Key::Named(key::Named::Escape);
+        for end_drag in [
+            Event::Keyboard(Key::KeyPressed {
+                key: escape.clone(),
+                modified_key: escape.clone(),
+                physical_key: key::Physical::Code(key::Code::Escape),
+                location: Location::Standard,
+                modifiers: Modifiers::COMMAND,
+                text: None,
+                repeat: false,
+            }),
+            Event::Window(iced::window::Event::Unfocused),
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)),
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+        ] {
+            let mut state = State {
+                modifiers: Modifiers::COMMAND,
+                ..Default::default()
+            };
+            for event in [
+                mouse::Event::CursorMoved { position: start },
+                mouse::Event::ButtonPressed(mouse::Button::Left),
+                mouse::Event::CursorMoved { position: end },
+            ] {
+                canvas.update(&mut state, &Event::Mouse(event), bounds, cursor);
+            }
+            assert!(matches!(state.gesture, Some(Gesture::Move { .. })));
+            // The drag preview extracts the copy, as drawing a frame does.
+            let copy = state.scene.borrow_mut().copy(&doc, &selected);
+            assert_eq!(copy.atoms.len(), 2);
+            canvas.update(&mut state, &end_drag, bounds, cursor);
+            assert!(state.gesture.is_none(), "{end_drag:?}");
+            assert_eq!(std::rc::Rc::strong_count(&copy), 1, "{end_drag:?}");
+        }
     }
 
     #[test]
