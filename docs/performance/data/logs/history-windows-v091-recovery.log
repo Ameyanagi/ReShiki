@@ -1,0 +1,7 @@
+running 1 test
+workload,median_ms,p95_ms
+gallery_1x_recovery_tick,4.0730,5.2298
+gallery_4x_recovery_tick,15.3179,16.7682
+test app::performance::historical_recovery_workloads ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 226 filtered out; finished in 0.73s

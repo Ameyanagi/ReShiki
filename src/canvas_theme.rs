@@ -230,10 +230,19 @@ fn label_backgrounds(
 /// Arbitrary overlapping artwork and unknown paste destinations are not covered.
 pub fn label_contrast_issues(doc: &crate::document::Document) -> Vec<u64> {
     let palette = Palette::of(doc);
+    let mut degrees = std::collections::HashMap::<u64, usize>::new();
+    for bond in &doc.bonds {
+        *degrees.entry(bond.a).or_default() += 1;
+        if bond.a != bond.b {
+            *degrees.entry(bond.b).or_default() += 1;
+        }
+    }
     doc.atoms
         .iter()
         .filter(|atom| {
-            if !crate::atom_labels::visible(atom, doc) {
+            if !crate::atom_labels::visible_with_degree(atom, doc, || {
+                degrees.get(&atom.id).copied().unwrap_or(0)
+            }) {
                 return false;
             }
             let ink = doc.canvas_theme.color(atom_ink(doc, &palette, atom));
@@ -336,4 +345,53 @@ pub fn element_swatch(
         || doc.color_theme.element_swatch(element, mode),
         |t| t.element_swatch(element, mode),
     )
+}
+
+#[cfg(test)]
+mod contrast_tests {
+    use super::*;
+    use crate::{atom_labels::Carbons, document::Document};
+
+    #[test]
+    fn indexed_contrast_matches_label_visibility_for_themes_and_carbon_modes() {
+        let mut doc: Document =
+            serde_json::from_str(include_str!("../assets/examples/shortcut-examples.rsk")).unwrap();
+        for (index, atom) in doc.atoms.iter_mut().enumerate() {
+            if index % 3 == 0 {
+                atom.display.color_override = true;
+                atom.text_style = Some(crate::typography::TextStyle {
+                    color: Color::Custom([235; 3]),
+                    ..Default::default()
+                });
+            }
+        }
+        let isolated = doc.add_atom("C", Default::default());
+        doc.atom_mut(isolated).unwrap().display.color_override = true;
+        doc.atom_mut(isolated).unwrap().text_style = Some(crate::typography::TextStyle {
+            color: Color::Custom([235; 3]),
+            ..Default::default()
+        });
+        for canvas in CanvasTheme::ALL {
+            for carbons in Carbons::ALL {
+                doc.canvas_theme = canvas;
+                doc.atom_labels.carbons = carbons;
+                let before = doc.clone();
+                let expected: Vec<_> = doc
+                    .atoms
+                    .iter()
+                    .filter(|atom| {
+                        crate::atom_labels::visible(atom, &doc)
+                            && !crate::color_contrast::meets(
+                                doc.canvas_theme.color(atom_color(&doc, atom)),
+                                &label_backgrounds(&doc, &Palette::of(&doc), atom),
+                                crate::color_contrast::TEXT_MIN,
+                            )
+                    })
+                    .map(|atom| atom.id)
+                    .collect();
+                assert_eq!(label_contrast_issues(&doc), expected);
+                assert_eq!(doc, before);
+            }
+        }
+    }
 }

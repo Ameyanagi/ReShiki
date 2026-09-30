@@ -38,9 +38,9 @@ Starting with 0.9.0, Mac supports Apple Silicon and Intel on macOS 14+. Windows 
 
 Nightly builds are optional prereleases for testing upcoming changes from `main`. For everyday work, use the [latest stable release](https://github.com/Ameyanagi/ReShiki/releases/latest).
 
-To try a nightly, open [GitHub Releases](https://github.com/Ameyanagi/ReShiki/releases), choose a release named **Nightly** with the **Pre-release** label, and download the portable archive for your platform. Extract the entire folder. Nightlies are unsigned, and macOS nightlies are not notarized. Keep your stable installation and use copies of drawings when testing.
+To try a nightly, open [GitHub Releases](https://github.com/Ameyanagi/ReShiki/releases), choose a release named **Nightly** with the **Pre-release** label, and use its operating-system and architecture download table. New nightlies include signed, notarized macOS DMG/ZIP downloads, Windows setup/ZIP downloads, and Linux tar.gz archives. Windows and Linux packages remain unsigned.
 
-**Mac first launch:** Open the extracted `ReShiki.app` once. If macOS blocks it because the developer cannot be verified or the app is not notarized, and you trust the download from this repository, open **System Settings → Privacy & Security**, choose **Open Anyway** for ReShiki, then confirm **Open**. This creates an exception for that app. See [Apple's first-launch guidance](https://support.apple.com/en-us/102445).
+Installers replace the existing ReShiki installation. To retain Stable, choose a portable archive and extract it into a separate folder, keeping its contents together. Use copies of drawings when testing. Older nightlies may offer only unsigned portable archives; the release notes identify the available packages.
 
 The all-releases page includes stable releases and nightlies; a newer nightly can appear above stable. The **Latest** label and the stable download links identify the stable release.
 
@@ -62,12 +62,12 @@ Stable 0.9.1 does not include the channel selector shown below. If it is missing
 Click **ReShiki** at the top left → **Check for updates**. Choose **Stable** (the default) or **Nightly** in the update window. ReShiki remembers your choice and checks that channel once a day; turn off **Check automatically** here if you prefer. Changing channels starts a fresh check without turning automatic checks back on.
 
 <Screenshot
-  src="/doc-images/update-channel/nightly.png"
-  alt="ReShiki’s update window offers Stable and Nightly channels, with a portable download for the selected nightly build."
+  src="/doc-images/nightly-installers/nightly.png"
+  alt="ReShiki’s Nightly update window offers a manual download and links portable archives through Release notes."
 />
 
 On **Stable**, when an update is available, save your drawing and choose **Update and restart**. ReShiki downloads the matching release, verifies its checksum (and the developer signature on macOS), installs it, and reopens your saved drawing. Installation waits for unsaved drawings, pending atom-label edits, assistant drafts and unfinished text/image input to be resolved. Clear the assistant input or attachment when finished with it. If a download or verification fails, the running app stays in place. **Release notes** opens the release page. Automatic checks never install an update without your click.
 
-On **Nightly**, choose **Download portable ↗** to download the ZIP or tar.gz for your operating system and architecture. Nightlies are unsigned test builds, installed manually: extract the entire archive, keep your stable installation, and use copies of drawings when testing. They do not use the verified stable installer. **Release notes** opens the selected build’s notes and checksums.
+On **Nightly**, choose **Download nightly ↗** to download the DMG or Windows setup for your operating system and architecture when available. Older nightlies fall back to ZIP; Linux uses tar.gz. Installation remains manual. **Release notes** opens the selected build’s table with both installer and portable options, notes and checksums. Nightlies do not use the automatic stable installer. Older app versions label this button **Download portable ↗** and always choose an archive.
 
 Switching channels offers the latest release in the chosen channel even when its version number is lower. This lets stable users try a nightly with the same base version, and nightly users return to the latest stable release. Within a channel, only newer versions are offered.

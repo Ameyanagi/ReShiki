@@ -1,0 +1,20 @@
+running 1 test
+PERF,workload,iterations,median_ms,p95_ms,mean_ms
+PERF,gallery_1x_unselected_draw,20,49.4406,57.1475,50.2740
+PERF,gallery_1x_selected_draw,20,92.9598,106.6619,95.7706
+PERF,gallery_1x_pointer_hit,20,30.1254,30.6540,29.0830
+PERF,gallery_1x_drag_all,20,115.3028,121.3620,115.8728
+PERF,gallery_1x_drag_partial,20,48.5375,54.2057,49.2358
+PERF,gallery_1x_pan,20,98.4977,108.3069,99.8984
+PERF,gallery_1x_zoom,20,93.2916,97.8596,93.0760
+PERF,gallery_4x_unselected_draw,20,314.7923,361.3046,319.5696
+PERF,gallery_4x_selected_draw,20,481.4293,537.4365,485.8790
+PERF,gallery_4x_pointer_hit,20,106.1043,113.5380,106.9781
+PERF,gallery_4x_drag_all,20,572.8170,638.2359,576.0369
+PERF,gallery_4x_drag_partial,20,287.6093,335.2033,295.7515
+test canvas::performance::loaded_canvas_workloads has been running for over 60 seconds
+PERF,gallery_4x_pan,20,472.1205,512.8647,474.3258
+PERF,gallery_4x_zoom,20,467.0345,530.7863,471.2129
+test canvas::performance::loaded_canvas_workloads ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 269 filtered out; finished in 75.46s

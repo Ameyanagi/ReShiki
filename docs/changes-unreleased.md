@@ -30,15 +30,66 @@ The drawing features added since 0.9.1 now share fewer rows, and each command ha
 
 Application-renderer captures at 1280 × 820, before (`fc0884f`) and after (`c7f6853`) the cleanup. The [screenshot record](changes/ui-declutter.md) pairs all eight matched states at 1280 × 820 and 1040 × 680, including the molecule, ring-tool, import and unsaved-changes states. It also shows the color popover, hue editing, recovery offer, Insert menu, Help panel and Assistant-tab rows; these states were added during the cleanup and have no before counterpart. The native save dialog and drag-and-drop happen outside the renderer and are not pictured.
 
+## Loaded canvas performance
+
+By @Ameyanagi in [PR #84](https://github.com/Ameyanagi/ReShiki/pull/84).
+
+Dragging and selecting the shortcut gallery requires much less CPU work, with
+bounded text caching and checks that edits and undo/redo keep the drawing current.
+The original pre-optimization Nightly required 573 ms for four-gallery drag
+preparation on the Mac and 1,182 ms on the Windows test VM. After the combined
+canvas changes, the same workloads took 4.11 ms and 6.86 ms in the follow-up
+measurement. These measure CPU preparation, not display FPS. Larger partial
+drags and zoom changes remain more expensive. See the
+[complete measurement history](performance/release-to-current.md), including a
+separate comparison against the actual stable v0.9.1 tag, and the original
+[profiling method and validation](performance/loaded-canvas.md).
+
+Atom shortcuts such as O → OH now start label calculation immediately, without
+the polling delay or unnecessary identifier/property calculations. Unchanged
+molecules reuse checked label results; independent structures keep updating even
+when another component cannot be analyzed. Abbreviation checks, selection
+grouping and dimension readouts also avoid repeated work. See the
+[editing latency investigation and remaining targets](performance/editing-latency.md).
+
+Valid multi-center/variable attachments and drawing centroids no longer produce
+an automatic “Invalid drawing” warning. Their supplied labels are retained, and
+the inspector continues to explain analysis limitations. Malformed attachment
+targets and invalid valence in ordinary molecules still report errors.
+
+Autosave validation and disk writes now run in order on a background worker,
+and native file parsing/save serialization and template-library changes avoid
+blocking the editor. Collapsed inspector sections skip hidden work. Reusing
+selection decorations and exactly hinted glyphs reduced four-gallery zoom CPU
+preparation from 47 ms to 24 ms on the Mac benchmark. See the
+[background I/O, inspector and zoom report](performance/background-io-and-zoom.md).
+
+Double bonds now participate in **Emphasize front bonds** and retain their
+emphasis during further 3D tilts. Foreground double bonds use a bold main stroke
+with a thin second stroke; editable CDX/CDXML copy and export keep that appearance.
+See the [before/after example and validation](changes/tilted-double-bonds.md).
+
 ## Stable and Nightly update channels
 
 By @Ameyanagi in [PR #82](https://github.com/Ameyanagi/ReShiki/pull/82).
 
-Choose **Stable** or **Nightly** in **Check for updates**. ReShiki remembers the channel and preserves your automatic-check preference. Stable remains the default and uses verified installation; Nightly downloads the portable archive for your computer for manual installation. Switching back to Stable offers the latest stable release even when its version number is lower than the installed nightly.
+Choose **Stable** or **Nightly** in **Check for updates**. ReShiki remembers the channel and preserves your automatic-check preference. Stable remains the default and uses verified installation; Nightly downloads the matching installer when available, with portable archives as a fallback, for manual installation. Switching back to Stable offers the latest stable release even when its version number is lower than the installed nightly.
 
 ![The update window offers Stable and Nightly, with a portable download and manual-install notice for the selected nightly build.](images/update-channel/nightly.png)
 
 Application-renderer example with automatic checking disabled. Separate desktop checks verified channel persistence and the downloaded nightly archive; see the [validation record](changes/update-channel.md).
+
+## Nightly installers and release downloads
+
+By @Ameyanagi in [PR #85](https://github.com/Ameyanagi/ReShiki/pull/85), with signing-secret forwarding in [PR #86](https://github.com/Ameyanagi/ReShiki/pull/86).
+
+Nightly builds include installers and portable archives for all six supported targets. macOS DMG and ZIP downloads are signed and notarized; Windows and Linux packages remain unsigned. Each release provides a table organized by operating system, architecture, installer and portable archive, with verified checksums. Stable remains the primary release.
+
+**Download nightly ↗** prefers a matching published installer, with a portable fallback for older builds. Installation remains manual; installers replace the existing app. Use the portable option from **Release notes** to retain Stable in a separate folder.
+
+![The Nightly update window offers Download nightly and explains that installation is manual, with portable archives linked from Release notes.](images/nightly-installers/nightly.png)
+
+Application-renderer evidence and packaging checks are recorded in the [validation notes](changes/nightly-installers.md).
 
 ## ChemDraw arrow exchange
 
@@ -166,8 +217,8 @@ for testing. The [validation record](windows-gpu-validation.md) includes Windows
 VM measurements and real Radeon GPU rendering on Linux; physical Windows GPU
 performance remains unmeasured.
 
-Development PRs target `main`. Successful nightly builds publish unsigned portable
-prereleases for all six platforms, with unique versions and checksums. Stable
+Development PRs target `main`. Successful nightly builds publish installers and portable
+archives as prereleases for all six platforms, with unique versions and checksums. Stable
 releases use version tags on tested commits in `main`.
 
 ## Stable downloads and optional nightly builds

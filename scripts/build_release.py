@@ -6,6 +6,7 @@ import json
 import os
 import platform
 import plistlib
+import re
 import shutil
 import struct
 import subprocess
@@ -36,6 +37,17 @@ def run(command, **kwargs):
 
 def version():
     return tomllib.loads((ROOT / "Cargo.toml").read_text(encoding="utf-8"))["package"]["version"]
+
+
+def numeric_version(value):
+    """Keep prerelease identifiers out of macOS and Windows numeric version fields."""
+    base = re.split(r"[-+]", value, maxsplit=1)[0]
+    if not re.fullmatch(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)", base):
+        raise ValueError("Expected a three-component numeric package version")
+    # Windows VERSIONINFO stores each component as an unsigned 16-bit integer.
+    if any(int(component) > 65535 for component in base.split(".")):
+        raise ValueError("Package version exceeds a Windows version component")
+    return base
 
 
 def check_tag(tag):
@@ -255,8 +267,9 @@ def mac_bundle(destination, profile, *, target=None, inchi_helper=None):
             CFBundleIdentifier=identifier,
             CFBundleExecutable=binary,
             CFBundlePackageType="APPL",
-            CFBundleShortVersionString=version().split("-")[0],
-            CFBundleVersion=version().split("-")[0],
+            CFBundleShortVersionString=numeric_version(version()),
+            CFBundleVersion=numeric_version(version()),
+            ReShikiPackageVersion=version(),
             NSHighResolutionCapable=True,
             LSMinimumSystemVersion=os.environ.get("MACOSX_DEPLOYMENT_TARGET", "14.0"),
         )

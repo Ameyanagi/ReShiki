@@ -548,7 +548,7 @@ impl App {
             let result = result.map(|(doc, focus)| (doc, vec![focus]));
             self.commit_hotkey(result, "Atom shortcut applied");
             if !self.error {
-                self.refresh_due = Some(std::time::Instant::now());
+                self.labels_dirty = true;
                 // Continue growth at its new endpoint until the pointer moves again.
                 self.hover = self
                     .selected
@@ -793,7 +793,7 @@ mod tests {
         let _ = app.context_key("n");
         assert_eq!(app.doc.atom(a).unwrap().element, "N");
         assert_eq!(app.doc.atom(b).unwrap().element, "C");
-        assert!(app.refresh_due.is_some());
+        assert!(app.labels_dirty);
         let _ = app.update(Message::Undo);
         assert_eq!(app.doc, original);
     }
@@ -875,7 +875,7 @@ mod tests {
         });
         assert_eq!(reshiki::aromatic::circles(&app.doc).len(), 1);
         assert!(app.doc.atoms.iter().all(|a| a.label_h == 1));
-        assert!(app.refresh_due.is_none());
+        assert!(!app.labels_dirty);
         assert_eq!(app.selected, original.all_ids());
         let circled = app.doc.clone();
         let _ = app.update(Message::Undo);

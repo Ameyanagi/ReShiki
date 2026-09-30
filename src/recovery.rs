@@ -1,6 +1,10 @@
-use crate::{document::Document, storage::write_atomic};
+use crate::{
+    document::{Document, VERSION},
+    storage::write_atomic,
+};
 use serde::{Deserialize, Serialize};
 use std::{
+    borrow::Cow,
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -72,8 +76,20 @@ impl Recovery {
     }
     pub fn save(&self, document: &Document, source: Option<PathBuf>) -> Result<(), String> {
         document.validate()?;
-        let snapshot = Snapshot {
-            document: document.current(),
+        #[derive(Serialize)]
+        struct BorrowedSnapshot<'a> {
+            document: Cow<'a, Document>,
+            source: Option<PathBuf>,
+            saved_at: u64,
+        }
+        // Drafts carry this build's document version, so restoring never migrates again.
+        let document = if document.version == VERSION {
+            Cow::Borrowed(document)
+        } else {
+            Cow::Owned(document.current())
+        };
+        let snapshot = BorrowedSnapshot {
+            document,
             source,
             saved_at: SystemTime::now()
                 .duration_since(UNIX_EPOCH)

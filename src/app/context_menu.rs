@@ -262,10 +262,10 @@ mod tests {
         assert_eq!(app.alignment_count(), 3);
         assert_eq!(app.doc, before);
         assert!(!app.history.can_undo());
-        let _ = app.update(Message::RefreshLabels);
+        let _ = app.update(Message::InspectorScroll(0.));
         assert!(
             app.context_menu.is_some(),
-            "Background label refresh must leave the menu open"
+            "Background inspector updates must leave the menu open"
         );
         let _ = app.context_action(Action::Run(Box::new(Message::Arrange(
             Arrange::AlignVertical,

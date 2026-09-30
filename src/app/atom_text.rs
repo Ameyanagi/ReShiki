@@ -300,7 +300,6 @@ pub(super) fn background(message: &Message) -> bool {
     matches!(
         message,
         Message::Tick
-            | Message::RefreshLabels
             | Message::EngineDone { .. }
             | Message::Viewport(_)
             | Message::Assistant(_)

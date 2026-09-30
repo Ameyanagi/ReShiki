@@ -776,6 +776,69 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn projected_double_bonds_keep_bold_rails_in_editable_clipboard() -> anyhow::Result<()> {
+        use anyhow::{Context, ensure};
+        let mut source: Document = serde_json::from_str(include_str!(
+            "../tests/fixtures/tilted-fused-double-bonds.rsk"
+        ))?;
+        let ids = source.all_ids();
+        crate::projection::depth_bonds(&mut source, &ids);
+        let (outcome, representations) = prepare_copy(Default::default(), source.clone(), false)
+            .await
+            .map_err(anyhow::Error::msg)?;
+        ensure!(outcome.external_editable && !outcome.image_only);
+        let native = representations
+            .iter()
+            .find(|r| r.kind == NATIVE)
+            .context("Native drawing")?;
+        assert_eq!(
+            Document::from_json(&native.bytes().map_err(anyhow::Error::msg)?)
+                .map_err(anyhow::Error::msg)?,
+            source.current()
+        );
+        let binary = representations
+            .iter()
+            .find(|r| r.kind == CDX_TYPES[0])
+            .context("CDX drawing")?;
+        let back = paste_packet(
+            Default::default(),
+            Packet {
+                representations: vec![binary.clone()],
+            },
+        )
+        .await
+        .map_err(anyhow::Error::msg)?;
+        assert_eq!(
+            (back.atoms.len(), back.bonds.len()),
+            (source.atoms.len(), source.bonds.len())
+        );
+        for (before, after) in source
+            .bonds
+            .iter()
+            .zip(&back.bonds)
+            .filter(|(b, _)| b.order == 2)
+        {
+            assert_eq!(
+                (
+                    before.order,
+                    &before.display,
+                    before
+                        .secondary_display
+                        .as_deref()
+                        .unwrap_or(&before.display)
+                ),
+                (
+                    after.order,
+                    &after.display,
+                    after.secondary_display.as_deref().unwrap_or(&after.display)
+                )
+            );
+        }
+        ensure!(back.atoms.iter().all(|a| a.stereo.is_none()));
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn copying_unvalidated_rings_keeps_editable_exchange_and_paste_warning()
     -> anyhow::Result<()> {
         use anyhow::{Context, ensure};

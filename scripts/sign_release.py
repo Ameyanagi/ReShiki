@@ -2,12 +2,18 @@
 
 import hashlib
 import json
+import os
 import tempfile
 from pathlib import Path
 
 from build_release import ROOT, archive, run, verify_archive, version
 from installers import mac_disk_image
 from sign_macos import sign_and_notarize
+
+
+def verify_source(metadata):
+    if metadata.get("version") != version() or metadata.get("commit") != os.environ["GITHUB_SHA"]:
+        raise ValueError("Archive source does not match this release run")
 
 
 def main():
@@ -27,13 +33,7 @@ def main():
         run(["ditto", "-x", "-k", source, directory])
         folder = directory / source.stem
         metadata = json.loads((folder / "build.json").read_text(encoding="utf-8"))
-        import os
-
-        if (
-            metadata.get("version") != version()
-            or metadata.get("commit") != os.environ["GITHUB_SHA"]
-        ):
-            raise ValueError("Archive source does not match this release run")
+        verify_source(metadata)
         sign_and_notarize(folder / "ReShiki.app")
         metadata.update(signed=True, notarized=True, unsigned_sha256=digest)
         (folder / "build.json").write_text(json.dumps(metadata, indent=2) + "\n")

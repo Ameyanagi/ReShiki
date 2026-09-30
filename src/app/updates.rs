@@ -18,6 +18,7 @@ pub enum Action {
     Install,
     Poll,
     Prepared(Result<std::sync::Arc<updates::install::Prepared>, String>),
+    RecoveryCleared,
     Restarted(Result<(), String>),
     Opened(Result<(), String>),
 }
@@ -139,9 +140,9 @@ impl App {
                     Err(error) => self.updates.error = Some(error),
                 }
             }
+            Action::RecoveryCleared => return self.handoff_update(),
             Action::Restarted(result) => match result {
                 Ok(()) => {
-                    self.clear_recovery();
                     return iced::exit();
                 }
                 Err(error) => {
@@ -212,7 +213,7 @@ impl App {
                     && self.updates.available()
                     && let Some(release) = self.updates.latest.clone()
                 {
-                    return Task::perform(updates::open_portable(release), |result| {
+                    return Task::perform(updates::open_nightly_download(release), |result| {
                         Message::Updates(Action::Opened(result))
                     });
                 }
@@ -262,6 +263,8 @@ impl App {
             Some("Save your drawing, then click Update and restart.")
         } else if self.assistant.has_unfinished_work() {
             Some("Finish or clear the assistant draft and input before restarting.")
+        } else if self.file_io.saving || self.templates.pending() {
+            Some("Wait for the current file or library save before restarting.")
         } else if self.busy
             || self.cleanup.is_some()
             || self.joining.is_some()
@@ -272,18 +275,37 @@ impl App {
             None
         }
     }
+    pub(super) fn update_restart_failed(&mut self, error: String) {
+        self.updates.restarting = false;
+        self.updates.error = Some(error);
+        self.updates.open = true;
+    }
+
     fn restart_for_update(&mut self) -> Task<Message> {
         if let Some(reason) = self.update_restart_blocker() {
             self.updates.error = Some(format!("Update ready. {reason}"));
             self.updates.open = true;
             return Task::none();
         }
-        let Some(prepared) = self.updates.prepared.clone() else {
+        if self.updates.prepared.is_none() {
             return Task::none();
-        };
+        }
         self.updates.restarting = true;
         self.updates.open = true;
         self.updates.error = None;
+        // The installer helper has a limited lifetime waiting for this process.
+        // Drain recovery writes and clear the draft before launching that helper.
+        self.restart_after_recovery()
+    }
+
+    fn handoff_update(&mut self) -> Task<Message> {
+        if !self.updates.restarting {
+            return Task::none();
+        }
+        let Some(prepared) = self.updates.prepared.clone() else {
+            self.updates.restarting = false;
+            return Task::none();
+        };
         Task::perform(
             updates::install::handoff(prepared, self.path.clone()),
             |result| Message::Updates(Action::Restarted(result)),
@@ -353,7 +375,7 @@ impl App {
                 button("Check for updates")
                     .padding([9, 12])
                     .on_press_maybe((!state.checking && !state.installing && !state.restarting).then_some(msg(Action::Check(true)))),
-                button(if state.channel == Channel::Nightly { "Download portable ↗" } else if state.installing { "Downloading…" } else { "Update and restart" })
+                button(if state.channel == Channel::Nightly { "Download nightly ↗" } else if state.installing { "Downloading…" } else { "Update and restart" })
                     .padding([9, 12])
                     .on_press_maybe((state.available() && !state.installing && !state.restarting).then_some(msg(if state.channel == Channel::Nightly { Action::Portable } else { Action::Install })))
             ]
@@ -367,7 +389,7 @@ impl App {
                 .size(16)
                 .text_size(13),
             button("Release notes ↗").on_press(msg(Action::Download)).style(button::text),
-            text(if state.channel == Channel::Nightly { "Checks once a day. Nightly builds are unsigned and installed manually. Extract the entire download; keep your stable installation." } else { "Checks once a day. Stable updates are verified before installation. Your saved drawing reopens after restarting." })
+            text(if state.channel == Channel::Nightly { "Checks once a day. Nightlies are installed manually. Downloads prefer installers when available; Release notes also links portable archives." } else { "Checks once a day. Stable updates are verified before installation. Your saved drawing reopens after restarting." })
                 .size(12)
                 .style(super::workspace::muted_text),
         ]

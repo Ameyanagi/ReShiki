@@ -177,6 +177,9 @@ impl Document {
         self.groups = merged;
     }
     pub fn validate_groups(&self) -> Result<(), String> {
+        if self.groups.is_empty() {
+            return Ok(());
+        }
         let objects: HashSet<_> = self.all_ids().into_iter().collect();
         let mut ids = objects.clone();
         for g in &self.groups {

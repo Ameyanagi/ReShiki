@@ -935,17 +935,23 @@ mod tests {
     async fn open_reads_binary_cdx() -> Result<(), String> {
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("tests/fixtures/native-ethyl-clipboard.cdx");
-        let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
         let mut app = ready();
+        let key = app.file_request_key();
+        let opened = super::super::files::read(path).await;
+        let Some((_, Ok(super::super::files::Prepared::Import { format, contents }))) = &opened
+        else {
+            return Err(format!("{opened:?}"));
+        };
+        assert_eq!(*format, "cdx");
+        let response = LocalEngine::default()
+            .request(Request::import(format, contents))
+            .await?;
         assert!(
-            app.update(Message::Opened(Some((path, Ok(bytes.clone())))))
+            app.update(Message::FilePrepared(key, opened.clone()))
                 .units()
                 > 0
         );
         assert!(app.busy, "{}", app.status);
-        let response = LocalEngine::default()
-            .request(Request::import("cdx", &contents("cdx", bytes)))
-            .await?;
         assert!(!response.document.ok_or("drawing")?.atoms.is_empty());
         Ok(())
     }

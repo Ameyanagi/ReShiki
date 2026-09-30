@@ -1,8 +1,11 @@
-; SourceDir, AppVersion, AppArchitecture, OutputDir and OutputName are set by installers.py.
+; SourceDir, AppVersion, AppNumericVersion, AppArchitecture, OutputDir and OutputName are set by installers.py.
 [Setup]
 AppId=dev.reshiki.editor
 AppName=ReShiki
 AppVersion={#AppVersion}
+VersionInfoVersion={#AppNumericVersion}
+VersionInfoTextVersion={#AppVersion}
+VersionInfoProductTextVersion={#AppVersion}
 AppPublisher=ReShiki contributors
 AppPublisherURL=https://reshiki.com/
 AppSupportURL=https://reshiki.com/guide/install/

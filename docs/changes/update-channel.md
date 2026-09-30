@@ -2,7 +2,7 @@
 
 The existing **Check for updates** window now has a saved **Stable / Nightly** choice. Stable remains the default. Changing channels checks immediately, preserves the automatic-check preference, and clears results from the previous channel.
 
-Stable offers the verified **Update and restart** flow. Nightly offers **Download portable ↗**, which opens the ZIP or tar.gz matching the current operating system and architecture. Nightlies are unsigned portable builds, installed manually; they cannot enter the signed stable installer. Keep the extracted contents together and retain a stable installation when testing.
+Stable offers the verified **Update and restart** flow. Nightly offers **Download portable ↗**, which opens the ZIP or tar.gz matching the current operating system and architecture. The initial nightly builds shown below were unsigned portable archives, installed manually. New nightlies include installers and signed/notarized macOS packages; the current button is **Download nightly ↗** and prefers a published installer. They remain outside the automatic stable installer. Keep the extracted contents together and retain a stable installation when testing.
 
 Within either channel, only newer versions are offered. A switch between an installed stable and nightly version offers the selected channel even if its semantic version is lower: stable `0.9.1` can find `0.9.1-nightly.20260929.36501221724.1`, and a nightly can return to the latest stable. Daily success caches and hourly failure caches are separate by channel; manual checks bypass them. Results from an earlier request cannot replace a later channel selection.
 

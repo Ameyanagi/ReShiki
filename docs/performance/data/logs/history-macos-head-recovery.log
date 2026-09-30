@@ -1,0 +1,11 @@
+running 1 test
+workload,median_ms,p95_ms
+gallery_1x_recovery_synchronous,5.2215,5.7535
+gallery_1x_recovery_dispatch,0.0534,0.0541
+gallery_1x_recovery_roundtrip,7.8427,8.9335
+gallery_4x_recovery_synchronous,10.7487,11.2774
+gallery_4x_recovery_dispatch,0.4031,0.4699
+gallery_4x_recovery_roundtrip,9.8571,14.7878
+test app::autosave::tests::recovery_workloads ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 306 filtered out; finished in 1.15s

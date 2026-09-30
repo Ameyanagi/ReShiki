@@ -387,11 +387,14 @@ impl App {
     // Chemistry checks can refresh hydrogen/CIP labels without a revision or
     // Undo entry. Refresh untouched readouts without discarding typed values.
     pub(super) fn refresh_numeric_dimensions(&mut self) {
-        let width = extent(&self.doc, &self.selected, Field::Width)
-            .map(|v| format!("{v:.2}"))
-            .unwrap_or_default();
-        let height = extent(&self.doc, &self.selected, Field::Height)
-            .map(|v| format!("{v:.2}"))
+        let (width, height) = reshiki::scene::selection_bounds(&self.doc, &self.selected)
+            .map(|(lo, hi)| {
+                let scale = self.doc.drawing_style.points_per_world();
+                (
+                    format!("{:.2}", (hi.x - lo.x) * scale),
+                    format!("{:.2}", (hi.y - lo.y) * scale),
+                )
+            })
             .unwrap_or_default();
         if self.numeric_transforms.width == self.numeric_transforms.dimensions.0 {
             self.numeric_transforms.width = width.clone();

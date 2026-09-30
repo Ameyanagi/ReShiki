@@ -1,0 +1,9 @@
+running 1 test
+native_parse_validate_1x: median 1.156 ms, p95 1.227 ms
+native_serialize_1x: median 0.666 ms, p95 0.780 ms
+library_load_512: median 1.965 ms, p95 2.385 ms
+library_save_checked_512: median 13.745 ms, p95 16.543 ms
+library_parse_validate_512: median 1.603 ms, p95 2.110 ms
+test app::files::performance::file_library_workloads ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 308 filtered out; finished in 0.66s

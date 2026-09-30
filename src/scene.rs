@@ -398,6 +398,9 @@ fn label_ink_boxes(runs: &[Primitive]) -> Vec<(Point, Point)> {
 
 /// Visible selected extents, including atom labels in the original graph.
 pub fn selection_bounds(doc: &Document, ids: &[u64]) -> Option<(Point, Point)> {
+    if ids.is_empty() {
+        return None;
+    }
     let mut points = Vec::new();
     for label in crate::atom_labels::indicators(doc)
         .into_iter()
@@ -427,7 +430,8 @@ pub fn selection_bounds(doc: &Document, ids: &[u64]) -> Option<(Point, Point)> {
         }
     }
     for a in doc.annotations.iter().filter(|a| ids.contains(&a.id)) {
-        points.extend([a.position, a.position.offset(a.size().0, a.size().1)]);
+        let (width, height) = a.size();
+        points.extend([a.position, a.position.offset(width, height)]);
     }
     for a in doc.arrows.iter().filter(|a| ids.contains(&a.id)) {
         let (lo, hi) = a.bounds();
@@ -640,6 +644,7 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
         .collect();
     // Fill joined bond outlines together. Separate antialiased polygons leave
     // translucent seams even when their mathematical corners agree exactly.
+    let joins = crate::bond_joins::Joins::new(doc);
     let mut joined: std::collections::BTreeMap<
         crate::palette::Color,
         Vec<crate::graphics::PathCommand>,
@@ -688,16 +693,12 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
         let ny = ux;
         let bond_start = out.len();
         match b.display.as_str() {
-            "plain" | "bold" | "wedge"
-                if !matches!(b.order, 2 | 7) && crate::bond_joins::needed(doc, b) =>
-            {
-                out.push(Primitive::Polygon(crate::bond_joins::polygon(
-                    doc, b, start, end,
-                )));
+            "plain" | "bold" | "wedge" if !matches!(b.order, 2 | 7) && joins.needed(b) => {
+                out.push(Primitive::Polygon(joins.polygon(b, start, end)));
             }
             "hollow_wedge" => {
                 use crate::graphics::PathCommand;
-                let points = crate::bond_joins::polygon(doc, b, start, end);
+                let points = joins.polygon(b, start, end);
                 if let Some(first) = points.first() {
                     let mut commands = vec![PathCommand::Move(*first)];
                     commands.extend(points.iter().skip(1).copied().map(PathCommand::Line));
@@ -836,10 +837,8 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
                     if (last.x - first.x) * ux + (last.y - first.y) * uy <= 0.1 {
                         continue;
                     }
-                    if index == 0 && *offset == 0. && crate::bond_joins::needed(doc, b) {
-                        out.push(Primitive::Polygon(crate::bond_joins::polygon(
-                            doc, b, first, last,
-                        )));
+                    if index == 0 && *offset == 0. && joins.needed(b) {
+                        out.push(Primitive::Polygon(joins.polygon(b, first, last)));
                     } else if display == "bold" {
                         // An explicitly centered bold rail still needs flat
                         // ends; round caps protrude beyond the junction.
@@ -908,7 +907,7 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             let bond_primitives = out.drain(bond_start..).collect();
             out.extend(crate::crossings::cut(bond_primitives, gaps));
         }
-        if crate::bond_joins::needed(doc, b) && b.display != "hollow_wedge" {
+        if joins.needed(b) && b.display != "hollow_wedge" {
             use crate::graphics::PathCommand;
             let commands = joined.entry(b.color).or_default();
             let mut secondary = Vec::new();
@@ -969,7 +968,7 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             }
         }
     }
-    for junction in crate::bond_joins::junctions(doc) {
+    for junction in joins.junctions() {
         use crate::graphics::PathCommand;
         let mut commands = Vec::new();
         for (bond_index, points) in junction.parts {
