@@ -748,6 +748,102 @@ fn regular_ring_valence_fits(doc: &Document, target: &crate::document::Atom) -> 
     crate::templates::valence(doc, target.id) <= crate::templates::capacity(target)
 }
 
+/// Why a regular ring atom cannot be shared, as a short label.
+fn shared_atom_label(
+    doc: &Document,
+    result: &Document,
+    target: &crate::document::Atom,
+) -> Option<String> {
+    let id = target.id;
+    let stereo = target.stereo.is_some()
+        || doc.atoms.iter().any(|a| {
+            a.stereo
+                .as_ref()
+                .is_some_and(|stereo| stereo.neighbors.contains(&id))
+        })
+        || doc.bonds.iter().any(|b| {
+            b.stereo_atoms.contains(&id)
+                || (b.a == id || b.b == id)
+                    && (b.stereo.is_some()
+                        || !b.stereo_atoms.is_empty()
+                        || (!b.projection
+                            && ((b.order == 1
+                                && matches!(
+                                    b.display.as_str(),
+                                    "wedge" | "hollow_wedge" | "bold" | "hash" | "hashed" | "wavy"
+                                ))
+                                || (b.order == 2 && b.display == "wavy"))))
+        });
+    let reason = if stereo {
+        "has stereochemistry"
+    } else if target.radical_electrons != 0 {
+        "has a radical"
+    } else if !target.marks.is_empty() {
+        "has charge or electron marks"
+    } else if target.explicit_h != 0 || target.no_implicit {
+        "has fixed hydrogens"
+    } else if target.isotope != 0 {
+        "has an isotope label"
+    } else if target.map_num != 0 {
+        "has a map number"
+    } else if target.attachment.is_some() || !target.centroid.is_empty() {
+        "is an attachment point"
+    } else if doc.abbreviation(id).is_some() {
+        return Some("Expand the abbreviation first".into());
+    } else if !regular_ring_valence_fits(result, target) {
+        // Neutral phosphorus follows its allowed valences, not a capacity.
+        let capacity = if target.element == "P" && target.charge == 0 {
+            u32::MAX
+        } else {
+            crate::templates::capacity(target)
+        };
+        return Some(crate::templates::valence_label(
+            &target.element,
+            capacity,
+            crate::templates::valence(result, id),
+        ));
+    } else {
+        return None;
+    };
+    Some(format!("{} {reason}", target.element))
+}
+
+/// A short label, shown beside the pointer, for why a ring or template
+/// cannot attach at `p`. The full reason is the placement's error message.
+pub fn attachment_label(doc: &Document, p: Point, radius: f32) -> String {
+    if radius > 0. {
+        if let Some(atom) = doc.nearest(p, radius).and_then(|id| doc.atom(id)) {
+            return crate::templates::blocked(doc, atom)
+                .unwrap_or_else(|| format!("Can't attach to this {}", atom.element));
+        }
+        if nearest_bond(doc, p, radius).is_some() {
+            return "Can't fuse to this bond".into();
+        }
+    }
+    "Can't place the ring here".into()
+}
+
+/// Why a ring cannot be placed: the full message for the status bar, a
+/// short label for beside the pointer, and the rejected ring's vertices and
+/// blocking atom when they are known.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RingRejection {
+    pub message: &'static str,
+    pub label: String,
+    pub outline: Vec<Point>,
+    pub atom: Option<u64>,
+}
+impl RingRejection {
+    fn new(message: &'static str, label: impl Into<String>) -> Self {
+        Self {
+            message,
+            label: label.into(),
+            outline: vec![],
+            atom: None,
+        }
+    }
+}
+
 /// Attach at an atom/bond, optionally using a drag to choose the ring's side.
 pub fn ring_oriented(
     doc: &mut Document,
@@ -757,13 +853,30 @@ pub fn ring_oriented(
     radius: f32,
     direction: Option<Point>,
 ) -> Result<Vec<u64>, &'static str> {
+    let (result, ids) =
+        ring_placement(doc, p, size, aromatic, radius, direction).map_err(|r| r.message)?;
+    *doc = result;
+    Ok(ids)
+}
+
+/// The drawing `ring_oriented` would produce. The live preview and commit
+/// both build it, so a rejected preview matches the rejected click.
+pub fn ring_placement(
+    doc: &Document,
+    p: Point,
+    size: u8,
+    aromatic: bool,
+    radius: f32,
+    direction: Option<Point>,
+) -> Result<(Document, Vec<u64>), RingRejection> {
+    const INVALID: &str = "Invalid ring attachment geometry.";
     if !p.x.is_finite()
         || !p.y.is_finite()
         || !radius.is_finite()
         || radius < 0.
         || direction.is_some_and(|p| !p.x.is_finite() || !p.y.is_finite())
     {
-        return Err("Invalid ring attachment geometry.");
+        return Err(RingRejection::new(INVALID, "Invalid ring geometry"));
     }
     let n = size.clamp(3, 8) as usize;
     if aromatic && n == 6 {
@@ -777,21 +890,27 @@ pub fn ring_oriented(
         // Keep that convention here without relaxing the template API's
         // positive-radius contract or accidentally hitting an existing label.
         let empty = Document::default();
-        let base = if radius == 0. { &empty } else { &*doc };
-        let (mut result, ids) =
-            drawing.place(base, p, direction, if radius == 0. { 1. } else { radius })?;
+        let base = if radius == 0. { &empty } else { doc };
+        let (mut result, ids) = drawing
+            .place(base, p, direction, if radius == 0. { 1. } else { radius })
+            .map_err(|message| {
+                let mut rejection = RingRejection::new(message, attachment_label(doc, p, radius));
+                rejection.atom = doc.nearest(p, radius).filter(|_| radius > 0.);
+                rejection
+            })?;
         let mut circles: Vec<_> = crate::aromatic::circles(base)
             .into_iter()
             .map(|c| c.atoms)
             .collect();
         circles.push(ids.clone());
         crate::templates::show_circles(&mut result, &circles);
-        return if radius == 0. {
-            Ok(append(doc, &result, Point::default()))
+        return Ok(if radius == 0. {
+            let mut doc = doc.clone();
+            let ids = append(&mut doc, &result, Point::default());
+            (doc, ids)
         } else {
-            *doc = result;
-            Ok(ids)
-        };
+            (result, ids)
+        });
     }
     let atom = doc.nearest(p, radius);
     let bond = if atom.is_none() {
@@ -805,14 +924,17 @@ pub fn ring_oriented(
     let mut ids = vec![];
     if let Some(index) = bond {
         let Some(b) = doc.bonds.get(index).cloned() else {
-            return Err("The attachment bond is no longer available.");
+            return Err(RingRejection::new(
+                "The attachment bond is no longer available.",
+                "The bond is unavailable",
+            ));
         };
         let (Some(a), Some(z)) = (doc.atom(b.a), doc.atom(b.b)) else {
-            return Err("The attachment bond has missing atoms.");
+            return Err(RingRejection::new(
+                "The attachment bond has missing atoms.",
+                "The bond is unavailable",
+            ));
         };
-        if b.validate_appearance().is_err() || b.stereo.is_some() || !b.stereo_atoms.is_empty() {
-            return Err("Choose a supported bond appearance without assigned stereochemistry.");
-        }
         let (a, z) = (a.position, z.position);
         let positions = |sign: f32| {
             let mut points = vec![a, z];
@@ -846,6 +968,20 @@ pub fn ring_oriented(
             .map(|side| side > 0.0)
             .unwrap_or_else(|| score(&first) <= score(&second));
         let points = if first_side { first } else { second };
+        let appearance = b.validate_appearance().is_ok();
+        if !appearance || b.stereo.is_some() || !b.stereo_atoms.is_empty() {
+            return Err(RingRejection {
+                outline: points,
+                ..RingRejection::new(
+                    "Choose a supported bond appearance without assigned stereochemistry.",
+                    if appearance {
+                        "The bond has stereochemistry"
+                    } else {
+                        "Unsupported bond style"
+                    },
+                )
+            });
+        }
         ids.extend([b.a, b.b]);
         for p in points.iter().skip(2) {
             ids.push(result.add_atom("C", *p));
@@ -918,80 +1054,80 @@ pub fn ring_oriented(
             }
         }
     }
+    let outline: Vec<_> = ids
+        .iter()
+        .filter_map(|id| result.atom(*id).map(|a| a.position))
+        .collect();
+    let reject = |message, label: &str, atom| RingRejection {
+        message,
+        label: label.into(),
+        outline: outline.clone(),
+        atom,
+    };
     for id in &ids {
         if let Some(target) = doc.atom(*id)
-            && (target.stereo.is_some()
-                || target.radical_electrons != 0
-                || !target.marks.is_empty()
-                || target.explicit_h != 0
-                || target.no_implicit
-                || target.isotope != 0
-                || target.map_num != 0
-                || target.attachment.is_some()
-                || !target.centroid.is_empty()
-                || doc.abbreviation(*id).is_some()
-                || doc.atoms.iter().any(|a| {
-                    a.stereo
-                        .as_ref()
-                        .is_some_and(|stereo| stereo.neighbors.contains(id))
-                })
-                || doc.bonds.iter().any(|b| {
-                    b.stereo_atoms.contains(id)
-                        || (b.a == *id || b.b == *id)
-                            && (b.stereo.is_some()
-                                || !b.stereo_atoms.is_empty()
-                                || (!b.projection
-                                    && ((b.order == 1
-                                        && matches!(
-                                            b.display.as_str(),
-                                            "wedge"
-                                                | "hollow_wedge"
-                                                | "bold"
-                                                | "hash"
-                                                | "hashed"
-                                                | "wavy"
-                                        ))
-                                        || (b.order == 2 && b.display == "wavy"))))
-                })
-                || !regular_ring_valence_fits(&result, target))
+            && let Some(label) = shared_atom_label(doc, &result, target)
         {
-            return Err(
+            return Err(reject(
                 "This atom has no available valence, or has protected hydrogens, labels or stereochemistry.",
-            );
+                &label,
+                Some(*id),
+            ));
         }
     }
-    let [first, second, ..] = ids.as_slice() else {
-        return Err("The ring has a missing edge.");
+    let missing = || {
+        reject(
+            "The ring has a missing atom.",
+            "Invalid ring geometry",
+            None,
+        )
     };
-    let a = result.atom(*first).ok_or("The ring has a missing atom.")?;
-    let b = result.atom(*second).ok_or("The ring has a missing atom.")?;
+    let [first, second, ..] = ids.as_slice() else {
+        return Err(reject(
+            "The ring has a missing edge.",
+            "Invalid ring geometry",
+            None,
+        ));
+    };
+    let a = result.atom(*first).ok_or_else(missing)?;
+    let b = result.atom(*second).ok_or_else(missing)?;
     let length = a.position.distance(b.position);
     if !length.is_finite() || length < 0.001 {
-        return Err("Choose an attachment with nonzero bond lengths.");
+        return Err(reject(
+            "Choose an attachment with nonzero bond lengths.",
+            "The bond has no length",
+            None,
+        ));
     }
     // Use the aromatic fusion planner's scale-relative proximity threshold,
     // independent of zoom/hit radius. Regular rings conservatively reject an
     // unshared coincident vertex instead of merging arbitrary existing atoms.
     let tolerance = (length * (5. / 75.)).max(0.01);
     for added in result.atoms.iter().skip(doc.atoms.len()) {
-        if doc
+        if let Some(old) = doc
             .atoms
             .iter()
-            .any(|old| added.position.distance(old.position) <= tolerance)
+            .find(|old| added.position.distance(old.position) <= tolerance)
         {
-            return Err(
+            return Err(reject(
                 "The ring would overlap an existing atom. Choose another position or side.",
-            );
+                "Overlaps an existing atom",
+                Some(old.id),
+            ));
         }
     }
     result.reconcile_molecule_groups();
-    crate::reactions::reconcile(&mut result)
-        .map_err(|_| "The ring would create incompatible reaction participants.")?;
+    crate::reactions::reconcile(&mut result).map_err(|_| {
+        reject(
+            "The ring would create incompatible reaction participants.",
+            "Would mix reaction participants",
+            None,
+        )
+    })?;
     result
         .validate()
-        .map_err(|_| "Invalid ring attachment geometry.")?;
-    *doc = result;
-    Ok(ids)
+        .map_err(|_| reject(INVALID, "Invalid ring geometry", None))?;
+    Ok((result, ids))
 }
 
 pub(crate) fn open_angle(anchor: Point, neighbors: &[Point]) -> f32 {
@@ -1324,6 +1460,52 @@ mod tests {
         tilted.sort_unstable();
         assert_eq!(tilted, expected);
         Ok(())
+    }
+
+    #[test]
+    fn rejected_rings_name_the_blocking_atom_and_keep_their_outline() {
+        let mut doc = Document::default();
+        let center = doc.add_atom("C", Point::default());
+        for (x, y) in [(42., 0.), (-42., 0.), (0., 42.), (0., -42.)] {
+            let other = doc.add_atom("C", Point::new(x, y));
+            doc.add_bond(center, other, 1, "plain");
+        }
+        let before = doc.clone();
+        let rejection = ring_placement(&doc, Point::default(), 6, false, 5., None).unwrap_err();
+        assert_eq!(rejection.label, "C would have 6 bonds");
+        assert_eq!(rejection.atom, Some(center));
+        assert_eq!(rejection.outline.len(), 6);
+        assert!(rejection.outline.contains(&Point::default()));
+        assert_eq!(
+            ring_oriented(&mut doc, Point::default(), 6, false, 5., None),
+            Err(rejection.message)
+        );
+        assert_eq!(doc, before);
+        // The circle form falls back to a phenyl bond, which does not fit either.
+        let rejection = ring_placement(&doc, Point::default(), 6, true, 5., None).unwrap_err();
+        assert_eq!(rejection.label, "C would have 5 bonds");
+        assert_eq!(rejection.atom, Some(center));
+
+        let mut methane = Document::default();
+        let carbon = methane.add_atom("C", Point::default());
+        if let Some(atom) = methane.atom_mut(carbon) {
+            atom.explicit_h = 4;
+        }
+        let rejection = ring_placement(&methane, Point::default(), 5, false, 5., None).unwrap_err();
+        assert_eq!(rejection.label, "C has fixed hydrogens");
+
+        let ring = crate::rings::Preset::Regular.document(42., false);
+        let bond = &ring.bonds[0];
+        let (a, b) = (ring.atom(bond.a).unwrap(), ring.atom(bond.b).unwrap());
+        let middle = Point::new(
+            (a.position.x + b.position.x) / 2.,
+            (a.position.y + b.position.y) / 2.,
+        );
+        let rejection =
+            ring_placement(&ring, middle, 6, false, 5., Some(Point::default())).unwrap_err();
+        assert_eq!(rejection.label, "Overlaps an existing atom");
+        assert_eq!(rejection.outline.len(), 6);
+        assert!(rejection.atom.is_some());
     }
 
     #[test]

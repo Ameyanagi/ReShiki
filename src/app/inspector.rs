@@ -38,13 +38,20 @@ pub enum FigureFormat {
     Emf,
 }
 impl FigureFormat {
+    /// Menu order: vector formats, then raster.
     const ALL: &'static [Self] = &[
-        Self::Pdf,
         Self::Svg,
-        Self::Png,
+        Self::Pdf,
         #[cfg(windows)]
         Self::Emf,
+        Self::Png,
     ];
+    fn kind(self) -> &'static str {
+        match self {
+            Self::Png => "Raster",
+            _ => "Vector",
+        }
+    }
     fn code(self) -> &'static str {
         match self {
             Self::Pdf => "pdf",
@@ -71,11 +78,11 @@ impl FigureFormat {
 impl std::fmt::Display for FigureFormat {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            Self::Pdf => "PDF · vector",
-            Self::Svg => "SVG · editable vector",
-            Self::Png => "PNG · automatic resolution",
+            Self::Pdf => "PDF",
+            Self::Svg => "SVG",
+            Self::Png => "PNG",
             #[cfg(windows)]
-            Self::Emf => "EMF · Office vector picture",
+            Self::Emf => "EMF for Office",
         })
     }
 }
@@ -120,6 +127,8 @@ impl std::fmt::Display for ChemicalFormat {
 pub enum Action {
     Section(Section, bool),
     Figure(FigureFormat),
+    /// Open or close the figure format menu.
+    FigureMenu(bool),
     Chemical(ChemicalFormat),
     RefreshProperties,
     Centroid,
@@ -138,17 +147,25 @@ pub struct PropertyKey {
 pub(super) struct State {
     expanded: HashMap<Section, bool>,
     figure: FigureFormat,
+    figure_menu: bool,
     chemical: ChemicalFormat,
     pending: Option<PropertyKey>,
     properties: Option<(PropertyKey, Result<Analysis, String>)>,
 }
 impl State {
+    pub(super) fn close_menu(&mut self) {
+        self.figure_menu = false;
+    }
     pub(super) fn update(&mut self, action: Action) {
         match action {
             Action::Section(section, expanded) => {
                 self.expanded.insert(section, expanded);
             }
-            Action::Figure(format) => self.figure = format,
+            Action::Figure(format) => {
+                self.figure = format;
+                self.figure_menu = false;
+            }
+            Action::FigureMenu(open) => self.figure_menu = open,
             Action::Chemical(format) => self.chemical = format,
             Action::RefreshProperties
             | Action::PropertiesCalculated(..)
@@ -1106,16 +1123,57 @@ impl App {
         .into()
     }
 
+    /// The figure format, chosen from a menu grouped into vector and raster.
+    fn figure_menu(&self, figure: FigureFormat) -> Element<'_, Message> {
+        let open = self.inspector_ui.figure_menu;
+        let anchor = button(
+            row![
+                text(format!("{} · {figure}", figure.kind()))
+                    .size(12)
+                    .width(Length::Fill),
+                super::workspace::caret(9.)
+            ]
+            .align_y(Alignment::Center),
+        )
+        .padding(8)
+        .width(Length::Fill)
+        .style(crate::appearance::secondary)
+        .on_press(Message::InspectorAction(Action::FigureMenu(!open)));
+        let popup = open.then(|| {
+            let mut items = column![].spacing(1);
+            for kind in ["Vector", "Raster"] {
+                items =
+                    items.push(container(text(kind).size(11).style(muted_text)).padding([5, 10]));
+                for &format in FigureFormat::ALL.iter().filter(|f| f.kind() == kind) {
+                    items = items.push(
+                        button(text(format.to_string()).size(12))
+                            .width(Length::Fill)
+                            .padding([6, 10])
+                            .style(super::workspace::control(format == figure))
+                            .on_press(Message::InspectorAction(Action::Figure(format))),
+                    );
+                }
+            }
+            container(items)
+                .width(Length::Fill)
+                .padding(5)
+                .style(super::color_popover::surface)
+                .into()
+        });
+        super::popover::popover(
+            anchor,
+            popup,
+            Message::InspectorAction(Action::FigureMenu(false)),
+        )
+        .fit_anchor()
+        .into()
+    }
+
     pub(super) fn export_panel(&self) -> Element<'_, Message> {
         let figure = self.inspector_ui.figure;
         let chemical = self.inspector_ui.chemical;
         let mut figures = column![
-            crate::appearance::pick_list(FigureFormat::ALL, Some(figure), |f| {
-                Message::InspectorAction(Action::Figure(f))
-            })
-            .text_size(12)
-            .padding(8)
-            .width(Length::Fill),
+            self.figure_menu(figure),
             text(figure.description()).size(12).style(muted_text),
             button(
                 text(if self.figure_exporting {
@@ -1135,10 +1193,13 @@ impl App {
         if reshiki::clipboard::available() {
             figures = figures
                 .push(
-                    command(
-                        super::platform_shortcut("Copy image · ⇧⌘C", "Copy image · Ctrl+Shift+C"),
-                        Message::CopyImage,
-                    )
+                    button(super::workspace::keyed_text(
+                        "Copy image",
+                        super::shortcuts::label(&Message::CopyImage),
+                        "",
+                    ))
+                    .padding([7, 9])
+                    .style(super::workspace::control(false))
                     .on_press_maybe((!self.clipboard_busy).then_some(Message::CopyImage))
                     .width(Length::Fill),
                 )
@@ -1503,5 +1564,26 @@ mod tests {
         assert_eq!(app.inspector_ui.chemical, ChemicalFormat::Cdxml);
         let _ = app.properties_panel();
         let _ = app.export_panel();
+    }
+
+    #[test]
+    fn figure_menu_lists_vector_formats_before_raster_and_closes_after_a_choice() {
+        let kinds: Vec<_> = FigureFormat::ALL.iter().map(|f| f.kind()).collect();
+        assert_eq!(kinds.first(), Some(&"Vector"));
+        assert_eq!(
+            kinds.iter().position(|k| *k == "Raster"),
+            Some(kinds.len() - 1)
+        );
+        let (mut app, _) = App::new();
+        let _ = app.update(Message::InspectorAction(Action::FigureMenu(true)));
+        assert!(app.inspector_ui.figure_menu);
+        let _ = app.export_panel();
+        let _ = app.update(Message::InspectorAction(Action::Figure(FigureFormat::Svg)));
+        assert!(!app.inspector_ui.figure_menu);
+        assert_eq!(app.inspector_ui.figure, FigureFormat::Svg);
+        // Leaving the tab by shortcut must not leave it open behind the tab.
+        let _ = app.update(Message::InspectorAction(Action::FigureMenu(true)));
+        let _ = app.update(Message::Inspector(InspectorTab::Import));
+        assert!(!app.inspector_ui.figure_menu);
     }
 }

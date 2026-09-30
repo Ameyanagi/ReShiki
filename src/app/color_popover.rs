@@ -895,7 +895,7 @@ fn link(label: &str, message: Message) -> button::Button<'_, Message> {
         .on_press(message)
 }
 
-fn surface(theme: &Theme) -> container::Style {
+pub(super) fn surface(theme: &Theme) -> container::Style {
     crate::appearance::container(
         theme,
         container::Style {

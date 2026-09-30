@@ -5,8 +5,8 @@ use super::{
 use crate::canvas::layered::canvas;
 use crate::canvas::{Edit, MoleculeCanvas, Tool};
 use iced::widget::{
-    Space, button, checkbox, column, combo_box, container, responsive, row, scrollable, sensor,
-    text, text_editor, tooltip,
+    Space, button, checkbox, column, combo_box, container, responsive, rich_text, row, scrollable,
+    sensor, span, text, text_editor, tooltip,
 };
 use iced::{Alignment, Border, Color, Element, Length, Theme};
 use reshiki::bonds::BondPreset;
@@ -948,11 +948,13 @@ impl App {
         let mut commands = vec![
             RowCommand {
                 label: "Move & attach…",
+                hint: "Join the selection to another structure at an atom or bond",
                 message: Message::Join(super::joining::Action::Begin),
                 enabled: self.selected.iter().any(|id| self.doc.atom(*id).is_some()),
             },
             RowCommand {
                 label: "Group",
+                hint: "Group",
                 message: Message::Group,
                 enabled: self.can_group(),
             },
@@ -960,6 +962,7 @@ impl App {
         if !self.doc.outer_selected_groups(&self.selected).is_empty() {
             commands.push(RowCommand {
                 label: "Ungroup",
+                hint: "Ungroup",
                 message: Message::Ungroup,
                 enabled: true,
             });
@@ -1024,30 +1027,35 @@ impl App {
         let (folded, compact) = fold(width, fixed, &widths, arrange);
         let mut x = CONTEXT_PADDING + fixed;
         for (c, w) in commands.iter().zip(&widths).skip(folded) {
-            row = row.push(
+            row = row.push(hover_keys(
                 command(c.label, c.message.clone())
                     .on_press_maybe(c.enabled.then(|| c.message.clone())),
-            );
+                c.hint,
+                super::shortcuts::label(&c.message),
+                tooltip::Position::Bottom,
+            ));
             x += CONTEXT_GAP + w;
         }
         if folded > 0 {
             let labels: Vec<_> = commands.iter().take(folded).map(|c| c.label).collect();
-            row = row.push(hover_hint(
-                button(
-                    iced::widget::canvas(Glyph(Icon::More, true))
-                        .width(24)
-                        .height(24),
-                )
-                .width(MORE_WIDTH)
-                .padding(3)
-                .style(control(false))
-                .on_press(Message::ContextMenu(super::context_menu::Action::Open(
-                    super::context_menu::Page::More(folded),
-                    x + CONTEXT_GAP,
-                ))),
-                format!("More: {}", labels.join(", ")),
-                tooltip::Position::Bottom,
-            ));
+            let page = super::context_menu::Page::More(folded);
+            row = row.push(
+                self.menu_anchor(
+                    page,
+                    button(
+                        iced::widget::canvas(Glyph(Icon::More, true))
+                            .width(24)
+                            .height(24),
+                    )
+                    .width(MORE_WIDTH)
+                    .padding(3)
+                    .style(control(false))
+                    .on_press(Message::ContextMenu(
+                        super::context_menu::Action::Open(page, x + CONTEXT_GAP),
+                    )),
+                    format!("More: {}", labels.join(", ")),
+                ),
+            );
         }
         if let Some((full, short)) = arrange {
             let group = if compact { short } else { full };
@@ -1058,6 +1066,24 @@ impl App {
             );
         }
         row.into()
+    }
+
+    /// A context row menu button with its hover hint, which is left out while
+    /// the menu is open so that it cannot cover the menu's first item.
+    pub(super) fn menu_anchor<'a>(
+        &self,
+        page: super::context_menu::Page,
+        anchor: impl Into<Element<'a, Message>>,
+        hint: impl Into<std::borrow::Cow<'a, str>>,
+    ) -> Element<'a, Message> {
+        if self
+            .context_menu
+            .as_ref()
+            .is_some_and(|menu| menu.page == page)
+        {
+            return anchor.into();
+        }
+        hover_hint(anchor, hint, tooltip::Position::Bottom).into()
     }
 
     /// Options for the current tool, and the usage hint shown on the tool name.
@@ -1167,7 +1193,7 @@ impl App {
                 )
             }
             Tool::EditPoints => (
-                vec![command("Done", Message::Tool(Tool::Select)).into()],
+                vec![done("Done")],
                 "Drag anchors or control points · Escape finishes",
             ),
             Tool::Template => (
@@ -1181,7 +1207,7 @@ impl App {
                     )
                     .size(12)
                     .into(),
-                    command("Cancel", Message::Tool(Tool::Select)).into(),
+                    done("Cancel"),
                 ],
                 "Click to place / attach · Drag to orient",
             ),
@@ -1289,7 +1315,7 @@ impl App {
                             tooltip::Position::Bottom,
                         )
                         .into(),
-                        command("Done", Message::Tool(Tool::Select)).into(),
+                        done("Done"),
                     ],
                     "Drag to tilt · Shift: 15°",
                 )
@@ -2179,6 +2205,8 @@ const MORE_WIDTH: f32 = 30.;
 /// A context row command that can fold into the ⋯ menu.
 pub(super) struct RowCommand {
     pub label: &'static str,
+    /// Tooltip text, followed by the shortcut if there is one.
+    pub hint: &'static str,
     pub message: Message,
     pub enabled: bool,
 }
@@ -2210,15 +2238,34 @@ fn fold(width: f32, fixed: f32, commands: &[f32], arrange: Option<(f32, f32)>) -
         .unwrap_or((commands.len(), arrange.is_some()))
 }
 
+/// Returns to Select, like Escape.
+fn done(label: &str) -> Element<'_, Message> {
+    hover_hint(
+        command(label, Message::Tool(Tool::Select)),
+        "Return to Select · Esc",
+        tooltip::Position::Bottom,
+    )
+    .into()
+}
+
 /// Width of one line of interface text, measured like the text widget does.
-pub(super) fn text_width(label: &str, size: f32) -> f32 {
+pub(crate) fn text_width(label: &str, size: f32) -> f32 {
+    font_width(
+        label,
+        size,
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+    )
+}
+
+/// Width of one line of text in `font`.
+pub(super) fn font_width(label: &str, size: f32, font: iced::Font) -> f32 {
     use iced::advanced::text::Paragraph as _;
     iced::advanced::graphics::text::Paragraph::with_text(iced::advanced::Text {
         content: label,
         bounds: iced::Size::INFINITE,
         size: iced::Pixels(size),
         line_height: text::LineHeight::default(),
-        font: iced::Font::with_name(reshiki::style::ui_font_family()),
+        font,
         align_x: text::Alignment::Default,
         align_y: iced::alignment::Vertical::Top,
         shaping: text::Shaping::default(),
@@ -2234,12 +2281,47 @@ pub(super) fn hover_hint<'a>(
     label: impl Into<std::borrow::Cow<'a, str>>,
     position: tooltip::Position,
 ) -> tooltip::Tooltip<'a, Message> {
+    hint_tooltip(content, text(label.into()).size(12), position)
+}
+
+/// A hover hint whose first line ends with a shortcut, drawn in the
+/// shortcut font, so a long hint cannot wrap the shortcut away from its name.
+pub(super) fn hover_keys<'a>(
+    content: impl Into<Element<'a, Message>>,
+    hint: &str,
+    keys: Option<String>,
+    position: tooltip::Position,
+) -> tooltip::Tooltip<'a, Message> {
+    let (title, detail) = hint.split_once('\n').unwrap_or((hint, ""));
+    hint_tooltip(content, keyed_text(title, keys, detail), position)
+}
+
+/// `title · keys` with the shortcut in the shortcut font, then `detail` on
+/// the next line if it is not empty.
+pub(super) fn keyed_text<'a>(
+    title: &str,
+    keys: Option<String>,
+    detail: &str,
+) -> Element<'a, Message> {
+    let mut spans: Vec<text::Span<'a>> = vec![span(title.to_owned())];
+    if let Some(keys) = keys {
+        spans.push(span(" · "));
+        spans.extend(super::shortcuts::spans(&keys));
+    }
+    if !detail.is_empty() {
+        spans.push(span(format!("\n{detail}")));
+    }
+    rich_text(spans).size(12).into()
+}
+
+fn hint_tooltip<'a>(
+    content: impl Into<Element<'a, Message>>,
+    label: impl Into<Element<'a, Message>>,
+    position: tooltip::Position,
+) -> tooltip::Tooltip<'a, Message> {
     tooltip(
         content,
-        container(text(label.into()).size(12))
-            .max_width(300)
-            .padding([7, 10])
-            .style(tip),
+        container(label).max_width(300).padding([7, 10]).style(tip),
         position,
     )
     .padding(0)

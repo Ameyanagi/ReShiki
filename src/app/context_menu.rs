@@ -3,7 +3,9 @@ use super::object_toolbar::Command;
 use super::workspace::horizontal_line;
 use super::{App, InspectorTab, Message, inspector};
 use crate::canvas::Tool;
-use iced::widget::{Space, button, column, container, mouse_area, opaque, scrollable, stack, text};
+use iced::widget::{
+    Space, button, column, container, mouse_area, opaque, rich_text, row, scrollable, stack, text,
+};
 use iced::{Border, Color, Element, Length, Point, Task};
 use reshiki::{
     bonds::BondPreset,
@@ -126,7 +128,7 @@ mod tests {
         );
         app.selected = vec![atom];
         let single = labels(&app, Page::Main);
-        assert!(single.contains(&"Edit atom label…  Enter"));
+        assert!(single.contains(&"Edit atom label…"));
         assert!(!single.contains(&"3D tilt…"));
         assert!(!single.contains(&"Bond appearance…"));
         assert!(single.contains(&"Select molecule"));
@@ -332,6 +334,16 @@ mod tests {
         Ok(())
     }
 }
+const SHORTCUT_GAP: f32 = 12.;
+
+/// The shortcut shown right-aligned beside a command.
+fn shortcut(action: &Action) -> Option<String> {
+    match action {
+        Action::Run(message) => super::shortcuts::label(message),
+        _ => None,
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Action {
     Close,
@@ -404,7 +416,7 @@ impl App {
                 let mut entries = vec![];
                 if atoms && self.atom_text_target().is_some() {
                     entries.push(command(
-                        "Edit atom label…  Enter",
+                        "Edit atom label…",
                         Message::AtomText(super::atom_text::Action::Begin(None)),
                         true,
                     ));
@@ -588,7 +600,7 @@ impl App {
                 entries.push(command("Bond behind", Message::BondDepth(false), bonds));
                 if reshiki::rings::selected_cycle(&self.doc, &self.selected).is_some() {
                     entries.push(command(
-                        "Saturated ↔ Aromatic  Shift+R",
+                        "Saturated ↔ Aromatic",
                         Message::ToggleSelectedRing,
                         true,
                     ));
@@ -737,9 +749,33 @@ impl App {
     }
 
     fn context_geometry(&self, menu: &State) -> (Point, f32, f32) {
+        use super::workspace::{font_width, text_width};
         let header = usize::from(matches!(menu.page, Page::Main) && !self.selected.is_empty());
-        let count = self.context_entries(menu.page).len() + header;
-        let width = 232_f32.min((self.viewport.width - 12.).max(1.));
+        let entries = self.context_entries(menu.page);
+        let count = entries.len() + header;
+        // Wide enough for the longest label and its shortcut, as on Windows.
+        let content = entries
+            .iter()
+            .filter_map(|entry| match entry {
+                Entry::Item { label, action, .. } => Some(
+                    text_width(label, 12.)
+                        + shortcut(action).map_or(0., |keys| {
+                            SHORTCUT_GAP
+                                + super::shortcuts::spans(&keys)
+                                    .iter()
+                                    .map(|run| match run.font {
+                                        Some(font) => font_width(&run.text, 11., font),
+                                        None => text_width(&run.text, 11.),
+                                    })
+                                    .sum::<f32>()
+                        }),
+                ),
+                _ => None,
+            })
+            .fold(0., f32::max);
+        let width = (content + 30.)
+            .max(232.)
+            .min((self.viewport.width - 12.).max(1.));
         let height = ((count as f32 * 30.) + 12.).min((self.viewport.height - 12.).max(1.));
         let x = menu
             .position
@@ -763,13 +799,23 @@ impl App {
         };
         let item = |label: String, action: Action, enabled: bool| {
             let destructive = matches!(&action, Action::Run(message) if matches!(message.as_ref(), Message::Delete));
-            let label = text(label).size(12);
+            let label = text(label).size(12).width(Length::Fill);
             let label = if destructive {
                 label.style(crate::appearance::text_color(Color::from_rgb8(167, 59, 51)))
             } else {
                 label
             };
-            button(label)
+            let mut content = row![label]
+                .spacing(SHORTCUT_GAP)
+                .align_y(iced::Alignment::Center);
+            if let Some(keys) = shortcut(&action) {
+                content = content.push(
+                    rich_text(super::shortcuts::spans(&keys))
+                        .size(11)
+                        .style(super::workspace::muted_text),
+                );
+            }
+            button(content)
                 .padding([6, 10])
                 .width(Length::Fill)
                 .style(button::text)

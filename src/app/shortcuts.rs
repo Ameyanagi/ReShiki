@@ -29,6 +29,95 @@ pub enum Action {
     },
 }
 
+/// The shortcut of a menu or context row command, shown with ⌘ symbols on
+/// macOS and as Ctrl+ elsewhere.
+pub(super) fn label(message: &Message) -> Option<String> {
+    let (mods, key) = keys(message)?;
+    let mac = cfg!(target_os = "macos");
+    let key = match key {
+        "Delete" if mac => "⌫",
+        "Enter" if mac => "↩",
+        key => key,
+    };
+    Some(if mac {
+        [(mods.alt(), "⌥"), (mods.shift(), "⇧"), (mods.logo(), "⌘")]
+            .into_iter()
+            .filter_map(|(held, symbol)| held.then_some(symbol))
+            .chain([key])
+            .collect()
+    } else {
+        [
+            (mods.control(), "Ctrl+"),
+            (mods.alt(), "Alt+"),
+            (mods.shift(), "Shift+"),
+        ]
+        .into_iter()
+        .filter_map(|(held, name)| held.then_some(name))
+        .chain([key])
+        .collect()
+    })
+}
+
+/// `keys` as rich text spans, with the macOS key symbols in Lucida Grande:
+/// the interface font lacks ⌥, ⌫ and ↩ and draws ⇧ as a hairline.
+pub(super) fn spans(keys: &str) -> Vec<iced::widget::text::Span<'static>> {
+    let symbol = |c: char| matches!(c, '⌘' | '⇧' | '⌥' | '⌃' | '⌫' | '↩');
+    let mut spans = vec![];
+    let mut rest = keys;
+    while let Some(first) = rest.chars().next() {
+        let symbols = symbol(first);
+        let end = rest.find(|c| symbol(c) != symbols).unwrap_or(rest.len());
+        let run = iced::widget::span(rest[..end].to_owned());
+        spans.push(if symbols {
+            run.font(iced::Font::with_name("Lucida Grande"))
+        } else {
+            run
+        });
+        rest = &rest[end..];
+    }
+    spans
+}
+
+/// Modifiers and key of the commands that have a shortcut in `key_message`.
+fn keys(message: &Message) -> Option<(Modifiers, &'static str)> {
+    let command = Modifiers::COMMAND;
+    let shift = command | Modifiers::SHIFT;
+    Some(match message {
+        Message::Undo => (command, "Z"),
+        Message::Redo => (shift, "Z"),
+        Message::Copy(cut) => (command, if *cut { "X" } else { "C" }),
+        Message::Paste => (command, "V"),
+        Message::CopyImage => (shift, "C"),
+        Message::Duplicate => (shift, "D"),
+        Message::SelectAll => (command, "A"),
+        Message::InvertSelection => (shift, "A"),
+        Message::Group => (command, "G"),
+        Message::Ungroup => (shift, "G"),
+        Message::Fit => (command, "/"),
+        Message::BondDepth(front) => (command, if *front { "]" } else { "[" }),
+        Message::Transform(Transform::FlipHorizontal) => (shift, "V"),
+        Message::Transform(Transform::FlipVertical) => (shift, "H"),
+        Message::Arrange(arrange) => (
+            shift | Modifiers::ALT,
+            match arrange {
+                Arrange::AlignLeft => "L",
+                Arrange::AlignVertical => "C",
+                Arrange::AlignRight => "R",
+                Arrange::AlignTop => "T",
+                Arrange::AlignHorizontal => "M",
+                Arrange::AlignBottom => "B",
+                Arrange::DistributeHorizontal => "H",
+                Arrange::DistributeVertical => "V",
+            },
+        ),
+        Message::Delete => (Modifiers::empty(), "Delete"),
+        // Keys for the selected atom or ring, through `App::context_key`.
+        Message::AtomText(super::atom_text::Action::Begin(None)) => (Modifiers::empty(), "Enter"),
+        Message::ToggleSelectedRing => (Modifiers::SHIFT, "R"),
+        _ => return None,
+    })
+}
+
 /// Called only after focused widgets have had an opportunity to capture the key.
 /// Character hotkeys use the actual modified character (including Caps Lock).
 pub(super) fn key_message(key: &Key, modified: &Key, mods: Modifiers) -> Option<Message> {
@@ -790,6 +879,97 @@ mod compatibility_tests {
         } else {
             Modifiers::CTRL
         }
+    }
+
+    #[test]
+    fn displayed_shortcuts_are_the_keys_that_run_their_commands() {
+        let mut messages = vec![
+            Message::Undo,
+            Message::Redo,
+            Message::Copy(false),
+            Message::Copy(true),
+            Message::Paste,
+            Message::CopyImage,
+            Message::Duplicate,
+            Message::SelectAll,
+            Message::InvertSelection,
+            Message::Group,
+            Message::Ungroup,
+            Message::Fit,
+            Message::BondDepth(true),
+            Message::BondDepth(false),
+            Message::Transform(Transform::FlipHorizontal),
+            Message::Transform(Transform::FlipVertical),
+            Message::Delete,
+            Message::AtomText(crate::app::atom_text::Action::Begin(None)),
+            Message::ToggleSelectedRing,
+        ];
+        messages.extend(
+            [
+                Arrange::AlignLeft,
+                Arrange::AlignRight,
+                Arrange::AlignTop,
+                Arrange::AlignBottom,
+                Arrange::AlignHorizontal,
+                Arrange::AlignVertical,
+                Arrange::DistributeHorizontal,
+                Arrange::DistributeVertical,
+            ]
+            .map(Message::Arrange),
+        );
+        for message in messages {
+            let (mods, name) = keys(&message).expect("a shortcut");
+            let (pressed, expected) = match name {
+                "Delete" => (Key::Named(Named::Delete), message.clone()),
+                "Enter" => (Key::Named(Named::Enter), Message::ContextKey(name.into())),
+                // Unmodified letters act on the selection under the pointer.
+                _ if !mods.command() => (key(name), Message::ContextKey(name.into())),
+                _ => (key(&name.to_lowercase()), message.clone()),
+            };
+            let actual = key_message(&pressed, &pressed, mods);
+            assert_eq!(format!("{actual:?}"), format!("{:?}", Some(expected)));
+        }
+        assert_eq!(label(&Message::Transform(Transform::Rotate(180.))), None);
+        let label = |message| label(&message).unwrap_or_default();
+        if cfg!(target_os = "macos") {
+            assert_eq!(label(Message::Arrange(Arrange::AlignLeft)), "⌥⇧⌘L");
+            assert_eq!(label(Message::Copy(true)), "⌘X");
+            assert_eq!(label(Message::Delete), "⌫");
+        } else {
+            assert_eq!(
+                label(Message::Arrange(Arrange::AlignLeft)),
+                "Ctrl+Alt+Shift+L"
+            );
+            assert_eq!(label(Message::Copy(true)), "Ctrl+X");
+            assert_eq!(label(Message::Delete), "Delete");
+        }
+    }
+
+    #[test]
+    fn only_key_symbols_change_font() {
+        let runs = |keys| {
+            spans(keys)
+                .into_iter()
+                .map(|run| (run.text.into_owned(), run.font.is_some()))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            runs("⌥⇧⌘L"),
+            [("⌥⇧⌘".to_owned(), true), ("L".to_owned(), false)]
+        );
+        assert_eq!(
+            runs("⌘ Z / ⇧ ⌘ Z"),
+            [
+                ("⌘".to_owned(), true),
+                (" Z / ".to_owned(), false),
+                ("⇧".to_owned(), true),
+                (" ".to_owned(), false),
+                ("⌘".to_owned(), true),
+                (" Z".to_owned(), false),
+            ]
+        );
+        assert_eq!(runs("Ctrl+Shift+D"), [("Ctrl+Shift+D".to_owned(), false)]);
+        assert!(runs("").is_empty());
     }
 
     #[test]

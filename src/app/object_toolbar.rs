@@ -207,7 +207,8 @@ impl App {
         if compact {
             // Every arrange command needs a selection.
             let enabled = !self.selected.is_empty();
-            return workspace::hover_hint(
+            return self.menu_anchor(
+                Page::Arrange,
                 button(
                     row![text("Arrange").size(12), workspace::caret(9.)]
                         .spacing(5)
@@ -222,14 +223,13 @@ impl App {
                 } else {
                     "Arrange · Select objects first"
                 },
-                tooltip::Position::Bottom,
-            )
-            .into();
+            );
         }
         // Each menu's commands share one availability rule; `icon` stands for them.
         let menu = |icon: Command, page, name: &str, index: f32| {
             let enabled = icon.enabled(self, objects);
-            workspace::hover_hint(
+            self.menu_anchor(
+                page,
                 button(
                     row![
                         canvas(Glyph(icon, enabled)).width(24).height(24),
@@ -247,7 +247,6 @@ impl App {
                 } else {
                     format!("{name} · {}", icon.requirement())
                 },
-                tooltip::Position::Bottom,
             )
         };
         let mut group = row![
@@ -270,19 +269,21 @@ impl App {
         .align_y(Alignment::Center);
         for command in Command::TRANSFORM {
             let enabled = command.enabled(self, objects);
-            group = group.push(workspace::hover_hint(
+            let keys = super::shortcuts::label(&command.message()).filter(|_| enabled);
+            group = group.push(workspace::hover_keys(
                 button(canvas(Glyph(command, enabled)).width(24).height(24))
                     .width(ICON_BUTTON)
                     .padding(3)
                     .on_press_maybe(enabled.then(|| command.message()))
                     .style(workspace::control(false)),
-                match (enabled, command) {
+                &match (enabled, command) {
                     (false, _) => format!("{} · {}", command.name(), command.requirement()),
                     (true, Command::Reflect(_)) => {
-                        format!("{} · Preserves stereochemistry", command.name())
+                        format!("{}\nPreserves stereochemistry", command.name())
                     }
                     _ => command.name().to_owned(),
                 },
+                keys,
                 tooltip::Position::Bottom,
             ));
         }

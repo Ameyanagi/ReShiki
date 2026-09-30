@@ -3,7 +3,7 @@ use super::{
     workspace::{control, muted_text},
 };
 use iced::widget::{
-    Space, button, column, container, mouse_area, opaque, row, scrollable, stack, text,
+    Space, button, column, container, mouse_area, opaque, rich_text, row, scrollable, stack, text,
 };
 use iced::{Alignment, Border, Color, Element, Length};
 
@@ -53,6 +53,11 @@ impl App {
         let editing = group(
             "Selection & arrangement",
             &[
+                (
+                    platform_shortcut("⌘ X / ⌘ C / ⌘ V", "Ctrl X / Ctrl C / Ctrl V"),
+                    "Cut / Copy / Paste",
+                ),
+                (platform_shortcut("⌘ A", "Ctrl A"), "Select all"),
                 (platform_shortcut("⌘ G", "Ctrl G"), "Group"),
                 (platform_shortcut("⇧ ⌘ G", "Ctrl Shift G"), "Ungroup"),
                 (
@@ -246,7 +251,7 @@ impl App {
 fn shortcut(keys: &'static str, label: &'static str) -> Element<'static, Message> {
     row![
         text(label).size(12).width(Length::Fill),
-        container(text(keys).size(11))
+        container(rich_text(super::shortcuts::spans(keys)).size(11))
             .padding([3, 6])
             .style(|theme| crate::appearance::container(
                 theme,

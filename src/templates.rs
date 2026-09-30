@@ -137,14 +137,7 @@ pub fn place_with_mode(
     }
     let id = target.ok_or("Choose a drawing atom to connect.")?;
     let target = doc.atom(id).ok_or("The drawing atom is unavailable.")?;
-    let eligible = |d: &Document, a: &Atom| {
-        a.stereo.is_none()
-            && a.radical_electrons == 0
-            && a.explicit_h == 0
-            && !a.no_implicit
-            && d.abbreviation(a.id).is_none()
-            && valence(d, a.id).saturating_add(2) <= capacity(a)
-    };
+    let eligible = |d: &Document, a: &Atom| blocked(d, a).is_none();
     if !eligible(doc, target) {
         return Err(
             "This atom has no available valence, or needs its abbreviation/stereochemistry expanded first.",
@@ -408,6 +401,39 @@ pub(crate) fn valence(doc: &Document, id: u64) -> u32 {
             n => 2 * n as u32,
         })
         .sum()
+}
+
+/// Why `atom` cannot take a new single bond from a template, as a short
+/// label shown beside the pointer.
+pub(crate) fn blocked(doc: &Document, atom: &Atom) -> Option<String> {
+    let reason = if atom.stereo.is_some() {
+        "has stereochemistry"
+    } else if atom.radical_electrons != 0 {
+        "has a radical"
+    } else if atom.explicit_h != 0 || atom.no_implicit {
+        "has fixed hydrogens"
+    } else if doc.abbreviation(atom.id).is_some() {
+        return Some("Expand the abbreviation first".into());
+    } else if valence(doc, atom.id).saturating_add(2) > capacity(atom) {
+        return Some(valence_label(
+            &atom.element,
+            capacity(atom),
+            valence(doc, atom.id).saturating_add(2),
+        ));
+    } else {
+        return None;
+    };
+    Some(format!("{} {reason}", atom.element))
+}
+
+/// A short label for an atom whose bonds would exceed its `capacity`, both
+/// counted like `valence`.
+pub(crate) fn valence_label(element: &str, capacity: u32, valence: u32) -> String {
+    if capacity == 0 {
+        format!("{element} can't take another bond here")
+    } else {
+        format!("{element} would have {} bonds", valence.div_ceil(2))
+    }
 }
 
 pub(crate) fn capacity(atom: &Atom) -> u32 {

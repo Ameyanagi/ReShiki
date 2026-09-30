@@ -1239,6 +1239,7 @@ impl MoleculeCanvas<'_> {
         let mut ring_selection = None;
         let mut chain_badge = None;
         let mut template_notice = None;
+        let mut rejection: Option<reshiki::editing::RingRejection> = None;
         if let (Some(Gesture::Tilt(drag)), Some(p)) = (&state.gesture, state.cursor)
             && self.tool == Tool::Tilt
         {
@@ -1421,24 +1422,44 @@ impl MoleculeCanvas<'_> {
             drag.apply(&mut preview, end, state.modifiers.shift());
             ring_selection = Some(drag.ids.clone());
         }
-        if let (Some(Gesture::Ring { start, attached }), Some(p)) = (&state.gesture, state.cursor)
-            && bounds.contains(p)
+        if let Some(p) = state.cursor.filter(|p| bounds.contains(*p))
             && self.tool == Tool::Ring
         {
+            let radius = 10.0 / self.camera.zoom;
             let end = self
                 .camera
                 .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
-            let (anchor, direction) = ring_gesture(*start, end, *attached, 10.0 / self.camera.zoom);
-            ring_selection = reshiki::editing::ring_oriented(
-                &mut preview,
-                anchor,
-                self.ring_size,
-                self.aromatic_ring
-                    || delocalized_ring_size(self.tool, self.ring_size, state.modifiers).is_some(),
-                10.0 / self.camera.zoom,
-                direction,
-            )
-            .ok();
+            let placement = |anchor, direction| {
+                reshiki::editing::ring_placement(
+                    &preview,
+                    anchor,
+                    self.ring_size,
+                    self.aromatic_ring
+                        || delocalized_ring_size(self.tool, self.ring_size, state.modifiers)
+                            .is_some(),
+                    radius,
+                    direction,
+                )
+            };
+            match &state.gesture {
+                Some(Gesture::Ring { start, attached }) => {
+                    let (anchor, direction) = ring_gesture(*start, end, *attached, radius);
+                    match placement(anchor, direction) {
+                        Ok((doc, ids)) => {
+                            preview = doc;
+                            ring_selection = Some(ids);
+                        }
+                        Err(reason) => rejection = Some(reason),
+                    }
+                }
+                // Hovering where a click would attach shows only a rejection.
+                None if self.doc.nearest(end, radius).is_some()
+                    || reshiki::editing::nearest_bond(self.doc, end, radius).is_some() =>
+                {
+                    rejection = placement(end, None).err();
+                }
+                _ => {}
+            }
         }
         if let Tool::RingPreset(preset) = self.tool
             && let Some(p) = state.cursor.filter(|p| bounds.contains(*p))
@@ -1477,7 +1498,16 @@ impl MoleculeCanvas<'_> {
                         true,
                     ));
                 }
-                Err(error) => template_notice = Some((error.into(), false)),
+                Err(error) => {
+                    let radius = 10. / self.camera.zoom;
+                    template_notice = Some((error.into(), false));
+                    rejection = Some(reshiki::editing::RingRejection {
+                        message: error,
+                        label: reshiki::editing::attachment_label(self.doc, anchor, radius),
+                        outline: vec![],
+                        atom: self.doc.nearest(anchor, radius),
+                    });
+                }
             }
         }
         if self.tool == Tool::Template
@@ -1641,15 +1671,20 @@ impl MoleculeCanvas<'_> {
             } else {
                 (end, None)
             };
-            ring_selection = reshiki::editing::ring_oriented(
-                &mut preview,
+            match reshiki::editing::ring_placement(
+                &preview,
                 anchor,
                 size,
                 true,
                 10. / self.camera.zoom,
                 direction,
-            )
-            .ok();
+            ) {
+                Ok((doc, ids)) => {
+                    preview = doc;
+                    ring_selection = Some(ids);
+                }
+                Err(reason) => rejection = Some(reason),
+            }
         }
         if let (
             Some(Gesture::Draw {
@@ -1837,27 +1872,42 @@ impl MoleculeCanvas<'_> {
             });
         }
         if let Some((point, content, valid)) = chain_badge {
-            let p = self.camera.screen(point, bounds);
-            let position = Point::new(
-                (p.x + 14.).clamp(4., (bounds.width - 200.).max(4.)),
-                (p.y + 18.).clamp(20., (bounds.height - 30.).max(20.)),
-            );
-            frame.fill_rectangle(
-                position - Vector::new(5., 4.),
-                iced::Size::new(196., 24.),
-                rgb(if valid {
-                    [225, 242, 237]
-                } else {
-                    [253, 235, 233]
-                }),
-            );
-            frame.fill_text(canvas::Text {
+            badge(
+                frame,
+                bounds,
+                self.camera.screen(point, bounds),
                 content,
-                position,
-                color: rgb(if valid { [30, 100, 85] } else { [160, 50, 45] }),
-                size: 12.into(),
-                ..Default::default()
-            });
+                valid,
+            );
+        }
+        // A rejected ring shows where it would go, and why, at the pointer;
+        // the status bar gets the full message if the user clicks anyway.
+        if let (Some(rejection), Some(p)) = (rejection, state.cursor) {
+            let error = rgb([182, 66, 61]);
+            let pointer = Point::new(p.x - bounds.x, p.y - bounds.y);
+            if let [first, rest @ ..] = rejection.outline.as_slice() {
+                let path = Path::new(|b| {
+                    b.move_to(self.camera.screen(*first, bounds));
+                    for point in rest {
+                        b.line_to(self.camera.screen(*point, bounds));
+                    }
+                    b.close();
+                });
+                frame.fill(&path, Color::from_rgba8(182, 66, 61, 0.08));
+                frame.stroke(&path, Stroke::default().with_width(2.).with_color(error));
+            }
+            let marker = rejection
+                .atom
+                .and_then(|id| self.doc.atom(id))
+                .map(|a| self.camera.screen(a.position, bounds))
+                .or(rejection.outline.is_empty().then_some(pointer));
+            if let Some(center) = marker {
+                frame.stroke(
+                    &Path::circle(center, 10.),
+                    Stroke::default().with_width(2.).with_color(error),
+                );
+            }
+            badge(frame, bounds, pointer, rejection.label, false);
         }
         if self.tool == Tool::EditPoints {
             for indicator in reshiki::atom_labels::indicators(&preview)
@@ -2155,6 +2205,38 @@ fn draw_atom_markers(
             );
         }
     }
+}
+
+/// A one-line label beside the pointer at `p`, kept inside the canvas.
+fn badge(
+    frame: &mut layered::Frame<'_>,
+    bounds: Rectangle,
+    p: Point,
+    content: String,
+    valid: bool,
+) {
+    let width = crate::app::text_width(&content, 12.) + 10.;
+    let position = Point::new(
+        (p.x + 14.).clamp(4., (bounds.width - width - 4.).max(4.)),
+        (p.y + 18.).clamp(20., (bounds.height - 30.).max(20.)),
+    );
+    frame.fill_rectangle(
+        position - Vector::new(5., 4.),
+        iced::Size::new(width, 24.),
+        rgb(if valid {
+            [225, 242, 237]
+        } else {
+            [253, 235, 233]
+        }),
+    );
+    frame.fill_text(canvas::Text {
+        content,
+        position,
+        color: rgb(if valid { [30, 100, 85] } else { [160, 50, 45] }),
+        size: 12.into(),
+        font: iced::Font::with_name(reshiki::style::ui_font_family()),
+        ..Default::default()
+    });
 }
 
 fn ring_gesture(start: World, end: World, attached: bool, radius: f32) -> (World, Option<World>) {

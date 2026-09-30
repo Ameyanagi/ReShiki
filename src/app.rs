@@ -51,6 +51,7 @@ mod tool_button;
 mod typography;
 mod updates;
 mod workspace;
+pub(crate) use workspace::text_width;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum InspectorTab {
@@ -924,6 +925,7 @@ impl App {
                 | Message::Imports(import::Action::Loaded(..))
         ) {
             self.context_menu = None;
+            self.inspector_ui.close_menu();
             if !matches!(message, Message::Imports(import::Action::Menu(_))) {
                 self.imports.menu = false;
             }

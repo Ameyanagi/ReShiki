@@ -16,6 +16,7 @@ pub struct Popover<'a> {
     close: Message,
     escape: Message,
     keys: fn(&keyboard::Key) -> Option<Message>,
+    fit_anchor: bool,
 }
 
 /// `popup` is shown while it is Some; `close` is sent for a click outside it.
@@ -30,11 +31,17 @@ pub fn popover<'a>(
         escape: close.clone(),
         close,
         keys: |_| None,
+        fit_anchor: false,
     }
 }
 impl Popover<'_> {
     pub fn on_escape(mut self, message: Message) -> Self {
         self.escape = message;
+        self
+    }
+    /// Makes the popup as wide as its anchor, like a drop-down list.
+    pub fn fit_anchor(mut self) -> Self {
+        self.fit_anchor = true;
         self
     }
     /// Keys the popup handles when none of its widgets does.
@@ -164,6 +171,7 @@ impl Widget<Message, Theme, Renderer> for Popover<'_> {
             close: &self.close,
             escape: &self.escape,
             keys: self.keys,
+            fit_anchor: self.fit_anchor,
         })))
     }
 }
@@ -181,17 +189,22 @@ struct Popup<'a, 'b> {
     close: &'b Message,
     escape: &'b Message,
     keys: fn(&keyboard::Key) -> Option<Message>,
+    fit_anchor: bool,
 }
 
 impl overlay::Overlay<Message, Theme, Renderer> for Popup<'_, '_> {
     fn layout(&mut self, renderer: &Renderer, bounds: Size) -> layout::Node {
         let top = self.anchor.y + self.anchor.height + GAP;
+        let width = (bounds.width - 2. * MARGIN).max(0.);
+        let (min, max) = if self.fit_anchor {
+            let width = self.anchor.width.min(width);
+            (width, width)
+        } else {
+            (0., width)
+        };
         let limits = layout::Limits::new(
-            Size::ZERO,
-            Size::new(
-                (bounds.width - 2. * MARGIN).max(0.),
-                (bounds.height - top - MARGIN).max(0.),
-            ),
+            Size::new(min, 0.),
+            Size::new(max, (bounds.height - top - MARGIN).max(0.)),
         );
         let node = self
             .popup
