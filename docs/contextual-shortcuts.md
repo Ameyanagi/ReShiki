@@ -128,6 +128,9 @@ Acyclic triple-bond edits straighten the adjacent branches. Bond appearance and 
 | Cmd/Ctrl+Shift+K            | Preview cleanup                                                                           |
 | Cmd/Ctrl+L / E              | Toggle fixed bond length / fixed angles                                                   |
 | Option/Alt-drag             | Temporarily draw or move bonded endpoints freely                                          |
+| Cmd/Ctrl-drag               | Drag a copy, leaving the original in place                                                |
+| Shift-drag                  | Move horizontally or vertically only                                                      |
+| Cmd/Ctrl+Shift-drag         | Drag a copy along one axis                                                                |
 | Cmd/Ctrl+Alt+K              | Toggle a selected aromatic ring's circle / alternating bonds; Windows also supports Alt+K |
 | Cmd/Ctrl+[ / ]              | Send crossing bonds behind / bring forward                                                |
 | Cmd/Ctrl+/                  | Fit drawing                                                                               |

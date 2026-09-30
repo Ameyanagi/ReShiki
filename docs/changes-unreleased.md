@@ -30,6 +30,12 @@ The drawing features added since 0.9.1 now share fewer rows, and each command ha
 
 Application-renderer captures at 1280 × 820, before (`fc0884f`) and after (`c7f6853`) the cleanup. The [screenshot record](changes/ui-declutter.md) pairs all eight matched states at 1280 × 820 and 1040 × 680, including the molecule, ring-tool, import and unsaved-changes states. It also shows the color popover, hue editing, recovery offer, Insert menu, Help panel and Assistant-tab rows; these states were added during the cleanup and have no before counterpart. The native save dialog and drag-and-drop happen outside the renderer and are not pictured.
 
+## Drag to copy and axis-locked moves
+
+By @HiroYokoyama in [PR #87](https://github.com/Ameyanagi/ReShiki/pull/87).
+
+With Select or Lasso, hold **⌘** on macOS or **Ctrl** on Windows and Linux while dragging a selection to drop a copy and leave the original in place; the copy is selected afterwards. Hold **Shift** to move only horizontally or vertically, whichever way the pointer moved farther. Bonded parts keep their bond length and angle constraints, and **Option/Alt** still frees them. Hold both keys for a copy along one axis. Each drag is one Undo step. The keys held at release decide, so to cancel a copy drag, release ⌘ or Ctrl first, then press **Escape**. The Help panel lists these gestures.
+
 ## Loaded canvas performance
 
 By @Ameyanagi in [PR #84](https://github.com/Ameyanagi/ReShiki/pull/84).
