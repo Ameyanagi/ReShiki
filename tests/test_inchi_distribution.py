@@ -511,7 +511,7 @@ class HelperTests(unittest.TestCase):
                 def helper(binary, version):
                     self.assertTrue(binary.is_file())
                     self.assertIn("Installed/ReShiki.app/Contents/MacOS", binary.as_posix())
-                    self.assertEqual(version, "1.07.3")
+                    self.assertEqual(version, "1.07.5")
                     checked.append(binary)
 
                 with (
@@ -584,7 +584,7 @@ class HelperTests(unittest.TestCase):
             def helper(binary, version):
                 self.assertEqual(binary, installed[-1] / "reshiki-inchi-helper.exe")
                 self.assertTrue(binary.is_file())
-                self.assertEqual(version, "1.07.3")
+                self.assertEqual(version, "1.07.5")
                 checked.append(binary)
 
             with (
