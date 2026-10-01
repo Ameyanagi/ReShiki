@@ -1,6 +1,6 @@
 # Development
 
-ReShiki uses Rust for the editor and chemistry, a standalone native InChI helper, and Astro Starlight for documentation. Python/RDKit is an optional test reference.
+ReShiki uses Rust for the editor and chemistry, a standalone Rust InChI helper, and Astro Starlight for documentation. Python/RDKit is an optional test reference.
 
 ## Build and run
 
@@ -11,7 +11,7 @@ On macOS, Cargo defaults C/C++ dependencies to Apple Clang from `/usr/bin`, so a
 ```sh
 git clone https://github.com/Ameyanagi/ReShiki.git reshiki
 cd reshiki
-python3 scripts/build_inchi_helper.py --fetch-source
+python3 scripts/build_inchi_helper.py
 export RESHIKI_INCHI_HELPER="$PWD/artifacts/inchi-helper/reshiki-inchi-helper"
 cargo run --locked
 ```

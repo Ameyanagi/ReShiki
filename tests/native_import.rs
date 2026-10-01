@@ -313,11 +313,14 @@ async fn cdx_conversion_and_kernel_budget_keep_import_atomic() -> anyhow::Result
     };
     let config = Config::new(path);
     let reference = PythonEngine::default();
-    for xml in [
-        MOLECULE,
-        include_str!("fixtures/ui-drawn-ethanol.cdxml"),
-        include_str!("fixtures/atom-labels-chemdraw.cdxml"),
-        include_str!("fixtures/graphics-chemdraw.cdxml"),
+    for (name, xml) in [
+        ("molecule", MOLECULE),
+        ("ethanol", include_str!("fixtures/ui-drawn-ethanol.cdxml")),
+        (
+            "atom labels",
+            include_str!("fixtures/atom-labels-chemdraw.cdxml"),
+        ),
+        ("graphics", include_str!("fixtures/graphics-chemdraw.cdxml")),
     ] {
         let document = reference
             .execute(Request::import("cdxml", xml))
@@ -338,8 +341,9 @@ async fn cdx_conversion_and_kernel_budget_keep_import_atomic() -> anyhow::Result
             .execute(request.clone())
             .await
             .map_err(anyhow::Error::msg)?;
-        let Outcome::Complete(actual) =
-            native_import::execute(request, Some(config.clone())).await?
+        let Outcome::Complete(actual) = native_import::execute(request, Some(config.clone()))
+            .await
+            .with_context(|| format!("Native CDX import: {name}"))?
         else {
             anyhow::bail!("Binary drawing deferred");
         };
@@ -349,7 +353,7 @@ async fn cdx_conversion_and_kernel_budget_keep_import_atomic() -> anyhow::Result
     }
     let tiny = Config {
         limits: generator::Limits {
-            kernel_heap_bytes: 1,
+            heap_bytes: 1,
             timeout: Duration::from_secs(5),
         },
         ..config.clone()
@@ -408,7 +412,7 @@ async fn layout_and_inchi_reader_failures_preserve_the_entire_request() -> anyho
     let before = serde_json::to_value(source.as_ref())?;
     let tiny = Config {
         limits: generator::Limits {
-            kernel_heap_bytes: 1,
+            heap_bytes: 1,
             ..config.limits
         },
         ..config.clone()

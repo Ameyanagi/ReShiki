@@ -1081,5 +1081,20 @@
         "source": "https://opensource.org/license/mit"
       }
     ]
+  },
+  "cosmolkit-inchi@0.3.0": {
+    "license": "MIT",
+    "repository": "https://github.com/cosmol-studio/COSMolKit",
+    "revision": "d892ec3507c5b568c5ed5d86ae44e466f7d03855",
+    "authors": ["COSMolKit Contributors"],
+    "files": [
+      {
+        "path": "texts/cosmolkit-MIT-318ada8a479d.txt",
+        "sha256": "318ada8a479dc3483285c569ab09a4a7044b7c324dedef241625495ecdb1971e",
+        "source": "https://raw.githubusercontent.com/cosmol-studio/COSMolKit/d892ec3507c5b568c5ed5d86ae44e466f7d03855/LICENSE"
+      }
+    ],
+    "fork": "https://github.com/Ameyanagi/COSMolKit",
+    "fork_revision": "3a437849dcd28319b1a3cdf02d7897a7ee200cb2"
   }
 }

@@ -133,8 +133,13 @@ fn render_drawing(doc: &Document, format: &str, clipboard: bool) -> Result<Figur
         })
         .map_err(|e| e.to_string()),
         "png" => {
+            let budget = if clipboard {
+                RasterBudget::clipboard(cfg!(windows))
+            } else {
+                RasterBudget::FILE
+            };
             let (width, height, dpi) =
-                png_dimensions(tree.size().width(), tree.size().height(), !clipboard)?;
+                png_dimensions(tree.size().width(), tree.size().height(), budget)?;
             let scale = dpi as f32 / 96.0;
             let mut pixmap =
                 resvg::tiny_skia::Pixmap::new(width, height).ok_or("Could not allocate image")?;
@@ -181,25 +186,60 @@ fn render_drawing(doc: &Document, format: &str, clipboard: bool) -> Result<Figur
     }
 }
 
-/// Bound both allocation and encoded pixel work. The clipboard keeps its fixed
-/// resolution because its native picture bounds use that resolution too.
-fn png_dimensions(width: f32, height: f32, adaptive: bool) -> Result<(u32, u32, u32), String> {
+#[derive(Clone, Copy)]
+struct RasterBudget {
+    adaptive: bool,
+    pixels: u64,
+    side: u32,
+}
+impl RasterBudget {
+    const FILE: Self = Self {
+        adaptive: true,
+        pixels: 80_000_000,
+        side: u32::MAX,
+    };
+
+    fn clipboard(windows: bool) -> Self {
+        if windows {
+            // RGBA Office previews and CF_DIB must fit the native 64 MiB
+            // limit. Also keep Copy Image pasteable as a native picture.
+            Self {
+                adaptive: true,
+                pixels: crate::pictures::MAX_PIXELS,
+                side: 8192,
+            }
+        } else {
+            Self {
+                adaptive: false,
+                ..Self::FILE
+            }
+        }
+    }
+}
+
+/// Choose resolution before allocating pixels. PNG resolution metadata keeps
+/// the publication size independent of an adaptive clipboard preview's DPI.
+fn png_dimensions(
+    width: f32,
+    height: f32,
+    budget: RasterBudget,
+) -> Result<(u32, u32, u32), String> {
     if !width.is_finite() || !height.is_finite() || width <= 0. || height <= 0. {
         return Err("Invalid PNG dimensions".into());
     }
     let preferred = crate::style::DEFAULT.png_dpi;
     for dpi in [preferred, 600, 300, 150, 96, 72] {
-        if !adaptive && dpi != preferred {
+        if !budget.adaptive && dpi != preferred {
             break;
         }
         let scale = dpi as f32 / 96.;
         let w = (width * scale).ceil() as u32;
         let h = (height * scale).ceil() as u32;
-        if u64::from(w) * u64::from(h) <= 80_000_000 {
+        if w <= budget.side && h <= budget.side && u64::from(w) * u64::from(h) <= budget.pixels {
             return Ok((w, h, dpi));
         }
     }
-    Err(if adaptive {
+    Err(if budget.adaptive {
         "Drawing is too large for a PNG even at 72 dpi; use SVG or PDF."
     } else {
         "Drawing is too large for a 1200 dpi PNG; use SVG or PDF."
@@ -292,11 +332,39 @@ mod tests {
             (10., f32::INFINITY),
             (f32::MAX, f32::MAX),
         ] {
-            assert!(png_dimensions(width, height, true).is_err());
+            assert!(png_dimensions(width, height, RasterBudget::FILE).is_err());
         }
-        assert_eq!(png_dimensions(100., 100., true), Ok((1250, 1250, 1200)));
-        assert_eq!(png_dimensions(800., 800., true), Ok((5000, 5000, 600)));
-        assert!(png_dimensions(800., 800., false).is_err());
+        assert_eq!(
+            png_dimensions(100., 100., RasterBudget::FILE),
+            Ok((1250, 1250, 1200))
+        );
+        assert_eq!(
+            png_dimensions(800., 800., RasterBudget::FILE),
+            Ok((5000, 5000, 600))
+        );
+        assert!(png_dimensions(800., 800., RasterBudget::clipboard(false)).is_err());
+    }
+
+    #[test]
+    fn windows_clipboard_resolution_fits_dib_office_and_native_picture_limits() {
+        let budget = RasterBudget::clipboard(true);
+        assert_eq!(png_dimensions(100., 100., budget), Ok((1250, 1250, 1200)));
+        // The old fixed 1200 DPI raster passes the export budget (50M pixels),
+        // but its 24-bit DIB alone is 150 MB. The Office RGBA preview is larger.
+        assert_eq!(
+            png_dimensions(800., 400., RasterBudget::clipboard(false)),
+            Ok((10000, 5000, 1200))
+        );
+        assert_eq!(png_dimensions(800., 400., budget), Ok((5000, 2500, 600)));
+        for (width, height) in [(800., 400.), (800., 800.), (2000., 20.), (10000., 300.)] {
+            let (w, h, _) = png_dimensions(width, height, budget).unwrap();
+            let pixels = u64::from(w) * u64::from(h);
+            let stride = (u64::from(w) * 3 + 3) & !3;
+            assert!(pixels * 4 <= 64 * 1024 * 1024, "Office RGBA preview");
+            assert!(40 + stride * u64::from(h) <= 64 * 1024 * 1024, "CF_DIB");
+            assert!(pixels <= crate::pictures::MAX_PIXELS && w <= 8192 && h <= 8192);
+        }
+        assert!(png_dimensions(20000., 20000., budget).is_err());
     }
     #[test]
     fn clipboard_is_transparent_and_files_keep_canvas_background() {

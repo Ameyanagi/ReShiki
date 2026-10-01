@@ -9,7 +9,7 @@ of adaptations, copyright notices, and license texts are recorded in:
 
   licenses/rdkit/          Molecular algorithms, data, and reference fixtures
   licenses/cdxml-native/   Molecular interchange parser adaptations
-  licenses/inchi/          InChIKey adaptations and the native InChI helper
+  licenses/inchi/          InChIKey adaptations and the Rust InChI kernel
   licenses/cpython/        Numerical algorithm adaptations
   licenses/stdlib/         Standard-library algorithm adaptations
   licenses/amd-win-libm/   Windows numerical algorithm adaptations

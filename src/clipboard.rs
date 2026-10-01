@@ -97,9 +97,18 @@ fn embedded_png(png: &[u8]) -> Result<Vec<u8>, String> {
     let reader = png::Decoder::new(std::io::Cursor::new(png))
         .read_info()
         .map_err(|e| format!("Invalid clipboard PNG: {e}"))?;
-    let points_per_pixel = 72.0 / f64::from(crate::style::DEFAULT.png_dpi);
-    let width = f64::from(reader.info().width) * points_per_pixel;
-    let height = f64::from(reader.info().height) * points_per_pixel;
+    let dimensions = reader
+        .info()
+        .pixel_dims
+        .filter(|d| d.unit == png::Unit::Meter && d.xppu > 0 && d.yppu > 0);
+    let (x_dpi, y_dpi) = dimensions
+        .map(|d| (f64::from(d.xppu) * 0.0254, f64::from(d.yppu) * 0.0254))
+        .unwrap_or_else(|| {
+            let dpi = f64::from(crate::style::DEFAULT.png_dpi);
+            (dpi, dpi)
+        });
+    let width = f64::from(reader.info().width) * 72.0 / x_dpi;
+    let height = f64::from(reader.info().height) * 72.0 / y_dpi;
     if !width.is_finite()
         || !height.is_finite()
         || width <= 0.0
@@ -355,6 +364,27 @@ async fn prepare_copy(
     for (format, result) in images {
         match result {
             Ok(image) => {
+                if format == "png" {
+                    let dpi = image
+                        .bytes()
+                        .ok()
+                        .and_then(|bytes| {
+                            png::Decoder::new(std::io::Cursor::new(bytes))
+                                .read_info()
+                                .ok()?
+                                .info()
+                                .pixel_dims
+                        })
+                        .filter(|d| d.unit == png::Unit::Meter)
+                        .map(|d| (f64::from(d.xppu) * 0.0254).round() as u32);
+                    if let Some(dpi) = dpi
+                        && dpi < crate::style::DEFAULT.png_dpi
+                    {
+                        outcome.notices.push(format!(
+                            "Raster preview uses {dpi} dpi to fit the clipboard; vector formats retain full quality"
+                        ));
+                    }
+                }
                 // Editors that prefer CDX may reject the generic PDF/image
                 // flavors. Supply a sized picture when editable exchange is
                 // unavailable, without claiming it contains editable atoms.
@@ -424,18 +454,9 @@ fn copy_images(
         ));
     }
     if image_only && let Some((_, Ok(png))) = images.iter().find(|(format, _)| *format == "png") {
-        // Keep Copy Image pasteable inside ReShiki as one picture, with the
-        // same physical dimensions as the exported 1200 dpi raster.
+        // Honor the actual PNG resolution, including bounded Windows previews.
         let native = png.bytes().and_then(|bytes| {
-            let picture = crate::pictures::Picture::import(&bytes)?;
-            let width = crate::style::DEFAULT
-                .world(picture.width() as f32 * 72. / crate::style::DEFAULT.png_dpi as f32);
-            let height = crate::style::DEFAULT
-                .world(picture.height() as f32 * 72. / crate::style::DEFAULT.png_dpi as f32);
-            let mut doc = picture.document();
-            if let Some(g) = doc.graphics.first_mut() {
-                crate::pictures::resize(g, width, height)?;
-            }
+            let doc = crate::pictures::clipboard_document(&bytes)?;
             let bytes = serde_json::to_vec(&doc).map_err(|e| e.to_string())?;
             Ok(Representation::new(NATIVE, &bytes))
         });
@@ -1268,7 +1289,8 @@ mod tests {
         let reader = png::Decoder::new(std::io::Cursor::new(&png))
             .read_info()
             .unwrap();
-        let expected_width = f64::from(reader.info().width) * 72.0 / 1200.0;
+        let expected_width = f64::from(reader.info().width) * 72.0
+            / (f64::from(reader.info().pixel_dims.unwrap().xppu) * 0.0254);
         assert!((right - 30.0 - expected_width).abs() < 0.0001);
         assert_eq!(
             u16::from_le_bytes(drawing[80..82].try_into().unwrap()),
@@ -1280,5 +1302,50 @@ mod tests {
         assert!(embedded_png(b"invalid image").is_err());
         assert!(embedded_png(&png[..20]).is_err());
         assert!(embedded_png(&vec![0; 16 * 1024 * 1024 + 1]).is_err());
+    }
+
+    #[test]
+    fn adaptive_raster_wrappers_keep_publication_size_from_actual_resolution() {
+        for dpi in [1200, 600, 300, 150, 96, 72] {
+            // The same one-inch figure at each of the preview resolutions.
+            let (width, height) = (dpi, dpi / 2);
+            let mut bytes = Vec::new();
+            let mut encoder = png::Encoder::new(&mut bytes, width, height);
+            encoder.set_color(png::ColorType::Rgba);
+            encoder.set_depth(png::BitDepth::Eight);
+            encoder.set_pixel_dims(Some(png::PixelDimensions {
+                xppu: (f64::from(dpi) / 0.0254).round() as u32,
+                yppu: (f64::from(dpi) / 0.0254).round() as u32,
+                unit: png::Unit::Meter,
+            }));
+            encoder
+                .write_header()
+                .unwrap()
+                .write_image_data(&vec![0; width as usize * height as usize * 4])
+                .unwrap();
+            let drawing = embedded_png(&bytes).unwrap();
+            let coordinate = |offset| {
+                f64::from(i32::from_le_bytes(
+                    drawing[offset..offset + 4].try_into().unwrap(),
+                )) / 65536.
+            };
+            let (cdx_width, cdx_height) = (
+                coordinate(76) - coordinate(68),
+                coordinate(72) - coordinate(64),
+            );
+            let native = crate::pictures::clipboard_document(&bytes).unwrap();
+            let graphic = &native.graphics[0];
+            let style = &*crate::style::DEFAULT;
+            // The PNG pHYs field is integer pixels/meter, hence a small physical
+            // quantization at the lowest resolutions. All wrappers must agree.
+            assert!((cdx_width - 72.).abs() < 0.02, "{dpi} DPI width");
+            assert!((cdx_height - 36.).abs() < 0.02, "{dpi} DPI height");
+            assert!(
+                (f64::from(graphic.axis_x.x * style.points_per_world()) - cdx_width).abs() < 0.001
+            );
+            assert!(
+                (f64::from(graphic.axis_y.y * style.points_per_world()) - cdx_height).abs() < 0.001
+            );
+        }
     }
 }

@@ -54,6 +54,16 @@ Several drawings can be open in one window. The tabs take the place of the file 
 
 Work that a tab started, such as a chemistry check, an import or a clipboard read, never changes another tab. If you switch tabs before it finishes, the result still completes in its own tab with the same checks for newer edits. Imports, pastes, cuts and picture replacements keep their own Undo steps; labels and properties refresh as usual. The front drawing, view and controls stay unchanged. Each tab retains its latest status or error, shown when you return. Results for closed tabs are discarded.
 
+## Rust InChI implementation
+
+By @Ameyanagi in [PR #99](https://github.com/Ameyanagi/ReShiki/pull/99) (under review).
+
+ReShiki uses a Rust InChI implementation for molecular identifiers and imports.
+Compatibility checks preserve the existing chemistry results, while each operation
+retains its cancellation, time and memory limits. Release builds use the pinned
+Cargo dependency instead of separately downloading and compiling the C InChI kernel.
+See the [helper and compatibility checks](https://github.com/Ameyanagi/ReShiki/blob/d621f1a/tools/inchi-helper/README.md).
+
 ## Loaded canvas performance
 
 By @Ameyanagi in [PR #84](https://github.com/Ameyanagi/ReShiki/pull/84).
