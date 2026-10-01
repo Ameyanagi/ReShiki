@@ -3,6 +3,9 @@ use super::*;
 use crate::document::{History, Point};
 use anyhow::Context;
 
+#[path = "../../../tests/support/reference_presentation.rs"]
+mod reference_presentation;
+
 async fn guarded(
     record: &std::path::Path,
     inject: bool,
@@ -65,6 +68,7 @@ async fn guarded_script(
 fn matches(actual: &Response, expected: &Response) -> anyhow::Result<()> {
     let mut actual = serde_json::to_value(actual)?;
     let mut expected = serde_json::to_value(expected)?;
+    reference_presentation::compare_export(&actual, &mut expected)?;
     for field in ["mass", "exact_mass", "logp", "tpsa"] {
         if let (Some(a), Some(e)) = (
             actual["analysis"][field].as_f64(),
