@@ -240,7 +240,21 @@ def main():
         emit(f"unicode-decimal/{zero:x}", root)
     for value in ["bad'quote", 'bad"quote', "bad\\quote", "\u00a0bad\u00a0", "⑥", "Ⅵ"]:
         emit(f"integer-error-spelling/{value}", drawing(dict(Z=value)))
-    for point in [0xAD, 0x200D, 0x2028, 0xE000, 0xFDD0, 0x10FFFF, 0x301, 0xFE0F, 0x1ACF, 0x1E6C0]:
+    points = [0xAD, 0x200D, 0x2028, 0xE000, 0xFDD0, 0x10FFFF, 0x301, 0x1ACF, 0x1E6C0]
+    # Printable default-ignorables that Rust's debug formatter escapes.
+    for first, last in [
+        (0x034F, 0x034F),
+        (0x115F, 0x1160),
+        (0x17B4, 0x17B5),
+        (0x180B, 0x180D),
+        (0x180F, 0x180F),
+        (0x3164, 0x3164),
+        (0xFE00, 0xFE0F),
+        (0xFFA0, 0xFFA0),
+        (0xE0100, 0xE01EF),
+    ]:
+        points.extend(range(first, last + 1))
+    for point in points:
         value = f"bad{chr(point)}"
         for field in ["B", "Display", "Z"]:
             emit(f"unicode-error-spelling/{point:x}/{field}", drawing({field: value}))

@@ -53,6 +53,9 @@ fn log_content(value: &str) -> String {
     value
         .lines()
         .filter(|line| !line.contains(" Build ("))
+        // The historical Windows help uses '/' as its command-line prefix.
+        // This is syntax in the empty-input usage banner, not a diagnostic.
+        .map(|line| line.replace("[/option[ /option...]]", "[-option[ -option...]]"))
         .collect::<Vec<_>>()
         .join("\n")
         .replace("1.07.3", "1.07.5")
