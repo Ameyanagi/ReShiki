@@ -120,7 +120,7 @@ fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String
         };
         Ok(Prepared::Import {
             format,
-            contents: super::import::contents(format, contents),
+            contents: super::import::contents(format, contents)?,
         })
     }
 }
@@ -177,17 +177,17 @@ impl super::App {
         result: Result<Option<PathBuf>, String>,
     ) -> iced::Task<super::Message> {
         self.file_io.saving = false;
+        // The write still releases the serial save slot, but its dialog and
+        // error belong to the document that started it.
+        if epoch != self.tab.file_epoch {
+            return iced::Task::none();
+        }
         if result.is_err() {
             self.cancel_close();
         }
         match result {
             Ok(Some(path)) => {
                 // Continue the save dialog's action only when nothing is left unsaved.
-                let pending = self.pending.take();
-                if epoch != self.tab.file_epoch {
-                    self.status = "Previous document saved".into();
-                    return iced::Task::none();
-                }
                 self.tab.saved = *snapshot;
                 self.tab.path = Some(path);
                 self.tab.untitled_name = None;
@@ -200,19 +200,21 @@ impl super::App {
                 self.error = false;
                 if !self.dirty() {
                     self.clear_recovery();
-                    if let Some(action) = pending {
+                    if let Some(action) = self.pending.take() {
                         return self.perform(action);
                     }
+                } else if self.pending.is_some() {
+                    // Edits made during the write need another answer before
+                    // New, Open or Close can continue.
+                    return ask_to_save(self.document_name());
                 }
             }
             // A cancelled Save As or a failed save also cancels the dialog's action.
             Ok(None) => self.pending = None,
             Err(e) => {
                 self.pending = None;
-                if epoch == self.tab.file_epoch {
-                    self.status = e;
-                    self.error = true;
-                }
+                self.status = e;
+                self.error = true;
             }
         }
         iced::Task::none()
@@ -291,7 +293,7 @@ pub(super) fn finish_dispatched_open(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::{App, Message, inline_text};
+    use crate::app::{App, Message, Pending, inline_text};
     use reshiki::document::{Document, Point};
     use rfd::MessageDialogResult as Answer;
 
@@ -408,6 +410,60 @@ mod tests {
         ));
         assert!(!app.file_io.saving);
         assert!(!path.exists());
+    }
+
+    #[test]
+    fn stale_save_results_preserve_the_new_documents_pending_action() {
+        for result in [
+            Ok(Some("old.rsk".into())),
+            Ok(None),
+            Err("Old failure".into()),
+        ] {
+            let (mut app, _) = App::new();
+            let epoch = app.tab.file_epoch;
+            let snapshot = app.tab.doc.clone();
+            let _ = app.update(Message::Save);
+            app.reset_tab();
+            app.tab.doc.add_atom("O", Point::default());
+            let _ = app.update(Message::Tabs(crate::app::tabs::Action::Close(None)));
+            app.status = "Current drawing".into();
+            let before = app.tab.doc.clone();
+            let _ = app.update(Message::Saved(epoch, Box::new(snapshot), result));
+            assert!(!app.file_io.saving);
+            assert!(matches!(app.pending, Some(Pending::CloseTab(_))));
+            assert_eq!(app.tab.doc, before);
+            assert_eq!(app.status, "Current drawing");
+            assert!(!app.error && app.tab.path.is_none());
+            // The outstanding dialog still answers the new drawing's request.
+            let _ = app.update(Message::Discard);
+            assert!(app.tab.doc.all_ids().is_empty() && app.pending.is_none());
+        }
+    }
+
+    #[test]
+    fn edits_during_a_save_reopen_the_pending_dialog() {
+        let (mut app, _) = App::new();
+        app.tab.doc.add_atom("O", Point::default());
+        let snapshot = app.tab.doc.clone();
+        let _ = app.update(Message::Tabs(crate::app::tabs::Action::Close(None)));
+        let _ = app.update(Message::Save);
+        let before = app.tab.doc.clone();
+        app.tab.doc.add_atom("N", Point::new(80., 0.));
+        app.changed(before);
+        let edited = app.tab.doc.clone();
+        let task = app.update(Message::Saved(
+            app.tab.file_epoch,
+            Box::new(snapshot.clone()),
+            Ok(Some("drawing.rsk".into())),
+        ));
+        assert!(task.units() > 0, "Ask about the edits made during the save");
+        assert!(matches!(app.pending, Some(Pending::CloseTab(_))));
+        assert_eq!(app.tab.saved, snapshot);
+        assert_eq!(app.tab.doc, edited);
+        assert!(app.dirty());
+        let _ = app.update(Message::Cancel);
+        assert!(app.pending.is_none());
+        assert_eq!(app.tab.doc, edited);
     }
 }
 
