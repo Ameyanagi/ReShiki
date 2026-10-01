@@ -491,6 +491,7 @@ class HelperTests(unittest.TestCase):
                     patch("installers.run", side_effect=run),
                     patch("installers.verify_inchi_worker", side_effect=helper),
                     patch("installers.verify_runtime") as runtime,
+                    patch("installers.verify_macos_workers") as native_workers,
                 ):
                     installers.verify_mac_disk_image(
                         Path("fixture.dmg"), False, architecture=architecture
@@ -504,6 +505,7 @@ class HelperTests(unittest.TestCase):
                 runtime.assert_called_once_with(
                     checked[0].with_name("reshiki"), checked[0].parents[2]
                 )
+                native_workers.assert_called_once_with(checked[0])
 
     def test_windows_setup_and_upgrade_verify_the_relocated_application(self):
         import installers

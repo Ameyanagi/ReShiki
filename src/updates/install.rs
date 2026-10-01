@@ -515,7 +515,12 @@ mod tests {
     #[test]
     fn helper_replaces_owned_files_and_rolls_back_an_interrupted_install() {
         use std::os::unix::fs::PermissionsExt;
-        for (fail, missing_licenses) in [(false, false), (true, false), (false, true)] {
+        for (fail, missing_licenses, missing_binary) in [
+            (false, false, false),
+            (true, false, false),
+            (false, true, false),
+            (false, false, true),
+        ] {
             let root = tempfile::tempdir().unwrap();
             let target = root.path().join("installed app");
             let stage = root.path().join("stage");
@@ -529,6 +534,9 @@ mod tests {
             ] {
                 std::fs::write(&path, body).unwrap();
                 std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+            }
+            if missing_binary {
+                std::fs::remove_file(payload.join("reshiki")).unwrap();
             }
             std::fs::write(target.join("reshiki-inchi-helper"), "old helper").unwrap();
             std::fs::create_dir_all(target.join("Licenses/rust/legacy")).unwrap();
@@ -564,7 +572,7 @@ mod tests {
                 .unwrap();
             assert_eq!(
                 result.status.success(),
-                !fail,
+                !fail && !missing_binary,
                 "{}",
                 String::from_utf8_lossy(&result.stderr)
             );
@@ -572,7 +580,7 @@ mod tests {
                 std::fs::read_to_string(target.join("user drawing.rsk")).unwrap(),
                 "preserve"
             );
-            if fail {
+            if fail || missing_binary {
                 assert_eq!(
                     std::fs::read_to_string(target.join("reshiki-inchi-helper")).unwrap(),
                     "old helper"

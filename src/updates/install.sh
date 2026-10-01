@@ -51,13 +51,18 @@ else
         reopen "$@"
     }
     trap 'rollback "$@"' EXIT
+    if [ ! -f "$payload/reshiki" ]; then
+        echo 'Update payload is missing its application; nothing installed.' >&2
+        exit 1
+    fi
     for name in reshiki reshiki-inchi-helper Licenses build.json README.txt; do
         # Retire an old owned helper even when the new package has no companion.
         # Keep it in the rollback directory until the replacement has succeeded.
-        # Preserve every other owned path if its replacement has disappeared.
-        [ -e "$payload/$name" ] || [ "$name" = reshiki-inchi-helper ] || continue
+        # Preserve optional paths if their replacement has disappeared. A lost
+        # application executable must fail its move and trigger rollback.
+        [ -e "$payload/$name" ] || [ "$name" = reshiki ] || [ "$name" = reshiki-inchi-helper ] || continue
         if [ -e "$target/$name" ]; then /bin/mv "$target/$name" "$stage/previous/$name"; fi
-        if [ -e "$payload/$name" ]; then
+        if [ "$name" = reshiki ] || [ -e "$payload/$name" ]; then
             touch "$stage/installed/$name"
             /bin/mv "$payload/$name" "$target/$name"
         fi
