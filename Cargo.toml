@@ -2,6 +2,7 @@
 name = "reshiki"
 version = "0.9.1"
 edition = "2024"
+default-run = "reshiki"
 description = "A molecular drawing workspace"
 # Original ReShiki code; see LICENSE for third-party exclusions and notices.
 license = "MIT OR Apache-2.0"
@@ -30,6 +31,7 @@ iced_tiny_skia = { version = "0.14", default-features = false }
 iced = { version = "0.14", default-features = false, features = ["wgpu"] }
 
 [dependencies]
+cosmolkit-inchi = { version = "=0.3.0", git = "https://github.com/Ameyanagi/COSMolKit.git", rev = "3a437849dcd28319b1a3cdf02d7897a7ee200cb2" }
 reshiki-depict-math = { path = "crates/depict-math" }
 iced = { version = "0.14", default-features = false, features = [
   "canvas",
@@ -321,6 +323,10 @@ name = "inchi_reader"
 required-features = ["rdkit-reference"]
 
 [[test]]
+name = "inchi_rust"
+required-features = ["rdkit-reference"]
+
+[[test]]
 name = "jpeg_sampling"
 required-features = ["rdkit-reference"]
 
@@ -455,3 +461,7 @@ required-features = ["rdkit-reference"]
 [[test]]
 name = "wedging"
 required-features = ["rdkit-reference"]
+
+[[bin]]
+name = "reshiki-inchi-helper"
+path = "tools/inchi-helper/main.rs"

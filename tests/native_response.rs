@@ -383,7 +383,7 @@ async fn helper_resource_failures_are_typed_atomic_and_recoverable() -> anyhow::
     let prepared = prepare(Arc::clone(&request)).await?;
     let before = serde_json::to_value(&*request)?;
     let mut config = Config::new(path);
-    config.limits.kernel_heap_bytes = 1;
+    config.limits.heap_bytes = 1;
     let result =
         native_response::build(Arc::clone(&request), prepared.clone(), config.clone()).await;
     assert!(matches!(
@@ -391,7 +391,7 @@ async fn helper_resource_failures_are_typed_atomic_and_recoverable() -> anyhow::
         Err(Error::Helper(generator::Error::ResourceLimit { .. }))
     ));
     assert_eq!(before, serde_json::to_value(&*request)?);
-    config.limits.kernel_heap_bytes = generator::DEFAULT_KERNEL_HEAP_BYTES;
+    config.limits.heap_bytes = generator::DEFAULT_HEAP_BYTES;
     let response =
         native_response::build(Arc::clone(&request), prepared.clone(), config.clone()).await?;
     equal(
@@ -772,8 +772,11 @@ async fn cancelling_a_running_response_kills_helper_and_preserves_snapshots() ->
     let Some(path) = helper("reshiki-inchi-helper")? else {
         return Ok(());
     };
-    let directory = tempfile::tempdir()?;
+    let directory = tempfile::tempdir_in(stub.parent().context("Missing stub directory")?)?;
     let executable = directory.path().join("hang");
+    #[cfg(unix)]
+    std::fs::hard_link(stub, &executable)?;
+    #[cfg(not(unix))]
     std::fs::copy(stub, &executable)?;
     let reference = PythonEngine::default();
     let request = Arc::new(Request::molecule(

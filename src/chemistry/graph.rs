@@ -9,7 +9,7 @@ use super::{AtomFacts, ELEMENTS, Element};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Atom {
     pub atomic_number: u8,
@@ -21,7 +21,7 @@ pub struct Atom {
     pub radical_electrons: u8,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Bond {
     /// Dense atom indices; dative bonds run from donor `a` to acceptor `b`.
@@ -33,7 +33,7 @@ pub struct Bond {
     pub aromatic: bool,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Graph {
     pub atoms: Vec<Atom>,

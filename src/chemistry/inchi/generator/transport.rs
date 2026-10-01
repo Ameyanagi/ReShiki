@@ -1,346 +1,335 @@
-use super::{Error, MAX_REQUEST_BYTES, Output, Resource, Status};
-use crate::chemistry::inchi::{INCHI_VERSION, input::Input, output};
-use std::collections::BTreeSet;
+use super::{Error, MAX_REQUEST_BYTES, Output, Status};
+use crate::chemistry::inchi::{
+    kernel::{self, Molecule},
+    output, validation, wire,
+};
 
-const MAGIC: &[u8; 8] = b"RSHINCHI";
-const PROTOCOL: u16 = 2;
-const MAX_STRING: usize = 2 * 1024 * 1024;
-
-pub(super) fn encode(input: &Input, kernel_heap_bytes: usize) -> Result<Vec<u8>, Error> {
-    let count = input.atoms.len();
-    if count > i16::MAX as usize || input.stereo.len() > i16::MAX as usize {
-        return Err(Error::Input(
-            "Atom or stereo count exceeds the native index range",
-        ));
-    }
-    let mut body = Vec::new();
-    body.try_reserve(8 + count * 119 + input.stereo.len() * 12)
-        .map_err(|_| Error::Limit("request"))?;
-    body.extend_from_slice(&(kernel_heap_bytes as u32).to_le_bytes());
-    body.extend_from_slice(&(count as u16).to_le_bytes());
-    body.extend_from_slice(&(input.stereo.len() as u16).to_le_bytes());
-    for (id, atom) in input.atoms.iter().enumerate() {
-        if atom.position.iter().any(|x| !x.is_finite())
-            || atom.element.is_empty()
-            || atom.element.len() > 5
-            || !atom
-                .element
-                .bytes()
-                .all(|b| b.is_ascii_alphabetic() || b == b'*')
-            || atom.bonds.len() > 20
-            || atom.radical != 0
-        {
-            return Err(Error::Input(
-                "Invalid atom coordinates, element, radical or neighbor count",
-            ));
-        }
-        for position in atom.position {
-            body.extend_from_slice(&position.to_le_bytes());
-        }
-        body.extend_from_slice(atom.element.as_bytes());
-        body.extend(std::iter::repeat_n(0, 6 - atom.element.len()));
-        body.extend_from_slice(&atom.isotopic_mass.to_le_bytes());
-        body.push(atom.charge as u8);
-        body.extend(atom.hydrogens.iter().map(|&h| h as u8));
-        body.push(atom.radical as u8);
-        body.push(atom.bonds.len() as u8);
-        let mut seen = BTreeSet::new();
-        for bond in &atom.bonds {
-            if bond.neighbor < 0
-                || bond.neighbor as usize <= id
-                || bond.neighbor as usize >= count
-                || !seen.insert(bond.neighbor)
-                || !(0..=3).contains(&bond.kind)
-                || !matches!(bond.stereo, -6 | -4 | -1 | 0 | 1 | 3 | 4 | 6)
-            {
-                return Err(Error::Input("Invalid stored bond"));
-            }
-            body.extend_from_slice(&bond.neighbor.to_le_bytes());
-            body.extend_from_slice(&[bond.kind as u8, bond.stereo as u8]);
-        }
-    }
-    for stereo in &input.stereo {
-        if !matches!(stereo.kind, 1 | 2)
-            || !matches!(stereo.parity, 1..=3)
-            || (stereo.kind == 1) != stereo.central_atom.is_none()
-            || stereo
-                .central_atom
-                .is_some_and(|i| i < 0 || i as usize >= count)
-            || stereo
-                .neighbors
-                .iter()
-                .any(|&i| i < 0 || i as usize >= count)
-        {
-            return Err(Error::Input("Invalid stereo record"));
-        }
-        body.extend_from_slice(&stereo.central_atom.unwrap_or(-1).to_le_bytes());
-        for id in stereo.neighbors {
-            body.extend_from_slice(&id.to_le_bytes());
-        }
-        body.extend_from_slice(&[stereo.kind as u8, stereo.parity as u8]);
-    }
-    if body.len() + 16 > MAX_REQUEST_BYTES {
-        return Err(Error::Limit("request"));
-    }
-    let mut result = Vec::new();
-    result
-        .try_reserve(body.len() + 16)
-        .map_err(|_| Error::Limit("request"))?;
-    result.extend_from_slice(MAGIC);
-    result.extend_from_slice(&PROTOCOL.to_le_bytes());
-    result.extend_from_slice(&[1, u8::from(input.has_coordinates)]);
-    result.extend_from_slice(&(body.len() as u32).to_le_bytes());
-    result.extend(body);
-    Ok(result)
-}
-
-struct Reader<'a> {
-    bytes: &'a [u8],
-    position: usize,
-}
-impl<'a> Reader<'a> {
-    fn take(&mut self, count: usize) -> Result<&'a [u8], Error> {
-        let end = self
-            .position
-            .checked_add(count)
-            .ok_or(Error::Protocol("Response length overflow"))?;
-        let bytes = self
-            .bytes
-            .get(self.position..end)
-            .ok_or(Error::Protocol("Truncated response"))?;
-        self.position = end;
-        Ok(bytes)
-    }
-    fn number<const N: usize>(&mut self) -> Result<[u8; N], Error> {
-        self.take(N)?
-            .try_into()
-            .map_err(|_| Error::Protocol("Invalid integer size"))
-    }
-    fn string(&mut self) -> Result<String, Error> {
-        let length = u32::from_le_bytes(self.number()?) as usize;
-        if length > MAX_STRING {
-            return Err(Error::Limit("response string"));
-        }
-        std::str::from_utf8(self.take(length)?)
-            .map(str::to_owned)
-            .map_err(|_| Error::Protocol("Response is not UTF-8"))
-    }
-}
-
-fn response(bytes: &[u8], expected_kind: u16) -> Result<Reader<'_>, Error> {
-    let mut reader = Reader { bytes, position: 0 };
-    if reader.take(8)? != MAGIC || u16::from_le_bytes(reader.number()?) != PROTOCOL {
-        return Err(Error::Protocol("Incompatible response protocol"));
-    }
-    let version = reader.string()?;
-    if version != INCHI_VERSION {
-        return Err(Error::Version(version));
-    }
-    let result_kind = u16::from_le_bytes(reader.number()?);
-    if result_kind == 1 {
-        let message = reader.string()?;
-        if reader.position != bytes.len() {
-            return Err(Error::Protocol("Trailing rejection data"));
-        }
-        return Err(Error::Rejected(message));
-    }
-    if result_kind == 2 {
-        let resource = match u16::from_le_bytes(reader.number()?) {
-            1 => Resource::KernelHeap,
-            _ => return Err(Error::Protocol("Unknown resource scope")),
-        };
-        let reason = u16::from_le_bytes(reader.number()?);
-        let budget = u64::from_le_bytes(reader.number()?);
-        let used = u64::from_le_bytes(reader.number()?);
-        let requested = u64::from_le_bytes(reader.number()?);
-        if reader.position != bytes.len()
-            || budget == 0
-            || budget > super::MAX_KERNEL_HEAP_BYTES as u64
-            || used > budget
-        {
-            return Err(Error::Protocol("Invalid resource result"));
-        }
-        return Err(match reason {
-            1 => Error::ResourceLimit {
-                resource,
-                budget,
-                used,
-                requested,
-            },
-            2 => Error::ResourceUnavailable { resource, budget },
-            3 => Error::Protocol("Native allocator invariant failed"),
-            _ => Error::Protocol("Unknown resource failure"),
-        });
-    }
-    if result_kind != expected_kind {
-        return Err(Error::Protocol("Unexpected response operation"));
-    }
-    Ok(reader)
-}
-
-pub(super) fn decode(bytes: &[u8]) -> Result<Output, Error> {
-    let mut reader = response(bytes, 0)?;
-    let status = Status::from_code(i16::from_le_bytes(reader.number()?))?;
-    let output = Output {
-        status,
-        inchi: reader.string()?,
-        message: reader.string()?,
-        log: reader.string()?,
-        auxiliary: reader.string()?,
+pub(super) fn encode(input: &Molecule, heap_bytes: usize) -> Result<Vec<u8>, Error> {
+    input
+        .validate()
+        .map_err(|_| Error::Input("Invalid molecular graph, annotations or coordinates"))?;
+    let request = wire::Request {
+        heap_bytes,
+        operation: wire::Operation::Generate(Box::new(input.clone())),
     };
-    if reader.position != bytes.len() {
-        return Err(Error::Protocol("Trailing response data"));
+    wire::encode(&request, MAX_REQUEST_BYTES).map_err(|_| Error::Limit("request"))
+}
+
+pub(super) fn encode_import(
+    inchi: &str,
+    heap_bytes: usize,
+    options: output::Options,
+) -> Result<Vec<u8>, Error> {
+    if inchi.len() > super::MAX_INCHI_BYTES {
+        return Err(Error::Limit("InChI text"));
     }
-    if !output.inchi.is_empty() && !output.inchi.starts_with("InChI=1S/") {
-        return Err(Error::Protocol("Helper returned a nonstandard identifier"));
+    wire::encode(
+        &wire::Request {
+            heap_bytes,
+            operation: wire::Operation::Read {
+                inchi: inchi.into(),
+                options,
+            },
+        },
+        MAX_REQUEST_BYTES,
+    )
+    .map_err(|_| Error::Limit("request"))
+}
+
+fn reply(bytes: &[u8]) -> Result<wire::Reply, Error> {
+    let response: wire::Response = wire::decode(bytes, super::MAX_RESPONSE_BYTES)
+        .map_err(|_| Error::Protocol("Invalid response frame"))?;
+    if response.version != kernel::VERSION {
+        return Err(Error::Version(response.version));
     }
-    if !status.is_success() && !output.inchi.is_empty() {
+    response.result.map_err(Error::Rejected)
+}
+fn strings(values: &[&str]) -> Result<(), Error> {
+    if values.iter().any(|v| v.len() > super::MAX_INCHI_BYTES) {
+        return Err(Error::Limit("response string"));
+    }
+    Ok(())
+}
+pub(super) fn decode(bytes: &[u8]) -> Result<Output, Error> {
+    let wire::Reply::Generated(result) = reply(bytes)? else {
+        return Err(Error::Protocol("Expected generation response"));
+    };
+    strings(&[
+        &result.inchi,
+        &result.message,
+        &result.log,
+        &result.auxiliary,
+    ])?;
+    if !result.inchi.is_empty() && !result.inchi.starts_with("InChI=1S/") {
+        return Err(Error::Protocol("Expected a standard InChI"));
+    }
+    let status = Status::from_code(
+        i16::try_from(result.status).map_err(|_| Error::Protocol("Invalid status"))?,
+    )?;
+    if !status.is_success() && !result.inchi.is_empty() {
         return Err(Error::Protocol(
             "Helper returned an identifier with a failure status",
         ));
     }
-    Ok(output)
-}
-
-pub(super) fn encode_import(inchi: &str, kernel_heap_bytes: usize) -> Result<Vec<u8>, Error> {
-    if inchi.len() > super::MAX_INCHI_BYTES {
-        return Err(Error::Limit("InChI text"));
-    }
-    let mut request = Vec::new();
-    request
-        .try_reserve(inchi.len() + 24)
-        .map_err(|_| Error::Limit("request"))?;
-    request.extend_from_slice(MAGIC);
-    request.extend_from_slice(&PROTOCOL.to_le_bytes());
-    request.extend_from_slice(&[2, 0]);
-    request.extend_from_slice(&((inchi.len() + 8) as u32).to_le_bytes());
-    request.extend_from_slice(&(kernel_heap_bytes as u32).to_le_bytes());
-    request.extend_from_slice(&(inchi.len() as u32).to_le_bytes());
-    request.extend_from_slice(inchi.as_bytes());
-    Ok(request)
-}
-
-fn native_index(value: i16, count: usize) -> Result<i16, Error> {
-    if value < 0 || value as usize >= count {
-        return Err(Error::Protocol("Invalid native atom index"));
-    }
-    Ok(value)
-}
-
-pub(super) fn decode_import(bytes: &[u8]) -> Result<output::Output, Error> {
-    let mut reader = response(bytes, 3)?;
-    let status = i32::from_le_bytes(reader.number()?);
-    Status::from_code(
-        i16::try_from(status).map_err(|_| Error::Protocol("Invalid import status"))?,
-    )?;
-    let message = reader.string()?;
-    let log = reader.string()?;
-    let mut warning_flags = [[0_u64; 2]; 2];
-    for row in &mut warning_flags {
-        for value in row {
-            *value = u64::from_le_bytes(reader.number()?);
-        }
-    }
-    let count = usize::from(u16::from_le_bytes(reader.number()?));
-    let stereo_count = usize::from(u16::from_le_bytes(reader.number()?));
-    if count > i16::MAX as usize
-        || stereo_count > i16::MAX as usize
-        || count * 39 + stereo_count * 12 > bytes.len().saturating_sub(reader.position)
-    {
-        return Err(Error::Protocol("Invalid native record counts"));
-    }
-    let mut atoms = Vec::new();
-    atoms
-        .try_reserve(count)
-        .map_err(|_| Error::Limit("import atoms"))?;
-    for _ in 0..count {
-        let mut position = [0.0; 3];
-        for value in &mut position {
-            *value = f64::from_le_bytes(reader.number()?);
-        }
-        if position.iter().any(|v| !v.is_finite()) {
-            return Err(Error::Protocol("Nonfinite native coordinate"));
-        }
-        let name = reader.take(6)?;
-        let length = name
-            .iter()
-            .position(|&b| b == 0)
-            .ok_or(Error::Protocol("Unterminated native element"))?;
-        let prefix = name
-            .get(..length)
-            .ok_or(Error::Protocol("Invalid native element length"))?;
-        if prefix.is_empty()
-            || !prefix.iter().all(|b| b.is_ascii_alphabetic() || *b == b'*')
-            || name
-                .get(length..)
-                .is_none_or(|tail| tail.iter().any(|&b| b != 0))
-        {
-            return Err(Error::Protocol("Invalid native element"));
-        }
-        let element = std::str::from_utf8(prefix)
-            .map_err(|_| Error::Protocol("Native element is not UTF-8"))?
-            .to_owned();
-        let isotopic_mass = i16::from_le_bytes(reader.number()?);
-        let charge = i8::from_le_bytes(reader.number()?);
-        let mut hydrogens = [0_i8; 4];
-        for value in &mut hydrogens {
-            *value = i8::from_le_bytes(reader.number()?);
-        }
-        let radical = i8::from_le_bytes(reader.number()?);
-        let bond_count = usize::from(u8::from_le_bytes(reader.number()?));
-        if bond_count > 20 {
-            return Err(Error::Protocol("Invalid native adjacency count"));
-        }
-        let mut bonds = Vec::new();
-        bonds
-            .try_reserve(bond_count)
-            .map_err(|_| Error::Limit("import bonds"))?;
-        for _ in 0..bond_count {
-            bonds.push(output::Bond {
-                neighbor: native_index(i16::from_le_bytes(reader.number()?), count)?,
-                kind: i8::from_le_bytes(reader.number()?),
-                stereo: i8::from_le_bytes(reader.number()?),
-            });
-        }
-        atoms.push(output::Atom {
-            position,
-            element,
-            isotopic_mass,
-            charge,
-            hydrogens,
-            radical,
-            bonds,
-        });
-    }
-    let mut stereo = Vec::new();
-    stereo
-        .try_reserve(stereo_count)
-        .map_err(|_| Error::Limit("import stereo"))?;
-    for _ in 0..stereo_count {
-        let central_atom = match i16::from_le_bytes(reader.number()?) {
-            -1 => None,
-            value => Some(native_index(value, count)?),
-        };
-        let mut neighbors = [0_i16; 4];
-        for value in &mut neighbors {
-            *value = native_index(i16::from_le_bytes(reader.number()?), count)?;
-        }
-        stereo.push(output::Stereo {
-            central_atom,
-            neighbors,
-            kind: i8::from_le_bytes(reader.number()?),
-            parity: i8::from_le_bytes(reader.number()?),
-        });
-    }
-    if reader.position != bytes.len() {
-        return Err(Error::Protocol("Trailing import data"));
-    }
-    Ok(output::Output {
+    Ok(Output {
         status,
-        message,
-        log,
-        warning_flags,
-        atoms,
-        stereo,
+        inchi: result.inchi,
+        message: result.message,
+        log: result.log,
+        auxiliary: result.auxiliary,
+        diagnostics: result.diagnostics,
     })
+}
+pub(super) fn decode_import(bytes: &[u8]) -> Result<kernel::Imported, Error> {
+    let wire::Reply::Imported(result) = reply(bytes)? else {
+        return Err(Error::Protocol("Expected import response"));
+    };
+    Status::from_code(
+        i16::try_from(result.status).map_err(|_| Error::Protocol("Invalid status"))?,
+    )?;
+    strings(&[&result.message, &result.log])?;
+    if let Some(state) = &result.state {
+        validation::molecule(state, None)
+            .map_err(|_| Error::Protocol("Invalid imported molecule"))?;
+        if result.unspecified_bonds.len() != state.graph.bonds.len() {
+            return Err(Error::Protocol("Invalid imported bond identities"));
+        }
+    } else if !result.unspecified_bonds.is_empty() {
+        return Err(Error::Protocol("Bond identities without a molecule"));
+    }
+    Ok(*result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::chemistry::{smiles, stereo::Point3};
+
+    fn molecule() -> Molecule {
+        Molecule {
+            state: smiles::prepare("C1CCC1").unwrap().state,
+            positions: Some(vec![Point3::default(); 4]),
+        }
+    }
+
+    fn imported(molecule: &Molecule) -> Vec<u8> {
+        wire::encode(
+            &wire::Response {
+                version: kernel::VERSION.into(),
+                result: Ok(wire::Reply::Imported(Box::new(kernel::Imported {
+                    status: 0,
+                    message: String::new(),
+                    log: String::new(),
+                    state: Some(molecule.state.clone()),
+                    unspecified_bonds: vec![false; molecule.state.graph.bonds.len()],
+                    diagnostics: vec![],
+                }))),
+            },
+            super::super::MAX_RESPONSE_BYTES,
+        )
+        .unwrap()
+    }
+
+    fn assert_invalid_state(molecule: Molecule, name: &str) {
+        let budget = super::super::DEFAULT_HEAP_BYTES;
+        assert!(molecule.validate().is_err(), "{name}: molecule validation");
+        assert!(
+            matches!(encode(&molecule, budget), Err(Error::Input(_))),
+            "{name}: request encoding"
+        );
+        assert!(
+            matches!(decode_import(&imported(&molecule)), Err(Error::Protocol(_))),
+            "{name}: response decoding"
+        );
+        assert!(
+            Molecule::prepare(&molecule.state, molecule.positions.as_deref()).is_err(),
+            "{name}: application preparation"
+        );
+        assert!(kernel::generate(&molecule).is_err(), "{name}: kernel entry");
+        assert!(
+            wire::Request {
+                heap_bytes: budget,
+                operation: wire::Operation::Generate(Box::new(molecule)),
+            }
+            .validate()
+            .is_err(),
+            "{name}: helper request validation"
+        );
+    }
+
+    #[test]
+    fn serialized_annotation_dimensions_are_checked_at_every_boundary() {
+        let original = serde_json::to_value(molecule()).unwrap();
+        for field in [
+            "/state/metadata/atoms",
+            "/state/metadata/bonds",
+            "/state/directions",
+            "/state/valences",
+            "/state/conjugated",
+            "/state/hybridizations",
+            "/state/properties/atoms",
+            "/state/properties/bond_codes",
+        ] {
+            for grow in [false, true] {
+                let mut value = original.clone();
+                let array = value.pointer_mut(field).unwrap().as_array_mut().unwrap();
+                if grow {
+                    array.push(array.first().unwrap().clone());
+                } else {
+                    array.pop();
+                }
+                assert_invalid_state(
+                    serde_json::from_value(value).unwrap(),
+                    &format!("{field}, grow={grow}"),
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn serialized_ring_and_stereo_indices_are_checked() {
+        for ring in [vec![0, 1], vec![0, 1, 1], vec![0, 1, 4], vec![0, 1, 3]] {
+            let mut molecule = molecule();
+            molecule.state.rings.atoms = vec![ring];
+            assert_invalid_state(molecule, "invalid cached cycle");
+        }
+        let mut uninitialized = molecule();
+        uninitialized.state.rings.kind = crate::chemistry::stereo::perception::RingKind::None;
+        assert_invalid_state(uninitialized, "uninitialized ring cache with cycles");
+        for member in [0, 5, -5, i32::MIN] {
+            let mut molecule = molecule();
+            molecule
+                .state
+                .properties
+                .atoms
+                .first_mut()
+                .unwrap()
+                .ring_members = Some(vec![member]);
+            assert_invalid_state(molecule, "invalid stereo ring member");
+        }
+        let mut molecule = molecule();
+        molecule
+            .state
+            .metadata
+            .bonds
+            .first_mut()
+            .unwrap()
+            .stereo_atoms = vec![4];
+        assert_invalid_state(molecule, "invalid stereo atom");
+    }
+
+    #[test]
+    fn generation_boundaries_reject_invalid_coordinates() {
+        for positions in [
+            vec![],
+            vec![
+                Point3 {
+                    x: f64::INFINITY,
+                    y: 0.0,
+                    z: 0.0
+                };
+                4
+            ],
+        ] {
+            let mut molecule = molecule();
+            molecule.positions = Some(positions);
+            assert!(molecule.validate().is_err());
+            assert!(encode(&molecule, super::super::DEFAULT_HEAP_BYTES).is_err());
+            assert!(
+                wire::Request {
+                    heap_bytes: super::super::DEFAULT_HEAP_BYTES,
+                    operation: wire::Operation::Generate(Box::new(molecule)),
+                }
+                .validate()
+                .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn structural_boundaries_do_not_run_chemical_preparation() {
+        // An odd aromatic carbon cycle cannot be kekulized. It is still a
+        // structurally valid unsanitized state and can cross the Read boundary.
+        let mut state = smiles::prepare("C1CCCC1").unwrap().state;
+        for atom in &mut state.graph.atoms {
+            atom.aromatic = true;
+        }
+        for bond in &mut state.graph.bonds {
+            bond.aromatic = true;
+            bond.order = 4;
+        }
+        state.valences = state.graph.provisional_valences().unwrap();
+        let molecule = Molecule {
+            state,
+            positions: None,
+        };
+        assert!(matches!(
+            Molecule::prepare(&molecule.state, None),
+            Err(crate::chemistry::inchi::input::Error::Kekule(_))
+        ));
+        let budget = super::super::DEFAULT_HEAP_BYTES;
+        let request = encode(&molecule, budget).unwrap();
+        wire::decode::<wire::Request>(&request, MAX_REQUEST_BYTES)
+            .unwrap()
+            .validate()
+            .unwrap();
+        let actual = decode_import(&imported(&molecule)).unwrap();
+        assert_eq!(
+            serde_json::to_value(actual.state.unwrap()).unwrap(),
+            serde_json::to_value(molecule.state).unwrap()
+        );
+    }
+
+    fn generated(status: Status, inchi: &str) -> Vec<u8> {
+        wire::encode(
+            &wire::Response {
+                version: kernel::VERSION.into(),
+                result: Ok(wire::Reply::Generated(kernel::Generated {
+                    status: i32::from(status.code()),
+                    inchi: inchi.into(),
+                    message: String::new(),
+                    log: String::new(),
+                    auxiliary: String::new(),
+                    diagnostics: vec![],
+                })),
+            },
+            super::super::MAX_RESPONSE_BYTES,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn failure_statuses_cannot_publish_an_identifier() {
+        for status in [
+            Status::Break,
+            Status::Skipped,
+            Status::Empty,
+            Status::Error,
+            Status::Fatal,
+            Status::Unknown,
+            Status::Busy,
+        ] {
+            assert!(
+                matches!(
+                    decode(&generated(status, "InChI=1S/CH4/h1H4")),
+                    Err(Error::Protocol(_))
+                ),
+                "{status:?} with an identifier must be a protocol error"
+            );
+            let empty = decode(&generated(status, "")).unwrap();
+            assert_eq!(empty.status, status);
+            assert!(empty.inchi.is_empty());
+        }
+    }
+
+    #[test]
+    fn successful_and_warning_statuses_preserve_identifiers() {
+        for status in [Status::Success, Status::Warning] {
+            for inchi in ["", "InChI=1S/CH4/h1H4"] {
+                let result = decode(&generated(status, inchi)).unwrap();
+                assert_eq!(result.status, status);
+                assert_eq!(result.inchi, inchi);
+            }
+        }
+    }
 }

@@ -145,19 +145,19 @@ jobs:
         run: uv run --locked python -m unittest discover -s tests -p 'test_*.py'
       - name: Build Intel native helper boundary fixtures
         if: matrix.native_only == true
-        run: uv run --no-project --isolated --python 3.12 python scripts/build_inchi_helper.py --fetch-source --target ${{ matrix.target }}
+        run: uv run --no-project --isolated --python 3.12 python scripts/build_inchi_helper.py --target ${{ matrix.target }}
       - name: Test Intel Mac packaging without reference dependencies
         if: matrix.native_only == true
         env:
           RESHIKI_REQUIRE_INCHI_HELPER: "1"
-        run: uv run --no-project --isolated --python 3.12 python -m unittest tests.test_release tests.test_release_downloads tests.test_prepare_nightly tests.test_inchi_distribution tests.test_inchi_helper_builder tests.test_inchi_source_patch tests.test_inchi_helper_protocol tests.test_inchi_arena tests.test_native_packaging tests.test_license_notices tests.test_native_clipboard tests.test_native_print
+        run: uv run --no-project --isolated --python 3.12 python -m unittest tests.test_release tests.test_release_downloads tests.test_prepare_nightly tests.test_inchi_distribution tests.test_inchi_helper_builder tests.test_inchi_helper_protocol tests.test_native_packaging tests.test_license_notices tests.test_native_clipboard tests.test_native_print
       - name: Verify reference dependencies
         if: matrix.native_only != true
         run: uv run --locked python scripts/check_reference_dependencies.py
       - name: Build and test extracted portable archive
         env:
           MACOSX_DEPLOYMENT_TARGET: "14.0"
-        run: uv run --no-project --isolated --python 3.12 python scripts/build_release.py --target ${{ matrix.target }} --fetch-inchi-source --installer
+        run: uv run --no-project --isolated --python 3.12 python scripts/build_release.py --target ${{ matrix.target }} --installer
       - name: Test native chemistry on Intel macOS
         if: matrix.artifact == 'macos-x64'
         env:

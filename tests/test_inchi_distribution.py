@@ -319,27 +319,24 @@ class SourceTests(unittest.TestCase):
 
 class HelperTests(unittest.TestCase):
     @staticmethod
-    def reply(version="1.07.3", inchi="InChI=1S/CH4/h1H4", extra=b""):
-        def text(value):
-            data = value.encode()
-            return struct.pack("<I", len(data)) + data
-
-        return (
-            b"RSHINCHI\x02\x00"
-            + text(version)
-            + struct.pack("<Hh", 0, 0)
-            + text(inchi)
-            + text("")
-            + text("")
-            + text("AuxInfo=1/0/N:1/rA:1C/rB:/rC:;")
-            + extra
-        )
+    def reply(version="1.07.5", carbon=6, extra=b""):
+        state = {
+            "graph": {
+                "atoms": [{"atomic_number": carbon, "charge": 0, "explicit_hydrogens": 4}],
+                "bonds": [],
+            },
+            "valences": [{"implicit_hydrogens": 0}],
+        }
+        body = json.dumps(
+            {"version": version, "result": {"Ok": {"Imported": {"status": 0, "state": state}}}}
+        ).encode()
+        return b"RSHINCHI" + struct.pack("<HHI", 3, 0, len(body)) + body + extra
 
     def test_archive_smoke_checks_protocol_version_and_chemical_output(self):
         valid = self.reply()
         for response in [valid[:n] for n in range(len(valid))] + [
             self.reply(version="wrong"),
-            self.reply(inchi="wrong"),
+            self.reply(carbon=8),
             self.reply(extra=b"extra"),
         ]:
             with patch(
@@ -347,59 +344,37 @@ class HelperTests(unittest.TestCase):
                 return_value=subprocess.CompletedProcess([], 0, stdout=response),
             ):
                 with self.assertRaises((ValueError, UnicodeError)):
-                    build_release.verify_inchi_helper(Path("helper"), "1.07.3")
+                    build_release.verify_inchi_helper(Path("helper"), "1.07.5")
         with patch(
             "build_release.run", return_value=subprocess.CompletedProcess([], 0, stdout=valid)
         ) as run:
-            build_release.verify_inchi_helper(Path("helper"), "1.07.3")
-            request = run.call_args.kwargs["input"]
-            self.assertEqual(request[:12], b"RSHINCHI\x02\x00\x01\x00")
+            build_release.verify_inchi_helper(Path("helper"), "1.07.5")
+            self.assertEqual(run.call_args.kwargs["input"][:12], b"RSHINCHI\x03\x00\x00\x00")
             self.assertEqual(run.call_args.args[0], [Path("helper")])
             self.assertEqual(run.call_args.kwargs["timeout"], 15)
 
-    def test_build_source_choice_is_required_before_any_download_or_compile(self):
-        with patch("build_release.run") as run:
-            for kwargs in [{}, {"source": Path("src"), "fetch": True}]:
-                with self.assertRaisesRegex(ValueError, "Choose --inchi-source"):
-                    build_release.prepare_inchi_helper("x86_64-unknown-linux-gnu", **kwargs)
-            run.assert_not_called()
-
-    def test_explicit_native_source_build_uses_target_and_production_output(self):
+    def test_cargo_build_uses_target_and_production_output_without_c_source(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             target = "aarch64-pc-windows-msvc"
             output = root / target / "inchi-helper/reshiki-inchi-helper.exe"
             with (
                 patch("build_release.target_directory", return_value=root),
-                patch("inchi_source.prepare_source", return_value=root / "source") as source,
                 patch("build_release.run") as run,
                 patch("build_release.verify_inchi_build", return_value=(output, {})) as verify,
             ):
-                result = build_release.prepare_inchi_helper(target, archive=root / "official.zip")
-            self.assertEqual(result, (output, {}))
-            source.assert_called_once_with(
-                root / "inchi-sources", source=None, archive=root / "official.zip", fetch=False
-            )
+                self.assertEqual(build_release.prepare_inchi_helper(target), (output, {}))
             command = run.call_args.args[0]
             self.assertIn("--production", command)
+            self.assertNotIn("--source", command)
             self.assertEqual(command[command.index("--target") + 1], target)
             self.assertEqual(command[command.index("--output") + 1], output.parent)
             verify.assert_called_once_with(output, target)
 
-    def test_prebuilt_helper_checks_all_native_targets_and_source_identity(self):
-        reference = inchi_source.manifest()
-        bridges = {
-            relative: hashlib.sha256((build_release.ROOT / relative).read_bytes()).hexdigest()
-            for relative in (
-                "tools/inchi-helper/main.cpp",
-                "tools/inchi-helper/arena.cpp",
-                "tools/inchi-helper/arena.h",
-                "tools/inchi-helper/allocator_redirect.h",
-                "scripts/build_inchi_helper.py",
-                "scripts/inchi_source_patch.py",
-                "tools/inchi-helper/source-patches.json",
-            )
-        }
+    def test_prebuilt_helper_checks_all_targets_locked_dependency_and_source_identity(self):
+        from build_inchi_helper import INCHI_VERSION, dependency, source_hashes
+
+        hashes = source_hashes(build_release.ROOT)
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             for target, (system, architecture) in build_release.RELEASE_TARGETS.items():
@@ -422,41 +397,26 @@ class HelperTests(unittest.TestCase):
                         ).to_bytes(4, "little")
                     binary = root / build_release.inchi_helper_name(system)
                     binary.write_bytes(image)
-                    metadata = {
-                        "inchi_version": reference["inchi_version"],
-                        "archive_sha256": reference["archive_sha256"],
-                        "manifest_sha256": hashlib.sha256(
-                            inchi_source.MANIFEST.read_bytes()
-                        ).hexdigest(),
-                        "executable_sha256": hashlib.sha256(image).hexdigest(),
-                        "target": target,
-                        "bridge_sources": bridges,
-                        "patched_source_hashes": {
-                            relative: item["patched_sha256"]
-                            for relative, item in json.loads(
-                                (
-                                    build_release.ROOT / "tools/inchi-helper/source-patches.json"
-                                ).read_text()
-                            )["files"].items()
-                        },
-                    }
+                    metadata = dict(
+                        inchi_version=INCHI_VERSION,
+                        dependency=dependency(build_release.ROOT),
+                        source_hashes=hashes,
+                        executable_sha256=hashlib.sha256(image).hexdigest(),
+                        target=target,
+                        production=True,
+                    )
                     record = root / "build.json"
                     record.write_text(json.dumps(metadata))
                     helper, details = build_release.verify_inchi_build(binary, target)
                     self.assertEqual(helper, binary.resolve())
-                    self.assertEqual(details["version"], "1.07.3")
-                    for key in (
-                        "target",
-                        "manifest_sha256",
-                        "executable_sha256",
-                        "archive_sha256",
-                        "patched_source_hashes",
-                    ):
+                    self.assertEqual(details["version"], "1.07.5")
+                    for key in metadata:
                         record.write_text(json.dumps({**metadata, key: "wrong"}))
                         with self.assertRaisesRegex(ValueError, "build metadata"):
                             build_release.verify_inchi_build(binary, target)
-                    record.write_text(json.dumps({**metadata, "bridge_sources": {}}))
-                    with self.assertRaisesRegex(ValueError, "bridge source changed"):
+                    changed = {**hashes, "src/chemistry/inchi/kernel.rs": "stale"}
+                    record.write_text(json.dumps({**metadata, "source_hashes": changed}))
+                    with self.assertRaisesRegex(ValueError, "build metadata"):
                         build_release.verify_inchi_build(binary, target)
                     binary.write_bytes(b"incorrect architecture")
                     metadata["executable_sha256"] = hashlib.sha256(binary.read_bytes()).hexdigest()
@@ -646,7 +606,7 @@ class HelperTests(unittest.TestCase):
         binary = os.environ.get("RESHIKI_TEST_PACKAGED_INCHI_HELPER")
         if binary is None:
             self.skipTest("Optional independently built native package helper")
-        build_release.verify_inchi_helper(Path(binary), "1.07.3")
+        build_release.verify_inchi_helper(Path(binary), "1.07.5")
 
 
 if __name__ == "__main__":

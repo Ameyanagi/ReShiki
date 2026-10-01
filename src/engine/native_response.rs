@@ -8,7 +8,7 @@ use super::{Analysis, Request, Response};
 use crate::{
     chemistry::{
         self, document as molecular,
-        inchi::{generator, helper, input, key},
+        inchi::{generator, helper, input, kernel, key},
         molfile, rings, smiles,
     },
     document::Document,
@@ -28,7 +28,7 @@ impl Config {
             helper,
             limits: generator::Limits {
                 timeout: Duration::from_secs(30),
-                kernel_heap_bytes: generator::DEFAULT_KERNEL_HEAP_BYTES,
+                heap_bytes: generator::DEFAULT_HEAP_BYTES,
             },
         }
     }
@@ -94,7 +94,7 @@ pub enum Error {
 struct Draft {
     document: Document,
     smiles: String,
-    inchi: Option<input::Input>,
+    inchi: Option<kernel::Molecule>,
     figure_only: bool,
 }
 
@@ -231,7 +231,7 @@ async fn build_with_config(
 }
 
 async fn generate_inchi(
-    input: Option<&input::Input>,
+    input: Option<&kernel::Molecule>,
     config: Option<Config>,
 ) -> Result<String, Error> {
     if let Some(input) = input {
@@ -307,7 +307,7 @@ fn begin(request: &Request, prepared: Option<&Prepared>) -> Result<Draft, Error>
 
 fn prepare_identifiers(
     molecule: &molecular::Molecule,
-) -> Result<(String, Option<input::Input>), Error> {
+) -> Result<(String, Option<kernel::Molecule>), Error> {
     let bonds = &molecule.state.graph.bonds;
     let identifiers = !bonds.iter().any(|b| matches!(b.order, 0 | 7));
     let smiles = if identifiers {
@@ -316,7 +316,7 @@ fn prepare_identifiers(
         String::new()
     };
     let inchi = if identifiers && !bonds.iter().any(|b| matches!(b.order, 5 | 6)) {
-        match input::prepare(&molecule.state, Some(&molecule.positions)) {
+        match kernel::Molecule::prepare(&molecule.state, Some(&molecule.positions)) {
             Ok(input) => Some(input),
             // The pinned adapter returns an empty identifier before calling the
             // kernel when its one-sided adjacency exceeds native storage.

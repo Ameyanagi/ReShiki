@@ -2,6 +2,16 @@
 
 The Windows dropdown fix is recorded in [ReShiki 0.9.1](changes-0.9.1.md). Publisher-style, theme, clipboard and aromatic-fusion updates are recorded in [ReShiki 0.9.0](changes-0.9.md).
 
+## Rust InChI implementation
+
+By @Ameyanagi in [PR #99](https://github.com/Ameyanagi/ReShiki/pull/99) (under review).
+
+ReShiki uses a Rust InChI implementation for molecular identifiers and imports.
+Compatibility checks preserve the existing chemistry results, while each operation
+retains its cancellation, time and memory limits. Release builds use the pinned
+Cargo dependency instead of separately downloading and compiling the C InChI kernel.
+See the [helper and compatibility checks](https://github.com/Ameyanagi/ReShiki/blob/d621f1a/tools/inchi-helper/README.md).
+
 ## Loaded canvas performance
 
 By @Ameyanagi in [PR #84](https://github.com/Ameyanagi/ReShiki/pull/84).

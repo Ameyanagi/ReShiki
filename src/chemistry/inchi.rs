@@ -3,8 +3,11 @@
 pub mod generator;
 pub mod helper;
 pub mod input;
+pub mod kernel;
 pub mod key;
 pub mod output;
+mod validation;
+pub mod wire;
 
 /// Version of the reference implementation used for these operations.
-pub const INCHI_VERSION: &str = "1.07.3";
+pub const INCHI_VERSION: &str = kernel::VERSION;

@@ -106,67 +106,40 @@ def inchi_helper_name(system):
     return "reshiki-inchi-helper.exe" if system == "windows" else "reshiki-inchi-helper"
 
 
-def verify_inchi_build(binary, target):
-    from inchi_source import MANIFEST, manifest
-    from inchi_source_patch import patch_manifest
+def verify_inchi_build(binary, target, *, require_production=True):
+    from build_inchi_helper import INCHI_VERSION, dependency, source_hashes
 
     binary = Path(binary).resolve(strict=True)
-    reference = manifest()
     metadata = json.loads(binary.with_name("build.json").read_text(encoding="utf-8"))
-    required = {
-        "inchi_version": reference["inchi_version"],
-        "archive_sha256": reference["archive_sha256"],
-        "manifest_sha256": hashlib.sha256(MANIFEST.read_bytes()).hexdigest(),
-        "executable_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
-        "target": target,
-        "patched_source_hashes": {
-            relative: patch["patched_sha256"]
-            for relative, patch in patch_manifest()["files"].items()
-        },
-    }
-    if any(metadata.get(key) != value for key, value in required.items()):
-        raise ValueError("InChI helper build metadata does not match this source and target")
-    bridges = metadata.get("bridge_sources", {})
-    for relative in (
-        "tools/inchi-helper/main.cpp",
-        "tools/inchi-helper/arena.cpp",
-        "tools/inchi-helper/arena.h",
-        "tools/inchi-helper/allocator_redirect.h",
-        "scripts/build_inchi_helper.py",
-        "scripts/inchi_source_patch.py",
-        "tools/inchi-helper/source-patches.json",
+    required = dict(
+        inchi_version=INCHI_VERSION,
+        dependency=dependency(ROOT),
+        source_hashes=source_hashes(ROOT),
+        executable_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
+        target=target,
+    )
+    if (
+        any(metadata.get(key) != value for key, value in required.items())
+        or type(metadata.get("production")) is not bool
+        or (require_production and not metadata["production"])
     ):
-        if bridges.get(relative) != hashlib.sha256((ROOT / relative).read_bytes()).hexdigest():
-            raise ValueError(f"InChI helper bridge source changed: {relative}")
+        raise ValueError("InChI helper build metadata does not match this source and target")
     verify_binary(binary, *release_platform(target))
-    return binary, {
-        "version": reference["inchi_version"],
-        "archive_sha256": reference["archive_sha256"],
-        "manifest_sha256": required["manifest_sha256"],
-        "build_executable_sha256": required["executable_sha256"],
-        "patched_source_hashes": required["patched_source_hashes"],
-    }
+    return binary, dict(
+        version=INCHI_VERSION,
+        dependency=required["dependency"],
+        build_executable_sha256=required["executable_sha256"],
+    )
 
 
-def prepare_inchi_helper(target, *, source=None, archive=None, fetch=False, prebuilt=None):
-    if sum((source is not None, archive is not None, fetch, prebuilt is not None)) != 1:
-        raise ValueError(
-            "Choose --inchi-source, --inchi-archive, --fetch-inchi-source, or --inchi-helper; "
-            "release builds never download native source implicitly"
-        )
+def prepare_inchi_helper(target, *, prebuilt=None, require_production=True):
     if prebuilt is not None:
-        return verify_inchi_build(prebuilt, target)
-    from inchi_source import prepare_source
-
-    build = target_directory()
-    source = prepare_source(build / "inchi-sources", source=source, archive=archive, fetch=fetch)
-    output = build / target / "inchi-helper"
+        return verify_inchi_build(prebuilt, target, require_production=require_production)
+    output = target_directory() / target / "inchi-helper"
     run(
         [
             sys.executable,
             ROOT / "scripts/build_inchi_helper.py",
-            "--source",
-            source,
             "--output",
             output,
             "--target",
@@ -181,35 +154,46 @@ def prepare_inchi_helper(target, *, source=None, archive=None, fetch=False, preb
 
 
 def verify_inchi_helper(binary, version):
-    """Exercise the packaged native protocol with no interpreter or chemistry modules."""
-    atom = struct.pack("<ddd6shb4bbB", 0, 0, 0, b"C", 0, 0, -1, 0, 0, 0, 0, 0)
-    body = struct.pack("<IHH", 64 * 1024 * 1024, 1, 0) + atom
-    request = b"RSHINCHI" + struct.pack("<HBBI", 2, 1, 0, len(body)) + body
+    """Parse methane with the packaged pure Rust helper and validate its graph."""
+    body = json.dumps(
+        dict(
+            heap_bytes=64 * 1024 * 1024,
+            operation={
+                "Read": {
+                    "inchi": "InChI=1S/CH4/h1H4",
+                    "options": {"sanitize": True, "remove_hydrogens": False},
+                }
+            },
+        )
+    ).encode()
+    request = b"RSHINCHI" + struct.pack("<HHI", 3, 0, len(body)) + body
     response = run([binary], input=request, capture_output=True, timeout=15).stdout
-    if len(response) > 8 * 1024 * 1024 or response[:10] != b"RSHINCHI\x02\x00":
+    if (
+        len(response) > 8 * 1024 * 1024
+        or response[:12] != b"RSHINCHI\x03\x00\x00\x00"
+        or len(response) < 16
+    ):
         raise ValueError("Packaged InChI helper returned an incompatible protocol")
-    position = 10
-
-    def take(size):
-        nonlocal position
-        if size > len(response) - position:
-            raise ValueError("Packaged InChI helper returned a truncated response")
-        data = response[position : position + size]
-        position += size
-        return data
-
-    def string():
-        size = struct.unpack("<I", take(4))[0]
-        return take(size).decode("utf-8")
-
-    if string() != version or struct.unpack("<H", take(2))[0] != 0:
-        raise ValueError("Packaged InChI helper returned the wrong version or response kind")
-    if struct.unpack("<h", take(2))[0] != 0 or string() != "InChI=1S/CH4/h1H4":
-        raise ValueError("Packaged InChI helper did not generate methane")
-    string()  # message
-    string()  # log
-    if not string().startswith("AuxInfo=") or position != len(response):
-        raise ValueError("Packaged InChI helper returned invalid auxiliary data")
+    if struct.unpack("<I", response[12:16])[0] != len(response) - 16:
+        raise ValueError("Packaged InChI helper returned an invalid frame length")
+    result = json.loads(response[16:])
+    try:
+        imported = result["result"]["Ok"]["Imported"]
+        state = imported["state"]
+        atoms = state["graph"]["atoms"]
+        valid = (
+            result["version"] == version
+            and imported["status"] == 0
+            and len(atoms) == 1
+            and atoms[0]["atomic_number"] == 6
+            and atoms[0]["charge"] == 0
+            and not state["graph"]["bonds"]
+            and atoms[0]["explicit_hydrogens"] + state["valences"][0]["implicit_hydrogens"] == 4
+        )
+    except (KeyError, TypeError, IndexError) as error:
+        raise ValueError("Packaged InChI helper returned an invalid molecule") from error
+    if not valid:
+        raise ValueError("Packaged InChI helper did not read methane correctly")
 
 
 def notices(destination):
@@ -386,18 +370,8 @@ def main():
     )
     parser.add_argument("--target", choices=sorted(RELEASE_TARGETS))
     parser.add_argument("--check-tag-only", action="store_true")
-    native = parser.add_mutually_exclusive_group()
-    native.add_argument(
-        "--inchi-source", type=Path, help="Audited local official InChI source tree"
-    )
-    native.add_argument("--inchi-archive", type=Path, help="Pinned official InChI source ZIP")
-    native.add_argument(
-        "--fetch-inchi-source",
-        action="store_true",
-        help="Fetch the pinned official source explicitly",
-    )
-    native.add_argument(
-        "--inchi-helper", type=Path, help="Already built helper with matching build.json"
+    parser.add_argument(
+        "--inchi-helper", type=Path, help="Already built Rust helper with matching build.json"
     )
     args = parser.parse_args()
     if args.tag:
@@ -412,13 +386,7 @@ def main():
         raise ValueError(
             "Build and verify a release on a runner with the matching operating system"
         )
-    helper, helper_metadata = prepare_inchi_helper(
-        target,
-        source=args.inchi_source,
-        archive=args.inchi_archive,
-        fetch=args.fetch_inchi_source,
-        prebuilt=args.inchi_helper,
-    )
+    helper, helper_metadata = prepare_inchi_helper(target, prebuilt=args.inchi_helper)
     name = f"reshiki-{version()}-{system}-{arch}"
     # Keep dependency notices outside Cargo's target tree: rust-cache treats
     # nested crate sources as build output and removes their test directories.

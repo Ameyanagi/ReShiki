@@ -32,9 +32,11 @@ def main():
     if not args.inchi_helper.is_file():
         raise SystemExit(
             "Build the native helper first: uv run --locked python "
-            "scripts/build_inchi_helper.py --fetch-source"
+            "scripts/build_inchi_helper.py --production"
         )
-    helper, _ = prepare_inchi_helper(target, prebuilt=args.inchi_helper)
+    helper, _ = prepare_inchi_helper(
+        target, prebuilt=args.inchi_helper, require_production=args.release
+    )
     profile = "release" if args.release else "debug"
     run(["cargo", "build", "--locked", *(["--release"] if args.release else [])], cwd=ROOT)
     destination = ROOT / ("dist/ReShiki.app" if args.portable else f"target/{profile}/ReShiki.app")

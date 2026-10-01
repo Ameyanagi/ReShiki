@@ -383,7 +383,7 @@ async fn cleanup_child() -> anyhow::Result<()> {
                     "resource",
                     native_cleanup::Error::Analysis(native_response::Error::Helper(
                         generator::Error::ResourceLimit {
-                            resource: generator::Resource::KernelHeap,
+                            resource: generator::Resource::Heap,
                             ..
                         },
                     )),
