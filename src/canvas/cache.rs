@@ -12,6 +12,7 @@ pub(super) struct SceneCache {
     selection: Option<Option<SelectionBox>>,
     markers: Option<Rc<super::markers::Markers>>,
     whole: bool,
+    copy: Option<Rc<Document>>,
 }
 
 impl SceneCache {
@@ -23,6 +24,7 @@ impl SceneCache {
             self.selection = None;
             self.markers = None;
             self.whole = false;
+            self.copy = None;
         }
     }
 
@@ -32,6 +34,7 @@ impl SceneCache {
             self.ids = ids.to_vec();
             self.selection = None;
             self.markers = None;
+            self.copy = None;
             let selected: HashSet<_> = ids.iter().copied().collect();
             let all = doc.all_ids();
             self.whole = !all.is_empty() && all.iter().all(|id| selected.contains(id));
@@ -41,6 +44,14 @@ impl SceneCache {
     pub fn whole_document(&mut self, doc: &Document, ids: &[u64]) -> bool {
         self.selected(doc, ids);
         self.whole
+    }
+
+    /// The selection extracted for a Ctrl/Cmd drag copy.
+    pub fn copy(&mut self, doc: &Document, ids: &[u64]) -> Rc<Document> {
+        self.selected(doc, ids);
+        self.copy
+            .get_or_insert_with(|| Rc::new(reshiki::editing::selection(doc, ids)))
+            .clone()
     }
 
     pub fn primitives(&mut self, doc: &Document) -> Rc<[Primitive]> {

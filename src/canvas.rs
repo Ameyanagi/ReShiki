@@ -61,7 +61,7 @@ impl Tool {
     pub fn hint(self) -> &'static str {
         match self {
             Self::Select => {
-                "Bonded drags use Length/Angles · Option/Alt frees movement · Drag a ring edge to fuse"
+                "Bonded drags use Length/Angles · Option/Alt frees movement · Shift locks an axis · Ctrl/Cmd drag copies · Drag a ring edge to fuse"
             }
             Self::Lasso => "Draw around objects · Shift adds · Option/Alt drag subtracts",
             Self::Tilt => "Drag a ring or selection to tilt · Shift snaps to 15° · Escape cancels",
@@ -130,6 +130,8 @@ pub enum Edit {
     ArrowClick(u64),
     Select(Vec<u64>),
     Move(Vec<u64>, f32, f32),
+    /// Copy the objects to the offset, leaving the originals in place.
+    Duplicate(Vec<u64>, f32, f32),
     Tilt {
         ids: Vec<u64>,
         x: f32,
@@ -249,14 +251,17 @@ enum Gesture {
         last: Point,
     },
 }
-// Cmd on macOS, Ctrl elsewhere. Chairs and Haworth projections retain their geometry.
-fn delocalized_ring_size(tool: Tool, size: u8, modifiers: iced::keyboard::Modifiers) -> Option<u8> {
-    let held = if cfg!(target_os = "macos") {
+// Cmd on macOS, Ctrl elsewhere.
+fn command_held(modifiers: iced::keyboard::Modifiers) -> bool {
+    if cfg!(target_os = "macos") {
         modifiers.logo()
     } else {
         modifiers.control()
-    };
-    if !held {
+    }
+}
+// Chairs and Haworth projections retain their geometry.
+fn delocalized_ring_size(tool: Tool, size: u8, modifiers: iced::keyboard::Modifiers) -> Option<u8> {
+    if !command_held(modifiers) {
         return None;
     }
     use reshiki::rings::Preset;
@@ -299,6 +304,27 @@ fn rgb(c: [u8; 3]) -> Color {
 }
 
 impl MoleculeCanvas<'_> {
+    /// Drag offset for the preview and release. A Ctrl/Cmd copy has no bonds to constrain.
+    fn move_delta(
+        &self,
+        ids: &[u64],
+        requested: World,
+        modifiers: iced::keyboard::Modifiers,
+    ) -> World {
+        if command_held(modifiers) {
+            return if modifiers.shift() {
+                movement::axis_locked(requested)
+            } else {
+                requested
+            };
+        }
+        let drawing = self.bond_drawing.unconstrained(modifiers.alt());
+        if modifiers.shift() {
+            movement::axis_delta(self.doc, ids, requested, drawing)
+        } else {
+            movement::delta(self.doc, ids, requested, drawing)
+        }
+    }
     fn template_gesture(
         &self,
         start: World,
@@ -1076,13 +1102,16 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                             }
                         } else {
                             state.last_click = None;
-                            let delta = movement::delta(
-                                self.doc,
+                            let delta = self.move_delta(
                                 &ids,
                                 World::new(p.x - start.x, p.y - start.y),
-                                self.bond_drawing.unconstrained(state.modifiers.alt()),
+                                state.modifiers,
                             );
-                            Edit::Move(ids, delta.x, delta.y)
+                            if command_held(state.modifiers) {
+                                Edit::Duplicate(ids, delta.x, delta.y)
+                            } else {
+                                Edit::Move(ids, delta.x, delta.y)
+                            }
                         }
                     }
                     Gesture::Select { start } => {
@@ -1597,14 +1626,16 @@ impl MoleculeCanvas<'_> {
             let p = self
                 .camera
                 .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
-            let delta = movement::delta(
-                self.doc,
+            let delta = self.move_delta(
                 ids,
                 World::new(p.x - start.x, p.y - start.y),
-                self.bond_drawing.unconstrained(state.modifiers.alt()),
+                state.modifiers,
             );
             if start.distance(p) < 1.0 / self.camera.zoom {
                 ring_selection = Some(ids.clone());
+            } else if command_held(state.modifiers) {
+                let part = state.scene.borrow_mut().copy(self.doc, ids);
+                ring_selection = Some(reshiki::editing::append(&mut preview, &part, delta));
             } else if state.scene.borrow_mut().whole_document(self.doc, ids) {
                 // Moving every object cannot change their relative geometry,
                 // chemical labels, crossing gaps or ring attachment targets.
@@ -4458,7 +4489,19 @@ mod tests {
     }
 
     fn pointer_gesture(canvas: &MoleculeCanvas<'_>, start: Point, end: Point) -> Edit {
-        let mut state = State::default();
+        pointer_gesture_with(canvas, start, end, Default::default())
+    }
+
+    fn pointer_gesture_with(
+        canvas: &MoleculeCanvas<'_>,
+        start: Point,
+        end: Point,
+        modifiers: iced::keyboard::Modifiers,
+    ) -> Edit {
+        let mut state = State {
+            modifiers,
+            ..Default::default()
+        };
         let bounds = Rectangle::new(Point::ORIGIN, iced::Size::new(400.0, 300.0));
         let cursor = mouse::Cursor::Available(end);
         for event in [
@@ -4781,6 +4824,71 @@ mod tests {
         assert!(
             matches!(pointer_gesture(&canvas, Point::new(179.0, 150.0), Point::new(209.0, 170.0)), Edit::Move(ids, 30.0, 20.0) if ids == vec![a, b])
         );
+    }
+
+    #[test]
+    fn command_drag_duplicates_and_shift_drag_locks_to_one_axis() {
+        use iced::keyboard::Modifiers;
+        let mut doc = Document::default();
+        let a = doc.add_atom("C", World::new(-21.0, 0.0));
+        let b = doc.add_atom("C", World::new(21.0, 0.0));
+        let c = doc.add_atom("C", World::new(21.0, 42.0));
+        doc.add_bond(a, b, 1, "plain");
+        doc.add_bond(b, c, 1, "plain");
+        let selected = [a, b, c];
+        let canvas = MoleculeCanvas {
+            element: "C",
+            joining: None,
+            hidden_annotation: None,
+            bond_drawing: Default::default(),
+            chain_drawing: Default::default(),
+            doc: &doc,
+            selected: &selected,
+            tool: Tool::Select,
+            camera: Camera::default(),
+            grid: false,
+            guides: Default::default(),
+            ring_size: 6,
+            aromatic_ring: false,
+            template_connection: reshiki::templates::Connection::Auto,
+            template: None,
+            arrow_preset: Default::default(),
+            arrow_style: &reshiki::arrows::ArrowStyle::DEFAULT,
+            orbital_phase: Default::default(),
+            phase_flipped: false,
+            attach_symbols: true,
+            graphic_constrain: false,
+            graphic_arc: Default::default(),
+            graphic_style: &GraphicStyle::default(),
+            bracket_sides: BracketSides::Both,
+        };
+        let (start, end) = (Point::new(200.0, 150.0), Point::new(290.0, 170.0));
+        let gesture = |modifiers| pointer_gesture_with(&canvas, start, end, modifiers);
+        assert!(
+            matches!(gesture(Modifiers::COMMAND), Edit::Duplicate(ids, 90.0, 20.0) if ids == selected)
+        );
+        assert!(matches!(gesture(Modifiers::SHIFT), Edit::Move(ids, 90.0, 0.0) if ids == selected));
+        assert!(
+            matches!(gesture(Modifiers::COMMAND | Modifiers::SHIFT), Edit::Duplicate(ids, 90.0, 0.0) if ids == selected)
+        );
+        let vertical =
+            pointer_gesture_with(&canvas, start, Point::new(215.0, 90.0), Modifiers::SHIFT);
+        assert!(matches!(vertical, Edit::Move(ids, 0.0, -60.0) if ids == selected));
+        // Duplicating a bonded part of a molecule copies it free of the rest.
+        let partial = [b, c];
+        let canvas = MoleculeCanvas {
+            selected: &partial,
+            ..canvas
+        };
+        assert!(matches!(
+            pointer_gesture_with(&canvas, Point::new(221.0, 171.0), Point::new(251.0, 201.0), Modifiers::COMMAND),
+            Edit::Duplicate(ids, 30.0, 30.0) if ids == partial
+        ));
+        // Shift+Option/Alt moves a part still bonded to the rest freely along the axis.
+        assert!(matches!(
+            pointer_gesture_with(&canvas, Point::new(221.0, 171.0), Point::new(251.0, 181.0), Modifiers::SHIFT | Modifiers::ALT),
+            Edit::Move(ids, 30.0, 0.0) if ids.len() == 2 && partial.iter().all(|id| ids.contains(id))
+        ));
     }
 
     #[test]

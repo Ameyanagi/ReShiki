@@ -5,6 +5,31 @@ use reshiki::{
 };
 use std::collections::{HashMap, HashSet};
 
+/// Shift-drag keeps only the component the pointer has moved farther along.
+pub(super) fn axis_locked(requested: Point) -> Point {
+    if requested.x.abs() >= requested.y.abs() {
+        Point::new(requested.x, 0.)
+    } else {
+        Point::new(0., requested.y)
+    }
+}
+
+/// Shift-drag under bond constraints: a move they would push off the axis is refused.
+pub(super) fn axis_delta(
+    doc: &Document,
+    ids: &[u64],
+    requested: Point,
+    drawing: BondDrawing,
+) -> Point {
+    let locked = axis_locked(requested);
+    let d = delta(doc, ids, locked, drawing);
+    let off_axis = if locked.y == 0. { d.y } else { d.x };
+    if off_axis.abs() > 0.001 {
+        return Point::default();
+    }
+    d
+}
+
 pub(super) fn delta(doc: &Document, ids: &[u64], requested: Point, drawing: BondDrawing) -> Point {
     if !requested.x.is_finite() || !requested.y.is_finite() {
         return Point::default();
@@ -115,6 +140,39 @@ mod tests {
                 }
             }
         }
+        Ok(())
+    }
+    #[test]
+    fn axis_lock_keeps_bond_constraints_and_never_leaves_the_axis() -> Result<(), String> {
+        let mut doc = Document::default();
+        let fixed = doc.add_atom("C", Point::default());
+        let moving = doc.add_atom("C", Point::new(21., 42. * 3_f32.sqrt() / 2.));
+        doc.add_bond(fixed, moving, 1, "plain");
+        let drawing = BondDrawing::default();
+        // Horizontally, the 120° position keeps the bond length and angle.
+        let d = axis_delta(&doc, &[moving], Point::new(-45., 3.), drawing);
+        assert!((d.x + 42.).abs() < 0.001 && d.y.abs() < 0.001, "{d:?}");
+        let moved = doc.atom(moving).ok_or("moving")?.position.offset(d.x, d.y);
+        assert!((moved.distance(Point::default()) - 42.).abs() < 0.001);
+        // Vertically, no constrained position stays on the axis.
+        assert_eq!(
+            axis_delta(&doc, &[moving], Point::new(5., 40.), drawing),
+            Point::default()
+        );
+        // Option/Alt frees the constraints; whole molecules are never constrained.
+        assert_eq!(
+            axis_delta(
+                &doc,
+                &[moving],
+                Point::new(5., 40.),
+                drawing.unconstrained(true)
+            ),
+            Point::new(0., 40.)
+        );
+        assert_eq!(
+            axis_delta(&doc, &[fixed, moving], Point::new(5., 40.), drawing),
+            Point::new(0., 40.)
+        );
         Ok(())
     }
     #[test]
