@@ -181,13 +181,12 @@ impl Plan {
 }
 
 /// Structure file contents as the engine reads them: binary CDX as base64.
-pub(super) fn contents(format: &str, bytes: Vec<u8>) -> String {
+pub(super) fn contents(format: &str, bytes: Vec<u8>) -> Result<String, String> {
     use base64::{Engine, engine::general_purpose::STANDARD};
     if format == "cdx" {
-        STANDARD.encode(bytes)
+        Ok(STANDARD.encode(bytes))
     } else {
-        String::from_utf8(bytes)
-            .unwrap_or_else(|error| String::from_utf8_lossy(error.as_bytes()).into_owned())
+        String::from_utf8(bytes).map_err(|error| format!("The file is not valid UTF-8: {error}"))
     }
 }
 
@@ -211,9 +210,12 @@ async fn read(engine: &LocalEngine, path: &Path) -> Result<(Document, Vec<String
         Kind::Structure(format) => {
             let bytes = tokio::fs::read(path).await.map_err(|e| e.to_string())?;
             let response = engine
-                .execute(Request::import(format, &contents(format, bytes)))
+                .execute(Request::import(format, &contents(format, bytes)?))
                 .await?;
             let drawing = response.document.ok_or("The file contains no drawing")?;
+            if reshiki::scene::selection_bounds(&drawing, &drawing.all_ids()).is_none() {
+                return Err("The file contains no drawing".into());
+            }
             Ok((drawing, response.warnings))
         }
         Kind::Document | Kind::Unsupported => Err("Unsupported file type".into()),
@@ -312,6 +314,9 @@ impl App {
                 }
             },
             Action::Loaded(ticket, result) => {
+                // Imports and engine requests share one serial busy slot.
+                // New may invalidate this result, but no newer request can
+                // start until this import releases its slot.
                 self.busy = false;
                 if ticket.epoch != self.file_epoch {
                     return Task::none();
@@ -343,16 +348,19 @@ impl App {
 
     /// Inserts the drawings side by side around the drop point as one Undo step.
     fn insert_batch(&mut self, batch: Batch) {
-        let parts: Vec<_> = batch
+        let parts: Option<Vec<_>> = batch
             .drawings
             .iter()
-            .filter_map(|d| reshiki::scene::selection_bounds(d, &d.all_ids()).map(|b| (d, b)))
+            .map(|d| reshiki::scene::selection_bounds(d, &d.all_ids()).map(|b| (d, b)))
             .collect();
-        if parts.is_empty() {
+        let Some(parts) = parts.filter(|parts| !parts.is_empty()) else {
             self.error = true;
-            self.status = format!("{} contains no drawing", batch.label);
+            self.status = format!(
+                "Could not insert {}: a file contains no drawing",
+                batch.label
+            );
             return;
-        }
+        };
         let gap = self.doc.drawing_style.bond_length_world;
         let width = parts.iter().map(|(_, (lo, hi))| hi.x - lo.x).sum::<f32>()
             + gap * (parts.len() - 1) as f32;
@@ -774,6 +782,69 @@ mod tests {
         assert!(app.imports.is_blank());
         app.imports.set_text("CCO>>CC=O");
         assert_eq!(app.imports.format.map(format_name), Some("Reaction SMILES"));
+    }
+
+    #[test]
+    fn structure_files_reject_invalid_text_and_preserve_binary_cdx() {
+        for format in ["mol", "rxn", "cdxml", "smiles"] {
+            assert!(
+                contents(format, vec![b'C', 0xff])
+                    .unwrap_err()
+                    .contains("UTF-8")
+            );
+            assert_eq!(
+                contents(format, "Label α".as_bytes().to_vec()).unwrap(),
+                "Label α"
+            );
+        }
+        assert_eq!(contents("cdx", vec![0xff, 0x00]).unwrap(), "/wA=");
+    }
+
+    #[test]
+    fn mixed_empty_batch_is_rejected_without_inserting_any_files() {
+        let mut app = ready();
+        app.doc.add_atom("N", Point::new(-80., 0.));
+        let before = app.doc.clone();
+        let mut visible = Document::default();
+        visible.add_atom("O", Point::default());
+        for drawings in [
+            vec![visible.clone(), Document::default()],
+            vec![Document::default(), visible],
+        ] {
+            app.insert_batch(Batch {
+                label: "2 files".into(),
+                drawings,
+                warnings: vec![],
+            });
+            assert!(app.error && app.status.contains("contains no drawing"));
+            assert_eq!(app.doc, before);
+            assert!(!app.history.can_undo());
+        }
+    }
+
+    #[test]
+    fn invalidated_import_keeps_the_serial_slot_until_its_completion() {
+        let mut app = ready();
+        let ticket = Ticket {
+            epoch: app.file_epoch,
+            revision: app.revision,
+        };
+        assert!(
+            app.update(Message::Imports(Action::Files(paths(&["old.mol"]))))
+                .units()
+                > 0
+        );
+        let _ = app.update(Message::New);
+        assert_ne!(app.file_epoch, ticket.epoch);
+        assert!(app.busy);
+        assert_eq!(app.update(Message::Analyze).units(), 0);
+        let _ = app.update(Message::Imports(Action::Loaded(
+            ticket,
+            Box::new(Err("Old error".into())),
+        )));
+        assert!(!app.busy && !app.error);
+        assert!(app.doc.all_ids().is_empty());
+        assert!(app.update(Message::Analyze).units() > 0);
     }
 
     #[test]
