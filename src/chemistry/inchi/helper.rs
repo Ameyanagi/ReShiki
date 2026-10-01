@@ -1,4 +1,5 @@
-//! Locate an already installed helper. Discovery never searches PATH or the
+//! Relaunch the current application in worker mode. An explicit development
+//! override can select a test executable; discovery never searches PATH or the
 //! working directory and never starts a compiler, downloader, or interpreter.
 use std::{
     ffi::OsStr,
@@ -49,11 +50,10 @@ fn resolve(application: &Path, supplied: Option<&OsStr>) -> Result<PathBuf, Erro
         }
         candidate
     } else {
-        application
-            .parent()
-            .filter(|p| p.is_absolute())
-            .ok_or(Error::ApplicationPath)?
-            .join(filename())
+        if !application.is_absolute() {
+            return Err(Error::ApplicationPath);
+        }
+        application.to_path_buf()
     };
     let metadata = candidate.metadata().map_err(|source| Error::Unavailable {
         path: candidate.clone(),
@@ -93,17 +93,16 @@ mod tests {
     }
 
     #[test]
-    fn resolves_native_helper_beside_application_with_spaces_and_unicode() -> anyhow::Result<()> {
+    fn resolves_application_itself_with_spaces_and_unicode() -> anyhow::Result<()> {
         let root = tempfile::tempdir()?;
         for folder in ["ReShiki portable 日本語", "ReShiki.app/Contents/MacOS"] {
             let directory = root.path().join(folder);
             std::fs::create_dir_all(&directory)?;
-            let helper = directory.join(filename());
-            executable(&helper)?;
-            assert_eq!(
-                resolve(&directory.join("reshiki"), None)?,
-                helper.canonicalize()?
-            );
+            let application = directory.join("reshiki");
+            executable(&application)?;
+            // A stale sibling is never used, even if it is executable.
+            executable(&directory.join(filename()))?;
+            assert_eq!(resolve(&application, None)?, application.canonicalize()?);
         }
         Ok(())
     }
@@ -136,7 +135,7 @@ mod tests {
     }
 
     #[test]
-    fn missing_sibling_is_an_error_without_working_directory_fallback() -> anyhow::Result<()> {
+    fn missing_application_is_an_error_without_sibling_fallback() -> anyhow::Result<()> {
         let root = tempfile::tempdir()?;
         executable(&root.path().join(filename()))?;
         assert!(matches!(
@@ -154,7 +153,7 @@ mod tests {
     #[test]
     fn rejects_nonexecutable_files() -> anyhow::Result<()> {
         let root = tempfile::tempdir()?;
-        std::fs::write(root.path().join(filename()), b"not executable")?;
+        std::fs::write(root.path().join("reshiki"), b"not executable")?;
         assert!(matches!(
             resolve(&root.path().join("reshiki"), None),
             Err(Error::NotExecutable(_))

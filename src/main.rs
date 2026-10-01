@@ -20,7 +20,39 @@ mod canvas;
 #[cfg(windows)]
 mod rendering;
 
+#[global_allocator]
+static ALLOCATOR: reshiki_process_heap::BoundedHeap = reshiki_process_heap::BoundedHeap;
+
 fn main() -> iced::Result {
+    // Worker modes enter before graphics, AppKit/Office registration or Tokio.
+    // Relaunching this executable keeps deadlines and memory failures isolated.
+    if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--inchi-worker")) {
+        reshiki::chemistry::inchi::worker::run();
+        return Ok(());
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let worker = match std::env::args_os()
+            .nth(1)
+            .as_deref()
+            .and_then(|arg| arg.to_str())
+        {
+            Some("--clipboard-worker") => {
+                Some(reshiki_macos::workers::clipboard as fn() -> Result<(), String>)
+            }
+            Some("--print-worker") => {
+                Some(reshiki_macos::workers::print as fn() -> Result<(), String>)
+            }
+            _ => None,
+        };
+        if let Some(worker) = worker {
+            if let Err(error) = worker() {
+                eprintln!("{error}");
+                std::process::exit(1);
+            }
+            return Ok(());
+        }
+    }
     #[cfg(windows)]
     {
         if std::env::args().any(|arg| arg == "--graphics-info") {

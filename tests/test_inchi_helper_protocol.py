@@ -9,10 +9,15 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-HELPER = (
-    ROOT
-    / "artifacts/inchi-helper"
-    / ("reshiki-inchi-helper.exe" if os.name == "nt" else "reshiki-inchi-helper")
+HELPER = Path(
+    os.environ.get(
+        "RESHIKI_TEST_PACKAGED_APP",
+        str(
+            ROOT
+            / "artifacts/inchi-helper"
+            / ("reshiki-inchi-helper.exe" if os.name == "nt" else "reshiki-inchi-helper")
+        ),
+    )
 )
 
 
@@ -39,7 +44,9 @@ class ProtocolTests(unittest.TestCase):
             raise unittest.SkipTest("Optional Rust helper is not built")
 
     def run_frame(self, payload):
-        result = subprocess.run([str(HELPER)], input=payload, capture_output=True, timeout=5)
+        result = subprocess.run(
+            [str(HELPER), "--inchi-worker"], input=payload, capture_output=True, timeout=5
+        )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertLessEqual(len(result.stdout), 8 * 1024 * 1024)
         self.assertEqual(result.stdout[:12], b"RSHINCHI\x03\x00\x00\x00")
@@ -76,7 +83,7 @@ class ProtocolTests(unittest.TestCase):
         for budget in (1, 64, 128, 1024):
             outcomes = [
                 subprocess.run(
-                    [str(HELPER)],
+                    [str(HELPER), "--inchi-worker"],
                     input=frame(request(budget=budget)),
                     capture_output=True,
                     timeout=5,

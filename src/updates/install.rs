@@ -314,7 +314,8 @@ fn stage(asset: &Path, directory: &Path, version: &str) -> Result<PathBuf, Strin
     .map_err(|e| e.to_string())?;
     if data.get("version").and_then(|v| v.as_str()) != Some(version)
         || !payload.join("reshiki").is_file()
-        || !payload.join("reshiki-inchi-helper").is_file()
+        || (data.pointer("/inchi/runtime").and_then(|v| v.as_str()) != Some("self-process")
+            && !payload.join("reshiki-inchi-helper").is_file())
     {
         return Err("Incomplete update package".into());
     }
@@ -519,7 +520,14 @@ mod tests {
                 std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
             }
             std::fs::write(target.join("reshiki-inchi-helper"), "old helper").unwrap();
-            std::fs::write(payload.join("reshiki-inchi-helper"), "new helper").unwrap();
+            std::fs::create_dir_all(target.join("Licenses/rust/legacy")).unwrap();
+            std::fs::write(target.join("Licenses/rust/legacy/LICENSE"), "old license").unwrap();
+            std::fs::create_dir_all(payload.join("Licenses")).unwrap();
+            std::fs::write(
+                payload.join("Licenses/THIRD-PARTY-NOTICES.txt"),
+                "complete notices",
+            )
+            .unwrap();
             std::fs::write(target.join("user drawing.rsk"), "preserve").unwrap();
             let mut script = include_str!("install.sh").to_owned();
             if fail {
@@ -551,14 +559,30 @@ mod tests {
                 std::fs::read_to_string(target.join("user drawing.rsk")).unwrap(),
                 "preserve"
             );
-            assert_eq!(
-                std::fs::read_to_string(target.join("reshiki-inchi-helper")).unwrap(),
-                if fail { "old helper" } else { "new helper" }
-            );
             if fail {
+                assert_eq!(
+                    std::fs::read_to_string(target.join("reshiki-inchi-helper")).unwrap(),
+                    "old helper"
+                );
+                assert_eq!(
+                    std::fs::read_to_string(target.join("Licenses/rust/legacy/LICENSE")).unwrap(),
+                    "old license"
+                );
                 assert_eq!(
                     std::fs::read_to_string(target.join("reshiki")).unwrap(),
                     old
+                );
+            } else {
+                assert!(!target.join("reshiki-inchi-helper").exists());
+                assert!(!target.join("Licenses/rust").exists());
+                assert_eq!(
+                    std::fs::read_to_string(target.join("Licenses/THIRD-PARTY-NOTICES.txt"))
+                        .unwrap(),
+                    "complete notices"
+                );
+                assert_eq!(
+                    std::fs::read_to_string(stage.join("previous/reshiki-inchi-helper")).unwrap(),
+                    "old helper"
                 );
             }
         }
@@ -572,6 +596,60 @@ mod tests {
         let app = stage(Path::new(&disk), root.path(), "0.6.1").unwrap();
         assert!(app.join("Contents/MacOS/reshiki").is_file());
         assert!(!root.path().join("mount/ReShiki.app").exists());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn stages_single_executable_and_legacy_linux_updates_but_rejects_incomplete_packages() {
+        let arch = if cfg!(target_arch = "aarch64") {
+            "arm64"
+        } else {
+            "x64"
+        };
+        for (self_process, old_helper, main_binary) in [
+            (true, false, true),
+            (false, true, true),
+            (false, false, true),
+            (true, false, false),
+        ] {
+            let root = tempfile::tempdir().unwrap();
+            let name = format!("reshiki-0.10.0-linux-{arch}");
+            let payload = root.path().join(&name);
+            std::fs::create_dir(&payload).unwrap();
+            let mut metadata = serde_json::json!({"version": "0.10.0"});
+            if self_process {
+                metadata["inchi"] = serde_json::json!({"runtime": "self-process"});
+            }
+            std::fs::write(
+                payload.join("build.json"),
+                serde_json::to_vec(&metadata).unwrap(),
+            )
+            .unwrap();
+            if main_binary {
+                std::fs::write(payload.join("reshiki"), "application").unwrap();
+            }
+            if old_helper {
+                std::fs::write(payload.join("reshiki-inchi-helper"), "legacy helper").unwrap();
+            }
+            let archive = root.path().join("package.tar.gz");
+            assert!(
+                Command::new("tar")
+                    .arg("-czf")
+                    .arg(&archive)
+                    .arg("-C")
+                    .arg(root.path())
+                    .arg(&name)
+                    .status()
+                    .unwrap()
+                    .success()
+            );
+            let staging = root.path().join("staging");
+            std::fs::create_dir(&staging).unwrap();
+            assert_eq!(
+                stage(&archive, &staging, "0.10.0").is_ok(),
+                main_binary && (self_process || old_helper)
+            );
+        }
     }
 
     #[test]

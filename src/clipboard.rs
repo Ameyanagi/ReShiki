@@ -158,17 +158,10 @@ pub fn available() -> bool {
 
 #[cfg(not(windows))]
 fn helper() -> Result<PathBuf, String> {
-    let bundled = std::env::current_exe().ok().and_then(|exe| {
-        let path = exe.parent()?.join("reshiki-clipboard");
-        path.is_file().then_some(path)
-    });
-    bundled
-        .or_else(|| {
-            option_env!("RESHIKI_CLIPBOARD_HELPER")
-                .map(PathBuf::from)
-                .filter(|p| p.is_file())
-        })
-        .ok_or_else(|| "Native clipboard helper is unavailable".into())
+    if !cfg!(target_os = "macos") {
+        return Err("Native clipboard is unavailable on this platform".into());
+    }
+    std::env::current_exe().map_err(|e| format!("Could not locate the application: {e}"))
 }
 
 #[cfg(windows)]
@@ -198,6 +191,7 @@ async fn invoke(operation: &str, representations: &[Representation]) -> Result<P
         return Err("Clipboard request is too large".into());
     }
     let mut command = Command::new(helper()?);
+    command.arg("--clipboard-worker");
     let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

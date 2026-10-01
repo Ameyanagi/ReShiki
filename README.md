@@ -22,7 +22,7 @@ Draw molecules, build reaction schemes, and prepare figures on an editable canva
 
 Start with JACS / ACS styling. Attach templates, refine selected structures, or ask the assistant to propose a drawing. Review edits and undo changes. Copy editable structures or export SVG, PDF, and PNG.
 
-Version 0.9 adds publisher drawing presets, separate light/dark canvas themes, a theme manager and generator, reusable style/theme files, and improved ChemDraw color and ring-fill transfer. Aromatic rings and templates share validated fusion, including phenyl attachment and supported gap closure. [Release notes](docs/changes-0.9.md) · [Styles and themes](docs/drawing-styles.md) · [Shortcut gallery and reference](docs/contextual-shortcuts.md).
+Version 0.10 adds document tabs, smart alignment guides, drag-to-copy, a compact interface, editable Strong/Tint palettes, and Rust InChI. Older drawings open normally; drawings saved in 0.10 use a new format that 0.9.1 and earlier cannot read. [Release notes](docs/changes-0.10.md) · [Styles and themes](docs/drawing-styles.md) · [Shortcut gallery and reference](docs/contextual-shortcuts.md).
 
 [Explore the color palettes](https://reshiki.com/guide/color-palettes/): each theme's Strong and Tint rows and every Presentation, Pastel and Jmol element color in light and dark mode, with RGB, OKLCH, CSS variables and reusable theme downloads.
 
@@ -61,7 +61,7 @@ option. Both permit commercial use, including use at work.
 Third-party dependencies and copied, ported, or adapted code retain their
 existing licenses and notices. See [LICENSE](LICENSE) for scope and
 [NOTICE](NOTICE) for the attribution records. Release packages include the
-project licenses and third-party notices in their `Licenses` directory.
+project licenses and one consolidated `THIRD-PARTY-NOTICES.txt` in their `Licenses` directory.
 
 Unless explicitly stated otherwise, contributions intentionally submitted
 for inclusion in original ReShiki code are offered under MIT OR Apache-2.0.
@@ -73,8 +73,8 @@ and confirm it in your pull request.
 
 Thanks to our [contributors](docs/contributors.md) for their code, testing, and feedback.
 
-ReShiki uses Rust, Iced, and a bundled native InChI helper. See the [developer guide](https://reshiki.com/developer/development/) for setup, checks, and contribution instructions.
+ReShiki uses Rust and Iced, with chemistry, clipboard and printing in one application executable per platform. See the [developer guide](https://reshiki.com/developer/development/) for setup, checks, and contribution instructions.
 
 ReShiki is under active development. [Report a problem](https://github.com/Ameyanagi/ReShiki/issues).
 
-See the [latest release notes](docs/changes-0.9.1.md) and the [shortcut list with one editable example document](docs/contextual-shortcuts.md). Group and template definitions may be extended or revised in future releases.
+See the [latest release notes](docs/changes-0.10.md) and the [shortcut list with one editable example document](docs/contextual-shortcuts.md). Group and template definitions may be extended or revised in future releases.

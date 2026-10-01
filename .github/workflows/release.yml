@@ -158,19 +158,29 @@ jobs:
         env:
           MACOSX_DEPLOYMENT_TARGET: "14.0"
         run: uv run --no-project --isolated --python 3.12 python scripts/build_release.py --target ${{ matrix.target }} --installer
+      - name: Check the application worker protocol and heap boundaries
+        env:
+          RESHIKI_REQUIRE_INCHI_HELPER: "1"
+          RESHIKI_TEST_PACKAGED_APP: ${{ github.workspace }}/target/${{ matrix.target }}/release/reshiki${{ runner.os == 'Windows' && '.exe' || '' }}
+        run: uv run --no-project --isolated --python 3.12 python -m unittest tests.test_inchi_helper_protocol tests.test_inchi_distribution.HelperTests.test_packaged_application_worker_executes_when_supplied_for_validation
+      - name: Test native macOS clipboard and physical print coordinates
+        if: runner.os == 'macOS'
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "14.0"
+        run: cargo test --release --locked -p reshiki-macos --target ${{ matrix.target }}
       - name: Test native chemistry on Intel macOS
         if: matrix.artifact == 'macos-x64'
         env:
           MACOSX_DEPLOYMENT_TARGET: "14.0"
           RESHIKI_REQUIRE_INCHI_HELPER: "1"
-          RESHIKI_INCHI_HELPER: ${{ github.workspace }}/target/x86_64-apple-darwin/inchi-helper/reshiki-inchi-helper
+          RESHIKI_INCHI_HELPER: ${{ github.workspace }}/target/x86_64-apple-darwin/release/reshiki
         run: cargo test --release --locked --no-default-features --lib --target x86_64-apple-darwin
       - name: Test the nightly application and renderer regressions
         if: inputs.nightly
         env:
           MACOSX_DEPLOYMENT_TARGET: "14.0"
           RESHIKI_REQUIRE_INCHI_HELPER: "1"
-          RESHIKI_INCHI_HELPER: ${{ github.workspace }}/target/${{ matrix.target }}/inchi-helper/reshiki-inchi-helper${{ runner.os == 'Windows' && '.exe' || '' }}
+          RESHIKI_INCHI_HELPER: ${{ github.workspace }}/target/${{ matrix.target }}/release/reshiki${{ runner.os == 'Windows' && '.exe' || '' }}
         run: cargo test --release --locked --no-default-features --bin reshiki --target ${{ matrix.target }}
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

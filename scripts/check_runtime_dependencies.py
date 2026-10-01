@@ -16,6 +16,15 @@ def verify_payload(package):
         if "Licenses" in relative.parts:
             continue
         name = entry.name.lower()
+        if name in {
+            "reshiki-inchi-helper",
+            "reshiki-inchi-helper.exe",
+            "reshiki-clipboard",
+            "reshiki-print",
+        }:
+            raise ValueError(
+                f"Separate worker executable in single-application package: {relative}"
+            )
         if (
             name in {"chemistry", ".venv", "__pycache__", "uv.lock", "pyproject.toml", "pyvenv.cfg"}
             or entry.suffix.lower() in {".py", ".pyc", ".pyo", ".pyd"}
@@ -23,6 +32,25 @@ def verify_payload(package):
             or name.startswith(("libpython", "python3.", "python31", "rdkit"))
         ):
             raise ValueError(f"Python chemistry payload in native package: {relative}")
+
+
+def verify_single_executable(binary, package):
+    """Portable archives contain exactly one PE, ELF or Mach-O executable."""
+    binary = Path(binary).resolve(strict=True)
+    found = []
+    for entry in Path(package).rglob("*"):
+        if not entry.is_file():
+            continue
+        with entry.open("rb") as stream:
+            header = stream.read(4)
+        if header.startswith(b"MZ") or header in {
+            b"\x7fELF",
+            b"\xcf\xfa\xed\xfe",
+            b"\xfe\xed\xfa\xcf",
+        }:
+            found.append(entry.resolve())
+    if found != [binary]:
+        raise ValueError(f"Expected only the application executable in {package}; found {found}")
 
 
 def verify_runtime(binary, package, *, user_data=None):

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::io::{self, Write};
 
 pub const PROTOCOL: u16 = 3;
-pub const RESOURCE_EXIT: i32 = 75;
+pub use reshiki_process_heap::RESOURCE_EXIT;
 const MAGIC: &[u8; 8] = b"RSHINCHI";
 
 #[derive(Debug, Serialize, Deserialize)]

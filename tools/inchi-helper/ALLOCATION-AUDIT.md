@@ -1,9 +1,8 @@
 # Rust helper allocation budget
 
-`heap.rs` wraps Rust's system allocator. Every allocation receives an aligned
+`crates/process-heap/src/lib.rs` wraps Rust's system allocator. Every allocation receives an aligned
 header recording its charge. Allocation size includes the header and alignment
-padding. The wrapper handles reallocations through the `GlobalAlloc` default
-allocate/copy/free path, so their temporary peak counts against the budget.
+padding. Budgeted reallocations use allocate/copy/free, so their temporary peak counts against the budget. The editor leaves the budget disabled and delegates growth to the system allocator, retaining in-place reallocations. Both modes use the same aligned allocation headers; the application never enables an operation budget in the editor process.
 
 The budget starts after a byte-bounded request has been read and deserialized.
 It covers validation, ReShiki toolkit callbacks, the cosmolkit-inchi kernel,

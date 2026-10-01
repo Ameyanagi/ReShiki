@@ -55,10 +55,8 @@ class ReleaseTests(unittest.TestCase):
                 patch("build_release.notices"),
             ):
                 mac_bundle(app, "release")
-            for info_path in (
-                app / "Contents/Info.plist",
-                app / "Contents/Helpers/ReShiki Print.app/Contents/Info.plist",
-            ):
+            self.assertFalse((app / "Contents/Helpers/ReShiki Print.app").exists())
+            for info_path in (app / "Contents/Info.plist",):
                 info = plistlib.loads(info_path.read_bytes())
                 self.assertEqual(info["CFBundleVersion"], "0.9.1")
                 self.assertEqual(info["CFBundleShortVersionString"], "0.9.1")
@@ -123,15 +121,15 @@ class ReleaseTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "Licenses"
             with patch("build_release.run") as run:
-                run.side_effect = lambda *args, **kwargs: kwargs["stdout"].write('{"packages": []}')
+                run.return_value = subprocess.CompletedProcess([], 0, stdout='{"packages": []}')
                 notices(destination)
             self.assertIn(
                 "BSD 3-Clause License",
-                (destination / "sources/rdkit/LICENSE").read_text(),
+                (destination / "THIRD-PARTY-NOTICES.txt").read_text(),
             )
             self.assertIn(
                 "0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985",
-                (destination / "sources/rdkit/NOTICE").read_text(),
+                (destination / "THIRD-PARTY-NOTICES.txt").read_text(),
             )
             self.assertIn("MIT OR Apache-2.0", (destination / "LICENSE").read_text())
             self.assertIn(
@@ -154,8 +152,6 @@ class ReleaseTests(unittest.TestCase):
             binary = root / "target" / target / "release/reshiki.exe"
             binary.parent.mkdir(parents=True)
             binary.write_bytes(self.pe_image(0xAA64))
-            helper = binary.with_name("reshiki-inchi-helper.exe")
-            helper.write_bytes(self.pe_image(0xAA64))
             with (
                 patch("build_release.ROOT", root),
                 patch("build_release.version", return_value="1.2.3"),
@@ -164,8 +160,8 @@ class ReleaseTests(unittest.TestCase):
                 patch("build_release.target_directory", return_value=root / "target"),
                 patch("build_release.notices"),
                 patch(
-                    "build_release.prepare_inchi_helper",
-                    return_value=(helper, {"version": "1.07.3"}),
+                    "build_inchi_helper.dependency",
+                    return_value={"name": "cosmolkit-inchi", "version": "0.3.0"},
                 ),
                 patch("build_release.verify_archive"),
                 patch("build_release.run") as run,
@@ -174,7 +170,8 @@ class ReleaseTests(unittest.TestCase):
             ):
                 main()
             run.assert_called_once_with(
-                ["cargo", "build", "--release", "--locked", "--target", target], cwd=root
+                ["cargo", "build", "--release", "--locked", "--bin", "reshiki", "--target", target],
+                cwd=root,
             )
             self.assertTrue((root / "build/release-bundles/reshiki-1.2.3-windows-arm64").is_dir())
             self.assertFalse((root / "target/release-bundles").exists())
@@ -192,10 +189,12 @@ class ReleaseTests(unittest.TestCase):
                 self.assertFalse(
                     any(name.endswith((".py", "uv.lock")) for name in stream.namelist())
                 )
-                self.assertEqual(metadata["inchi_helper"]["version"], "1.07.3")
+                self.assertEqual(metadata["inchi"]["version"], "1.07.5")
+                self.assertEqual(metadata["inchi"]["runtime"], "self-process")
+                self.assertEqual(metadata["inchi"]["dependency"]["name"], "cosmolkit-inchi")
                 self.assertEqual(
-                    stream.read("reshiki-1.2.3-windows-arm64/reshiki-inchi-helper.exe"),
-                    self.pe_image(0xAA64),
+                    [name for name in stream.namelist() if name.endswith(".exe")],
+                    ["reshiki-1.2.3-windows-arm64/reshiki.exe"],
                 )
                 self.assertFalse(metadata["signed"])
                 self.assertIn(

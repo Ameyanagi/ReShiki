@@ -134,20 +134,19 @@ class NativeRuntimeTests(unittest.TestCase):
             metadata = {
                 "platform": "windows",
                 "architecture": "arm64",
-                "inchi_helper": {"version": "1.07.3"},
+                "inchi": {"version": "1.07.5"},
             }
             with zipfile.ZipFile(archive, "w") as stream:
                 stream.writestr("package/build.json", json.dumps(metadata))
-                stream.writestr("package/reshiki.exe", "binary")
-                stream.writestr("package/reshiki-inchi-helper.exe", "helper")
+                stream.writestr("package/reshiki.exe", b"MZbinary")
             with (
                 patch("build_release.platform.system", return_value="Windows"),
                 patch("build_release.verify_binary"),
-                patch("build_release.verify_inchi_helper") as helper,
+                patch("build_release.verify_inchi_worker") as helper,
                 patch("build_release.verify_runtime") as check,
             ):
                 build_release.verify_archive(archive)
-            self.assertEqual(helper.call_args.args[0].name, "reshiki-inchi-helper.exe")
+            self.assertEqual(helper.call_args.args[0].name, "reshiki.exe")
             self.assertEqual(check.call_args.args[0].parent, check.call_args.args[1])
             self.assertEqual(check.call_count, 1)
 
@@ -155,7 +154,16 @@ class NativeRuntimeTests(unittest.TestCase):
         script = (build_release.ROOT / "packaging/windows/reshiki.iss").read_text()
         section = script.split("[InstallDelete]\n", 1)[1].split("\n[", 1)[0]
         directives = [line for line in section.splitlines() if line and not line.startswith(";")]
-        self.assertEqual(directives, ['Type: filesandordirs; Name: "{app}\\chemistry"'])
+        self.assertEqual(
+            directives,
+            [
+                'Type: filesandordirs; Name: "{app}\\chemistry"',
+                'Type: files; Name: "{app}\\reshiki-inchi-helper.exe"',
+                'Type: filesandordirs; Name: "{app}\\Licenses\\rust"',
+                'Type: filesandordirs; Name: "{app}\\Licenses\\sources"',
+                'Type: files; Name: "{app}\\Licenses\\rust-dependencies.json"',
+            ],
+        )
 
     def test_windows_verifier_detects_retained_workers_and_changed_user_sentinels(self):
         import installers
@@ -163,10 +171,16 @@ class NativeRuntimeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             source = Path(temporary) / "source"
             source.mkdir()
-            for name in ("reshiki.exe", "reshiki-inchi-helper.exe"):
+            for name in ("reshiki.exe",):
                 (source / name).touch()
             (source / "build.json").write_text(json.dumps({"architecture": "arm64"}))
-            for fault in ("retained_worker", "user_drawing", "user_cache"):
+            for fault in (
+                "retained_worker",
+                "retained_helper",
+                "retained_licenses",
+                "user_drawing",
+                "user_cache",
+            ):
                 with self.subTest(fault=fault):
                     installations = []
                     uninstalled = []
@@ -184,6 +198,12 @@ class NativeRuntimeTests(unittest.TestCase):
                             if installations:
                                 if fault != "retained_worker":
                                     shutil.rmtree(destination / "chemistry")
+                                if fault != "retained_helper":
+                                    (destination / "reshiki-inchi-helper.exe").unlink()
+                                if fault != "retained_licenses":
+                                    for old_name in ("rust", "sources"):
+                                        shutil.rmtree(destination / "Licenses" / old_name)
+                                    (destination / "Licenses/rust-dependencies.json").unlink()
                                 if fault == "user_drawing":
                                     (destination.parent / "User data/keep.reshiki").write_text(
                                         "changed"
@@ -212,7 +232,7 @@ class NativeRuntimeTests(unittest.TestCase):
                         patch.dict(sys.modules, {"winreg": registry}),
                         patch("installers.run", side_effect=run),
                         patch("installers.verify_binary"),
-                        patch("installers.verify_inchi_helper"),
+                        patch("installers.verify_inchi_worker"),
                         patch("installers.verify_runtime"),
                     ):
                         with self.assertRaises(ValueError):

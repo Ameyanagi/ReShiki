@@ -52,10 +52,13 @@ else
     }
     trap 'rollback "$@"' EXIT
     for name in reshiki reshiki-inchi-helper Licenses build.json README.txt; do
-        [ -e "$payload/$name" ] || continue
+        # Retire an old owned helper even when the new package has no companion.
+        # Keep it in the rollback directory until the replacement has succeeded.
         if [ -e "$target/$name" ]; then /bin/mv "$target/$name" "$stage/previous/$name"; fi
-        touch "$stage/installed/$name"
-        /bin/mv "$payload/$name" "$target/$name"
+        if [ -e "$payload/$name" ]; then
+            touch "$stage/installed/$name"
+            /bin/mv "$payload/$name" "$target/$name"
+        fi
     done
     reopen "$@"
     trap - EXIT

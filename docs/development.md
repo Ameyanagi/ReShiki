@@ -1,6 +1,6 @@
 # Development
 
-ReShiki uses Rust for the editor and chemistry, a standalone Rust InChI helper, and Astro Starlight for documentation. Python/RDKit is an optional test reference.
+ReShiki uses one Rust application executable for the editor, chemistry and native integrations, and Astro Starlight for documentation. Python/RDKit is an optional test reference.
 
 ## Build and run
 
@@ -11,24 +11,16 @@ On macOS, Cargo defaults C/C++ dependencies to Apple Clang from `/usr/bin`, so a
 ```sh
 git clone https://github.com/Ameyanagi/ReShiki.git reshiki
 cd reshiki
-python3 scripts/build_inchi_helper.py
-export RESHIKI_INCHI_HELPER="$PWD/artifacts/inchi-helper/reshiki-inchi-helper"
 cargo run --locked
 ```
 
-In PowerShell, use `python` instead of `python3` and replace the `export` line with:
-
-```powershell
-$env:RESHIKI_INCHI_HELPER = (Resolve-Path artifacts/inchi-helper/reshiki-inchi-helper.exe).Path
-```
-
-For Windows ARM, build the helper with `--target aarch64-pc-windows-msvc` from an ARM64 Visual Studio tools shell. The app and helper use the same architecture.
-
-The helper build verifies the pinned source and records compiler, repair and binary hashes. Use `--source /path/to/INCHI-1-SRC` for an offline build. Packaged apps find the helper beside their executable; source builds use the absolute path above.
+For Windows ARM, build with `--target aarch64-pc-windows-msvc` from an ARM64 Visual Studio tools shell. The application relaunches itself for bounded InChI operations; macOS clipboard and printing use separate modes of the same binary. There are no sibling runtime executables or Swift build steps. For offline Cargo builds, populate the dependency cache first and set `CARGO_NET_OFFLINE=true`.
 
 ## Native checks
 
 ```sh
+python3 scripts/build_inchi_helper.py
+export RESHIKI_INCHI_HELPER="$PWD/artifacts/inchi-helper/reshiki-inchi-helper"
 export RESHIKI_REQUIRE_INCHI_HELPER=1
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
@@ -37,9 +29,9 @@ cargo test --workspace --locked
 cargo run --locked -- --engine-check
 ```
 
-Keep `RESHIKI_INCHI_HELPER` set. In PowerShell, use `$env:RESHIKI_REQUIRE_INCHI_HELPER = '1'`. Required mode fails if native test binaries are missing. Default tests do not require Python or RDKit. Windows clipboard tests replace the desktop clipboard with test data.
+The development-only helper and fault-injection stub let library tests exercise subprocess transport independently of the GUI entry point. Keep `RESHIKI_INCHI_HELPER` set while running those tests. In PowerShell, use `python`, set `$env:RESHIKI_INCHI_HELPER = (Resolve-Path artifacts/inchi-helper/reshiki-inchi-helper.exe).Path`, and set `$env:RESHIKI_REQUIRE_INCHI_HELPER = '1'`. Required mode fails if native test binaries are missing. Default tests do not require Python or RDKit. Windows clipboard tests replace the desktop clipboard with test data.
 
-Archive and installer checks run the installed app twice with Python, uv and the checkout unavailable. They reject worker payloads and chemistry-environment creation.
+Archive and installer checks run the installed app twice with Python, uv and the checkout unavailable. They reject separate worker executables, Python payloads and chemistry-environment creation. Release CI also runs the complete InChI framing and heap suite against the application’s `--inchi-worker` mode.
 
 ## Optional RDKit reference tests
 
