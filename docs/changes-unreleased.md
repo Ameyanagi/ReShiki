@@ -50,6 +50,7 @@ Several drawings can be open in one window. The tabs take the place of the file 
 - **Close tab** (⌘W or Ctrl+W, or ×) asks with the save dialog if the tab has unsaved changes. Closing the last tab leaves one empty Untitled tab. Closing the window asks about each unsaved tab in turn, bringing it to the front; **Cancel** stops the close. On macOS, ⌘Q still quits at once and keeps every tab's recovery draft.
 - **Switching.** Click a tab, press **Ctrl+Tab** or **Ctrl+Shift+Tab**, or ⌘1–⌘8 (Ctrl+1–8) for a tab and ⌘9 (Ctrl+9) for the last one. None of these keys had another use. Each tab keeps its zoom, scroll position, selection, Undo history, cleanup preview and inspector sections; the tool stays the same across tabs.
 - **Recovery.** Each tab has its own recovery draft. At the next launch, **Restore** opens every draft as a tab, the latest in front.
+- **Update and restart** reopens every saved tab in its original order, with the previously front tab in front again. Save nonempty drawings first. Repeat `--open <path>` to open several files at launch.
 - **Help → Open shortcut examples** opens the bundled drawing in a **Shortcut examples** tab, or switches to an unchanged examples tab. **Save** asks for a location for a personal copy. The `--shortcut-examples` launch flag opens the same tab.
 - The window title names the drawing in front, and the Help panel lists the tab shortcuts.
 
