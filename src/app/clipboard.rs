@@ -4,22 +4,26 @@ use reshiki::clipboard::{CopyOutcome, PasteOutcome};
 
 impl App {
     pub(super) fn copy_native(&mut self, cut: bool, image_only: bool) -> Task<Message> {
-        if self.clipboard_busy {
+        if self.tab.clipboard_busy {
             self.status = "A clipboard operation is already in progress".into();
             return Task::none();
         }
-        if self.selected.is_empty() && !image_only {
+        if self.tab.selected.is_empty() && !image_only {
             self.status = "Select objects to copy".into();
             return Task::none();
         }
-        let snapshot = if self.selected.is_empty() {
-            self.doc.clone()
+        let snapshot = if self.tab.selected.is_empty() {
+            self.tab.doc.clone()
         } else {
-            editing::selection(&self.doc, &self.selected)
+            editing::selection(&self.tab.doc, &self.tab.selected)
         };
-        let cut_ids = if cut { self.selected.clone() } else { vec![] };
-        let (epoch, revision) = (self.file_epoch, self.revision);
-        self.clipboard_busy = true;
+        let cut_ids = if cut {
+            self.tab.selected.clone()
+        } else {
+            vec![]
+        };
+        let (epoch, revision) = (self.tab.file_epoch, self.tab.revision);
+        self.tab.clipboard_busy = true;
         self.error = false;
         self.status = "Preparing clipboard…".into();
         Task::perform(
@@ -34,14 +38,14 @@ impl App {
     }
 
     pub(super) fn paste_native(&mut self, image_only: bool) -> Task<Message> {
-        if self.clipboard_busy {
+        if self.tab.clipboard_busy {
             self.status = "A clipboard operation is already in progress".into();
             return Task::none();
         }
-        self.clipboard_busy = true;
+        self.tab.clipboard_busy = true;
         self.error = false;
         self.status = "Reading clipboard…".into();
-        let (epoch, revision) = (self.file_epoch, self.revision);
+        let (epoch, revision) = (self.tab.file_epoch, self.tab.revision);
         Task::perform(
             reshiki::clipboard::paste_with_warnings(self.engine.clone(), image_only),
             move |result| Message::ClipboardRead {
@@ -59,7 +63,7 @@ impl App {
         cut_ids: Vec<u64>,
         result: Result<CopyOutcome, String>,
     ) {
-        self.clipboard_busy = false;
+        self.tab.clipboard_busy = false;
         let outcome = match result {
             Ok(outcome) => outcome,
             Err(error) => {
@@ -69,10 +73,10 @@ impl App {
             }
         };
         let cut = !cut_ids.is_empty();
-        let stale_cut = cut && (epoch != self.file_epoch || revision != self.revision);
+        let stale_cut = cut && (epoch != self.tab.file_epoch || revision != self.tab.revision);
         if cut && !stale_cut {
-            let before = self.doc.clone();
-            self.doc.delete(&cut_ids);
+            let before = self.tab.doc.clone();
+            self.tab.doc.delete(&cut_ids);
             self.changed(before);
             self.sync_typography();
             self.sync_graphics();
@@ -114,12 +118,12 @@ impl App {
         revision: u64,
         result: Result<PasteOutcome, String>,
     ) {
-        self.clipboard_busy = false;
-        if epoch != self.file_epoch
-            || revision != self.revision
-            || self.inline_text.is_some()
-            || self.joining.is_some()
-            || self.cleanup.is_some()
+        self.tab.clipboard_busy = false;
+        if epoch != self.tab.file_epoch
+            || revision != self.tab.revision
+            || self.tab.inline_text.is_some()
+            || self.tab.joining.is_some()
+            || self.tab.cleanup.is_some()
         {
             self.status =
                 "Drawing changed while reading the clipboard · Paste again to insert here".into();
@@ -137,27 +141,27 @@ impl App {
             }
         };
         let part = if outcome.native {
-            reshiki::canvas_theme::for_native_paste(outcome.document, self.doc.canvas_theme)
+            reshiki::canvas_theme::for_native_paste(outcome.document, self.tab.doc.canvas_theme)
         } else {
-            reshiki::canvas_theme::for_paste(outcome.document, self.doc.canvas_theme)
+            reshiki::canvas_theme::for_paste(outcome.document, self.tab.doc.canvas_theme)
         };
         let center = editing::center(&part, &part.all_ids());
-        let before = self.doc.clone();
+        let before = self.tab.doc.clone();
         let selected = editing::append(
-            &mut self.doc,
+            &mut self.tab.doc,
             &part,
             Point::new(
-                self.camera.center.x - center.x + 24.,
-                self.camera.center.y - center.y + 24.,
+                self.tab.camera.center.x - center.x + 24.,
+                self.tab.camera.center.y - center.y + 24.,
             ),
         );
-        if selected.is_empty() || self.doc.validate().is_err() {
-            self.doc = before;
+        if selected.is_empty() || self.tab.doc.validate().is_err() {
+            self.tab.doc = before;
             self.status = "Could not insert the clipboard drawing".into();
             self.error = true;
             return;
         }
-        self.selected = selected;
+        self.tab.selected = selected;
         self.changed(before);
         self.tool = Tool::Select;
         self.sync_typography();
@@ -169,7 +173,7 @@ impl App {
             && part.arrows.is_empty()
             && part.graphics.iter().all(|g| g.picture.is_some())
         {
-            if let Some(id) = self.selected.first().copied() {
+            if let Some(id) = self.tab.selected.first().copied() {
                 self.reveal_picture(id);
             }
             self.status = "Picture pasted · Drag the corner handles to resize".into();
@@ -199,11 +203,63 @@ mod tests {
     }
 
     #[test]
+    fn background_clipboard_reads_and_cuts_keep_the_front_unchanged() {
+        use crate::app::tabs::{Action, tests::Front};
+        for cut in [false, true] {
+            for stale in [false, true] {
+                let (mut app, _) = App::new();
+                app.tab.busy = false;
+                app.tab.doc.add_atom("N", Point::default());
+                let (id, epoch, revision) = (app.tab.id, app.tab.file_epoch, app.tab.revision);
+                let cut_ids = app.tab.doc.all_ids();
+                app.tab.clipboard_busy = true;
+                if stale {
+                    let before = app.tab.doc.clone();
+                    app.tab.doc.add_atom("C", Point::new(42., 0.));
+                    app.changed(before);
+                }
+                let before = app.tab.doc.clone();
+                let front = Front::new(&mut app);
+                let mut part = Document::default();
+                part.add_atom("O", Point::default());
+                let message = if cut {
+                    Message::ClipboardWritten {
+                        epoch,
+                        revision,
+                        cut_ids,
+                        result: success(),
+                    }
+                } else {
+                    Message::ClipboardRead {
+                        epoch,
+                        revision,
+                        result: Box::new(Ok(part.into())),
+                    }
+                };
+                let _ = app.update(Message::Tab(id, Box::new(message)));
+                front.assert_unchanged(&app);
+                assert!(!app.tabs.background[0].clipboard_busy);
+                let _ = app.update(Message::Tabs(Action::Select(id)));
+                if stale {
+                    assert_eq!(app.tab.doc, before);
+                    assert!(app.status.contains("changed"));
+                } else {
+                    assert_ne!(app.tab.doc, before);
+                    assert!(app.status.contains(if cut { "cut" } else { "pasted" }));
+                    let _ = app.update(Message::Undo);
+                    assert_eq!(app.tab.doc, before);
+                    assert!(!app.tab.history.can_undo());
+                }
+            }
+        }
+    }
+
+    #[test]
     fn successful_picture_fallback_has_a_concise_status_and_retains_details() {
         let (mut app, _) = App::new();
         app.clipboard_written(
-            app.file_epoch,
-            app.revision,
+            app.tab.file_epoch,
+            app.tab.revision,
             vec![],
             Ok(CopyOutcome {
                 external_editable: false,
@@ -224,24 +280,24 @@ mod tests {
     #[test]
     fn cut_waits_for_success_and_refuses_stale_completion() {
         let (mut app, _) = App::new();
-        let a = app.doc.add_atom("C", Point::default());
-        let b = app.doc.add_atom("O", Point::new(42., 0.));
-        app.doc.add_bond(a, b, 1, "plain");
-        let before = app.doc.clone();
-        let (epoch, revision) = (app.file_epoch, app.revision);
+        let a = app.tab.doc.add_atom("C", Point::default());
+        let b = app.tab.doc.add_atom("O", Point::new(42., 0.));
+        app.tab.doc.add_bond(a, b, 1, "plain");
+        let before = app.tab.doc.clone();
+        let (epoch, revision) = (app.tab.file_epoch, app.tab.revision);
         app.clipboard_written(epoch, revision, vec![a, b], Err("Write failed".into()));
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         app.clipboard_written(epoch.wrapping_add(1), revision, vec![a, b], success());
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         app.clipboard_written(epoch, revision.wrapping_add(1), vec![a, b], success());
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         // A changed selection must not change the pending Cut's snapshot.
-        app.selected = vec![a];
+        app.tab.selected = vec![a];
         app.clipboard_written(epoch, revision, vec![b], success());
-        assert!(app.doc.atom(a).is_some());
-        assert!(app.doc.atom(b).is_none());
+        assert!(app.tab.doc.atom(a).is_some());
+        assert!(app.tab.doc.atom(b).is_none());
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
     }
 
     #[test]
@@ -251,48 +307,56 @@ mod tests {
         let a = part.add_atom("N", Point::default());
         let b = part.add_atom("C", Point::new(42., 0.));
         part.add_bond(a, b, 1, "plain");
-        let before = app.doc.clone();
+        let before = app.tab.doc.clone();
         app.clipboard_read(
-            app.file_epoch,
-            app.revision.wrapping_add(1),
+            app.tab.file_epoch,
+            app.tab.revision.wrapping_add(1),
             Ok(part.clone().into()),
         );
-        assert_eq!(app.doc, before);
-        app.clipboard_read(app.file_epoch, app.revision, Ok(part.into()));
-        assert_eq!(app.doc.atoms.len(), before.atoms.len() + 2);
-        assert_eq!(app.selected.len(), 2);
+        assert_eq!(app.tab.doc, before);
+        app.clipboard_read(app.tab.file_epoch, app.tab.revision, Ok(part.into()));
+        assert_eq!(app.tab.doc.atoms.len(), before.atoms.len() + 2);
+        assert_eq!(app.tab.selected.len(), 2);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
     }
 
     #[test]
     fn reshiki_pastes_keep_palette_colors_and_other_sources_stay_exact() {
         use reshiki::palette::{Color, Hue, Row};
         let (mut app, _) = App::new();
-        let a = app.doc.add_atom("C", Point::default());
-        let b = app.doc.add_atom("O", Point::new(42., 0.));
-        app.doc.add_bond(a, b, 1, "plain");
-        app.doc.bonds[0].color = Color::Palette(Hue::Teal, Row::Strong);
-        let part = editing::selection(&app.doc, &[a, b]);
+        let a = app.tab.doc.add_atom("C", Point::default());
+        let b = app.tab.doc.add_atom("O", Point::new(42., 0.));
+        app.tab.doc.add_bond(a, b, 1, "plain");
+        app.tab.doc.bonds[0].color = Color::Palette(Hue::Teal, Row::Strong);
+        let part = editing::selection(&app.tab.doc, &[a, b]);
         app.clipboard_read(
-            app.file_epoch,
-            app.revision,
+            app.tab.file_epoch,
+            app.tab.revision,
             Ok(PasteOutcome::native(part.clone())),
         );
-        assert_eq!(app.doc.bonds[1].color, app.doc.bonds[0].color);
-        assert!(app.doc.atoms[2..].iter().all(|a| !a.display.color_override));
+        assert_eq!(app.tab.doc.bonds[1].color, app.tab.doc.bonds[0].color);
+        assert!(
+            app.tab.doc.atoms[2..]
+                .iter()
+                .all(|a| !a.display.color_override)
+        );
         // The same drawing from ChemDraw keeps its source appearance.
-        app.doc.canvas_theme = reshiki::canvas_theme::CanvasTheme::Dark;
+        app.tab.doc.canvas_theme = reshiki::canvas_theme::CanvasTheme::Dark;
         let teal = reshiki::palette::Palette::of(&part).rgb(part.bonds[0].color);
         app.clipboard_read(
-            app.file_epoch,
-            app.revision,
+            app.tab.file_epoch,
+            app.tab.revision,
             Ok(reshiki::canvas_theme::resolved_document(&part)
                 .into_owned()
                 .into()),
         );
-        assert_eq!(app.doc.bonds[2].color, Color::Custom(teal));
-        assert!(app.doc.atoms[4..].iter().all(|a| a.display.color_override));
+        assert_eq!(app.tab.doc.bonds[2].color, Color::Custom(teal));
+        assert!(
+            app.tab.doc.atoms[4..]
+                .iter()
+                .all(|a| a.display.color_override)
+        );
     }
 
     #[test]
@@ -302,8 +366,8 @@ mod tests {
         doc.add_atom("O", Point::default());
         let (mut app, _) = App::new();
         app.clipboard_read(
-            app.file_epoch,
-            app.revision,
+            app.tab.file_epoch,
+            app.tab.revision,
             Ok(PasteOutcome {
                 document: doc.clone(),
                 warnings: vec![warning.into()],
@@ -315,7 +379,7 @@ mod tests {
         assert!(!app.error);
         for kind in [Job::Import, Job::ImportFile, Job::Insert] {
             let _ = app.update(Message::EngineDone {
-                revision: app.revision,
+                revision: app.tab.revision,
                 kind,
                 result: Box::new(Ok(Response {
                     document: Some(doc.clone()),

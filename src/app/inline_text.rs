@@ -30,33 +30,8 @@ pub struct State {
     future: Vec<Revision>,
     auto_formula: bool,
 }
-impl App {
-    pub(super) fn auto_format_caption(&mut self) {
-        if self.inline_text.as_ref().is_some_and(|s| s.auto_formula) {
-            let formula = reshiki::typography::is_formula(&self.caption);
-            self.caption_format.style.formula = formula;
-            for span in &mut self.caption_format.spans {
-                span.style.formula = formula;
-            }
-        }
-    }
-    pub(super) fn manual_caption_format(&mut self) {
-        if let Some(state) = &mut self.inline_text {
-            state.auto_formula = false;
-        }
-    }
-    pub(super) fn text_history_available(&self, redo: bool) -> Option<bool> {
-        self.inline_text.as_ref().map(|s| {
-            if redo {
-                !s.future.is_empty()
-            } else {
-                !s.past.is_empty()
-            }
-        })
-    }
-    pub(super) fn inline_label_id(&self) -> Option<u64> {
-        self.inline_text.as_ref()?.original.as_ref().map(|a| a.id)
-    }
+impl super::DocumentTab {
+    /// A caption draft that differs from the text it started with.
     pub(super) fn inline_changed(&self) -> bool {
         self.inline_text
             .as_ref()
@@ -65,51 +40,95 @@ impl App {
                 None => !self.caption.trim().is_empty(),
             })
     }
+}
+impl App {
+    pub(super) fn auto_format_caption(&mut self) {
+        if self
+            .tab
+            .inline_text
+            .as_ref()
+            .is_some_and(|s| s.auto_formula)
+        {
+            let formula = reshiki::typography::is_formula(&self.tab.caption);
+            self.tab.caption_format.style.formula = formula;
+            for span in &mut self.tab.caption_format.spans {
+                span.style.formula = formula;
+            }
+        }
+    }
+    pub(super) fn manual_caption_format(&mut self) {
+        if let Some(state) = &mut self.tab.inline_text {
+            state.auto_formula = false;
+        }
+    }
+    pub(super) fn text_history_available(&self, redo: bool) -> Option<bool> {
+        self.tab.inline_text.as_ref().map(|s| {
+            if redo {
+                !s.future.is_empty()
+            } else {
+                !s.past.is_empty()
+            }
+        })
+    }
+    pub(super) fn inline_label_id(&self) -> Option<u64> {
+        self.tab
+            .inline_text
+            .as_ref()?
+            .original
+            .as_ref()
+            .map(|a| a.id)
+    }
     pub(super) fn inline_checkpoint(&mut self) {
-        if let Some(state) = &mut self.inline_text {
+        if let Some(state) = &mut self.tab.inline_text {
             state.past.push(Revision {
-                text: self.caption.clone(),
-                format: self.caption_format.clone(),
+                text: self.tab.caption.clone(),
+                format: self.tab.caption_format.clone(),
                 auto_formula: state.auto_formula,
             });
             state.future.clear();
             if state.past.len() > 100 {
                 state.past.remove(0);
             }
-            self.autosaved_revision = None;
-            self.autosave.edited_draft();
+            self.tab.autosaved_revision = None;
+            self.tab.autosave.edited_draft();
         }
     }
     pub(super) fn inline_candidate(&self) -> Result<Document, String> {
         self.inline_snapshot(true)
     }
     fn inline_snapshot(&self, validate: bool) -> Result<Document, String> {
-        let Some(state) = &self.inline_text else {
-            return Ok(self.doc.clone());
+        let Some(state) = &self.tab.inline_text else {
+            return Ok(self.tab.doc.clone());
         };
-        if state.epoch != self.file_epoch {
+        if state.epoch != self.tab.file_epoch {
             return Err("The drawing changed. Cancel this text draft before continuing.".into());
         }
         if let Some(original) = &state.original
-            && self.doc.annotations.iter().find(|a| a.id == original.id) != Some(original)
+            && self
+                .tab
+                .doc
+                .annotations
+                .iter()
+                .find(|a| a.id == original.id)
+                != Some(original)
         {
             return Err("This label changed elsewhere. Copy your draft or cancel before editing the updated label.".into());
         }
-        self.caption_format.validate(&self.caption)?;
-        let mut doc = self.doc.clone();
-        match (&state.original, self.caption.trim().is_empty()) {
+        self.tab.caption_format.validate(&self.tab.caption)?;
+        let mut doc = self.tab.doc.clone();
+        match (&state.original, self.tab.caption.trim().is_empty()) {
             (Some(original), true) => doc.delete(&[original.id]),
             (Some(original), false) => {
                 if let Some(label) = doc.annotations.iter_mut().find(|a| a.id == original.id) {
-                    label.text = self.caption.clone();
-                    label.format = self.caption_format.clone();
+                    label.text = self.tab.caption.clone();
+                    label.format = self.tab.caption_format.clone();
                 }
             }
             (None, false) => doc.annotations.push(Annotation {
                 id: doc.next_id(),
                 position: state.position,
-                text: self.caption.clone(),
-                format: self.caption_format.clone(),
+                text: self.tab.caption.clone(),
+                format: self.tab.caption_format.clone(),
             }),
             (None, true) => {}
         }
@@ -122,10 +141,10 @@ impl App {
         // Full validation runs on the recovery worker; building a caption draft
         // only needs its local format/identity checks on the event-loop thread.
         self.inline_snapshot(false)
-            .unwrap_or_else(|_| self.doc.clone())
+            .unwrap_or_else(|_| self.tab.doc.clone())
     }
     pub(super) fn finish_inline(&mut self, apply: bool) -> bool {
-        if self.inline_text.is_none() {
+        if self.tab.inline_text.is_none() {
             return true;
         }
         if apply {
@@ -137,39 +156,42 @@ impl App {
                     return false;
                 }
             };
-            let id = self.inline_text.as_ref().map(|s| {
+            let id = self.tab.inline_text.as_ref().map(|s| {
                 s.original
                     .as_ref()
                     .map(|a| a.id)
-                    .unwrap_or_else(|| self.doc.next_id())
+                    .unwrap_or_else(|| self.tab.doc.next_id())
             });
-            let before = self.doc.clone();
-            self.doc = document;
-            self.selected = id
+            let before = self.tab.doc.clone();
+            self.tab.doc = document;
+            self.tab.selected = id
                 .into_iter()
-                .filter(|id| self.doc.annotations.iter().any(|a| a.id == *id))
+                .filter(|id| self.tab.doc.annotations.iter().any(|a| a.id == *id))
                 .collect();
-            self.caption_target = self.selected.first().copied();
-            self.inline_text = None;
+            self.tab.caption_target = self.tab.selected.first().copied();
+            self.tab.inline_text = None;
             self.changed(before);
             if let Some(label) = self
+                .tab
                 .doc
                 .annotations
                 .iter()
-                .find(|a| Some(a.id) == self.caption_target)
+                .find(|a| Some(a.id) == self.tab.caption_target)
             {
                 let paper = self.guides.paper(iced::Rectangle::with_size(self.viewport));
-                self.camera.center = reveal_label(self.camera, paper.size(), label);
+                self.tab.camera.center = reveal_label(self.tab.camera, paper.size(), label);
             }
         } else {
-            self.inline_text = None;
+            self.tab.inline_text = None;
             self.error = false;
             self.status = "Text edit cancelled".into();
         }
-        self.autosaved_revision = None;
-        self.autosave.edited_draft();
+        self.tab.autosaved_revision = None;
+        self.tab.autosave.edited_draft();
         self.tool = crate::canvas::Tool::Select;
-        self.selected.retain(|id| self.doc.all_ids().contains(id));
+        self.tab
+            .selected
+            .retain(|id| self.tab.doc.all_ids().contains(id));
         let inspector = (self.inspector_open, self.inspector_tab);
         self.sync_typography();
         (self.inspector_open, self.inspector_tab) = inspector;
@@ -178,44 +200,45 @@ impl App {
     pub(super) fn inline_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Begin(id, position) => {
-                if self.cleanup.is_some() || !self.finish_inline(true) {
+                if self.tab.cleanup.is_some() || !self.finish_inline(true) {
                     return Task::none();
                 }
                 let original = id
-                    .and_then(|id| self.doc.annotations.iter().find(|a| a.id == id))
+                    .and_then(|id| self.tab.doc.annotations.iter().find(|a| a.id == id))
                     .cloned();
                 if id.is_some() && original.is_none() {
                     return Task::none();
                 }
-                self.caption = original
+                self.tab.caption = original
                     .as_ref()
                     .map(|a| a.text.clone())
                     .unwrap_or_default();
-                self.caption_format =
-                    original
-                        .as_ref()
-                        .map(|a| a.format.clone())
-                        .unwrap_or_else(|| TextFormat {
-                            style: self.caption_format.style.clone(),
-                            ..Default::default()
-                        });
-                self.caption_target = id;
-                self.selected = id.into_iter().collect();
-                self.caption_editor = text_editor::Content::with_text(&self.caption);
-                self.caption_editor
+                self.tab.caption_format = original
+                    .as_ref()
+                    .map(|a| a.format.clone())
+                    .unwrap_or_else(|| TextFormat {
+                        style: self.tab.caption_format.style.clone(),
+                        ..Default::default()
+                    });
+                self.tab.caption_target = id;
+                self.tab.selected = id.into_iter().collect();
+                self.tab.caption_editor = text_editor::Content::with_text(&self.tab.caption);
+                self.tab
+                    .caption_editor
                     .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
-                self.inline_text = Some(State {
+                self.tab.inline_text = Some(State {
                     auto_formula: original.is_none()
-                        && self.caption_format.style.script == reshiki::typography::Script::Normal,
+                        && self.tab.caption_format.style.script
+                            == reshiki::typography::Script::Normal,
                     position: original.as_ref().map(|a| a.position).unwrap_or(position),
                     original,
-                    epoch: self.file_epoch,
+                    epoch: self.tab.file_epoch,
                     past: vec![],
                     future: vec![],
                 });
                 self.palette = None;
-                self.hover = None;
-                self.fit_to_view = false;
+                self.tab.hover = None;
+                self.tab.fit_to_view = false;
                 self.error = false;
                 self.status = format!(
                     "Editing text · {} applies · Escape cancels",
@@ -228,10 +251,10 @@ impl App {
                 self.finish_inline(apply);
             }
             Action::Undo(redo) => {
-                if let Some(state) = &mut self.inline_text {
+                if let Some(state) = &mut self.tab.inline_text {
                     let current = Revision {
-                        text: self.caption.clone(),
-                        format: self.caption_format.clone(),
+                        text: self.tab.caption.clone(),
+                        format: self.tab.caption_format.clone(),
                         auto_formula: state.auto_formula,
                     };
                     let revision = if redo {
@@ -245,14 +268,16 @@ impl App {
                         } else {
                             state.future.push(current);
                         }
-                        self.caption = revision.text;
-                        self.caption_format = revision.format;
+                        self.tab.caption = revision.text;
+                        self.tab.caption_format = revision.format;
                         state.auto_formula = revision.auto_formula;
-                        self.caption_editor = text_editor::Content::with_text(&self.caption);
-                        self.caption_editor
+                        self.tab.caption_editor =
+                            text_editor::Content::with_text(&self.tab.caption);
+                        self.tab
+                            .caption_editor
                             .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
-                        self.autosaved_revision = None;
-                        self.autosave.edited_draft();
+                        self.tab.autosaved_revision = None;
+                        self.tab.autosave.edited_draft();
                         self.sync_style_inputs();
                     }
                 }
@@ -264,34 +289,34 @@ impl App {
         &'a self,
         base: Element<'a, Message>,
     ) -> Element<'a, Message> {
-        let Some(state) = &self.inline_text else {
+        let Some(state) = &self.tab.inline_text else {
             return base;
         };
         let paper = self.guides.paper(iced::Rectangle::with_size(self.viewport));
-        let position = self.camera.screen(state.position, paper);
-        let size = (self.caption_format.style.size() * self.camera.zoom).clamp(12., 56.);
-        let natural = reshiki::typography::layout(&self.caption, &self.caption_format);
+        let position = self.tab.camera.screen(state.position, paper);
+        let size = (self.tab.caption_format.style.size() * self.tab.camera.zoom).clamp(12., 56.);
+        let natural = reshiki::typography::layout(&self.tab.caption, &self.tab.caption_format);
         let old = state.original.as_ref().map(|a| a.size().0).unwrap_or(0.);
-        let complex = complex_format(&self.caption_format) && self.viewport.height >= 240.;
+        let complex = complex_format(&self.tab.caption_format) && self.viewport.height >= 240.;
         let extra = if complex { 120. } else { 40. };
         let bounds = editor_bounds(
             self.viewport,
             iced::Point::new(paper.x + position.x - 8., paper.y + position.y - 8.),
-            natural.width.max(old) * self.camera.zoom + 36.,
-            (natural.height * self.camera.zoom + 20.).max(size * 1.5 + 16.),
+            natural.width.max(old) * self.tab.camera.zoom + 36.,
+            (natural.height * self.tab.camera.zoom + 20.).max(size * 1.5 + 16.),
             extra,
         );
         let x = bounds.x;
         let y = bounds.y;
         let width = bounds.width;
         let editor_height = (bounds.height - extra).max(24.);
-        let editor = text_editor(&self.caption_editor)
+        let editor = text_editor(&self.tab.caption_editor)
             .id("inline-caption")
             .font(iced::Font::with_name(reshiki::style::font_name(
-                &self.caption_format.style.family,
+                &self.tab.caption_format.style.family,
             )))
             .size(size)
-            .line_height(self.caption_format.line_spacing)
+            .line_height(self.tab.caption_format.line_spacing)
             .padding(7)
             .height(editor_height)
             .placeholder("Type a label…")
@@ -299,15 +324,15 @@ impl App {
             .highlight_with::<CaptionHighlighter>(
                 {
                     // The editor draws display colors directly.
-                    let palette = reshiki::palette::Palette::of(&self.doc);
-                    let mut format = self.caption_format.clone();
+                    let palette = reshiki::palette::Palette::of(&self.tab.doc);
+                    let mut format = self.tab.caption_format.clone();
                     format.style.color =
                         reshiki::palette::Color::Custom(palette.rgb(format.style.color));
                     for span in &mut format.spans {
                         span.style.color =
                             reshiki::palette::Color::Custom(palette.rgb(span.style.color));
                     }
-                    (self.caption.clone(), format)
+                    (self.tab.caption.clone(), format)
                 },
                 |style, _| {
                     let [r, g, b] = style.color.rgb();
@@ -385,29 +410,32 @@ impl App {
                     .or_else(|| text_editor::Binding::from_key_press(key))
             })
             .style(move |_, _| text_editor::Style {
-                background: crate::appearance::color(self.doc.canvas_theme.is_dark(), Color::WHITE)
-                    .into(),
+                background: crate::appearance::color(
+                    self.tab.doc.canvas_theme.is_dark(),
+                    Color::WHITE,
+                )
+                .into(),
                 border: Border::default(),
                 placeholder: crate::appearance::color(
-                    self.doc.canvas_theme.is_dark(),
+                    self.tab.doc.canvas_theme.is_dark(),
                     super::workspace::muted(),
                 ),
-                value: crate::appearance::color(self.doc.canvas_theme.is_dark(), Color::BLACK),
+                value: crate::appearance::color(self.tab.doc.canvas_theme.is_dark(), Color::BLACK),
                 selection: crate::appearance::color(
-                    self.doc.canvas_theme.is_dark(),
+                    self.tab.doc.canvas_theme.is_dark(),
                     Color::from_rgb8(193, 224, 216),
                 ),
             });
         let mut body = column![editor].spacing(5);
         if complex {
             let preview = Document {
-                canvas_theme: self.doc.canvas_theme,
-                color_theme: self.doc.color_theme,
+                canvas_theme: self.tab.doc.canvas_theme,
+                color_theme: self.tab.doc.color_theme,
                 annotations: vec![Annotation {
                     id: 1,
                     position: Point::default(),
-                    text: self.caption.clone(),
-                    format: self.caption_format.clone(),
+                    text: self.tab.caption.clone(),
+                    format: self.tab.caption_format.clone(),
                 }],
                 ..Default::default()
             };
@@ -611,6 +639,13 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             )
             | Message::New
             | Message::Open
+            | Message::OpenShortcutExamples
+            | Message::Tabs(
+                super::tabs::Action::Select(_)
+                    | super::tabs::Action::Cycle(_)
+                    | super::tabs::Action::Number(_)
+                    | super::tabs::Action::Close(_)
+            )
             | Message::Save
             | Message::SaveAs
             | Message::Close(_)
@@ -671,12 +706,12 @@ mod tests {
 
     fn app() -> App {
         let (mut app, _) = App::new();
-        app.busy = false;
+        app.tab.busy = false;
         app
     }
     fn label(app: &mut App, text: &str) -> u64 {
-        let id = app.doc.next_id();
-        app.doc.annotations.push(Annotation {
+        let id = app.tab.doc.next_id();
+        app.tab.doc.annotations.push(Annotation {
             id,
             position: Point::new(20., 30.),
             text: text.into(),
@@ -698,8 +733,8 @@ mod tests {
         let mut app = app();
         begin(&mut app, None);
         type_text(&mut app, "C2H2");
-        assert!(app.caption_format.style.formula);
-        let preview = reshiki::typography::layout(&app.caption, &app.caption_format);
+        assert!(app.tab.caption_format.style.formula);
+        let preview = reshiki::typography::layout(&app.tab.caption, &app.tab.caption_format);
         assert!(
             preview
                 .fragments
@@ -707,46 +742,46 @@ mod tests {
                 .any(|f| f.text == "2" && f.style.script == reshiki::typography::Script::Subscript)
         );
         assert!(app.finish_inline(true));
-        let original = app.doc.clone();
+        let original = app.tab.doc.clone();
         assert!(
-            app.doc.atoms.is_empty(),
+            app.tab.doc.atoms.is_empty(),
             "Caption formatting must not create molecular atoms"
         );
         let _ = app.update(Message::Undo);
-        assert!(app.doc.annotations.is_empty());
+        assert!(app.tab.doc.annotations.is_empty());
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
         begin(&mut app, None);
         type_text(&mut app, "Figure 2");
-        assert!(!app.caption_format.style.formula);
+        assert!(!app.tab.caption_format.style.formula);
         let _ = app.update(Message::InlineText(Action::Finish(false)));
         begin(&mut app, None);
         type_text(&mut app, "H2O");
         app.apply_text_style(StyleChange::Formula(false));
         type_text(&mut app, "2");
-        assert!(!app.caption_format.style.formula);
+        assert!(!app.tab.caption_format.style.formula);
         let _ = app.update(Message::InlineText(Action::Finish(false)));
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
     }
 
     #[test]
     fn text_tool_typing_and_formatting_commit_as_one_undo_step() {
         let mut app = app();
         app.inspector_open = false;
-        let before = app.doc.clone();
+        let before = app.tab.doc.clone();
         let _ = app.update(Message::Tool(Tool::Text));
         let _ = app.update(Message::Canvas(CanvasEdit::Click(Point::new(60., 70.))));
-        assert!(app.inline_text.is_some());
+        assert!(app.tab.inline_text.is_some());
         assert!(!app.inspector_open);
         type_text(&mut app, "加熱 H2O");
         let _ = app.update(Message::TextStyle(StyleChange::Formula(true)));
         let _ = app.update(Message::TextStyle(StyleChange::Color(
             reshiki::palette::Color::Custom([30, 90, 70]),
         )));
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         assert!(app.dirty());
         let _ = app.update(Message::InlineText(Action::Finish(true)));
-        let finished = app.doc.clone();
+        let finished = app.tab.doc.clone();
         assert_eq!(finished.annotations[0].text, "加熱 H2O");
         assert_eq!(finished.annotations[0].position, Point::new(60., 70.));
         assert_eq!(
@@ -754,12 +789,12 @@ mod tests {
             reshiki::palette::Color::Custom([30, 90, 70])
         );
         assert!(finished.annotations[0].format.style.formula);
-        assert_eq!(app.selected, vec![finished.annotations[0].id]);
+        assert_eq!(app.tab.selected, vec![finished.annotations[0].id]);
         assert!(!app.inspector_open);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, finished);
+        assert_eq!(app.tab.doc, finished);
     }
 
     #[test]
@@ -770,20 +805,20 @@ mod tests {
         type_text(&mut app, "、加熱");
         let _ = app.update(Message::TextStyle(StyleChange::Bold(true)));
         let _ = app.update(Message::Undo);
-        assert!(!app.caption_format.style.bold);
-        assert_eq!(app.caption, "酸触媒、加熱");
+        assert!(!app.tab.caption_format.style.bold);
+        assert_eq!(app.tab.caption, "酸触媒、加熱");
         let _ = app.update(Message::Redo);
-        assert!(app.caption_format.style.bold);
-        let before = app.doc.clone();
-        app.doc.add_atom("O", Point::new(200., 20.));
+        assert!(app.tab.caption_format.style.bold);
+        let before = app.tab.doc.clone();
+        app.tab.doc.add_atom("O", Point::new(200., 20.));
         app.changed(before.clone());
-        let concurrent = app.doc.clone();
+        let concurrent = app.tab.doc.clone();
         app.sync_typography();
-        assert_eq!(app.caption, "酸触媒、加熱");
+        assert_eq!(app.tab.caption, "酸触媒、加熱");
         let _ = app.update(Message::Escape);
-        assert_eq!(app.doc, concurrent);
+        assert_eq!(app.tab.doc, concurrent);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
     }
 
     #[test]
@@ -792,27 +827,27 @@ mod tests {
         let id = label(&mut app, "A");
         begin(&mut app, Some(id));
         type_text(&mut app, "B");
-        app.doc.add_atom("C", Point::default());
-        let concurrent = app.doc.clone();
+        app.tab.doc.add_atom("C", Point::default());
+        let concurrent = app.tab.doc.clone();
         assert!(app.finish_inline(true));
-        assert_eq!(app.doc.annotations[0].text, "AB");
-        assert_eq!(app.doc.atoms, concurrent.atoms);
+        assert_eq!(app.tab.doc.annotations[0].text, "AB");
+        assert_eq!(app.tab.doc.atoms, concurrent.atoms);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, concurrent);
+        assert_eq!(app.tab.doc, concurrent);
         begin(&mut app, Some(id));
         type_text(&mut app, " draft");
-        app.doc.annotations[0].text = "changed externally".into();
-        let external = app.doc.clone();
+        app.tab.doc.annotations[0].text = "changed externally".into();
+        let external = app.tab.doc.clone();
         assert!(!app.finish_inline(true));
-        assert_eq!(app.doc, external);
-        assert!(app.inline_text.is_some());
+        assert_eq!(app.tab.doc, external);
+        assert!(app.tab.inline_text.is_some());
         assert!(app.finish_inline(false));
-        assert_eq!(app.doc, external);
+        assert_eq!(app.tab.doc, external);
         begin(&mut app, Some(id));
         type_text(&mut app, " epoch");
-        app.file_epoch += 1;
+        app.tab.file_epoch += 1;
         assert!(!app.finish_inline(true));
-        assert_eq!(app.doc, external);
+        assert_eq!(app.tab.doc, external);
     }
 
     #[test]
@@ -820,31 +855,31 @@ mod tests {
         let mut app = app();
         let id = label(&mut app, "First");
         label(&mut app, "Second");
-        let before = app.doc.clone();
+        let before = app.tab.doc.clone();
         begin(&mut app, Some(id));
         assert!(app.finish_inline(true));
-        assert_eq!(app.doc, before);
-        assert!(!app.history.undo(&mut app.doc));
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.undo(&mut app.tab.doc));
     }
 
     #[test]
     fn deleting_a_label_prunes_groups_and_undo_restores_them() {
         let mut app = app();
         let id = label(&mut app, "Caption");
-        let atom = app.doc.add_atom("C", Point::default());
-        app.selected = vec![id, atom];
+        let atom = app.tab.doc.add_atom("C", Point::default());
+        app.tab.selected = vec![id, atom];
         let _ = app.update(Message::Group);
-        let before = app.doc.clone();
+        let before = app.tab.doc.clone();
         assert!(!before.groups.is_empty());
         begin(&mut app, Some(id));
         let _ = app.update(Message::CaptionAction(Input::SelectAll));
         type_text(&mut app, "");
         assert!(app.finish_inline(true));
-        assert!(app.doc.annotations.is_empty());
-        assert_eq!(app.doc.atoms, before.atoms);
-        app.doc.validate().unwrap();
+        assert!(app.tab.doc.annotations.is_empty());
+        assert_eq!(app.tab.doc.atoms, before.atoms);
+        app.tab.doc.validate().unwrap();
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
     }
 
     #[test]
@@ -852,14 +887,16 @@ mod tests {
         let mut app = app();
         let id = label(&mut app, "酸触媒 H2O");
         let range = "酸触媒 ".len().."酸触媒 H2O".len();
-        app.doc.annotations[0]
-            .format
-            .apply("酸触媒 H2O", Some(range), &StyleChange::Bold(true));
+        app.tab.doc.annotations[0].format.apply(
+            "酸触媒 H2O",
+            Some(range),
+            &StyleChange::Bold(true),
+        );
         begin(&mut app, Some(id));
         let _ = app.update(Message::CaptionAction(Input::Move(Motion::DocumentStart)));
         type_text(&mut app, "濃 ");
         assert!(app.finish_inline(true));
-        let label = &app.doc.annotations[0];
+        let label = &app.tab.doc.annotations[0];
         assert_eq!(label.text, "濃 酸触媒 H2O");
         assert!(label.format.at("濃 酸触媒 ".len()).bold);
         assert!(!label.format.at(0).bold);
@@ -870,16 +907,16 @@ mod tests {
     fn recovery_includes_drafts_and_cancel_removes_them() {
         let mut app = app();
         let dir = tempfile::tempdir().unwrap();
-        app.recovery = Some(reshiki::recovery::Recovery::in_directory(dir.path()).unwrap());
+        app.tab.recovery = Some(reshiki::recovery::Recovery::in_directory(dir.path()).unwrap());
         begin(&mut app, None);
         type_text(&mut app, "Unsaved label");
         let _ = app.update(Message::Tick);
         super::super::autosave::tests::finish_pending(&mut app);
-        let path = app.recovery.as_ref().unwrap().session.clone();
+        let path = app.tab.recovery.as_ref().unwrap().session.clone();
         let snapshot: reshiki::recovery::Snapshot =
             serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
         assert_eq!(snapshot.document.annotations[0].text, "Unsaved label");
-        assert!(app.doc.annotations.is_empty());
+        assert!(app.tab.doc.annotations.is_empty());
         type_text(&mut app, " updated");
         let _ = app.update(Message::Tick);
         super::super::autosave::tests::finish_pending(&mut app);
@@ -901,16 +938,17 @@ mod tests {
         begin(&mut app, None);
         type_text(&mut app, "Keep me");
         let _ = app.update(Message::New);
-        assert!(app.inline_text.is_none());
-        assert_eq!(app.doc.annotations[0].text, "Keep me");
-        assert!(app.pending.is_some());
-        let _ = app.update(Message::Cancel);
+        assert!(app.pending.is_none(), "New opens a tab without asking");
+        assert!(app.tab.doc.annotations.is_empty());
+        let _ = app.update(Message::Tabs(super::super::tabs::Action::Cycle(false)));
+        assert!(app.tab.inline_text.is_none());
+        assert_eq!(app.tab.doc.annotations[0].text, "Keep me");
         begin(&mut app, Some(1));
         type_text(&mut app, " too");
         let _ = app.update(Message::Tool(Tool::Bond(1)));
-        assert!(app.inline_text.is_none());
+        assert!(app.tab.inline_text.is_none());
         assert_eq!(app.tool, Tool::Bond(1));
-        assert_eq!(app.doc.annotations[0].text, "Keep me too");
+        assert_eq!(app.tab.doc.annotations[0].text, "Keep me too");
     }
 
     #[test]
@@ -941,20 +979,21 @@ mod tests {
     #[test]
     fn finished_labels_are_revealed_without_changing_zoom() {
         let mut app = app();
-        app.camera.zoom = 1.;
-        app.camera.center = Point::default();
+        app.tab.camera.zoom = 1.;
+        app.tab.camera.center = Point::default();
         app.viewport = iced::Size::new(420., 360.);
         let _ = app.inline_action(Action::Begin(None, Point::new(190., 160.)));
         type_text(&mut app, "Conditions\nTime");
         assert!(app.finish_inline(true));
-        let label = &app.doc.annotations[0];
+        let label = &app.tab.doc.annotations[0];
         let (width, height) = label.size();
         let position = app
+            .tab
             .camera
             .screen(label.position, iced::Rectangle::with_size(app.viewport));
         assert!(position.x >= 20. && position.x + width <= app.viewport.width - 19.);
         assert!(position.y >= 20. && position.y + height <= app.viewport.height - 19.);
-        assert_eq!(app.camera.zoom, 1.);
+        assert_eq!(app.tab.camera.zoom, 1.);
     }
 
     #[test]

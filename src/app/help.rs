@@ -45,7 +45,7 @@ impl App {
                 ("F1".into(), "Keyboard shortcuts"),
                 (
                     format!("{} drag", keys(alt, "")),
-                    "Draw or move bonded atoms freely",
+                    "Draw or move freely, without bond constraints or smart guides",
                 ),
                 (
                     format!("{}-click with a ring tool", keys(command, "")),
@@ -80,12 +80,16 @@ impl App {
                 (label(Message::InvertSelection), "Invert selection"),
                 (label(Message::Duplicate), "Duplicate"),
                 (
+                    "Drag an object".into(),
+                    "Snap to other objects' edges, centers and equal gaps (smart guides)",
+                ),
+                (
                     format!("{} drag", keys(command, "")),
-                    "Drag a copy, leaving the original in place",
+                    "Drag a copy, leaving the original in place; the copy snaps too",
                 ),
                 (
                     format!("{} drag", keys(command | shift, "")),
-                    "Drag a copy along one axis",
+                    "Drag a copy along one axis, snapping along it",
                 ),
                 (
                     format!("Release {}, then Esc", keys(command, "")),
@@ -93,7 +97,7 @@ impl App {
                 ),
                 (
                     format!("{} drag", keys(shift, "")),
-                    "Move horizontally or vertically only",
+                    "Move horizontally or vertically only, snapping along that axis",
                 ),
                 (
                     keys(command | shift, "Right"),
@@ -156,9 +160,27 @@ impl App {
             &[
                 (
                     format!("{} / {}", keys(command, "N"), keys(command, "O")),
-                    "New / Open",
+                    "New / Open, each in a new tab",
                 ),
                 (keys(command, "S"), "Save"),
+                (keys(command, "W"), "Close tab"),
+                (
+                    format!(
+                        "{} / {}",
+                        keys(Modifiers::CTRL, "Tab"),
+                        keys(Modifiers::CTRL | shift, "Tab")
+                    ),
+                    "Next / previous tab",
+                ),
+                (
+                    format!(
+                        "{}–{} / {}",
+                        keys(command, "1"),
+                        keys(command, "8"),
+                        keys(command, "9")
+                    ),
+                    "Tab 1–8 / last tab",
+                ),
                 (
                     format!("{} / {}", keys(command, "I"), keys(command | shift, "E")),
                     "Import / Export",
@@ -190,7 +212,7 @@ impl App {
                 ),
                 (
                     format!("Arrows / {} arrows", keys(shift, "")),
-                    "Nudge 1 / 10 units",
+                    "Nudge 1 / 10 units, never snapping",
                 ),
                 ("Drag side handle".into(), "Change width or height"),
                 ("Drag corner handle".into(), "Resize proportionally"),
@@ -202,11 +224,11 @@ impl App {
             ],
         );
         let examples = column![
-            button(text("Open shortcut examples ↗").size(14))
+            button(text("Open shortcut examples").size(14))
                 .padding([10, 16])
                 .on_press(Message::OpenShortcutExamples)
                 .style(control(true)),
-            text("One editable ReShiki file with labeled examples. Opens in a separate window; double-click a structure to select it, then copy and paste into your drawing.")
+            text("One editable drawing with labeled examples. Opens in a tab; double-click a structure to select it, then copy and paste into your drawing. Save creates your own copy.")
                 .size(12).style(muted_text),
         ].spacing(8);
         let body = column![examples, drawing, context, editing, files]
@@ -447,18 +469,22 @@ mod tests {
         let (mut app, _) = App::new();
         app.tool = crate::canvas::Tool::Ring;
         app.inspector_tab = crate::app::InspectorTab::Import;
-        app.selected = vec![app.doc.add_atom("O", reshiki::document::Point::default())];
-        app.camera.zoom = 5.;
-        let before = app.doc.clone();
-        let selected = app.selected.clone();
+        app.tab.selected = vec![
+            app.tab
+                .doc
+                .add_atom("O", reshiki::document::Point::default()),
+        ];
+        app.tab.camera.zoom = 5.;
+        let before = app.tab.doc.clone();
+        let selected = app.tab.selected.clone();
         let _ = app.update(Message::ToggleHelp);
         assert!(app.help_open);
         assert_eq!(app.inspector_tab, crate::app::InspectorTab::Import);
         let _ = app.update(Message::Escape);
         assert!(!app.help_open);
         assert_eq!(app.tool, crate::canvas::Tool::Ring);
-        assert_eq!(app.selected, selected);
-        assert_eq!(app.camera.zoom, 5.);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.selected, selected);
+        assert_eq!(app.tab.camera.zoom, 5.);
+        assert_eq!(app.tab.doc, before);
     }
 }

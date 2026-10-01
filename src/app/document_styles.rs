@@ -18,6 +18,41 @@ mod tests {
     use super::*;
 
     #[test]
+    fn background_style_loads_and_save_status_stay_with_their_editor() {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let _ = app.update(Message::DrawingStyle(Action::Open));
+        let (id, epoch, serial) = (app.tab.id, app.tab.file_epoch, app.tab.styles.serial);
+        let front = super::super::tabs::tests::Front::new(&mut app);
+        let style = Preset::Nature.style();
+        let _ = app.update(Message::Tab(
+            id,
+            Box::new(Message::DrawingStyle(Action::Loaded(
+                serial,
+                epoch,
+                Ok(Some(style.clone())),
+            ))),
+        ));
+        front.assert_unchanged(&app);
+        assert_eq!(
+            app.tabs.background[0]
+                .styles
+                .editor
+                .as_ref()
+                .unwrap()
+                .candidate()
+                .unwrap(),
+            style
+        );
+        let _ = app.update(Message::Tab(
+            id,
+            Box::new(Message::DrawingStyle(Action::Saved(Ok(true)))),
+        ));
+        front.assert_unchanged(&app);
+        assert_eq!(app.tabs.background[0].status, "Drawing style saved");
+    }
+
+    #[test]
     fn element_tile_contrast_covers_all_themes_modes_and_states() {
         use iced::{Background, widget::button};
         use reshiki::{
@@ -29,7 +64,7 @@ mod tests {
         let mut text_min = 21_f64;
         let mut outline_min = 21_f64;
         for canvas in CanvasTheme::ALL {
-            app.doc.canvas_theme = canvas;
+            app.tab.doc.canvas_theme = canvas;
             for mode in crate::appearance::Mode::ALL {
                 app.appearance.mode = mode;
                 let theme = app.theme();
@@ -43,9 +78,9 @@ mod tests {
                             .map(|t| (t.name.clone(), t.base, Some(t))),
                     );
                 for (palette, base, custom) in palettes {
-                    base.apply(&mut app.doc);
+                    base.apply(&mut app.tab.doc);
                     if let Some(custom) = custom {
-                        custom.apply(&mut app.doc).unwrap();
+                        custom.apply(&mut app.tab.doc).unwrap();
                     }
                     for element in reshiki::editing::ELEMENTS {
                         for selected in [false, true] {
@@ -55,7 +90,9 @@ mod tests {
                                 button::Status::Pressed,
                             ] {
                                 let style = super::super::workspace::element_control(
-                                    selected, &app.doc, element,
+                                    selected,
+                                    &app.tab.doc,
+                                    element,
                                 )(&theme, state);
                                 let outer = theme.palette().background;
                                 let inner = match style.background {
@@ -102,7 +139,7 @@ mod tests {
         let _ = app.update(Message::DrawingStyle(Action::Open));
         let _ = app.update(Message::DrawingStyle(Action::Preset(Preset::Nature)));
         let _ = app.update(Message::DrawingStyle(Action::Custom));
-        let custom = app.styles.editor.as_ref().unwrap().candidate().unwrap();
+        let custom = app.tab.styles.editor.as_ref().unwrap().candidate().unwrap();
         let mut expected = Preset::Nature.style();
         expected.name = "Custom".into();
         assert_eq!(custom, expected);
@@ -111,41 +148,41 @@ mod tests {
         std::fs::write(&path, serde_json::to_vec(&custom).unwrap()).unwrap();
         assert_eq!(reshiki::document_styles::load(&path).unwrap(), custom);
         let _ = app.update(Message::DrawingStyle(Action::Apply));
-        assert_eq!(app.doc.drawing_style, custom);
+        assert_eq!(app.tab.doc.drawing_style, custom);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc.drawing_style, DrawingStyle::default());
+        assert_eq!(app.tab.doc.drawing_style, DrawingStyle::default());
     }
 
     #[test]
     fn interface_mode_never_changes_canvas_or_exports() {
         use reshiki::canvas_theme::CanvasTheme;
         let (mut app, _) = App::new();
-        app.doc = reshiki::rings::Preset::Regular.document(42., false);
+        app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
         for (canvas, palette) in CanvasTheme::ALL.into_iter().flat_map(|canvas| {
             reshiki::canvas_theme::ColorTheme::ALL.map(|palette| (canvas, palette))
         }) {
-            app.doc.canvas_theme = canvas;
-            app.doc.color_theme = palette;
+            app.tab.doc.canvas_theme = canvas;
+            app.tab.doc.color_theme = palette;
             for preset in Preset::ALL {
-                app.doc.drawing_style = preset.style();
+                app.tab.doc.drawing_style = preset.style();
                 let _ = app.update(Message::DrawingStyle(Action::Open));
-                let before = app.doc.clone();
-                let saved = app.saved.clone();
-                let export = reshiki::export::figure(&app.doc, "svg").unwrap().bytes;
+                let before = app.tab.doc.clone();
+                let saved = app.tab.saved.clone();
+                let export = reshiki::export::figure(&app.tab.doc, "svg").unwrap().bytes;
                 for mode in crate::appearance::Mode::ALL {
                     let _ = app.update(Message::Appearance(mode));
                     assert_eq!(
                         crate::appearance::is_dark(&app.theme()),
                         mode.is_dark(canvas)
                     );
-                    assert_eq!(app.doc, before);
-                    assert_eq!(app.saved, saved);
+                    assert_eq!(app.tab.doc, before);
+                    assert_eq!(app.tab.saved, saved);
                     assert_eq!(
-                        app.styles.editor.as_ref().unwrap().candidate().unwrap(),
+                        app.tab.styles.editor.as_ref().unwrap().candidate().unwrap(),
                         preset.style()
                     );
                     assert_eq!(
-                        reshiki::export::figure(&app.doc, "svg").unwrap().bytes,
+                        reshiki::export::figure(&app.tab.doc, "svg").unwrap().bytes,
                         export
                     );
                 }
@@ -157,37 +194,37 @@ mod tests {
     fn canvas_colors_and_quick_presets_are_independent_undo_steps() {
         use reshiki::canvas_theme::CanvasTheme;
         let (mut app, _) = App::new();
-        app.doc = reshiki::rings::Preset::Regular.document(42., false);
-        let original = app.doc.clone();
+        app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
+        let original = app.tab.doc.clone();
         let _ = app.update(Message::ColorTheme(
             reshiki::canvas_theme::ColorTheme::Presentation,
         ));
-        let colored = app.doc.clone();
+        let colored = app.tab.doc.clone();
         let _ = app.update(Message::CanvasTheme(CanvasTheme::Dark));
-        assert_eq!(app.doc.drawing_style, original.drawing_style);
-        assert_eq!(app.doc.atoms, original.atoms);
-        let dark = app.doc.clone();
+        assert_eq!(app.tab.doc.drawing_style, original.drawing_style);
+        assert_eq!(app.tab.doc.atoms, original.atoms);
+        let dark = app.tab.doc.clone();
         let _ = app.update(Message::QuickDrawingStyle(Choice::Journal(Preset::Nature)));
-        assert_eq!(app.doc.canvas_theme, CanvasTheme::Dark);
-        assert_eq!(app.doc.drawing_style, Preset::Nature.style());
-        assert!(app.styles.editor.is_none());
+        assert_eq!(app.tab.doc.canvas_theme, CanvasTheme::Dark);
+        assert_eq!(app.tab.doc.drawing_style, Preset::Nature.style());
+        assert!(app.tab.styles.editor.is_none());
         assert_ne!(
-            app.doc.atoms, dark.atoms,
+            app.tab.doc.atoms, dark.atoms,
             "quick switching also scales bond geometry"
         );
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, dark);
+        assert_eq!(app.tab.doc, dark);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, colored);
+        assert_eq!(app.tab.doc, colored);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, colored);
+        assert_eq!(app.tab.doc, colored);
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, dark);
+        assert_eq!(app.tab.doc, dark);
         let _ = app.update(Message::QuickDrawingStyle(Choice::Details));
-        assert!(app.styles.editor.is_some());
-        assert_eq!(app.doc, dark);
+        assert!(app.tab.styles.editor.is_some());
+        assert_eq!(app.tab.doc, dark);
     }
 
     #[test]
@@ -203,52 +240,55 @@ mod tests {
     #[test]
     fn preview_cancel_apply_and_history_preserve_the_document() {
         let (mut app, _) = App::new();
-        app.doc = reshiki::rings::Preset::Regular.document(42., false);
-        app.busy = false;
-        app.history = Default::default();
-        let before = app.doc.clone();
-        app.saved = before.clone();
+        app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
+        app.tab.busy = false;
+        app.tab.history = Default::default();
+        let before = app.tab.doc.clone();
+        app.tab.saved = before.clone();
         let send = |app: &mut App, action| {
             let _ = app.update(Message::DrawingStyle(action));
         };
         send(&mut app, Action::Open);
         send(&mut app, Action::Preset(Preset::Presentation));
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         send(&mut app, Action::Cancel);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         send(&mut app, Action::Open);
         send(&mut app, Action::Preset(Preset::Presentation));
         send(&mut app, Action::Input(Field::Line, "NaN".into()));
         send(&mut app, Action::Apply);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         assert!(app.error);
         send(&mut app, Action::Preset(Preset::Presentation));
         send(&mut app, Action::Apply);
         assert!(!app.error);
-        let after = app.doc.clone();
+        let after = app.tab.doc.clone();
         assert!(app.dirty(), "A style-only edit must be saved");
-        assert_eq!(app.drawing_length_input, "24");
-        assert_eq!(app.caption_format.style.size_pt, 16.);
-        assert_eq!(app.doc.atoms, before.atoms);
+        assert_eq!(app.tab.drawing_length_input, "24");
+        assert_eq!(app.tab.caption_format.style.size_pt, 16.);
+        assert_eq!(app.tab.doc.atoms, before.atoms);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
-        assert_eq!(app.drawing_length_input, "14.4");
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.drawing_length_input, "14.4");
         assert!(!app.dirty());
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, after);
+        assert_eq!(app.tab.doc, after);
         let _ = app.update(Message::ArrowStyle(reshiki::arrows::Preset::Fishhook));
-        assert_eq!(app.arrows.style.width_pt, 1.);
-        assert_eq!(app.arrows.numbers.first().map(String::as_str), Some("1"));
+        assert_eq!(app.tab.arrows.style.width_pt, 1.);
+        assert_eq!(
+            app.tab.arrows.numbers.first().map(String::as_str),
+            Some("1")
+        );
         send(&mut app, Action::Open);
-        app.file_epoch = app.file_epoch.wrapping_add(1);
+        app.tab.file_epoch = app.tab.file_epoch.wrapping_add(1);
         send(&mut app, Action::Preset(Preset::Jacs));
         send(&mut app, Action::Apply);
-        assert_eq!(app.doc, after);
+        assert_eq!(app.tab.doc, after);
         assert!(app.error);
-        let _ = app.perform(super::super::Pending::New);
-        assert!(app.doc.drawing_style.is_default());
-        assert_eq!(app.caption_format.style.size_pt, 10.);
-        assert_eq!(app.drawing_length_input, "14.4");
+        let _ = app.update(Message::New);
+        assert!(app.tab.doc.drawing_style.is_default());
+        assert_eq!(app.tab.caption_format.style.size_pt, 10.);
+        assert_eq!(app.tab.drawing_length_input, "14.4");
     }
 
     #[tokio::test]
@@ -256,19 +296,19 @@ mod tests {
     async fn drawing_style_headless_snapshot() {
         use iced::advanced::{layout, mouse, renderer::Headless, widget::Tree};
         let (mut app, _) = App::new();
-        app.doc = reshiki::rings::Preset::Regular.document(42., false);
-        app.busy = false;
+        app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
+        app.tab.busy = false;
         app.status = "Ready".into();
         let _ = app.update(Message::DrawingStyle(Action::Open));
         let _ = app.update(Message::DrawingStyle(Action::Preset(Preset::Nature)));
-        let carbon = app.doc.atoms[0].id;
-        let p = app.doc.atoms[0].position;
+        let carbon = app.tab.doc.atoms[0].id;
+        let p = app.tab.doc.atoms[0].position;
         // The first ring atom is the top vertex. Point its carbonyl outward,
         // leaving 120-degree bond angles instead of crowding a ring edge.
-        let oxygen = app.doc.add_atom("O", p.offset(0., -42.));
-        app.doc.add_bond(carbon, oxygen, 2, "plain");
-        app.doc.atoms[3].element = "N".into();
-        app.doc.atoms[3].label_h = 1;
+        let oxygen = app.tab.doc.add_atom("O", p.offset(0., -42.));
+        app.tab.doc.add_bond(carbon, oxygen, 2, "plain");
+        app.tab.doc.atoms[3].element = "N".into();
+        app.tab.doc.atoms[3].label_h = 1;
         let directory = std::env::temp_dir().join("reshiki-document-style-qa");
         std::fs::create_dir_all(&directory).unwrap();
         for (name, width, height, dark, mode) in [
@@ -350,12 +390,12 @@ mod tests {
                 crate::appearance::Mode::MatchCanvas,
             ),
         ] {
-            app.doc.canvas_theme = if dark {
+            app.tab.doc.canvas_theme = if dark {
                 reshiki::canvas_theme::CanvasTheme::Dark
             } else {
                 reshiki::canvas_theme::CanvasTheme::Light
             };
-            app.doc.color_theme = if name.starts_with("presentation") {
+            app.tab.doc.color_theme = if name.starts_with("presentation") {
                 reshiki::canvas_theme::ColorTheme::Presentation
             } else if name.starts_with("pastel") {
                 reshiki::canvas_theme::ColorTheme::Pastel
@@ -364,8 +404,8 @@ mod tests {
             };
             app.appearance.mode = mode;
             app.sync_color_input();
-            app.selected = if name == "selected-compact" {
-                app.doc.all_ids()
+            app.tab.selected = if name == "selected-compact" {
+                app.tab.doc.all_ids()
             } else {
                 vec![]
             };
@@ -615,7 +655,7 @@ impl App {
             Choice::Details | Choice::Custom => {
                 let task = self.drawing_style_action(Action::Open);
                 if choice == Choice::Custom
-                    && let Some(editor) = &mut self.styles.editor
+                    && let Some(editor) = &mut self.tab.styles.editor
                 {
                     editor.name = "Custom".into();
                 }
@@ -623,15 +663,15 @@ impl App {
             }
             Choice::Journal(preset) => {
                 self.cancel_join();
-                if self.cleanup.is_some() || !self.finish_inline(true) {
+                if self.tab.cleanup.is_some() || !self.finish_inline(true) {
                     return Task::none();
                 }
-                match reshiki::document_styles::apply(&self.doc, preset.style(), true, true) {
+                match reshiki::document_styles::apply(&self.tab.doc, preset.style(), true, true) {
                     Ok(doc) => {
-                        let before = self.doc.clone();
-                        self.doc = doc;
+                        let before = self.tab.doc.clone();
+                        self.tab.doc = doc;
                         self.changed(before);
-                        self.styles.editor = None;
+                        self.tab.styles.editor = None;
                         if self.inspector_tab == InspectorTab::DrawingStyle {
                             self.inspector_tab = InspectorTab::Properties;
                         }
@@ -652,19 +692,20 @@ impl App {
     }
 
     pub(super) fn sync_drawing_defaults(&mut self) {
-        let style = &self.doc.drawing_style;
-        self.bond_drawing.length = style.bond_length_world;
-        self.drawing_length_input = style.bond_length_pt.to_string();
-        self.caption_format = reshiki::typography::TextFormat {
+        let style = &self.tab.doc.drawing_style;
+        self.tab.bond_drawing.length = style.bond_length_world;
+        self.tab.drawing_length_input = style.bond_length_pt.to_string();
+        self.tab.caption_format = reshiki::typography::TextFormat {
             style: style.text_style(),
             ..Default::default()
         };
-        self.caption_target = None;
-        self.graphic_style.width_pt = style.line_width_pt;
-        self.graphic_width_input = style.line_width_pt.to_string();
-        self.arrows.style.width_pt = style.line_width_pt;
-        self.arrows
-            .refresh_inputs(&reshiki::palette::Palette::of(&self.doc));
+        self.tab.caption_target = None;
+        self.tab.graphic_style.width_pt = style.line_width_pt;
+        self.tab.graphic_width_input = style.line_width_pt.to_string();
+        self.tab.arrows.style.width_pt = style.line_width_pt;
+        self.tab
+            .arrows
+            .refresh_inputs(&reshiki::palette::Palette::of(&self.tab.doc));
         self.sync_style_inputs();
     }
 
@@ -680,31 +721,34 @@ impl App {
             }
             Action::Open => {
                 self.cancel_join();
-                if self.cleanup.is_some() || !self.finish_inline(true) {
+                if self.tab.cleanup.is_some() || !self.finish_inline(true) {
                     return Task::none();
                 }
-                self.styles.serial = self.styles.serial.wrapping_add(1);
-                self.styles.editor = Some(Editor::new(&self.doc.drawing_style, self.file_epoch));
+                self.tab.styles.serial = self.tab.styles.serial.wrapping_add(1);
+                self.tab.styles.editor = Some(Editor::new(
+                    &self.tab.doc.drawing_style,
+                    self.tab.file_epoch,
+                ));
                 self.inspector_tab = InspectorTab::DrawingStyle;
                 self.inspector_open = true;
                 self.palette = None;
             }
             Action::Cancel => {
-                self.styles.editor = None;
+                self.tab.styles.editor = None;
                 self.inspector_tab = InspectorTab::Properties;
             }
             Action::Apply => {
-                let Some(editor) = &self.styles.editor else {
+                let Some(editor) = &self.tab.styles.editor else {
                     return Task::none();
                 };
-                let result = if editor.epoch != self.file_epoch
-                    || editor.original != self.doc.drawing_style
+                let result = if editor.epoch != self.tab.file_epoch
+                    || editor.original != self.tab.doc.drawing_style
                 {
                     Err("The document style changed. Reopen Drawing style before applying.".into())
                 } else {
                     editor.candidate().and_then(|style| {
                         reshiki::document_styles::apply(
-                            &self.doc,
+                            &self.tab.doc,
                             style,
                             editor.matching,
                             editor.scale,
@@ -713,11 +757,11 @@ impl App {
                 };
                 match result {
                     Ok(doc) => {
-                        let before = self.doc.clone();
-                        self.doc = doc;
+                        let before = self.tab.doc.clone();
+                        self.tab.doc = doc;
                         self.changed(before);
                         if !self.error {
-                            self.styles.editor = None;
+                            self.tab.styles.editor = None;
                             self.inspector_tab = InspectorTab::Properties;
                             self.status = "Drawing style applied · Undo restores the previous style and layout".into();
                         }
@@ -729,8 +773,8 @@ impl App {
                 }
             }
             Action::Load => {
-                let serial = self.styles.serial;
-                let epoch = self.file_epoch;
+                let serial = self.tab.styles.serial;
+                let epoch = self.tab.file_epoch;
                 return Task::perform(
                     async {
                         let Some(file) = rfd::AsyncFileDialog::new()
@@ -761,15 +805,15 @@ impl App {
                 );
             }
             Action::Loaded(serial, epoch, result) => {
-                if serial != self.styles.serial
-                    || epoch != self.file_epoch
-                    || self.styles.editor.is_none()
+                if serial != self.tab.styles.serial
+                    || epoch != self.tab.file_epoch
+                    || self.tab.styles.editor.is_none()
                 {
                     return Task::none();
                 }
                 match result {
                     Ok(Some(style)) => {
-                        if let Some(editor) = &mut self.styles.editor {
+                        if let Some(editor) = &mut self.tab.styles.editor {
                             editor.set(&style);
                         }
                     }
@@ -781,7 +825,7 @@ impl App {
                 }
             }
             Action::Save(format) => {
-                let Some(editor) = &mut self.styles.editor else {
+                let Some(editor) = &mut self.tab.styles.editor else {
                     return Task::none();
                 };
                 editor.export_menu = false;
@@ -827,7 +871,7 @@ impl App {
                 }
             },
             action => {
-                if let Some(editor) = &mut self.styles.editor {
+                if let Some(editor) = &mut self.tab.styles.editor {
                     match action {
                         Action::Preset(preset) => editor.set(&preset.style()),
                         Action::Custom => editor.name = "Custom".into(),
@@ -866,7 +910,7 @@ impl App {
 
     pub(super) fn drawing_style_panel(&self) -> Element<'_, Message> {
         let action = Message::DrawingStyle;
-        let Some(editor) = &self.styles.editor else {
+        let Some(editor) = &self.tab.styles.editor else {
             return command("Edit drawing style")
                 .on_press(action(Action::Open))
                 .into();
@@ -936,9 +980,9 @@ impl App {
                 90.,
             );
             preview.drawing_style = style.clone();
-            preview.canvas_theme = self.doc.canvas_theme;
-            preview.color_theme = self.doc.color_theme;
-            preview.custom_theme = self.doc.custom_theme.clone();
+            preview.canvas_theme = self.tab.doc.canvas_theme;
+            preview.color_theme = self.tab.doc.color_theme;
+            preview.custom_theme = self.tab.doc.custom_theme.clone();
             body = body.push(
                 container(
                     canvas(DrawingThumbnail(preview))

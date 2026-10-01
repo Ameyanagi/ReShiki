@@ -36,12 +36,15 @@ pub struct Settings {
     /// Arrange group in the Select context row. A new key: the retired
     /// `object_toolbar` preference (off by default) must not hide it.
     pub arrange_controls: bool,
+    /// Snap dragged objects to other objects' edges, centers and gaps.
+    pub smart_guides: bool,
 }
 impl Default for Settings {
     fn default() -> Self {
         Self {
             mode: Mode::default(),
             arrange_controls: true,
+            smart_guides: true,
         }
     }
 }

@@ -135,9 +135,9 @@ impl Editor {
 }
 impl App {
     pub(super) fn print_document(&self) -> Result<reshiki::document::Document, String> {
-        let mut snapshot = self.doc.clone();
-        if let Some(editor) = &self.pages.editor {
-            if editor.epoch != self.file_epoch || editor.original != self.doc.page_layout {
+        let mut snapshot = self.tab.doc.clone();
+        if let Some(editor) = &self.tab.pages.editor {
+            if editor.epoch != self.tab.file_epoch || editor.original != self.tab.doc.page_layout {
                 return Err("Reopen Page setup before printing changed page settings.".into());
             }
             snapshot.page_layout = Some(editor.candidate()?);
@@ -145,7 +145,7 @@ impl App {
         Ok(snapshot)
     }
     pub(super) fn fit_pages(&mut self, index: Option<usize>) {
-        let Some(layout) = &self.doc.page_layout else {
+        let Some(layout) = &self.tab.doc.page_layout else {
             return;
         };
         let region = match index {
@@ -156,39 +156,40 @@ impl App {
             return;
         };
         let paper = self.guides.paper(iced::Rectangle::with_size(self.viewport));
-        self.camera.center = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
-        self.camera.zoom = ((paper.width - 50.).max(100.) / (hi.x - lo.x))
+        self.tab.camera.center = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
+        self.tab.camera.zoom = ((paper.width - 50.).max(100.) / (hi.x - lo.x))
             .min((paper.height - 50.).max(100.) / (hi.y - lo.y))
             .clamp(0.005, 5.);
-        self.fit_to_view = false;
-        self.pages.fit = Some(index);
+        self.tab.fit_to_view = false;
+        self.tab.pages.fit = Some(index);
         if let Some(i) = index {
-            self.pages.active = i;
+            self.tab.pages.active = i;
         }
     }
     pub(super) fn page_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Show => {
-                if self.doc.page_layout.is_none() {
+                if self.tab.doc.page_layout.is_none() {
                     return self.page_action(Action::Open);
                 }
                 self.cancel_join();
-                if self.cleanup.is_some() || !self.finish_inline(true) {
+                if self.tab.cleanup.is_some() || !self.finish_inline(true) {
                     return Task::none();
                 }
-                self.pages.editor = None;
+                self.tab.pages.editor = None;
                 self.inspector_open = true;
                 self.inspector_tab = InspectorTab::Pages;
                 self.palette = None;
             }
             Action::Open => {
                 self.cancel_join();
-                if self.cleanup.is_some() || !self.finish_inline(true) {
+                if self.tab.cleanup.is_some() || !self.finish_inline(true) {
                     return Task::none();
                 }
-                self.pages.editor = Some(Editor::new(&self.doc, self.file_epoch));
-                self.pages.active = self.pages.active.min(
-                    self.doc
+                self.tab.pages.editor = Some(Editor::new(&self.tab.doc, self.tab.file_epoch));
+                self.tab.pages.active = self.tab.pages.active.min(
+                    self.tab
+                        .doc
                         .page_layout
                         .as_ref()
                         .map(|l| l.count().saturating_sub(1))
@@ -199,11 +200,11 @@ impl App {
                 self.palette = None;
             }
             Action::Cancel => {
-                self.pages.editor = None;
+                self.tab.pages.editor = None;
                 self.inspector_tab = InspectorTab::Export;
             }
             Action::Input(field, value) => {
-                if let Some(e) = &mut self.pages.editor {
+                if let Some(e) = &mut self.tab.pages.editor {
                     *match field {
                         Field::Width => &mut e.width,
                         Field::Height => &mut e.height,
@@ -217,7 +218,7 @@ impl App {
                 }
             }
             Action::Preset(preset) => {
-                if let Some(e) = &mut self.pages.editor
+                if let Some(e) = &mut self.tab.pages.editor
                     && let Some((w, h)) = preset.size()
                 {
                     if let Ok(candidate) = e.candidate() {
@@ -230,7 +231,7 @@ impl App {
                 }
             }
             Action::Landscape(landscape) => {
-                if let Some(e) = &mut self.pages.editor {
+                if let Some(e) = &mut self.tab.pages.editor {
                     if let Ok(candidate) = e.candidate() {
                         e.layout = candidate;
                     }
@@ -241,29 +242,32 @@ impl App {
                 }
             }
             Action::Apply => {
-                let Some(editor) = &self.pages.editor else {
+                let Some(editor) = &self.tab.pages.editor else {
                     return Task::none();
                 };
-                if editor.epoch != self.file_epoch || editor.original != self.doc.page_layout {
+                if editor.epoch != self.tab.file_epoch
+                    || editor.original != self.tab.doc.page_layout
+                {
                     self.error = true;
                     self.status = "Page settings changed. Reopen Page setup to continue.".into();
                     return Task::none();
                 }
                 match editor.candidate() {
                     Ok(layout) => {
-                        let before = self.doc.clone();
-                        self.doc.page_layout = Some(layout);
-                        self.doc.version = self.doc.version.max(15);
+                        let before = self.tab.doc.clone();
+                        self.tab.doc.page_layout = Some(layout);
+                        self.tab.doc.version = self.tab.doc.version.max(15);
                         self.changed(before);
-                        self.pages.editor = None;
-                        self.pages.active = self.pages.active.min(
-                            self.doc
+                        self.tab.pages.editor = None;
+                        self.tab.pages.active = self.tab.pages.active.min(
+                            self.tab
+                                .doc
                                 .page_layout
                                 .as_ref()
                                 .map(|l| l.count().saturating_sub(1))
                                 .unwrap_or(0),
                         );
-                        self.fit_pages(Some(self.pages.active));
+                        self.fit_pages(Some(self.tab.pages.active));
                         self.status =
                             "Page setup applied · Drawing scale and positions preserved".into();
                     }
@@ -274,10 +278,10 @@ impl App {
                 }
             }
             Action::Remove => {
-                let before = self.doc.clone();
-                self.doc.page_layout = None;
+                let before = self.tab.doc.clone();
+                self.tab.doc.page_layout = None;
                 self.changed(before);
-                self.pages = State::default();
+                self.tab.pages = State::default();
                 self.inspector_tab = InspectorTab::Export;
                 self.fit();
                 self.status =
@@ -286,19 +290,19 @@ impl App {
             Action::Fit(index) => self.fit_pages(index),
             Action::Navigate(index) => self.fit_pages(Some(index)),
             Action::Center(selection) => {
-                let Some(layout) = self.doc.page_layout.clone() else {
+                let Some(layout) = self.tab.doc.page_layout.clone() else {
                     return Task::none();
                 };
                 let ids = if selection {
-                    self.selected.clone()
+                    self.tab.selected.clone()
                 } else {
-                    self.doc.all_ids()
+                    self.tab.doc.all_ids()
                 };
-                let before = self.doc.clone();
-                match layout.center(&mut self.doc, &ids, self.pages.active) {
+                let before = self.tab.doc.clone();
+                match layout.center(&mut self.tab.doc, &ids, self.tab.pages.active) {
                     Ok(()) => {
                         self.changed(before);
-                        self.fit_pages(Some(self.pages.active));
+                        self.fit_pages(Some(self.tab.pages.active));
                         self.status =
                             "Centered on page · Drawing size preserved · Undo is available".into();
                     }
@@ -316,8 +320,8 @@ impl App {
     }
     fn pages_overview(&self) -> Element<'_, Message> {
         let mut body = column![text("Publication pages").size(17)].spacing(14);
-        if let Some(layout) = &self.doc.page_layout {
-            let active = self.pages.active.min(layout.count().saturating_sub(1));
+        if let Some(layout) = &self.tab.doc.page_layout {
+            let active = self.tab.pages.active.min(layout.count().saturating_sub(1));
             body = body
                 .push(
                     text(format!(
@@ -358,12 +362,14 @@ impl App {
                 )
                 .push(horizontal_line())
                 .push(
-                    command(if self.selected.is_empty() {
+                    command(if self.tab.selected.is_empty() {
                         "Center drawing on page"
                     } else {
                         "Center selection on page"
                     })
-                    .on_press(Message::Pages(Action::Center(!self.selected.is_empty())))
+                    .on_press(Message::Pages(Action::Center(
+                        !self.tab.selected.is_empty(),
+                    )))
                     .style(button::text),
                 )
                 .push(
@@ -389,7 +395,7 @@ impl App {
                         .width(Length::Fill),
                 );
             }
-            let overflow = layout.overflow(&self.doc);
+            let overflow = layout.overflow(&self.tab.doc);
             if overflow > 0 {
                 body = body.push(text(format!("{overflow} items cross a page edge or sit outside the pages. PDF pages clip at paper edges.")).size(11).style(crate::appearance::text_color(iced::Color::from_rgb8(168,91,36))));
             }
@@ -404,10 +410,11 @@ impl App {
     }
     pub(super) fn pages_panel(&self) -> Element<'_, Message> {
         let Some(editor) = self
+            .tab
             .pages
             .editor
             .as_ref()
-            .filter(|e| e.epoch == self.file_epoch)
+            .filter(|e| e.epoch == self.tab.file_epoch)
         else {
             return self.pages_overview();
         };
@@ -451,7 +458,7 @@ impl App {
             text("Canvas brightness · copies have transparent backgrounds").size(11),
             crate::appearance::pick_list(
                 reshiki::canvas_theme::CanvasTheme::ALL,
-                Some(self.doc.canvas_theme),
+                Some(self.tab.doc.canvas_theme),
                 Message::CanvasTheme
             )
             .width(Length::Fill)
@@ -505,8 +512,8 @@ impl App {
                 iced::Color::from_rgb8(168, 52, 47),
             )));
         }
-        if let Some(layout) = &self.doc.page_layout {
-            let active = self.pages.active.min(layout.count().saturating_sub(1));
+        if let Some(layout) = &self.tab.doc.page_layout {
+            let active = self.tab.pages.active.min(layout.count().saturating_sub(1));
             body = body
                 .push(horizontal_line())
                 .push(
@@ -533,12 +540,14 @@ impl App {
                     .spacing(5),
                 )
                 .push(
-                    command(if self.selected.is_empty() {
+                    command(if self.tab.selected.is_empty() {
                         "Center drawing on page"
                     } else {
                         "Center selection on page"
                     })
-                    .on_press(Message::Pages(Action::Center(!self.selected.is_empty())))
+                    .on_press(Message::Pages(Action::Center(
+                        !self.tab.selected.is_empty(),
+                    )))
                     .style(button::text),
                 )
                 .push(
@@ -557,7 +566,7 @@ impl App {
                         .width(Length::Fill),
                 );
             }
-            let overflow = layout.overflow(&self.doc);
+            let overflow = layout.overflow(&self.tab.doc);
             if overflow > 0 {
                 body=body.push(text(format!("{overflow} objects cross a page edge or sit outside the pages. PDF pages clip at paper edges.")).size(11).style(crate::appearance::text_color(iced::Color::from_rgb8(168,91,36))));
             }
@@ -576,24 +585,24 @@ mod tests {
     use super::*;
     fn ready() -> App {
         let (mut app, _) = App::new();
-        app.busy = false;
-        app.doc = reshiki::document::Document::default();
-        let a = app.doc.add_atom("C", Point::default());
-        let b = app.doc.add_atom("O", Point::new(42., 0.));
-        app.doc.add_bond(a, b, 1, "plain");
+        app.tab.busy = false;
+        app.tab.doc = reshiki::document::Document::default();
+        let a = app.tab.doc.add_atom("C", Point::default());
+        let b = app.tab.doc.add_atom("O", Point::new(42., 0.));
+        app.tab.doc.add_bond(a, b, 1, "plain");
         app
     }
     #[test]
     fn page_setup_is_an_explicit_atomic_edit_and_does_not_scale_objects() {
         let mut app = ready();
-        let before = app.doc.clone();
-        app.saved = before.clone();
+        let before = app.tab.doc.clone();
+        app.tab.saved = before.clone();
         let _ = app.update(Message::Pages(Action::Open));
         let _ = app.update(Message::Pages(Action::Preset(Preset::Letter)));
         let _ = app.update(Message::Pages(Action::Input(Field::Columns, "2".into())));
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         let _ = app.update(Message::Pages(Action::Apply));
-        let expected = app.doc.clone();
+        let expected = app.tab.doc.clone();
         assert!(app.dirty());
         assert_eq!(app.recovery_document().page_layout, expected.page_layout);
         assert_eq!(expected.page_layout.as_ref().unwrap().count(), 2);
@@ -601,33 +610,33 @@ mod tests {
         assert_eq!(expected.bonds, before.bonds);
         assert_eq!(expected.page_layout.as_ref().unwrap().width_pt, 612.);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         assert!(!app.dirty());
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, expected);
+        assert_eq!(app.tab.doc, expected);
         let _ = app.update(Message::Pages(Action::Open));
         let _ = app.update(Message::Pages(Action::Input(Field::Width, "bad".into())));
         let _ = app.update(Message::Pages(Action::Apply));
-        assert_eq!(app.doc, expected);
+        assert_eq!(app.tab.doc, expected);
         assert!(app.error);
         let _ = app.update(Message::Pages(Action::Cancel));
-        assert_eq!(app.doc, expected);
+        assert_eq!(app.tab.doc, expected);
     }
     #[test]
     fn setup_preserves_concurrent_drawing_edits_but_rejects_a_changed_file() {
         let mut app = ready();
         let _ = app.update(Message::Pages(Action::Open));
-        let before = app.doc.clone();
-        app.doc.add_atom("N", Point::new(100., 0.));
+        let before = app.tab.doc.clone();
+        app.tab.doc.add_atom("N", Point::new(100., 0.));
         app.changed(before);
-        let atoms = app.doc.atoms.clone();
+        let atoms = app.tab.doc.atoms.clone();
         let _ = app.update(Message::Pages(Action::Apply));
-        assert_eq!(app.doc.atoms, atoms);
+        assert_eq!(app.tab.doc.atoms, atoms);
         let _ = app.update(Message::Pages(Action::Open));
-        app.file_epoch += 1;
-        let before = app.doc.clone();
+        app.tab.file_epoch += 1;
+        let before = app.tab.doc.clone();
         let _ = app.update(Message::Pages(Action::Apply));
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         assert!(app.error);
     }
     #[test]
@@ -636,25 +645,25 @@ mod tests {
         let _ = app.update(Message::Pages(Action::Open));
         let _ = app.update(Message::Pages(Action::Input(Field::Rows, "2".into())));
         let _ = app.update(Message::Pages(Action::Apply));
-        let before = app.doc.clone();
-        let revision = app.revision;
+        let before = app.tab.doc.clone();
+        let revision = app.tab.revision;
         let _ = app.update(Message::Pages(Action::Navigate(1)));
-        assert_eq!(app.doc, before);
-        assert_eq!(app.revision, revision);
-        assert_eq!(app.pages.active, 1);
-        let center = app.camera.center;
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.revision, revision);
+        assert_eq!(app.tab.pages.active, 1);
+        let center = app.tab.camera.center;
         let _ = app.update(Message::Viewport(iced::Size::new(800., 500.)));
-        assert_eq!(app.camera.center, center);
-        app.selected = vec![1];
+        assert_eq!(app.tab.camera.center, center);
+        app.tab.selected = vec![1];
         let _ = app.update(Message::Pages(Action::Center(true)));
-        assert_ne!(app.doc.atoms, before.atoms);
-        assert_eq!(app.doc.bonds, before.bonds);
+        assert_ne!(app.tab.doc.atoms, before.atoms);
+        assert_eq!(app.tab.doc.bonds, before.bonds);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         let _ = app.update(Message::Pages(Action::Remove));
-        assert!(app.doc.page_layout.is_none());
+        assert!(app.tab.doc.page_layout.is_none());
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
     }
 
     #[test]
@@ -666,23 +675,23 @@ mod tests {
             graphics::{Graphic, GraphicKind, GraphicStyle},
         };
         let mut app = ready();
-        let caption = app.doc.next_id();
-        app.doc.annotations.push(Annotation {
+        let caption = app.tab.doc.next_id();
+        app.tab.doc.annotations.push(Annotation {
             id: caption,
             position: Point::new(10., 35.),
             text: "Methanol".into(),
             format: Default::default(),
         });
-        let arrow = app.doc.next_id();
-        app.doc.arrows.push(Arrow::new(
+        let arrow = app.tab.doc.next_id();
+        app.tab.doc.arrows.push(Arrow::new(
             arrow,
             Point::new(200., 0.),
             Point::new(300., 0.),
             ArrowPreset::Forward,
             ArrowStyle::default(),
         ));
-        let graphic = app.doc.next_id();
-        app.doc.graphics.push(Graphic::dragged(
+        let graphic = app.tab.doc.next_id();
+        app.tab.doc.graphics.push(Graphic::dragged(
             graphic,
             GraphicKind::Rectangle,
             Point::new(200., 100.),
@@ -691,16 +700,16 @@ mod tests {
             Default::default(),
             false,
         ));
-        app.doc.page_layout = Some(Layout {
+        app.tab.doc.page_layout = Some(Layout {
             columns: 2,
             ..Default::default()
         });
-        let before = app.doc.clone();
-        let revision = app.revision;
+        let before = app.tab.doc.clone();
+        let revision = app.tab.revision;
         let _ = app.update(Message::Pages(Action::Show));
         let _ = app.update(Message::Pages(Action::Fit(None)));
         let _ = app.update(Message::SelectAll);
-        assert_eq!(app.selected, before.all_ids());
+        assert_eq!(app.tab.selected, before.all_ids());
         assert_eq!(app.inspector_tab, InspectorTab::Pages);
         for ids in [
             vec![caption],
@@ -709,22 +718,23 @@ mod tests {
             vec![1, 2, caption],
         ] {
             let _ = app.update(Message::Canvas(Edit::Select(ids.clone())));
-            assert_eq!(app.selected, ids);
+            assert_eq!(app.tab.selected, ids);
             assert_eq!(app.inspector_tab, InspectorTab::Pages);
             assert!(app.inspector_open);
-            assert_eq!(app.doc, before);
-            assert_eq!(app.revision, revision);
-            assert!(!app.history.can_undo());
+            assert_eq!(app.tab.doc, before);
+            assert_eq!(app.tab.revision, revision);
+            assert!(!app.tab.history.can_undo());
         }
         let _ = app.update(Message::Pages(Action::Navigate(1)));
         let _ = app.update(Message::Pages(Action::Center(true)));
-        assert_eq!(app.selected, vec![1, 2, caption]);
+        assert_eq!(app.tab.selected, vec![1, 2, caption]);
         assert_eq!(app.inspector_tab, InspectorTab::Pages);
-        assert_eq!(app.doc.arrows, before.arrows);
-        assert_eq!(app.doc.graphics, before.graphics);
-        assert_ne!(app.doc.atoms, before.atoms);
-        let (lo, hi) = reshiki::scene::selection_bounds(&app.doc, &app.selected).unwrap();
+        assert_eq!(app.tab.doc.arrows, before.arrows);
+        assert_eq!(app.tab.doc.graphics, before.graphics);
+        assert_ne!(app.tab.doc.atoms, before.atoms);
+        let (lo, hi) = reshiki::scene::selection_bounds(&app.tab.doc, &app.tab.selected).unwrap();
         let (page_lo, page_hi) = app
+            .tab
             .doc
             .page_layout
             .as_ref()
@@ -734,8 +744,8 @@ mod tests {
         assert!(((lo.x + hi.x) - (page_lo.x + page_hi.x)).abs() < 0.01);
         assert!(((lo.y + hi.y) - (page_lo.y + page_hi.y)).abs() < 0.01);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         assert_eq!(app.inspector_tab, InspectorTab::Pages);
-        assert!(!app.history.can_undo());
+        assert!(!app.tab.history.can_undo());
     }
 }

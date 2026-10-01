@@ -218,6 +218,15 @@ impl<'a> Frame<'a> {
         self.layers
             .push(std::mem::replace(&mut self.current, next).into_geometry());
     }
+    /// Inserts reusable geometry at this point in the layer order.
+    pub(super) fn cached(&mut self, cache: &canvas::Cache, draw: impl FnOnce(&mut canvas::Frame)) {
+        self.split();
+        self.layers
+            .push(cache.draw_with_bounds(self.renderer, self.clip, |frame| {
+                frame.translate(self.offset);
+                draw(frame);
+            }));
+    }
     pub fn finish(mut self) -> Vec<canvas::Geometry> {
         self.split();
         self.layers

@@ -38,6 +38,11 @@ impl Unit {
             Self::Centimetres | Self::Inches => 2,
         }
     }
+    /// A world distance in this unit, as the rulers show it.
+    pub fn format(self, world: f32) -> String {
+        let precision = self.precision();
+        format!("{:.precision$} {self}", f64::from(world) * self.per_world())
+    }
 }
 impl std::fmt::Display for Unit {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

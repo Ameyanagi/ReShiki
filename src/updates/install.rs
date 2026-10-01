@@ -322,8 +322,8 @@ fn stage(asset: &Path, directory: &Path, version: &str) -> Result<PathBuf, Strin
 }
 
 /// The helper acknowledges startup before the application exits. It waits for
-/// this process to terminate, then installs and reopens the saved drawing.
-pub async fn handoff(prepared: Arc<Prepared>, drawing: Option<PathBuf>) -> Result<(), String> {
+/// this process to terminate, then installs and reopens the saved tabs.
+pub async fn handoff(prepared: Arc<Prepared>, drawings: Vec<PathBuf>) -> Result<(), String> {
     let dir = prepared.directory.path();
     let ready = dir.join("ready");
     // A retry must receive an acknowledgement from the new helper, not a
@@ -354,29 +354,16 @@ pub async fn handoff(prepared: Arc<Prepared>, drawing: Option<PathBuf>) -> Resul
     .map_err(|e| e.to_string())?;
     let log = std::fs::File::create(dir.join("install.log")).map_err(|e| e.to_string())?;
     let error = log.try_clone().map_err(|e| e.to_string())?;
-    let mut cmd = if cfg!(windows) {
-        let mut c = Command::new("powershell.exe");
-        c.args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-        ]);
-        c
-    } else {
-        Command::new("/bin/sh")
-    };
-    cmd.arg(&script)
-        .arg(std::process::id().to_string())
-        .arg(&prepared.target)
-        .arg(&prepared.payload)
-        .arg(dir)
-        .arg(drawing.unwrap_or_default())
-        .arg(std::env::consts::OS)
-        .stdin(Stdio::null())
-        .stdout(log)
-        .stderr(error);
+    let mut cmd = handoff_command(
+        &script,
+        std::process::id(),
+        &prepared.target,
+        &prepared.payload,
+        dir,
+        &drawings,
+        std::env::consts::OS,
+    );
+    cmd.stdin(Stdio::null()).stdout(log).stderr(error);
     let mut child = cmd
         .spawn()
         .map_err(|e| format!("Could not start the installer: {e}"))?;
@@ -397,9 +384,108 @@ pub async fn handoff(prepared: Arc<Prepared>, drawing: Option<PathBuf>) -> Resul
     Err("The installer did not respond. Your app is unchanged.".into())
 }
 
+fn handoff_command(
+    script: &Path,
+    parent: u32,
+    target: &Path,
+    payload: &Path,
+    stage: &Path,
+    drawings: &[PathBuf],
+    platform: &str,
+) -> Command {
+    let mut cmd = if platform == "windows" {
+        let mut c = Command::new("powershell.exe");
+        c.args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+        ]);
+        c
+    } else {
+        Command::new("/bin/sh")
+    };
+    // The first six arguments retain the single-drawing helper format.
+    cmd.arg(script)
+        .arg(parent.to_string())
+        .arg(target)
+        .arg(payload)
+        .arg(stage)
+        .arg(
+            drawings
+                .first()
+                .map_or_else(|| Path::new(""), PathBuf::as_path),
+        )
+        .arg(platform)
+        .args(drawings.iter().skip(1));
+    cmd
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn handoff_keeps_each_path_as_an_argument_and_preserves_the_legacy_prefix() {
+        use std::ffi::OsString;
+        let drawings = [
+            PathBuf::from("drawings/first drawing.rsk"),
+            "資料/構造 β.rsk".into(),
+            "drawings/first drawing.rsk".into(),
+        ];
+        for platform in ["macos", "linux", "windows"] {
+            for count in [0, 1, drawings.len()] {
+                let paths = &drawings[..count];
+                let script = Path::new("staging directory/install script");
+                let command = handoff_command(
+                    script,
+                    123,
+                    Path::new("installed app"),
+                    Path::new("update payload"),
+                    Path::new("staging directory"),
+                    paths,
+                    platform,
+                );
+                let mut expected: Vec<OsString> = if platform == "windows" {
+                    [
+                        "-NoProfile",
+                        "-NonInteractive",
+                        "-ExecutionPolicy",
+                        "Bypass",
+                        "-File",
+                    ]
+                    .map(OsString::from)
+                    .to_vec()
+                } else {
+                    vec![]
+                };
+                expected.extend(
+                    [
+                        script.as_os_str(),
+                        "123".as_ref(),
+                        "installed app".as_ref(),
+                        "update payload".as_ref(),
+                        "staging directory".as_ref(),
+                        paths.first().map_or_else(|| "".as_ref(), |p| p.as_os_str()),
+                        platform.as_ref(),
+                    ]
+                    .map(OsString::from),
+                );
+                expected.extend(paths.iter().skip(1).map(|p| p.as_os_str().to_owned()));
+                assert_eq!(command.get_args().collect::<Vec<_>>(), expected);
+                assert_eq!(
+                    command.get_program(),
+                    if platform == "windows" {
+                        "powershell.exe"
+                    } else {
+                        "/bin/sh"
+                    }
+                );
+            }
+        }
+    }
+
     #[tokio::test]
     async fn nightly_cannot_enter_verified_stable_installation() {
         let (sender, _) = tokio::sync::mpsc::channel(1);

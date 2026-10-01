@@ -143,11 +143,11 @@ impl App {
             Action::RecoveryCleared => return self.handoff_update(),
             Action::Restarted(result) => match result {
                 Ok(()) => {
+                    self.commit_exit();
                     return iced::exit();
                 }
                 Err(error) => {
-                    self.updates.restarting = false;
-                    self.updates.error = Some(error);
+                    self.update_restart_failed(error);
                 }
             },
             Action::Check(manual) => {
@@ -259,23 +259,29 @@ impl App {
     }
 
     fn update_restart_blocker(&self) -> Option<&'static str> {
-        if self.dirty() {
-            Some("Save your drawing, then click Update and restart.")
+        if self
+            .strip()
+            .any(|tab| self.edited(tab) || (tab.path.is_none() && !tab.doc.all_ids().is_empty()))
+        {
+            Some("Save your drawings, then click Update and restart.")
         } else if self.assistant.has_unfinished_work() {
             Some("Finish or clear the assistant draft and input before restarting.")
         } else if self.file_io.saving || self.templates.pending() {
             Some("Wait for the current file or library save before restarting.")
-        } else if self.busy
-            || self.cleanup.is_some()
-            || self.joining.is_some()
-            || self.atom_text.is_some()
-        {
+        } else if self.strip().any(|tab| {
+            tab.busy
+                || tab.clipboard_busy
+                || tab.cleanup.is_some()
+                || tab.joining.is_some()
+                || tab.atom_text.is_some()
+        }) {
             Some("Finish the current editing operation before restarting.")
         } else {
             None
         }
     }
     pub(super) fn update_restart_failed(&mut self, error: String) {
+        self.cancel_close();
         self.updates.restarting = false;
         self.updates.error = Some(error);
         self.updates.open = true;
@@ -303,13 +309,25 @@ impl App {
             return Task::none();
         }
         let Some(prepared) = self.updates.prepared.clone() else {
+            self.cancel_close();
             self.updates.restarting = false;
             return Task::none();
         };
         Task::perform(
-            updates::install::handoff(prepared, self.path.clone()),
+            updates::install::handoff(prepared, self.update_reopen_paths()),
             |result| Message::Updates(Action::Restarted(result)),
         )
+    }
+
+    fn update_reopen_paths(&self) -> Vec<std::path::PathBuf> {
+        let mut paths: Vec<_> = self.strip().filter_map(|tab| tab.path.clone()).collect();
+        // Opening an already open file restores the front without changing order.
+        if let Some(front) = &self.tab.path
+            && paths.last() != Some(front)
+        {
+            paths.push(front.clone());
+        }
+        paths
     }
 
     pub(super) fn with_updates<'a>(
@@ -389,7 +407,7 @@ impl App {
                 .size(16)
                 .text_size(13),
             button("Release notes ↗").on_press(msg(Action::Download)).style(button::text),
-            text(if state.channel == Channel::Nightly { "Checks once a day. Nightlies are installed manually. Downloads prefer installers when available; Release notes also links portable archives." } else { "Checks once a day. Stable updates are verified before installation. Your saved drawing reopens after restarting." })
+            text(if state.channel == Channel::Nightly { "Checks once a day. Nightlies are installed manually. Downloads prefer installers when available; Release notes also links portable archives." } else { "Checks once a day. Stable updates are verified before installation. Your saved tabs reopen after restarting." })
                 .size(12)
                 .style(super::workspace::muted_text),
         ]
@@ -435,20 +453,124 @@ impl App {
 mod tests {
     use super::*;
 
+    #[tokio::test]
+    async fn update_reopens_saved_tabs_in_order_and_restores_each_front() {
+        let directory = tempfile::tempdir().unwrap();
+        let paths: Vec<_> = ["first drawing.rsk", "構造 β.rsk", "last drawing.rsk"]
+            .map(|name| directory.path().join(name))
+            .to_vec();
+        for (i, path) in paths.iter().enumerate() {
+            let mut doc = reshiki::document::Document::default();
+            doc.add_atom(["C", "N", "O"][i], reshiki::document::Point::default());
+            std::fs::write(path, doc.file_json().unwrap()).unwrap();
+        }
+        let (mut original, _) = App::new();
+        for path in &paths {
+            let opened = super::super::files::read(path.clone()).await;
+            let _ = original.update(Message::FilePrepared(opened));
+        }
+        for front in 0..paths.len() {
+            original.select_tab(front);
+            assert!(original.update_restart_blocker().is_none());
+            let reopen = original.update_reopen_paths();
+            assert_eq!(&reopen[..paths.len()], paths);
+            assert_eq!(reopen.last(), paths.get(front));
+            let args = super::super::startup::parse(reopen.iter().flat_map(|path| {
+                [
+                    std::ffi::OsString::from("--open"),
+                    path.as_os_str().to_owned(),
+                ]
+            }));
+            let (mut relaunched, _) = App::new();
+            for path in args.paths {
+                let opened = super::super::files::read(path).await;
+                let _ = relaunched.update(Message::FilePrepared(opened));
+            }
+            assert_eq!(
+                relaunched
+                    .strip()
+                    .filter_map(|tab| tab.path.clone())
+                    .collect::<Vec<_>>(),
+                paths
+            );
+            assert_eq!(relaunched.tabs.active, front);
+            assert_eq!(relaunched.tab.path, paths.get(front).cloned());
+        }
+        let _ = original.update(Message::New);
+        assert!(original.update_restart_blocker().is_none());
+        assert_eq!(original.update_reopen_paths(), paths);
+    }
+
+    #[test]
+    fn empty_and_single_file_reopen_lists_remain_compatible() {
+        let (mut app, _) = App::new();
+        assert!(app.update_reopen_paths().is_empty());
+        app.tab.path = Some("saved drawing.rsk".into());
+        assert_eq!(
+            app.update_reopen_paths(),
+            [std::path::PathBuf::from("saved drawing.rsk")]
+        );
+    }
+
+    #[test]
+    fn unbound_examples_must_be_saved_before_update_restart() {
+        let (mut app, _) = App::new();
+        let _ = app.update(Message::OpenShortcutExamples);
+        assert!(!app.dirty());
+        assert!(app.update_restart_blocker().unwrap().contains("Save"));
+        let _ = app.update(Message::New);
+        assert!(app.update_restart_blocker().unwrap().contains("Save"));
+        app.tabs.background[0].path = Some("My examples.rsk".into());
+        assert!(app.update_restart_blocker().is_none());
+    }
+
     #[test]
     fn pending_atom_label_prevents_update_restart() {
         let (mut app, _) = App::new();
-        let atom = app.doc.add_atom("C", reshiki::document::Point::default());
-        app.saved = app.doc.clone();
+        let atom = app
+            .tab
+            .doc
+            .add_atom("C", reshiki::document::Point::default());
+        app.tab.saved = app.tab.doc.clone();
+        app.tab.path = Some("saved drawing.rsk".into());
         let _ = app.atom_text_action(super::super::atom_text::Action::Begin(Some(atom)));
         let _ = app.atom_text_action(super::super::atom_text::Action::Input("Boc".into()));
         assert!(!app.dirty());
         assert!(app.update_restart_blocker().is_some());
         let _ = app.restart_for_update();
         assert!(!app.updates.restarting);
-        assert!(app.atom_text.is_some());
+        assert!(app.tab.atom_text.is_some());
         let _ = app.atom_text_action(super::super::atom_text::Action::Cancel);
         assert!(app.update_restart_blocker().is_none());
+    }
+
+    #[test]
+    fn work_in_a_tab_behind_the_front_prevents_update_restart() {
+        let (mut app, _) = App::new();
+        app.tab.busy = true;
+        let _ = app.update(Message::New);
+        assert!(app.tabs.background[0].busy, "A busy tab is not reused");
+        assert!(app.update_restart_blocker().is_some());
+        app.tabs.background[0].busy = false;
+        assert!(app.update_restart_blocker().is_none());
+    }
+
+    #[test]
+    fn clipboard_work_in_any_tab_prevents_update_restart() {
+        for background in [false, true] {
+            let (mut app, _) = App::new();
+            app.tab.busy = false;
+            let id = app.tab.id;
+            app.tab.clipboard_busy = true;
+            if background {
+                app.add_tab();
+            }
+            assert!(app.update_restart_blocker().is_some());
+            let _ = app.restart_for_update();
+            assert!(!app.updates.restarting);
+            app.in_tab(id, |app| app.tab.clipboard_busy = false);
+            assert!(app.update_restart_blocker().is_none());
+        }
     }
 
     #[test]
@@ -457,29 +579,32 @@ mod tests {
         app.updates.latest = Some(Release {
             version: "99.0.0".into(),
         });
-        app.doc.add_atom("N", reshiki::document::Point::default());
-        let original = app.doc.clone();
+        app.tab
+            .doc
+            .add_atom("N", reshiki::document::Point::default());
+        let original = app.tab.doc.clone();
         let _ = app.update_action(Action::Install);
         assert!(!app.updates.installing);
         assert!(!app.updates.restarting);
         assert!(app.updates.error.as_ref().unwrap().contains("Save"));
-        app.saved = app.doc.clone();
+        app.tab.saved = app.tab.doc.clone();
+        app.tab.path = Some("saved drawing.rsk".into());
         app.assistant.busy = true;
         let _ = app.update_action(Action::Install);
         assert!(!app.updates.installing);
         assert!(app.updates.error.as_ref().unwrap().contains("assistant"));
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
         app.assistant.busy = false;
         assert!(app.update_restart_blocker().is_none());
         app.updates.restarting = true;
         let _ = app.update(Message::Delete);
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
     }
 
     #[test]
     fn background_checks_respect_opt_out_and_do_not_change_a_drawing() {
         let (mut app, _) = App::new();
-        let original = app.doc.clone();
+        let original = app.tab.doc.clone();
         let _ = app.update_action(Action::Check(false));
         assert!(!app.updates.checking);
         let _ = app.update_action(Action::Check(true));
@@ -492,19 +617,19 @@ mod tests {
         )));
         assert!(app.updates.available());
         assert!(!app.updates.checking);
-        assert_eq!(app.doc, original);
-        assert!(!app.history.can_undo());
+        assert_eq!(app.tab.doc, original);
+        assert!(!app.tab.history.can_undo());
         let _ = app.update_action(Action::Check(true));
         let _ = app.update_action(Action::Checked(app.updates.check_id, Err("Offline".into())));
         assert!(!app.updates.checking);
         assert!(app.updates.available());
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
     }
 
     #[test]
     fn switching_channels_ignores_old_results_and_keeps_automatic_checks_disabled() {
         let (mut app, _) = App::new();
-        let original = app.doc.clone();
+        let original = app.tab.doc.clone();
         assert_eq!(app.updates.channel, Channel::Stable);
         assert!(!app.updates.automatic);
         let _ = app.update_action(Action::Check(true));
@@ -547,8 +672,8 @@ mod tests {
             }),
         ));
         assert!(app.updates.available());
-        assert_eq!(app.doc, original);
-        assert!(!app.history.can_undo());
+        assert_eq!(app.tab.doc, original);
+        assert!(!app.tab.history.can_undo());
     }
 
     #[test]

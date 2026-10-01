@@ -7,11 +7,16 @@ use std::collections::{HashMap, HashSet};
 
 /// Shift-drag keeps only the component the pointer has moved farther along.
 pub(super) fn axis_locked(requested: Point) -> Point {
-    if requested.x.abs() >= requested.y.abs() {
+    if horizontal(requested) {
         Point::new(requested.x, 0.)
     } else {
         Point::new(0., requested.y)
     }
+}
+
+/// Whether a Shift-drag locks to the horizontal axis.
+pub(super) fn horizontal(requested: Point) -> bool {
+    requested.x.abs() >= requested.y.abs()
 }
 
 /// Shift-drag under bond constraints: a move they would push off the axis is refused.

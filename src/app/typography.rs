@@ -28,8 +28,12 @@ impl std::fmt::Display for ColorScope {
 
 impl App {
     fn selected_label_groups(&self) -> impl Iterator<Item = &reshiki::abbreviations::Abbreviation> {
-        self.doc.abbreviations.iter().filter(|group| {
-            self.inline_text.is_none() && group.members.iter().any(|id| self.selected.contains(id))
+        self.tab.doc.abbreviations.iter().filter(|group| {
+            self.tab.inline_text.is_none()
+                && group
+                    .members
+                    .iter()
+                    .any(|id| self.tab.selected.contains(id))
         })
     }
 
@@ -41,8 +45,8 @@ impl App {
     }
 
     pub(super) fn toolbar_alignment(&self) -> Option<TextAlign> {
-        if self.inline_text.is_some() {
-            return Some(self.caption_format.alignment);
+        if self.tab.inline_text.is_some() {
+            return Some(self.tab.caption_format.alignment);
         }
         let mut values = self
             .selected_label_groups()
@@ -53,25 +57,30 @@ impl App {
                 LabelAlignment::Auto | LabelAlignment::Above => None,
             })
             .chain(
-                self.doc
+                self.tab
+                    .doc
                     .annotations
                     .iter()
-                    .filter(|a| self.selected.contains(&a.id))
+                    .filter(|a| self.tab.selected.contains(&a.id))
                     .map(|a| Some(a.format.alignment)),
             );
         let Some(first) = values.next() else {
-            return Some(self.caption_format.alignment);
+            return Some(self.tab.caption_format.alignment);
         };
         first.filter(|_| values.all(|value| value == first))
     }
 
     pub(super) fn apply_group_alignment(&mut self, alignment: LabelAlignment) {
-        if self.inline_text.is_some() {
+        if self.tab.inline_text.is_some() {
             return;
         }
-        let before = self.doc.clone();
-        for group in &mut self.doc.abbreviations {
-            if group.members.iter().any(|id| self.selected.contains(id)) {
+        let before = self.tab.doc.clone();
+        for group in &mut self.tab.doc.abbreviations {
+            if group
+                .members
+                .iter()
+                .any(|id| self.tab.selected.contains(id))
+            {
                 group.alignment = alignment;
             }
         }
@@ -79,47 +88,51 @@ impl App {
     }
 
     pub(super) fn text_range(&self) -> Option<Range<usize>> {
-        let cursor = self.caption_editor.cursor();
+        let cursor = self.tab.caption_editor.cursor();
         let offset = |p: iced::widget::text_editor::Position| {
-            self.caption
+            self.tab
+                .caption
                 .split_inclusive('\n')
                 .take(p.line)
                 .map(str::len)
                 .sum::<usize>()
                 + p.column
         };
-        let a = offset(cursor.position).min(self.caption.len());
-        let b = offset(cursor.selection?).min(self.caption.len());
-        let selected = self.caption_editor.selection()?;
+        let a = offset(cursor.position).min(self.tab.caption.len());
+        let b = offset(cursor.selection?).min(self.tab.caption.len());
+        let selected = self.tab.caption_editor.selection()?;
         if selected.is_empty() {
             return None;
         }
         let start = a.min(b);
-        if self.caption.get(start..start + selected.len()) == Some(selected.as_str()) {
+        if self.tab.caption.get(start..start + selected.len()) == Some(selected.as_str()) {
             return Some(start..start + selected.len());
         }
         // Word/line selections expose their anchor rather than normalized bounds.
-        self.caption
+        self.tab
+            .caption
             .match_indices(&selected)
             .min_by_key(|(i, _)| i.abs_diff(start))
             .map(|(i, s)| i..i + s.len())
     }
     pub(super) fn current_text_style(&self) -> &TextStyle {
         if let Some(range) = self.text_range() {
-            self.caption_format.at(range.start)
-        } else if self.inline_text.is_some() || self.caption_target.is_some() {
-            let cursor = self.caption_editor.cursor().position;
+            self.tab.caption_format.at(range.start)
+        } else if self.tab.inline_text.is_some() || self.tab.caption_target.is_some() {
+            let cursor = self.tab.caption_editor.cursor().position;
             let offset = self
+                .tab
                 .caption
                 .split_inclusive('\n')
                 .take(cursor.line)
                 .map(str::len)
                 .sum::<usize>()
                 + cursor.column;
-            self.caption_format
-                .at(offset.min(self.caption.len().saturating_sub(1)))
+            self.tab
+                .caption_format
+                .at(offset.min(self.tab.caption.len().saturating_sub(1)))
         } else {
-            &self.caption_format.style
+            &self.tab.caption_format.style
         }
     }
     /// An atom's color as a swatch: its explicit color, or its automatic theme
@@ -130,10 +143,11 @@ impl App {
             return explicit;
         }
         let rgb = self
+            .tab
             .doc
             .canvas_theme
-            .color(reshiki::canvas_theme::atom_color(&self.doc, atom));
-        if rgb == self.doc.canvas_theme.color([0; 3]) {
+            .color(reshiki::canvas_theme::atom_color(&self.tab.doc, atom));
+        if rgb == self.tab.doc.canvas_theme.color([0; 3]) {
             Paint::Ink
         } else {
             Paint::Custom(rgb)
@@ -141,10 +155,11 @@ impl App {
     }
     /// The interior color of each selected ring; None where it has no fill.
     pub(super) fn selected_ring_fills(&self) -> Vec<Option<Paint>> {
-        reshiki::ring_fills::selected_cycles(&self.doc, &self.selected)
+        reshiki::ring_fills::selected_cycles(&self.tab.doc, &self.tab.selected)
             .iter()
             .map(|atoms| {
-                self.doc
+                self.tab
+                    .doc
                     .ring_fills
                     .iter()
                     .find(|fill| {
@@ -156,7 +171,7 @@ impl App {
             .collect()
     }
     pub(super) fn current_selection_color(&self) -> Option<Paint> {
-        if self.color_scope == ColorScope::Rings {
+        if self.tab.color_scope == ColorScope::Rings {
             let colors: Vec<_> = self
                 .selected_ring_fills()
                 .into_iter()
@@ -166,28 +181,30 @@ impl App {
                 .copied()
                 .filter(|first| colors.iter().all(|c| c == first));
         }
-        if (self.inline_text.is_some() && self.color_scope != ColorScope::Bonds)
-            || self.selected.is_empty()
+        if (self.tab.inline_text.is_some() && self.tab.color_scope != ColorScope::Bonds)
+            || self.tab.selected.is_empty()
             || (self.text_range().is_some()
-                && self.selected.len() == 1
-                && self.color_scope != ColorScope::Bonds)
+                && self.tab.selected.len() == 1
+                && self.tab.color_scope != ColorScope::Bonds)
         {
             return Some(self.current_text_style().color);
         }
         let mut colors = Vec::new();
-        if self.color_scope != ColorScope::Bonds {
+        if self.tab.color_scope != ColorScope::Bonds {
             colors.extend(
-                self.doc
+                self.tab
+                    .doc
                     .atoms
                     .iter()
-                    .filter(|a| self.selected.contains(&a.id))
+                    .filter(|a| self.tab.selected.contains(&a.id))
                     .map(|a| self.atom_paint(a)),
             );
             for a in self
+                .tab
                 .doc
                 .annotations
                 .iter()
-                .filter(|a| self.selected.contains(&a.id))
+                .filter(|a| self.tab.selected.contains(&a.id))
             {
                 if a.text.is_empty() {
                     colors.push(a.format.style.color);
@@ -196,28 +213,33 @@ impl App {
                 }
             }
         }
-        if self.color_scope != ColorScope::Text {
+        if self.tab.color_scope != ColorScope::Text {
             colors.extend(
-                self.doc
+                self.tab
+                    .doc
                     .bonds
                     .iter()
-                    .filter(|b| self.selected.contains(&b.a) && self.selected.contains(&b.b))
+                    .filter(|b| {
+                        self.tab.selected.contains(&b.a) && self.tab.selected.contains(&b.b)
+                    })
                     .map(|b| b.color),
             );
         }
-        if self.color_scope == ColorScope::All {
+        if self.tab.color_scope == ColorScope::All {
             colors.extend(
-                self.doc
+                self.tab
+                    .doc
                     .arrows
                     .iter()
-                    .filter(|a| self.selected.contains(&a.id))
+                    .filter(|a| self.tab.selected.contains(&a.id))
                     .map(|a| a.appearance().color),
             );
             for g in self
+                .tab
                 .doc
                 .graphics
                 .iter()
-                .filter(|g| self.selected.contains(&g.id) && g.picture.is_none())
+                .filter(|g| self.tab.selected.contains(&g.id) && g.picture.is_none())
             {
                 colors.push(g.style.stroke);
                 colors.extend(g.style.fill);
@@ -229,42 +251,45 @@ impl App {
             .filter(|first| colors.iter().all(|c| c == first))
     }
     pub(super) fn sync_color_input(&mut self) {
-        let palette = Palette::of(&self.doc);
-        self.text_color_input = self
+        let palette = Palette::of(&self.tab.doc);
+        self.tab.text_color_input = self
             .current_selection_color()
             .map(|color| reshiki::palette::hex(palette.rgb(color)))
             .unwrap_or_default();
         self.flag_color_input(false);
     }
     pub(super) fn sync_typography(&mut self) {
-        if self.inline_text.is_some() {
+        if self.tab.inline_text.is_some() {
             self.sync_style_inputs();
             return;
         }
         let mut selected_atoms = self
+            .tab
             .doc
             .atoms
             .iter()
-            .filter(|a| self.selected.contains(&a.id));
-        self.labels.number = selected_atoms
+            .filter(|a| self.tab.selected.contains(&a.id));
+        self.tab.labels.number = selected_atoms
             .next()
             .and_then(|a| a.display.number.as_ref())
             .map(|n| n.text.clone())
             .unwrap_or_default();
         if selected_atoms.next().is_some() {
-            self.labels.number.clear();
+            self.tab.labels.number.clear();
         }
 
         if let Some(label) = self
+            .tab
             .doc
             .annotations
             .iter()
-            .find(|a| self.selected.contains(&a.id))
+            .find(|a| self.tab.selected.contains(&a.id))
         {
-            self.caption = label.text.clone();
-            self.caption_editor = iced::widget::text_editor::Content::with_text(&self.caption);
-            self.caption_format = label.format.clone();
-            self.caption_target = Some(label.id);
+            self.tab.caption = label.text.clone();
+            self.tab.caption_editor =
+                iced::widget::text_editor::Content::with_text(&self.tab.caption);
+            self.tab.caption_format = label.format.clone();
+            self.tab.caption_target = Some(label.id);
             if !matches!(
                 self.inspector_tab,
                 InspectorTab::Templates
@@ -276,19 +301,21 @@ impl App {
                 self.inspector_tab = InspectorTab::Properties;
             }
         } else {
-            self.caption_target = None;
-            self.caption_editor = iced::widget::text_editor::Content::with_text(&self.caption);
+            self.tab.caption_target = None;
+            self.tab.caption_editor =
+                iced::widget::text_editor::Content::with_text(&self.tab.caption);
             if let Some(atom) = self
+                .tab
                 .doc
                 .atoms
                 .iter()
-                .find(|a| self.selected.contains(&a.id))
+                .find(|a| self.tab.selected.contains(&a.id))
             {
-                self.caption_format = TextFormat {
+                self.tab.caption_format = TextFormat {
                     style: atom
                         .text_style
                         .clone()
-                        .unwrap_or_else(|| self.doc.drawing_style.text_style()),
+                        .unwrap_or_else(|| self.tab.doc.drawing_style.text_style()),
                     ..Default::default()
                 };
             }
@@ -298,9 +325,10 @@ impl App {
     pub(super) fn sync_style_inputs(&mut self) {
         let style = self.current_text_style();
         let size = style.size_pt.to_string();
-        self.font_size_input = size;
+        self.tab.font_size_input = size;
         self.sync_color_input();
-        self.text_width_input = self
+        self.tab.text_width_input = self
+            .tab
             .caption_format
             .width_pt
             .map(|w| w.to_string())
@@ -319,21 +347,22 @@ impl App {
                     | iced::widget::text_editor::Edit::Delete
             )
         );
-        let cursor = self.caption_editor.cursor().position;
+        let cursor = self.tab.caption_editor.cursor().position;
         let hint = selection.as_ref().map(|r| r.start).unwrap_or_else(|| {
-            self.caption
+            self.tab
+                .caption
                 .split_inclusive('\n')
                 .take(cursor.line)
                 .map(str::len)
                 .sum::<usize>()
                 + cursor.column
         });
-        self.caption_editor.perform(action);
+        self.tab.caption_editor.perform(action);
         if changed {
-            let text = self.caption_editor.text();
+            let text = self.tab.caption_editor.text();
             let replaced = selection.unwrap_or_else(|| {
-                if deletion && text.len() < self.caption.len() {
-                    let cursor = self.caption_editor.cursor().position;
+                if deletion && text.len() < self.tab.caption.len() {
+                    let cursor = self.tab.caption_editor.cursor().position;
                     let after = text
                         .split_inclusive('\n')
                         .take(cursor.line)
@@ -341,27 +370,26 @@ impl App {
                         .sum::<usize>()
                         + cursor.column;
                     let start = after.min(hint);
-                    start..start + self.caption.len() - text.len()
+                    start..start + self.tab.caption.len() - text.len()
                 } else {
                     hint..hint
                 }
             });
-            self.caption_format.edited(&self.caption, &text, replaced);
-            self.caption = text;
+            self.tab
+                .caption_format
+                .edited(&self.tab.caption, &text, replaced);
+            self.tab.caption = text;
             self.auto_format_caption();
-            if self.inline_text.is_some() {
+            if self.tab.inline_text.is_some() {
                 self.sync_style_inputs();
                 return;
             }
-            let before = self.doc.clone();
-            if let Some(label) = self
-                .doc
-                .annotations
-                .iter_mut()
-                .find(|a| Some(a.id) == self.caption_target && self.selected.contains(&a.id))
-            {
-                label.text = self.caption.clone();
-                label.format = self.caption_format.clone();
+            let before = self.tab.doc.clone();
+            if let Some(label) = self.tab.doc.annotations.iter_mut().find(|a| {
+                Some(a.id) == self.tab.caption_target && self.tab.selected.contains(&a.id)
+            }) {
+                label.text = self.tab.caption.clone();
+                label.format = self.tab.caption_format.clone();
             }
             self.changed(before);
         }
@@ -377,16 +405,17 @@ impl App {
         if matches!(change, StyleChange::Formula(_) | StyleChange::Script(_)) {
             self.manual_caption_format();
         }
-        let before = self.doc.clone();
-        self.caption_format
-            .apply(&self.caption, range.clone(), &change);
-        if self.inline_text.is_some() {
+        let before = self.tab.doc.clone();
+        self.tab
+            .caption_format
+            .apply(&self.tab.caption, range.clone(), &change);
+        if self.tab.inline_text.is_some() {
             self.sync_style_inputs();
             return;
         }
-        for label in &mut self.doc.annotations {
-            if self.selected.contains(&label.id) {
-                let target_range = if Some(label.id) == self.caption_target {
+        for label in &mut self.tab.doc.annotations {
+            if self.tab.selected.contains(&label.id) {
+                let target_range = if Some(label.id) == self.tab.caption_target {
                     range.clone()
                 } else {
                     None
@@ -394,11 +423,11 @@ impl App {
                 label.format.apply(&label.text, target_range, &change);
             }
         }
-        for atom in &mut self.doc.atoms {
-            if self.selected.contains(&atom.id) {
+        for atom in &mut self.tab.doc.atoms {
+            if self.tab.selected.contains(&atom.id) {
                 let style = atom
                     .text_style
-                    .get_or_insert_with(|| self.doc.drawing_style.text_style());
+                    .get_or_insert_with(|| self.tab.doc.drawing_style.text_style());
                 change.apply(style);
                 // Chemical scripts are derived from charge/isotope/H count.
                 style.script = Script::Normal;
@@ -409,8 +438,8 @@ impl App {
         self.sync_style_inputs();
     }
     pub(super) fn apply_ring_color(&mut self, color: Option<Paint>) {
-        let before = self.doc.clone();
-        let count = reshiki::ring_fills::apply(&mut self.doc, &self.selected, color);
+        let before = self.tab.doc.clone();
+        let count = reshiki::ring_fills::apply(&mut self.tab.doc, &self.tab.selected, color);
         self.remember_custom(color, &before);
         self.changed(before);
         self.sync_color_input();
@@ -430,21 +459,21 @@ impl App {
     /// Keep a custom color that was just used in the drawing for the picker.
     pub(super) fn remember_custom(&mut self, color: Option<Paint>, before: &Document) {
         if let Some(Paint::Custom(rgb)) = color
-            && self.doc != *before
+            && self.tab.doc != *before
         {
-            self.doc.remember_color(rgb);
+            self.tab.doc.remember_color(rgb);
         }
     }
     pub(super) fn apply_selection_color(&mut self, color: Paint) {
-        if self.color_scope == ColorScope::Rings {
+        if self.tab.color_scope == ColorScope::Rings {
             self.apply_ring_color(Some(color));
             return;
         }
-        if self.inline_text.is_some() {
-            if self.color_scope != ColorScope::Bonds {
+        if self.tab.inline_text.is_some() {
+            if self.tab.color_scope != ColorScope::Bonds {
                 self.inline_checkpoint();
-                self.caption_format.apply(
-                    &self.caption,
+                self.tab.caption_format.apply(
+                    &self.tab.caption,
                     self.text_range(),
                     &StyleChange::Color(color),
                 );
@@ -452,31 +481,33 @@ impl App {
             }
             return;
         }
-        let before = self.doc.clone();
+        let before = self.tab.doc.clone();
         let range = self.text_range().filter(|_| {
-            self.selected.len() == 1
+            self.tab.selected.len() == 1
                 && self
+                    .tab
                     .caption_target
-                    .is_some_and(|id| self.selected.contains(&id))
+                    .is_some_and(|id| self.tab.selected.contains(&id))
         });
-        let text_only = range.is_some() && self.color_scope != ColorScope::Bonds;
-        let text = self.color_scope != ColorScope::Bonds;
-        let bonds = self.color_scope != ColorScope::Text && !text_only;
+        let text_only = range.is_some() && self.tab.color_scope != ColorScope::Bonds;
+        let text = self.tab.color_scope != ColorScope::Bonds;
+        let bonds = self.tab.color_scope != ColorScope::Text && !text_only;
         if text {
             let change = StyleChange::Color(color);
-            self.caption_format
-                .apply(&self.caption, range.clone(), &change);
-            for label in &mut self.doc.annotations {
-                if self.selected.contains(&label.id) {
+            self.tab
+                .caption_format
+                .apply(&self.tab.caption, range.clone(), &change);
+            for label in &mut self.tab.doc.annotations {
+                if self.tab.selected.contains(&label.id) {
                     label.format.apply(&label.text, range.clone(), &change);
                 }
             }
-            for atom in &mut self.doc.atoms {
-                if self.selected.contains(&atom.id) && !text_only {
+            for atom in &mut self.tab.doc.atoms {
+                if self.tab.selected.contains(&atom.id) && !text_only {
                     atom.display.color_override = true;
                     atom.display.hydrogen_color = None;
                     atom.text_style
-                        .get_or_insert_with(|| self.doc.drawing_style.text_style())
+                        .get_or_insert_with(|| self.tab.doc.drawing_style.text_style())
                         .color = color;
                     atom.display.stereo.style.color = color;
                     if let Some(number) = &mut atom.display.number {
@@ -485,30 +516,30 @@ impl App {
                 }
             }
             if !text_only {
-                for bond in &mut self.doc.bonds {
-                    if self.selected.contains(&bond.a) && self.selected.contains(&bond.b) {
+                for bond in &mut self.tab.doc.bonds {
+                    if self.tab.selected.contains(&bond.a) && self.tab.selected.contains(&bond.b) {
                         bond.indicator.style.color = color;
                     }
                 }
             }
         }
         if bonds {
-            for bond in &mut self.doc.bonds {
-                if self.selected.contains(&bond.a) && self.selected.contains(&bond.b) {
+            for bond in &mut self.tab.doc.bonds {
+                if self.tab.selected.contains(&bond.a) && self.tab.selected.contains(&bond.b) {
                     bond.color = color;
                 }
             }
         }
-        if self.color_scope == ColorScope::All && !text_only {
-            for arrow in &mut self.doc.arrows {
-                if self.selected.contains(&arrow.id) {
+        if self.tab.color_scope == ColorScope::All && !text_only {
+            for arrow in &mut self.tab.doc.arrows {
+                if self.tab.selected.contains(&arrow.id) {
                     let mut style = arrow.appearance();
                     style.color = color;
                     arrow.style = Some(style);
                 }
             }
-            for graphic in &mut self.doc.graphics {
-                if self.selected.contains(&graphic.id) && graphic.picture.is_none() {
+            for graphic in &mut self.tab.doc.graphics {
+                if self.tab.selected.contains(&graphic.id) && graphic.picture.is_none() {
                     graphic.style.stroke = color;
                     if graphic.style.fill.is_some() {
                         graphic.style.fill = Some(color);
@@ -516,27 +547,27 @@ impl App {
                 }
             }
         }
-        let changed = before != self.doc;
+        let changed = before != self.tab.doc;
         self.remember_custom(Some(color), &before);
         self.changed(before);
         self.sync_style_inputs();
         self.sync_graphics();
         self.sync_arrows();
         self.sync_bonds();
-        self.text_color_input = reshiki::palette::hex(Palette::of(&self.doc).rgb(color));
+        self.tab.text_color_input = reshiki::palette::hex(Palette::of(&self.tab.doc).rgb(color));
         self.status = if text_only {
             "Text range recolored".into()
         } else if changed {
             format!(
                 "Color applied to {}",
-                self.color_scope.to_string().to_lowercase()
+                self.tab.color_scope.to_string().to_lowercase()
             )
-        } else if self.selected.is_empty() && text {
+        } else if self.tab.selected.is_empty() && text {
             "Text color set · Select drawing objects to recolor them".into()
         } else {
             format!(
                 "No color change · Apply to {}",
-                self.color_scope.to_string().to_lowercase()
+                self.tab.color_scope.to_string().to_lowercase()
             )
         };
     }
@@ -558,35 +589,40 @@ impl App {
                 format.width_pt = value;
             }
         };
-        if self.inline_text.is_some()
+        if self.tab.inline_text.is_some()
             || self.selected_group_alignment().is_none()
             || self
+                .tab
                 .doc
                 .annotations
                 .iter()
-                .any(|a| self.selected.contains(&a.id))
+                .any(|a| self.tab.selected.contains(&a.id))
         {
-            update(&mut self.caption_format);
+            update(&mut self.tab.caption_format);
         }
-        if self.inline_text.is_some() {
+        if self.tab.inline_text.is_some() {
             self.sync_style_inputs();
             return;
         }
-        let before = self.doc.clone();
+        let before = self.tab.doc.clone();
         if let Some(group_alignment) = alignment.and_then(|value| match value {
             TextAlign::Left => Some(LabelAlignment::Left),
             TextAlign::Center => Some(LabelAlignment::Center),
             TextAlign::Right => Some(LabelAlignment::Right),
             TextAlign::Justified => None,
         }) {
-            for group in &mut self.doc.abbreviations {
-                if group.members.iter().any(|id| self.selected.contains(id)) {
+            for group in &mut self.tab.doc.abbreviations {
+                if group
+                    .members
+                    .iter()
+                    .any(|id| self.tab.selected.contains(id))
+                {
                     group.alignment = group_alignment;
                 }
             }
         }
-        for label in &mut self.doc.annotations {
-            if self.selected.contains(&label.id) {
+        for label in &mut self.tab.doc.annotations {
+            if self.tab.selected.contains(&label.id) {
                 update(&mut label.format);
             }
         }
@@ -600,8 +636,9 @@ mod tests {
     use super::*;
 
     fn group(app: &mut App, label: &str, x: f32) -> Result<u64, String> {
-        let id = app.doc.add_atom("C", Point::new(x, 0.));
-        app.doc = reshiki::atom_text::apply(&app.doc, id, label, reshiki::atom_text::Mode::Group)?;
+        let id = app.tab.doc.add_atom("C", Point::new(x, 0.));
+        app.tab.doc =
+            reshiki::atom_text::apply(&app.tab.doc, id, label, reshiki::atom_text::Mode::Group)?;
         Ok(id)
     }
 
@@ -609,18 +646,18 @@ mod tests {
     fn toolbar_aligns_selected_groups_and_captions_in_one_undo_without_changing_chemistry()
     -> Result<(), String> {
         let (mut app, _) = App::new();
-        app.doc = Document::default();
+        app.tab.doc = Document::default();
         let boc = group(&mut app, "Boc", 0.)?;
         let cp = group(&mut app, "Cp*", 150.)?;
         let other = group(&mut app, "OMe", 300.)?;
-        let caption = app.doc.next_id();
-        app.doc.annotations.push(Annotation {
+        let caption = app.tab.doc.next_id();
+        app.tab.doc.annotations.push(Annotation {
             id: caption,
             position: Point::new(0., 200.),
             text: "Caption".into(),
             format: Default::default(),
         });
-        app.selected = vec![boc];
+        app.tab.selected = vec![boc];
         assert_eq!(
             app.selected_group_alignment(),
             Some(Some(LabelAlignment::Auto))
@@ -632,37 +669,42 @@ mod tests {
         );
         let _ = app.update(Message::TextAlign(TextAlign::Right));
         assert_eq!(app.toolbar_alignment(), Some(TextAlign::Right));
-        app.selected = vec![boc, cp, caption];
+        app.tab.selected = vec![boc, cp, caption];
         assert_eq!(app.selected_group_alignment(), Some(None));
         assert_eq!(app.toolbar_alignment(), None);
-        let before = app.doc.clone();
+        let before = app.tab.doc.clone();
         let _ = app.update(Message::TextAlign(TextAlign::Center));
         assert_eq!(app.toolbar_alignment(), Some(TextAlign::Center));
         for id in [boc, cp] {
             assert_eq!(
-                app.doc.abbreviation(id).ok_or("group")?.alignment,
+                app.tab.doc.abbreviation(id).ok_or("group")?.alignment,
                 LabelAlignment::Center
             );
         }
         assert_eq!(
-            app.doc.abbreviation(other).ok_or("other group")?.alignment,
+            app.tab
+                .doc
+                .abbreviation(other)
+                .ok_or("other group")?
+                .alignment,
             LabelAlignment::Auto
         );
-        assert_eq!(app.doc.atoms, before.atoms);
-        assert_eq!(app.doc.bonds, before.bonds);
-        let after = app.doc.clone();
+        assert_eq!(app.tab.doc.atoms, before.atoms);
+        assert_eq!(app.tab.doc.bonds, before.bonds);
+        let after = app.tab.doc.clone();
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, after);
+        assert_eq!(app.tab.doc, after);
 
         let _ = app.update(Message::TextAlign(TextAlign::Justified));
         assert_eq!(
-            app.doc.abbreviation(boc).ok_or("group")?.alignment,
+            app.tab.doc.abbreviation(boc).ok_or("group")?.alignment,
             LabelAlignment::Center
         );
         assert_eq!(
-            app.doc
+            app.tab
+                .doc
                 .annotations
                 .first()
                 .ok_or("caption")?
@@ -681,7 +723,8 @@ mod tests {
             Some(Some(LabelAlignment::Auto))
         );
         assert_eq!(
-            app.doc
+            app.tab
+                .doc
                 .annotations
                 .first()
                 .ok_or("caption")?
@@ -694,8 +737,8 @@ mod tests {
             app.selected_group_alignment(),
             Some(Some(LabelAlignment::Above))
         );
-        assert_eq!(app.doc.atoms, before.atoms);
-        assert_eq!(app.doc.bonds, before.bonds);
+        assert_eq!(app.tab.doc.atoms, before.atoms);
+        assert_eq!(app.tab.doc.bonds, before.bonds);
         Ok(())
     }
 
@@ -703,28 +746,32 @@ mod tests {
     fn group_only_alignment_does_not_change_paragraph_defaults_or_unselected_groups()
     -> Result<(), String> {
         let (mut app, _) = App::new();
-        app.doc = Document::default();
+        app.tab.doc = Document::default();
         let id = group(&mut app, "Boc", 0.)?;
-        app.selected = app.doc.abbreviation(id).ok_or("group")?.members.clone();
-        let format = app.caption_format.clone();
+        app.tab.selected = app.tab.doc.abbreviation(id).ok_or("group")?.members.clone();
+        let format = app.tab.caption_format.clone();
         for alignment in [TextAlign::Left, TextAlign::Center, TextAlign::Right] {
             let _ = app.update(Message::TextAlign(alignment));
             assert_eq!(app.toolbar_alignment(), Some(alignment));
-            assert_eq!(app.caption_format, format);
+            assert_eq!(app.tab.caption_format, format);
         }
-        let before = app.doc.clone();
+        let before = app.tab.doc.clone();
         let _ = app.update(Message::TextAlign(TextAlign::Justified));
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         let second = group(&mut app, "Cp", 200.)?;
         assert_eq!(
-            app.doc.abbreviation(second).ok_or("new group")?.alignment,
+            app.tab
+                .doc
+                .abbreviation(second)
+                .ok_or("new group")?
+                .alignment,
             LabelAlignment::Auto
         );
-        app.selected.clear();
+        app.tab.selected.clear();
         let _ = app.update(Message::TextAlign(TextAlign::Justified));
-        assert_eq!(app.caption_format.alignment, TextAlign::Justified);
+        assert_eq!(app.tab.caption_format.alignment, TextAlign::Justified);
         assert_eq!(
-            app.doc.abbreviation(id).ok_or("group")?.alignment,
+            app.tab.doc.abbreviation(id).ok_or("group")?.alignment,
             LabelAlignment::Right
         );
         Ok(())
@@ -734,29 +781,32 @@ mod tests {
     fn inline_caption_alignment_never_moves_group_labels_and_can_be_cancelled() -> Result<(), String>
     {
         let (mut app, _) = App::new();
-        app.doc = Document::default();
+        app.tab.doc = Document::default();
         let id = group(&mut app, "Boc", 0.)?;
-        let caption = app.doc.next_id();
-        app.doc.annotations.push(Annotation {
+        let caption = app.tab.doc.next_id();
+        app.tab.doc.annotations.push(Annotation {
             id: caption,
             position: Point::new(0., 100.),
             text: "Caption".into(),
             format: Default::default(),
         });
-        let before = app.doc.clone();
+        let before = app.tab.doc.clone();
         let _ = app.update(Message::InlineText(
             super::super::inline_text::Action::Begin(Some(caption), Point::default()),
         ));
-        app.selected = vec![id, caption];
+        app.tab.selected = vec![id, caption];
         assert_eq!(app.selected_group_alignment(), None);
         let _ = app.update(Message::GroupLabelAlign(LabelAlignment::Above));
         let _ = app.update(Message::TextAlign(TextAlign::Right));
         assert_eq!(app.toolbar_alignment(), Some(TextAlign::Right));
-        assert_eq!(app.doc, before, "Inline formatting only changes the draft");
+        assert_eq!(
+            app.tab.doc, before,
+            "Inline formatting only changes the draft"
+        );
         let _ = app.update(Message::InlineText(
             super::super::inline_text::Action::Finish(false),
         ));
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         Ok(())
     }
 }

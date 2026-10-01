@@ -1,6 +1,6 @@
 //! The Import tab, and structure or picture files chosen or dropped on the window.
 use super::workspace::{caret, hover_hint, muted_text};
-use super::{App, Message, Pending};
+use super::{App, Message};
 use crate::canvas::Tool;
 use iced::widget::canvas::{self, Geometry, Path as Outline, Stroke};
 use iced::widget::{button, column, container, row, stack, text, text_editor, tooltip};
@@ -75,8 +75,7 @@ pub struct State {
     dropped: Vec<PathBuf>,
 }
 impl State {
-    // Only macOS Finder opens ask whether the Import box is blank.
-    #[cfg(any(test, target_os = "macos"))]
+    #[cfg(test)]
     pub fn is_blank(&self) -> bool {
         self.format.is_none()
     }
@@ -152,7 +151,8 @@ fn describe(paths: &[PathBuf]) -> String {
 #[derive(Debug, PartialEq)]
 enum Plan {
     Insert(Vec<PathBuf>),
-    Open(PathBuf),
+    /// Drawings, each opened in a tab.
+    Open(Vec<PathBuf>),
     Reject(String),
 }
 fn plan(paths: &[PathBuf]) -> Plan {
@@ -162,19 +162,20 @@ fn plan(paths: &[PathBuf]) -> Plan {
             e => format!("Can't import .{e}"),
         });
     }
-    match paths {
-        [path] if kind(path) == Kind::Document => Plan::Open(path.clone()),
-        _ if paths.iter().any(|p| kind(p) == Kind::Document) => {
-            Plan::Reject("Open one drawing at a time".into())
-        }
-        _ => Plan::Insert(paths.to_vec()),
+    let documents = paths.iter().filter(|p| kind(p) == Kind::Document).count();
+    if documents == paths.len() {
+        Plan::Open(paths.to_vec())
+    } else if documents > 0 {
+        Plan::Reject("Drop drawings apart from structures and pictures".into())
+    } else {
+        Plan::Insert(paths.to_vec())
     }
 }
 impl Plan {
     fn label(&self) -> String {
         match self {
             Plan::Insert(paths) => format!("Drop to insert · {}", describe(paths)),
-            Plan::Open(path) => format!("Drop to open · {}", name(path)),
+            Plan::Open(paths) => format!("Drop to open · {}", describe(paths)),
             Plan::Reject(reason) => reason.clone(),
         }
     }
@@ -294,19 +295,19 @@ impl App {
                     self.error = true;
                     self.status = reason;
                 }
-                Plan::Open(path) => return self.pending(Pending::Open(Some(path))),
+                Plan::Open(paths) => return super::files::open_paths(paths),
                 Plan::Insert(paths) => {
-                    if self.busy {
+                    if self.tab.busy {
                         self.error = true;
                         self.status = "Wait for the current operation, then import again".into();
                         return Task::none();
                     }
-                    self.busy = true;
+                    self.tab.busy = true;
                     self.error = false;
                     self.status = "Importing…".into();
                     let ticket = Ticket {
-                        epoch: self.file_epoch,
-                        revision: self.revision,
+                        epoch: self.tab.file_epoch,
+                        revision: self.tab.revision,
                     };
                     return Task::perform(load(self.engine.clone(), paths), move |result| {
                         Message::Imports(Action::Loaded(ticket, Box::new(result)))
@@ -314,18 +315,15 @@ impl App {
                 }
             },
             Action::Loaded(ticket, result) => {
-                // Imports and engine requests share one serial busy slot.
-                // New may invalidate this result, but no newer request can
-                // start until this import releases its slot.
-                self.busy = false;
-                if ticket.epoch != self.file_epoch {
+                if ticket.epoch != self.tab.file_epoch {
                     return Task::none();
                 }
-                if ticket.revision != self.revision
-                    || self.inline_text.is_some()
-                    || self.atom_text.is_some()
-                    || self.joining.is_some()
-                    || self.cleanup.is_some()
+                self.tab.busy = false;
+                if ticket.revision != self.tab.revision
+                    || self.tab.inline_text.is_some()
+                    || self.tab.atom_text.is_some()
+                    || self.tab.joining.is_some()
+                    || self.tab.cleanup.is_some()
                 {
                     self.status =
                         "Drawing changed while importing · Import again when ready".into();
@@ -361,7 +359,7 @@ impl App {
             );
             return;
         };
-        let gap = self.doc.drawing_style.bond_length_world;
+        let gap = self.tab.doc.drawing_style.bond_length_world;
         let width = parts.iter().map(|(_, (lo, hi))| hi.x - lo.x).sum::<f32>()
             + gap * (parts.len() - 1) as f32;
         let height = parts
@@ -369,14 +367,14 @@ impl App {
             .map(|(_, (lo, hi))| hi.y - lo.y)
             .fold(0., f32::max);
         let at = self.drop_point(width, height);
-        let before = self.doc.clone();
+        let before = self.tab.doc.clone();
         let mut x = at.x - width / 2.;
         let mut selected = vec![];
         for (drawing, (lo, hi)) in parts {
             let offset = Point::new(x - lo.x, at.y - (lo.y + hi.y) / 2.);
-            let ids = reshiki::editing::append(&mut self.doc, drawing, offset);
+            let ids = reshiki::editing::append(&mut self.tab.doc, drawing, offset);
             if ids.is_empty() {
-                self.doc = before;
+                self.tab.doc = before;
                 self.error = true;
                 self.status = format!("Could not insert {}", batch.label);
                 return;
@@ -384,11 +382,11 @@ impl App {
             selected.extend(ids);
             x += hi.x - lo.x + gap;
         }
-        self.selected = selected;
+        self.tab.selected = selected;
         self.error = false;
         self.changed(before);
         if self.error {
-            self.selected.clear();
+            self.tab.selected.clear();
             return;
         }
         self.tool = Tool::Select;
@@ -413,12 +411,13 @@ impl App {
     /// system reports it again after the drop.
     fn drop_point(&self, width: f32, height: f32) -> Point {
         let at = self
+            .tab
             .hover
-            .filter(|&(_, epoch)| epoch == self.file_epoch)
-            .map_or(self.camera.center, |(at, _)| at);
+            .filter(|&(_, epoch)| epoch == self.tab.file_epoch)
+            .map_or(self.tab.camera.center, |(at, _)| at);
         let canvas = Rectangle::with_size(self.viewport);
         let paper = self.guides.paper(canvas);
-        let camera = self.camera;
+        let camera = self.tab.camera;
         let world = |x: f32, y: f32| {
             Point::new(
                 (x - canvas.width / 2.) / camera.zoom + camera.center.x,
@@ -442,13 +441,14 @@ impl App {
 
     /// Moves the view only when the new selection would be clipped.
     fn reveal_inserted(&mut self) {
-        let Some((lo, hi)) = reshiki::scene::selection_bounds(&self.doc, &self.selected) else {
+        let Some((lo, hi)) = reshiki::scene::selection_bounds(&self.tab.doc, &self.tab.selected)
+        else {
             return;
         };
         let canvas = Rectangle::with_size(self.viewport);
         let paper = self.guides.paper(canvas);
-        if !(paper.contains(self.camera.screen(lo, canvas))
-            && paper.contains(self.camera.screen(hi, canvas)))
+        if !(paper.contains(self.tab.camera.screen(lo, canvas))
+            && paper.contains(self.tab.camera.screen(hi, canvas)))
         {
             self.reveal_bounds(lo, hi);
         }
@@ -456,7 +456,7 @@ impl App {
 
     pub(super) fn import_panel(&self) -> Element<'_, Message> {
         let state = &self.imports;
-        let ready = state.format.is_some() && !self.busy;
+        let ready = state.format.is_some() && !self.tab.busy;
         let editor = text_editor(&state.input)
             .id(INPUT)
             .placeholder(format!(
@@ -545,7 +545,7 @@ impl App {
                 tooltip::Position::Top,
             ),
             field("Paste picture").on_press_maybe(
-                (reshiki::clipboard::available() && !self.clipboard_busy)
+                (reshiki::clipboard::available() && !self.tab.clipboard_busy)
                     .then_some(Message::PastePicture)
             ),
             crate::appearance::pick_list(EXAMPLES, None::<Example>, |e| Message::Example(e.1))
@@ -580,7 +580,7 @@ impl App {
         let plan = plan(&self.imports.hovered);
         let zone = Zone {
             error: matches!(plan, Plan::Reject(_)),
-            dark: self.doc.canvas_theme.is_dark(),
+            dark: self.tab.doc.canvas_theme.is_dark(),
         };
         let accent = zone.colors(false).0;
         let tag = container(text(plan.label()).size(12))
@@ -728,8 +728,56 @@ mod tests {
     }
     fn ready() -> App {
         let (mut app, _) = App::new();
-        app.busy = false;
+        app.tab.busy = false;
         app
+    }
+
+    #[test]
+    fn background_file_insertion_keeps_its_status_guards_and_undo() {
+        use crate::app::tabs::{Action as Tabs, tests::Front};
+        for stale in [false, true] {
+            let mut app = ready();
+            let id = app.tab.id;
+            let ticket = Ticket {
+                epoch: app.tab.file_epoch,
+                revision: app.tab.revision,
+            };
+            app.tab.busy = true;
+            if stale {
+                let before = app.tab.doc.clone();
+                app.tab.doc.add_atom("N", Point::default());
+                app.changed(before);
+            }
+            let before = app.tab.doc.clone();
+            let front = Front::new(&mut app);
+            let mut drawing = Document::default();
+            drawing.add_atom("O", Point::default());
+            let batch = Batch {
+                label: "caffeine.mol".into(),
+                drawings: vec![drawing],
+                warnings: vec![],
+            };
+            let _ = app.update(Message::Tab(
+                id,
+                Box::new(Message::Imports(Action::Loaded(
+                    ticket,
+                    Box::new(Ok(batch)),
+                ))),
+            ));
+            front.assert_unchanged(&app);
+            assert!(!app.tabs.background[0].busy);
+            let _ = app.update(Message::Tabs(Tabs::Select(id)));
+            if stale {
+                assert_eq!(app.tab.doc, before);
+                assert!(app.status.contains("changed"));
+            } else {
+                assert!(app.status.starts_with("Inserted caffeine.mol"));
+                assert_eq!(app.tab.doc.atoms.len(), before.atoms.len() + 1);
+                let _ = app.update(Message::Undo);
+                assert_eq!(app.tab.doc, before);
+                assert!(!app.tab.history.can_undo());
+            }
+        }
     }
 
     #[test]
@@ -749,16 +797,22 @@ mod tests {
         let pictures = paths(&["a.png", "b.JPG", "c.jpeg", "d.tif", "e.tiff", "f.webp"]);
         assert_eq!(plan(&pictures), Plan::Insert(pictures.clone()));
         for native in ["x.rsk", "x.reshiki", "x.moruno"] {
-            let path = PathBuf::from(native);
-            assert_eq!(plan(std::slice::from_ref(&path)), Plan::Open(path));
+            let path = paths(&[native]);
+            assert_eq!(plan(&path), Plan::Open(path.clone()));
         }
         assert_eq!(plan(&paths(&["x.rsk"])).label(), "Drop to open · x.rsk");
+        assert_eq!(
+            plan(&paths(&["a.rsk", "b.rsk"])).label(),
+            "Drop to open · 2 files"
+        );
         for (names, reason) in [
             (&["notes.docx"][..], "Can't import .docx"),
             (&["a.mol", "notes.docx"][..], "Can't import .docx"),
             (&["README"][..], "Can't import this file"),
-            (&["a.rsk", "b.rsk"][..], "Open one drawing at a time"),
-            (&["a.rsk", "b.mol"][..], "Open one drawing at a time"),
+            (
+                &["a.rsk", "b.mol"][..],
+                "Drop drawings apart from structures and pictures",
+            ),
         ] {
             assert_eq!(plan(&paths(names)).label(), reason);
         }
@@ -803,8 +857,8 @@ mod tests {
     #[test]
     fn mixed_empty_batch_is_rejected_without_inserting_any_files() {
         let mut app = ready();
-        app.doc.add_atom("N", Point::new(-80., 0.));
-        let before = app.doc.clone();
+        app.tab.doc.add_atom("N", Point::new(-80., 0.));
+        let before = app.tab.doc.clone();
         let mut visible = Document::default();
         visible.add_atom("O", Point::default());
         for drawings in [
@@ -817,34 +871,36 @@ mod tests {
                 warnings: vec![],
             });
             assert!(app.error && app.status.contains("contains no drawing"));
-            assert_eq!(app.doc, before);
-            assert!(!app.history.can_undo());
+            assert_eq!(app.tab.doc, before);
+            assert!(!app.tab.history.can_undo());
         }
     }
 
     #[test]
-    fn invalidated_import_keeps_the_serial_slot_until_its_completion() {
+    fn stale_import_does_not_release_a_new_documents_operation() {
         let mut app = ready();
         let ticket = Ticket {
-            epoch: app.file_epoch,
-            revision: app.revision,
+            epoch: app.tab.file_epoch,
+            revision: app.tab.revision,
         };
         assert!(
             app.update(Message::Imports(Action::Files(paths(&["old.mol"]))))
                 .units()
                 > 0
         );
-        let _ = app.update(Message::New);
-        assert_ne!(app.file_epoch, ticket.epoch);
-        assert!(app.busy);
-        assert_eq!(app.update(Message::Analyze).units(), 0);
+        app.reset_tab();
+        assert_ne!(app.tab.file_epoch, ticket.epoch);
+        assert!(app.update(Message::Analyze).units() > 0);
+        assert!(app.tab.busy);
+        let status = app.status.clone();
         let _ = app.update(Message::Imports(Action::Loaded(
             ticket,
             Box::new(Err("Old error".into())),
         )));
-        assert!(!app.busy && !app.error);
-        assert!(app.doc.all_ids().is_empty());
-        assert!(app.update(Message::Analyze).units() > 0);
+        assert!(app.tab.busy && !app.error);
+        assert_eq!(app.status, status);
+        assert!(app.tab.doc.all_ids().is_empty());
+        assert_eq!(app.update(Message::Analyze).units(), 0);
     }
 
     #[test]
@@ -885,42 +941,54 @@ mod tests {
         }
         assert_eq!(app.imports.hovered, paths(&["a.mol", "b.png"]));
         let _ = app.update(Message::Imports(Action::Dropped("a.mol".into())));
-        assert!(!app.busy, "Waits for the second file");
+        assert!(!app.tab.busy, "Waits for the second file");
         assert_eq!(app.imports.hovered.len(), 2);
         assert!(
             app.update(Message::Imports(Action::Dropped("b.png".into())))
                 .units()
                 > 0
         );
-        assert!(app.busy && app.imports.hovered.is_empty() && app.imports.dropped.is_empty());
+        assert!(app.tab.busy && app.imports.hovered.is_empty() && app.imports.dropped.is_empty());
         assert_eq!(app.status, "Importing…");
 
         let mut app = ready();
-        app.doc.add_atom("C", Point::default());
-        let before = app.doc.clone();
+        app.tab.doc.add_atom("C", Point::default());
+        let before = app.tab.doc.clone();
         let _ = app.update(Message::Imports(Action::Hovered("notes.docx".into())));
         let _ = app.update(Message::Imports(Action::Left));
         assert!(app.imports.hovered.is_empty());
         let _ = app.update(Message::Imports(Action::Hovered("notes.docx".into())));
         let _ = app.update(Message::Imports(Action::Dropped("notes.docx".into())));
-        assert_eq!(app.doc, before);
-        assert!(app.error && !app.busy);
+        assert_eq!(app.tab.doc, before);
+        assert!(app.error && !app.tab.busy);
         assert_eq!(app.status, "Can't import .docx");
     }
 
-    #[test]
-    fn a_dropped_drawing_opens_after_the_save_dialog() {
-        let path = PathBuf::from("Esterification.rsk");
+    #[tokio::test]
+    async fn dropped_drawings_open_in_tabs_without_a_save_dialog() {
+        let folder = tempfile::tempdir().unwrap();
         let mut app = ready();
-        assert!(
-            app.update(Message::Imports(Action::Files(vec![path.clone()])))
-                .units()
-                > 0
+        app.tab.doc.add_atom("O", Point::default());
+        let mut dropped = vec![];
+        for (name, element) in [("first.rsk", "N"), ("second.rsk", "S")] {
+            let mut doc = Document::default();
+            doc.add_atom(element, Point::default());
+            let path = folder.path().join(name);
+            std::fs::write(&path, serde_json::to_vec(&doc).unwrap()).unwrap();
+            dropped.push(path);
+        }
+        let task = app.update(Message::Imports(Action::Files(dropped.clone())));
+        assert!(task.units() > 0 && app.pending.is_none());
+        for path in &dropped {
+            let opened = super::super::files::read(path.clone()).await;
+            let _ = app.update(Message::FilePrepared(opened));
+        }
+        let paths: Vec<_> = app.strip().map(|tab| tab.path.clone()).collect();
+        assert_eq!(
+            paths,
+            [None, Some(dropped[0].clone()), Some(dropped[1].clone())]
         );
-        assert!(app.pending.is_none(), "A saved drawing opens at once");
-        app.doc.add_atom("O", Point::default());
-        let _ = app.update(Message::Imports(Action::Files(vec![path.clone()])));
-        assert!(matches!(&app.pending, Some(Pending::Open(Some(p))) if *p == path));
+        assert_eq!(app.tab.doc.atoms[0].element, "S");
     }
 
     #[tokio::test]
@@ -944,48 +1012,49 @@ mod tests {
 
         let mut app = ready();
         app.viewport = iced::Size::new(900., 600.);
-        app.doc.add_atom("N", Point::new(-300., 0.));
+        app.tab.doc.add_atom("N", Point::new(-300., 0.));
         let at = Point::new(40., 25.);
         let _ = app.update(Message::Canvas(Edit::Hover(Some(at))));
-        let before = app.doc.clone();
+        let before = app.tab.doc.clone();
         let ticket = Ticket {
-            epoch: app.file_epoch,
-            revision: app.revision,
+            epoch: app.tab.file_epoch,
+            revision: app.tab.revision,
         };
-        app.busy = true;
+        app.tab.busy = true;
         let loaded = |ticket, batch: &Batch| {
             Message::Imports(Action::Loaded(ticket, Box::new(Ok(batch.clone()))))
         };
         let _ = app.update(loaded(ticket, &batch));
-        assert!(!app.busy && !app.error, "{}", app.status);
-        let after = app.doc.clone();
+        assert!(!app.tab.busy && !app.error, "{}", app.status);
+        let after = app.tab.doc.clone();
         assert!(before.atoms.iter().all(|a| after.atom(a.id) == Some(a)));
         assert_eq!(after.graphics.len(), 1);
-        let (lo, hi) = reshiki::scene::selection_bounds(&after, &app.selected).ok_or("bounds")?;
+        let (lo, hi) =
+            reshiki::scene::selection_bounds(&after, &app.tab.selected).ok_or("bounds")?;
         assert!(((lo.x + hi.x) / 2. - at.x).abs() < 1. && ((lo.y + hi.y) / 2. - at.y).abs() < 1.);
         // Left to right in file order.
         let x = |ids: &[u64]| reshiki::scene::selection_bounds(&after, ids).map(|(lo, _)| lo.x);
-        let mol: Vec<_> = app.selected.iter().copied().take(3).collect();
+        let mol: Vec<_> = app.tab.selected.iter().copied().take(3).collect();
         let picture = [after.graphics[0].id];
         assert!(x(&mol) < x(&picture));
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, after);
+        assert_eq!(app.tab.doc, after);
 
         // A newer drawing or file wins over a late result.
         for new_file in [false, true] {
             let ticket = Ticket {
-                epoch: app.file_epoch,
-                revision: app.revision,
+                epoch: app.tab.file_epoch,
+                revision: app.tab.revision,
             };
             if new_file {
-                app.file_epoch += 1;
+                app.tab.file_epoch += 1;
             } else {
-                app.revision += 1;
+                app.tab.revision += 1;
             }
             let _ = app.update(loaded(ticket, &batch));
-            assert_eq!(app.doc, after);
+            assert_eq!(app.tab.doc, after);
         }
         // A pointer that left the canvas, as it does to reach Finder or the
         // Import tab, leaves files at the view center.
@@ -993,15 +1062,15 @@ mod tests {
         let _ = app.update(Message::Canvas(Edit::Hover(Some(at))));
         assert_eq!(app.drop_point(0., 0.), at);
         let _ = app.update(Message::Canvas(Edit::Hover(None)));
-        assert_eq!(app.drop_point(0., 0.), app.camera.center);
+        assert_eq!(app.drop_point(0., 0.), app.tab.camera.center);
         // Drawings dropped near an edge move inward rather than scroll the view.
-        let edge = app.camera.center.x + app.viewport.width / 2. / app.camera.zoom;
+        let edge = app.tab.camera.center.x + app.viewport.width / 2. / app.tab.camera.zoom;
         let _ = app.update(Message::Canvas(Edit::Hover(Some(Point::new(
             edge - 1.,
             at.y,
         )))));
         let x = app.drop_point(200., 0.).x;
-        assert!(x + 100. < edge && x > app.camera.center.x, "{x}");
+        assert!(x + 100. < edge && x > app.tab.camera.center.x, "{x}");
         Ok(())
     }
 
@@ -1010,7 +1079,6 @@ mod tests {
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("tests/fixtures/native-ethyl-clipboard.cdx");
         let mut app = ready();
-        let key = app.file_request_key();
         let opened = super::super::files::read(path).await;
         let Some((_, Ok(super::super::files::Prepared::Import { format, contents }))) = &opened
         else {
@@ -1020,12 +1088,8 @@ mod tests {
         let response = LocalEngine::default()
             .request(Request::import(format, contents))
             .await?;
-        assert!(
-            app.update(Message::FilePrepared(key, opened.clone()))
-                .units()
-                > 0
-        );
-        assert!(app.busy, "{}", app.status);
+        assert!(app.update(Message::FilePrepared(opened.clone())).units() > 0);
+        assert!(app.tab.busy, "{}", app.status);
         assert!(!response.document.ok_or("drawing")?.atoms.is_empty());
         Ok(())
     }

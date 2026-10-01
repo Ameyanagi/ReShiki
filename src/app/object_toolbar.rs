@@ -102,26 +102,28 @@ impl Command {
     }
 
     pub(super) fn enabled(self, app: &App, objects: usize) -> bool {
-        if app.cleanup.is_some() || app.joining.is_some() {
+        if app.tab.cleanup.is_some() || app.tab.joining.is_some() {
             return false;
         }
         match self {
             Self::Layer(_) => {
-                app.doc
+                app.tab
+                    .doc
                     .graphics
                     .iter()
-                    .any(|g| app.selected.contains(&g.id))
+                    .any(|g| app.tab.selected.contains(&g.id))
                     || app
+                        .tab
                         .doc
                         .bonds
                         .iter()
-                        .any(|b| app.selected.contains(&b.a) && app.selected.contains(&b.b))
+                        .any(|b| app.tab.selected.contains(&b.a) && app.tab.selected.contains(&b.b))
             }
             Self::Align(Arrange::DistributeHorizontal | Arrange::DistributeVertical) => {
                 objects >= 3
             }
             Self::Align(_) => objects >= 2,
-            Self::Reflect(_) | Self::Rotate => !app.selected.is_empty(),
+            Self::Reflect(_) | Self::Rotate => !app.tab.selected.is_empty(),
         }
     }
 }
@@ -144,10 +146,11 @@ impl App {
     /// selection changes both in one history step, using the existing commands'
     /// ordering rules. Text and arrows have no editable stacking order.
     pub(super) fn layer_objects(&mut self, front: bool, graphics: bool, bonds: bool) {
-        let before = self.doc.clone();
+        let before = self.tab.doc.clone();
         if graphics {
             let edge = if front {
-                self.doc
+                self.tab
+                    .doc
                     .graphics
                     .iter()
                     .map(|g| g.layer)
@@ -156,7 +159,8 @@ impl App {
                     .max(0)
                     .saturating_add(1)
             } else {
-                self.doc
+                self.tab
+                    .doc
                     .graphics
                     .iter()
                     .map(|g| g.layer)
@@ -165,15 +169,16 @@ impl App {
                     .min(0)
                     .saturating_sub(1)
             };
-            for graphic in &mut self.doc.graphics {
-                if self.selected.contains(&graphic.id) {
+            for graphic in &mut self.tab.doc.graphics {
+                if self.tab.selected.contains(&graphic.id) {
                     graphic.layer = edge;
                 }
             }
         }
         if bonds {
             let edge = if front {
-                self.doc
+                self.tab
+                    .doc
                     .bonds
                     .iter()
                     .map(|b| b.z_order)
@@ -181,7 +186,8 @@ impl App {
                     .unwrap_or(0)
                     .saturating_add(1)
             } else {
-                self.doc
+                self.tab
+                    .doc
                     .bonds
                     .iter()
                     .map(|b| b.z_order)
@@ -190,8 +196,8 @@ impl App {
                     .min(-1)
                     .saturating_sub(1)
             };
-            for bond in &mut self.doc.bonds {
-                if self.selected.contains(&bond.a) && self.selected.contains(&bond.b) {
+            for bond in &mut self.tab.doc.bonds {
+                if self.tab.selected.contains(&bond.a) && self.tab.selected.contains(&bond.b) {
                     bond.z_order = edge;
                 }
             }
@@ -206,7 +212,7 @@ impl App {
         let open = |page, x| Message::ContextMenu(context_menu::Action::Open(page, x));
         if compact {
             // Every arrange command needs a selection.
-            let enabled = !self.selected.is_empty();
+            let enabled = !self.tab.selected.is_empty();
             return self.menu_anchor(
                 Page::Arrange,
                 button(
@@ -432,13 +438,13 @@ mod tests {
 
     fn fixture() -> App {
         let (mut app, _) = App::new();
-        app.doc = Document::default();
+        app.tab.doc = Document::default();
         for (x, y, element) in [(40., 40., "O"), (190., 100., "N"), (360., 65., "Cl")] {
-            let a = app.doc.add_atom("C", Point::new(x, y));
-            let b = app.doc.add_atom(element, Point::new(x + 40., y));
-            app.doc.add_bond(a, b, 1, "plain");
+            let a = app.tab.doc.add_atom("C", Point::new(x, y));
+            let b = app.tab.doc.add_atom(element, Point::new(x + 40., y));
+            app.tab.doc.add_bond(a, b, 1, "plain");
         }
-        app.selected = app.doc.all_ids();
+        app.tab.selected = app.tab.doc.all_ids();
         app
     }
 
@@ -447,32 +453,40 @@ mod tests {
         let mut app = fixture();
         assert_eq!(app.alignment_count(), 3);
         assert!(Command::Align(Arrange::DistributeHorizontal).enabled(&app, app.alignment_count()));
-        app.selected.truncate(4);
+        app.tab.selected.truncate(4);
         assert_eq!(app.alignment_count(), 2);
         assert!(Command::Align(Arrange::AlignLeft).enabled(&app, app.alignment_count()));
         assert!(
             !Command::Align(Arrange::DistributeHorizontal).enabled(&app, app.alignment_count())
         );
-        app.selected.truncate(2);
+        app.tab.selected.truncate(2);
         assert_eq!(app.alignment_count(), 1);
         assert!(!Command::Align(Arrange::AlignLeft).enabled(&app, app.alignment_count()));
         assert!(Command::Layer(true).enabled(&app, 1));
-        app.selected.truncate(1);
+        app.tab.selected.truncate(1);
         assert!(!Command::Layer(true).enabled(&app, 1));
         assert!(Command::Rotate.enabled(&app, 1));
-        app.selected.clear();
+        app.tab.selected.clear();
         assert!(!Command::Reflect(true).enabled(&app, 0));
         assert!(!Command::Rotate.enabled(&app, 0));
 
         let mut grouped = fixture();
-        grouped.doc.group_selection(&grouped.selected[..4]).unwrap();
+        grouped
+            .tab
+            .doc
+            .group_selection(&grouped.tab.selected[..4])
+            .unwrap();
         assert_eq!(grouped.alignment_count(), 2);
         assert!(Command::Align(Arrange::AlignLeft).enabled(&grouped, grouped.alignment_count()));
         assert!(
             !Command::Align(Arrange::DistributeHorizontal)
                 .enabled(&grouped, grouped.alignment_count())
         );
-        grouped.doc.group_selection(&grouped.selected).unwrap();
+        grouped
+            .tab
+            .doc
+            .group_selection(&grouped.tab.selected)
+            .unwrap();
         assert_eq!(grouped.alignment_count(), 1);
         assert!(!Command::Align(Arrange::AlignLeft).enabled(&grouped, grouped.alignment_count()));
     }
@@ -480,12 +494,12 @@ mod tests {
     #[test]
     fn arrange_setting_roundtrips_and_ignores_the_retired_toolbar_key() {
         let mut app = fixture();
-        let before = app.doc.clone();
+        let before = app.tab.doc.clone();
         for visible in [false, true] {
             let _ = app.update(Message::ObjectToolbar(Action::Visible(visible)));
             assert_eq!(app.appearance.arrange_controls, visible);
-            assert_eq!(app.doc, before);
-            assert!(!app.history.can_undo());
+            assert_eq!(app.tab.doc, before);
+            assert!(!app.tab.history.can_undo());
             let bytes = serde_json::to_vec(&app.appearance).unwrap();
             let reloaded: crate::appearance::Settings = serde_json::from_slice(&bytes).unwrap();
             assert_eq!(reloaded.arrange_controls, visible);
@@ -503,8 +517,8 @@ mod tests {
     #[test]
     fn mixed_layers_are_one_undo_step_and_survive_save_reopen() {
         let mut app = fixture();
-        let id = app.doc.next_id();
-        app.doc.graphics.push(Graphic::dragged(
+        let id = app.tab.doc.next_id();
+        app.tab.doc.graphics.push(Graphic::dragged(
             id,
             GraphicKind::Rectangle,
             Point::new(10., 10.),
@@ -513,31 +527,31 @@ mod tests {
             BracketSides::Both,
             false,
         ));
-        app.selected = vec![app.doc.atoms[0].id, app.doc.atoms[1].id, id];
-        let before = app.doc.clone();
+        app.tab.selected = vec![app.tab.doc.atoms[0].id, app.tab.doc.atoms[1].id, id];
+        let before = app.tab.doc.clone();
         let _ = app.update(Command::Layer(true).message());
-        assert_eq!(app.doc.graphics[0].layer, 1);
-        assert_eq!(app.doc.bonds[0].z_order, 1);
-        assert_eq!(app.doc.bonds[1].z_order, 0);
-        let after = app.doc.clone();
+        assert_eq!(app.tab.doc.graphics[0].layer, 1);
+        assert_eq!(app.tab.doc.bonds[0].z_order, 1);
+        assert_eq!(app.tab.doc.bonds[1].z_order, 0);
+        let after = app.tab.doc.clone();
         let reopened: Document =
             serde_json::from_slice(&serde_json::to_vec(&after).unwrap()).unwrap();
         assert_eq!(reopened, after);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
-        assert!(!app.history.can_undo());
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, after);
+        assert_eq!(app.tab.doc, after);
         let _ = app.update(Command::Layer(false).message());
-        assert_eq!(app.doc.graphics[0].layer, -1);
-        assert_eq!(app.doc.bonds[0].z_order, -2);
+        assert_eq!(app.tab.doc.graphics[0].layer, -1);
+        assert_eq!(app.tab.doc.bonds[0].z_order, -2);
     }
 
     #[test]
     fn bond_depth_changes_only_bonds() {
         let mut app = fixture();
-        let id = app.doc.next_id();
-        app.doc.graphics.push(Graphic::dragged(
+        let id = app.tab.doc.next_id();
+        app.tab.doc.graphics.push(Graphic::dragged(
             id,
             GraphicKind::Rectangle,
             Point::new(10., 10.),
@@ -546,11 +560,11 @@ mod tests {
             BracketSides::Both,
             false,
         ));
-        app.selected.push(id);
-        let graphics = app.doc.graphics.clone();
+        app.tab.selected.push(id);
+        let graphics = app.tab.doc.graphics.clone();
         let _ = app.update(Message::BondDepth(true));
-        assert!(app.doc.bonds.iter().all(|b| b.z_order == 1));
-        assert_eq!(app.doc.graphics, graphics);
+        assert!(app.tab.doc.bonds.iter().all(|b| b.z_order == 1));
+        assert_eq!(app.tab.doc.graphics, graphics);
     }
 
     #[test]
@@ -563,14 +577,14 @@ mod tests {
             Command::Rotate,
         ] {
             let mut app = fixture();
-            let before = app.doc.clone();
+            let before = app.tab.doc.clone();
             let _ = app.update(command.message());
-            assert_ne!(app.doc, before);
-            let after = app.doc.clone();
+            assert_ne!(app.tab.doc, before);
+            let after = app.tab.doc.clone();
             let _ = app.update(Message::Undo);
-            assert_eq!(app.doc, before);
+            assert_eq!(app.tab.doc, before);
             let _ = app.update(Message::Redo);
-            assert_eq!(app.doc, after);
+            assert_eq!(app.tab.doc, after);
         }
     }
 
@@ -590,7 +604,7 @@ mod tests {
         for (width, selected) in [(636., true), (636., false), (876., true)] {
             let mut app = fixture();
             if !selected {
-                app.selected.clear();
+                app.tab.selected.clear();
             }
             let size = Size::new(width, 80.);
             let left = 14. + (width - 28.) - GROUP_WIDTH;

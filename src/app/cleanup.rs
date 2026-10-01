@@ -15,17 +15,18 @@ impl App {
         scope: Option<Scope>,
         orientation: Option<bool>,
     ) -> Task<Message> {
-        if self.busy {
+        if self.tab.busy {
             return Task::none();
         }
-        let mut job = if let Some(preview) = &self.cleanup {
+        let mut job = if let Some(preview) = &self.tab.cleanup {
             preview.job.clone()
         } else {
             let selection: Vec<_> = self
+                .tab
                 .doc
-                .expand_abbreviation_selection(&self.selected)
+                .expand_abbreviation_selection(&self.tab.selected)
                 .into_iter()
-                .filter(|id| self.doc.atom(*id).is_some())
+                .filter(|id| self.tab.doc.atom(*id).is_some())
                 .collect();
             if selection.is_empty() {
                 self.status = "Select a molecule or atoms to clean up".into();
@@ -38,8 +39,8 @@ impl App {
                     ..Options::default()
                 },
                 selection,
-                serial: self.cleanup_serial,
-                epoch: self.file_epoch,
+                serial: self.tab.cleanup_serial,
+                epoch: self.tab.file_epoch,
             }
         };
         if let Some(scope) = scope {
@@ -52,9 +53,9 @@ impl App {
             self.status = "Select atoms before using selected cleanup".into();
             return Task::none();
         }
-        self.cleanup_serial = self.cleanup_serial.wrapping_add(1);
-        job.serial = self.cleanup_serial;
-        let mut request = Request::molecule("clean", self.doc.clone());
+        self.tab.cleanup_serial = self.tab.cleanup_serial.wrapping_add(1);
+        job.serial = self.tab.cleanup_serial;
+        let mut request = Request::molecule("clean", self.tab.doc.clone());
         request.selected_ids = Some(job.selection.clone());
         request.cleanup = Some(job.options);
         self.run(request, Job::Clean(job))

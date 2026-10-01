@@ -24,46 +24,49 @@ pub struct State {
 }
 impl App {
     pub(super) fn cancel_join(&mut self) {
-        if let Some(state) = self.joining.take() {
-            self.selected = state
+        if let Some(state) = self.tab.joining.take() {
+            self.tab.selected = state
                 .prepared
                 .moving
                 .into_iter()
-                .filter(|id| self.doc.all_ids().contains(id))
+                .filter(|id| self.tab.doc.all_ids().contains(id))
                 .collect();
             self.tool = Tool::Select;
-            self.hover = None;
+            self.tab.hover = None;
         }
     }
     pub(super) fn join_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Begin => {
-                if self.cleanup.is_some() || !self.finish_inline(true) {
+                if self.tab.cleanup.is_some() || !self.finish_inline(true) {
                     return Task::none();
                 }
                 self.cancel_join();
-                match Prepared::new(&self.doc, &self.selected) {
+                match Prepared::new(&self.tab.doc, &self.tab.selected) {
                     Ok(prepared) => {
                         let mode = Connection::Connect;
                         let anchor = self
+                            .tab
                             .hover
-                            .filter(|(_, epoch)| *epoch == self.file_epoch)
-                            .and_then(|(p, _)| prepared.fragment.nearest(p, 10. / self.camera.zoom))
+                            .filter(|(_, epoch)| *epoch == self.tab.file_epoch)
+                            .and_then(|(p, _)| {
+                                prepared.fragment.nearest(p, 10. / self.tab.camera.zoom)
+                            })
                             .map(Anchor::Atom)
                             .unwrap_or_else(|| prepared.default_anchor(mode));
-                        self.selected = prepared.moving.clone();
-                        self.joining = Some(State {
+                        self.tab.selected = prepared.moving.clone();
+                        self.tab.joining = Some(State {
                             prepared,
                             anchor,
                             mode,
-                            revision: self.revision,
-                            epoch: self.file_epoch,
+                            revision: self.tab.revision,
+                            epoch: self.tab.file_epoch,
                         });
                         self.tool = Tool::Template;
                         self.palette = None;
                         self.inspector_open = true;
                         self.inspector_tab = InspectorTab::Properties;
-                        self.fit_to_view = false;
+                        self.tab.fit_to_view = false;
                         self.status = "Choose the source atom or bond in the preview, then its destination on the canvas".into();
                         self.error = false;
                     }
@@ -79,7 +82,7 @@ impl App {
                 self.status = "Move & attach cancelled".into();
             }
             Action::Anchor(anchor) => {
-                if let Some(state) = &mut self.joining
+                if let Some(state) = &mut self.tab.joining
                     && anchor.valid(&state.prepared.fragment)
                 {
                     state.anchor = anchor;
@@ -91,7 +94,7 @@ impl App {
                 }
             }
             Action::Mode(mode) => {
-                if let Some(state) = &mut self.joining {
+                if let Some(state) = &mut self.tab.joining {
                     state.mode = mode;
                     if (mode == Connection::FuseBond) != matches!(state.anchor, Anchor::Bond(..)) {
                         state.anchor = state.prepared.default_anchor(mode);
@@ -102,7 +105,7 @@ impl App {
         Task::none()
     }
     pub(super) fn join_panel(&self) -> Element<'_, Message> {
-        let Some(state) = &self.joining else {
+        let Some(state) = &self.tab.joining else {
             return text("Select a fragment to attach").into();
         };
         let preview: Element<'_, Anchor> = canvas(TemplateAnchorPreview {
@@ -174,73 +177,73 @@ mod tests {
 
     fn ready() -> App {
         let (mut app, _) = App::new();
-        app.busy = false;
-        app.doc = Document::default();
-        app.doc.add_atom("C", Point::default());
-        let source = app.doc.add_atom("C", Point::new(180., 0.));
-        let end = app.doc.add_atom("C", Point::new(222., 0.));
-        app.doc.add_bond(source, end, 1, "plain");
-        app.selected = vec![source];
+        app.tab.busy = false;
+        app.tab.doc = Document::default();
+        app.tab.doc.add_atom("C", Point::default());
+        let source = app.tab.doc.add_atom("C", Point::new(180., 0.));
+        let end = app.tab.doc.add_atom("C", Point::new(222., 0.));
+        app.tab.doc.add_bond(source, end, 1, "plain");
+        app.tab.selected = vec![source];
         app
     }
     #[test]
     fn joining_uses_the_preview_and_is_one_undo_step() {
         let mut app = ready();
-        let before = app.doc.clone();
+        let before = app.tab.doc.clone();
         let _ = app.update(Message::Join(Action::Begin));
-        assert_eq!(app.doc, before);
-        let state = app.joining.as_ref().unwrap();
+        assert_eq!(app.tab.doc, before);
+        let state = app.tab.joining.as_ref().unwrap();
         let (expected, _) = state
             .prepared
             .place(
                 Point::default(),
                 None,
-                10. / app.camera.zoom,
+                10. / app.tab.camera.zoom,
                 state.anchor,
                 state.mode,
             )
             .unwrap();
         let _ = app.update(Message::Canvas(Edit::Template(Point::default(), None)));
-        assert!(app.joining.is_none());
-        assert_eq!(app.doc, expected);
-        assert_eq!(app.doc.bonds.len(), 2);
+        assert!(app.tab.joining.is_none());
+        assert_eq!(app.tab.doc, expected);
+        assert_eq!(app.tab.doc.bonds.len(), 2);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, expected);
+        assert_eq!(app.tab.doc, expected);
     }
     #[test]
     fn cancel_switching_tools_and_invalid_targets_keep_the_original() {
         let mut app = ready();
-        let before = app.doc.clone();
+        let before = app.tab.doc.clone();
         let _ = app.update(Message::Join(Action::Begin));
         let _ = app.update(Message::Canvas(Edit::Template(
             Point::new(500., 500.),
             None,
         )));
-        assert!(app.joining.is_some());
-        assert_eq!(app.doc, before);
+        assert!(app.tab.joining.is_some());
+        assert_eq!(app.tab.doc, before);
         let _ = app.update(Message::Escape);
-        assert!(app.joining.is_none());
-        assert_eq!(app.doc, before);
-        assert!(!app.history.can_undo());
+        assert!(app.tab.joining.is_none());
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
         let _ = app.update(Message::Join(Action::Begin));
         let _ = app.update(Message::Tool(Tool::Bond(2)));
-        assert!(app.joining.is_none());
+        assert!(app.tab.joining.is_none());
         assert_eq!(app.tool, Tool::Bond(2));
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
     }
     #[test]
     fn a_changed_document_cannot_be_overwritten_by_a_prepared_join() {
         let mut app = ready();
         let _ = app.update(Message::Join(Action::Begin));
-        let before = app.doc.clone();
-        app.doc.add_atom("O", Point::new(300., 100.));
+        let before = app.tab.doc.clone();
+        app.tab.doc.add_atom("O", Point::new(300., 100.));
         app.changed(before);
-        let changed = app.doc.clone();
+        let changed = app.tab.doc.clone();
         let _ = app.update(Message::Canvas(Edit::Template(Point::default(), None)));
-        assert!(app.joining.is_none());
-        assert_eq!(app.doc, changed);
+        assert!(app.tab.joining.is_none());
+        assert_eq!(app.tab.doc, changed);
         assert!(app.error);
     }
     #[test]
@@ -248,13 +251,13 @@ mod tests {
         let mut app = ready();
         let _ = app.update(Message::Join(Action::Begin));
         let _ = app.update(Message::Join(Action::Anchor(Anchor::Bond(2, 3))));
-        assert_eq!(app.joining.as_ref().unwrap().mode, Connection::FuseBond);
+        assert_eq!(app.tab.joining.as_ref().unwrap().mode, Connection::FuseBond);
         let _ = app.update(Message::Join(Action::Mode(Connection::ShareAtom)));
         assert!(matches!(
-            app.joining.as_ref().unwrap().anchor,
+            app.tab.joining.as_ref().unwrap().anchor,
             Anchor::Atom(_)
         ));
         let _ = app.update(Message::Join(Action::Anchor(Anchor::Atom(3))));
-        assert_eq!(app.joining.as_ref().unwrap().anchor, Anchor::Atom(3));
+        assert_eq!(app.tab.joining.as_ref().unwrap().anchor, Anchor::Atom(3));
     }
 }

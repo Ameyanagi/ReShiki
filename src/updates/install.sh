@@ -6,12 +6,18 @@ payload=$3
 stage=$4
 drawing=$5
 platform=$6
+shift 6
 reopen() {
+    # Convert the additional paths to --open pairs without evaluating shell text.
+    for path do
+        shift
+        set -- "$@" --open "$path"
+    done
+    if [ -n "$drawing" ]; then set -- --open "$drawing" "$@"; fi
     if [ "$platform" = macos ]; then
-        if [ -n "$drawing" ]; then /usr/bin/open -n "$target" --args --open "$drawing"; else /usr/bin/open -n "$target"; fi
+        /usr/bin/open -n "$target" --args "$@"
     else
-        if [ -n "$drawing" ]; then "$target/reshiki" --open "$drawing" </dev/null >/dev/null 2>&1 &
-        else "$target/reshiki" </dev/null >/dev/null 2>&1 & fi
+        "$target/reshiki" "$@" </dev/null >/dev/null 2>&1 &
     fi
 }
 touch "$stage/ready"
@@ -28,12 +34,12 @@ if [ "$platform" = macos ]; then
             if [ -e "$target" ]; then /bin/mv "$target" "$stage/failed.app"; fi
             /bin/mv "$backup" "$target"
         fi
-        reopen
+        reopen "$@"
     }
-    trap 'rollback' EXIT
+    trap 'rollback "$@"' EXIT
     /bin/mv "$target" "$backup"
     /bin/mv "$payload" "$target"
-    reopen
+    reopen "$@"
     trap - EXIT
 else
     mkdir "$stage/previous" "$stage/installed"
@@ -42,16 +48,16 @@ else
             if [ -e "$stage/installed/$name" ]; then rm -rf "$target/$name"; fi
             if [ -e "$stage/previous/$name" ]; then /bin/mv "$stage/previous/$name" "$target/$name"; fi
         done
-        reopen
+        reopen "$@"
     }
-    trap 'rollback' EXIT
+    trap 'rollback "$@"' EXIT
     for name in reshiki reshiki-inchi-helper Licenses build.json README.txt; do
         [ -e "$payload/$name" ] || continue
         if [ -e "$target/$name" ]; then /bin/mv "$target/$name" "$stage/previous/$name"; fi
         touch "$stage/installed/$name"
         /bin/mv "$payload/$name" "$target/$name"
     done
-    reopen
+    reopen "$@"
     trap - EXIT
 fi
 # Retain the previous application and log for recovery. No user files are deleted.

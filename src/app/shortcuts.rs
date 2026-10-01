@@ -260,21 +260,21 @@ impl App {
             Action::ReactionCopy => self.reaction_copy_shortcut(),
             Action::SelectRecent => self.select_recent_shortcut(),
             Action::FixedLength => {
-                return self.update(Message::FixedLength(!self.bond_drawing.fixed_length));
+                return self.update(Message::FixedLength(!self.tab.bond_drawing.fixed_length));
             }
             Action::FixedAngles => {
-                return self.update(Message::FixedAngles(!self.bond_drawing.fixed_angles));
+                return self.update(Message::FixedAngles(!self.tab.bond_drawing.fixed_angles));
             }
             Action::Rulers => return self.update(Message::Rulers(!self.guides.rulers)),
             Action::Crosshair => return self.update(Message::Crosshair(!self.guides.crosshair)),
             Action::Nudge(x, y) => {
-                let before = self.doc.clone();
+                let before = self.tab.doc.clone();
                 let ids = if self.tool == Tool::EditPoints {
-                    self.selected.clone()
+                    self.tab.selected.clone()
                 } else {
-                    reshiki::attachments::movement_selection(&self.doc, &self.selected)
+                    reshiki::attachments::movement_selection(&self.tab.doc, &self.tab.selected)
                 };
-                self.doc.translate(&ids, x, y);
+                self.tab.doc.translate(&ids, x, y);
                 self.changed(before);
             }
             Action::Join => {
@@ -282,17 +282,17 @@ impl App {
                 self.commit_hotkey(result, "Joined selected attachment sites");
             }
             Action::CopyText(format) => {
-                if self.selected.is_empty() {
+                if self.tab.selected.is_empty() {
                     self.status = "Select a structure to copy".into();
                     return Task::none();
                 }
                 let engine = self.engine.clone();
                 let mut request = super::Request::molecule(
                     "export",
-                    editing::selection(&self.doc, &self.selected),
+                    editing::selection(&self.tab.doc, &self.tab.selected),
                 );
                 request.format = Some(format.into());
-                let (epoch, revision) = (self.file_epoch, self.revision);
+                let (epoch, revision) = (self.tab.file_epoch, self.tab.revision);
                 return Task::perform(
                     async move {
                         engine
@@ -315,7 +315,7 @@ impl App {
                 revision,
                 result,
             } => {
-                if epoch != self.file_epoch || revision != self.revision {
+                if epoch != self.tab.file_epoch || revision != self.tab.revision {
                     self.status = "Drawing changed; copy the structure again".into();
                     return Task::none();
                 }
@@ -340,8 +340,8 @@ impl App {
             joining::Prepared,
             templates::{Anchor, Connection},
         };
-        if let [source, target] = self.selected.as_slice() {
-            let prepared = Prepared::new(&self.doc, &[*source])?;
+        if let [source, target] = self.tab.selected.as_slice() {
+            let prepared = Prepared::new(&self.tab.doc, &[*source])?;
             let point = prepared
                 .base
                 .atom(*target)
@@ -355,15 +355,16 @@ impl App {
                 Connection::ShareAtom,
             );
         }
-        if self.selected.len() == 4 {
+        if self.tab.selected.len() == 4 {
             let bonds: Vec<_> = self
+                .tab
                 .doc
                 .bonds
                 .iter()
-                .filter(|b| self.selected.contains(&b.a) && self.selected.contains(&b.b))
+                .filter(|b| self.tab.selected.contains(&b.a) && self.tab.selected.contains(&b.b))
                 .collect();
             if let [source, target] = bonds.as_slice() {
-                let prepared = Prepared::new(&self.doc, &[source.a, source.b])?;
+                let prepared = Prepared::new(&self.tab.doc, &[source.a, source.b])?;
                 let a = prepared
                     .base
                     .atom(target.a)
@@ -392,8 +393,8 @@ impl App {
     fn commit_hotkey(&mut self, result: Result<(Document, Vec<u64>), String>, status: &str) {
         match result {
             Ok((doc, selected)) => {
-                let before = std::mem::replace(&mut self.doc, doc);
-                self.selected = selected;
+                let before = std::mem::replace(&mut self.tab.doc, doc);
+                self.tab.selected = selected;
                 self.changed(before);
                 self.status = status.into();
                 self.error = false;
@@ -409,22 +410,23 @@ impl App {
 
     pub(super) fn context_key(&mut self, key: &str) -> Task<Message> {
         let point = self
+            .tab
             .hover
-            .filter(|(_, epoch)| *epoch == self.file_epoch)
+            .filter(|(_, epoch)| *epoch == self.tab.file_epoch)
             .map(|(p, _)| p);
-        let hovered_atom = point.and_then(|p| self.doc.nearest(p, 10. / self.camera.zoom));
+        let hovered_atom = point.and_then(|p| self.tab.doc.nearest(p, 10. / self.tab.camera.zoom));
         let hovered_bond = if hovered_atom.is_none() {
             point
-                .and_then(|p| editing::nearest_bond(&self.doc, p, 7. / self.camera.zoom))
-                .and_then(|i| self.doc.bonds.get(i))
+                .and_then(|p| editing::nearest_bond(&self.tab.doc, p, 7. / self.tab.camera.zoom))
+                .and_then(|i| self.tab.doc.bonds.get(i))
                 .map(|b| (b.a, b.b))
         } else {
             None
         };
         let atom = hovered_atom.or_else(|| {
             if hovered_bond.is_none() {
-                match self.selected.as_slice() {
-                    [id] if self.doc.atom(*id).is_some() => Some(*id),
+                match self.tab.selected.as_slice() {
+                    [id] if self.tab.doc.atom(*id).is_some() => Some(*id),
                     _ => None,
                 }
             } else {
@@ -433,9 +435,10 @@ impl App {
         });
         let bond = hovered_bond.or_else(|| {
             if atom.is_none() {
-                match self.selected.as_slice() {
+                match self.tab.selected.as_slice() {
                     [a, b]
                         if self
+                            .tab
                             .doc
                             .bonds
                             .iter()
@@ -454,10 +457,10 @@ impl App {
         if key == "a"
             && hovered_atom.is_none()
             && hovered_bond.is_none()
-            && reshiki::rings::selected_cycle(&self.doc, &self.selected).is_some()
-            && self.doc.bonds.iter().any(|b| {
-                self.selected.contains(&b.a)
-                    && self.selected.contains(&b.b)
+            && reshiki::rings::selected_cycle(&self.tab.doc, &self.tab.selected).is_some()
+            && self.tab.doc.bonds.iter().any(|b| {
+                self.tab.selected.contains(&b.a)
+                    && self.tab.selected.contains(&b.b)
                     && matches!(b.order, 2 | 4)
             })
         {
@@ -465,18 +468,19 @@ impl App {
         }
         if key == "g" {
             if let Some(id) = atom {
-                self.selected = vec![id];
+                self.tab.selected = vec![id];
             } else if let Some((a, b)) = bond {
-                self.selected = vec![a, b];
+                self.tab.selected = vec![a, b];
             }
             return Task::none();
         }
         if ["/", "?", "=", "Enter"].contains(&key) {
             if key == "Enter"
                 && self
+                    .tab
                     .selected
                     .iter()
-                    .filter(|id| self.doc.atom(**id).is_some())
+                    .filter(|id| self.tab.doc.atom(**id).is_some())
                     .count()
                     > 1
             {
@@ -487,19 +491,20 @@ impl App {
                 }));
             }
             if let Some(id) = atom {
-                self.selected = vec![id];
+                self.tab.selected = vec![id];
                 if ["=", "Enter"].contains(&key) {
                     return self
                         .update(Message::AtomText(super::atom_text::Action::Begin(Some(id))));
                 }
             } else if let Some((a, b)) = bond {
-                self.selected = vec![a, b];
+                self.tab.selected = vec![a, b];
             }
             return self.update(Message::Inspector(InspectorTab::Properties));
         }
         if let Some((a, b)) = bond {
             if let Some(preset) = hotkeys::bond_preset(key) {
                 if self
+                    .tab
                     .doc
                     .abbreviations
                     .iter()
@@ -509,21 +514,21 @@ impl App {
                     self.error = true;
                     return Task::none();
                 }
-                self.selected = vec![a, b];
+                self.tab.selected = vec![a, b];
                 // Repeated 2 cycles placement while keeping chemical order intact.
                 if key == "2"
-                    && let Some(current) = self.doc.bonds.iter().find(|e| {
+                    && let Some(current) = self.tab.doc.bonds.iter().find(|e| {
                         ((e.a == a && e.b == b) || (e.a == b && e.b == a))
                             && reshiki::bonds::BondPreset::of(e)
                                 == Some(reshiki::bonds::BondPreset::Double)
                     })
                 {
                     return self.update(Message::BondPosition(
-                        reshiki::scene::effective_double_position(&self.doc, current).cycled(),
+                        reshiki::scene::effective_double_position(&self.tab.doc, current).cycled(),
                     ));
                 }
                 let result =
-                    hotkeys::bond_edit(&self.doc, a, b, preset).map(|doc| (doc, vec![a, b]));
+                    hotkeys::bond_edit(&self.tab.doc, a, b, preset).map(|doc| (doc, vec![a, b]));
                 self.commit_hotkey(result, &format!("{preset} bond"));
                 return Task::none();
             }
@@ -534,33 +539,35 @@ impl App {
                 _ => None,
             };
             if let Some(position) = position {
-                self.selected = vec![a, b];
+                self.tab.selected = vec![a, b];
                 return self.update(Message::BondPosition(position));
             }
             if key == "f" {
-                self.selected = vec![a, b];
+                self.tab.selected = vec![a, b];
                 return self.update(Message::BondDepth(true));
             }
         }
         if let Some(id) = atom
-            && let Some(result) = hotkeys::atom_edit(&self.doc, id, key, self.bond_drawing.length)
+            && let Some(result) =
+                hotkeys::atom_edit(&self.tab.doc, id, key, self.tab.bond_drawing.length)
         {
             let result = result.map(|(doc, focus)| (doc, vec![focus]));
             self.commit_hotkey(result, "Atom shortcut applied");
             if !self.error {
-                self.labels_dirty = true;
+                self.tab.labels_dirty = true;
                 // Continue growth at its new endpoint until the pointer moves again.
-                self.hover = self
+                self.tab.hover = self
+                    .tab
                     .selected
                     .first()
-                    .and_then(|id| self.doc.atom(*id))
-                    .map(|a| (a.position, self.file_epoch));
+                    .and_then(|id| self.tab.doc.atom(*id))
+                    .map(|a| (a.position, self.tab.file_epoch));
             }
             return Task::none();
         }
         if (atom.is_some() || bond.is_some())
             && let Some(result) =
-                hotkeys::ring_edit(&self.doc, atom, bond, key, self.bond_drawing.length)
+                hotkeys::ring_edit(&self.tab.doc, atom, bond, key, self.tab.bond_drawing.length)
         {
             self.commit_hotkey(result, "Ring attached");
             return Task::none();
@@ -694,77 +701,78 @@ mod tests {
     #[test]
     fn a_toggles_a_selected_ring_when_the_pointer_is_off_the_structure() {
         let (mut app, _) = App::new();
-        app.doc = reshiki::rings::Preset::Benzene.document(42., false);
-        app.selected = app.doc.all_ids();
+        app.tab.doc = reshiki::rings::Preset::Benzene.document(42., false);
+        app.tab.selected = app.tab.doc.all_ids();
         app.edit(Edit::Hover(Some(Point::new(200., 200.))));
-        let before = app.doc.clone();
+        let before = app.tab.doc.clone();
         let _ = app.context_key("a");
         assert!(
-            app.busy,
+            app.tab.busy,
             "The selection-only display shortcut remains available"
         );
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
     }
 
     #[test]
     fn repeated_phenyl_shortcuts_ignore_the_automatic_ring_selection() {
         let (mut app, _) = App::new();
-        app.doc = Document::default();
-        let start = app.doc.add_atom("C", Point::default());
-        let end = app.doc.add_atom("C", Point::new(42., 0.));
-        app.doc.add_bond(start, end, 1, "plain");
+        app.tab.doc = Document::default();
+        let start = app.tab.doc.add_atom("C", Point::default());
+        let end = app.tab.doc.add_atom("C", Point::new(42., 0.));
+        app.tab.doc.add_bond(start, end, 1, "plain");
         app.edit(Edit::Hover(Some(Point::new(42., 0.))));
         let _ = app.context_key("a");
         assert!(!app.error);
-        assert_eq!(app.selected.len(), 6);
-        let mut steps = vec![app.doc.clone()];
+        assert_eq!(app.tab.selected.len(), 6);
+        let mut steps = vec![app.tab.doc.clone()];
         for expected_atoms in [13, 19] {
-            let original = app.doc.clone();
+            let original = app.tab.doc.clone();
             let target = app
+                .tab
                 .selected
                 .iter()
-                .filter_map(|id| app.doc.atom(*id))
+                .filter_map(|id| app.tab.doc.atom(*id))
                 .max_by(|a, b| a.position.x.total_cmp(&b.position.x))
                 .unwrap()
                 .position;
             app.edit(Edit::Hover(Some(target)));
             let _ = app.context_key("a");
             assert!(
-                !app.busy,
+                !app.tab.busy,
                 "Hovering a selected atom must not start aromatic display conversion"
             );
             assert!(!app.error, "{}", app.status);
-            assert_eq!(app.doc.atoms.len(), expected_atoms);
-            assert!(app.doc.bonds.starts_with(&original.bonds));
-            reshiki::chemistry::document::prepare(&app.doc).unwrap();
-            steps.push(app.doc.clone());
+            assert_eq!(app.tab.doc.atoms.len(), expected_atoms);
+            assert!(app.tab.doc.bonds.starts_with(&original.bonds));
+            reshiki::chemistry::document::prepare(&app.tab.doc).unwrap();
+            steps.push(app.tab.doc.clone());
         }
         for original in steps.iter().rev().skip(1) {
             let _ = app.update(Message::Undo);
-            assert_eq!(&app.doc, original);
+            assert_eq!(&app.tab.doc, original);
         }
         for added in steps.iter().skip(1) {
             let _ = app.update(Message::Redo);
-            assert_eq!(&app.doc, added);
+            assert_eq!(&app.tab.doc, added);
         }
     }
 
     #[test]
     fn a_fuses_at_a_hovered_bond_even_when_its_ring_is_selected() {
         let (mut app, _) = App::new();
-        app.doc = reshiki::rings::Preset::Benzene.document(42., false);
-        app.selected = app.doc.all_ids();
-        let a = app.doc.atoms[0].position;
-        let b = app.doc.atoms[1].position;
+        app.tab.doc = reshiki::rings::Preset::Benzene.document(42., false);
+        app.tab.selected = app.tab.doc.all_ids();
+        let a = app.tab.doc.atoms[0].position;
+        let b = app.tab.doc.atoms[1].position;
         app.edit(Edit::Hover(Some(Point::new(
             (a.x + b.x) / 2.,
             (a.y + b.y) / 2.,
         ))));
         let _ = app.context_key("a");
-        assert!(!app.busy);
+        assert!(!app.tab.busy);
         assert!(!app.error, "{}", app.status);
-        assert_eq!((app.doc.atoms.len(), app.doc.bonds.len()), (10, 11));
-        reshiki::chemistry::document::prepare(&app.doc).unwrap();
+        assert_eq!((app.tab.doc.atoms.len(), app.tab.doc.bonds.len()), (10, 11));
+        reshiki::chemistry::document::prepare(&app.tab.doc).unwrap();
     }
 
     use super::*;
@@ -775,120 +783,123 @@ mod tests {
     #[test]
     fn hover_atom_shortcuts_reveal_carbon_replace_elements_and_undo_once() {
         let (mut app, _) = App::new();
-        app.doc = Document::default();
-        let a = app.doc.add_atom("C", Point::default());
-        let b = app.doc.add_atom("C", Point::new(42., 0.));
-        app.doc.add_bond(a, b, 1, "plain");
-        app.doc.atom_mut(a).unwrap().label_h = 3;
-        app.selected = vec![b];
-        let original = app.doc.clone();
+        app.tab.doc = Document::default();
+        let a = app.tab.doc.add_atom("C", Point::default());
+        let b = app.tab.doc.add_atom("C", Point::new(42., 0.));
+        app.tab.doc.add_bond(a, b, 1, "plain");
+        app.tab.doc.atom_mut(a).unwrap().label_h = 3;
+        app.tab.selected = vec![b];
+        let original = app.tab.doc.clone();
         app.edit(Edit::Hover(Some(Point::default())));
         let _ = app.context_key("c");
-        assert_eq!(app.selected, vec![a]);
-        assert_eq!(app.doc.atom(a).unwrap().display.carbons, Some(Carbons::All));
-        assert_eq!(app.doc.atom(a).unwrap().label_h, 3);
-        assert!(!super::super::chemistry_changed(&original, &app.doc));
+        assert_eq!(app.tab.selected, vec![a]);
+        assert_eq!(
+            app.tab.doc.atom(a).unwrap().display.carbons,
+            Some(Carbons::All)
+        );
+        assert_eq!(app.tab.doc.atom(a).unwrap().label_h, 3);
+        assert!(!super::super::chemistry_changed(&original, &app.tab.doc));
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
         let _ = app.context_key("n");
-        assert_eq!(app.doc.atom(a).unwrap().element, "N");
-        assert_eq!(app.doc.atom(b).unwrap().element, "C");
-        assert!(app.labels_dirty);
+        assert_eq!(app.tab.doc.atom(a).unwrap().element, "N");
+        assert_eq!(app.tab.doc.atom(b).unwrap().element, "C");
+        assert!(app.tab.labels_dirty);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
     }
 
     #[test]
     fn selected_and_hovered_bond_shortcuts_set_order_and_cycle_only_double_position() {
         let (mut app, _) = App::new();
-        app.doc = Document::default();
-        let a = app.doc.add_atom("C", Point::default());
-        let b = app.doc.add_atom("C", Point::new(42., 0.));
-        app.doc.add_bond(a, b, 1, "plain");
-        app.selected = vec![a, b];
+        app.tab.doc = Document::default();
+        let a = app.tab.doc.add_atom("C", Point::default());
+        let b = app.tab.doc.add_atom("C", Point::new(42., 0.));
+        app.tab.doc.add_bond(a, b, 1, "plain");
+        app.tab.selected = vec![a, b];
         for (key, order) in [("2", 2), ("3", 3), ("1", 1)] {
             let _ = app.context_key(key);
-            assert_eq!(app.doc.bonds[0].order, order);
+            assert_eq!(app.tab.doc.bonds[0].order, order);
         }
-        app.selected.clear();
+        app.tab.selected.clear();
         app.edit(Edit::Hover(Some(Point::new(21., 0.))));
         let _ = app.context_key("2");
-        let before = app.doc.clone();
+        let before = app.tab.doc.clone();
         let _ = app.context_key("2");
-        assert_eq!(app.doc.bonds[0].order, 2);
+        assert_eq!(app.tab.doc.bonds[0].order, 2);
         assert_ne!(
-            app.doc.bonds[0].double_position,
+            app.tab.doc.bonds[0].double_position,
             before.bonds[0].double_position
         );
-        assert!(!super::super::chemistry_changed(&before, &app.doc));
+        assert!(!super::super::chemistry_changed(&before, &app.tab.doc));
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         app.edit(Edit::Hover(Some(Point::default())));
         let _ = app.context_key("s");
-        assert_eq!(app.doc.atom(a).unwrap().element, "S");
-        assert_eq!(app.doc.bonds[0].order, 2);
+        assert_eq!(app.tab.doc.atom(a).unwrap().element, "S");
+        assert_eq!(app.tab.doc.bonds[0].order, 2);
     }
 
     #[test]
     fn stale_hover_and_empty_cleanup_do_not_modify_the_drawing() {
         let (mut app, _) = App::new();
-        app.busy = false;
-        app.doc = Document::default();
-        app.doc.add_atom("C", Point::default());
+        app.tab.busy = false;
+        app.tab.doc = Document::default();
+        app.tab.doc.add_atom("C", Point::default());
         app.edit(Edit::Hover(Some(Point::default())));
-        app.file_epoch = app.file_epoch.wrapping_add(1);
-        let before = app.doc.clone();
+        app.tab.file_epoch = app.tab.file_epoch.wrapping_add(1);
+        let before = app.tab.doc.clone();
         let _ = app.context_key("o");
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         assert_eq!(app.tool, Tool::Atom);
         let _ = app.update(Message::Clean);
-        assert!(!app.busy);
-        assert!(app.cleanup.is_none());
+        assert!(!app.tab.busy);
+        assert!(app.tab.cleanup.is_none());
         assert!(app.status.contains("Select"));
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
     }
 
     #[tokio::test]
     async fn aromatic_shortcut_commits_once_keeps_hydrogens_and_ignores_late_results() {
         use super::super::{Job, Request};
         let (mut app, _) = App::new();
-        app.busy = false;
-        app.doc = app
+        app.tab.busy = false;
+        app.tab.doc = app
             .engine
             .request(Request::import_smiles("c1cc[nH]c1"))
             .await
             .unwrap()
             .document
             .unwrap();
-        app.selected = app.doc.all_ids();
-        let original = app.doc.clone();
-        let revision = app.revision;
+        app.tab.selected = app.tab.doc.all_ids();
+        let original = app.tab.doc.clone();
+        let revision = app.tab.revision;
         let _ = app.update(Message::AromaticDisplay);
-        assert!(app.busy);
-        let mut request = Request::molecule("aromatic", app.doc.clone());
-        request.selected_ids = Some(app.selected.clone());
+        assert!(app.tab.busy);
+        let mut request = Request::molecule("aromatic", app.tab.doc.clone());
+        request.selected_ids = Some(app.tab.selected.clone());
         let response = app.engine.request(request).await.unwrap();
         let _ = app.update(Message::EngineDone {
             revision,
             kind: Job::AromaticDisplay,
             result: Box::new(Ok(response.clone())),
         });
-        assert_eq!(reshiki::aromatic::circles(&app.doc).len(), 1);
-        assert!(app.doc.atoms.iter().all(|a| a.label_h == 1));
-        assert!(!app.labels_dirty);
-        assert_eq!(app.selected, original.all_ids());
-        let circled = app.doc.clone();
+        assert_eq!(reshiki::aromatic::circles(&app.tab.doc).len(), 1);
+        assert!(app.tab.doc.atoms.iter().all(|a| a.label_h == 1));
+        assert!(!app.tab.labels_dirty);
+        assert_eq!(app.tab.selected, original.all_ids());
+        let circled = app.tab.doc.clone();
         let _ = app.update(Message::Undo);
-        assert!(super::super::same_drawing(&app.doc, &original));
-        assert!(!app.history.can_undo());
+        assert!(super::super::same_drawing(&app.tab.doc, &original));
+        assert!(!app.tab.history.can_undo());
         let _ = app.update(Message::Redo);
-        assert!(super::super::same_drawing(&app.doc, &circled));
+        assert!(super::super::same_drawing(&app.tab.doc, &circled));
         let _ = app.update(Message::EngineDone {
             revision,
             kind: Job::AromaticDisplay,
             result: Box::new(Ok(response)),
         });
-        assert!(super::super::same_drawing(&app.doc, &circled));
+        assert!(super::super::same_drawing(&app.tab.doc, &circled));
     }
 }
 
@@ -1077,49 +1088,49 @@ mod compatibility_tests {
     #[test]
     fn numeric_hotkeys_distinguish_hovered_bond_atom_and_blank_canvas() -> Result<(), String> {
         let (mut app, _) = App::new();
-        app.doc = Document::default();
-        let a = app.doc.add_atom("C", Point::default());
-        let b = app.doc.add_atom("C", Point::new(42., 0.));
-        app.doc.add_bond(a, b, 1, "plain");
-        let initial = app.doc.clone();
-        app.selected = vec![a]; // The actual hovered bond must win over this selection.
+        app.tab.doc = Document::default();
+        let a = app.tab.doc.add_atom("C", Point::default());
+        let b = app.tab.doc.add_atom("C", Point::new(42., 0.));
+        app.tab.doc.add_bond(a, b, 1, "plain");
+        let initial = app.tab.doc.clone();
+        app.tab.selected = vec![a]; // The actual hovered bond must win over this selection.
         app.edit(Edit::Hover(Some(Point::new(21., 0.))));
         let _ = app.context_key("2");
-        assert_eq!(app.doc.atoms.len(), 2);
-        assert_eq!(app.doc.bonds.first().ok_or("Missing bond")?.order, 2);
+        assert_eq!(app.tab.doc.atoms.len(), 2);
+        assert_eq!(app.tab.doc.bonds.first().ok_or("Missing bond")?.order, 2);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, initial);
+        assert_eq!(app.tab.doc, initial);
         app.edit(Edit::Hover(Some(Point::new(42., 0.))));
         let _ = app.context_key("2");
-        assert_eq!(app.doc.atoms.len(), 4);
-        assert!(app.doc.atoms.iter().any(|a| a.element == "O"));
+        assert_eq!(app.tab.doc.atoms.len(), 4);
+        assert!(app.tab.doc.atoms.iter().any(|a| a.element == "O"));
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, initial);
-        app.selected.clear();
+        assert_eq!(app.tab.doc, initial);
+        app.tab.selected.clear();
         app.edit(Edit::Hover(None));
         let _ = app.context_key("2");
         assert_eq!(app.tool, Tool::Bond(2));
-        assert_eq!(app.doc, initial);
+        assert_eq!(app.tab.doc, initial);
         Ok(())
     }
 
     #[test]
     fn every_bond_hotkey_is_undoable_and_preserves_endpoints() -> Result<(), String> {
         let (mut app, _) = App::new();
-        app.doc = Document::default();
-        let a = app.doc.add_atom("C", Point::default());
-        let b = app.doc.add_atom("C", Point::new(42., 0.));
-        app.doc.add_bond(a, b, 1, "plain");
-        let original = app.doc.clone();
+        app.tab.doc = Document::default();
+        let a = app.tab.doc.add_atom("C", Point::default());
+        let b = app.tab.doc.add_atom("C", Point::new(42., 0.));
+        app.tab.doc.add_bond(a, b, 1, "plain");
+        let original = app.tab.doc.clone();
         for key in ["2", "3", "b", "B", "w", "h", "W", "H", "y", "d", "D"] {
-            app.selected = vec![a, b];
+            app.tab.selected = vec![a, b];
             let _ = app.context_key(key);
-            app.doc.validate()?;
-            let bond = app.doc.bonds.first().ok_or("Missing bond")?;
+            app.tab.doc.validate()?;
+            let bond = app.tab.doc.bonds.first().ok_or("Missing bond")?;
             assert_eq!((bond.a, bond.b), (a, b));
             assert_eq!(BondPreset::of(bond), hotkeys::bond_preset(key));
             let _ = app.update(Message::Undo);
-            assert_eq!(app.doc, original, "{key}");
+            assert_eq!(app.tab.doc, original, "{key}");
         }
         Ok(())
     }
@@ -1127,52 +1138,55 @@ mod compatibility_tests {
     #[test]
     fn triple_shortcut_geometry_and_order_undo_and_redo_as_one_edit() -> Result<(), String> {
         let (mut app, _) = App::new();
-        app.doc = Document::default();
-        let a = app.doc.add_atom("C", Point::new(0., 0.));
-        let b = app.doc.add_atom("C", Point::new(36.373, -21.));
-        let c = app.doc.add_atom("C", Point::new(72.746, 0.));
-        let d = app.doc.add_atom("C", Point::new(109.119, -21.));
+        app.tab.doc = Document::default();
+        let a = app.tab.doc.add_atom("C", Point::new(0., 0.));
+        let b = app.tab.doc.add_atom("C", Point::new(36.373, -21.));
+        let c = app.tab.doc.add_atom("C", Point::new(72.746, 0.));
+        let d = app.tab.doc.add_atom("C", Point::new(109.119, -21.));
         for (a, b) in [(a, b), (b, c), (c, d)] {
-            app.doc.add_bond(a, b, 1, "plain");
+            app.tab.doc.add_bond(a, b, 1, "plain");
         }
-        app.selected = vec![b, c];
-        app.hover = None;
-        let original = app.doc.clone();
+        app.tab.selected = vec![b, c];
+        app.tab.hover = None;
+        let original = app.tab.doc.clone();
         let _ = app.context_key("3");
         assert!(!app.error, "{}", app.status);
-        let changed = app.doc.clone();
+        let changed = app.tab.doc.clone();
         assert_ne!(
             changed.atom(a).ok_or("Missing atom")?.position,
             original.atom(a).ok_or("Missing atom")?.position
         );
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, original);
-        assert!(!app.history.can_undo());
+        assert_eq!(app.tab.doc, original);
+        assert!(!app.tab.history.can_undo());
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, changed);
+        assert_eq!(app.tab.doc, changed);
         Ok(())
     }
 
     #[test]
     fn group_shortcuts_are_atomic_and_modal_editors_block_them() -> Result<(), String> {
         let (mut app, _) = App::new();
-        app.doc = Document::default();
-        let a = app.doc.add_atom("N", Point::default());
-        let b = app.doc.add_atom("C", Point::new(42., 0.));
-        app.doc.add_bond(a, b, 1, "plain");
-        let original = app.doc.clone();
-        app.selected = vec![b];
+        app.tab.doc = Document::default();
+        let a = app.tab.doc.add_atom("N", Point::default());
+        let b = app.tab.doc.add_atom("C", Point::new(42., 0.));
+        app.tab.doc.add_bond(a, b, 1, "plain");
+        let original = app.tab.doc.clone();
+        app.tab.selected = vec![b];
         let _ = app.update(Message::ContextKey("y".into()));
-        assert_eq!(app.doc.abbreviation(b).ok_or("Missing Boc")?.label, "Boc");
+        assert_eq!(
+            app.tab.doc.abbreviation(b).ok_or("Missing Boc")?.label,
+            "Boc"
+        );
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
         let _ = app.update(Message::AtomText(super::super::atom_text::Action::Begin(
             Some(b),
         )));
         let _ = app.update(Message::ContextKey("2".into()));
         let _ = app.update(Message::Shortcut(Action::Join));
-        assert_eq!(app.doc, original);
-        assert!(app.atom_text.is_some());
+        assert_eq!(app.tab.doc, original);
+        assert!(app.tab.atom_text.is_some());
         Ok(())
     }
 
@@ -1180,28 +1194,28 @@ mod compatibility_tests {
     fn new_group_and_pi_ligand_keys_undo_and_respect_text_editors() -> Result<(), String> {
         for key in ["M", "Z", "j", "J"] {
             let (mut app, _) = App::new();
-            app.doc = Document::default();
-            let target = app.doc.add_atom(
+            app.tab.doc = Document::default();
+            let target = app.tab.doc.add_atom(
                 if matches!(key, "j" | "J") { "Fe" } else { "C" },
                 Point::default(),
             );
-            let original = app.doc.clone();
-            app.selected = vec![target];
+            let original = app.tab.doc.clone();
+            app.tab.selected = vec![target];
             let _ = app.update(Message::ContextKey(key.into()));
             assert!(!app.error, "{key}: {}", app.status);
-            assert_ne!(app.doc, original);
-            app.doc.validate()?;
-            let changed = app.doc.clone();
+            assert_ne!(app.tab.doc, original);
+            app.tab.doc.validate()?;
+            let changed = app.tab.doc.clone();
             let _ = app.update(Message::Undo);
-            assert_eq!(app.doc, original);
-            assert!(!app.history.can_undo());
+            assert_eq!(app.tab.doc, original);
+            assert!(!app.tab.history.can_undo());
             let _ = app.update(Message::Redo);
-            assert_eq!(app.doc, changed);
+            assert_eq!(app.tab.doc, changed);
             let _ = app.update(Message::AtomText(super::super::atom_text::Action::Begin(
                 Some(target),
             )));
             let _ = app.update(Message::ContextKey(key.into()));
-            assert_eq!(app.doc, changed);
+            assert_eq!(app.tab.doc, changed);
         }
         Ok(())
     }
@@ -1210,27 +1224,27 @@ mod compatibility_tests {
     fn join_merges_sites_instead_of_adding_an_extra_bond_and_undo_restores_all()
     -> Result<(), String> {
         let (mut app, _) = App::new();
-        app.doc = Document::default();
-        let a = app.doc.add_atom("C", Point::new(0., 0.));
-        let b = app.doc.add_atom("C", Point::new(42., 0.));
-        app.doc.add_bond(a, b, 1, "plain");
-        let c = app.doc.add_atom("C", Point::new(150., 0.));
-        let d = app.doc.add_atom("O", Point::new(192., 0.));
-        app.doc.add_bond(c, d, 1, "plain");
-        app.selected = vec![b, c];
-        let original = app.doc.clone();
+        app.tab.doc = Document::default();
+        let a = app.tab.doc.add_atom("C", Point::new(0., 0.));
+        let b = app.tab.doc.add_atom("C", Point::new(42., 0.));
+        app.tab.doc.add_bond(a, b, 1, "plain");
+        let c = app.tab.doc.add_atom("C", Point::new(150., 0.));
+        let d = app.tab.doc.add_atom("O", Point::new(192., 0.));
+        app.tab.doc.add_bond(c, d, 1, "plain");
+        app.tab.selected = vec![b, c];
+        let original = app.tab.doc.clone();
         let _ = app.update(Message::Shortcut(Action::Join));
         assert!(!app.error, "{}", app.status);
-        assert_eq!(app.doc.atoms.len(), 3);
-        assert_eq!(app.doc.bonds.len(), 2);
-        app.doc.validate()?;
+        assert_eq!(app.tab.doc.atoms.len(), 3);
+        assert_eq!(app.tab.doc.bonds.len(), 2);
+        app.tab.doc.validate()?;
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
         // A failed attempt cannot lose either fragment.
-        app.selected = vec![a, d];
+        app.tab.selected = vec![a, d];
         let _ = app.update(Message::Shortcut(Action::Join));
         assert!(app.error);
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
         Ok(())
     }
 }

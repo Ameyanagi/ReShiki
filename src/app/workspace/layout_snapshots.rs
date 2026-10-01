@@ -113,12 +113,12 @@ fn benzene() -> Document {
 }
 
 fn open(app: &mut App, doc: Document) {
-    app.doc = doc;
-    app.saved = app.doc.clone();
+    app.tab.doc = doc;
+    app.tab.saved = app.tab.doc.clone();
 }
 
 fn select_all(app: &mut App) {
-    let _ = app.update(Message::Canvas(Edit::Select(app.doc.all_ids())));
+    let _ = app.update(Message::Canvas(Edit::Select(app.tab.doc.all_ids())));
 }
 
 fn molecule(app: &mut App) {
@@ -145,7 +145,7 @@ fn mixed(app: &mut App) {
         false,
     ));
     open(app, doc);
-    app.camera.center = World::new(110., 0.);
+    app.tab.camera.center = World::new(110., 0.);
     select_all(app);
 }
 
@@ -189,12 +189,42 @@ fn transform(app: &mut App) {
     ));
 }
 
-/// New on an edited drawing waits for the native save dialog, which the
+/// Closing an edited tab waits for the native save dialog, which the
 /// headless renderer cannot show; nothing may appear above the canvas.
 fn unsaved(app: &mut App) {
-    app.doc = benzene();
-    let _ = app.update(Message::New);
+    app.tab.doc = benzene();
+    let _ = app.update(Message::Tabs(crate::app::tabs::Action::Close(None)));
     assert!(app.pending.is_some());
+}
+
+/// Three drawings; the one in front has unsaved changes.
+fn tabs(app: &mut App) {
+    open(app, benzene());
+    app.tab.path = Some("aspirin.rsk".into());
+    app.add_tab();
+    app.tab.doc = benzene();
+    let unsaved = app.tab.id;
+    app.add_tab();
+    mixed(app);
+    app.tab.path = Some("scheme-3.rsk".into());
+    let _ = app.update(Message::Tabs(crate::app::tabs::Action::Select(unsaved)));
+}
+
+/// More tabs than fit, with the ▾ list of the others open.
+fn many_tabs(app: &mut App) {
+    tabs(app);
+    for name in [
+        "oxidation",
+        "suzuki-coupling",
+        "grignard",
+        "aldol",
+        "wittig",
+    ] {
+        app.add_tab();
+        open(app, benzene());
+        app.tab.path = Some(format!("{name}.rsk").into());
+    }
+    let _ = app.update(Message::Tabs(crate::app::tabs::Action::Menu(true)));
 }
 
 /// A launch that found drafts from a session that closed unexpectedly.
@@ -216,7 +246,7 @@ fn recovery(app: &mut App) {
 fn color_popover(app: &mut App) {
     use reshiki::palette::Color as Paint;
     mixed(app);
-    app.doc.remember_color([31, 78, 121]);
+    app.tab.doc.remember_color([31, 78, 121]);
     let _ = app.update(Message::TextStyle(StyleChange::Color(Paint::Custom([
         232, 119, 34,
     ]))));
@@ -250,20 +280,134 @@ fn chain(app: &mut App) {
     let _ = app.update(Message::Tool(Tool::Chain(
         reshiki::chains::ChainMode::Snaking,
     )));
-    app.bond_drawing.fixed_angles = false;
+    app.tab.bond_drawing.fixed_angles = false;
 }
 
 /// One selected atom moves its bonded neighbors: constraints and Reset show.
 fn atom(app: &mut App) {
     open(app, benzene());
-    let id = app.doc.atoms[0].id;
+    let id = app.tab.doc.atoms[0].id;
     let _ = app.update(Message::Canvas(Edit::Select(vec![id])));
-    app.bond_drawing.fixed_angles = false;
+    app.tab.bond_drawing.fixed_angles = false;
+}
+
+/// A reaction scheme in one row with a molecule waiting below it, selected,
+/// with the grid and View panel shown. Returns the drag from the molecule to
+/// its place in the row, and a point on the molecule to drag by.
+fn smart_guides_scheme(app: &mut App) -> (World, World) {
+    let arrow = {
+        let mut doc = Document::default();
+        doc.arrows.push(Arrow::new(
+            doc.next_id(),
+            World::new(0., 0.),
+            World::new(80., 0.),
+            Default::default(),
+            Default::default(),
+        ));
+        doc
+    };
+    let mut doc = Document::default();
+    let mut place = |part: &Document, left: f32, middle: f32| {
+        let (lo, hi) = reshiki::scene::selection_bounds(part, &part.all_ids()).unwrap();
+        let offset = World::new(left - lo.x, middle - (lo.y + hi.y) / 2.);
+        let ids = reshiki::editing::append(&mut doc, part, offset);
+        (ids, left + hi.x - lo.x + 30.)
+    };
+    // Equal 30-unit gaps, with the middle molecule 25 right and 170 below its place.
+    let (_, x) = place(&benzene(), -300., 0.);
+    let (_, x) = place(&arrow, x, 0.);
+    let (ids, x) = place(&benzene(), x + 25., 170.);
+    let (_, x) = place(&arrow, x - 25., 0.);
+    place(&benzene(), x, 0.);
+    open(app, doc);
+    let grab = app.tab.doc.atom(ids[0]).unwrap().position;
+    let _ = app.update(Message::Canvas(Edit::Select(ids)));
+    app.grid = true;
+    app.view_open = true;
+    app.tab.camera.center = World::new(-40., 70.);
+    (World::new(-25., -170.), grab)
+}
+
+/// The canvas widget: the leaf the size of the drawing viewport.
+fn canvas_bounds(layout: Layout<'_>, size: Size) -> Option<Rectangle> {
+    if layout.bounds().size() == size && layout.children().next().is_none() {
+        return Some(layout.bounds());
+    }
+    layout
+        .children()
+        .find_map(|child| canvas_bounds(child, size))
+}
+
+/// Mid-drag: the molecule moved to 3 px right of and 4 px below its place in the
+/// row, where smart guides center it and even out the gaps.
+fn smart_guides(renderer: &mut iced::Renderer, size: Size, output: &Path) {
+    let (mut app, _) = App::new();
+    app.appearance.mode = crate::appearance::Mode::Light;
+    let (offset, grab) = smart_guides_scheme(&mut app);
+    let mut tree = Tree::empty();
+    for _ in 0..3 {
+        for message in pass(&app, renderer, &mut tree, size, None) {
+            let _ = app.update(message);
+        }
+    }
+    // Sends one pointer event; returns what it publishes and where the canvas is.
+    let mut send = |app: &App, event, point| {
+        let mut messages = Vec::new();
+        let mut view = app.view();
+        tree.diff(view.as_widget());
+        let node =
+            view.as_widget_mut()
+                .layout(&mut tree, renderer, &layout::Limits::new(size, size));
+        view.as_widget_mut().update(
+            &mut tree,
+            &Event::Mouse(event),
+            Layout::new(&node),
+            mouse::Cursor::Available(point),
+            renderer,
+            &mut iced::advanced::clipboard::Null,
+            &mut iced::advanced::Shell::new(&mut messages),
+            &Rectangle::with_size(size),
+        );
+        let canvas = canvas_bounds(Layout::new(&node), app.viewport);
+        (messages, canvas)
+    };
+    let (_, canvas) = send(&app, mouse::Event::CursorLeft, iced::Point::ORIGIN);
+    let canvas = canvas.expect("Canvas layout");
+    let camera = app.tab.camera;
+    let screen = |p: World| {
+        iced::Point::new(
+            canvas.x + (p.x - camera.center.x) * camera.zoom + canvas.width / 2.,
+            canvas.y + (p.y - camera.center.y) * camera.zoom + canvas.height / 2.,
+        )
+    };
+    let pixel = 1. / camera.zoom;
+    let to = grab.offset(offset.x + 3. * pixel, offset.y + 4. * pixel);
+    for (event, point) in [
+        (
+            mouse::Event::CursorMoved {
+                position: screen(grab),
+            },
+            grab,
+        ),
+        (mouse::Event::ButtonPressed(mouse::Button::Left), grab),
+        (
+            mouse::Event::CursorMoved {
+                position: screen(to),
+            },
+            to,
+        ),
+    ] {
+        let (messages, _) = send(&app, event, screen(point));
+        for message in messages {
+            let _ = app.update(message);
+        }
+    }
+    pass(&app, renderer, &mut tree, size, Some(output));
 }
 
 type Setup = fn(&mut App);
 
-const STATES: [(&str, Setup); 17] = [
+const STATES: [(&str, Setup); 19] = [
     ("default", |_| {}),
     ("molecule", molecule),
     ("mixed", mixed),
@@ -274,6 +418,8 @@ const STATES: [(&str, Setup); 17] = [
     ("help", |app| app.help_open = true),
     ("transform", transform),
     ("unsaved", unsaved),
+    ("tabs", tabs),
+    ("tabs-many", many_tabs),
     ("recovery", recovery),
     ("color-popover", color_popover),
     ("edit-hues", edit_hues),
@@ -323,6 +469,13 @@ async fn ui_layout_snapshots() {
             );
             eprintln!("{}", output.display());
         }
+        let output = directory.join(format!("smart-guides-{width}.png"));
+        smart_guides(
+            &mut renderer,
+            Size::new(width as f32, height as f32),
+            &output,
+        );
+        eprintln!("{}", output.display());
     }
 }
 
@@ -509,6 +662,111 @@ async fn the_insert_menu_closes_like_the_other_menus() {
     assert!(!app.imports.menu);
 }
 
+/// A click on a tab brings it to the front, the × of a tab under the pointer
+/// closes it, and the ▾ list of the tabs that do not fit opens and closes
+/// like the other menus.
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn tab_strip_clicks_switch_and_close_tabs() {
+    use crate::app::tabs::Action;
+    let renderer = <iced::Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        None,
+    )
+    .await
+    .unwrap();
+    // Sends events at a point and returns the messages published.
+    fn click(app: &App, renderer: &iced::Renderer, size: Size, at: iced::Point) -> Vec<String> {
+        let mut messages = Vec::new();
+        let mut view = app.view();
+        let mut tree = Tree::new(view.as_widget());
+        let node =
+            view.as_widget_mut()
+                .layout(&mut tree, renderer, &layout::Limits::new(size, size));
+        for event in [
+            mouse::Event::CursorMoved { position: at },
+            mouse::Event::ButtonPressed(mouse::Button::Left),
+            mouse::Event::ButtonReleased(mouse::Button::Left),
+        ] {
+            let mut shell = iced::advanced::Shell::new(&mut messages);
+            view.as_widget_mut().update(
+                &mut tree,
+                &Event::Mouse(event),
+                Layout::new(&node),
+                mouse::Cursor::Available(at),
+                renderer,
+                &mut iced::advanced::clipboard::Null,
+                &mut shell,
+                &Rectangle::with_size(size),
+            );
+        }
+        messages.iter().map(|m| format!("{m:?}")).collect()
+    }
+    let tabs_in = |app: &App, size| {
+        let mut view = app.view();
+        let mut tree = Tree::new(view.as_widget());
+        let node =
+            view.as_widget_mut()
+                .layout(&mut tree, &renderer, &layout::Limits::new(size, size));
+        [30., 28.].map(|height| {
+            let mut row = vec![];
+            layout_row(Layout::new(&node), height, &mut row);
+            row
+        })
+    };
+    /// Header controls of this height, left to right: tabs are 30 high, the
+    /// + and ▾ buttons 28.
+    fn layout_row(layout: Layout<'_>, height: f32, found: &mut Vec<Rectangle>) {
+        let bounds = layout.bounds();
+        if bounds.y < 54. && bounds.height == height && (20. ..=200.).contains(&bounds.width) {
+            if !found.iter().any(|b| b.x == bounds.x) {
+                found.push(bounds);
+            }
+            return;
+        }
+        for child in layout.children() {
+            layout_row(child, height, found);
+        }
+    }
+    let size = Size::new(1280., 820.);
+    let (mut app, _) = App::new();
+    tabs(&mut app);
+    let ids: Vec<_> = app.strip().map(|tab| tab.id).collect();
+    let found = tabs_in(&app, size);
+    let [first, _, third] = found[0].as_slice() else {
+        panic!("Three tabs: {found:?}");
+    };
+    assert_eq!(
+        click(&app, &renderer, size, first.center()),
+        [format!("Tabs(Select({:?}))", ids[0])]
+    );
+    // The × shows and works on a tab behind the front one under the pointer.
+    let close = iced::Point::new(third.x + third.width - 10., third.center_y());
+    assert_eq!(
+        click(&app, &renderer, size, close),
+        [format!("Tabs(Close(Some({:?})))", ids[2])]
+    );
+    let _ = app.update(Message::Tabs(Action::Close(Some(ids[2]))));
+    assert_eq!(app.strip().count(), 2);
+    // At the minimum window, the ▾ list holds the tabs that do not fit.
+    let size = Size::new(1040., 680.);
+    let (mut app, _) = App::new();
+    many_tabs(&mut app);
+    let _ = app.update(Message::Tabs(Action::Menu(false)));
+    let found = tabs_in(&app, size);
+    assert_eq!(
+        found[0].len(),
+        3,
+        "Compact header leaves room for three tabs: {found:?}"
+    );
+    let more = found[1][0];
+    assert_eq!(
+        click(&app, &renderer, size, more.center()),
+        ["Tabs(Menu(true))"]
+    );
+}
+
 /// Every tool's context row fits the canvas of a 1040 px window with any
 /// inspector tab or none, including Reset and bonded-movement controls.
 #[tokio::test]
@@ -558,8 +816,8 @@ async fn every_context_row_fits_the_minimum_window() {
             let (mut app, _) = App::new();
             open(&mut app, benzene());
             app.tool = tool;
-            app.selected = app.doc.all_ids().into_iter().take(selected).collect();
-            app.bond_drawing.fixed_angles = !reset;
+            app.tab.selected = app.tab.doc.all_ids().into_iter().take(selected).collect();
+            app.tab.bond_drawing.fixed_angles = !reset;
             app.inspector_open = tab.is_some();
             app.inspector_tab = tab.unwrap_or(app.inspector_tab);
             let width = 1040. - PALETTE_WIDTH - app.inspector_width() - 2. * CONTEXT_PADDING;
@@ -786,7 +1044,7 @@ async fn command_keys_never_type_into_fields_and_enter_leaves_them() {
             "72".into(),
         ),
     ));
-    let before = app.doc.clone();
+    let before = app.tab.doc.clone();
     let mut tree = Tree::empty();
     let field = locate(&app, &renderer, &mut tree, viewport, false, "72");
     let (_, _, focused) = send(
@@ -826,7 +1084,7 @@ async fn command_keys_never_type_into_fields_and_enter_leaves_them() {
     assert_eq!(messages.len(), 1, "{messages:?}");
     assert!(messages[0].contains("Apply(Rotation)"), "{messages:?}");
     assert!(!focused, "Enter leaves the field");
-    assert_ne!(app.doc, before);
+    assert_ne!(app.tab.doc, before);
     let (messages, status, _) = send(
         &mut app,
         &renderer,

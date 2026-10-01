@@ -28,7 +28,7 @@ impl Default for State {
 }
 impl App {
     pub(super) fn abbreviation_action(&mut self, action: Action) -> Task<Message> {
-        let before = self.doc.clone();
+        let before = self.tab.doc.clone();
         match action {
             Action::Preset(value) => self.abbreviations.preset = value,
             Action::Label(value) => self.abbreviations.label = value,
@@ -38,28 +38,29 @@ impl App {
                 if replace && reshiki::ligands::LABELS.contains(&self.abbreviations.preset.as_str())
                 {
                     let anchor = self
+                        .tab
                         .doc
                         .abbreviations
                         .iter()
                         .find(|g| {
-                            !self.selected.is_empty()
-                                && self.selected.iter().all(|id| g.members.contains(id))
+                            !self.tab.selected.is_empty()
+                                && self.tab.selected.iter().all(|id| g.members.contains(id))
                         })
                         .map(|g| g.anchor)
                         .or_else(|| {
-                            (self.selected.len() == 1)
-                                .then(|| self.selected.first().copied())
+                            (self.tab.selected.len() == 1)
+                                .then(|| self.tab.selected.first().copied())
                                 .flatten()
                         });
                     match anchor
                         .ok_or_else(|| "Select one endpoint or an existing group".to_string())
                         .and_then(|id| {
-                            reshiki::ligands::replace(&self.doc, id, &self.abbreviations.preset)
+                            reshiki::ligands::replace(&self.tab.doc, id, &self.abbreviations.preset)
                         }) {
                         Ok(doc) => {
-                            self.doc = doc;
+                            self.tab.doc = doc;
                             self.changed(before);
-                            self.selected = anchor.into_iter().collect();
+                            self.tab.selected = anchor.into_iter().collect();
                             self.status = "Ligand abbreviated · Real atoms and five-center attachment retained".into();
                             self.error = false;
                             self.tool = Tool::Select;
@@ -71,15 +72,15 @@ impl App {
                     }
                     return Task::none();
                 }
-                let mut request = Request::molecule("abbreviate", self.doc.clone());
-                request.selected_ids = Some(self.selected.clone());
+                let mut request = Request::molecule("abbreviate", self.tab.doc.clone());
+                request.selected_ids = Some(self.tab.selected.clone());
                 request.format = Some(if replace { "replace" } else { "find" }.into());
                 request.text = replace.then(|| self.abbreviations.preset.clone());
                 return self.run(request, Job::Abbreviate);
             }
             Action::Contract => {
-                if let Err(error) = self.doc.contract(
-                    &self.selected,
+                if let Err(error) = self.tab.doc.contract(
+                    &self.tab.selected,
                     &self.abbreviations.label,
                     &self.abbreviations.reverse_label,
                 ) {
@@ -93,11 +94,11 @@ impl App {
             }
             Action::Expand | Action::ExpandAll => {
                 let ids = if matches!(action, Action::ExpandAll) {
-                    self.doc.all_ids()
+                    self.tab.doc.all_ids()
                 } else {
-                    self.selected.clone()
+                    self.tab.selected.clone()
                 };
-                let count = self.doc.expand_abbreviations(&ids);
+                let count = self.tab.doc.expand_abbreviations(&ids);
                 self.changed(before);
                 self.status = format!(
                     "Expanded {count} abbreviation{}",

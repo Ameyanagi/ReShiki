@@ -361,11 +361,11 @@ fn transformed(
 impl App {
     pub(super) fn sync_numeric_transforms(&mut self) {
         let key = Key {
-            revision: self.revision,
-            epoch: self.file_epoch,
-            ids: self.selected.clone(),
+            revision: self.tab.revision,
+            epoch: self.tab.file_epoch,
+            ids: self.tab.selected.clone(),
         };
-        if self.numeric_transforms.key.as_ref() == Some(&key) {
+        if self.tab.numeric_transforms.key.as_ref() == Some(&key) {
             return;
         }
         let State {
@@ -373,8 +373,8 @@ impl App {
             last_size,
             more,
             ..
-        } = self.numeric_transforms;
-        self.numeric_transforms = State {
+        } = self.tab.numeric_transforms;
+        self.tab.numeric_transforms = State {
             key: Some(key),
             proportional,
             last_size,
@@ -387,30 +387,32 @@ impl App {
     // Chemistry checks can refresh hydrogen/CIP labels without a revision or
     // Undo entry. Refresh untouched readouts without discarding typed values.
     pub(super) fn refresh_numeric_dimensions(&mut self) {
-        let (width, height) = reshiki::scene::selection_bounds(&self.doc, &self.selected)
+        let (width, height) = reshiki::scene::selection_bounds(&self.tab.doc, &self.tab.selected)
             .map(|(lo, hi)| {
-                let scale = self.doc.drawing_style.points_per_world();
+                let scale = self.tab.doc.drawing_style.points_per_world();
                 (
                     format!("{:.2}", (hi.x - lo.x) * scale),
                     format!("{:.2}", (hi.y - lo.y) * scale),
                 )
             })
             .unwrap_or_default();
-        if self.numeric_transforms.width == self.numeric_transforms.dimensions.0 {
-            self.numeric_transforms.width = width.clone();
+        if self.tab.numeric_transforms.width == self.tab.numeric_transforms.dimensions.0 {
+            self.tab.numeric_transforms.width = width.clone();
         }
-        if self.numeric_transforms.height == self.numeric_transforms.dimensions.1 {
-            self.numeric_transforms.height = height.clone();
+        if self.tab.numeric_transforms.height == self.tab.numeric_transforms.dimensions.1 {
+            self.tab.numeric_transforms.height = height.clone();
         }
-        self.numeric_transforms.dimensions = (width, height);
+        self.tab.numeric_transforms.dimensions = (width, height);
     }
 
     // Validate against the caption that would be committed, without ending its
     // draft or consuming history for invalid and unchanged transforms.
     fn numeric_transform_candidate(&self, fields: &[Field]) -> Result<Option<Document>, String> {
         let source = self.inline_candidate()?;
-        let selected = if self.inline_text.is_some() {
-            let id = self.inline_label_id().unwrap_or_else(|| self.doc.next_id());
+        let selected = if self.tab.inline_text.is_some() {
+            let id = self
+                .inline_label_id()
+                .unwrap_or_else(|| self.tab.doc.next_id());
             source
                 .annotations
                 .iter()
@@ -418,7 +420,7 @@ impl App {
                 .map(|a| a.id)
                 .collect()
         } else {
-            self.selected.clone()
+            self.tab.selected.clone()
         };
         let mut document = source.clone();
         for &field in fields {
@@ -426,8 +428,8 @@ impl App {
                 &document,
                 &selected,
                 field,
-                self.numeric_transforms.value(field),
-                self.numeric_transforms.proportional,
+                self.tab.numeric_transforms.value(field),
+                self.tab.numeric_transforms.proportional,
             )
             .map_err(|error| {
                 if fields.len() > 1 {
@@ -443,17 +445,17 @@ impl App {
     pub(super) fn numeric_transform_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Input(field, input) => {
-                *self.numeric_transforms.value_mut(field) = input;
-                self.numeric_transforms.error = None;
+                *self.tab.numeric_transforms.value_mut(field) = input;
+                self.tab.numeric_transforms.error = None;
                 if matches!(field, Field::Width | Field::Height) {
-                    self.numeric_transforms.last_size = field;
+                    self.tab.numeric_transforms.last_size = field;
                 }
             }
-            Action::Proportional(lock) => self.numeric_transforms.proportional = lock,
-            Action::More(open) => self.numeric_transforms.more = open,
+            Action::Proportional(lock) => self.tab.numeric_transforms.proportional = lock,
+            Action::More(open) => self.tab.numeric_transforms.more = open,
             Action::Apply(field) => self.apply_numeric_transforms(&[field], true),
             Action::ApplyAll => {
-                self.apply_numeric_transforms(&self.numeric_transforms.to_apply(), false)
+                self.apply_numeric_transforms(&self.tab.numeric_transforms.to_apply(), false)
             }
         }
         Task::none()
@@ -467,15 +469,15 @@ impl App {
                 if document.is_some() && !self.finish_inline(true) {
                     return;
                 }
-                let state = &self.numeric_transforms;
+                let state = &self.tab.numeric_transforms;
                 let pending: Vec<_> = state
                     .edited()
                     .into_iter()
                     .filter(|field| keep && !fields.contains(field))
                     .map(|field| (field, state.value(field).to_owned()))
                     .collect();
-                self.numeric_transforms.error = None;
-                self.numeric_transforms.key = None;
+                self.tab.numeric_transforms.error = None;
+                self.tab.numeric_transforms.key = None;
                 self.error = false;
                 self.status = if document.is_none() {
                     "No transform needed".into()
@@ -483,27 +485,27 @@ impl App {
                     "Drawing updated".into()
                 };
                 if let Some(document) = document {
-                    let before = std::mem::replace(&mut self.doc, document);
+                    let before = std::mem::replace(&mut self.tab.doc, document);
                     self.changed(before);
                 }
                 self.sync_numeric_transforms();
                 for (field, value) in pending {
-                    *self.numeric_transforms.value_mut(field) = value;
+                    *self.tab.numeric_transforms.value_mut(field) = value;
                 }
             }
             Err(error) => {
                 self.status = error.clone();
                 self.error = true;
-                self.numeric_transforms.error = Some(error);
+                self.tab.numeric_transforms.error = Some(error);
             }
         }
     }
 
     /// Rotate | Scale and W 🔒 H, with tilt under More and one Apply.
     pub(super) fn numeric_transform_panel(&self) -> Element<'_, Message> {
-        let state = &self.numeric_transforms;
-        let selected = !self.selected.is_empty();
-        let tilt = selected && crate::canvas::tilt::available(&self.doc, &self.selected);
+        let state = &self.tab.numeric_transforms;
+        let selected = !self.tab.selected.is_empty();
+        let tilt = selected && crate::canvas::tilt::available(&self.tab.doc, &self.tab.selected);
         let cell = |label: Element<'static, Message>, field: Field, label_width: f32| {
             let enabled = if matches!(field, Field::TiltX | Field::TiltY) {
                 tilt
@@ -640,24 +642,24 @@ mod tests {
 
     fn fixture() -> App {
         let (mut app, _) = App::new();
-        app.busy = false;
-        app.doc = reshiki::rings::Preset::Regular.document(42., false);
-        app.doc.atoms[0].element = "N".into();
-        app.doc.annotations.push(Annotation {
-            id: app.doc.next_id(),
+        app.tab.busy = false;
+        app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
+        app.tab.doc.atoms[0].element = "N".into();
+        app.tab.doc.annotations.push(Annotation {
+            id: app.tab.doc.next_id(),
             position: Point::new(95., 60.),
             text: "Fixed text".into(),
             format: Default::default(),
         });
-        app.doc.arrows.push(Arrow::new(
-            app.doc.next_id(),
+        app.tab.doc.arrows.push(Arrow::new(
+            app.tab.doc.next_id(),
             Point::new(90., 0.),
             Point::new(180., 0.),
             Default::default(),
             Default::default(),
         ));
-        app.doc.graphics.push(Graphic::dragged(
-            app.doc.next_id(),
+        app.tab.doc.graphics.push(Graphic::dragged(
+            app.tab.doc.next_id(),
             GraphicKind::Rectangle,
             Point::new(210., -30.),
             Point::new(260., 45.),
@@ -665,9 +667,9 @@ mod tests {
             Default::default(),
             false,
         ));
-        app.selected = app.doc.all_ids();
-        app.doc.group_selection(&app.selected).unwrap();
-        app.doc.add_atom("O", Point::new(400., 150.));
+        app.tab.selected = app.tab.doc.all_ids();
+        app.tab.doc.group_selection(&app.tab.selected).unwrap();
+        app.tab.doc.add_atom("O", Point::new(400., 150.));
         app.sync_numeric_transforms();
         app
     }
@@ -691,11 +693,11 @@ mod tests {
             (Field::Scale, "125"),
         ] {
             let mut app = fixture();
-            let original = app.doc.clone();
-            let ids = app.selected.clone();
+            let original = app.tab.doc.clone();
+            let ids = app.tab.selected.clone();
             apply(&mut app, field, input);
             assert!(!app.error, "{field:?}: {}", app.status);
-            let changed = app.doc.clone();
+            let changed = app.tab.doc.clone();
             assert_ne!(changed, original);
             assert_eq!(changed.atoms.last(), original.atoms.last());
             assert_eq!(changed.bonds, original.bonds);
@@ -707,26 +709,29 @@ mod tests {
             assert_eq!(changed.arrows[0].style, original.arrows[0].style);
             assert_eq!(changed.graphics[0].style, original.graphics[0].style);
             assert_eq!(changed.drawing_style, original.drawing_style);
-            assert_eq!(app.selected, ids);
+            assert_eq!(app.tab.selected, ids);
             let reopened: Document =
                 serde_json::from_slice(&serde_json::to_vec(&changed).unwrap()).unwrap();
             assert_eq!(reopened, changed);
             let _ = app.update(Message::Undo);
-            assert_eq!(app.doc, original);
-            assert!(!app.history.can_undo(), "Each Apply is exactly one edit");
+            assert_eq!(app.tab.doc, original);
+            assert!(
+                !app.tab.history.can_undo(),
+                "Each Apply is exactly one edit"
+            );
             let _ = app.update(Message::Redo);
-            assert_eq!(app.doc, changed);
+            assert_eq!(app.tab.doc, changed);
         }
     }
 
     #[test]
     fn apply_button_applies_every_edited_field_as_one_undo_step() {
         let mut app = fixture();
-        let original = app.doc.clone();
+        let original = app.tab.doc.clone();
         let _ = app.update(Message::NumericTransform(Action::ApplyAll));
         assert!(!app.error);
-        assert_eq!(app.doc, original, "Nothing edited is a no-op");
-        assert!(!app.history.can_undo());
+        assert_eq!(app.tab.doc, original, "Nothing edited is a no-op");
+        assert!(!app.tab.history.can_undo());
         let mut sequential = fixture();
         apply(&mut sequential, Field::Rotation, "72");
         apply(&mut sequential, Field::Scale, "125");
@@ -738,19 +743,22 @@ mod tests {
         }
         let _ = app.update(Message::NumericTransform(Action::ApplyAll));
         assert!(!app.error, "{}", app.status);
-        assert_eq!(app.doc, sequential.doc, "Rotation applies before scale");
-        let changed = app.doc.clone();
+        assert_eq!(
+            app.tab.doc, sequential.tab.doc,
+            "Rotation applies before scale"
+        );
+        let changed = app.tab.doc.clone();
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, original);
-        assert!(!app.history.can_undo(), "One Apply is one Undo step");
+        assert_eq!(app.tab.doc, original);
+        assert!(!app.tab.history.can_undo(), "One Apply is one Undo step");
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, changed);
+        assert_eq!(app.tab.doc, changed);
     }
 
     #[test]
     fn apply_button_rejects_all_edits_when_one_field_is_invalid() {
         let mut app = fixture();
-        let original = app.doc.clone();
+        let original = app.tab.doc.clone();
         let _ = app.update(Message::NumericTransform(Action::More(true)));
         for (field, input) in [(Field::Rotation, "72"), (Field::TiltX, "90")] {
             let _ = app.update(Message::NumericTransform(Action::Input(
@@ -761,14 +769,17 @@ mod tests {
         let _ = app.update(Message::NumericTransform(Action::ApplyAll));
         assert!(app.error);
         assert!(app.status.starts_with("Tilt X: "), "{}", app.status);
-        assert_eq!(app.doc, original);
-        assert!(!app.history.can_undo());
-        assert_eq!(app.numeric_transforms.rotation, "72", "Typed values stay");
-        app.selected = vec![app.doc.graphics[0].id];
+        assert_eq!(app.tab.doc, original);
+        assert!(!app.tab.history.can_undo());
+        assert_eq!(
+            app.tab.numeric_transforms.rotation, "72",
+            "Typed values stay"
+        );
+        app.tab.selected = vec![app.tab.doc.graphics[0].id];
         let _ = app.update(Message::Tick);
-        assert_eq!(app.numeric_transforms.rotation, "0");
+        assert_eq!(app.tab.numeric_transforms.rotation, "0");
         assert!(
-            app.numeric_transforms.more,
+            app.tab.numeric_transforms.more,
             "More stays open across selections"
         );
     }
@@ -783,7 +794,7 @@ mod tests {
     #[test]
     fn enter_applies_its_field_and_keeps_values_typed_in_others() {
         let mut app = fixture();
-        let original = app.doc.clone();
+        let original = app.tab.doc.clone();
         for (field, value) in [
             (Field::Rotation, "72"),
             (Field::Scale, "125"),
@@ -793,26 +804,26 @@ mod tests {
         }
         let _ = app.update(Message::NumericTransform(Action::Apply(Field::Rotation)));
         assert!(!app.error, "{}", app.status);
-        let state = &app.numeric_transforms;
+        let state = &app.tab.numeric_transforms;
         assert_eq!(state.rotation, "0");
         assert_eq!((state.scale.as_str(), state.width.as_str()), ("125", "160"));
         assert_ne!(state.dimensions.0, "160");
         // Enter on an unchanged field keeps them too.
         let _ = app.update(Message::NumericTransform(Action::Apply(Field::Rotation)));
-        assert_eq!(app.numeric_transforms.scale, "125");
+        assert_eq!(app.tab.numeric_transforms.scale, "125");
         let _ = app.update(Message::NumericTransform(Action::Apply(Field::Scale)));
         let _ = app.update(Message::NumericTransform(Action::Apply(Field::Width)));
         assert!(!app.error, "{}", app.status);
         assert_eq!(
-            app.numeric_transforms.width,
-            app.numeric_transforms.dimensions.0
+            app.tab.numeric_transforms.width,
+            app.tab.numeric_transforms.dimensions.0
         );
-        assert_eq!(app.numeric_transforms.width, "160.00");
+        assert_eq!(app.tab.numeric_transforms.width, "160.00");
         for _ in 0..3 {
             let _ = app.update(Message::Undo);
         }
-        assert_eq!(app.doc, original);
-        assert!(!app.history.can_undo(), "Each Enter is one Undo step");
+        assert_eq!(app.tab.doc, original);
+        assert!(!app.tab.history.can_undo(), "Each Enter is one Undo step");
     }
 
     #[test]
@@ -820,8 +831,8 @@ mod tests {
         for last in [Field::Width, Field::Height] {
             let mut app = fixture();
             let (width, height) = (
-                extent(&app.doc, &app.selected, Field::Width).unwrap(),
-                extent(&app.doc, &app.selected, Field::Height).unwrap(),
+                extent(&app.tab.doc, &app.tab.selected, Field::Width).unwrap(),
+                extent(&app.tab.doc, &app.tab.selected, Field::Height).unwrap(),
             );
             let first = if last == Field::Width {
                 Field::Height
@@ -833,13 +844,13 @@ mod tests {
             input(&mut app, last, &format!("{:.2}", target(last)));
             let _ = app.update(Message::NumericTransform(Action::ApplyAll));
             assert!(!app.error, "{}", app.status);
-            let reached = extent(&app.doc, &app.selected, last).unwrap();
+            let reached = extent(&app.tab.doc, &app.tab.selected, last).unwrap();
             assert!((reached - target(last)).abs() < 0.01, "{last:?}: {reached}");
-            let state = &app.numeric_transforms;
+            let state = &app.tab.numeric_transforms;
             assert_eq!(state.width, state.dimensions.0);
             assert_eq!(state.height, state.dimensions.1);
             let _ = app.update(Message::Undo);
-            assert!(!app.history.can_undo(), "One Apply is one Undo step");
+            assert!(!app.tab.history.can_undo(), "One Apply is one Undo step");
         }
         // Unlocked, both sizes apply.
         let mut app = fixture();
@@ -847,7 +858,7 @@ mod tests {
         input(&mut app, Field::Width, "150");
         input(&mut app, Field::Height, "90");
         assert_eq!(
-            app.numeric_transforms.to_apply(),
+            app.tab.numeric_transforms.to_apply(),
             [Field::Width, Field::Height]
         );
     }
@@ -855,7 +866,7 @@ mod tests {
     #[test]
     fn apply_includes_tilt_typed_before_more_was_closed() {
         let mut app = fixture();
-        let original = app.doc.clone();
+        let original = app.tab.doc.clone();
         let mut sequential = fixture();
         apply(&mut sequential, Field::Rotation, "72");
         apply(&mut sequential, Field::TiltX, "20");
@@ -864,16 +875,16 @@ mod tests {
         input(&mut app, Field::TiltX, "20");
         let _ = app.update(Message::NumericTransform(Action::More(false)));
         assert_eq!(
-            app.numeric_transforms.to_apply(),
+            app.tab.numeric_transforms.to_apply(),
             [Field::Rotation, Field::TiltX]
         );
         let _ = app.update(Message::NumericTransform(Action::ApplyAll));
         assert!(!app.error, "{}", app.status);
-        assert_eq!(app.doc, sequential.doc);
-        assert_eq!(app.numeric_transforms.tilt_x, "0");
+        assert_eq!(app.tab.doc, sequential.tab.doc);
+        assert_eq!(app.tab.numeric_transforms.tilt_x, "0");
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, original);
-        assert!(!app.history.can_undo());
+        assert_eq!(app.tab.doc, original);
+        assert!(!app.tab.history.can_undo());
     }
 
     #[test]
@@ -881,15 +892,18 @@ mod tests {
         for lock in [true, false] {
             for field in [Field::Width, Field::Height] {
                 let mut app = fixture();
-                let original = app.doc.clone();
-                let current = extent(&app.doc, &app.selected, field).unwrap();
+                let original = app.tab.doc.clone();
+                let current = extent(&app.tab.doc, &app.tab.selected, field).unwrap();
                 let target = current * 1.65;
                 let _ = app.update(Message::NumericTransform(Action::Proportional(lock)));
                 apply(&mut app, field, target);
                 assert!(!app.error, "{}", app.status);
-                assert!((extent(&app.doc, &app.selected, field).unwrap() - target).abs() < 0.005);
+                assert!(
+                    (extent(&app.tab.doc, &app.tab.selected, field).unwrap() - target).abs()
+                        < 0.005
+                );
                 let old = &original.graphics[0];
-                let new = &app.doc.graphics[0];
+                let new = &app.tab.doc.graphics[0];
                 let x_scale = new.axis_x.x / old.axis_x.x;
                 let y_scale = new.axis_y.y / old.axis_y.y;
                 if lock {
@@ -906,13 +920,13 @@ mod tests {
     #[test]
     fn invalid_and_noop_values_do_not_mutate_or_consume_history() {
         let mut app = fixture();
-        let original = app.doc.clone();
+        let original = app.tab.doc.clone();
         for field in Field::ALL {
             for input in ["", "-", "hello", "NaN", "inf", "-inf", "1e40"] {
                 apply(&mut app, field, input);
                 assert!(app.error, "{field:?} accepted {input}");
-                assert_eq!(app.doc, original);
-                assert!(!app.history.can_undo());
+                assert_eq!(app.tab.doc, original);
+                assert!(!app.tab.history.can_undo());
             }
         }
         for (field, input) in [
@@ -927,8 +941,8 @@ mod tests {
         ] {
             apply(&mut app, field, input);
             assert!(app.error);
-            assert_eq!(app.doc, original);
-            assert!(!app.history.can_undo());
+            assert_eq!(app.tab.doc, original);
+            assert!(!app.tab.history.can_undo());
         }
         for (field, input) in [
             (Field::Rotation, "360"),
@@ -939,15 +953,15 @@ mod tests {
         ] {
             apply(&mut app, field, input);
             assert!(!app.error);
-            assert_eq!(app.doc, original);
-            assert!(!app.history.can_undo());
+            assert_eq!(app.tab.doc, original);
+            assert!(!app.tab.history.can_undo());
         }
-        app.numeric_transforms.key = None;
+        app.tab.numeric_transforms.key = None;
         app.sync_numeric_transforms();
         for field in [Field::Width, Field::Height] {
             let _ = app.update(Message::NumericTransform(Action::Apply(field)));
-            assert_eq!(app.doc, original, "Displayed rounded sizes are no-ops");
-            assert!(!app.history.can_undo());
+            assert_eq!(app.tab.doc, original, "Displayed rounded sizes are no-ops");
+            assert!(!app.tab.history.can_undo());
         }
     }
 
@@ -962,42 +976,42 @@ mod tests {
             (Field::Rotation, "360", false),
         ] {
             let mut app = fixture();
-            let original = app.doc.clone();
+            let original = app.tab.doc.clone();
             apply(&mut app, Field::Scale, "125");
-            let redo = app.doc.clone();
+            let redo = app.tab.doc.clone();
             let _ = app.update(Message::Undo);
-            let id = app.doc.annotations[0].id;
+            let id = app.tab.doc.annotations[0].id;
             let _ = app.update(Message::InlineText(
                 super::super::inline_text::Action::Begin(Some(id), Point::default()),
             ));
             let _ = app.update(Message::CaptionAction(TextAction::Edit(TextEdit::Paste(
                 " draft".to_owned().into(),
             ))));
-            let draft = app.caption.clone();
-            let format = app.caption_format.clone();
-            let revision = app.revision;
+            let draft = app.tab.caption.clone();
+            let format = app.tab.caption_format.clone();
+            let revision = app.tab.revision;
             let draft_history = app.text_history_available(false);
             apply(&mut app, field, input);
             assert_eq!(app.error, invalid, "{field:?}: {}", app.status);
-            assert_eq!(app.doc, original);
-            assert_eq!(app.caption, draft);
-            assert_eq!(app.caption_editor.text(), draft);
-            assert_eq!(app.caption_format, format);
-            assert_eq!(app.revision, revision);
+            assert_eq!(app.tab.doc, original);
+            assert_eq!(app.tab.caption, draft);
+            assert_eq!(app.tab.caption_editor.text(), draft);
+            assert_eq!(app.tab.caption_format, format);
+            assert_eq!(app.tab.revision, revision);
             assert_eq!(app.text_history_available(false), draft_history);
-            assert!(app.inline_text.is_some());
-            assert_eq!(app.selected, vec![id]);
-            assert!(!app.history.can_undo());
-            assert!(app.history.can_redo());
+            assert!(app.tab.inline_text.is_some());
+            assert_eq!(app.tab.selected, vec![id]);
+            assert!(!app.tab.history.can_undo());
+            assert!(app.tab.history.can_redo());
             let _ = app.update(Message::InlineText(
                 super::super::inline_text::Action::Finish(false),
             ));
             let _ = app.update(Message::Redo);
-            assert_eq!(app.doc, redo);
+            assert_eq!(app.tab.doc, redo);
         }
         let mut app = fixture();
-        let original = app.doc.clone();
-        let id = app.doc.annotations[0].id;
+        let original = app.tab.doc.clone();
+        let id = app.tab.doc.annotations[0].id;
         let _ = app.update(Message::InlineText(
             super::super::inline_text::Action::Begin(Some(id), Point::default()),
         ));
@@ -1005,36 +1019,39 @@ mod tests {
             " draft".to_owned().into(),
         ))));
         let mut committed = original.clone();
-        committed.annotations[0].text = app.caption.clone();
-        committed.annotations[0].format = app.caption_format.clone();
+        committed.annotations[0].text = app.tab.caption.clone();
+        committed.annotations[0].format = app.tab.caption_format.clone();
         apply(&mut app, Field::Scale, "125");
         assert!(!app.error, "{}", app.status);
-        assert!(app.inline_text.is_none());
-        assert_eq!(app.doc.annotations[0].text, committed.annotations[0].text);
+        assert!(app.tab.inline_text.is_none());
+        assert_eq!(
+            app.tab.doc.annotations[0].text,
+            committed.annotations[0].text
+        );
         assert_ne!(
-            app.doc.annotations[0].position,
+            app.tab.doc.annotations[0].position,
             committed.annotations[0].position
         );
-        let transformed = app.doc.clone();
+        let transformed = app.tab.doc.clone();
         let _ = app.update(Message::Undo);
         assert_eq!(
-            app.doc, committed,
+            app.tab.doc, committed,
             "Transform is one Undo step after committing the caption"
         );
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, original);
-        assert!(!app.history.can_undo());
+        assert_eq!(app.tab.doc, original);
+        assert!(!app.tab.history.can_undo());
         let _ = app.update(Message::Redo);
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, transformed);
+        assert_eq!(app.tab.doc, transformed);
     }
 
     #[test]
     fn degenerate_sizes_and_fixed_text_report_unreachable_targets_without_changes() {
         for vertical in [true, false] {
             let (mut app, _) = App::new();
-            let a = app.doc.add_atom("C", Point::default());
-            let b = app.doc.add_atom(
+            let a = app.tab.doc.add_atom("C", Point::default());
+            let b = app.tab.doc.add_atom(
                 "C",
                 if vertical {
                     Point::new(0., 42.)
@@ -1042,10 +1059,10 @@ mod tests {
                     Point::new(42., 0.)
                 },
             );
-            app.doc.add_bond(a, b, 1, "plain");
-            app.selected = vec![a, b];
+            app.tab.doc.add_bond(a, b, 1, "plain");
+            app.tab.selected = vec![a, b];
             app.sync_numeric_transforms();
-            let original = app.doc.clone();
+            let original = app.tab.doc.clone();
             apply(
                 &mut app,
                 if vertical {
@@ -1056,55 +1073,55 @@ mod tests {
                 "10",
             );
             assert!(app.error);
-            assert_eq!(app.doc, original);
-            assert!(!app.history.can_undo());
+            assert_eq!(app.tab.doc, original);
+            assert!(!app.tab.history.can_undo());
         }
         let mut app = fixture();
-        app.selected = vec![app.doc.annotations[0].id];
+        app.tab.selected = vec![app.tab.doc.annotations[0].id];
         app.sync_numeric_transforms();
-        let original = app.doc.clone();
+        let original = app.tab.doc.clone();
         for field in [Field::Width, Field::Height] {
             apply(&mut app, field, "100");
             assert!(app.error);
-            assert_eq!(app.doc, original);
-            assert!(!app.history.can_undo());
+            assert_eq!(app.tab.doc, original);
+            assert!(!app.tab.history.can_undo());
         }
-        app.selected.clear();
+        app.tab.selected.clear();
         app.sync_numeric_transforms();
         apply(&mut app, Field::Rotation, "72");
         assert!(app.error);
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
     }
 
     #[test]
     fn pending_numbers_reset_with_selection_and_undo_but_typing_does_not_edit() {
         let mut app = fixture();
-        let original = app.doc.clone();
+        let original = app.tab.doc.clone();
         let _ = app.update(Message::NumericTransform(Action::Input(
             Field::Width,
             "160".into(),
         )));
-        assert_eq!(app.numeric_transforms.width, "160");
-        assert_eq!(app.doc, original);
-        assert!(!app.history.can_undo());
-        app.selected = vec![app.doc.graphics[0].id];
+        assert_eq!(app.tab.numeric_transforms.width, "160");
+        assert_eq!(app.tab.doc, original);
+        assert!(!app.tab.history.can_undo());
+        app.tab.selected = vec![app.tab.doc.graphics[0].id];
         let _ = app.update(Message::Tick);
-        assert_ne!(app.numeric_transforms.width, "160");
-        let old_width = app.numeric_transforms.width.clone();
+        assert_ne!(app.tab.numeric_transforms.width, "160");
+        let old_width = app.tab.numeric_transforms.width.clone();
         apply(&mut app, Field::Scale, "200");
-        assert_eq!(app.numeric_transforms.scale, "100");
-        assert_ne!(app.numeric_transforms.width, old_width);
+        assert_eq!(app.tab.numeric_transforms.scale, "100");
+        assert_ne!(app.tab.numeric_transforms.width, old_width);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.numeric_transforms.width, old_width);
+        assert_eq!(app.tab.numeric_transforms.width, old_width);
     }
 
     #[test]
     fn computed_label_refresh_updates_dimensions_without_discarding_pending_input() {
         let (mut app, _) = App::new();
-        let oxygen = app.doc.add_atom("O", Point::default());
-        app.selected = vec![oxygen];
+        let oxygen = app.tab.doc.add_atom("O", Point::default());
+        app.tab.selected = vec![oxygen];
         app.sync_numeric_transforms();
-        let old_width = app.numeric_transforms.width.clone();
+        let old_width = app.tab.numeric_transforms.width.clone();
         let _ = app.update(Message::NumericTransform(Action::Input(
             Field::Height,
             "65".into(),
@@ -1113,10 +1130,10 @@ mod tests {
             Field::Rotation,
             "72".into(),
         )));
-        let mut checked = app.doc.clone();
+        let mut checked = app.tab.doc.clone();
         checked.atom_mut(oxygen).unwrap().label_h = 2;
         let _ = app.update(Message::EngineDone {
-            revision: app.revision,
+            revision: app.tab.revision,
             kind: super::super::Job::Analyze,
             result: Box::new(Ok(reshiki::engine::Response {
                 document: Some(checked),
@@ -1126,39 +1143,40 @@ mod tests {
                 warnings: vec![],
             })),
         });
-        assert_ne!(app.numeric_transforms.width, old_width);
-        assert_eq!(app.numeric_transforms.height, "65");
-        assert_eq!(app.numeric_transforms.rotation, "72");
-        assert!(!app.history.can_undo());
+        assert_ne!(app.tab.numeric_transforms.width, old_width);
+        assert_eq!(app.tab.numeric_transforms.height, "65");
+        assert_eq!(app.tab.numeric_transforms.rotation, "72");
+        assert!(!app.tab.history.can_undo());
     }
 
     #[test]
     fn collapsed_abbreviations_keep_hidden_atoms_and_projection_depth_in_scale() {
         let (mut app, _) = App::new();
-        let n = app.doc.add_atom("N", Point::new(-42., 0.));
-        let c = app.doc.add_atom("C", Point::default());
-        app.doc.add_bond(n, c, 1, "plain");
-        app.doc =
-            reshiki::atom_text::apply(&app.doc, c, "Boc", reshiki::atom_text::Mode::Auto).unwrap();
-        let ids = app.doc.all_ids();
-        reshiki::projection::tilt(&mut app.doc, &ids, 25., true);
-        app.selected = vec![n, c];
+        let n = app.tab.doc.add_atom("N", Point::new(-42., 0.));
+        let c = app.tab.doc.add_atom("C", Point::default());
+        app.tab.doc.add_bond(n, c, 1, "plain");
+        app.tab.doc =
+            reshiki::atom_text::apply(&app.tab.doc, c, "Boc", reshiki::atom_text::Mode::Auto)
+                .unwrap();
+        let ids = app.tab.doc.all_ids();
+        reshiki::projection::tilt(&mut app.tab.doc, &ids, 25., true);
+        app.tab.selected = vec![n, c];
         app.sync_numeric_transforms();
-        let original = app.doc.clone();
+        let original = app.tab.doc.clone();
         apply(&mut app, Field::Scale, "150");
         assert!(!app.error, "{}", app.status);
-        assert_eq!(app.doc.bonds, original.bonds);
-        assert_eq!(app.doc.abbreviations, original.abbreviations);
-        for (now, old) in app.doc.atoms.iter().zip(&original.atoms) {
+        assert_eq!(app.tab.doc.bonds, original.bonds);
+        assert_eq!(app.tab.doc.abbreviations, original.abbreviations);
+        for (now, old) in app.tab.doc.atoms.iter().zip(&original.atoms) {
             assert!((now.depth - old.depth * 1.5).abs() < 0.0001);
         }
-        let changed = app.doc.clone();
+        let changed = app.tab.doc.clone();
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
         apply(&mut app, Field::Scale, "NaN");
         apply(&mut app, Field::Rotation, "360");
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, changed, "Invalid and no-op edits retain redo");
+        assert_eq!(app.tab.doc, changed, "Invalid and no-op edits retain redo");
     }
 
     #[test]
@@ -1195,8 +1213,8 @@ mod tests {
             .analysis
             .unwrap();
         let (mut app, _) = App::new();
-        app.doc = original.clone();
-        app.selected = app.doc.all_ids();
+        app.tab.doc = original.clone();
+        app.tab.selected = app.tab.doc.all_ids();
         app.sync_numeric_transforms();
         for (field, input) in [
             (Field::Rotation, "72"),
@@ -1220,14 +1238,14 @@ mod tests {
                     .collect::<Vec<_>>()
             };
             assert_eq!(
-                bonds_without_computed_labels(&app.doc),
+                bonds_without_computed_labels(&app.tab.doc),
                 bonds_without_computed_labels(&original)
             );
-            for (now, old) in app.doc.atoms.iter().zip(&original.atoms) {
+            for (now, old) in app.tab.doc.atoms.iter().zip(&original.atoms) {
                 assert_eq!(now.stereo, old.stereo);
             }
             let actual = engine
-                .execute(Request::molecule("analyze", app.doc.clone()))
+                .execute(Request::molecule("analyze", app.tab.doc.clone()))
                 .await
                 .unwrap()
                 .analysis
@@ -1246,11 +1264,11 @@ mod tests {
         std::fs::create_dir_all(&directory).unwrap();
         let mut app = fixture();
         // Tilt shown, and an edit that enables Apply.
-        app.numeric_transforms.more = true;
-        app.numeric_transforms.scale = "125".into();
+        app.tab.numeric_transforms.more = true;
+        app.tab.numeric_transforms.scale = "125".into();
         std::fs::write(
             directory.join("numeric-transforms.rsk"),
-            serde_json::to_vec_pretty(&app.doc).unwrap(),
+            serde_json::to_vec_pretty(&app.tab.doc).unwrap(),
         )
         .unwrap();
         for width in [246, 268] {
@@ -1428,10 +1446,13 @@ mod tests {
             )
             .unwrap();
         }
-        let original = app.doc.clone();
+        let original = app.tab.doc.clone();
         apply(&mut app, Field::Rotation, "72");
         apply(&mut app, Field::Scale, "125");
-        for (name, doc) in [("original", original), ("rotated-scaled", app.doc.clone())] {
+        for (name, doc) in [
+            ("original", original),
+            ("rotated-scaled", app.tab.doc.clone()),
+        ] {
             std::fs::write(
                 directory.join(format!("{name}.png")),
                 reshiki::export::drawing(&doc, "png").unwrap(),

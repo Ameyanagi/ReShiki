@@ -28,14 +28,18 @@ impl Recovery {
         let root = crate::compatibility::data_directory()?;
         Self::in_directory(&root.join("recovery"))
     }
+    /// A new draft file in `root`. Each document tab has its own, so the
+    /// count keeps drafts made within one clock tick apart.
     pub fn in_directory(root: &Path) -> Result<Self, String> {
+        static COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         std::fs::create_dir_all(root).map_err(|e| e.to_string())?;
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|e| e.to_string())?
             .as_nanos();
+        let count = COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         Ok(Self {
-            session: root.join(format!("{}-{now}.json", std::process::id())),
+            session: root.join(format!("{}-{now}-{count}.json", std::process::id())),
         })
     }
     pub fn candidates(&self) -> Vec<Candidate> {

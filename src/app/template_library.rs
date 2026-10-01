@@ -267,21 +267,21 @@ struct Context {
 impl Context {
     fn capture(app: &App) -> Self {
         Self {
-            epoch: app.file_epoch,
-            revision: app.revision,
+            epoch: app.tab.file_epoch,
+            revision: app.tab.revision,
             tool: app.tool,
             index: app.template_index,
             active: app.templates.active,
         }
     }
     fn current(self, app: &App) -> bool {
-        self.epoch == app.file_epoch
-            && self.revision == app.revision
+        self.epoch == app.tab.file_epoch
+            && self.revision == app.tab.revision
             && self.tool == app.tool
             && self.index == app.template_index
             && self.active == app.templates.active
-            && app.inline_text.is_none()
-            && app.atom_text.is_none()
+            && app.tab.inline_text.is_none()
+            && app.tab.atom_text.is_none()
     }
 }
 struct Operation {
@@ -344,7 +344,7 @@ impl Operation {
             },
             Action::Replace => Edit::Replace {
                 index: custom_index()?,
-                drawing: editing::selection(&app.doc, &app.selected),
+                drawing: editing::selection(&app.tab.doc, &app.tab.selected),
             },
             Action::RememberAnchor => Edit::Anchor {
                 index: custom_index()?,
@@ -624,7 +624,7 @@ impl App {
         }
         self.templates.pending = None;
         if result.is_err() {
-            self.autosave.cancel_close();
+            self.cancel_close();
         }
         let current = self
             .templates
@@ -647,7 +647,7 @@ impl App {
         if matches!(action, Action::Imported(_)) {
             self.templates.importing = false;
             if matches!(action, Action::Imported(Err(_))) {
-                self.autosave.cancel_close();
+                self.cancel_close();
             }
         } else if self.templates.importing {
             self.status = "A template collection is being opened".into();
@@ -819,7 +819,7 @@ impl App {
                 }
             }
             Action::BeginSave => {
-                let doc = editing::selection(&self.doc, &self.selected);
+                let doc = editing::selection(&self.tab.doc, &self.tab.selected);
                 if doc.all_ids().is_empty() {
                     return Err(
                         "Select a fragment, caption or graphic to save as a template.".into(),
@@ -899,6 +899,38 @@ mod navigation_tests {
     }
 
     #[test]
+    fn library_write_failure_replays_a_background_job_held_during_close() {
+        let (mut app, _dir) = persisted_app();
+        let id = app.tab.id;
+        let revision = app.tab.revision;
+        app.tab.busy = true;
+        app.add_tab();
+        let _ = app.update(Message::Templates(Action::SaveDetails));
+        let serial = app.templates.pending.unwrap();
+        let _ = app.update(Message::Close(iced::window::Id::unique()));
+        assert!(app.exit.closing());
+        let _ = app.update(Message::Tab(
+            id,
+            Box::new(Message::EngineDone {
+                revision,
+                kind: super::super::Job::Analyze,
+                result: Box::new(Err("Chemistry failure".into())),
+            }),
+        ));
+        assert_eq!(app.tabs.deferred_results.len(), 1);
+        let _ = app.update(Message::Templates(Action::Finished(
+            serial,
+            Err("Library write failed".into()),
+        )));
+        assert!(!app.exit.frozen() && app.tabs.deferred_results.is_empty());
+        assert!(!app.tabs.background[0].busy);
+        assert_eq!(app.tabs.background[0].status, "Chemistry failure");
+        assert_eq!(app.status, "Library write failed");
+        app.in_tab(id, |app| assert!(app.update(Message::Analyze).units() > 0))
+            .unwrap();
+    }
+
+    #[test]
     fn import_read_serializes_library_changes_and_releases_slot_on_cancellation() {
         let (mut app, _dir) = persisted_app();
         let task = app.update(Message::Templates(Action::Import));
@@ -970,12 +1002,12 @@ mod navigation_tests {
         let _ = app.update(Message::Templates(Action::SaveDetails));
         let serial = app.templates.pending.unwrap();
         let transaction = operation.execute().map(Box::new);
-        let _ = app.perform(super::super::Pending::New);
+        let _ = app.update(Message::New);
         app.status = "New drawing is active".into();
-        let original = app.doc.clone();
+        let original = app.tab.doc.clone();
         let tool = app.tool;
         let _ = app.update(Message::Templates(Action::Finished(serial, transaction)));
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
         assert_eq!(app.tool, tool);
         assert_eq!(app.status, "New drawing is active");
         assert_eq!(app.templates.library.templates.len(), 1);
@@ -1000,9 +1032,9 @@ mod navigation_tests {
             None,
             Default::default(),
         ));
-        assert!(app.inline_text.is_some());
+        assert!(app.tab.inline_text.is_some());
         let _ = app.update(Message::Templates(Action::Finished(serial, transaction)));
-        assert!(app.inline_text.is_some());
+        assert!(app.tab.inline_text.is_some());
         assert!(!app.templates.pending());
         assert_eq!(app.templates.library.templates.len(), 1);
     }

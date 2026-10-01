@@ -6,9 +6,10 @@ Windows 11. The app and chemistry tools run natively and work offline.
 ## Keyboard and files
 
 Windows uses Ctrl for application shortcuts: Ctrl+N/O/S for new/open/save,
-Ctrl+Z to undo, Ctrl+Y or Ctrl+Shift+Z to redo, and Ctrl+A/C/X/V to select,
-copy, cut and paste. Ctrl+Shift+G ungroups; Ctrl+G groups. Alt allows free bond
-drawing. Escape leaves the current tool or cancels a draft.
+Ctrl+W to close a tab, Ctrl+Tab or Ctrl+1–9 to switch tabs, Ctrl+Z to undo,
+Ctrl+Y or Ctrl+Shift+Z to redo, and Ctrl+A/C/X/V to select, copy, cut and
+paste. Ctrl+Shift+G ungroups; Ctrl+G groups. Alt allows free bond drawing and
+moves without smart guides. Escape leaves the current tool or cancels a draft.
 
 Use `.rsk` for an editable original, including pages, pictures and styles.
 SVG/PDF/PNG and EMF export figures; chemical interchange formats retain their supported

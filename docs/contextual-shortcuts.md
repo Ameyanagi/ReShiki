@@ -1,6 +1,6 @@
 # Shortcuts and editable examples
 
-Open **Help** at the bottom of the tool strip, or press **F1**, then choose **Open shortcut examples**. This opens **one editable ReShiki file** in a separate window. It contains nine sections of labeled structures made with the same operations as the keyboard shortcuts.
+Open **Help** at the bottom of the tool strip, or press **F1**, then choose **Open shortcut examples**. This opens **one editable drawing** in a tab named **Shortcut examples** in the current window. If an unchanged examples tab is already open, it comes to the front. **Save** asks for a location for your own copy. It contains nine sections of labeled structures made with the same operations as the keyboard shortcuts.
 
 [Download the shortcut examples (.rsk)](../assets/examples/shortcut-examples.rsk). This is a single document, not a template collection. Open it with **Open**, or double-click the downloaded file. The gallery uses the normal unbounded canvas, without print pages or a page-navigation panel.
 
@@ -99,21 +99,24 @@ Acyclic triple-bond edits straighten the adjacent branches. Bond appearance and 
 
 ## Files, clipboard and help
 
-| Keys                 | Action                                    |
-| -------------------- | ----------------------------------------- |
-| F1                   | Help and editable examples                |
-| Cmd/Ctrl+N / O / S   | New / open / save                         |
-| Cmd/Ctrl+Shift+S     | Save as                                   |
-| Cmd/Ctrl+P           | Print                                     |
-| Cmd/Ctrl+I           | Import                                    |
-| Cmd/Ctrl+Shift+E     | Open Export                               |
-| Cmd/Ctrl+C / X / V   | Copy / cut / paste editable selection     |
-| Cmd/Ctrl+Shift+C     | Copy as an image                          |
-| Cmd/Ctrl+D           | Copy CDXML text                           |
-| Cmd/Ctrl+Alt+C / O   | Copy SMILES / MOL text                    |
-| Cmd/Ctrl+Alt+P       | Paste                                     |
-| Cmd/Ctrl+Z / Shift+Z | Undo / redo; Windows also supports Ctrl+Y |
-| Cmd/Ctrl+Enter       | Finish editing a label or caption         |
+| Keys                      | Action                                    |
+| ------------------------- | ----------------------------------------- |
+| F1                        | Help and editable examples                |
+| Cmd/Ctrl+N / O / S        | New / open, each in a new tab / save      |
+| Cmd/Ctrl+Shift+S          | Save as                                   |
+| Cmd/Ctrl+W                | Close tab                                 |
+| Ctrl+Tab / Ctrl+Shift+Tab | Next / previous tab                       |
+| Cmd/Ctrl+1–8 / 9          | Tab 1–8 / last tab                        |
+| Cmd/Ctrl+P                | Print                                     |
+| Cmd/Ctrl+I                | Import                                    |
+| Cmd/Ctrl+Shift+E          | Open Export                               |
+| Cmd/Ctrl+C / X / V        | Copy / cut / paste editable selection     |
+| Cmd/Ctrl+Shift+C          | Copy as an image                          |
+| Cmd/Ctrl+D                | Copy CDXML text                           |
+| Cmd/Ctrl+Alt+C / O        | Copy SMILES / MOL text                    |
+| Cmd/Ctrl+Alt+P            | Paste                                     |
+| Cmd/Ctrl+Z / Shift+Z      | Undo / redo; Windows also supports Ctrl+Y |
+| Cmd/Ctrl+Enter            | Finish editing a label or caption         |
 
 ## Selection and drawing constraints
 
@@ -127,17 +130,18 @@ Acyclic triple-bond edits straighten the adjacent branches. Bond appearance and 
 | Cmd/Ctrl+J                  | Join selected atoms or bonds                                                              |
 | Cmd/Ctrl+Shift+K            | Preview cleanup                                                                           |
 | Cmd/Ctrl+L / E              | Toggle fixed bond length / fixed angles                                                   |
-| Option/Alt-drag             | Temporarily draw or move bonded endpoints freely                                          |
-| Cmd/Ctrl-drag               | Drag a copy, leaving the original in place                                                |
-| Shift-drag                  | Move horizontally or vertically only                                                      |
-| Cmd/Ctrl+Shift-drag         | Drag a copy along one axis                                                                |
+| Option/Alt-drag             | Temporarily draw or move freely, without bond constraints or smart guides                 |
+| Drag an object              | Snap its edges, center and gaps to other objects on screen (smart guides)                 |
+| Cmd/Ctrl-drag               | Drag a copy, leaving the original in place; the copy snaps to guides too                  |
+| Shift-drag                  | Move horizontally or vertically only; guides snap along that axis                         |
+| Cmd/Ctrl+Shift-drag         | Drag a copy along one axis, snapping along it                                             |
 | Cmd/Ctrl+Alt+K              | Toggle a selected aromatic ring's circle / alternating bonds; Windows also supports Alt+K |
 | Cmd/Ctrl+[ / ]              | Send crossing bonds behind / bring forward                                                |
 | Cmd/Ctrl+/                  | Fit drawing                                                                               |
 | Cmd/Ctrl+;                  | Toggle rulers                                                                             |
 | Cmd/Ctrl+Alt+X              | Toggle crosshair                                                                          |
 | Delete or Backspace         | Delete selection                                                                          |
-| Arrow / Shift+arrow         | Nudge 1 / 10 drawing units                                                                |
+| Arrow / Shift+arrow         | Nudge 1 / 10 drawing units; nudges never snap                                             |
 | Double-click an atom        | Select its molecule                                                                       |
 | Shift-click                 | Add to or toggle the selection                                                            |
 | Side handle / corner handle | Resize one axis / resize proportionally                                                   |

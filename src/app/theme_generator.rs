@@ -372,18 +372,18 @@ impl App {
         match event {
             Action::Open => {
                 self.cancel_join();
-                if self.cleanup.is_some() || !self.finish_inline(true) {
+                if self.tab.cleanup.is_some() || !self.finish_inline(true) {
                     return Task::none();
                 }
                 self.theme_library.editor = Some(Editor::new(
-                    &self.doc,
-                    self.file_epoch,
+                    &self.tab.doc,
+                    self.tab.file_epoch,
                     self.theme_library.themes(),
                 ));
                 self.inspector_tab = InspectorTab::ThemeGenerator;
                 self.inspector_open = true;
                 self.palette = None;
-                self.styles.editor = None;
+                self.tab.styles.editor = None;
                 self.error = false;
                 self.status = "Preview only · Save keeps and applies your theme".into();
             }
@@ -463,8 +463,8 @@ impl App {
                 let Some(editor) = &self.theme_library.editor else {
                     return Task::none();
                 };
-                let candidate = if editor.epoch != self.file_epoch
-                    || editor.original != ThemeFile::capture(&self.doc)
+                let candidate = if editor.epoch != self.tab.file_epoch
+                    || editor.original != ThemeFile::capture(&self.tab.doc)
                 {
                     Err("The document theme changed. Reopen the generator before saving.".into())
                 } else {
@@ -515,7 +515,7 @@ impl App {
                 }
                 if self.apply_theme_file(theme.clone()) {
                     let reference = Reference::capture(&theme);
-                    let original = ThemeFile::capture(&self.doc);
+                    let original = ThemeFile::capture(&self.tab.doc);
                     if let Some(editor) = &mut self.theme_library.editor {
                         editor.references.retain(|r| r.id != reference.id);
                         editor.references.push(reference);
@@ -1033,7 +1033,7 @@ mod tests {
     #[test]
     fn imports_preserve_authored_palettes_until_controls_change_and_back_discards() {
         let (mut app, _) = App::new();
-        let original = app.doc.clone();
+        let original = app.tab.doc.clone();
         let _ = app.theme_generator_action(Action::Open);
         let template = theme_files::bundled().unwrap().remove(0);
         let mut imported = Recipe::PRESENTATION.generate(&template).unwrap();
@@ -1063,10 +1063,10 @@ mod tests {
                 .unwrap(),
             imported
         );
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
         assert!(app.theme_library.themes().is_empty());
         let _ = app.theme_generator_action(Action::Back);
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
         assert!(app.theme_library.themes().is_empty());
         let _ = app.theme_generator_action(Action::Open);
         app.review_imported_theme(imported.clone());
@@ -1081,17 +1081,17 @@ mod tests {
                 .light,
             imported.light
         );
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
     }
     #[test]
     fn manager_protects_defaults_updates_customs_and_deletes_without_recoloring() {
         let (mut app, _) = App::new();
-        let original = app.doc.clone();
+        let original = app.tab.doc.clone();
         let _ = app.theme_generator_action(Action::Open);
         for theme in ColorTheme::ALL {
             let _ = app.theme_generator_action(Action::Select(Selection::Builtin(theme)));
             let _ = app.theme_generator_action(Action::Delete);
-            assert_eq!(app.doc, original);
+            assert_eq!(app.tab.doc, original);
             assert!(app.theme_library.themes().is_empty());
         }
         let _ = app
@@ -1104,10 +1104,10 @@ mod tests {
         assert_eq!(app.theme_library.themes().len(), 1);
         assert_eq!(app.theme_library.themes()[0].id, saved.id);
         assert_eq!(app.theme_library.themes()[0].name, "Renamed custom");
-        let themed = app.doc.clone();
+        let themed = app.tab.doc.clone();
         let _ = app.theme_generator_action(Action::Delete);
         assert!(app.theme_library.themes().is_empty());
-        assert_eq!(app.doc, themed);
+        assert_eq!(app.tab.doc, themed);
         let (choices, _) = app.theme_choices();
         assert_eq!(choices.len(), 5); // Four protected defaults and Manage themes.
         assert_eq!(
@@ -1135,7 +1135,7 @@ mod tests {
         let theme = theme_files::bundled().unwrap().remove(0);
         let _ = app.theme_generator_action(Action::Name("Newer draft".into()));
         let _ = app.theme_file_action(super::super::theme_files::Action::Loaded(
-            app.file_epoch,
+            app.tab.file_epoch,
             serial,
             Ok(Some(Box::new(theme))),
         ));
@@ -1214,24 +1214,24 @@ mod tests {
     #[test]
     fn drafts_cancel_without_edits_and_saved_recipes_reopen_with_undo() {
         let (mut app, _) = App::new();
-        app.doc = reshiki::rings::Preset::Regular.document(42., false);
-        let before = app.doc.clone();
+        app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
+        let before = app.tab.doc.clone();
         let _ = app.theme_generator_action(Action::Open);
         let _ = app.theme_generator_action(Action::Lightness(CanvasTheme::Light, 43.));
         let _ = app.theme_generator_action(Action::Chroma(CanvasTheme::Dark, 150.));
         let recipe = app.theme_library.editor.as_ref().unwrap().recipe.clone();
         assert_eq!(recipe.dark.chroma, 1.5);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         let _ = app.update(Message::Escape);
         assert!(app.theme_library.editor.is_none());
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         let _ = app.theme_generator_action(Action::Open);
         let _ = app.theme_generator_action(Action::Name("My palette".into()));
         let _ = app.theme_generator_action(Action::Lightness(CanvasTheme::Light, 43.));
         let _ = app.theme_generator_action(Action::Chroma(CanvasTheme::Dark, 150.));
         let _ = app.theme_generator_action(Action::Apply);
         assert!(!app.error, "{}", app.status);
-        let applied = app.doc.clone();
+        let applied = app.tab.doc.clone();
         assert_eq!(
             applied.custom_theme.as_ref().unwrap().generator,
             Some(recipe.clone())
@@ -1240,9 +1240,9 @@ mod tests {
         assert_eq!(applied.atoms, before.atoms);
         assert_eq!(applied.canvas_theme, before.canvas_theme);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, applied);
+        assert_eq!(app.tab.doc, applied);
         let _ = app.theme_generator_action(Action::Open);
         let editor = app.theme_library.editor.as_ref().unwrap();
         assert_eq!(editor.recipe, recipe);
@@ -1252,17 +1252,17 @@ mod tests {
     #[test]
     fn stale_and_invalid_drafts_cannot_apply_and_tables_cover_every_element() {
         let (mut app, _) = App::new();
-        let before = app.doc.clone();
+        let before = app.tab.doc.clone();
         let _ = app.theme_generator_action(Action::Open);
         let _ = app.theme_generator_action(Action::Name(" ".into()));
         let _ = app.theme_generator_action(Action::Apply);
         assert!(app.error);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         let _ = app.theme_generator_action(Action::Name("Valid".into()));
-        app.file_epoch += 1;
+        app.tab.file_epoch += 1;
         let _ = app.theme_generator_action(Action::Apply);
         assert!(app.error);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         let symbols: std::collections::HashSet<_> = ROWS
             .iter()
             .flat_map(|row| row.split_whitespace())
@@ -1280,7 +1280,7 @@ mod tests {
     async fn theme_generator_headless_snapshot() {
         use iced::advanced::{layout, mouse, renderer::Headless, widget::Tree};
         let (mut app, _) = App::new();
-        app.busy = false;
+        app.tab.busy = false;
         let _ = app.theme_generator_action(Action::Open);
         let _ = app
             .theme_generator_action(Action::Select(Selection::Builtin(ColorTheme::Presentation)));

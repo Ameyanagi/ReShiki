@@ -65,9 +65,9 @@ mod tests {
     #[test]
     fn row_menus_toggle_and_explain_unavailable_arrange_commands() -> Result<(), String> {
         let (mut app, _) = App::new();
-        app.doc = reshiki::rings::Preset::Regular.document(42., false);
-        app.selected = app.doc.all_ids();
-        let before = app.doc.clone();
+        app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
+        app.tab.selected = app.tab.doc.all_ids();
+        let before = app.tab.doc.clone();
         let open = Message::ContextMenu(Action::Open(Page::AlignObjects, 300.));
         let _ = app.update(open.clone());
         assert_eq!(
@@ -101,38 +101,38 @@ mod tests {
         let _ = app.update(Message::ContextMenu(Action::Open(Page::Arrange, 300.)));
         run_item(&mut app, Page::Arrange, "Flip horizontal")?;
         assert!(app.context_menu.is_none());
-        assert_ne!(app.doc, before);
+        assert_ne!(app.tab.doc, before);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         Ok(())
     }
 
     #[test]
     fn context_commands_follow_the_target_without_modifying_the_drawing() -> Result<(), String> {
         let (mut app, _) = App::new();
-        app.doc = reshiki::rings::Preset::Regular.document(42., false);
-        let ring = app.doc.all_ids();
+        app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
+        let ring = app.tab.doc.all_ids();
         let atom = *ring.first().ok_or("ring")?;
-        let arrow = app.doc.next_id();
-        app.doc.arrows.push(Arrow::new(
+        let arrow = app.tab.doc.next_id();
+        app.tab.doc.arrows.push(Arrow::new(
             arrow,
             World::new(100., 100.),
             World::new(160., 100.),
             Default::default(),
             Default::default(),
         ));
-        let before = app.doc.clone();
+        let before = app.tab.doc.clone();
         assert_eq!(
             labels(&app, Page::Main),
             ["Undo", "Redo", "Paste", "Select all", "Fit drawing"]
         );
-        app.selected = vec![atom];
+        app.tab.selected = vec![atom];
         let single = labels(&app, Page::Main);
         assert!(single.contains(&"Edit atom label…"));
         assert!(!single.contains(&"3D tilt…"));
         assert!(!single.contains(&"Bond appearance…"));
         assert!(single.contains(&"Select molecule"));
-        app.selected = ring.clone();
+        app.tab.selected = ring.clone();
         let molecule = labels(&app, Page::Main);
         assert!(!molecule.contains(&"Select molecule"));
         for expected in [
@@ -146,16 +146,16 @@ mod tests {
         assert!(!molecule.contains(&"Bond in front"));
         assert!(labels(&app, Page::Bonds).contains(&"Bond in front"));
         assert!(!labels(&app, Page::Align).contains(&"Align middles"));
-        app.selected.push(arrow);
+        app.tab.selected.push(arrow);
         assert!(!labels(&app, Page::Main).contains(&"Attachment points…"));
         assert!(labels(&app, Page::Align).contains(&"Align middles"));
-        app.selected = vec![arrow];
+        app.tab.selected = vec![arrow];
         let arrow_items = labels(&app, Page::Main);
         assert!(arrow_items.contains(&"Reverse arrow"));
         assert!(!arrow_items.contains(&"3D tilt…"));
         assert!(!arrow_items.contains(&"Bond appearance…"));
-        assert_eq!(app.doc, before);
-        assert!(!app.history.can_undo());
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
         Ok(())
     }
 
@@ -168,11 +168,11 @@ mod tests {
             ("Y +15°", false, 15.),
         ] {
             let (mut app, _) = App::new();
-            app.doc = reshiki::rings::Preset::Regular.document(42., false);
-            let ids = app.doc.all_ids();
-            let source = app.doc.clone();
-            reshiki::editing::append(&mut app.doc, &source, World::new(240., 0.));
-            let before = app.doc.clone();
+            app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
+            let ids = app.tab.doc.all_ids();
+            let source = app.tab.doc.clone();
+            reshiki::editing::append(&mut app.tab.doc, &source, World::new(240., 0.));
+            let before = app.tab.doc.clone();
             app.edit(Edit::ContextMenu {
                 position: Point::new(20., 20.),
                 selected: ids.clone(),
@@ -183,27 +183,27 @@ mod tests {
                 Some(Page::Tilt)
             ));
             run_item(&mut app, Page::Tilt, "‹ Back")?;
-            assert_eq!(app.doc, before);
-            assert!(!app.history.can_undo());
+            assert_eq!(app.tab.doc, before);
+            assert!(!app.tab.history.can_undo());
             run_item(&mut app, Page::Main, "3D tilt…")?;
             run_item(&mut app, Page::Tilt, label)?;
             let mut expected = before.clone();
             reshiki::projection::tilt(&mut expected, &ids, degrees, around_x);
-            assert_eq!(app.doc, expected);
-            assert_eq!(app.selected, ids);
+            assert_eq!(app.tab.doc, expected);
+            assert_eq!(app.tab.selected, ids);
             assert!(app.context_menu.is_none());
             let _ = app.update(Message::Undo);
-            assert_eq!(app.doc, before);
+            assert_eq!(app.tab.doc, before);
             let _ = app.update(Message::Redo);
-            assert_eq!(app.doc, expected);
+            assert_eq!(app.tab.doc, expected);
             app.edit(Edit::ContextMenu {
                 position: Point::new(20., 20.),
                 selected: ids.clone(),
             });
             run_item(&mut app, Page::Tilt, "Drag to tilt")?;
             assert_eq!(app.tool, Tool::Tilt);
-            assert_eq!(app.selected, ids);
-            assert_eq!(app.doc, expected);
+            assert_eq!(app.tab.selected, ids);
+            assert_eq!(app.tab.doc, expected);
             assert!(app.context_menu.is_none());
         }
         Ok(())
@@ -212,15 +212,15 @@ mod tests {
     #[test]
     fn tilt_drag_is_one_undo_step_and_matches_projection_preview() {
         let (mut app, _) = App::new();
-        app.doc = reshiki::rings::Preset::Regular.document(42., true);
-        let ids = app.doc.all_ids();
-        let source = app.doc.clone();
-        reshiki::editing::append(&mut app.doc, &source, World::new(240., 0.));
-        let before = app.doc.clone();
-        app.selected = ids.clone();
+        app.tab.doc = reshiki::rings::Preset::Regular.document(42., true);
+        let ids = app.tab.doc.all_ids();
+        let source = app.tab.doc.clone();
+        reshiki::editing::append(&mut app.tab.doc, &source, World::new(240., 0.));
+        let before = app.tab.doc.clone();
+        app.tab.selected = ids.clone();
         let _ = app.update(Message::Tool(Tool::Tilt));
-        assert_eq!(app.selected, ids);
-        assert!(!app.history.can_undo());
+        assert_eq!(app.tab.selected, ids);
+        assert!(!app.tab.history.can_undo());
         let mut preview = before.clone();
         crate::canvas::tilt::apply(&mut preview, &ids, 30., -15.);
         app.edit(Edit::Tilt {
@@ -228,40 +228,40 @@ mod tests {
             x: 30.,
             y: -15.,
         });
-        assert_eq!(app.doc, preview);
-        assert_eq!(app.doc.bonds, before.bonds);
+        assert_eq!(app.tab.doc, preview);
+        assert_eq!(app.tab.doc.bonds, before.bonds);
         assert_eq!(app.tool, Tool::Tilt);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
-        assert!(!app.history.can_undo());
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
         let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, preview);
+        assert_eq!(app.tab.doc, preview);
     }
 
     #[test]
     fn context_alignment_preserves_molecular_geometry_and_undo_restores_every_group()
     -> Result<(), String> {
         let (mut app, _) = App::new();
-        app.doc = reshiki::rings::Preset::Regular.document(42., false);
-        let source = app.doc.clone();
-        reshiki::editing::append(&mut app.doc, &source, World::new(240., 80.));
+        app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
+        let source = app.tab.doc.clone();
+        reshiki::editing::append(&mut app.tab.doc, &source, World::new(240., 80.));
         let arrow = Arrow::new(
-            app.doc.next_id(),
+            app.tab.doc.next_id(),
             World::new(90., -60.),
             World::new(160., -60.),
             Default::default(),
             Default::default(),
         );
-        app.doc.arrows.push(arrow);
-        let before = app.doc.clone();
-        let ids = app.doc.all_ids();
+        app.tab.doc.arrows.push(arrow);
+        let before = app.tab.doc.clone();
+        let ids = app.tab.doc.all_ids();
         app.edit(Edit::ContextMenu {
             position: Point::new(20., 20.),
             selected: ids.clone(),
         });
         assert_eq!(app.alignment_count(), 3);
-        assert_eq!(app.doc, before);
-        assert!(!app.history.can_undo());
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
         let _ = app.update(Message::InspectorScroll(0.));
         assert!(
             app.context_menu.is_some(),
@@ -271,17 +271,17 @@ mod tests {
             Arrange::AlignVertical,
         ))));
         assert!(app.context_menu.is_none());
-        let centers: Vec<_> = reshiki::editing::groups(&app.doc, &ids)
+        let centers: Vec<_> = reshiki::editing::groups(&app.tab.doc, &ids)
             .iter()
             .map(|ids| {
-                let (lo, hi) =
-                    reshiki::scene::selection_bounds(&app.doc, ids).ok_or("selection bounds")?;
+                let (lo, hi) = reshiki::scene::selection_bounds(&app.tab.doc, ids)
+                    .ok_or("selection bounds")?;
                 Ok::<_, String>((lo.y + hi.y) / 2.)
             })
             .collect::<Result<_, _>>()?;
         let center = centers.first().ok_or("alignment center")?;
         assert!(centers.iter().all(|y| (y - center).abs() < 0.001));
-        for bond in &app.doc.bonds {
+        for bond in &app.tab.doc.bonds {
             let length = |doc: &reshiki::document::Document| -> Result<f32, String> {
                 Ok(doc
                     .atom(bond.a)
@@ -289,17 +289,17 @@ mod tests {
                     .position
                     .distance(doc.atom(bond.b).ok_or("bond end")?.position))
             };
-            assert!((length(&app.doc)? - length(&before)?).abs() < 0.001);
+            assert!((length(&app.tab.doc)? - length(&before)?).abs() < 0.001);
         }
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         app.edit(Edit::ContextMenu {
             position: Point::new(20., 20.),
             selected: ids,
         });
         let _ = app.update(Message::Escape);
         assert!(app.context_menu.is_none());
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         Ok(())
     }
 
@@ -307,30 +307,31 @@ mod tests {
     async fn inserted_examples_keep_existing_objects_and_can_be_removed_in_one_undo()
     -> Result<(), String> {
         let (mut app, _) = App::new();
-        app.doc = reshiki::rings::Preset::Regular.document(42., false);
-        let before = app.doc.clone();
+        app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
+        let before = app.tab.doc.clone();
         let result = app
             .engine
             .request(reshiki::engine::Request::import_smiles("CCO"))
             .await?;
         let _ = app.update(Message::EngineDone {
-            revision: app.revision,
+            revision: app.tab.revision,
             kind: super::super::Job::Insert,
             result: Box::new(Ok(result)),
         });
-        assert_eq!(app.doc.atoms.len(), before.atoms.len() + 3);
-        assert_eq!(app.selected.len(), 3);
+        assert_eq!(app.tab.doc.atoms.len(), before.atoms.len() + 3);
+        assert_eq!(app.tab.selected.len(), 3);
         for atom in &before.atoms {
-            assert_eq!(app.doc.atom(atom.id), Some(atom));
+            assert_eq!(app.tab.doc.atom(atom.id), Some(atom));
         }
         let (_, old_max) = before.bounds();
-        assert!(
-            app.selected
-                .iter()
-                .all(|id| app.doc.atom(*id).is_some_and(|a| a.position.x > old_max.x))
-        );
+        assert!(app.tab.selected.iter().all(|id| {
+            app.tab
+                .doc
+                .atom(*id)
+                .is_some_and(|a| a.position.x > old_max.x)
+        }));
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc, before);
         Ok(())
     }
 }
@@ -390,24 +391,30 @@ impl App {
         use Entry::{Hint, Separator};
         let command = Entry::command;
         let submenu = Entry::page;
-        let atoms = self.doc.atoms.iter().any(|a| self.selected.contains(&a.id));
+        let atoms = self
+            .tab
+            .doc
+            .atoms
+            .iter()
+            .any(|a| self.tab.selected.contains(&a.id));
         let bonds = self
+            .tab
             .doc
             .bonds
             .iter()
-            .any(|b| self.selected.contains(&b.a) && self.selected.contains(&b.b));
-        let tilt = crate::canvas::tilt::available(&self.doc, &self.selected);
+            .any(|b| self.tab.selected.contains(&b.a) && self.tab.selected.contains(&b.b));
+        let tilt = crate::canvas::tilt::available(&self.tab.doc, &self.tab.selected);
         let multiple = self.alignment_count() >= 2;
         match page {
-            Page::Main if self.selected.is_empty() => vec![
-                command("Undo", Message::Undo, self.history.can_undo()),
-                command("Redo", Message::Redo, self.history.can_redo()),
+            Page::Main if self.tab.selected.is_empty() => vec![
+                command("Undo", Message::Undo, self.tab.history.can_undo()),
+                command("Redo", Message::Redo, self.tab.history.can_redo()),
                 Separator,
-                command("Paste", Message::Paste, !self.clipboard_busy),
+                command("Paste", Message::Paste, !self.tab.clipboard_busy),
                 command(
                     "Select all",
                     Message::SelectAll,
-                    !self.doc.all_ids().is_empty(),
+                    !self.tab.doc.all_ids().is_empty(),
                 ),
                 Separator,
                 command("Fit drawing", Message::Fit, true),
@@ -423,9 +430,10 @@ impl App {
                 }
                 if atoms
                     && self
+                        .tab
                         .selected
                         .iter()
-                        .filter(|id| self.doc.atom(**id).is_some())
+                        .filter(|id| self.tab.doc.atom(**id).is_some())
                         .count()
                         > 1
                 {
@@ -437,17 +445,18 @@ impl App {
                 }
                 if atoms {
                     let connected: Vec<_> =
-                        reshiki::editing::groups(&self.doc, &self.doc.all_ids())
+                        reshiki::editing::groups(&self.tab.doc, &self.tab.doc.all_ids())
                             .into_iter()
                             .filter(|ids| {
                                 ids.iter().any(|id| {
-                                    self.selected.contains(id) && self.doc.atom(*id).is_some()
+                                    self.tab.selected.contains(id)
+                                        && self.tab.doc.atom(*id).is_some()
                                 })
                             })
                             .flatten()
                             .collect();
-                    if connected.len() != self.selected.len()
-                        || connected.iter().any(|id| !self.selected.contains(id))
+                    if connected.len() != self.tab.selected.len()
+                        || connected.iter().any(|id| !self.tab.selected.contains(id))
                     {
                         entries.push(command(
                             "Select molecule",
@@ -459,10 +468,10 @@ impl App {
                 if tilt {
                     entries.push(submenu("3D tilt…", Page::Tilt));
                 }
-                if self.doc.atoms.iter().any(|a| {
-                    self.selected.contains(&a.id)
+                if self.tab.doc.atoms.iter().any(|a| {
+                    self.tab.selected.contains(&a.id)
                         && a.attachment.is_some()
-                        && self.doc.abbreviation(a.id).is_none()
+                        && self.tab.doc.abbreviation(a.id).is_none()
                 }) {
                     entries.push(command(
                         "Move attachment point only",
@@ -475,21 +484,25 @@ impl App {
                     entries.push(submenu("Bond appearance…", Page::Bonds));
                 }
                 let real_atoms = self
+                    .tab
                     .doc
                     .atoms
                     .iter()
                     .filter(|a| {
-                        self.selected.contains(&a.id) && a.element != "*" && a.centroid.is_empty()
+                        self.tab.selected.contains(&a.id)
+                            && a.element != "*"
+                            && a.centroid.is_empty()
                     })
                     .count();
-                if (2..=300).contains(&real_atoms) && real_atoms == self.selected.len() {
+                if (2..=300).contains(&real_atoms) && real_atoms == self.tab.selected.len() {
                     entries.push(submenu("Attachment points…", Page::Attachments));
                 }
                 if self
+                    .tab
                     .doc
                     .arrows
                     .iter()
-                    .any(|a| self.selected.contains(&a.id))
+                    .any(|a| self.tab.selected.contains(&a.id))
                 {
                     entries.push(command(
                         "Reverse arrow",
@@ -505,7 +518,7 @@ impl App {
                 entries.push(Separator);
                 entries.push(command("Cut", Message::Copy(true), true));
                 entries.push(command("Copy", Message::Copy(false), true));
-                entries.push(command("Paste", Message::Paste, !self.clipboard_busy));
+                entries.push(command("Paste", Message::Paste, !self.tab.clipboard_busy));
                 entries.push(command("Duplicate", Message::Duplicate, true));
                 entries.push(Separator);
                 entries.push(Entry::Item {
@@ -575,7 +588,11 @@ impl App {
                 }
                 if atoms
                     || self.can_group()
-                    || !self.doc.outer_selected_groups(&self.selected).is_empty()
+                    || !self
+                        .tab
+                        .doc
+                        .outer_selected_groups(&self.tab.selected)
+                        .is_empty()
                 {
                     entries.push(Separator);
                     if atoms {
@@ -588,7 +605,12 @@ impl App {
                     if self.can_group() {
                         entries.push(command("Group", Message::Group, true));
                     }
-                    if !self.doc.outer_selected_groups(&self.selected).is_empty() {
+                    if !self
+                        .tab
+                        .doc
+                        .outer_selected_groups(&self.tab.selected)
+                        .is_empty()
+                    {
                         entries.push(command("Ungroup", Message::Ungroup, true));
                     }
                 }
@@ -598,14 +620,16 @@ impl App {
                 let mut entries = vec![submenu("‹ Back", Page::Main), Hint("Bond appearance")];
                 entries.push(command("Bond in front", Message::BondDepth(true), bonds));
                 entries.push(command("Bond behind", Message::BondDepth(false), bonds));
-                if reshiki::rings::selected_cycle(&self.doc, &self.selected).is_some() {
+                if reshiki::rings::selected_cycle(&self.tab.doc, &self.tab.selected).is_some() {
                     entries.push(command(
                         "Saturated ↔ Aromatic",
                         Message::ToggleSelectedRing,
                         true,
                     ));
                 }
-                if !reshiki::ring_fills::selected_cycles(&self.doc, &self.selected).is_empty() {
+                if !reshiki::ring_fills::selected_cycles(&self.tab.doc, &self.tab.selected)
+                    .is_empty()
+                {
                     entries.push(command(
                         "Color ring interior…",
                         Message::StyleMenu(super::color_popover::Action::RingColor),
@@ -614,13 +638,15 @@ impl App {
                     entries.push(command(
                         "Clear ring fill",
                         Message::ClearRingFill,
-                        self.doc
+                        self.tab
+                            .doc
                             .ring_fills
                             .iter()
-                            .any(|f| f.atoms.iter().all(|id| self.selected.contains(id))),
+                            .any(|f| f.atoms.iter().all(|id| self.tab.selected.contains(id))),
                     ));
                 }
-                if reshiki::ring_arcs::toggle(&mut self.doc.clone(), &self.selected).is_ok() {
+                if reshiki::ring_arcs::toggle(&mut self.tab.doc.clone(), &self.tab.selected).is_ok()
+                {
                     entries.push(command(
                         "Toggle inner ring curve",
                         Message::InspectorAction(inspector::Action::RingArc),
@@ -737,7 +763,7 @@ impl App {
             Action::Properties(molecular) => {
                 self.context_menu = None;
                 if molecular {
-                    self.inspector_ui.update(inspector::Action::Section(
+                    self.tab.inspector_ui.update(inspector::Action::Section(
                         inspector::Section::Molecule,
                         true,
                     ));
@@ -750,7 +776,7 @@ impl App {
 
     fn context_geometry(&self, menu: &State) -> (Point, f32, f32) {
         use super::workspace::{font_width, text_width};
-        let header = usize::from(matches!(menu.page, Page::Main) && !self.selected.is_empty());
+        let header = usize::from(matches!(menu.page, Page::Main) && !self.tab.selected.is_empty());
         let entries = self.context_entries(menu.page);
         let count = entries.len() + header;
         // Wide enough for the longest label and its shortcut, as on Windows.
@@ -822,7 +848,7 @@ impl App {
                 .on_press_maybe(enabled.then_some(Message::ContextMenu(action)))
         };
         let mut entries = column![].spacing(1);
-        if matches!(menu.page, Page::Main) && !self.selected.is_empty() {
+        if matches!(menu.page, Page::Main) && !self.tab.selected.is_empty() {
             entries = entries.push(
                 container(
                     text(self.selection_summary())

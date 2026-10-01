@@ -53,10 +53,13 @@ pub enum Action {
 }
 impl App {
     pub(super) fn label_ids(&self) -> Vec<u64> {
-        self.doc
+        self.tab
+            .doc
             .atoms
             .iter()
-            .filter(|a| self.labels.scope == Scope::Drawing || self.selected.contains(&a.id))
+            .filter(|a| {
+                self.tab.labels.scope == Scope::Drawing || self.tab.selected.contains(&a.id)
+            })
             .map(|a| a.id)
             .collect()
     }
@@ -67,66 +70,100 @@ impl App {
         }
     }
     fn change_labels(&mut self, action: Action) -> Result<(), String> {
-        let before = self.doc.clone();
+        let before = self.tab.doc.clone();
         let ids = self.label_ids();
         match action {
-            Action::Scope(scope) => self.labels.scope = scope,
-            Action::Seed(s) => self.labels.seed = s,
-            Action::Text(s) => self.labels.number = s,
-            Action::Size(s) => self.labels.size = s,
+            Action::Scope(scope) => self.tab.labels.scope = scope,
+            Action::Seed(s) => self.tab.labels.seed = s,
+            Action::Text(s) => self.tab.labels.number = s,
+            Action::Size(s) => self.tab.labels.size = s,
             Action::PositionIndicators => {
-                self.selected = ids;
+                self.tab.selected = ids;
                 self.tool = Tool::EditPoints;
                 self.status = "Drag a number or stereochemistry handle · Escape finishes".into();
             }
             Action::Carbons(value) => {
-                if self.labels.scope == Scope::Drawing {
-                    self.doc.atom_labels.carbons = value;
+                if self.tab.labels.scope == Scope::Drawing {
+                    self.tab.doc.atom_labels.carbons = value;
                 }
-                for a in self.doc.atoms.iter_mut().filter(|a| ids.contains(&a.id)) {
-                    a.display.carbons = (self.labels.scope == Scope::Selection).then_some(value);
+                for a in self
+                    .tab
+                    .doc
+                    .atoms
+                    .iter_mut()
+                    .filter(|a| ids.contains(&a.id))
+                {
+                    a.display.carbons =
+                        (self.tab.labels.scope == Scope::Selection).then_some(value);
                 }
             }
             Action::Hydrogens(value) => {
-                if self.labels.scope == Scope::Drawing {
-                    self.doc.atom_labels.hydrogens = value;
+                if self.tab.labels.scope == Scope::Drawing {
+                    self.tab.doc.atom_labels.hydrogens = value;
                 }
-                for a in self.doc.atoms.iter_mut().filter(|a| ids.contains(&a.id)) {
-                    a.display.hydrogens = (self.labels.scope == Scope::Selection).then_some(value);
+                for a in self
+                    .tab
+                    .doc
+                    .atoms
+                    .iter_mut()
+                    .filter(|a| ids.contains(&a.id))
+                {
+                    a.display.hydrogens =
+                        (self.tab.labels.scope == Scope::Selection).then_some(value);
                 }
             }
             Action::Charges(show) => {
-                for a in self.doc.atoms.iter_mut().filter(|a| ids.contains(&a.id)) {
+                for a in self
+                    .tab
+                    .doc
+                    .atoms
+                    .iter_mut()
+                    .filter(|a| ids.contains(&a.id))
+                {
                     a.display.hide_charge = !show;
                 }
             }
             Action::Position(value) => {
-                for a in self.doc.atoms.iter_mut().filter(|a| ids.contains(&a.id)) {
+                for a in self
+                    .tab
+                    .doc
+                    .atoms
+                    .iter_mut()
+                    .filter(|a| ids.contains(&a.id))
+                {
                     a.display.hydrogen_position = value;
                 }
             }
             Action::Stereo(value) => {
-                if self.labels.scope == Scope::Drawing {
-                    self.doc.atom_labels.stereo = value;
+                if self.tab.labels.scope == Scope::Drawing {
+                    self.tab.doc.atom_labels.stereo = value;
                 }
-                for a in self.doc.atoms.iter_mut().filter(|a| ids.contains(&a.id)) {
+                for a in self
+                    .tab
+                    .doc
+                    .atoms
+                    .iter_mut()
+                    .filter(|a| ids.contains(&a.id))
+                {
                     a.display.stereo.show =
-                        (self.labels.scope == Scope::Selection).then_some(value);
+                        (self.tab.labels.scope == Scope::Selection).then_some(value);
                 }
                 for b in self
+                    .tab
                     .doc
                     .bonds
                     .iter_mut()
                     .filter(|b| ids.contains(&b.a) && ids.contains(&b.b))
                 {
-                    b.indicator.show = (self.labels.scope == Scope::Selection).then_some(value);
+                    b.indicator.show = (self.tab.labels.scope == Scope::Selection).then_some(value);
                 }
-                self.labels_dirty = true;
+                self.tab.labels_dirty = true;
             }
             Action::Number => {
-                let sequence = labels::sequence(&self.labels.seed, ids.len())?;
+                let sequence = labels::sequence(&self.tab.labels.seed, ids.len())?;
                 for (id, text) in ids.iter().zip(sequence) {
                     let atom = self
+                        .tab
                         .doc
                         .atom_mut(*id)
                         .ok_or("The numbered atom is no longer available")?;
@@ -138,7 +175,13 @@ impl App {
                 }
             }
             Action::ClearNumbers => {
-                for a in self.doc.atoms.iter_mut().filter(|a| ids.contains(&a.id)) {
+                for a in self
+                    .tab
+                    .doc
+                    .atoms
+                    .iter_mut()
+                    .filter(|a| ids.contains(&a.id))
+                {
                     a.display.number = None;
                 }
             }
@@ -151,6 +194,7 @@ impl App {
                     .copied()
                     .ok_or("Select one atom to edit its number")?;
                 let a = self
+                    .tab
                     .doc
                     .atom_mut(id)
                     .ok_or("The numbered atom is no longer available")?;
@@ -162,14 +206,15 @@ impl App {
                         offset: None,
                         style: labels::number_style(),
                     })
-                    .text = self.labels.number.trim().into();
+                    .text = self.tab.labels.number.trim().into();
                 display.validate()?;
                 a.display = display;
             }
             Action::ApplySize | Action::ToolbarStyle => {
                 let size = if matches!(action, Action::ApplySize) {
                     Some(
-                        self.labels
+                        self.tab
+                            .labels
                             .size
                             .parse::<f32>()
                             .ok()
@@ -182,7 +227,13 @@ impl App {
                 let mut style = self.current_text_style().clone();
                 style.script = reshiki::typography::Script::Normal;
                 style.formula = false;
-                for a in self.doc.atoms.iter_mut().filter(|a| ids.contains(&a.id)) {
+                for a in self
+                    .tab
+                    .doc
+                    .atoms
+                    .iter_mut()
+                    .filter(|a| ids.contains(&a.id))
+                {
                     for s in std::iter::once(&mut a.display.stereo.style)
                         .chain(a.display.number.iter_mut().map(|n| &mut n.style))
                     {
@@ -194,6 +245,7 @@ impl App {
                     }
                 }
                 for b in self
+                    .tab
                     .doc
                     .bonds
                     .iter_mut()
@@ -207,13 +259,20 @@ impl App {
                 }
             }
             Action::ResetPositions => {
-                for a in self.doc.atoms.iter_mut().filter(|a| ids.contains(&a.id)) {
+                for a in self
+                    .tab
+                    .doc
+                    .atoms
+                    .iter_mut()
+                    .filter(|a| ids.contains(&a.id))
+                {
                     a.display.stereo.offset = None;
                     if let Some(n) = &mut a.display.number {
                         n.offset = None;
                     }
                 }
                 for b in self
+                    .tab
                     .doc
                     .bonds
                     .iter_mut()
@@ -223,7 +282,13 @@ impl App {
                 }
             }
             Action::ResetOverrides => {
-                for a in self.doc.atoms.iter_mut().filter(|a| ids.contains(&a.id)) {
+                for a in self
+                    .tab
+                    .doc
+                    .atoms
+                    .iter_mut()
+                    .filter(|a| ids.contains(&a.id))
+                {
                     a.display.carbons = None;
                     a.display.hide_charge = false;
                     a.display.hydrogens = None;
@@ -231,6 +296,7 @@ impl App {
                     a.display.stereo.show = None;
                 }
                 for b in self
+                    .tab
                     .doc
                     .bonds
                     .iter_mut()

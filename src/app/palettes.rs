@@ -247,12 +247,13 @@ impl App {
                     .palette_action(Action::ArrowVariant(preset, ArrowStyle::preset(preset)));
             }
             Action::ArrowVariant(preset, style) => {
-                self.selected.clear();
+                self.tab.selected.clear();
                 self.palette = None;
-                self.arrow_style = preset;
-                self.arrows.style = style;
-                self.arrows
-                    .refresh_inputs(&reshiki::palette::Palette::of(&self.doc));
+                self.tab.arrow_style = preset;
+                self.tab.arrows.style = style;
+                self.tab
+                    .arrows
+                    .refresh_inputs(&reshiki::palette::Palette::of(&self.tab.doc));
                 return self.update(Message::Tool(Tool::Arrow));
             }
         }
@@ -316,7 +317,7 @@ impl App {
                                     .padding(1)
                                     .style(super::workspace::element_control(
                                         self.element == symbol,
-                                        &self.doc,
+                                        &self.tab.doc,
                                         symbol,
                                     ))
                                     .on_press(Message::Palette(Action::Atom(symbol.into()))),
@@ -514,7 +515,7 @@ impl App {
                             )
                             .padding(6)
                             .style(super::workspace::control(
-                                self.arrow_style == *preset && self.arrows.style == *style,
+                                self.tab.arrow_style == *preset && self.tab.arrows.style == *style,
                             ))
                             .on_press(Message::Palette(
                                 if style == &ArrowStyle::preset(*preset) {
@@ -666,8 +667,8 @@ mod tests {
             Point::new(100., 30.),
             true,
         ));
-        let drawing = app.doc.clone();
-        let g = &app.doc.graphics[0];
+        let drawing = app.tab.doc.clone();
+        let g = &app.tab.doc.graphics[0];
         assert!(
             (g.axis_x.distance(Point::default()) - g.axis_y.distance(Point::default())).abs()
                 < 0.001
@@ -678,11 +679,11 @@ mod tests {
             .unwrap()
             .1;
         let _ = app.update(Message::Palette(Action::Graphic(filled)));
-        assert_eq!(app.doc, drawing);
-        assert!(app.graphic_style.fill.is_some());
+        assert_eq!(app.tab.doc, drawing);
+        assert!(app.tab.graphic_style.fill.is_some());
         let _ = app.update(Message::Tool(Tool::Graphic(GraphicKind::Ellipse)));
         assert!(app.toolbar.ellipse.constrain);
-        assert!(app.graphic_style.fill.is_none());
+        assert!(app.tab.graphic_style.fill.is_none());
         for family in [
             Family::Rectangles,
             Family::Ellipses,
@@ -700,47 +701,47 @@ mod tests {
         use crate::canvas::Edit;
         let (mut app, _) = App::new();
         app.tool = Tool::Erase;
-        let a = app.doc.add_atom("C", Point::new(0., 0.));
-        app.doc.add_atom("O", Point::new(0., 50.));
-        let keep = app.doc.add_atom("N", Point::new(50., 50.));
-        let original = app.doc.clone();
+        let a = app.tab.doc.add_atom("C", Point::new(0., 0.));
+        app.tab.doc.add_atom("O", Point::new(0., 50.));
+        let keep = app.tab.doc.add_atom("N", Point::new(50., 50.));
+        let original = app.tab.doc.clone();
         app.edit(Edit::EraseStart(Point::new(0., -20.)));
         app.edit(Edit::EraseTo(Point::new(0., -20.), Point::new(0., 20.)));
-        assert!(app.doc.atom(a).is_none());
+        assert!(app.tab.doc.atom(a).is_none());
         app.edit(Edit::EraseTo(Point::new(0., 20.), Point::new(0., 80.)));
         app.edit(Edit::EraseEnd);
-        let erased = app.doc.clone();
+        let erased = app.tab.doc.clone();
         assert_eq!(erased.atoms.len(), 1);
         assert!(erased.atom(keep).is_some());
-        assert!(app.history.undo(&mut app.doc));
-        assert_eq!(app.doc, original);
-        assert!(!app.history.can_undo());
-        assert!(app.history.redo(&mut app.doc));
-        assert_eq!(app.doc, erased);
+        assert!(app.tab.history.undo(&mut app.tab.doc));
+        assert_eq!(app.tab.doc, original);
+        assert!(!app.tab.history.can_undo());
+        assert!(app.tab.history.redo(&mut app.tab.doc));
+        assert_eq!(app.tab.doc, erased);
         app.edit(Edit::EraseStart(Point::new(1000., 1000.)));
         app.edit(Edit::EraseEnd);
-        assert!(app.history.undo(&mut app.doc));
-        assert_eq!(app.doc, original);
+        assert!(app.tab.history.undo(&mut app.tab.doc));
+        assert_eq!(app.tab.doc, original);
     }
     #[test]
     fn toolbar_flyouts_choose_tools_without_mutating_the_drawing() {
         let (mut app, _) = App::new();
-        app.doc.arrows.push(Arrow::new(
+        app.tab.doc.arrows.push(Arrow::new(
             1,
             Point::default(),
             Point::new(80., 0.),
             ArrowPreset::Forward,
             ArrowStyle::default(),
         ));
-        app.selected = vec![1];
-        let original = app.doc.clone();
+        app.tab.selected = vec![1];
+        let original = app.tab.doc.clone();
         for tool in [Tool::Atom, Tool::Wedge, Tool::Ring, Tool::Arrow] {
             let _ = app.update(Message::Palette(Action::Open(tool)));
             assert!(app.palette.is_some());
             let _ = app.view();
             let _ = app.update(Message::Tool(Tool::Select));
             assert!(app.palette.is_none());
-            assert_eq!(app.doc, original);
+            assert_eq!(app.tab.doc, original);
         }
         let _ = app.update(Message::Palette(Action::Atom("Br".into())));
         assert_eq!(app.element, "Br");
@@ -749,38 +750,38 @@ mod tests {
         let _ = app.update(Message::Palette(Action::Ring(7, false)));
         assert_eq!(app.ring_size, 7);
         let _ = app.update(Message::Palette(Action::Arrow(ArrowPreset::Bent)));
-        assert_eq!(app.arrow_style, ArrowPreset::Bent);
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.arrow_style, ArrowPreset::Bent);
+        assert_eq!(app.tab.doc, original);
     }
     #[test]
     fn undo_during_an_eraser_drag_does_not_merge_later_motion_into_older_edits() {
         use crate::canvas::Edit;
         let (mut app, _) = App::new();
-        let original = app.doc.clone();
-        app.doc.add_atom("C", Point::default());
+        let original = app.tab.doc.clone();
+        app.tab.doc.add_atom("C", Point::default());
         app.changed(original.clone());
         app.tool = Tool::Erase;
         app.edit(Edit::EraseStart(Point::default()));
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc.atoms.len(), 1);
+        assert_eq!(app.tab.doc.atoms.len(), 1);
         app.edit(Edit::EraseTo(Point::default(), Point::new(10., 0.)));
         app.edit(Edit::EraseEnd);
-        assert_eq!(app.doc.atoms.len(), 1);
+        assert_eq!(app.tab.doc.atoms.len(), 1);
         let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, original);
+        assert_eq!(app.tab.doc, original);
     }
     #[test]
     fn crossing_depth_changes_are_undoable_and_preserve_chemistry() {
         let (mut app, _) = App::new();
-        let a = app.doc.add_atom("C", Point::default());
-        let b = app.doc.add_atom("C", Point::new(42., 0.));
-        app.doc.add_bond(a, b, 1, "plain");
-        app.selected = vec![a, b];
-        let before = app.doc.clone();
+        let a = app.tab.doc.add_atom("C", Point::default());
+        let b = app.tab.doc.add_atom("C", Point::new(42., 0.));
+        app.tab.doc.add_bond(a, b, 1, "plain");
+        app.tab.selected = vec![a, b];
+        let before = app.tab.doc.clone();
         let _ = app.update(Message::BondDepth(true));
-        assert_eq!(app.doc.bonds[0].z_order, 1);
-        assert!(!super::super::chemistry_changed(&before, &app.doc));
-        assert!(app.history.undo(&mut app.doc));
-        assert_eq!(app.doc, before);
+        assert_eq!(app.tab.doc.bonds[0].z_order, 1);
+        assert!(!super::super::chemistry_changed(&before, &app.tab.doc));
+        assert!(app.tab.history.undo(&mut app.tab.doc));
+        assert_eq!(app.tab.doc, before);
     }
 }
