@@ -258,4 +258,11 @@ def corpus():
 
 
 if __name__ == "__main__":
-    print(json.dumps(corpus(), ensure_ascii=False))
+    if sys.argv[1:] == ["--roundtrip"]:
+        binary = to_cdx(sys.stdin.read())
+        print(json.dumps(dict(binary=base64.b64encode(binary).decode(), decoded=from_cdx(binary))))
+    elif sys.argv[1:] == ["--decode"]:
+        print(json.dumps(from_cdx(base64.b64decode(sys.stdin.read(), validate=True))))
+    else:
+        assert not sys.argv[1:]
+        print(json.dumps(corpus(), ensure_ascii=False))

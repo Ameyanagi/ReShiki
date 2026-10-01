@@ -28,7 +28,20 @@ fn operation() -> Result<wire::Reply, String> {
 /// Handle one framed request, then terminate the worker process.
 /// The caller must install `reshiki_process_heap::BoundedHeap` as its allocator.
 pub fn run() {
-    let result = operation();
+    // The kernel recursively processes large molecular graphs. Windows' main
+    // thread stack is too small for the supported large-MOL corpus in debug
+    // builds. Give both executable entry points the same explicit stack while
+    // retaining the process-wide heap budget and parent-enforced deadline.
+    let result = std::thread::Builder::new()
+        .name("inchi-operation".into())
+        .stack_size(32 * 1024 * 1024)
+        .spawn(operation)
+        .map_err(|e| format!("Could not start InChI operation: {e}"))
+        .and_then(|thread| {
+            thread
+                .join()
+                .map_err(|_| "InChI operation panicked".to_owned())?
+        });
     let response = wire::Response {
         version: kernel::VERSION.into(),
         result,

@@ -39,6 +39,8 @@ fn helper(name: &str) -> anyhow::Result<Option<PathBuf>> {
 
 #[path = "support/reference_annotations.rs"]
 mod reference_annotations;
+#[path = "support/reference_cdx.rs"]
+mod reference_cdx;
 
 #[derive(Deserialize)]
 struct Case {
@@ -329,16 +331,18 @@ async fn cdx_conversion_and_kernel_budget_keep_import_atomic() -> anyhow::Result
             .document
             .context("Missing reference drawing")?;
         let mut export = Request::molecule("export", document);
-        export.format = Some("cdx".into());
-        let binary = reference
+        export.format = Some("cdxml".into());
+        let xml = reference
             .execute(export)
             .await
             .map_err(anyhow::Error::msg)?
             .output
-            .context("Missing original binary export")?;
-        let request = Request::import("cdx", &binary);
+            .context("Missing original drawing export")?;
+        let encoded = reference_cdx::roundtrip(&xml)?;
+        assert_eq!(reference_cdx::decode(&encoded.binary)?, encoded.decoded);
+        let request = Request::import("cdx", &encoded.binary);
         let expected = reference
-            .execute(request.clone())
+            .execute(Request::import("cdxml", &encoded.decoded))
             .await
             .map_err(anyhow::Error::msg)?;
         let Outcome::Complete(actual) = native_import::execute(request, Some(config.clone()))
@@ -348,7 +352,8 @@ async fn cdx_conversion_and_kernel_budget_keep_import_atomic() -> anyhow::Result
             anyhow::bail!("Binary drawing deferred");
         };
         // CDX deliberately quantizes coordinates/styles to signed 16.16. Compare
-        // its complete original import, not the pre-quantized XML drawing.
+        // its complete original import after independent decoding, not the
+        // pre-quantized XML drawing or the old codec's whole-point line heights.
         compare(*actual, expected)?;
     }
     let tiny = Config {

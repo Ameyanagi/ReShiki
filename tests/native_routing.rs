@@ -14,6 +14,8 @@ use std::{
     time::Duration,
 };
 
+#[path = "support/reference_cdx.rs"]
+mod reference_cdx;
 #[path = "support/reference_presentation.rs"]
 mod reference_presentation;
 
@@ -94,7 +96,14 @@ async fn import_case(reference: &PythonEngine, format: &str, text: &str) -> Case
         selected: Some(vec![9_007_199_254_740_993]),
         expected: Err(String::new()),
     };
-    result.expected = reference.execute(result.request()).await;
+    let mut request = result.request();
+    if format == "cdx"
+        && let Ok(xml) = reference_cdx::decode(text)
+    {
+        request.format = Some("cdxml".into());
+        request.text = Some(xml);
+    }
+    result.expected = reference.execute(request).await;
     result
 }
 async fn import_cases() -> anyhow::Result<Vec<Case>> {
@@ -110,13 +119,18 @@ async fn import_cases() -> anyhow::Result<Vec<Case>> {
         });
         for format in ["mol", "cdxml", "cdx"] {
             let mut request = Request::molecule("export", document.clone());
-            request.format = Some(format.into());
-            let text = reference
+            request.format = Some(if format == "cdx" { "cdxml" } else { format }.into());
+            let mut text = reference
                 .execute(request)
                 .await
                 .map_err(anyhow::Error::msg)?
                 .output
                 .context("Missing reference export")?;
+            if format == "cdx" {
+                let encoded = reference_cdx::roundtrip(&text)?;
+                assert_eq!(reference_cdx::decode(&encoded.binary)?, encoded.decoded);
+                text = encoded.binary;
+            }
             let entry = import_case(&reference, format, &text).await;
             anyhow::ensure!(
                 entry.expected.is_ok(),

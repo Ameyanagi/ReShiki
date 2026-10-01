@@ -12,11 +12,19 @@ pub enum Error {
 }
 type Result<T> = std::result::Result<T, Error>;
 
-// Rust 1.95 uses Unicode 17; the pinned Python 3.12 uses Unicode 15. These
+// Rust 1.99 uses Unicode 17; the pinned Python 3.12 uses Unicode 15. These
 // observed newly printable intervals retain the original repr of invalid input.
 fn nonprinting(ch: char) -> bool {
     if ch.is_ascii() {
         return ch.is_ascii_control();
+    }
+    // Rust debug formatting escapes these default-ignorable characters even
+    // inside a string. Python 3.12 considers them printable in repr().
+    if matches!(ch as u32, 0x034f | 0x115f..=0x1160 | 0x17b4..=0x17b5
+        | 0x180b..=0x180d | 0x180f | 0x3164 | 0xfe00..=0xfe0f
+        | 0xffa0 | 0xe0100..=0xe01ef)
+    {
+        return false;
     }
     if format!("x{ch}").escape_debug().nth(1) == Some('\\') {
         return true;

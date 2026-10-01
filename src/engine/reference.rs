@@ -10,6 +10,7 @@ use tokio::{
     process::{Child, ChildStdin, ChildStdout, Command},
     sync::Mutex,
 };
+mod colors;
 mod reaction;
 
 struct Worker {
@@ -267,6 +268,7 @@ impl PythonEngine {
             None
         };
         let mut message = serde_json::to_value(request).map_err(|e| e.to_string())?;
+        let reference_colors = colors::prepare(&mut message)?;
         let envelope = message
             .as_object_mut()
             .ok_or("Invalid chemistry request envelope")?;
@@ -315,6 +317,7 @@ impl PythonEngine {
             }
         }
         let mut result = self.exchange(message).await?;
+        reference_colors.restore(&mut result)?;
         if self.local_properties
             || self.local_pictures
             || prepared_molecule.is_some()
