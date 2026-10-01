@@ -146,8 +146,7 @@ impl App {
                     return iced::exit();
                 }
                 Err(error) => {
-                    self.updates.restarting = false;
-                    self.updates.error = Some(error);
+                    self.update_restart_failed(error);
                 }
             },
             Action::Check(manual) => {
@@ -277,6 +276,7 @@ impl App {
         }
     }
     pub(super) fn update_restart_failed(&mut self, error: String) {
+        self.cancel_close();
         self.updates.restarting = false;
         self.updates.error = Some(error);
         self.updates.open = true;
@@ -304,6 +304,7 @@ impl App {
             return Task::none();
         }
         let Some(prepared) = self.updates.prepared.clone() else {
+            self.cancel_close();
             self.updates.restarting = false;
             return Task::none();
         };

@@ -689,25 +689,40 @@ impl App {
             .map(|p| &p.document)
             .unwrap_or(&self.tab.doc)
     }
-    pub fn update(&mut self, message: Message) -> Task<Message> {
+    pub fn update(&mut self, mut message: Message) -> Task<Message> {
         // Timer polls belong to the Assistant's drawing before any front-tab
         // focus or menu handling runs.
         if matches!(&message, Message::Assistant(assistant::Action::Poll))
             && let Some(id) = self.assistant.tab.filter(|id| *id != self.tab.id)
         {
-            return self.update(Message::Tab(id, Box::new(message)));
+            message = Message::Tab(id, Box::new(message));
         }
-        if let Message::Tab(id, message) = message {
-            if id == self.tab.id {
-                return self.update(*message);
+        let task = match message {
+            Message::Tab(id, message) if id == self.tab.id => self.update(*message),
+            Message::Tab(id, message) => {
+                let task = tagged(self.background_result(id, *message), id);
+                Task::batch([task, self.start_autosave()])
             }
-            let task = tagged(self.background_result(id, *message), id);
-            return Task::batch([task, self.start_autosave()]);
+            message => {
+                let task = self.update_front(message, false);
+                // Results belong to the tab this message opened or brought forward.
+                tagged(task, self.tab.id)
+            }
+        };
+        if self.exit.frozen() {
+            return task;
         }
-        let task = self.update_front(message, false);
-        // Results of the work this message started belong to the tab now in
-        // front, which may be one it just opened or brought forward.
-        tagged(task, self.tab.id)
+        // A failed draft removal, explicit save or library write may have
+        // cancelled exit. Deliver held completions with their original tags
+        // and ordinary epoch/revision guards before accepting more input.
+        let deferred = std::mem::take(&mut self.tabs.deferred_results);
+        Task::batch(
+            std::iter::once(task).chain(
+                deferred
+                    .into_iter()
+                    .map(|(id, message)| self.update(Message::Tab(id, Box::new(message)))),
+            ),
+        )
     }
 
     fn update_front(&mut self, message: Message, background: bool) -> Task<Message> {
@@ -764,7 +779,15 @@ impl App {
             }
             return self.template_action(action);
         }
-        if self.exit.closing() {
+        if self.exit.frozen()
+            && !matches!(
+                message,
+                Message::Updates(updates::Action::RecoveryCleared | updates::Action::Restarted(_))
+            )
+        {
+            if tabs::document_result(&message) {
+                self.defer_document_result(self.tab.id, message);
+            }
             return Task::none();
         }
         if let Message::LabelsReady(key, result) = message {

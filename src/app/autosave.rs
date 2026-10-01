@@ -56,11 +56,20 @@ impl State {
 pub(super) struct Exit {
     closing: Option<iced::window::Id>,
     updating: bool,
+    committed: bool,
 }
 
 impl Exit {
     pub(super) fn closing(&self) -> bool {
         self.closing.is_some() || self.updating
+    }
+
+    pub(super) fn frozen(&self) -> bool {
+        self.closing() || self.committed
+    }
+
+    pub(super) fn committed(&self) -> bool {
+        self.committed
     }
 }
 
@@ -99,7 +108,7 @@ pub(super) async fn execute(path: PathBuf, work: Work) -> Result<Option<PathBuf>
 
 impl App {
     pub(super) fn cancel_close(&mut self) {
-        if self.exit.closing() {
+        if self.exit.frozen() {
             self.exit = Exit::default();
             self.each_tab(|app| {
                 app.tab.autosave.clear = false;
@@ -202,6 +211,8 @@ impl App {
     }
 
     fn finish_exit(&mut self) -> Task<Message> {
+        self.exit.committed = true;
+        self.tabs.deferred_results.clear();
         if self.exit.updating {
             self.exit.updating = false;
             return Task::done(Message::Updates(super::updates::Action::RecoveryCleared));
@@ -350,9 +361,9 @@ impl App {
                     }
                 }
                 Err(error) => {
-                    self.exit.closing = None;
-                    if self.exit.updating {
-                        self.exit.updating = false;
+                    let updating = self.exit.updating;
+                    self.cancel_close();
+                    if updating {
                         self.update_restart_failed(format!(
                             "Could not remove recovery draft: {error}"
                         ));
@@ -436,6 +447,80 @@ pub(super) mod tests {
             Box::new(Message::Autosaved(key, Ok(None))),
         ));
         assert!(app.tabs.retiring.is_empty());
+    }
+
+    #[test]
+    fn aborted_close_delivers_held_jobs_and_leaves_both_front_and_background_tabs_usable() {
+        for background in [false, true] {
+            let (mut app, directory) = fixture();
+            app.tab.doc = Document::default();
+            app.tab.saved = app.tab.doc.clone();
+            app.tab.busy = true;
+            let (id, revision) = (app.tab.id, app.tab.revision);
+            if background {
+                app.tab.recovery = None;
+                app.add_tab();
+                app.tab.recovery = Some(Recovery::in_directory(directory.path()).unwrap());
+            }
+            let front = app.tab.id;
+            let _ = app.update(Message::Close(iced::window::Id::unique()));
+            let key = app.tab.autosave.pending.unwrap();
+            assert!(app.exit.closing());
+            let mut document = Document::default();
+            document.add_atom("O", Point::default());
+            let _ = app.update(Message::Tab(
+                id,
+                Box::new(Message::EngineDone {
+                    revision,
+                    kind: super::super::Job::Insert,
+                    result: Box::new(Ok(reshiki::engine::Response {
+                        document: Some(document),
+                        analysis: None,
+                        output: None,
+                        engine_version: "test".into(),
+                        warnings: vec![],
+                    })),
+                }),
+            ));
+            assert!(app.strip().all(|tab| tab.doc.all_ids().is_empty()));
+            assert_eq!(app.tabs.deferred_results.len(), 1);
+            let _ = app.update(Message::Autosaved(key, Err("Permission denied".into())));
+            assert!(!app.exit.frozen());
+            assert!(app.tabs.deferred_results.is_empty());
+            assert_eq!(app.tab.id, front);
+            app.in_tab(id, |app| {
+                assert!(!app.tab.busy);
+                assert_eq!(app.tab.doc.atoms[0].element, "O");
+                assert!(app.tab.history.can_undo());
+                assert!(
+                    app.update(Message::Analyze).units() > 0,
+                    "Another job can start"
+                );
+            })
+            .unwrap();
+            if background {
+                assert!(app.tab.doc.all_ids().is_empty() && !app.tab.busy);
+            }
+        }
+    }
+
+    #[test]
+    fn successful_close_discards_held_results_and_stays_frozen_until_exit() {
+        let (mut app, _) = fixture();
+        app.tab.doc = Document::default();
+        app.tab.saved = app.tab.doc.clone();
+        let id = app.tab.id;
+        let _ = app.update(Message::Close(iced::window::Id::unique()));
+        let key = app.tab.autosave.pending.unwrap();
+        let message = || Message::Tab(id, Box::new(Message::Pasted(Some("O".into()))));
+        let _ = app.update(message());
+        assert_eq!(app.tabs.deferred_results.len(), 1);
+        let _ = app.update(Message::Autosaved(key, Ok(None)));
+        assert!(app.exit.committed() && app.exit.frozen());
+        assert!(app.tabs.deferred_results.is_empty());
+        let _ = app.update(message());
+        assert!(app.tabs.deferred_results.is_empty());
+        assert!(!app.tab.busy && app.tab.doc.all_ids().is_empty());
     }
 
     fn run(work: (Key, PathBuf, Work)) -> (Key, Result<Option<PathBuf>, String>) {

@@ -33,6 +33,8 @@ pub(super) struct State {
     pub(super) recovery_root: Option<PathBuf>,
     /// Closed tabs whose draft is removed once its last write finishes.
     pub(super) retiring: Vec<super::autosave::Retired>,
+    /// Results held while an exit can still fail; replayed if it is cancelled.
+    pub(super) deferred_results: Vec<(TabId, Message)>,
 }
 
 impl State {
@@ -430,9 +432,12 @@ impl App {
                 self.pending = pending;
                 done(task)
             }
-            // Once every drawing has passed the close check, late document
-            // results must obey the same gate as results for the front tab.
-            message if self.exit.closing() && document_result(&message) => Task::none(),
+            // Freeze edits until exit succeeds, but keep a job's completion
+            // available if recovery or a library write cancels the close.
+            message if self.exit.frozen() && document_result(&message) => {
+                self.defer_document_result(id, message);
+                Task::none()
+            }
             message if document_result(&message) => done(self.in_tab(id, |app| {
                 let (tool, inspector_open, inspector_tab) =
                     (app.tool, app.inspector_open, app.inspector_tab);
@@ -442,6 +447,16 @@ impl App {
                 task
             })),
             message => self.update(message),
+        }
+    }
+
+    pub(super) fn defer_document_result(&mut self, id: TabId, message: Message) {
+        // Polls resume through the timer, so a slow close cannot accumulate
+        // an unbounded queue of identical polls.
+        if !self.exit.committed()
+            && !matches!(message, Message::Assistant(super::assistant::Action::Poll))
+        {
+            self.tabs.deferred_results.push((id, message));
         }
     }
 
@@ -627,7 +642,7 @@ impl App {
 }
 
 /// Engine and clipboard results that change a drawing, dropped for a closed tab.
-fn document_result(message: &Message) -> bool {
+pub(super) fn document_result(message: &Message) -> bool {
     use super::{assistant, document_styles, import, pictures, printing, shortcuts};
     matches!(
         message,

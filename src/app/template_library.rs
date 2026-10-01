@@ -899,6 +899,38 @@ mod navigation_tests {
     }
 
     #[test]
+    fn library_write_failure_replays_a_background_job_held_during_close() {
+        let (mut app, _dir) = persisted_app();
+        let id = app.tab.id;
+        let revision = app.tab.revision;
+        app.tab.busy = true;
+        app.add_tab();
+        let _ = app.update(Message::Templates(Action::SaveDetails));
+        let serial = app.templates.pending.unwrap();
+        let _ = app.update(Message::Close(iced::window::Id::unique()));
+        assert!(app.exit.closing());
+        let _ = app.update(Message::Tab(
+            id,
+            Box::new(Message::EngineDone {
+                revision,
+                kind: super::super::Job::Analyze,
+                result: Box::new(Err("Chemistry failure".into())),
+            }),
+        ));
+        assert_eq!(app.tabs.deferred_results.len(), 1);
+        let _ = app.update(Message::Templates(Action::Finished(
+            serial,
+            Err("Library write failed".into()),
+        )));
+        assert!(!app.exit.frozen() && app.tabs.deferred_results.is_empty());
+        assert!(!app.tabs.background[0].busy);
+        assert_eq!(app.tabs.background[0].status, "Chemistry failure");
+        assert_eq!(app.status, "Library write failed");
+        app.in_tab(id, |app| assert!(app.update(Message::Analyze).units() > 0))
+            .unwrap();
+    }
+
+    #[test]
     fn import_read_serializes_library_changes_and_releases_slot_on_cancellation() {
         let (mut app, _dir) = persisted_app();
         let task = app.update(Message::Templates(Action::Import));
