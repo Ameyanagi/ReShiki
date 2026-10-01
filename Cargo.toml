@@ -323,6 +323,10 @@ name = "inchi_reader"
 required-features = ["rdkit-reference"]
 
 [[test]]
+name = "inchi_rust"
+required-features = ["rdkit-reference"]
+
+[[test]]
 name = "jpeg_sampling"
 required-features = ["rdkit-reference"]
 

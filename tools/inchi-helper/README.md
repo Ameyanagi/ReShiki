@@ -62,7 +62,7 @@ fixtures remain useful development reference checks.
 
 ```sh
 RESHIKI_REQUIRE_INCHI_HELPER=1 python3 -m unittest tests.test_inchi_helper_protocol tests.test_inchi_helper_builder tests.test_inchi_distribution
-cargo test --test inchi_rust
+cargo test --features rdkit-reference --test inchi_rust
 RESHIKI_REQUIRE_INCHI_HELPER=1 cargo test --features rdkit-reference --test inchi_generator --test inchi_reader --test native_import --test native_response
 cargo clippy --workspace --all-targets --features rdkit-reference --locked -- -D warnings
 ```

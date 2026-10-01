@@ -60,17 +60,6 @@ fn rust_kernel_import_matches_independent_molecules() -> anyhow::Result<()> {
 }
 
 #[test]
-fn rust_kernel_generates_methane() -> anyhow::Result<()> {
-    let imported = kernel::read("InChI=1S/CH4/h1H4", output::Options::default())
-        .map_err(anyhow::Error::msg)?;
-    let molecule = kernel::Molecule::prepare(&imported.state.context("Missing methane")?, None)?;
-    let result = kernel::generate(&molecule).map_err(anyhow::Error::msg)?;
-    assert_eq!(result.inchi, "InChI=1S/CH4/h1H4");
-    assert_eq!(result.status, 0);
-    Ok(())
-}
-
-#[test]
 fn patched_generation_matches_the_official_1075_kernel() -> anyhow::Result<()> {
     let capture: Value = serde_json::from_reader(fixture::open("inchi-1075-generation.json.gz")?)?;
     assert_eq!(capture["checked"], 11_772);

@@ -2,6 +2,15 @@ use super::*;
 use crate::chemistry::smiles;
 
 #[test]
+fn rust_kernel_generates_methane_without_reference_dependencies() {
+    let imported = read("InChI=1S/CH4/h1H4", output::Options::default()).unwrap();
+    let molecule = Molecule::prepare(&imported.state.unwrap(), None).unwrap();
+    let result = generate(&molecule).unwrap();
+    assert_eq!(result.inchi, "InChI=1S/CH4/h1H4");
+    assert_eq!(result.status, 0);
+}
+
+#[test]
 fn unchanged_graph_preserves_prepared_caches() {
     let state = smiles::prepare("C1CC1.C").unwrap().state;
     let molecule = to_adapter(&state, vec![], &[]).unwrap();
