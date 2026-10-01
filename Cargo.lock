@@ -702,6 +702,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cosmolkit-inchi"
+version = "0.3.0"
+source = "git+https://github.com/Ameyanagi/COSMolKit.git?rev=3a437849dcd28319b1a3cdf02d7897a7ee200cb2#3a437849dcd28319b1a3cdf02d7897a7ee200cb2"
+dependencies = [
+ "bytemuck",
+ "hexf-parse",
+ "memchr",
+]
+
+[[package]]
 name = "cpufeatures"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3309,6 +3319,7 @@ version = "0.9.1"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
+ "cosmolkit-inchi",
  "directories-next",
  "flate2",
  "iced",

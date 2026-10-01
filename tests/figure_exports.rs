@@ -96,8 +96,38 @@ fn whole_gallery_png_is_bounded_and_preserves_publication_size() -> anyhow::Resu
     let image = image::load_from_memory(&figure.bytes)?.into_rgba8();
     assert!(image.pixels().any(|p| p.0 == [0, 0, 0, 255]));
     assert_eq!(doc, before);
-    // Clipboard sizing still uses 1200 dpi; it must not quietly change scale.
-    assert!(export::clipboard_png(&doc).is_err());
+    if cfg!(windows) {
+        // Windows bounds its preview for DIB/Office/native picture limits,
+        // while retaining the gallery's publication size and transparency.
+        let bytes = export::clipboard_png(&doc).map_err(anyhow::Error::msg)?;
+        let reader = png::Decoder::new(std::io::Cursor::new(&bytes)).read_info()?;
+        let info = reader.info();
+        assert!(u64::from(info.width) * u64::from(info.height) <= reshiki::pictures::MAX_PIXELS);
+        assert!(info.width <= 8192 && info.height <= 8192);
+        let density = info.pixel_dims.context("clipboard physical density")?;
+        assert_eq!(density.unit, png::Unit::Meter);
+        assert_eq!(density.xppu, density.yppu);
+        let dpi = f64::from(density.xppu) * 0.0254;
+        assert!(dpi > 0. && dpi < 1200.);
+        let svg = reshiki::scene::svg(&doc);
+        let xml = roxmltree::Document::parse(&svg)?;
+        for (attr, pixels) in [("width", info.width), ("height", info.height)] {
+            let pt = xml
+                .root_element()
+                .attribute(attr)
+                .context("clipboard SVG physical size")?
+                .trim_end_matches("pt")
+                .parse::<f64>()?;
+            assert!((f64::from(pixels) / dpi - pt / 72.).abs() < 0.02, "{attr}");
+        }
+        let image = image::load_from_memory(&bytes)?.into_rgba8();
+        assert!(image.pixels().any(|p| p.0 == [0, 0, 0, 255]));
+        assert!(image.pixels().any(|p| p.0[3] == 0));
+    } else {
+        // macOS retains fixed 1200 dpi clipboard sizing and its prior limit.
+        assert!(export::clipboard_png(&doc).is_err());
+    }
+    assert_eq!(doc, before);
     Ok(())
 }
 

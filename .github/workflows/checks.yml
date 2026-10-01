@@ -115,12 +115,12 @@ jobs:
         uses: ./.github/actions/setup-msvc
         with:
           arch: ${{ matrix.msvc_arch }}
-      - name: Build the audited native helper and test executables
-        run: uv run --no-project python scripts/build_inchi_helper.py --fetch-source --target ${{ matrix.target }}
+      - name: Build the Rust helper and test executable
+        run: uv run --no-project python scripts/build_inchi_helper.py --target ${{ matrix.target }}
       - name: Select the helper for runtime integration tests
         run: uv run --no-project python -c "import os,pathlib; p=pathlib.Path('artifacts/inchi-helper/reshiki-inchi-helper'+('.exe' if os.name=='nt' else '')).resolve(); open(os.environ['GITHUB_ENV'],'a').write('RESHIKI_INCHI_HELPER='+str(p)+'\n')"
-      - name: Check native allocation and byte protocol boundaries
-        run: uv run --no-project python -m unittest tests.test_inchi_arena tests.test_inchi_helper_protocol tests.test_inchi_source_patch
+      - name: Check Rust heap and byte protocol boundaries
+        run: uv run --no-project python -m unittest tests.test_inchi_helper_protocol tests.test_inchi_helper_builder tests.test_inchi_distribution
       - run: cargo fmt --all --check
       - name: Check the native application without reference dependencies
         run: cargo clippy --workspace --all-targets --locked --no-default-features -- -D warnings
@@ -134,7 +134,7 @@ jobs:
         if: runner.os == 'Linux'
         run: echo "RESHIKI_TEST_LINUX_GOLDENS=ubuntu-22.04-x64" >> "$GITHUB_ENV"
       - name: Replay independently captured chemistry fixtures
-        run: cargo test --locked --features rdkit-reference --test inchi_input --test inchi_output --test inchi_reader --test depict_geometry --test depict_rings --test depict_attachment --test depict_seeds --test depict_templates --test depict_collision --test depict_expansion --test depict_finalize --no-fail-fast
+        run: cargo test --locked --features rdkit-reference --test inchi_input --test inchi_output --test inchi_reader --test inchi_rust --test depict_geometry --test depict_rings --test depict_attachment --test depict_seeds --test depict_templates --test depict_collision --test depict_expansion --test depict_finalize --no-fail-fast
       - name: Replay complete aromatic response fixtures
         run: cargo test --locked --features rdkit-reference --test native_aromatic complete_aromatic_responses_match_goldens -- --exact
   reference:
@@ -179,8 +179,8 @@ jobs:
         uses: ./.github/actions/setup-msvc
         with:
           arch: ${{ matrix.platform.msvc_arch }}
-      - name: Build the audited native helper and test executables
-        run: uv run --no-project python scripts/build_inchi_helper.py --fetch-source --target ${{ matrix.platform.target }}
+      - name: Build the Rust helper and test executable
+        run: uv run --no-project python scripts/build_inchi_helper.py --target ${{ matrix.platform.target }}
       - name: Select the helper for runtime integration tests
         run: uv run --no-project python -c "import os,pathlib; p=pathlib.Path('artifacts/inchi-helper/reshiki-inchi-helper'+('.exe' if os.name=='nt' else '')).resolve(); open(os.environ['GITHUB_ENV'],'a').write('RESHIKI_INCHI_HELPER='+str(p)+'\n')"
       - name: Install the optional reference dependencies

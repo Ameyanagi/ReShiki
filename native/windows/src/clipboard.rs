@@ -244,7 +244,10 @@ fn from_dib(data: &[u8]) -> Result<Vec<u8>> {
     encoder.write_header()?.write_image_data(image.as_raw())?;
     Ok(bytes)
 }
-fn write(representations: Vec<Representation>, embedded: bool) -> Result<()> {
+fn prepare_formats(
+    representations: Vec<Representation>,
+    embedded: bool,
+) -> Result<BTreeMap<u32, Vec<u8>>> {
     if representations.is_empty() || representations.len() > 32 {
         return Err(anyhow::anyhow!("No clipboard representations"));
     }
@@ -254,7 +257,10 @@ fn write(representations: Vec<Representation>, embedded: bool) -> Result<()> {
             return Err(anyhow::anyhow!("Invalid clipboard format"));
         }
         let bytes = decode(&rep.data)?;
-        if rep.kind == "public.png" {
+        // OLE carries its own cached PNG/EMF preview. It removes standalone
+        // bitmaps so Word keeps the object editable; don't allocate a DIB
+        // only to discard it (or reject Copy because that unused DIB is huge).
+        if rep.kind == "public.png" && !embedded {
             formats.insert(DIB, to_dib(&bytes)?);
         }
         let (id, bytes) = if rep.kind == "public.utf8-plain-text" {
@@ -276,7 +282,12 @@ fn write(representations: Vec<Representation>, embedded: bool) -> Result<()> {
             "Combined clipboard representations exceed 64 MB"
         ));
     }
-    if embedded && super::ole::enabled() {
+    Ok(formats)
+}
+fn write(representations: Vec<Representation>, embedded: bool) -> Result<()> {
+    let embedded = embedded && super::ole::enabled();
+    let formats = prepare_formats(representations, embedded)?;
+    if embedded {
         return super::ole::copy(formats);
     }
     let allocated: Result<Vec<_>> = formats
@@ -404,6 +415,37 @@ pub(super) fn invoke(bytes: &[u8]) -> Result<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn editable_office_copy_omits_standalone_bitmap_but_copy_image_keeps_it() {
+        let image = image::RgbaImage::from_pixel(20, 10, image::Rgba([30, 70, 150, 255]));
+        let mut png = Vec::new();
+        let mut encoder = png::Encoder::new(&mut png, 20, 10);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        encoder
+            .write_header()
+            .unwrap()
+            .write_image_data(image.as_raw())
+            .unwrap();
+        let reps = || {
+            vec![
+                Representation {
+                    kind: "public.png".into(),
+                    data: STANDARD.encode(&png),
+                },
+                Representation {
+                    kind: "dev.reshiki.drawing".into(),
+                    data: STANDARD.encode(b"{\"version\":15}"),
+                },
+            ]
+        };
+        let office = prepare_formats(reps(), true).unwrap();
+        assert!(!office.contains_key(&DIB));
+        assert_eq!(office[&format("PNG").unwrap()], png);
+        assert!(office.contains_key(&format("dev.reshiki.drawing").unwrap()));
+        let picture = prepare_formats(reps(), false).unwrap();
+        assert_eq!(bitmap(&from_dib(&picture[&DIB]).unwrap()).unwrap(), image);
+    }
     #[test]
     fn real_clipboard_unicode_native_priority_and_invalid_write() {
         let rep = |kind: &str, bytes: &[u8]| Representation {

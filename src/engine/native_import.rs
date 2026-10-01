@@ -364,14 +364,7 @@ fn finish_molecule(
     })
 }
 
-fn prepare_inchi(output: output::Output) -> Result<Prepared, Error> {
-    let imported = output::reconstruct(
-        &output,
-        output::Options {
-            sanitize: true,
-            remove_hydrogens: false,
-        },
-    )?;
+fn prepare_inchi(imported: crate::chemistry::inchi::kernel::Imported) -> Result<Prepared, Error> {
     let state = imported.state.ok_or(Error::Parse)?;
     if imported.unspecified_bonds.iter().any(|&value| value) {
         return Err(Error::BondType);

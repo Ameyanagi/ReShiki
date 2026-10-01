@@ -36,6 +36,16 @@ By @HiroYokoyama in [PR #87](https://github.com/Ameyanagi/ReShiki/pull/87).
 
 With Select or Lasso, hold **⌘** on macOS or **Ctrl** on Windows and Linux while dragging a selection to drop a copy and leave the original in place; the copy is selected afterwards. Hold **Shift** to move only horizontally or vertically, whichever way the pointer moved farther. Bonded parts keep their bond length and angle constraints, and **Option/Alt** still frees them. Hold both keys for a copy along one axis. Each drag is one Undo step. The keys held at release decide, so to cancel a copy drag, release ⌘ or Ctrl first, then press **Escape**. The Help panel lists these gestures.
 
+## Rust InChI implementation
+
+By @Ameyanagi in [PR #99](https://github.com/Ameyanagi/ReShiki/pull/99) (under review).
+
+ReShiki uses a Rust InChI implementation for molecular identifiers and imports.
+Compatibility checks preserve the existing chemistry results, while each operation
+retains its cancellation, time and memory limits. Release builds use the pinned
+Cargo dependency instead of separately downloading and compiling the C InChI kernel.
+See the [helper and compatibility checks](https://github.com/Ameyanagi/ReShiki/blob/d621f1a/tools/inchi-helper/README.md).
+
 ## Loaded canvas performance
 
 By @Ameyanagi in [PR #84](https://github.com/Ameyanagi/ReShiki/pull/84).

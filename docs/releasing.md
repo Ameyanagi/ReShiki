@@ -139,16 +139,16 @@ Setup references: [Apple notarization](https://developer.apple.com/documentation
 ## Build locally
 
 ```sh
-python3 scripts/build_release.py --fetch-inchi-source --installer
+python3 scripts/build_release.py --installer
 ```
 
-The native InChI helper is built for the application’s architecture and bundled beside it.
-`--fetch-inchi-source` downloads only the pinned official archive and verifies its checksum
-and source hashes. For offline builds, use `--inchi-source /path/to/INCHI-1-SRC` or
-`--inchi-archive /path/to/INCHI-1-SRC.zip`; `--inchi-helper /path/to/reshiki-inchi-helper`
-reuses a matching build with its adjacent `build.json`. The installed app never builds
-or downloads this helper. Developers can select an existing helper with an absolute
-`RESHIKI_INCHI_HELPER` path.
+The Rust InChI helper is built with Cargo's locked dependency graph and bundled
+beside the application. No separate C InChI source download or compiler step is
+needed. For an offline build, populate Cargo's cache first and set
+`CARGO_NET_OFFLINE=true`. `--inchi-helper /path/to/reshiki-inchi-helper` reuses a
+matching release build with its adjacent `build.json`. The installed application
+never builds or downloads its helper. Developers can select an existing helper
+with an absolute `RESHIKI_INCHI_HELPER` path.
 
 The application and InChI helper must match the selected CPU architecture, including ARM64 on Windows and Linux. Packaging checks both executable headers. Python is used for build scripts and optional reference tests only; it is not copied into the package.
 

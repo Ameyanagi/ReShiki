@@ -1,3 +1,18 @@
+# InChI attribution
+
+Runtime generation and import use `cosmolkit-inchi = 0.3.0`, a pure Rust source
+port of InChI 1.07.5 and the RDKit adapter, from the
+[Ameyanagi/COSMolKit fork](https://github.com/Ameyanagi/COSMolKit).
+Cargo.toml and Cargo.lock pin commit `3a437849dcd28319b1a3cdf02d7897a7ee200cb2`
+and the transitive dependency graph. The fork's `FORK.md` documents the hydrogen,
+perchlorate, unknown-stereo and string-buffer compatibility corrections. The COSMolKit MIT
+license is retained under `licenses/rust/` at the original source revision;
+the fork retains the RDKit BSD notice alongside its source. Release notice
+collection includes both. No InChI C source is built or linked by the application.
+
+The remaining notes describe ReShiki's independently adapted InChIKey code and
+the older C implementation used only to capture development reference data.
+
 The Rust InChIKey implementation in `src/chemistry/inchi/key.rs` adapts the
 key parsing, layer separation and base-26 encoding from the official IUPAC
 InChI reference implementation, version 1.07.3. These sources are MIT licensed,
@@ -25,8 +40,7 @@ Adapted source files under `INCHI-1-SRC/INCHI_BASE/src`:
 - `util.c`: `extract_inchi_substring`, SHA-256
   `0a785f94a5df5775fcecabf0844068ae744d1630b0276c14e86a39b17ef37027`.
 
-SHA-256 hashing uses RustCrypto's `sha2` crate with its software backend. No
-InChI SHA-256 implementation, C kernel, or FFI is included.
+SHA-256 hashing uses RustCrypto's `sha2` crate with its software backend. The standalone key implementation has no native dependencies.
 
 Initial character validation uses ASCII/C-locale rules. The native Windows
 `isalnum` check can accept a UTF-8 leading byte in some locales, then discard
