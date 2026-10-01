@@ -1,4 +1,4 @@
-use super::{App, InspectorTab, Message};
+use super::{App, InspectorTab, Message, document_tab::TabId};
 use crate::canvas::layered::canvas;
 use iced::widget::{
     Space, button, checkbox, column, container, mouse_area, opaque, rich_text, row, scrollable,
@@ -90,6 +90,8 @@ struct ChatMessage {
 
 #[derive(Default)]
 pub struct State {
+    /// The drawing this conversation and its canvas tools belong to.
+    pub(super) tab: Option<TabId>,
     waiting_for_canvas_edit: bool,
     input: text_editor::Content,
     source_image: Option<reshiki::pictures::Picture>,
@@ -198,6 +200,12 @@ impl State {
     }
 }
 impl App {
+    pub(super) fn retire_assistant(&mut self, id: TabId) {
+        if self.assistant.tab == Some(id) {
+            let _ = self.assistant_action(Action::Reset);
+        }
+    }
+
     pub(super) fn with_assistant_image<'a>(
         &'a self,
         base: Element<'a, Message>,
@@ -256,6 +264,16 @@ impl App {
         .into()
     }
     pub(super) fn assistant_action(&mut self, action: Action) -> Task<Message> {
+        if let Some(id) = self.assistant.tab.filter(|id| *id != self.tab.id) {
+            match action {
+                Action::Poll | Action::Done { .. } => {
+                    let task = self.background_result(id, Message::Assistant(action));
+                    return super::tagged(task, id);
+                }
+                Action::Send | Action::Improve | Action::Apply => return Task::none(),
+                _ => {}
+            }
+        }
         let mut scroll = matches!(
             &action,
             Action::Send | Action::Improve | Action::JumpToResult | Action::Reject
@@ -481,6 +499,10 @@ impl App {
                 }
             }
             Action::Reset => {
+                self.assistant.tab = None;
+                self.assistant.canvas = None;
+                self.assistant.pending_scope = None;
+                self.assistant.pending_proposal = None;
                 self.assistant.viewed_image = None;
                 self.assistant.source_image = None;
                 self.assistant.image_serial = self.assistant.image_serial.wrapping_add(1);
@@ -800,6 +822,7 @@ impl App {
                         "Select a smaller part of the drawing to share with Codex".into();
                     return Task::none();
                 }
+                self.assistant.tab = Some(self.tab.id);
                 let settings = DrawingSettings {
                     drawing_style: self.tab.doc.drawing_style.clone(),
                     format: self.tab.caption_format.clone(),
@@ -1128,6 +1151,22 @@ impl App {
     }
     pub(super) fn assistant_panel(&self) -> Element<'_, Message> {
         let state = &self.assistant;
+        if let Some(id) = state.tab.filter(|id| *id != self.tab.id) {
+            let name = self.strip().find(|tab| tab.id == id).map(|tab| tab.name());
+            return column![
+                text(format!(
+                    "This conversation belongs to {}.",
+                    name.unwrap_or_else(|| "a closed drawing".into())
+                ))
+                .size(13),
+                button(text("Go to drawing").size(12))
+                    .on_press(Message::Tabs(super::tabs::Action::Select(id))),
+                action("New conversation here", Action::Reset),
+            ]
+            .spacing(12)
+            .padding(12)
+            .into();
+        }
         let mut chat = column![].spacing(12).padding([2, 2]).width(Length::Fill);
         if state.messages.is_empty() {
             chat = chat.push(Space::new().height(20))
@@ -2160,6 +2199,74 @@ mod tests {
         assert_eq!(app.tab.doc, text_document);
         let _ = app.update(Message::Undo);
         assert_eq!(app.tab.doc, Document::default());
+    }
+
+    #[test]
+    fn requests_poll_and_apply_in_their_original_tab() {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.assistant.input = text_editor::Content::with_text("Draw water");
+        app.assistant.preferences.auto_apply = true;
+        let id = app.tab.id;
+        let _ = app.update(Message::Assistant(Action::Send));
+        assert_eq!(app.assistant.tab, Some(id));
+        let canvas = app.assistant.canvas.as_ref().unwrap().clone();
+        let (epoch, revision) = (app.tab.file_epoch, app.tab.revision);
+        let front = super::super::tabs::tests::Front::new(&mut app);
+        let _ = app.update(Message::Assistant(Action::Poll));
+        let snapshot = canvas.read().unwrap();
+        assert_eq!(snapshot.epoch, epoch);
+        assert!(snapshot.document.all_ids().is_empty());
+        drop(snapshot);
+        let mut fragment = Document::default();
+        fragment.add_atom("O", reshiki::document::Point::default());
+        let _ = app.update(Message::Tab(
+            id,
+            Box::new(Message::Assistant(Action::Done {
+                serial: app.assistant.serial,
+                epoch,
+                revision,
+                replace: vec![],
+                result: Box::new(Ok(assistant::review::Outcome {
+                    proposal: Proposal::default(),
+                    document: fragment,
+                    review: assistant::review::Report {
+                        verified: true,
+                        ..Default::default()
+                    },
+                })),
+            })),
+        ));
+        front.assert_unchanged(&app);
+        assert!(!app.assistant.busy && app.assistant.draft.is_none());
+        assert_eq!(app.tabs.background[0].doc.atoms[0].element, "O");
+        assert!(app.tabs.background[0].history.can_undo());
+    }
+
+    #[test]
+    fn closing_the_request_tab_cancels_its_canvas_and_ignores_late_results() {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        app.assistant.input = text_editor::Content::with_text("Draw water");
+        let id = app.tab.id;
+        let _ = app.update(Message::Assistant(Action::Send));
+        let serial = app.assistant.serial;
+        let _ = app.close_active_tab();
+        assert!(app.assistant.tab.is_none() && app.assistant.canvas.is_none());
+        assert!(!app.assistant.busy);
+        let front = super::super::tabs::tests::Front::new(&mut app);
+        let _ = app.update(Message::Tab(
+            id,
+            Box::new(Message::Assistant(Action::Done {
+                serial,
+                epoch: 0,
+                revision: 0,
+                replace: vec![],
+                result: Box::new(Err("Late failure".into())),
+            })),
+        ));
+        front.assert_unchanged(&app);
+        assert!(!app.assistant.error && app.assistant.draft.is_none());
     }
     fn ready(app: &mut App) {
         let mut fragment = Document::default();

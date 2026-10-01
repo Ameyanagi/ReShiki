@@ -690,6 +690,13 @@ impl App {
             .unwrap_or(&self.tab.doc)
     }
     pub fn update(&mut self, message: Message) -> Task<Message> {
+        // Timer polls belong to the Assistant's drawing before any front-tab
+        // focus or menu handling runs.
+        if matches!(&message, Message::Assistant(assistant::Action::Poll))
+            && let Some(id) = self.assistant.tab.filter(|id| *id != self.tab.id)
+        {
+            return self.update(Message::Tab(id, Box::new(message)));
+        }
         if let Message::Tab(id, message) = message {
             if id == self.tab.id {
                 return self.update(*message);
@@ -2068,6 +2075,10 @@ impl App {
     fn update_document_result(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::LabelsReady(key, result) => self.labels_ready(key, result),
+            Message::FigureExported(result) => self.figure_exported(result),
+            Message::Printing(action) => return self.print_action(action),
+            Message::DrawingStyle(action) => return self.drawing_style_action(action),
+            Message::Assistant(action) => return self.assistant_action(action),
             Message::InspectorAction(action) => return self.inspector_action(action),
             Message::Pictures(action) => return self.picture_action(action),
             Message::Imports(action) => return self.import_action(action),

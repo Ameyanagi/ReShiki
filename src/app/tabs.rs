@@ -32,7 +32,7 @@ pub(super) struct State {
     /// Where new tabs keep their recovery drafts.
     pub(super) recovery_root: Option<PathBuf>,
     /// Closed tabs whose draft is removed once its last write finishes.
-    pub(super) retiring: Vec<(TabId, PathBuf)>,
+    pub(super) retiring: Vec<super::autosave::Retired>,
 }
 
 impl State {
@@ -189,6 +189,7 @@ impl App {
     /// Starts the front tab over as a new drawing. Late results for its old
     /// drawing meet a new epoch and revision.
     pub(super) fn reset_tab(&mut self) {
+        self.retire_assistant(self.tab.id);
         let old = std::mem::replace(&mut self.tab, DocumentTab::new(None));
         self.tab.id = old.id;
         self.tab.recovery = old.recovery;
@@ -382,7 +383,7 @@ impl App {
     pub(super) fn background_result(&mut self, id: TabId, message: Message) -> Task<Message> {
         if self.tab_index(id).is_none() {
             return match message {
-                Message::Autosaved(key, _) => self.retired(id, key),
+                Message::Autosaved(key, result) => self.retired(id, key, result),
                 Message::Saved(_, _, result) => {
                     self.file_io.saving = false;
                     if let Err(error) = result {
@@ -396,6 +397,14 @@ impl App {
                     result,
                     ..
                 } => export_result(*result, format),
+                Message::FigureExported(_) => {
+                    self.figure_exporting = false;
+                    Task::none()
+                }
+                Message::Printing(action) => {
+                    self.discard_print_result(action);
+                    Task::none()
+                }
                 message if document_result(&message) => Task::none(),
                 message => self.update(message),
             };
@@ -421,6 +430,9 @@ impl App {
                 self.pending = pending;
                 done(task)
             }
+            // Once every drawing has passed the close check, late document
+            // results must obey the same gate as results for the front tab.
+            message if self.exit.closing() && document_result(&message) => Task::none(),
             message if document_result(&message) => done(self.in_tab(id, |app| {
                 let (tool, inspector_open, inspector_tab) =
                     (app.tool, app.inspector_open, app.inspector_tab);
@@ -616,11 +628,17 @@ impl App {
 
 /// Engine and clipboard results that change a drawing, dropped for a closed tab.
 fn document_result(message: &Message) -> bool {
-    use super::{import, pictures, shortcuts};
+    use super::{assistant, document_styles, import, pictures, printing, shortcuts};
     matches!(
         message,
         Message::EngineDone { .. }
             | Message::Exported(_)
+            | Message::FigureExported(_)
+            | Message::Printing(printing::Action::Prepared(..) | printing::Action::Finished(..))
+            | Message::DrawingStyle(
+                document_styles::Action::Loaded(..) | document_styles::Action::Saved(..)
+            )
+            | Message::Assistant(assistant::Action::Poll | assistant::Action::Done { .. })
             | Message::LabelsReady(..)
             | Message::InspectorAction(super::inspector::Action::PropertiesCalculated(..))
             | Message::Imports(import::Action::Loaded(..))
@@ -1028,6 +1046,30 @@ pub(super) mod tests {
         let _ = app.update(Message::Undo);
         assert_eq!(app.tab.doc, before);
         assert!(!app.tab.history.can_undo());
+    }
+
+    #[test]
+    fn background_edits_cannot_arrive_after_the_window_close_check() {
+        let mut app = ready();
+        let id = app.tab.id;
+        let revision = app.tab.revision;
+        app.tab.busy = true;
+        app.add_tab();
+        let directory = tempfile::tempdir().unwrap();
+        app.tab.recovery =
+            Some(reshiki::recovery::Recovery::in_directory(directory.path()).unwrap());
+        let _ = app.close_window(iced::window::Id::unique(), vec![]);
+        assert!(app.exit.closing());
+        let _ = app.update(Message::Tab(
+            id,
+            Box::new(Message::EngineDone {
+                revision,
+                kind: Job::Insert,
+                result: imported("O"),
+            }),
+        ));
+        assert!(app.strip().all(|tab| tab.doc.all_ids().is_empty()));
+        assert!(app.exit.closing());
     }
 
     #[test]

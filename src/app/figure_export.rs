@@ -73,6 +73,30 @@ impl App {
 mod tests {
     use super::*;
 
+    #[test]
+    fn switched_and_closed_tabs_keep_export_completions_off_the_front_tab() {
+        for closed in [false, true] {
+            let (mut app, _) = App::new();
+            app.tab.busy = false;
+            let id = app.tab.id;
+            app.figure_exporting = true;
+            if closed {
+                let _ = app.close_active_tab();
+            }
+            let front = super::super::tabs::tests::Front::new(&mut app);
+            let _ = app.update(Message::Tab(
+                id,
+                Box::new(Message::FigureExported(Err("Export failed".into()))),
+            ));
+            assert!(!app.figure_exporting);
+            front.assert_unchanged(&app);
+            if !closed {
+                assert_eq!(app.tabs.background[0].status, "Export failed");
+                assert!(app.tabs.background[0].error);
+            }
+        }
+    }
+
     #[cfg(windows)]
     #[test]
     fn emf_uses_figure_snapshot_without_changing_selection_or_document() {

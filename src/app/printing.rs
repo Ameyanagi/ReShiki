@@ -20,6 +20,15 @@ pub struct State {
     pub active: Option<u64>,
 }
 impl App {
+    /// A closed drawing no longer needs its pending print dialog or status.
+    pub(super) fn discard_print_result(&mut self, action: Action) {
+        if let Action::Prepared(ticket, _) | Action::Finished(ticket, _) = action
+            && self.printing.active == Some(ticket.serial)
+        {
+            self.printing.active = None;
+        }
+    }
+
     fn finish_print(&mut self, ticket: Ticket, result: Result<Outcome, String>) {
         if self.printing.active != Some(ticket.serial) {
             return;
@@ -146,6 +155,38 @@ mod tests {
             serial,
             epoch: app.tab.file_epoch,
             revision: app.tab.revision,
+        }
+    }
+
+    #[test]
+    fn background_and_closed_print_results_release_only_their_job() {
+        for closed in [false, true] {
+            for prepared in [false, true] {
+                let mut app = ready();
+                let id = app.tab.id;
+                let ticket = ticket(&app, 1);
+                app.printing.active = Some(1);
+                if closed {
+                    let _ = app.close_active_tab();
+                }
+                let front = super::super::tabs::tests::Front::new(&mut app);
+                let action = if prepared {
+                    Action::Prepared(ticket, Err("Printer unavailable".into()))
+                } else {
+                    Action::Finished(ticket, Err("Printer unavailable".into()))
+                };
+                let _ = app.update(Message::Tab(id, Box::new(Message::Printing(action))));
+                assert!(app.printing.active.is_none());
+                front.assert_unchanged(&app);
+                if !closed {
+                    assert!(
+                        app.tabs.background[0]
+                            .status
+                            .contains("Printer unavailable")
+                    );
+                    assert!(app.tabs.background[0].error);
+                }
+            }
         }
     }
     #[test]

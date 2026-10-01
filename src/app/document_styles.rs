@@ -18,6 +18,41 @@ mod tests {
     use super::*;
 
     #[test]
+    fn background_style_loads_and_save_status_stay_with_their_editor() {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let _ = app.update(Message::DrawingStyle(Action::Open));
+        let (id, epoch, serial) = (app.tab.id, app.tab.file_epoch, app.tab.styles.serial);
+        let front = super::super::tabs::tests::Front::new(&mut app);
+        let style = Preset::Nature.style();
+        let _ = app.update(Message::Tab(
+            id,
+            Box::new(Message::DrawingStyle(Action::Loaded(
+                serial,
+                epoch,
+                Ok(Some(style.clone())),
+            ))),
+        ));
+        front.assert_unchanged(&app);
+        assert_eq!(
+            app.tabs.background[0]
+                .styles
+                .editor
+                .as_ref()
+                .unwrap()
+                .candidate()
+                .unwrap(),
+            style
+        );
+        let _ = app.update(Message::Tab(
+            id,
+            Box::new(Message::DrawingStyle(Action::Saved(Ok(true)))),
+        ));
+        front.assert_unchanged(&app);
+        assert_eq!(app.tabs.background[0].status, "Drawing style saved");
+    }
+
+    #[test]
     fn element_tile_contrast_covers_all_themes_modes_and_states() {
         use iced::{Background, widget::button};
         use reshiki::{

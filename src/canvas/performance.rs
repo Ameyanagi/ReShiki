@@ -24,6 +24,46 @@ fn measure(name: &str, count: usize, mut run: impl FnMut(usize)) {
 }
 
 #[tokio::test]
+#[ignore = "Canvas grid profiling; requires a headless renderer"]
+async fn dense_grid_cache() {
+    let backend = std::env::var("RESHIKI_PERF_RENDERER").ok();
+    let renderer = <Renderer as Headless>::new(
+        iced::Font::with_name(reshiki::style::ui_font_family()),
+        iced::Pixels(16.),
+        backend.as_deref(),
+    )
+    .await
+    .expect("Headless renderer");
+    println!("Renderer: {}", renderer.name());
+    let doc = Document::default();
+    let mut canvas = tests::chain_canvas(&doc, ChainMode::Straight);
+    canvas.grid = true;
+    canvas.camera.zoom = 10. / doc.drawing_style.bond_length_world;
+    let bounds = Rectangle::with_size(iced::Size::new(3840., 2160.));
+    let state = State::default();
+    println!("PERF,workload,iterations,median_ms,p95_ms,mean_ms");
+    measure("4k_grid_rebuilt", 30, |_| {
+        state.grid.borrow().geometry.clear();
+        black_box(canvas.draw(
+            &state,
+            &renderer,
+            &Theme::Light,
+            bounds,
+            mouse::Cursor::Unavailable,
+        ));
+    });
+    measure("4k_grid_cached", 30, |_| {
+        black_box(canvas.draw(
+            &state,
+            &renderer,
+            &Theme::Light,
+            bounds,
+            mouse::Cursor::Unavailable,
+        ));
+    });
+}
+
+#[tokio::test]
 #[ignore = "Release-mode canvas workload profiling; requires a headless renderer"]
 async fn loaded_canvas_workloads() {
     let backend = std::env::var("RESHIKI_PERF_RENDERER").ok();

@@ -191,6 +191,7 @@ impl Camera {
 #[derive(Default)]
 pub struct State {
     scene: std::cell::RefCell<cache::SceneCache>,
+    grid: std::cell::RefCell<GridCache>,
     text: std::cell::RefCell<text_cache::TextCache>,
     gesture: Option<Gesture>,
     cursor: Option<Point>,
@@ -1332,11 +1333,12 @@ impl MoleculeCanvas<'_> {
             pages::draw(frame, layout, self.camera, bounds);
         }
         if self.grid {
-            draw_grid(
+            state.grid.borrow_mut().draw(
                 frame,
                 self.camera,
                 bounds,
                 self.doc.drawing_style.bond_length_world,
+                self.doc.canvas_theme.is_dark(),
             );
         }
         self.guides.draw_crosshair(
@@ -2302,15 +2304,28 @@ impl MoleculeCanvas<'_> {
 
 /// Grid dots on bond-length multiples from the world origin, with fainter half
 /// steps once they are 12 px apart; none when the step is under 10 px. Each
-/// dot is its screen position and whether it is on a whole step.
+/// dot is its screen position and whether it is on a whole step. Large views
+/// thin the grid by powers of two to bound the work while zooming or panning.
 fn grid_dots(camera: Camera, bounds: Rectangle, step: f32) -> Vec<(Point, bool)> {
     let step = step * camera.zoom;
     let origin = camera.screen(World::default(), bounds);
-    if !step.is_finite() || step < 10. || !origin.x.is_finite() || !origin.y.is_finite() {
+    if !step.is_finite()
+        || step < 10.
+        || !origin.x.is_finite()
+        || !origin.y.is_finite()
+        || !bounds.width.is_finite()
+        || !bounds.height.is_finite()
+        || bounds.width <= 0.
+        || bounds.height <= 0.
+    {
         return vec![];
     }
-    let halves = step / 2. >= 12.;
-    let pitch = if halves { step / 2. } else { step };
+    let mut halves = step / 2. >= 12.;
+    let mut pitch = if halves { step / 2. } else { step };
+    while (bounds.width / pitch + 1.) * (bounds.height / pitch + 1.) > 8192. {
+        pitch *= 2.;
+        halves = false;
+    }
     let indices = |origin: f32, length: f32| {
         (-origin / pitch).ceil() as i64..=((length - origin) / pitch).floor() as i64
     };
@@ -2326,19 +2341,43 @@ fn grid_dots(camera: Camera, bounds: Rectangle, step: f32) -> Vec<(Point, bool)>
     dots
 }
 
-/// There is no grid snapping; the dots only help the eye.
-fn draw_grid(frame: &mut layered::Frame<'_>, camera: Camera, bounds: Rectangle, step: f32) {
-    let dots = grid_dots(camera, bounds, step);
-    let path = |major: bool, radius: f32| {
-        Path::new(|b| {
-            for (p, _) in dots.iter().filter(|(_, m)| *m == major) {
-                b.circle(*p, radius);
+#[derive(Default)]
+struct GridCache {
+    key: Option<([f32; 4], bool)>,
+    geometry: canvas::Cache,
+}
+
+impl GridCache {
+    /// Reuse tessellated geometry throughout object drags and pointer movement.
+    /// The canvas bounds are also part of the geometry cache's own key.
+    fn draw(
+        &mut self,
+        frame: &mut layered::Frame<'_>,
+        camera: Camera,
+        bounds: Rectangle,
+        step: f32,
+        dark: bool,
+    ) {
+        let key = ([camera.center.x, camera.center.y, camera.zoom, step], dark);
+        if self.key != Some(key) {
+            self.geometry.clear();
+            self.key = Some(key);
+        }
+        frame.cached(&self.geometry, |frame| {
+            let dots = grid_dots(camera, bounds, step);
+            for (major, radius, alpha) in [(false, 0.9, 0.3), (true, 1.3, 0.6)] {
+                let path = Path::new(|b| {
+                    for (point, _) in dots.iter().filter(|(_, m)| *m == major) {
+                        b.circle(*point, radius);
+                    }
+                });
+                frame.fill(
+                    &path,
+                    crate::appearance::color(dark, Color::from_rgba8(90, 104, 99, alpha)),
+                );
             }
-        })
-    };
-    // Muted green-gray; the dark canvas inverts its lightness like drawing ink.
-    frame.fill(&path(false, 0.9), Color::from_rgba8(90, 104, 99, 0.3));
-    frame.fill(&path(true, 1.3), Color::from_rgba8(90, 104, 99, 0.6));
+        });
+    }
 }
 
 fn region_selection(
@@ -5637,5 +5676,27 @@ mod tests {
         let zoomed_out = grid_dots(at(0.5), bounds, 42.);
         assert!(!zoomed_out.is_empty() && zoomed_out.iter().all(|(_, major)| *major));
         assert!(grid_dots(at(0.2), bounds, 42.).is_empty());
+    }
+
+    #[test]
+    fn large_grids_bound_dot_count_without_moving_the_world_origin() {
+        for size in [iced::Size::new(3840., 2160.), iced::Size::new(7680., 4320.)] {
+            let bounds = Rectangle::with_size(size);
+            for step in [10., 24., 42.] {
+                let camera = Camera {
+                    center: World::new(13., -7.),
+                    zoom: 1.,
+                };
+                let dots = grid_dots(camera, bounds, step);
+                assert!(!dots.is_empty() && dots.len() <= 8192);
+                for (point, major) in dots {
+                    let world = camera.world(point, bounds);
+                    assert!(major);
+                    for value in [world.x, world.y] {
+                        assert!((value / step - (value / step).round()).abs() < 1e-3);
+                    }
+                }
+            }
+        }
     }
 }

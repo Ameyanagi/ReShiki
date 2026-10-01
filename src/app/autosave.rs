@@ -24,6 +24,13 @@ pub(super) struct State {
     retire_candidate: Option<PathBuf>,
 }
 
+/// A closed tab's draft remains tracked until its removal succeeds.
+pub(super) struct Retired {
+    id: TabId,
+    path: PathBuf,
+    pending: bool,
+}
+
 impl State {
     pub(super) fn pending(&self) -> bool {
         self.pending.is_some()
@@ -154,13 +161,13 @@ impl App {
     pub(super) fn close_after_recovery(&mut self, id: iced::window::Id) -> Task<Message> {
         self.each_tab(Self::clear_recovery);
         self.exit.closing = Some(id);
-        self.start_autosave()
+        Task::batch([self.retry_retired(), self.start_autosave()])
     }
 
     pub(super) fn restart_after_recovery(&mut self) -> Task<Message> {
         self.each_tab(Self::clear_recovery);
         self.exit.updating = true;
-        self.start_autosave()
+        Task::batch([self.retry_retired(), self.start_autosave()])
     }
 
     /// Starts one draft write or removal for every tab that waits for one.
@@ -208,10 +215,15 @@ impl App {
     /// Removes a closed tab's draft; a write still running for it finishes
     /// first, and its result, which finds no tab, starts the removal.
     pub(super) fn retire(&mut self, tab: DocumentTab) -> Task<Message> {
+        self.retire_assistant(tab.id);
         let Some(recovery) = tab.recovery else {
             return Task::none();
         };
-        self.tabs.retiring.push((tab.id, recovery.session.clone()));
+        self.tabs.retiring.push(Retired {
+            id: tab.id,
+            path: recovery.session.clone(),
+            pending: true,
+        });
         if tab.autosave.pending() {
             return Task::none();
         }
@@ -220,15 +232,44 @@ impl App {
 
     /// A draft result for a closed tab: its last write finished, so remove
     /// the draft, or the draft is gone.
-    pub(super) fn retired(&mut self, id: TabId, key: Key) -> Task<Message> {
+    pub(super) fn retired(
+        &mut self,
+        id: TabId,
+        key: Key,
+        result: Result<Option<PathBuf>, String>,
+    ) -> Task<Message> {
+        let Some(retired) = self.tabs.retiring.iter_mut().find(|tab| tab.id == id) else {
+            return Task::none();
+        };
         if key.clear {
-            self.tabs.retiring.retain(|(tab, _)| *tab != id);
+            if let Err(error) = result {
+                retired.pending = false;
+                let updating = self.exit.updating;
+                self.cancel_close();
+                let error = format!("Could not remove a closed drawing's recovery draft: {error}");
+                if updating {
+                    self.update_restart_failed(error.clone());
+                }
+                self.status = error;
+                self.error = true;
+            } else {
+                self.tabs.retiring.retain(|tab| tab.id != id);
+            }
             return Task::none();
         }
-        match self.tabs.retiring.iter().find(|(tab, _)| *tab == id) {
-            Some((_, path)) => remove_draft(id, path.clone()),
-            None => Task::none(),
-        }
+        // Even a failed final write can have left an older draft on disk.
+        remove_draft(id, retired.path.clone())
+    }
+
+    /// Retry failures on the next explicit close/restart, never in a hot loop.
+    fn retry_retired(&mut self) -> Task<Message> {
+        Task::batch(self.tabs.retiring.iter_mut().filter_map(|retired| {
+            if retired.pending {
+                return None;
+            }
+            retired.pending = true;
+            Some(remove_draft(retired.id, retired.path.clone()))
+        }))
     }
 
     fn prepare_autosave(&mut self) -> Option<(Key, PathBuf, Work)> {
@@ -357,6 +398,44 @@ pub(super) mod tests {
         app.tab.doc.add_atom("O", Point::default());
         app.tab.revision = 1;
         (app, directory)
+    }
+
+    #[test]
+    fn failed_retirement_cancels_exit_and_is_retried_on_the_next_close() {
+        let (mut app, directory) = fixture();
+        let id = app.tab.id;
+        let path = app.tab.recovery.as_ref().unwrap().session.clone();
+        let _ = app.close_active_tab();
+        assert!(app.tabs.retiring[0].pending);
+        let key = Key {
+            serial: 0,
+            generation: 0,
+            epoch: 0,
+            revision: 0,
+            clear: true,
+        };
+        app.tab.recovery = Some(Recovery::in_directory(directory.path()).unwrap());
+        let _ = app.close_after_recovery(iced::window::Id::unique());
+        assert!(app.exit.closing());
+        let _ = app.update(Message::Tab(
+            id,
+            Box::new(Message::Autosaved(key, Err("Permission denied".into()))),
+        ));
+        assert!(!app.exit.closing());
+        assert!(app.error && app.status.contains("Permission denied"));
+        assert_eq!(app.tabs.retiring.len(), 1);
+        assert_eq!(app.tabs.retiring[0].path, path);
+        assert!(!app.tabs.retiring[0].pending);
+        assert!(!app.drafts_settled());
+        let _ = app.start_autosave();
+        assert!(!app.tabs.retiring[0].pending, "No automatic retry loop");
+        let _ = app.close_after_recovery(iced::window::Id::unique());
+        assert!(app.tabs.retiring[0].pending);
+        let _ = app.update(Message::Tab(
+            id,
+            Box::new(Message::Autosaved(key, Ok(None))),
+        ));
+        assert!(app.tabs.retiring.is_empty());
     }
 
     fn run(work: (Key, PathBuf, Work)) -> (Key, Result<Option<PathBuf>, String>) {
