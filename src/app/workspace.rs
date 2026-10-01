@@ -718,15 +718,16 @@ impl App {
                 Some(Message::Inspector(InspectorTab::Import)),
                 self.inspector_open && self.inspector_tab == InspectorTab::Import
             ),
-            command(
+            icon_button(
+                Icon::Check,
                 if self.tab.busy {
                     "Checking…"
                 } else {
-                    "Check"
+                    "Check drawing"
                 },
-                Message::Analyze
-            )
-            .on_press_maybe((!self.tab.busy).then_some(Message::Analyze)),
+                (!self.tab.busy).then_some(Message::Analyze),
+                false
+            ),
             icon_button(
                 Icon::Cleanup,
                 keyed("Clean up…", &Message::Clean),

@@ -16,6 +16,7 @@ pub(super) enum Icon {
     Save,
     SaveAs,
     Assistant(bool),
+    Check,
     Cleanup,
     Trash,
     Undo,
@@ -605,6 +606,13 @@ impl Glyph {
                         Color::from_rgb8(17, 126, 108),
                     );
                 }
+            }
+            Icon::Check => {
+                f.stroke(
+                    &Path::circle(Point::new(12., 12.), 9.),
+                    Stroke::default().with_width(1.6).with_color(ink),
+                );
+                line(f, &[(7., 12.), (10.5, 15.5), (17., 8.5)]);
             }
             Icon::Cleanup => {
                 line(f, &[(18., 2.), (11., 11.)]);
