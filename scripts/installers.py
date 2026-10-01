@@ -10,9 +10,9 @@ import tempfile
 import time
 from pathlib import Path
 
+from build_inchi_helper import INCHI_VERSION
 from build_release import ROOT, numeric_version, run, verify_binary, verify_inchi_helper
 from check_runtime_dependencies import verify_payload, verify_runtime
-from inchi_source import manifest
 
 
 class InstallerCheckDirectory(tempfile.TemporaryDirectory):
@@ -135,7 +135,7 @@ def verify_windows_installer(installer, source):
             metadata = json.loads((source / "build.json").read_text(encoding="utf-8"))
             helper = destination / "reshiki-inchi-helper.exe"
             verify_binary(helper, "windows", metadata["architecture"])
-            verify_inchi_helper(helper, manifest()["inchi_version"])
+            verify_inchi_helper(helper, INCHI_VERSION)
             verify_runtime(destination / "reshiki.exe", destination, user_data=user_data)
         finally:
             uninstaller = destination / "unins000.exe"
@@ -209,7 +209,7 @@ def verify_mac_disk_image(output, signed, *, architecture):
         verify_binary(installed / "Contents/MacOS/reshiki", "macos", architecture)
         helper = installed / "Contents/MacOS/reshiki-inchi-helper"
         verify_binary(helper, "macos", architecture)
-        verify_inchi_helper(helper, manifest()["inchi_version"])
+        verify_inchi_helper(helper, INCHI_VERSION)
         verify_runtime(installed / "Contents/MacOS/reshiki", installed)
         run(["codesign", "--verify", "--deep", "--strict", installed])
         if signed:
