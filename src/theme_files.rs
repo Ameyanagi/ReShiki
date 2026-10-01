@@ -3,6 +3,7 @@ use crate::{
     canvas_theme::{CanvasTheme, ColorTheme},
     color_contrast::{self, Oklch, Rgb},
     document::Document,
+    palette::{Hues, Tones},
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::Path};
@@ -52,7 +53,8 @@ pub struct Palette {
     /// Independent seeds for pale/dark interface tiles, not label ink.
     #[serde(default)]
     pub tile_seeds: BTreeMap<String, ColorValue>,
-    /// Named stable ring slots: Sky, Mint, Rose, Lilac, Sand.
+    /// Ring slots of earlier versions (Sky, Mint, Rose, Lilac, Sand). Still read
+    /// and checked; ring interiors now use the palette's Tint row.
     #[serde(default)]
     pub ring_fills: BTreeMap<String, ColorValue>,
 }
@@ -75,6 +77,9 @@ pub struct ThemeFile {
     /// Optional editor recipe. Explicit palette values remain authoritative.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub generator: Option<crate::theme_generator::Recipe>,
+    /// Palette hue angles; files without them use the defaults.
+    #[serde(default, skip_serializing_if = "Hues::is_default")]
+    pub hues: Hues,
 }
 impl ThemeFile {
     pub fn palette(&self, mode: CanvasTheme) -> &Palette {
@@ -101,17 +106,23 @@ impl ThemeFile {
             .map(ColorValue::rgb)
             .or_else(|| self.base.element_swatch(element, mode))
     }
-    pub fn fill_color(&self, key: Rgb, mode: CanvasTheme) -> Option<Rgb> {
-        let name = crate::ring_fills::PALETTE
-            .iter()
-            .find(|(_, rgb)| *rgb == key)?
-            .0;
-        self.palette(mode).ring_fills.get(name).map(ColorValue::rgb)
+    /// Palette tones: a generator recipe sets Strong lightness over Publication's
+    /// values; a captured built-in keeps its base theme's tones.
+    pub fn tones(&self, mode: CanvasTheme) -> Tones {
+        self.generator.as_ref().map_or_else(
+            || self.base.tones(mode),
+            |recipe| {
+                let mut tones = ColorTheme::Publication.tones(mode);
+                tones.strong[0] = recipe.tone(mode).lightness;
+                tones
+            },
+        )
     }
     pub fn validate(&self) -> Result<(), String> {
         if let Some(recipe) = &self.generator {
             recipe.validate()?;
         }
+        self.hues.validate()?;
         if self.version != 1 {
             return Err(format!("Unsupported theme version {}", self.version));
         }
@@ -146,7 +157,7 @@ impl ThemeFile {
                 }
             }
             for (name, color) in &palette.ring_fills {
-                if !crate::ring_fills::PALETTE.iter().any(|(n, _)| n == name) {
+                if !crate::ring_fills::PALETTE.iter().any(|(n, ..)| n == name) {
                     return Err(format!("Unknown ring-fill slot {name}"));
                 }
                 color.validate()?;
@@ -193,11 +204,6 @@ impl ThemeFile {
                         .or_insert(ColorValue::Rgb(rgb));
                 }
             }
-            for (name, key) in crate::ring_fills::PALETTE {
-                palette.ring_fills.entry(name.into()).or_insert_with(|| {
-                    ColorValue::Rgb(crate::ring_fills::palette_color(key, mode))
-                });
-            }
         }
         self
     }
@@ -220,15 +226,7 @@ impl ThemeFile {
                         .map(|rgb| (e.into(), ColorValue::Rgb(rgb)))
                 })
                 .collect(),
-            ring_fills: crate::ring_fills::PALETTE
-                .iter()
-                .map(|&(name, key)| {
-                    (
-                        name.into(),
-                        ColorValue::Rgb(crate::ring_fills::palette_color(key, mode)),
-                    )
-                })
-                .collect(),
+            ring_fills: BTreeMap::new(),
         };
         Self {
             version: 1,
@@ -245,6 +243,7 @@ impl ThemeFile {
             light: palette(CanvasTheme::Light),
             dark: palette(CanvasTheme::Dark),
             generator: None,
+            hues: Hues::default(),
         }
     }
 }

@@ -4,22 +4,38 @@ template: splash
 tableOfContents: false
 prev: false
 next: false
-description: Reuse ReShiki’s Presentation, Pastel and Jmol colors. Compare every element in light and dark mode, and download RGB, OKLCH, CSS and theme files.
+description: Reuse ReShiki’s theme palettes and element colors. Compare the Strong and Tint rows of Publication, Presentation, Pastel and Jmol on light and dark paper, and download RGB, OKLCH, CSS and theme files.
 ---
 
 import ColorReference from "../../../components/ColorReference.astro";
 
+:::note[Nightly builds]
+This page describes the palette in Nightly builds after ReShiki 0.9.1. Stable 0.9.1 still uses its earlier swatches and five fixed ring fills.
+:::
+
 <ColorReference />
+
+## How the palette works
+
+Every theme has eight named hues, **Red, Orange, Amber, Green, Teal, Blue, Indigo and Purple**, plus **Ink**, which is black on the light canvas and white on the dark one. Each hue comes in two rows. **Strong** colors bonds, text and strokes; **Tint** colors fills, ring interiors and highlight boxes.
+
+**One lightness per row.** In each theme and canvas, every color in a row has the same OKLCH lightness (L) and aims for the same chroma (C), so no hue looks heavier or fainter than its neighbors, and swapping one hue for another keeps a figure balanced. If a hue cannot reach the target chroma in sRGB, ReShiki lowers its chroma and keeps its lightness and hue. Tint rows are light on the light canvas and dark on the dark canvas, so Ink bonds and labels stay readable on a filled ring.
+
+**Editable hues.** In the color popover, **Edit hues…** moves any hue in 10° steps, and every use of that hue in the drawing follows. **↺ Default** resets one hue and **Restore default hues** resets all eight. Editing a built-in theme saves a copy in the drawing, such as “Publication · custom hues”. This page shows the default hue angles.
+
+**Custom colors.** Type `#1F4E79`, `31, 78, 121`, `rgb(31 78 121)` or `oklch(0.42 0.09 250)` in the **Color** box. A custom color stays exact on both canvases and ignores theme and hue changes; the drawing keeps the last eight in the **Custom** row. ReShiki names the closest palette color, with **Use** to switch to it, and warns when the color has less than 3:1 contrast with the canvas. Lines need 3:1 and labels 4.5:1.
+
+Drawings from earlier versions turn their old swatch colors into the matching palette colors and keep every other color as it appeared. [Palette and contrast details](/developer/drawing-styles/)
 
 ## Using the colors
 
-Use the **Light / Dark** toggle to see the colors ReShiki draws on white or black paper. Each element has one color for each mode, including neutral ink for elements 110–118.
+Select any color to see its exact values. Use the **Light / Dark** toggle to see the element colors ReShiki draws on white or black paper. Each element has one color for each mode, including neutral ink for elements 110–118. Publication labels every element in Ink.
 
-**RGB is the exact, final 8-bit sRGB value used by the app.** HEX and `rgb()` express the same color. The OKLCH values are calculated from that final RGB and rounded to six decimals. They describe the displayed color, not the original generator settings.
+**RGB is the exact, final 8-bit sRGB value used by the app.** HEX and `rgb()` express the same color. The OKLCH values are calculated from that final RGB and rounded to six decimals, so they describe the displayed color, not the original generator settings. The palette table rounds them further to three decimals.
 
 In `oklch(L C h)`, **L** is lightness from 0 to 1, **C** is chroma (color intensity), and **h** is the hue angle in degrees. You can copy these values directly into CSS. Neutral colors have effectively zero chroma, so their hue angle has no visible effect.
 
-The JSON, CSV, and CSS downloads contain every theme, both modes, element colors, paper, ink, and ring fills. Native `.reshiki-theme` files contain both modes and can be reviewed through **Manage themes → Import** in ReShiki.
+The JSON, CSV, and CSS downloads contain every theme and both modes: paper, ink, the Strong and Tint rows, and element colors. Native `.reshiki-theme` files contain both modes and can be reviewed through **Manage themes → Import** in ReShiki.
 
 The CSS download defines variables under a theme and mode selector. Apply both attributes to the same element:
 
@@ -27,6 +43,7 @@ The CSS download defines variables under a theme and mode selector. Apply both a
 <link rel="stylesheet" href="palettes.css" />
 <div data-reshiki-theme="presentation" data-reshiki-mode="dark">
   <span class="nitrogen">N</span>
+  <span class="highlight">Step 1</span>
 </div>
 ```
 
@@ -39,9 +56,13 @@ The CSS download defines variables under a theme and mode selector. Apply both a
   color: var(--reshiki-element-N);
   /* Or: var(--reshiki-element-N-oklch) */
 }
+.highlight {
+  background: var(--reshiki-tint-amber);
+  border-bottom: 2px solid var(--reshiki-strong-amber);
+}
 ```
 
-## How the themes are made
+## How the element colors are made
 
 Presentation and Pastel preserve the [Jmol reference hues](https://jmol.sourceforge.net/jscolors/), set a target OKLCH lightness, and multiply the reference chroma:
 
@@ -51,14 +72,14 @@ Presentation and Pastel preserve the [Jmol reference hues](https://jmol.sourcefo
 | Pastel       | 0.55 / 0.35×                 | 0.83 / 0.40×                |
 | Jmol         | Jmol reference colors        | Jmol reference colors       |
 
-The generated color is converted to sRGB, reducing chroma when needed to fit the display gamut. Carbon and hydrogen stay neutral in Presentation and Pastel. For **canvas labels**, ReShiki then adjusts lightness as needed to target a **5:1 contrast ratio** against the paper. The values on this page include that contrast adjustment.
+The generated color is converted to sRGB, reducing chroma when needed to fit the display gamut. Carbon and hydrogen stay neutral in Presentation and Pastel, and Publication keeps every label in Ink. For **canvas labels**, ReShiki then adjusts lightness as needed to target a **5:1 contrast ratio** against the paper. The values on this page include that contrast adjustment.
 
-These values describe automatic labels on plain paper. Ring fills can trigger further label contrast adjustment, and explicit object colors override the theme. Interface controls derive their own interaction colors. [Use themes in ReShiki →](/guide/figures/#choose-canvas-colors)
+These values describe automatic labels on plain paper. Tint ring fills can trigger further label contrast adjustment, and explicit object colors override the theme. Interface controls derive their own interaction colors. [Use themes in ReShiki →](/guide/figures/#choose-canvas-colors)
 
 ## Sources and reuse
 
-Element reference colors come from [Jmol’s published color table](https://jmol.sourceforge.net/jscolors/). The perceptual conversion follows [Björn Ottosson’s Oklab color space](https://bottosson.github.io/posts/oklab/). ReShiki’s [theme implementation](https://github.com/Ameyanagi/ReShiki/blob/main/src/canvas_theme.rs), [contrast code](https://github.com/Ameyanagi/ReShiki/blob/main/src/color_contrast.rs), and [theme format guide](https://github.com/Ameyanagi/ReShiki/tree/main/presets/themes) document the transformations and file format.
+Element reference colors come from [Jmol’s published color table](https://jmol.sourceforge.net/jscolors/). The perceptual conversion follows [Björn Ottosson’s Oklab color space](https://bottosson.github.io/posts/oklab/). ReShiki’s [theme implementation](https://github.com/Ameyanagi/ReShiki/blob/main/src/canvas_theme.rs), [palette code](https://github.com/Ameyanagi/ReShiki/blob/main/src/palette.rs), [contrast code](https://github.com/Ameyanagi/ReShiki/blob/main/src/color_contrast.rs), and [theme format guide](https://github.com/Ameyanagi/ReShiki/tree/main/presets/themes) document the transformations and file format.
 
 ReShiki’s original code and contributions are available under [MIT or Apache-2.0](https://github.com/Ameyanagi/ReShiki/blob/main/CONTRIBUTING.md); the Jmol reference palette is credited separately above. Please retain source attribution when redistributing the collection.
 
-Contributors can regenerate this reference with `cargo run --locked --example theme_colors`. The `theme_reference` regression test checks every exported RGB and OKLCH value and the portable theme files against the application.
+Contributors can regenerate this reference with `cargo run --locked --example theme_colors`. The `theme_reference` regression test checks every exported RGB and OKLCH value, the shared lightness of each palette row, and the portable theme files against the application.

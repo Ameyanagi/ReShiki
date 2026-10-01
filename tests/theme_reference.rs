@@ -4,7 +4,7 @@ use reshiki::{
     color_contrast::{Oklch, Rgb},
     document::Document,
     editing::ELEMENTS,
-    ring_fills,
+    palette::{Hue, Palette, Row},
     theme_files::{self, ThemeFile},
 };
 use serde_json::Value;
@@ -32,15 +32,8 @@ fn check_color(value: &Value, expected: Rgb) {
 fn public_color_reference_matches_the_application_and_portable_themes() {
     let catalog: Value =
         serde_json::from_str(include_str!("../website/src/data/theme-colors.json")).unwrap();
-    assert_eq!(catalog["themes"].as_array().unwrap().len(), 3);
-    for (index, theme) in [
-        ColorTheme::Presentation,
-        ColorTheme::Pastel,
-        ColorTheme::Jmol,
-    ]
-    .into_iter()
-    .enumerate()
-    {
+    assert_eq!(catalog["themes"].as_array().unwrap().len(), 4);
+    for (index, theme) in ColorTheme::ALL.into_iter().enumerate() {
         let exported = &catalog["themes"][index];
         assert_eq!(exported["name"], theme.to_string());
         assert_eq!(exported["id"], theme.to_string().to_lowercase());
@@ -56,13 +49,31 @@ fn public_color_reference_matches_the_application_and_portable_themes() {
                 assert_eq!(element["number"], i + 1);
                 check_color(&element["label"], theme.element_color(symbol, mode));
             }
-            assert_eq!(palette["ring_fills"].as_object().unwrap().len(), 5);
-            for (name, key) in ring_fills::PALETTE {
-                check_color(
-                    &palette["ring_fills"][name],
-                    ring_fills::palette_color(key, mode),
-                );
+            // Strong and Tint rows at the default hues; every color in a row
+            // keeps the row's lightness, as the page states.
+            let tones = theme.tones(mode);
+            let swatches = Palette::new(tones, Default::default(), mode);
+            for (row, key, tone) in [
+                (Row::Strong, "strong", tones.strong),
+                (Row::Tint, "tint", tones.tint),
+            ] {
+                let data = &palette[key];
+                assert_eq!(data["lightness"].as_f64(), Some(tone[0]));
+                assert_eq!(data["target_chroma"].as_f64(), Some(tone[1]));
+                let colors = data["colors"].as_array().unwrap();
+                assert_eq!(colors.len(), Hue::ALL.len());
+                for (color, hue) in colors.iter().zip(Hue::ALL) {
+                    assert_eq!(color["hue"], hue.name());
+                    assert_eq!(color["degrees"], hue.default_degrees());
+                    check_color(color, swatches.swatch(hue, row));
+                    let l = color["oklch"][0].as_f64().unwrap();
+                    assert!(
+                        (l - tone[0]).abs() < 0.005,
+                        "{theme} {mode} {key} {hue:?}: L {l}"
+                    );
+                }
             }
+            assert!(palette.get("ring_fills").is_none());
         }
         let file = ThemeFile::capture(&Document {
             color_theme: theme,

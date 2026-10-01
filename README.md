@@ -24,7 +24,7 @@ Start with JACS / ACS styling. Attach templates, refine selected structures, or 
 
 Version 0.9 adds publisher drawing presets, separate light/dark canvas themes, a theme manager and generator, reusable style/theme files, and improved ChemDraw color and ring-fill transfer. Aromatic rings and templates share validated fusion, including phenyl attachment and supported gap closure. [Release notes](docs/changes-0.9.md) · [Styles and themes](docs/drawing-styles.md) · [Shortcut gallery and reference](docs/contextual-shortcuts.md).
 
-[Explore the color palettes](https://reshiki.com/guide/color-palettes/): every Presentation, Pastel and Jmol element color in light and dark mode, with RGB, OKLCH, CSS variables and reusable theme downloads.
+[Explore the color palettes](https://reshiki.com/guide/color-palettes/): each theme's Strong and Tint rows and every Presentation, Pastel and Jmol element color in light and dark mode, with RGB, OKLCH, CSS variables and reusable theme downloads.
 
 New drawings use `.rsk`; existing `.reshiki` and `.moruno` drawings remain supported. Groups and templates are available now and may be extended or revised in future releases.
 

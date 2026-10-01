@@ -305,7 +305,8 @@ impl Sketch {
             atom.no_implicit = true;
             atom.text_style = Some(settings.format.style.clone());
             if let Some(color) = a.color {
-                atom.text_style.as_mut().ok_or("Missing atom style")?.color = color;
+                atom.text_style.as_mut().ok_or("Missing atom style")?.color =
+                    crate::palette::Color::imported(color);
             }
             atom.display.variable = a.variable.clone();
         }
@@ -395,7 +396,7 @@ impl Sketch {
         for c in &self.captions {
             let mut format = settings.format.clone();
             if let Some(color) = c.color {
-                format.style.color = color;
+                format.style.color = crate::palette::Color::imported(color);
             }
             doc.annotations.push(crate::document::Annotation {
                 id: doc.next_id(),

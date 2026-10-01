@@ -1,11 +1,12 @@
 use super::{
-    App, Message, platform_shortcut,
+    App, Message,
+    shortcuts::keys,
     workspace::{control, muted_text},
 };
 use iced::widget::{
-    Space, button, column, container, mouse_area, opaque, row, scrollable, stack, text,
+    Space, button, column, container, mouse_area, opaque, rich_text, row, scrollable, stack, text,
 };
-use iced::{Alignment, Border, Color, Element, Length};
+use iced::{Alignment, Border, Color, Element, Length, keyboard::Modifiers};
 
 pub(super) fn is_shortcut(key: &iced::keyboard::Key, modifiers: iced::keyboard::Modifiers) -> bool {
     modifiers.is_empty()
@@ -20,65 +21,97 @@ impl App {
         if !self.help_open {
             return base;
         }
+        let (command, shift, alt) = (Modifiers::COMMAND, Modifiers::SHIFT, Modifiers::ALT);
+        let label = |message| super::shortcuts::label(&message).unwrap_or_default();
         let drawing = group(
             "Drawing tools",
             &[
-                ("Space / l", "Select / Lasso"),
-                ("x / 1", "Single bond"),
-                ("2 / 3 / 4", "Double / Triple / Quadruple"),
-                ("Shift X", "Straight chain"),
+                ("Space / l".into(), "Select / Lasso"),
+                ("x / 1".into(), "Single bond"),
+                ("2 / 3 / 4".into(), "Double / Triple / Quadruple"),
+                (keys(shift, "X"), "Straight chain"),
                 (
-                    "r / Shift R",
+                    format!("r / {}", keys(shift, "R")),
                     "Ring / Toggle saturated–aromatic (same size)",
                 ),
-                ("e / t / Shift T", "Arrow / Text / Brackets"),
-                ("j / Shift J", "Benzene / Cyclopentadiene"),
-                ("F1", "Keyboard shortcuts"),
-                ("Option / Alt drag", "Draw or move bonded atoms freely"),
                 (
-                    "Cmd / Ctrl-click with a ring tool",
+                    format!("e / t / {}", keys(shift, "T")),
+                    "Arrow / Text / Brackets",
+                ),
+                (
+                    format!("j / {}", keys(shift, "J")),
+                    "Benzene / Cyclopentadiene",
+                ),
+                ("F1".into(), "Keyboard shortcuts"),
+                (
+                    format!("{} drag", keys(alt, "")),
+                    "Draw or move bonded atoms freely",
+                ),
+                (
+                    format!("{}-click with a ring tool", keys(command, "")),
                     "Place the delocalized circle form",
                 ),
                 (
-                    "a with an aromatic ring selected",
+                    "a with an aromatic ring selected".into(),
                     "Toggle circle / alternating bonds",
                 ),
                 (
-                    "Atoms: drag from an existing atom",
+                    "Atoms: drag from an existing atom".into(),
                     "Add the chosen element with a single bond",
                 ),
-                ("Esc", "Return to selection"),
+                ("Esc".into(), "Return to selection"),
             ],
         );
         let editing = group(
             "Selection & arrangement",
             &[
-                (platform_shortcut("⌘ G", "Ctrl G"), "Group"),
-                (platform_shortcut("⇧ ⌘ G", "Ctrl Shift G"), "Ungroup"),
                 (
-                    platform_shortcut("⇧ ⌘ A", "Ctrl Shift A"),
-                    "Invert selection",
+                    format!(
+                        "{} / {} / {}",
+                        label(Message::Copy(true)),
+                        label(Message::Copy(false)),
+                        label(Message::Paste)
+                    ),
+                    "Cut / Copy / Paste",
                 ),
-                (platform_shortcut("⇧ ⌘ D", "Ctrl Shift D"), "Duplicate"),
+                (label(Message::SelectAll), "Select all"),
+                (label(Message::Group), "Group"),
+                (label(Message::Ungroup), "Ungroup"),
+                (label(Message::InvertSelection), "Invert selection"),
+                (label(Message::Duplicate), "Duplicate"),
                 (
-                    platform_shortcut("⌘ drag", "Ctrl drag"),
+                    format!("{} drag", keys(command, "")),
                     "Drag a copy, leaving the original in place",
                 ),
-                ("Shift drag", "Move horizontally or vertically only"),
                 (
-                    platform_shortcut("⇧ ⌘ →", "Ctrl Shift →"),
+                    format!("{} drag", keys(command | shift, "")),
+                    "Drag a copy along one axis",
+                ),
+                (
+                    format!("Release {}, then Esc", keys(command, "")),
+                    "Cancel a copy drag",
+                ),
+                (
+                    format!("{} drag", keys(shift, "")),
+                    "Move horizontally or vertically only",
+                ),
+                (
+                    keys(command | shift, "Right"),
                     "Reaction arrow and molecule copy",
                 ),
                 (
-                    "Space with Select active",
+                    "Space with Select active".into(),
                     "Select the most recently edited molecule",
                 ),
                 (
-                    platform_shortcut("⌘ Z / ⇧ ⌘ Z", "Ctrl Z / Ctrl Shift Z"),
+                    format!("{} / {}", label(Message::Undo), label(Message::Redo)),
                     "Undo / Redo",
                 ),
-                ("Delete", "Delete selection"),
-                ("Enter", "Edit selected atom label (M, L, X, Boc…)"),
+                (label(Message::Delete), "Delete selection"),
+                (
+                    keys(Modifiers::empty(), "Enter"),
+                    "Edit selected atom label (M, L, X, Boc…)",
+                ),
             ],
         );
         let context = column![
@@ -99,56 +132,73 @@ impl App {
             shortcut("3 / 6 / 7 / v / u", "Atom: phenyl / 6-ring / 5-ring / 3-ring / 4-ring"),
             shortcut("9 / K / k", "Atom: dimethyl / tert-butyl / sulfonyl"),
             shortcut("v / 4–8 / a / z / 9 / 0", "Bond: fuse rings / benzene / diene / chairs"),
-            shortcut("g / ? / Enter", "Select / Properties / Edit atom label"),
+            shortcut(&format!("g / ? / {}", keys(Modifiers::empty(), "Enter")), "Select / Properties / Edit atom label"),
             text("Uppercase means Shift-letter. Repeat 2 on a double bond to cycle its line placement.")
                 .size(12).style(muted_text),
         ].spacing(8);
+        // Windows also takes Alt+K alone; both zoom modifiers work on macOS.
+        let aromatic = if cfg!(windows) {
+            keys(alt, "K")
+        } else {
+            keys(command | alt, "K")
+        };
+        let zoom = if cfg!(target_os = "macos") {
+            format!(
+                "{} / {} scroll",
+                keys(command, ""),
+                keys(Modifiers::CTRL, "")
+            )
+        } else {
+            format!("{} scroll", keys(command, ""))
+        };
         let files = group(
             "Files",
             &[
                 (
-                    platform_shortcut("⌘ N / ⌘ O", "Ctrl N / Ctrl O"),
+                    format!("{} / {}", keys(command, "N"), keys(command, "O")),
                     "New / Open",
                 ),
-                (platform_shortcut("⌘ S", "Ctrl S"), "Save"),
+                (keys(command, "S"), "Save"),
                 (
-                    platform_shortcut("⌘ I / ⇧ ⌘ E", "Ctrl I / Ctrl Shift E"),
+                    format!("{} / {}", keys(command, "I"), keys(command | shift, "E")),
                     "Import / Export",
                 ),
-                (platform_shortcut("⌘ P", "Ctrl P"), "Print"),
+                (keys(command, "P"), "Print"),
+                (keys(command, "J"), "Join selected atoms / bonds"),
+                (keys(command | shift, "K"), "Clean up"),
                 (
-                    platform_shortcut("⌘ J", "Ctrl J"),
-                    "Join selected atoms / bonds",
-                ),
-                (platform_shortcut("⇧ ⌘ K", "Ctrl Shift K"), "Clean up"),
-                (
-                    platform_shortcut("⌘ L / ⌘ E", "Ctrl L / Ctrl E"),
+                    format!("{} / {}", keys(command, "L"), keys(command, "E")),
                     "Fixed bond length / angles",
                 ),
+                (aromatic, "Aromatic circle / alternating bonds"),
+                (keys(command, "D"), "Copy CDXML text"),
                 (
-                    platform_shortcut("⌥ ⌘ K", "Alt K"),
-                    "Aromatic circle / alternating bonds",
-                ),
-                (platform_shortcut("⌘ D", "Ctrl D"), "Copy CDXML text"),
-                (
-                    platform_shortcut("⌥ ⌘ C / ⌥ ⌘ O", "Ctrl Alt C / Ctrl Alt O"),
+                    format!(
+                        "{} / {}",
+                        keys(command | alt, "C"),
+                        keys(command | alt, "O")
+                    ),
                     "Copy SMILES / MOL",
                 ),
                 (
-                    "Alt arrows / Shift Alt arrows",
+                    format!(
+                        "{} arrows / {} arrows",
+                        keys(alt, ""),
+                        keys(alt | shift, "")
+                    ),
                     "Rotate / 3D tilt selection",
                 ),
-                ("Arrows / Shift arrows", "Nudge 1 / 10 units"),
-                ("Drag side handle", "Change width or height"),
-                ("Drag corner handle", "Resize proportionally"),
                 (
-                    "Scroll / side-scroll",
+                    format!("Arrows / {} arrows", keys(shift, "")),
+                    "Nudge 1 / 10 units",
+                ),
+                ("Drag side handle".into(), "Change width or height"),
+                ("Drag corner handle".into(), "Resize proportionally"),
+                (
+                    "Scroll / side-scroll".into(),
                     "Pan the canvas vertically / horizontally",
                 ),
-                (
-                    platform_shortcut("⌘ / Ctrl + scroll", "Ctrl + scroll"),
-                    "Zoom at the pointer",
-                ),
+                (zoom, "Zoom at the pointer"),
             ],
         );
         let examples = column![
@@ -248,10 +298,10 @@ impl App {
     }
 }
 
-fn shortcut(keys: &'static str, label: &'static str) -> Element<'static, Message> {
+fn shortcut(keys: &str, label: &'static str) -> Element<'static, Message> {
     row![
         text(label).size(12).width(Length::Fill),
-        container(text(keys).size(11))
+        container(rich_text(super::shortcuts::spans(keys)).size(11))
             .padding([3, 6])
             .style(|theme| crate::appearance::container(
                 theme,
@@ -271,10 +321,7 @@ fn shortcut(keys: &'static str, label: &'static str) -> Element<'static, Message
     .into()
 }
 
-fn group(
-    title: &'static str,
-    shortcuts: &[(&'static str, &'static str)],
-) -> Element<'static, Message> {
+fn group(title: &'static str, shortcuts: &[(String, &'static str)]) -> Element<'static, Message> {
     let mut body = column![text(title).size(14)].spacing(8);
     for (keys, label) in shortcuts {
         body = body.push(shortcut(keys, label));
@@ -399,14 +446,14 @@ mod tests {
     fn dismissing_shortcuts_preserves_the_drawing_tool_and_view() {
         let (mut app, _) = App::new();
         app.tool = crate::canvas::Tool::Ring;
-        app.import_open = true;
+        app.inspector_tab = crate::app::InspectorTab::Import;
         app.selected = vec![app.doc.add_atom("O", reshiki::document::Point::default())];
         app.camera.zoom = 5.;
         let before = app.doc.clone();
         let selected = app.selected.clone();
         let _ = app.update(Message::ToggleHelp);
         assert!(app.help_open);
-        assert!(app.import_open);
+        assert_eq!(app.inspector_tab, crate::app::InspectorTab::Import);
         let _ = app.update(Message::Escape);
         assert!(!app.help_open);
         assert_eq!(app.tool, crate::canvas::Tool::Ring);

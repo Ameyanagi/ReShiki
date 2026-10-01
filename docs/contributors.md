@@ -5,6 +5,6 @@ Thank you to all the contributors who have helped improve ReShiki. Your contribu
 This list credits authors of merged pull requests to ReShiki.
 
 - @Ameyanagi — project creator and maintainer.
-- @HiroYokoyama — proposed improved benzene fusion and Kekulé-pattern selection, with regression tests and follow-up review fixes, in [PR #40](https://github.com/Ameyanagi/ReShiki/pull/40).
+- @HiroYokoyama — proposed improved benzene fusion and Kekulé-pattern selection, with regression tests and follow-up review fixes, in [PR #40](https://github.com/Ameyanagi/ReShiki/pull/40), and added Ctrl/Cmd drag to copy and Shift drag to lock an axis in [PR #87](https://github.com/Ameyanagi/ReShiki/pull/87).
 
 The [GitHub contributor history](https://github.com/Ameyanagi/ReShiki/graphs/contributors) records merged commits. Individual [release notes](changes-unreleased.md) credit contributors alongside their changes.

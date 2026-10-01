@@ -5,7 +5,8 @@ use reshiki::{
     color_contrast::contrast,
     document::{Document, Point},
     document_styles::{self, Preset},
-    ring_fills::{self, RingFill},
+    palette::{Color, Hue, Palette, Row},
+    ring_fills::RingFill,
     theme_files::{self, ThemeFile},
 };
 use std::path::PathBuf;
@@ -24,14 +25,13 @@ fn main() -> anyhow::Result<()> {
             };
             theme.clone().apply(&mut doc).map_err(anyhow::Error::msg)?;
             let id = doc.add_atom("O", Point::default());
-            doc.ring_fills = ring_fills::PALETTE
-                .iter()
-                .map(|&(_, color)| RingFill {
+            doc.ring_fills = Hue::ALL
+                .map(|hue| RingFill {
                     atoms: vec![id],
-                    color,
-                    fixed_color: false,
+                    color: Color::Palette(hue, Row::Tint),
                 })
-                .collect();
+                .to_vec();
+            let palette = Palette::of(&doc);
             let mut minimum = 21_f64;
             for &element in reshiki::editing::ELEMENTS {
                 if let Some(atom) = doc.atoms.first_mut() {
@@ -39,11 +39,9 @@ fn main() -> anyhow::Result<()> {
                 }
                 let atom = doc.atoms.first().context("missing audit atom")?;
                 let ink = mode.color(canvas_theme::atom_color(&doc, atom));
-                for bg in std::iter::once(mode.background()).chain(
-                    doc.ring_fills
-                        .iter()
-                        .map(|f| canvas_theme::fill_color(&doc, f)),
-                ) {
+                for bg in std::iter::once(mode.background())
+                    .chain(doc.ring_fills.iter().map(|f| palette.rgb(f.color)))
+                {
                     minimum = minimum.min(contrast(ink, bg));
                 }
             }

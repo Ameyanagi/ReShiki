@@ -232,7 +232,8 @@ impl CdxmlScene {
                     atom.display = display(value)?;
                 }
                 atom.display.hide_charge = hidden_charge;
-                atom.display.hydrogen_color = old.hydrogen_color;
+                atom.display.hydrogen_color =
+                    old.hydrogen_color.map(crate::palette::Color::imported);
             }
         }
         if !previous.is_empty() {

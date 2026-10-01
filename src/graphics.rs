@@ -99,15 +99,15 @@ impl std::fmt::Display for BracketSides {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct GraphicStyle {
-    pub stroke: [u8; 3],
-    pub fill: Option<[u8; 3]>,
+    pub stroke: crate::palette::Color,
+    pub fill: Option<crate::palette::Color>,
     pub width_pt: f32,
     pub pattern: LinePattern,
 }
 impl Default for GraphicStyle {
     fn default() -> Self {
         Self {
-            stroke: [0, 0, 0],
+            stroke: crate::palette::Color::Ink,
             fill: None,
             width_pt: 0.6,
             pattern: LinePattern::Solid,
@@ -135,8 +135,8 @@ impl GraphicStyle {
 }
 #[derive(Debug, Clone)]
 pub enum GraphicChange {
-    Stroke([u8; 3]),
-    Fill(Option<[u8; 3]>),
+    Stroke(crate::palette::Color),
+    Fill(Option<crate::palette::Color>),
     Width(f32),
     Pattern(LinePattern),
 }

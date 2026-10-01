@@ -426,7 +426,7 @@ mod tests {
         doc.add_bond(a, b, 1, "plain");
         doc.atom_mut(b).ok_or("Oxygen")?.text_style = Some(TextStyle {
             size_pt: 12.,
-            color: [80, 0, 0],
+            color: crate::palette::Color::Custom([80, 0, 0]),
             ..Default::default()
         });
         doc.annotations.push(Annotation {

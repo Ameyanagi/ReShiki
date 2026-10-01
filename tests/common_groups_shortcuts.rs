@@ -231,7 +231,14 @@ fn replacing_a_colored_collapsed_ring_prunes_its_old_fill() -> Result<(), Box<dy
     doc = atom_text::apply(&doc, end, "Ph", Mode::Auto)?;
     let members = doc.abbreviation(end).ok_or("Ph")?.members.clone();
     doc.expand_abbreviations(&members);
-    reshiki::ring_fills::apply(&mut doc, &members, Some([201, 224, 248]));
+    reshiki::ring_fills::apply(
+        &mut doc,
+        &members,
+        Some(reshiki::palette::Color::Palette(
+            reshiki::palette::Hue::Blue,
+            reshiki::palette::Row::Tint,
+        )),
+    );
     doc.contract(&members, "Ph", "")?;
     let result = atom_text::apply(&doc, end, "MgBr", Mode::Auto)?;
     result.validate()?;

@@ -67,12 +67,23 @@ pub struct CopyOutcome {
 pub struct PasteOutcome {
     pub document: Document,
     pub warnings: Vec<String>,
+    /// ReShiki's own drawing data, whose palette colors can follow the target.
+    pub native: bool,
+}
+impl PasteOutcome {
+    pub fn native(document: Document) -> Self {
+        Self {
+            native: true,
+            ..document.into()
+        }
+    }
 }
 impl From<Document> for PasteOutcome {
     fn from(document: Document) -> Self {
         Self {
             document,
             warnings: Vec::new(),
+            native: false,
         }
     }
 }
@@ -286,6 +297,11 @@ async fn prepare_copy(
             original
         }
     };
+    // Marked like a saved file, so pasting it never migrates its colors again.
+    let doc = Document {
+        version: crate::document::VERSION,
+        ..doc
+    };
     let mut representations = Vec::new();
     if !image_only {
         representations.push(Representation::new(
@@ -449,13 +465,6 @@ fn copy_images(
     images
 }
 
-fn native_document(data: &[u8]) -> Result<Document, String> {
-    let doc: Document =
-        serde_json::from_slice(data).map_err(|e| format!("Invalid drawing: {e}"))?;
-    doc.validate()?;
-    Ok(doc)
-}
-
 fn mol_text(data: &[u8]) -> Result<String, String> {
     if let Ok(text) = std::str::from_utf8(data)
         && text.contains("M  END")
@@ -484,7 +493,12 @@ fn mol_text(data: &[u8]) -> Result<String, String> {
 }
 
 pub fn text_request(text: &str) -> Request {
-    let format = if text.trim_start().starts_with("InChI=") {
+    Request::import(text_format(text), text)
+}
+
+/// Import format of typed or pasted structure text, recognized by cheap markers.
+pub fn text_format(text: &str) -> &'static str {
+    if text.trim_start().starts_with("InChI=") {
         "inchi"
     } else if text.trim_start().starts_with("$RXN") {
         "rxn"
@@ -492,12 +506,13 @@ pub fn text_request(text: &str) -> Request {
         "mol"
     } else if text.contains("<CDXML") {
         "cdxml"
+    } else if text.contains("V2000") || text.contains("V3000") {
+        "mol"
     } else if text.replace("->", "").matches('>').count() == 2 {
         "rsmi"
     } else {
         "smiles"
-    };
-    Request::import(format, text)
+    }
 }
 
 pub async fn paste(engine: LocalEngine, image_only: bool) -> Result<Document, String> {
@@ -540,10 +555,10 @@ async fn paste_packet_with_warnings(
         .ok_or("No supported drawing on the clipboard")?;
     let data = item.bytes()?;
     if item.kind == NATIVE || item.kind == "dev.moruno.drawing" {
-        return tokio::task::spawn_blocking(move || native_document(&data))
+        return tokio::task::spawn_blocking(move || Document::from_json(&data))
             .await
             .map_err(|e| e.to_string())?
-            .map(PasteOutcome::from);
+            .map(PasteOutcome::native);
     }
     if matches!(
         item.kind.as_str(),
@@ -569,7 +584,7 @@ async fn paste_packet_with_warnings(
     ) {
         let text = std::str::from_utf8(&data).map_err(|_| "Invalid clipboard text encoding")?;
         if let Some(json) = editing::clipboard_json(text) {
-            return native_document(json.as_bytes()).map(PasteOutcome::from);
+            return Document::from_json(json.as_bytes()).map(PasteOutcome::native);
         }
         text_request(text)
     } else {
@@ -586,12 +601,34 @@ async fn paste_packet_with_warnings(
     Ok(PasteOutcome {
         document: doc,
         warnings: response.warnings,
+        native: false,
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn typed_text_formats_follow_cheap_markers() {
+        for (text, format) in [
+            ("  InChI=1S/C2H6O/c1-2-3/h3H,2H2,1H3", "inchi"),
+            ("$RXN\n\n  ReShiki\n\n  1  1\n$MOL\nM  END", "rxn"),
+            (
+                "ethanol\n\n\n  3  2  0  0  0  0  0  0  0  0999 V2000\nM  END",
+                "mol",
+            ),
+            ("\n\n\n  0  0  0     0  0            999 V3000\n", "mol"),
+            ("<?xml version=\"1.0\"?><CDXML><page/></CDXML>", "cdxml"),
+            ("CCO>>CC=O", "rsmi"),
+            ("CCO>O=O>CC=O", "rsmi"),
+            ("C->C", "smiles"),
+            ("c1ccccc1", "smiles"),
+        ] {
+            assert_eq!(text_format(text), format, "{text}");
+            assert_eq!(text_request(text).format.as_deref(), Some(format));
+        }
+    }
 
     #[tokio::test]
     async fn both_canvas_modes_copy_visible_ink_without_background_objects() {
@@ -632,7 +669,10 @@ mod tests {
                 back.graphics.is_empty(),
                 "Editable copies must not add a canvas rectangle"
             );
-            assert_eq!(back.bonds[0].color, theme.color([0; 3]));
+            assert_eq!(
+                back.bonds[0].color,
+                crate::palette::Color::imported(theme.color([0; 3]))
+            );
             for (_, image) in copy_images(&doc, true) {
                 let image = image.unwrap();
                 if image.kind == "public.png" {
@@ -733,7 +773,7 @@ mod tests {
             .iter()
             .find(|r| r.kind == NATIVE)
             .context("Native drawing")?;
-        let native = native_document(&native.bytes().map_err(anyhow::Error::msg)?)
+        let native = Document::from_json(&native.bytes().map_err(anyhow::Error::msg)?)
             .map_err(anyhow::Error::msg)?;
         for (a, b) in source.atoms.iter().zip(&native.atoms) {
             assert_eq!((a.position, a.depth), (b.position, b.depth));
@@ -773,9 +813,9 @@ mod tests {
             .find(|r| r.kind == NATIVE)
             .context("Native drawing")?;
         assert_eq!(
-            native_document(&native.bytes().map_err(anyhow::Error::msg)?)
+            Document::from_json(&native.bytes().map_err(anyhow::Error::msg)?)
                 .map_err(anyhow::Error::msg)?,
-            source
+            source.current()
         );
         let binary = representations
             .iter()
@@ -886,9 +926,9 @@ mod tests {
                 .find(|r| r.kind == NATIVE)
                 .context("Missing native drawing")?;
             ensure!(
-                native_document(&native.bytes().map_err(anyhow::Error::msg)?)
+                Document::from_json(&native.bytes().map_err(anyhow::Error::msg)?)
                     .map_err(anyhow::Error::msg)?
-                    == doc
+                    == doc.current()
             );
             let binary = representations
                 .iter()
@@ -927,9 +967,9 @@ mod tests {
             .find(|r| r.kind == NATIVE)
             .context("Native drawing")?;
         ensure!(
-            native_document(&native.bytes().map_err(anyhow::Error::msg)?)
+            Document::from_json(&native.bytes().map_err(anyhow::Error::msg)?)
                 .map_err(anyhow::Error::msg)?
-                == source
+                == source.current()
         );
         let cdx = representations
             .iter()
@@ -1027,7 +1067,7 @@ mod tests {
                 format!("{}{json}", editing::CLIPBOARD_PREFIX),
             ),
         ] {
-            let restored = paste_packet(
+            let restored = paste_packet_with_warnings(
                 LocalEngine::default(),
                 Packet {
                     representations: vec![Representation::new(kind, contents.as_bytes())],
@@ -1035,7 +1075,86 @@ mod tests {
             )
             .await
             .map_err(anyhow::Error::msg)?;
-            assert_eq!(restored, expected);
+            assert!(restored.native, "{kind}");
+            assert_eq!(restored.document, expected);
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn old_dark_reshiki_clipboards_convert_colors_once() -> anyhow::Result<()> {
+        use crate::{canvas_theme::CanvasTheme, document::Point, palette::Color};
+        let mut doc = Document {
+            canvas_theme: CanvasTheme::Dark,
+            ..Default::default()
+        };
+        let c = doc.add_atom("C", Point::default());
+        let o = doc.add_atom("O", Point::new(42., 0.));
+        doc.add_bond(c, o, 1, "plain");
+        doc.bonds[0].color = Color::Custom([10, 120, 200]);
+        assert!(doc.version < crate::document::VERSION);
+        let (_, representations) = prepare_copy(Default::default(), doc, false)
+            .await
+            .map_err(anyhow::Error::msg)?;
+        let copied = representations
+            .iter()
+            .find(|r| r.kind == NATIVE)
+            .ok_or_else(|| anyhow::anyhow!("no native data"))?
+            .bytes()
+            .map_err(anyhow::Error::msg)?;
+        // The previous release's dark drawing showed [10, 120, 200] flipped.
+        let old = include_bytes!("../tests/fixtures/palette/legacy-dark.rsk");
+        for (data, bond, color) in [
+            (copied.as_slice(), 0, [10, 120, 200]),
+            (old.as_slice(), 1, [55, 165, 245]),
+        ] {
+            let pasted = paste_packet_with_warnings(
+                LocalEngine::default(),
+                Packet {
+                    representations: vec![Representation::new(NATIVE, data)],
+                },
+            )
+            .await
+            .map_err(anyhow::Error::msg)?;
+            assert_eq!(pasted.document.bonds[bond].color, Color::Custom(color));
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn only_reshiki_clipboards_keep_palette_references() -> anyhow::Result<()> {
+        use crate::palette::{Color, Hue, Palette, Row};
+        let mut doc = Document::default();
+        let c = doc.add_atom("C", crate::document::Point::default());
+        let n = doc.add_atom("N", crate::document::Point::new(42., 0.));
+        let o = doc.add_atom("O", crate::document::Point::new(84., 0.));
+        doc.add_bond(c, n, 1, "plain");
+        doc.add_bond(n, o, 1, "plain");
+        doc.bonds[0].color = Color::Palette(Hue::Red, Row::Strong);
+        let red = Palette::of(&doc).rgb(doc.bonds[0].color);
+        let native = serde_json::to_vec(&doc)?;
+        let xml = crate::exchange::drawing::write(&doc, Default::default())?;
+        for (kind, data, native) in [
+            (NATIVE, native.as_slice(), true),
+            ("com.perkinelmer.chemdraw.cdxml", xml.as_bytes(), false),
+        ] {
+            let pasted = paste_packet_with_warnings(
+                LocalEngine::default(),
+                Packet {
+                    representations: vec![Representation::new(kind, data)],
+                },
+            )
+            .await
+            .map_err(anyhow::Error::msg)?;
+            assert_eq!(pasted.native, native, "{kind}");
+            let colors: Vec<_> = pasted.document.bonds.iter().map(|b| b.color).collect();
+            if native {
+                assert_eq!(colors, [Color::Palette(Hue::Red, Row::Strong), Color::Ink]);
+            } else {
+                // ChemDraw data keeps exact colors; its black becomes Ink.
+                assert!(colors.contains(&Color::Custom(red)), "{colors:?}");
+                assert!(colors.contains(&Color::Ink), "{colors:?}");
+            }
         }
         Ok(())
     }

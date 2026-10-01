@@ -121,7 +121,7 @@ fn crossing_gaps_split_waves_without_flattening_or_changing_their_style() {
     for reverse in [false, true] {
         let mut doc = crossed();
         doc.bonds[0].display = "wavy".into();
-        doc.bonds[0].color = [32, 80, 145];
+        doc.bonds[0].color = reshiki::palette::Color::Custom([32, 80, 145]);
         if reverse {
             doc.bonds[0].reverse();
         }
@@ -141,7 +141,7 @@ fn crossing_gaps_split_waves_without_flattening_or_changing_their_style() {
             .collect();
         assert_eq!(paths.len(), 2);
         for (commands, style) in paths {
-            assert_eq!(style.stroke, [32, 80, 145]);
+            assert_eq!(style.stroke.rgb(), [32, 80, 145]);
             assert!(commands.iter().any(|c| matches!(c, PathCommand::Cubic(..))));
             assert!(flattened(commands).iter().flatten().all(|p| p.x.abs() > 3.));
         }

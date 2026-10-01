@@ -72,7 +72,7 @@ pub struct TextStyle {
     pub bold: bool,
     pub italic: bool,
     pub underline: bool,
-    pub color: [u8; 3],
+    pub color: crate::palette::Color,
     pub script: Script,
     pub formula: bool,
 }
@@ -84,7 +84,7 @@ impl Default for TextStyle {
             bold: false,
             italic: false,
             underline: false,
-            color: [0, 0, 0],
+            color: crate::palette::Color::Ink,
             script: Script::Normal,
             formula: false,
         }
@@ -157,7 +157,7 @@ pub enum StyleChange {
     Bold(bool),
     Italic(bool),
     Underline(bool),
-    Color([u8; 3]),
+    Color(crate::palette::Color),
     Script(Script),
     Formula(bool),
 }

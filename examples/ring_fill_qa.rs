@@ -4,6 +4,7 @@ use reshiki::{
     document::{Annotation, Document, Point},
     editing,
     engine::{LocalEngine, Request},
+    palette::{Color, Hue, Row},
     ring_fills,
 };
 use std::{fs, path::PathBuf};
@@ -40,22 +41,26 @@ async fn main() -> anyhow::Result<()> {
         "<!doctype html><meta charset='utf-8'><title>Ring interior colors</title><style>body{font:16px system-ui;padding:32px;background:#f4f6f5}main{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}article{background:white;padding:16px}img{width:100%;height:200px;object-fit:contain}</style><h1>Ring interior colors</h1><p>Select a ring, then choose Color → Ring interiors. Use a swatch or enter a hex color; Clear fill removes it. Bond colors and chemistry stay unchanged.</p><main>",
     );
     for (index, (title, mut doc, color)) in [
-        ("Aromatic", aromatic, [255, 241, 174]),
-        ("Tilted", tilted, [201, 224, 248]),
-        ("Independent resize", wide, [198, 233, 220]),
-        ("Chair", chair, [249, 207, 209]),
-        ("Glucose", sugar, [226, 211, 245]),
-        ("Fused rings", fused, [255, 241, 174]),
+        ("Aromatic", aromatic, Hue::Amber),
+        ("Tilted", tilted, Hue::Blue),
+        ("Independent resize", wide, Hue::Teal),
+        ("Chair", chair, Hue::Red),
+        ("Glucose", sugar, Hue::Purple),
+        ("Fused rings", fused, Hue::Amber),
     ]
     .into_iter()
     .enumerate()
     {
         let ids = doc.all_ids();
-        ring_fills::apply(&mut doc, &ids, Some(color));
+        ring_fills::apply(&mut doc, &ids, Some(Color::Palette(color, Row::Tint)));
         if index == 5
             && let Some(ring) = doc.ring_fills.first().cloned()
         {
-            ring_fills::apply(&mut doc, &ring.atoms, Some([201, 224, 248]));
+            ring_fills::apply(
+                &mut doc,
+                &ring.atoms,
+                Some(Color::Palette(Hue::Blue, Row::Tint)),
+            );
         }
         doc.validate().map_err(anyhow::Error::msg)?;
         fs::write(

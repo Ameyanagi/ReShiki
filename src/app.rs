@@ -17,6 +17,7 @@ mod atom_text;
 mod autosave;
 mod cleanup;
 mod clipboard;
+mod color_popover;
 mod context_menu;
 mod document_styles;
 mod figure_export;
@@ -29,6 +30,7 @@ pub(crate) use macos_files::install_document_events;
 mod graphics;
 mod help;
 mod icons;
+mod import;
 mod inline_text;
 mod inspector;
 mod joining;
@@ -41,6 +43,7 @@ mod palettes;
 #[cfg(test)]
 mod performance;
 mod pictures;
+mod popover;
 mod printing;
 mod reactions;
 mod shortcut_examples;
@@ -52,6 +55,10 @@ mod tool_button;
 mod typography;
 mod updates;
 mod workspace;
+pub(crate) use workspace::text_width;
+
+/// The status bar's idle message.
+const READY: &str = "Ready · Choose a tool to start drawing";
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum InspectorTab {
@@ -64,12 +71,14 @@ pub enum InspectorTab {
     Properties,
     Labels,
     Templates,
+    Import,
     Export,
 }
 
 #[derive(Debug, Clone)]
 pub enum Message {
     ContextMenu(context_menu::Action),
+    StyleMenu(color_popover::Action),
     ObjectToolbar(object_toolbar::Action),
     InspectorAction(inspector::Action),
     NumericTransform(numeric_transforms::Action),
@@ -123,10 +132,9 @@ pub enum Message {
     RemoveMark(u64, usize),
     RotateMark(u64, usize),
     AtomRadical(u8),
-    GraphicLayer(bool),
     ToggleInspector,
     Inspector(InspectorTab),
-    ToggleImport,
+    Imports(import::Action),
     InsertInput,
     ToggleHelp,
     OpenShortcutExamples,
@@ -148,7 +156,6 @@ pub enum Message {
     TextSpacing(f32),
     TextWidth(String),
     ApplyTextWidth,
-    Smiles(String),
     Import,
     Example(&'static str),
     Clean,
@@ -235,7 +242,7 @@ pub enum Message {
             reason = "Legacy open event retained for editor-boundary tests"
         )
     )]
-    Opened(Option<(PathBuf, Result<String, String>)>),
+    Opened(Option<(PathBuf, Result<Vec<u8>, String>)>),
     FilePrepared(files::Key, files::Opened),
     #[cfg(target_os = "macos")]
     MacFiles(macos_files::Action),
@@ -260,7 +267,8 @@ pub enum Job {
 #[derive(Debug, Clone)]
 enum Pending {
     New,
-    Open,
+    /// Open this file, or the one chosen in the open dialog.
+    Open(Option<PathBuf>),
     Close(iced::window::Id),
 }
 
@@ -276,6 +284,7 @@ struct CleanupPreview {
 
 pub struct App {
     context_menu: Option<context_menu::State>,
+    style_menu: Option<color_popover::Menu>,
     updates: updates::State,
     styles: document_styles::State,
     theme_library: theme_files::State,
@@ -330,7 +339,7 @@ pub struct App {
     color_scope: typography::ColorScope,
     text_width_input: String,
     bond_color_input: String,
-    smiles: String,
+    imports: import::State,
     isotope: String,
     grid: bool,
     guides: canvas::guides::Guides,
@@ -368,7 +377,6 @@ pub struct App {
     inspector_ui: inspector::State,
     numeric_transforms: numeric_transforms::State,
     inspector_tab: InspectorTab,
-    import_open: bool,
     help_open: bool,
     viewport: iced::Size,
     fit_to_view: bool,
@@ -405,6 +413,7 @@ impl App {
             label_refresh: Default::default(),
             chemistry_notice: None,
             context_menu: None,
+            style_menu: None,
             bond_drawing: Default::default(),
             chain_drawing: Default::default(),
             drawing_length_input: reshiki::style::DEFAULT.bond_length_pt.to_string(),
@@ -417,7 +426,7 @@ impl App {
             attach_symbols: true,
             graphic_width_input: "0.6".into(),
             graphic_stroke_input: "#000000".into(),
-            graphic_fill_input: "#DCEFE9".into(),
+            graphic_fill_input: String::new(),
             bracket_sides: BracketSides::Both,
             doc: Document::default(),
             history: History::default(),
@@ -447,7 +456,7 @@ impl App {
             color_scope: Default::default(),
             bond_color_input: "#000000".into(),
             text_width_input: String::new(),
-            smiles: String::new(),
+            imports: Default::default(),
             isotope: String::new(),
             grid: false,
             guides: Default::default(),
@@ -459,7 +468,8 @@ impl App {
             busy: false,
             clipboard_busy: false,
             figure_exporting: false,
-            status: "Ready · Choose a tool to start drawing".into(),
+            // A recovery offer in the status bar is the launch message.
+            status: if recovered.is_empty() { READY } else { "" }.into(),
             error: false,
             path: None,
             file_io: files::State::default(),
@@ -485,7 +495,6 @@ impl App {
             inspector_ui: inspector::State::default(),
             numeric_transforms: numeric_transforms::State::default(),
             inspector_tab: InspectorTab::Properties,
-            import_open: false,
             help_open: false,
             viewport: iced::Size::new(850.0, 600.0),
             fit_to_view: false,
@@ -584,6 +593,9 @@ impl App {
             },
             iced::window::close_requests().map(Message::Close),
             iced::event::listen_with(|event, status, _window| {
+                if let iced::Event::Window(event) = &event {
+                    return import::drag_event(event);
+                }
                 if status == iced::event::Status::Ignored
                     && let Some(forward) = template_library::navigation_event(&event)
                 {
@@ -717,12 +729,20 @@ impl App {
         self.fit_to_view = true;
     }
     fn pending(&mut self, action: Pending) -> Task<Message> {
-        if self.dirty() {
-            self.pending = Some(action);
-            Task::none()
-        } else {
-            self.perform(action)
+        // The save dialog, or the save it started, still answers an earlier request.
+        if self.pending.is_some() {
+            return Task::none();
         }
+        if !self.dirty() {
+            return self.perform(action);
+        }
+        self.pending = Some(action);
+        files::ask_to_save(self.document_name())
+    }
+    /// Save chosen in the save dialog passes the gates of transient editors,
+    /// whose Close already reached the dialog.
+    fn answers_save_dialog(&self, message: &Message) -> bool {
+        self.pending.is_some() && matches!(message, Message::Save)
     }
     fn perform(&mut self, action: Pending) -> Task<Message> {
         match action {
@@ -764,7 +784,7 @@ impl App {
                 self.arrows = Default::default();
                 self.graphic_width_input = reshiki::style::DEFAULT.line_width_pt.to_string();
                 self.graphic_stroke_input = "#000000".into();
-                self.graphic_fill_input = "#DCEFE9".into();
+                self.graphic_fill_input.clear();
                 self.color_scope = Default::default();
                 self.bond_color_input = "#000000".into();
                 self.tool = Tool::Select;
@@ -774,15 +794,24 @@ impl App {
                     iced::advanced::widget::operation::focusable::unfocus(),
                 )
             }
-            Pending::Open => {
+            Pending::Open(path) => {
                 let key = self.file_request_key();
                 Task::perform(
                     async {
-                        let file = rfd::AsyncFileDialog::new()
-                            .set_title("Open a ReShiki, MOL, RXN, CDXML, or SMILES document")
-                            .pick_file()
-                            .await?;
-                        files::read(file.path().to_path_buf()).await
+                        let path = match path {
+                            Some(path) => path,
+                            // Accept supported extensions without relying on macOS
+                            // type registration; the worker validates the content.
+                            None => rfd::AsyncFileDialog::new()
+                                .set_title(
+                                    "Open a ReShiki, MOL, RXN, CDXML, CDX or SMILES document",
+                                )
+                                .pick_file()
+                                .await?
+                                .path()
+                                .to_path_buf(),
+                        };
+                        files::read(path).await
                     },
                     move |opened| Message::FilePrepared(key, opened),
                 )
@@ -860,6 +889,24 @@ impl App {
         if self.updates.restarting && !matches!(message, Message::Updates(_)) {
             return Task::none();
         }
+        // Before the atom label editor, which ignores other messages: it must
+        // never open under the popover.
+        if self.style_menu.is_some() {
+            if matches!(message, Message::Escape) {
+                return self.style_menu_action(self.style_menu_escape());
+            }
+            if !color_popover::keeps_open(&message) {
+                self.close_style_menu();
+            }
+        }
+        if let Message::Imports(
+            action @ (import::Action::Hovered(_)
+            | import::Action::Dropped(_)
+            | import::Action::Left),
+        ) = message
+        {
+            return self.import_drag(action);
+        }
         if let Message::AtomText(action) = message {
             return self.atom_text_action(action);
         }
@@ -867,7 +914,7 @@ impl App {
             if matches!(message, Message::Escape) {
                 return self.atom_text_action(atom_text::Action::Cancel);
             }
-            if !atom_text::background(&message) {
+            if !atom_text::background(&message) && !self.answers_save_dialog(&message) {
                 return Task::none();
             }
         }
@@ -882,6 +929,10 @@ impl App {
             self.context_menu = None;
             return Task::none();
         }
+        if self.imports.menu && matches!(message, Message::Escape) {
+            self.imports.menu = false;
+            return Task::none();
+        }
         if !matches!(
             message,
             Message::Canvas(Edit::Hover(_))
@@ -891,8 +942,13 @@ impl App {
                 | Message::InspectorAction(_)
                 | Message::Viewport(_)
                 | Message::Updates(_)
+                | Message::Imports(import::Action::Loaded(..))
         ) {
             self.context_menu = None;
+            self.inspector_ui.close_menu();
+            if !matches!(message, Message::Imports(import::Action::Menu(_))) {
+                self.imports.menu = false;
+            }
         }
         if let Message::InspectorAction(action) = message {
             return self.inspector_action(action);
@@ -1007,10 +1063,12 @@ impl App {
                         printing::Action::Prepared(..) | printing::Action::Finished(..)
                     )
                     | Message::Pictures(pictures::Action::Loaded(..))
+                    | Message::Imports(import::Action::Loaded(..))
                     | Message::Opened(_)
                     | Message::ClipboardRead { .. }
                     | Message::ClipboardWritten { .. }
-            ) {
+            ) && !self.answers_save_dialog(&message)
+            {
                 if !matches!(message, Message::Canvas(_)) {
                     self.status = "Apply or cancel the cleanup preview to continue editing".into();
                 }
@@ -1043,6 +1101,7 @@ impl App {
             && matches!(&message, Message::Canvas(Edit::Select(ids)) if ids.iter().any(|id| self.doc.annotations.iter().any(|a| a.id == *id) || self.doc.graphics.iter().any(|g|g.id==*id))));
         match message {
             Message::DrawingStyle(action) => return self.drawing_style_action(action),
+            Message::Imports(action) => return self.import_action(action),
             Message::Pages(action) => return self.page_action(action),
             Message::Printing(action) => return self.print_action(action),
             Message::Pictures(action) => return self.picture_action(action),
@@ -1054,6 +1113,7 @@ impl App {
             | Message::Join(_)
             | Message::Escape => {}
             Message::ContextKey(key) => return self.context_key(&key),
+            Message::StyleMenu(action) => return self.style_menu_action(action),
             Message::Shortcut(action) => return self.shortcut_action(action),
             Message::AromaticDisplay => {
                 if self.selected.is_empty() {
@@ -1190,13 +1250,15 @@ impl App {
             }
             Message::BondColor(value) => self.bond_color_input = value,
             Message::ApplyBondColor => {
-                if let Some(color) = graphics::parse_color(&self.bond_color_input) {
+                if let Some(rgb) = graphics::parse_color(&self.bond_color_input) {
+                    let color = reshiki::palette::Color::Custom(rgb);
                     let before = self.doc.clone();
                     for bond in &mut self.doc.bonds {
                         if self.selected.contains(&bond.a) && self.selected.contains(&bond.b) {
                             bond.color = color;
                         }
                     }
+                    self.remember_custom(Some(color), &before);
                     self.changed(before);
                 } else {
                     self.error = true;
@@ -1237,7 +1299,11 @@ impl App {
                         self.selected = ids;
                         self.changed(before);
                         self.tool = Tool::Select;
-                        self.status="Grouped · Option/Alt-click selects a member · Shift+Cmd/Ctrl+G ungroups".into();
+                        self.status = format!(
+                            "Grouped · {}-click selects a member · {} ungroups",
+                            shortcuts::keys(iced::keyboard::Modifiers::ALT, ""),
+                            shortcuts::label(&Message::Ungroup).unwrap_or_default()
+                        );
                     }
                     Err(e) => {
                         self.status = e;
@@ -1290,7 +1356,9 @@ impl App {
             Message::GraphicStroke(s) => self.graphic_stroke_input = s,
             Message::ApplyGraphicStroke => {
                 if let Some(c) = graphics::parse_color(&self.graphic_stroke_input) {
-                    self.apply_graphic_style(GraphicChange::Stroke(c));
+                    self.apply_graphic_style(GraphicChange::Stroke(
+                        reshiki::palette::Color::Custom(c),
+                    ));
                 } else {
                     self.error = true;
                     self.status = "Enter a six-digit hex color, such as #117E6C".into();
@@ -1299,7 +1367,9 @@ impl App {
             Message::GraphicFill(s) => self.graphic_fill_input = s,
             Message::ApplyGraphicFill => {
                 if let Some(c) = graphics::parse_color(&self.graphic_fill_input) {
-                    self.apply_graphic_style(GraphicChange::Fill(Some(c)));
+                    self.apply_graphic_style(GraphicChange::Fill(Some(
+                        reshiki::palette::Color::Custom(c),
+                    )));
                 } else {
                     self.error = true;
                     self.status = "Enter a six-digit hex color, such as #DCEFE9".into();
@@ -1411,7 +1481,6 @@ impl App {
                 }
                 self.changed(before);
             }
-            Message::GraphicLayer(front) => self.layer_objects(front, true, false),
             Message::ToggleInspector => {
                 self.inspector_open = !self.inspector_open;
                 if self.inspector_open && self.inspector_tab == InspectorTab::Assistant {
@@ -1449,14 +1518,14 @@ impl App {
                 }
                 self.inspector_tab = tab;
                 self.inspector_open = true;
-            }
-            Message::ToggleImport => {
-                self.import_open = !self.import_open;
-                if self.import_open {
+                if tab == InspectorTab::Import {
                     self.help_open = false;
+                    return iced::widget::operation::focus(import::INPUT);
                 }
             }
-            Message::InsertInput => return self.run(input_request(&self.smiles), Job::Insert),
+            Message::InsertInput => {
+                return self.run(input_request(&self.imports.input.text()), Job::Insert);
+            }
             Message::ToggleHelp => {
                 self.help_open = !self.help_open;
                 if self.help_open {
@@ -1529,30 +1598,26 @@ impl App {
                 self.color_scope = scope;
                 self.sync_color_input();
                 if scope == typography::ColorScope::Rings {
-                    self.status =
-                        "Ring interiors · Select a ring, then choose a color in the top toolbar"
-                            .into();
+                    self.status = "Ring interiors · Select a ring, then choose a Tint color".into();
                 }
             }
-            Message::TextColor(value) => self.text_color_input = value,
+            Message::TextColor(value) => {
+                self.text_color_input = value;
+                self.flag_color_input(false);
+            }
             Message::ApplyTextColor => {
-                let hex = self.text_color_input.trim().trim_start_matches('#');
-                if hex.len() == 6
-                    && let Ok(value) = u32::from_str_radix(hex, 16)
-                {
-                    let color = self.doc.canvas_theme.color([
-                        (value >> 16) as u8,
-                        (value >> 8) as u8,
-                        value as u8,
-                    ]);
+                if let Some(rgb) = reshiki::palette::parse_color(&self.text_color_input) {
+                    // Typed colors are exact on both canvases.
+                    let color = reshiki::palette::Color::Custom(rgb);
                     if self.color_scope == typography::ColorScope::Rings {
-                        self.apply_ring_color_kind(Some(color), true);
+                        self.apply_ring_color(Some(color));
                     } else {
                         self.apply_text_style(reshiki::typography::StyleChange::Color(color));
                     }
                 } else {
                     self.error = true;
-                    self.status = "Enter a color such as #174A7E".into();
+                    self.status = color_popover::HINT.into();
+                    self.flag_color_input(true);
                 }
             }
             Message::TextAlign(alignment) => self.apply_paragraph(Some(alignment), None, None),
@@ -1574,7 +1639,6 @@ impl App {
                         "Text width must be 10–2000 pt, or blank for automatic width".into();
                 }
             }
-            Message::Smiles(s) => self.smiles = s,
             Message::Isotope(s) => self.isotope = s,
             Message::RingSize(n) => {
                 self.toolbar.ring = Tool::Ring;
@@ -1665,7 +1729,7 @@ impl App {
                     return Task::none();
                 }
                 let selection = editing::selection(&self.doc, &self.selected);
-                if let Ok(json) = serde_json::to_string(&selection) {
+                if let Ok(json) = serde_json::to_string(&selection.current()) {
                     if cut {
                         let before = self.doc.clone();
                         self.doc.delete(&self.selected);
@@ -1691,13 +1755,12 @@ impl App {
             Message::Pasted(contents) => {
                 if let Some(contents) = contents.filter(|s| !s.trim().is_empty()) {
                     if let Some(json) = editing::clipboard_json(&contents) {
-                        match serde_json::from_str::<Document>(json)
-                            .map_err(|e| e.to_string())
-                            .and_then(|d| {
-                                d.validate()?;
-                                Ok(d)
-                            }) {
+                        match Document::from_json(json.as_bytes()) {
                             Ok(part) => {
+                                let part = reshiki::canvas_theme::for_native_paste(
+                                    part,
+                                    self.doc.canvas_theme,
+                                );
                                 let center = editing::center(&part, &part.all_ids());
                                 let before = self.doc.clone();
                                 self.selected = editing::append(
@@ -1807,6 +1870,9 @@ impl App {
             }
             Message::DismissRecovery => {
                 self.recovered.clear();
+                if self.status.is_empty() {
+                    self.status = READY.into();
+                }
             }
             Message::Canvas(edit) => self.edit(edit),
             Message::Appearance(mode) => {
@@ -1863,9 +1929,11 @@ impl App {
                 self.fit_to_view = false;
                 self.camera.zoom = (self.camera.zoom * f).clamp(0.005, 5.0);
             }
-            Message::Import => return self.run(input_request(&self.smiles), Job::Import),
+            Message::Import => {
+                return self.run(input_request(&self.imports.input.text()), Job::Import);
+            }
             Message::Example(smiles) => {
-                self.smiles = smiles.into();
+                self.imports.set_text(smiles);
                 return self.run(Request::import_smiles(smiles), Job::Insert);
             }
             Message::Analyze => {
@@ -2173,7 +2241,7 @@ impl App {
                 }
             }
             Message::New => return self.pending(Pending::New),
-            Message::Open => return self.pending(Pending::Open),
+            Message::Open => return self.pending(Pending::Open(None)),
             Message::Close(id) => return self.pending(Pending::Close(id)),
             Message::Cancel => self.pending = None,
             Message::Discard => {
@@ -2232,8 +2300,7 @@ impl App {
                         };
                         let save_path = path.clone();
                         tokio::task::spawn_blocking(move || {
-                            let bytes = serde_json::to_vec_pretty(save_snapshot.as_ref())
-                                .map_err(|e| e.to_string())?;
+                            let bytes = save_snapshot.file_json()?;
                             #[cfg(windows)]
                             if office_save {
                                 reshiki_windows::prepare_office_save(&save_path);
@@ -2924,8 +2991,8 @@ impl App {
             .iter()
             .find(|b| self.selected.contains(&b.a) && self.selected.contains(&b.b))
         {
-            let [r, g, b] = b.color;
-            self.bond_color_input = format!("#{r:02X}{g:02X}{b:02X}");
+            self.bond_color_input =
+                reshiki::palette::hex(reshiki::palette::Palette::of(&self.doc).rgb(b.color));
         }
     }
     fn apply_current_bond_preset(&mut self, a: u64, b: u64) {
@@ -3006,8 +3073,8 @@ fn chemistry_changed(before: &Document, after: &Document) -> bool {
             let mut b = b.clone();
             a.z_order = 0;
             b.z_order = 0;
-            a.color = [0, 0, 0];
-            b.color = [0, 0, 0];
+            a.color = Default::default();
+            b.color = Default::default();
             a.double_position = Default::default();
             b.double_position = Default::default();
             a.secondary_display = None;
@@ -3065,14 +3132,6 @@ async fn save_export(bytes: Vec<u8>, format: &'static str) -> Result<Option<Path
 }
 fn input_request(text: &str) -> Request {
     reshiki::clipboard::text_request(text)
-}
-
-fn platform_shortcut(macos: &'static str, other: &'static str) -> &'static str {
-    if cfg!(target_os = "macos") {
-        macos
-    } else {
-        other
-    }
 }
 
 #[cfg(test)]
@@ -3229,6 +3288,31 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn dismissing_the_recovery_offer_restores_the_ready_message() {
+        use reshiki::recovery::Snapshot;
+        let (mut app, _) = App::new();
+        let candidate = Candidate {
+            path: "draft.json".into(),
+            snapshot: Snapshot {
+                document: Document::default(),
+                source: None,
+                saved_at: 0,
+            },
+        };
+        // At launch the offer replaces the ready message.
+        app.recovered = vec![candidate.clone()];
+        app.status.clear();
+        let _ = app.update(Message::DismissRecovery);
+        assert!(app.recovered.is_empty());
+        assert_eq!(app.status, READY);
+        // A newer message stays.
+        app.recovered = vec![candidate];
+        app.status = "Drawing updated".into();
+        let _ = app.update(Message::DismissRecovery);
+        assert_eq!(app.status, "Drawing updated");
+    }
+
     fn checked_labels(app: &mut App) {
         let mut checked = app.doc.clone();
         for atom in &mut checked.atoms {
@@ -3262,7 +3346,7 @@ mod tests {
         let methyl = app.doc.add_atom("C", Point::new(36.373, 21.));
         app.doc.add_bond(c, o, 2, "plain");
         app.doc.add_bond(c, methyl, 1, "plain");
-        app.doc.bonds[0].color = [32, 80, 145];
+        app.doc.bonds[0].color = reshiki::palette::Color::Custom([32, 80, 145]);
         app.doc.atom_mut(c).unwrap().label_h = 1;
         let original = app.doc.clone();
         let mut scenes = std::collections::BTreeSet::new();
@@ -3539,18 +3623,20 @@ mod tests {
         app.selected = editing::ring(&mut app.doc, Point::default(), 6, true, 0.);
         let original = app.doc.clone();
         let _ = app.update(Message::ColorScope(typography::ColorScope::Rings));
+        let tint = reshiki::palette::Color::Palette(
+            reshiki::palette::Hue::Blue,
+            reshiki::palette::Row::Tint,
+        );
         let _ = app.update(Message::TextStyle(reshiki::typography::StyleChange::Color(
-            [201, 224, 248],
+            tint,
         )));
         assert_eq!(app.doc.ring_fills.len(), 1);
         assert_eq!(app.doc.atoms, original.atoms);
         assert_eq!(app.doc.bonds, original.bonds);
-        assert_eq!(
-            app.current_selection_color(),
-            Some(reshiki::ring_fills::palette_color(
-                [201, 224, 248],
-                app.doc.canvas_theme
-            ))
+        assert_eq!(app.current_selection_color(), Some(tint));
+        assert!(
+            app.doc.recent_colors.is_empty(),
+            "palette colors are not recent customs"
         );
         let colored = app.doc.clone();
         let _ = app.update(Message::ClearRingFill);
@@ -3573,8 +3659,8 @@ mod tests {
         let _ = app.update(Message::TextColor("#C9E0F8".into()));
         let _ = app.update(Message::ApplyTextColor);
         let fill = app.doc.ring_fills.first().unwrap();
-        assert!(fill.fixed_color);
-        assert_eq!(fill.visible_color(app.doc.canvas_theme), [201, 224, 248]);
+        assert_eq!(fill.color, reshiki::palette::Color::Custom([201, 224, 248]));
+        assert_eq!(app.doc.recent_colors, [[201, 224, 248]]);
         assert_eq!(app.text_color_input, "#C9E0F8");
         let _ = app.update(Message::Undo);
         assert_eq!(app.doc, original);
@@ -3983,7 +4069,7 @@ mod tests {
         app.graphic_style.width_pt = 3.;
         app.caption_format.style.family = "Times New Roman".into();
         app.caption_format.style.size_pt = 18.;
-        app.caption_format.style.color = [190, 30, 40];
+        app.caption_format.style.color = reshiki::palette::Color::Custom([190, 30, 40]);
         app.caption_format.style.bold = true;
         let _ = app.update(Message::DrawingLength("30".into()));
         let _ = app.update(Message::FixedLength(false));
@@ -4085,7 +4171,7 @@ mod tests {
             Point::new(0., 80.),
             Point::new(84., 120.),
             GraphicStyle {
-                fill: Some([200, 200, 200]),
+                fill: Some(reshiki::palette::Color::Custom([200, 200, 200])),
                 ..Default::default()
             },
             Default::default(),
@@ -4098,10 +4184,13 @@ mod tests {
         app.caption_action(Action::Select(Motion::Right));
         assert_eq!(app.text_range(), Some(0..2));
         let original = app.doc.clone();
-        let red = [180, 50, 55];
+        let red = reshiki::palette::Color::Custom([180, 50, 55]);
         let _ = app.update(Message::TextStyle(StyleChange::Color(red)));
         assert_eq!(app.doc.annotations[0].format.at(0).color, red);
-        assert_eq!(app.doc.annotations[0].format.at(3).color, [0; 3]);
+        assert_eq!(
+            app.doc.annotations[0].format.at(3).color,
+            reshiki::palette::Color::Ink
+        );
         assert_eq!(app.doc.graphics, original.graphics);
         let _ = app.update(Message::Undo);
         assert_eq!(app.doc, original);
@@ -4149,8 +4238,12 @@ mod tests {
             style: reshiki::atom_labels::number_style(),
         });
         let original = app.doc.clone();
-        let blue = [32, 80, 145];
-        let red = [180, 50, 55];
+        let blue = reshiki::palette::Color::Palette(
+            reshiki::palette::Hue::Blue,
+            reshiki::palette::Row::Strong,
+        );
+        // Typed colors are custom and exact.
+        let red = reshiki::palette::Color::Custom([180, 50, 55]);
         let _ = app.update(Message::SelectAll);
         let _ = app.update(Message::TextStyle(StyleChange::Color(blue)));
         assert!(
@@ -4219,7 +4312,10 @@ mod tests {
         let _ = app.update(Message::BondPosition(DoublePosition::Left));
         let _ = app.update(Message::BondColor("#205091".into()));
         let _ = app.update(Message::ApplyBondColor);
-        assert_eq!(app.doc.bonds[0].color, [32, 80, 145]);
+        assert_eq!(
+            app.doc.bonds[0].color,
+            reshiki::palette::Color::Custom([32, 80, 145])
+        );
         assert_eq!(app.doc.bonds[1], other);
         let _ = app.update(Message::ApplyBondPreset(BondPreset::HollowWedge));
         assert_eq!(app.doc.bonds[0].display, "hollow_wedge");
@@ -4385,7 +4481,9 @@ mod tests {
         ));
         let id = app.doc.graphics[0].id;
         assert_eq!(app.tool, Tool::Select);
-        app.apply_graphic_style(GraphicChange::Stroke([32, 80, 145]));
+        app.apply_graphic_style(GraphicChange::Stroke(reshiki::palette::Color::Custom([
+            32, 80, 145,
+        ])));
         let before = app.doc.clone();
         let _ = app.update(Message::Tool(Tool::EditPoints));
         app.edit(Edit::GraphicPoint(id, 1, Point::new(20., -50.)));
@@ -4401,7 +4499,9 @@ mod tests {
         assert!(app.analysis.is_some());
         let _ = app.update(Message::Tool(Tool::Graphic(GraphicKind::Ellipse)));
         assert!(app.selected.is_empty());
-        app.apply_graphic_style(GraphicChange::Stroke([180, 50, 55]));
+        app.apply_graphic_style(GraphicChange::Stroke(reshiki::palette::Color::Custom([
+            180, 50, 55,
+        ])));
         assert_eq!(
             app.doc, after,
             "new drawing style must not change the previous object"
@@ -4928,8 +5028,10 @@ mod tests {
                 .enable_all()
                 .build()
                 .unwrap();
-            let opened =
-                runtime.block_on(files::prepare_contents(path.clone(), Ok(contents.clone())));
+            let opened = runtime.block_on(files::prepare_contents(
+                path.clone(),
+                Ok(contents.clone().into_bytes()),
+            ));
             let _ = app.update(Message::FilePrepared(key, opened));
             assert!(!app.error && !app.dirty(), "{extension}: {}", app.status);
             assert_eq!(app.doc, document);
@@ -4939,6 +5041,35 @@ mod tests {
             assert!(app.camera.zoom > Camera::default().zoom);
             assert!(app.camera.zoom <= 2.5);
         }
+    }
+
+    #[test]
+    fn drawings_from_a_newer_reshiki_ask_for_an_update_and_keep_the_current_drawing() {
+        let (mut app, _) = App::new();
+        app.doc.add_atom("O", Point::default());
+        let before = app.doc.clone();
+        let newer = format!(
+            r#"{{"version": {}, "atoms": [], "bonds": [], "future": "blue.strong"}}"#,
+            reshiki::document::VERSION + 1
+        );
+        let path = PathBuf::from("newer.rsk");
+        let task = app.update(Message::Opened(Some((
+            path.clone(),
+            Ok(newer.clone().into_bytes()),
+        ))));
+        assert!(task.units() > 0);
+        files::finish_dispatched_open(&mut app, path, Ok(newer.into_bytes()));
+        assert!(app.error);
+        assert!(
+            app.status.ends_with(&format!(
+                "This drawing was made with a newer version of ReShiki (document version {}). Update ReShiki to open it.",
+                reshiki::document::VERSION + 1
+            )),
+            "{}",
+            app.status
+        );
+        assert_eq!(app.doc, before);
+        assert_eq!(app.path, None);
     }
 
     #[test]
@@ -4952,6 +5083,63 @@ mod tests {
             Ok(Some("example.reshiki".into())),
         ));
         assert!(app.dirty());
+    }
+
+    #[test]
+    fn unsaved_changes_wait_for_one_save_dialog_answer() {
+        let (mut app, _) = App::new();
+        app.doc.add_atom("O", Point::default());
+        let edited = app.doc.clone();
+        let window = iced::window::Id::unique();
+        assert!(app.update(Message::Close(window)).units() > 0);
+        assert!(matches!(app.pending, Some(Pending::Close(id)) if id == window));
+        // Further requests are ignored while the dialog is open.
+        for message in [Message::Close(window), Message::New, Message::Open] {
+            assert_eq!(app.update(message).units(), 0);
+        }
+        assert!(matches!(app.pending, Some(Pending::Close(_))));
+        let _ = app.update(Message::Cancel);
+        assert!(app.pending.is_none());
+        assert_eq!(app.doc, edited);
+        let _ = app.update(Message::New);
+        let _ = app.update(Message::Discard);
+        assert!(app.pending.is_none());
+        assert!(app.doc.all_ids().is_empty());
+    }
+
+    #[test]
+    fn save_answer_continues_only_after_the_drawing_is_saved() {
+        let (mut app, _) = App::new();
+        app.doc.add_atom("O", Point::default());
+        let _ = app.update(Message::New);
+        // Cancelling Save As cancels New too, so a later save does not continue it.
+        let epoch = app.file_epoch;
+        let _ = app.update(Message::Saved(epoch, Box::new(app.doc.clone()), Ok(None)));
+        assert!(app.pending.is_none());
+        let saved = Ok(Some(PathBuf::from("drawing.reshiki")));
+        let _ = app.update(Message::Saved(
+            epoch,
+            Box::new(app.doc.clone()),
+            saved.clone(),
+        ));
+        assert_eq!(app.doc.atoms.len(), 1);
+        app.doc.add_atom("N", Point::new(80., 0.));
+        let _ = app.update(Message::New);
+        let _ = app.update(Message::Saved(epoch, Box::new(app.doc.clone()), saved));
+        assert!(app.pending.is_none());
+        assert!(app.doc.all_ids().is_empty() && app.path.is_none());
+    }
+
+    #[test]
+    fn save_answer_passes_an_open_atom_editor() {
+        let (mut app, _) = App::new();
+        let atom = app.doc.add_atom("C", Point::default());
+        app.selected = vec![atom];
+        let _ = app.update(Message::AtomText(atom_text::Action::Begin(None)));
+        assert_eq!(app.update(Message::Save).units(), 0);
+        let _ = app.update(Message::Close(iced::window::Id::unique()));
+        assert!(app.pending.is_some());
+        assert!(app.update(Message::Save).units() > 0);
     }
 
     #[test]
@@ -4974,7 +5162,7 @@ mod tests {
         assert!(app.doc.all_ids().is_empty());
         assert!(!app.busy && !app.dirty() && !app.history.can_undo());
         assert!(app.analysis.is_none() && app.path.is_none());
-        assert!(app.smiles.is_empty());
+        assert!(app.imports.is_blank());
     }
 
     #[test]

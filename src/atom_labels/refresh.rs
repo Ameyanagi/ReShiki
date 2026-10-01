@@ -176,7 +176,7 @@ fn components(document: &Document) -> Vec<Document> {
     for bond in &document.bonds {
         let mut bond = bond.clone();
         bond.cip_label = None;
-        bond.color = [0, 0, 0];
+        bond.color = crate::palette::Color::Ink;
         bond.indicator = Default::default();
         bond.z_order = 0;
         bond.double_position = Default::default();

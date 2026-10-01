@@ -96,6 +96,16 @@ impl Oklch {
     }
 }
 
+/// Perceptual distance: Euclidean OKLab distance ×100.
+pub fn delta_e(a: Rgb, b: Rgb) -> f64 {
+    let lab = |rgb| {
+        let Oklch { l, c, h } = Oklch::from_rgb(rgb);
+        [l, c * h.cos(), c * h.sin()]
+    };
+    let ([l1, a1, b1], [l2, a2, b2]) = (lab(a), lab(b));
+    100. * ((l1 - l2).powi(2) + (a1 - a2).powi(2) + (b1 - b2).powi(2)).sqrt()
+}
+
 /// Find nearby ink at the source hue, checking every background after gamut
 /// mapping and 8-bit rounding. None means no passing candidate was found; callers
 /// must report the conflict, not silently overwrite an explicit user color.

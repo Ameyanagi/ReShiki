@@ -1,34 +1,60 @@
-import { catalog, hex } from "./color-reference";
+import { catalog } from "./color-reference";
 import {
   inspector,
   paletteTiles,
-  supportingTiles,
+  paperChips,
+  parseSwatch,
+  selectedKey,
+  themeStrip,
+  valuesTable,
   type Selection,
   type Mode,
 } from "./color-explorer";
+
+/** One tab stop per group; arrow keys, Home and End move within it. */
+function roving(group: HTMLElement) {
+  group.addEventListener("focusin", (event) => {
+    if (event.target instanceof HTMLButtonElement) setTabStop(group, event.target);
+  });
+  group.addEventListener("keydown", (event) => {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    const buttons = [...group.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
+    const current = buttons.indexOf(event.target as HTMLButtonElement);
+    if (current < 0) return;
+    event.preventDefault();
+    const index =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? buttons.length - 1
+          : (current + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
+    buttons[index]?.focus();
+  });
+}
+
+function setTabStop(group: HTMLElement, preferred?: HTMLButtonElement) {
+  const buttons = [...group.querySelectorAll<HTMLButtonElement>("button")];
+  const enabled = buttons.filter((button) => !button.disabled);
+  const stop =
+    (preferred && enabled.includes(preferred) ? preferred : undefined) ||
+    enabled.find((button) => button.tabIndex === 0) ||
+    enabled.find((button) => button.getAttribute("aria-pressed") === "true") ||
+    enabled[0];
+  for (const button of buttons) button.tabIndex = button === stop ? 0 : -1;
+}
 
 export function initExplorer() {
   const root = document.querySelector<HTMLDivElement>("#color-reference");
   if (!root) return;
   const elements = root.querySelector<HTMLDivElement>("#cr-elements")!;
+  const papers = [...root.querySelectorAll<HTMLDivElement>("[data-paper]")];
   const search = root.querySelector<HTMLInputElement>("#cr-search")!;
   const status = root.querySelector<HTMLParagraphElement>("#cr-copy-status")!;
   const menu = root.querySelector<HTMLDetailsElement>(".cr-download-menu")!;
   let theme = catalog.themes[0];
   let mode: Mode = "light";
-  let selected: Selection = { kind: "element", index: 6 };
+  let selected: Selection = { kind: "swatch", mode: "light", row: "strong", index: 5 };
   let copyTimer: ReturnType<typeof setTimeout>;
-
-  function setTabStop(preferred?: HTMLButtonElement) {
-    const buttons = [...elements.querySelectorAll<HTMLButtonElement>(".cr-tile")];
-    const enabled = buttons.filter((button) => !button.disabled);
-    const stop =
-      (preferred && enabled.includes(preferred) ? preferred : undefined) ||
-      enabled.find((button) => button.tabIndex === 0) ||
-      enabled.find((button) => button.getAttribute("aria-pressed") === "true") ||
-      enabled[0];
-    for (const button of buttons) button.tabIndex = button === stop ? 0 : -1;
-  }
 
   function filter() {
     const query = search.value.trim().toLowerCase();
@@ -42,7 +68,7 @@ export function initExplorer() {
       tile.disabled = !matches;
       if (matches) count++;
     }
-    setTabStop();
+    setTabStop(elements);
     root!.querySelector("#cr-count")!.textContent = count
       ? `${count} element${count === 1 ? "" : "s"}${query ? " found" : ""}`
       : "No matches. Try N or 7.";
@@ -56,12 +82,13 @@ export function initExplorer() {
         String(selected.kind === "element" && Number(tile.dataset.element) === selected.index),
       );
     }
-    for (const tile of root!.querySelectorAll<HTMLButtonElement>("[data-support]")) {
-      tile.setAttribute(
-        "aria-pressed",
-        String(selected.kind === "role" && tile.dataset.support === selected.name),
-      );
+    const key = selectedKey(selected);
+    for (const chip of root!.querySelectorAll<HTMLButtonElement>("[data-swatch]")) {
+      chip.setAttribute("aria-pressed", String(chip.dataset.swatch === key));
     }
+    root!
+      .querySelector<HTMLAnchorElement>(".cr-back")!
+      .setAttribute("href", selected.kind === "element" ? "#cr-palette" : "#cr-swatches");
     if (scroll && window.matchMedia("(max-width: 1050px)").matches) {
       root!.querySelector("#cr-inspector")!.scrollIntoView({
         block: "start",
@@ -75,25 +102,23 @@ export function initExplorer() {
   function update() {
     root!.dataset.canvasMode = mode;
     root!.querySelector("#cr-description")!.textContent =
-      `Colors as they appear on ${mode === "light" ? "white" : "black"} paper.`;
-    root!.querySelector("#cr-support-colors")!.innerHTML = supportingTiles(theme, mode);
+      `Colors as they appear on ${mode === "light" ? "white" : "black"} paper.${
+        theme.id === "publication" ? " Publication labels every element in Ink." : ""
+      }`;
     for (const button of root!.querySelectorAll<HTMLButtonElement>("button[data-canvas-mode]")) {
       button.setAttribute("aria-pressed", String(button.dataset.canvasMode === mode));
     }
     for (const card of root!.querySelectorAll<HTMLButtonElement>("[data-theme-id]")) {
-      const palette = catalog.themes.find((item) => item.id === card.dataset.themeId)!;
-      card.querySelectorAll<HTMLElement>(".cr-theme-strip > span").forEach((swatch, index) => {
-        swatch.style.background = hex(
-          palette.modes[mode].elements[[6, 7, 14, 15, 16, 52][index]].label,
-        );
-      });
+      const item = catalog.themes.find((entry) => entry.id === card.dataset.themeId)!;
+      card.querySelector(".cr-theme-strip")!.innerHTML = themeStrip(item, mode);
+      card.setAttribute("aria-pressed", String(item.id === theme.id));
     }
+    for (const paper of papers) {
+      paper.innerHTML = paperChips(theme, selected, paper.dataset.paper as Mode);
+    }
+    root!.querySelector("#cr-values")!.innerHTML = valuesTable(theme);
+    root!.querySelector("#cr-swatch-theme")!.textContent = theme.name;
     elements.innerHTML = paletteTiles(theme, selected, mode);
-    for (const button of root!.querySelectorAll("[data-theme-id]"))
-      button.setAttribute(
-        "aria-pressed",
-        String((button as HTMLElement).dataset.themeId === theme.id),
-      );
     const native = root!.querySelector<HTMLAnchorElement>("#cr-native")!;
     native.href = `/colors/${theme.id}.reshiki-theme`;
     native.querySelector("small")!.textContent = `${theme.name} · both modes`;
@@ -114,8 +139,8 @@ export function initExplorer() {
     } else if (button.dataset.element) {
       selected = { kind: "element", index: Number(button.dataset.element) };
       showSelection(true);
-    } else if (button.dataset.support) {
-      selected = { kind: "role", name: button.dataset.support };
+    } else if (button.dataset.swatch) {
+      selected = parseSwatch(button.dataset.swatch);
       showSelection(true);
     } else if (button.dataset.copy) {
       try {
@@ -139,24 +164,8 @@ export function initExplorer() {
       filter();
     }
   });
-  // Move through the palette without tabbing through all 118 tiles.
-  elements.addEventListener("focusin", (event) => {
-    if (event.target instanceof HTMLButtonElement) setTabStop(event.target);
-  });
-  elements.addEventListener("keydown", (event) => {
-    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-    const buttons = [...elements.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
-    const current = buttons.indexOf(event.target as HTMLButtonElement);
-    if (current < 0) return;
-    event.preventDefault();
-    const index =
-      event.key === "Home"
-        ? 0
-        : event.key === "End"
-          ? buttons.length - 1
-          : (current + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
-    buttons[index]?.focus();
-  });
+  // Move through the palette and the periodic table without tabbing through every color.
+  for (const group of [elements, ...papers]) roving(group);
   document.addEventListener("click", (event) => {
     if (!menu.contains(event.target as Node)) menu.open = false;
   });

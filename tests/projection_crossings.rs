@@ -6,7 +6,7 @@ use reshiki::{
     scene::{self, Primitive},
 };
 
-const BLUE: [u8; 3] = [32, 80, 145];
+const BLUE: reshiki::palette::Color = reshiki::palette::Color::Custom([32, 80, 145]);
 
 #[test]
 fn crossings_interpolate_depth_at_the_intersection_not_the_bond_midpoint() -> Result<(), String> {

@@ -98,6 +98,7 @@ impl Reference {
             light: palette(&self.light, &self.light_tile_seeds),
             dark: palette(&self.dark, &self.dark_tile_seeds),
             generator: None,
+            hues: Default::default(),
         }
         .validate()?;
         if [self.light.len(), self.dark.len()] != [118, 118] {

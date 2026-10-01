@@ -1,15 +1,18 @@
 //! Commands for the object under a secondary click, or the current selection.
+use super::object_toolbar::Command;
 use super::workspace::horizontal_line;
 use super::{App, InspectorTab, Message, inspector};
 use crate::canvas::Tool;
-use iced::widget::{Space, button, column, container, mouse_area, opaque, scrollable, stack, text};
+use iced::widget::{
+    Space, button, column, container, mouse_area, opaque, rich_text, row, scrollable, stack, text,
+};
 use iced::{Border, Color, Element, Length, Point, Task};
 use reshiki::{
     bonds::BondPreset,
     editing::{Arrange, Transform},
 };
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub enum Page {
     #[default]
     Main,
@@ -17,6 +20,13 @@ pub enum Page {
     Bonds,
     Tilt,
     Attachments,
+    // Menus anchored under context row buttons.
+    AlignObjects,
+    Distribute,
+    Order,
+    Arrange,
+    /// The first n context row commands, folded into ⋯.
+    More(usize),
 }
 
 #[cfg(test)]
@@ -53,6 +63,51 @@ mod tests {
     }
 
     #[test]
+    fn row_menus_toggle_and_explain_unavailable_arrange_commands() -> Result<(), String> {
+        let (mut app, _) = App::new();
+        app.doc = reshiki::rings::Preset::Regular.document(42., false);
+        app.selected = app.doc.all_ids();
+        let before = app.doc.clone();
+        let open = Message::ContextMenu(Action::Open(Page::AlignObjects, 300.));
+        let _ = app.update(open.clone());
+        assert_eq!(
+            app.context_menu.as_ref().map(|m| m.page),
+            Some(Page::AlignObjects)
+        );
+        let _ = app.update(open);
+        assert!(
+            app.context_menu.is_none(),
+            "The same button closes its menu"
+        );
+        // One molecule is one object: alignment is unavailable and says why.
+        assert_eq!(
+            labels(&app, Page::Arrange),
+            [
+                "Align needs 2 objects",
+                "Distribute needs 3 objects",
+                "Bring to front",
+                "Send to back",
+                "Flip horizontal",
+                "Flip vertical",
+                "Rotate 180°"
+            ]
+        );
+        assert!(run_item(&mut app, Page::Arrange, "Align needs 2 objects").is_err());
+        assert_eq!(
+            labels(&app, Page::More(2)),
+            ["Move & attach…", "Group"],
+            "⋯ lists the folded commands in row order"
+        );
+        let _ = app.update(Message::ContextMenu(Action::Open(Page::Arrange, 300.)));
+        run_item(&mut app, Page::Arrange, "Flip horizontal")?;
+        assert!(app.context_menu.is_none());
+        assert_ne!(app.doc, before);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, before);
+        Ok(())
+    }
+
+    #[test]
     fn context_commands_follow_the_target_without_modifying_the_drawing() -> Result<(), String> {
         let (mut app, _) = App::new();
         app.doc = reshiki::rings::Preset::Regular.document(42., false);
@@ -73,7 +128,7 @@ mod tests {
         );
         app.selected = vec![atom];
         let single = labels(&app, Page::Main);
-        assert!(single.contains(&"Edit atom label…  Enter"));
+        assert!(single.contains(&"Edit atom label…"));
         assert!(!single.contains(&"3D tilt…"));
         assert!(!single.contains(&"Bond appearance…"));
         assert!(single.contains(&"Select molecule"));
@@ -279,9 +334,21 @@ mod tests {
         Ok(())
     }
 }
+const SHORTCUT_GAP: f32 = 12.;
+
+/// The shortcut shown right-aligned beside a command.
+fn shortcut(action: &Action) -> Option<String> {
+    match action {
+        Action::Run(message) => super::shortcuts::label(message),
+        _ => None,
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Action {
     Close,
+    /// Toggle a context row menu at this x offset over the canvas.
+    Open(Page, f32),
     Page(Page),
     Run(Box<Message>),
     Properties(bool),
@@ -291,6 +358,7 @@ pub(super) struct State {
     pub page: Page,
 }
 
+#[derive(Clone)]
 enum Entry {
     Item {
         label: &'static str,
@@ -348,7 +416,7 @@ impl App {
                 let mut entries = vec![];
                 if atoms && self.atom_text_target().is_some() {
                     entries.push(command(
-                        "Edit atom label…  Enter",
+                        "Edit atom label…",
                         Message::AtomText(super::atom_text::Action::Begin(None)),
                         true,
                     ));
@@ -532,7 +600,7 @@ impl App {
                 entries.push(command("Bond behind", Message::BondDepth(false), bonds));
                 if reshiki::rings::selected_cycle(&self.doc, &self.selected).is_some() {
                     entries.push(command(
-                        "Saturated ↔ Aromatic  Shift+R",
+                        "Saturated ↔ Aromatic",
                         Message::ToggleSelectedRing,
                         true,
                     ));
@@ -540,7 +608,7 @@ impl App {
                 if !reshiki::ring_fills::selected_cycles(&self.doc, &self.selected).is_empty() {
                     entries.push(command(
                         "Color ring interior…",
-                        Message::ColorScope(super::typography::ColorScope::Rings),
+                        Message::StyleMenu(super::color_popover::Action::RingColor),
                         true,
                     ));
                     entries.push(command(
@@ -567,6 +635,22 @@ impl App {
                 );
                 entries
             }
+            Page::AlignObjects => self.arrange_entries(&[&Command::HORIZONTAL, &Command::VERTICAL]),
+            Page::Distribute => self.arrange_entries(&[&Command::DISTRIBUTE]),
+            Page::Order => self.arrange_entries(&[&Command::ORDER]),
+            Page::Arrange => [
+                self.arrange_entries(&[&Command::HORIZONTAL, &Command::VERTICAL]),
+                self.arrange_entries(&[&Command::DISTRIBUTE]),
+                self.arrange_entries(&[&Command::ORDER]),
+                self.arrange_entries(&[&Command::TRANSFORM]),
+            ]
+            .join(&Separator),
+            Page::More(folded) => self
+                .context_commands()
+                .into_iter()
+                .take(folded)
+                .map(|c| command(c.menu, c.message, c.enabled))
+                .collect(),
             Page::Attachments => vec![
                 submenu("‹ Back", Page::Main),
                 Hint("Attach to selected atoms"),
@@ -595,9 +679,45 @@ impl App {
         }
     }
 
+    /// Groups of arrange commands that share one availability rule, or a
+    /// single disabled row saying what they need.
+    fn arrange_entries(&self, groups: &[&[Command]]) -> Vec<Entry> {
+        let mut commands = groups.iter().flat_map(|group| group.iter());
+        if let Some(first) = commands
+            .next()
+            .filter(|c| !c.enabled(self, self.alignment_count()))
+        {
+            return vec![Entry::Item {
+                label: first.unavailable(),
+                action: Action::Close,
+                enabled: false,
+            }];
+        }
+        groups
+            .iter()
+            .map(|group| {
+                group
+                    .iter()
+                    .map(|c| Entry::command(c.name(), c.message(), true))
+                    .collect::<Vec<_>>()
+            })
+            .collect::<Vec<_>>()
+            .join(&Entry::Separator)
+    }
+
     pub(super) fn context_action(&mut self, action: Action) -> Task<Message> {
         match action {
             Action::Close => self.context_menu = None,
+            Action::Open(page, x) => {
+                let open = self
+                    .context_menu
+                    .as_ref()
+                    .is_some_and(|menu| menu.page == page);
+                self.context_menu = (!open).then(|| State {
+                    position: Point::new(x, 0.),
+                    page,
+                });
+            }
             Action::Page(page) => {
                 let origin = self.context_menu.as_ref().map(|menu| {
                     let (position, _, _) = self.context_geometry(menu);
@@ -629,9 +749,33 @@ impl App {
     }
 
     fn context_geometry(&self, menu: &State) -> (Point, f32, f32) {
+        use super::workspace::{font_width, text_width};
         let header = usize::from(matches!(menu.page, Page::Main) && !self.selected.is_empty());
-        let count = self.context_entries(menu.page).len() + header;
-        let width = 232_f32.min((self.viewport.width - 12.).max(1.));
+        let entries = self.context_entries(menu.page);
+        let count = entries.len() + header;
+        // Wide enough for the longest label and its shortcut, as on Windows.
+        let content = entries
+            .iter()
+            .filter_map(|entry| match entry {
+                Entry::Item { label, action, .. } => Some(
+                    text_width(label, 12.)
+                        + shortcut(action).map_or(0., |keys| {
+                            SHORTCUT_GAP
+                                + super::shortcuts::spans(&keys)
+                                    .iter()
+                                    .map(|run| match run.font {
+                                        Some(font) => font_width(&run.text, 11., font),
+                                        None => text_width(&run.text, 11.),
+                                    })
+                                    .sum::<f32>()
+                        }),
+                ),
+                _ => None,
+            })
+            .fold(0., f32::max);
+        let width = (content + 30.)
+            .max(232.)
+            .min((self.viewport.width - 12.).max(1.));
         let height = ((count as f32 * 30.) + 12.).min((self.viewport.height - 12.).max(1.));
         let x = menu
             .position
@@ -655,13 +799,23 @@ impl App {
         };
         let item = |label: String, action: Action, enabled: bool| {
             let destructive = matches!(&action, Action::Run(message) if matches!(message.as_ref(), Message::Delete));
-            let label = text(label).size(12);
+            let label = text(label).size(12).width(Length::Fill);
             let label = if destructive {
                 label.style(crate::appearance::text_color(Color::from_rgb8(167, 59, 51)))
             } else {
                 label
             };
-            button(label)
+            let mut content = row![label]
+                .spacing(SHORTCUT_GAP)
+                .align_y(iced::Alignment::Center);
+            if let Some(keys) = shortcut(&action) {
+                content = content.push(
+                    rich_text(super::shortcuts::spans(&keys))
+                        .size(11)
+                        .style(super::workspace::muted_text),
+                );
+            }
+            button(content)
                 .padding([6, 10])
                 .width(Length::Fill)
                 .style(button::text)

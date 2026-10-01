@@ -55,7 +55,8 @@ fn caption(doc: &mut Document, text: &str, p: Point, size: f32, bold: bool, widt
     let mut format = TextFormat::default();
     format.style.size_pt = size;
     format.style.bold = bold;
-    format.style.color = if bold { [41, 62, 56] } else { [78, 90, 87] };
+    format.style.color =
+        reshiki::palette::Color::Custom(if bold { [41, 62, 56] } else { [78, 90, 87] });
     format.width_pt = Some(width);
     doc.annotations.push(Annotation {
         id: doc.next_id(),

@@ -25,12 +25,12 @@ async fn circles_follow_ring_geometry_copy_color_and_editable_exchange() {
         let mut circled = response.document.unwrap();
         assert_eq!(aromatic::circles(&circled).len(), count);
         for b in &mut circled.bonds {
-            b.color = [27, 110, 100];
+            b.color = reshiki::palette::Color::Custom([27, 110, 100]);
         }
         assert!(
             aromatic::circles(&circled)
                 .iter()
-                .all(|c| c.color == [27, 110, 100])
+                .all(|c| c.color == reshiki::palette::Color::Custom([27, 110, 100]))
         );
         let primitives = scene::primitives(&circled);
         assert_eq!(primitives.iter().filter(|p| matches!(p,scene::Primitive::Path { commands,.. } if commands.iter().any(|p|matches!(p,reshiki::graphics::PathCommand::Cubic(..))))).count(),count);

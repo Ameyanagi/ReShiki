@@ -69,7 +69,7 @@ pub fn documents() -> anyhow::Result<Vec<(String, Document)>> {
                 doc.add_bond(a, b, order, pattern);
                 let bond = doc.bonds.last_mut().context("Missing test bond")?;
                 bond.double_position = position;
-                bond.color = [219, 113, 51];
+                bond.color = reshiki::palette::Color::Custom([219, 113, 51]);
                 let c = doc.add_atom("C", Point::new(-42., 42.));
                 let d = doc.add_atom("C", Point::new(42., -42.));
                 doc.add_bond(c, d, 1, "plain");
@@ -114,7 +114,7 @@ pub fn documents() -> anyhow::Result<Vec<(String, Document)>> {
     docs.push(("grouped abbreviation".into(), group.clone()));
     group.atom_mut(b).context("Missing anchor")?.text_style = Some(TextStyle {
         family: "Helvetica".into(),
-        color: [60, 130, 210],
+        color: reshiki::palette::Color::Custom([60, 130, 210]),
         size_pt: 14.,
         ..Default::default()
     });

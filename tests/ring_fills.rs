@@ -2,9 +2,13 @@ use reshiki::{
     document::{Document, Point},
     editing,
     engine::{LocalEngine, Request},
+    palette::{Color, Hue, Palette, Row},
     ring_fills,
     scene::Primitive,
 };
+fn tint(hue: Hue) -> Option<Color> {
+    Some(Color::Palette(hue, Row::Tint))
+}
 fn ring() -> Document {
     let mut doc = Document::default();
     editing::ring(&mut doc, Point::default(), 6, false, 0.);
@@ -16,7 +20,7 @@ fn fill_tracks_geometry_copy_delete_and_rejects_invalid_ownership()
     let mut doc = ring();
     let ids = doc.all_ids();
     let chemistry = doc.bonds.clone();
-    assert_eq!(ring_fills::apply(&mut doc, &ids, Some([201, 224, 248])), 1);
+    assert_eq!(ring_fills::apply(&mut doc, &ids, tint(Hue::Blue)), 1);
     assert_eq!(doc.bonds, chemistry);
     let original = doc.ring_fills.clone();
     editing::scale_axes_about(&mut doc, &ids, Point::default(), 1.6, 0.7);
@@ -73,7 +77,7 @@ async fn colors_survive_native_clean_and_editable_roundtrip()
     for aromatic in [false, true] {
         let mut doc = Document::default();
         let ids = editing::ring(&mut doc, Point::default(), 6, aromatic, 0.);
-        ring_fills::apply(&mut doc, &ids, Some([198, 233, 220]));
+        ring_fills::apply(&mut doc, &ids, tint(Hue::Teal));
         let saved: Document = serde_json::from_str(&serde_json::to_string(&doc)?)?;
         assert_eq!(doc, saved);
         for action in ["analyze", "clean"] {
@@ -129,9 +133,10 @@ async fn colors_survive_native_clean_and_editable_roundtrip()
                 .ok_or("import")?;
             back.validate()?;
             assert_eq!(back.ring_fills.len(), 1, "{format}");
+            // Editable exchange writes the visible color, which returns as custom.
             assert_eq!(
                 back.ring_fills.first().ok_or("fill")?.color,
-                ring_fills::palette_color([198, 233, 220], doc.canvas_theme)
+                Color::Custom(Palette::of(&doc).swatch(Hue::Teal, Row::Tint))
             );
             assert!(
                 back.graphics.is_empty(),
@@ -155,11 +160,8 @@ fn fused_rings_are_independently_colored_and_partial_selections_do_nothing()
     doc.add_bond(a, c, 1, "plain");
     doc.add_bond(b, c, 1, "plain");
     let all = doc.all_ids();
-    assert_eq!(ring_fills::apply(&mut doc, &all, Some([255, 241, 174])), 2);
-    assert_eq!(
-        ring_fills::apply(&mut doc, &[a, b, c], Some([201, 224, 248])),
-        1
-    );
+    assert_eq!(ring_fills::apply(&mut doc, &all, tint(Hue::Amber)), 2);
+    assert_eq!(ring_fills::apply(&mut doc, &[a, b, c], tint(Hue::Blue)), 1);
     assert_eq!(ring_fills::apply(&mut doc, &[a, b], None), 0);
     assert_eq!(ring_fills::apply(&mut doc, &[a, b, c], None), 1);
     assert_eq!(doc.ring_fills.len(), 1);
@@ -168,10 +170,7 @@ fn fused_rings_are_independently_colored_and_partial_selections_do_nothing()
     // Saturated chair rings must not depend on aromatic-circle clearance.
     let mut chair = reshiki::rings::Preset::ChairUp.document(42., false);
     let ids = chair.all_ids();
-    assert_eq!(
-        ring_fills::apply(&mut chair, &ids, Some([226, 211, 245])),
-        1
-    );
+    assert_eq!(ring_fills::apply(&mut chair, &ids, tint(Hue::Purple)), 1);
     Ok(())
 }
 
@@ -193,8 +192,7 @@ async fn reads_chemdraw_created_native_fill() -> Result<(), Box<dyn std::error::
         );
         assert!(doc.graphics.is_empty());
         let fill = &doc.ring_fills[0];
-        assert_eq!(fill.color, [29, 139, 39]);
-        assert!(fill.fixed_color);
+        assert_eq!(fill.color, Color::Custom([29, 139, 39]));
         let before = fill.commands(&doc);
         let id = fill.atoms[0];
         let mut moved = doc.clone();
@@ -239,7 +237,7 @@ async fn native_fills_follow_grouped_fragments() -> Result<(), Box<dyn std::erro
     let mut doc = ring();
     let second = editing::ring(&mut doc, Point::new(200., 0.), 5, false, 0.);
     let ids = doc.all_ids();
-    ring_fills::apply(&mut doc, &ids, Some([198, 233, 220]));
+    ring_fills::apply(&mut doc, &ids, tint(Hue::Teal));
     doc.groups.push(reshiki::grouping::Group {
         id: 1000,
         members: second,
@@ -290,7 +288,7 @@ async fn filled_abbreviations_expand_for_editable_exchange()
         let mut doc = ring();
         doc.canvas_theme = mode;
         let members = doc.all_ids();
-        ring_fills::apply(&mut doc, &members, Some([198, 233, 220]));
+        ring_fills::apply(&mut doc, &members, tint(Hue::Teal));
         let anchor = members[0];
         let outside = doc.add_atom(
             "O",
@@ -353,7 +351,10 @@ async fn filled_abbreviations_expand_for_editable_exchange()
                     .iter()
                     .all(|id| !restored.abbreviations[0].members.contains(id))
             );
-            assert_eq!(fill.color, ring_fills::palette_color([198, 233, 220], mode));
+            assert_eq!(
+                fill.color,
+                Color::Custom(Palette::of(&doc).swatch(Hue::Teal, Row::Tint))
+            );
             // File exports retain the dark page; clipboard copies contain no background.
             assert_eq!(
                 restored.graphics.len(),
@@ -385,7 +386,7 @@ async fn imports_actual_chemdraw_return_clipboard() -> Result<(), Box<dyn std::e
     assert!(
         doc.ring_fills
             .iter()
-            .all(|f| f.color == [67, 99, 132] && f.fixed_color)
+            .all(|f| f.color == Color::Custom([67, 99, 132]))
     );
     doc.validate()?;
     Ok(())

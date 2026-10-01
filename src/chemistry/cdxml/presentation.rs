@@ -130,6 +130,10 @@ impl NativeColor {
         }
         Ok(self.0.map(|n| n as u8))
     }
+    /// Imported colors are exact; ChemDraw's default black becomes Ink.
+    pub fn into_color(self) -> Result<crate::palette::Color> {
+        self.into_document().map(crate::palette::Color::imported)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]

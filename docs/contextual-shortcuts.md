@@ -21,7 +21,7 @@ The canvas fills the drawing area. Rulers reserve only their top and left gutter
 
 Lowercase and uppercase are different: **m** inserts Me at an atom; **M** means **Shift+m** and inserts MgBr. Keys depend on what is under the pointer. A single selected atom, or a selected bond's two endpoints, can also provide the target. A hovered target takes precedence. Clear the selection and move to empty canvas before choosing a tool.
 
-Text fields keep ordinary typing. **Cmd** means Command on macOS; **Ctrl** is the corresponding modifier on Windows and Linux. **Alt** is Option on macOS. Uppercase letters in modified shortcuts, such as **Cmd/Ctrl+C**, do not imply Shift unless it is written explicitly.
+Text fields keep ordinary typing, and Cmd/Ctrl shortcuts never type their letter into a field. Enter applies a field and leaves it, so **Cmd/Ctrl+Z** then undoes the drawing; while a field is still focused, Undo and Redo do nothing. **Cmd** means Command on macOS; **Ctrl** is the corresponding modifier on Windows and Linux. **Alt** is Option on macOS. Uppercase letters in modified shortcuts, such as **Cmd/Ctrl+C**, do not imply Shift unless it is written explicitly.
 
 ## Two quick ring gestures
 
@@ -128,6 +128,9 @@ Acyclic triple-bond edits straighten the adjacent branches. Bond appearance and 
 | Cmd/Ctrl+Shift+K            | Preview cleanup                                                                           |
 | Cmd/Ctrl+L / E              | Toggle fixed bond length / fixed angles                                                   |
 | Option/Alt-drag             | Temporarily draw or move bonded endpoints freely                                          |
+| Cmd/Ctrl-drag               | Drag a copy, leaving the original in place                                                |
+| Shift-drag                  | Move horizontally or vertically only                                                      |
+| Cmd/Ctrl+Shift-drag         | Drag a copy along one axis                                                                |
 | Cmd/Ctrl+Alt+K              | Toggle a selected aromatic ring's circle / alternating bonds; Windows also supports Alt+K |
 | Cmd/Ctrl+[ / ]              | Send crossing bonds behind / bring forward                                                |
 | Cmd/Ctrl+/                  | Fit drawing                                                                               |

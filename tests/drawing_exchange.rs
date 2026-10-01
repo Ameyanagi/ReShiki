@@ -278,7 +278,7 @@ fn editable_drawing_output_matches_original_writer() -> anyhow::Result<()> {
     for kind in kinds {
         for phase in Phase::ALL {
             for pattern in [LinePattern::Solid, LinePattern::Dashed, LinePattern::Dotted] {
-                for fill in [None, Some([19, 170, 82])] {
+                for fill in [None, Some(reshiki::palette::Color::Custom([19, 170, 82]))] {
                     let mut doc = Document::default();
                     let mut graphic = Graphic::dragged(
                         1,
@@ -288,7 +288,7 @@ fn editable_drawing_output_matches_original_writer() -> anyhow::Result<()> {
                         GraphicStyle {
                             pattern,
                             fill,
-                            stroke: [74, 112, 239],
+                            stroke: reshiki::palette::Color::Custom([74, 112, 239]),
                             width_pt: 0.83,
                         },
                         Default::default(),
@@ -325,7 +325,7 @@ fn editable_drawing_output_matches_original_writer() -> anyhow::Result<()> {
                 line_spacing: 1.37,
                 style: TextStyle {
                     family: "Hiragino Sans".into(),
-                    color: [145, 60, 220],
+                    color: reshiki::palette::Color::Custom([145, 60, 220]),
                     size_pt: 13.,
                     ..Default::default()
                 },
@@ -360,7 +360,7 @@ fn editable_drawing_output_matches_original_writer() -> anyhow::Result<()> {
         reshiki::editing::transform(&mut doc, &all, reshiki::editing::Transform::FlipHorizontal);
         for (i, b) in doc.bonds.iter_mut().enumerate() {
             b.z_order = i as i16;
-            b.color = [120, 25, 90];
+            b.color = reshiki::palette::Color::Custom([120, 25, 90]);
         }
         doc.atom_labels.carbons = reshiki::atom_labels::Carbons::All;
         doc.atom_labels.stereo = true;

@@ -24,6 +24,12 @@ body:has(.color-reference) .sl-markdown-content > :not(.color-reference) {
 body:has(.color-reference) .sl-markdown-content > h2 {
   margin-top: 3.5rem;
 }
+/* A note that introduces the explorer shares its left edge instead of the prose column. */
+body:has(.color-reference) .sl-markdown-content > .starlight-aside:has(+ .color-reference) {
+  max-width: none;
+  margin-inline: 0;
+  margin-bottom: 1.5rem;
+}
 
 .sl-markdown-content .color-reference {
   --cr-surface: var(--reshiki-surface);
@@ -135,14 +141,13 @@ body:has(.color-reference) .sl-markdown-content > h2 {
 }
 .color-reference .cr-themes {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 1rem;
   margin-bottom: 1.6rem;
 }
 .color-reference .cr-theme {
   display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 0.25rem 1rem;
+  gap: 0.25rem;
   padding: 1rem 1.2rem;
   border: 1px solid var(--cr-border);
   border-radius: 0.75rem;
@@ -172,21 +177,19 @@ body:has(.color-reference) .sl-markdown-content > h2 {
   visibility: visible;
 }
 .color-reference .cr-theme-description {
-  grid-column: 1;
   font-size: 0.75rem;
   color: var(--cr-muted);
 }
 .color-reference .cr-theme-strip {
   display: flex;
-  align-self: center;
   gap: 3px;
-  grid-column: 2;
-  grid-row: 1 / 3;
+  margin-top: 0.5rem;
 }
 .color-reference .cr-theme-strip > span {
-  width: 0.6rem;
-  height: 2rem;
-  border-radius: 3px;
+  flex: 1;
+  min-width: 0;
+  height: 0.55rem;
+  border-radius: 2px;
 }
 .color-reference .cr-workspace {
   display: grid;
@@ -320,35 +323,6 @@ body:has(.color-reference) .sl-markdown-content > h2 {
   padding-top: 1rem;
   font-size: 0.7rem;
   color: var(--cr-muted);
-}
-.color-reference .cr-supporting {
-  margin-top: 1.4rem;
-  border-top: 1px solid var(--cr-border);
-  padding-top: 1.2rem;
-}
-.color-reference .cr-support-grid {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 0.65rem;
-  margin-top: 0.9rem;
-}
-.color-reference .cr-support-tile {
-  border: 0;
-  background: none;
-  padding: 0.2rem;
-  border-radius: 0.3rem;
-  font-size: 0.7rem;
-}
-.color-reference .cr-support-tile[aria-pressed="true"] {
-  outline: 2px solid var(--cr-accent);
-  outline-offset: 2px;
-}
-.color-reference .cr-support-tile > span:last-child {
-  display: block;
-  margin-top: 0.35rem;
-}
-.color-reference .cr-support-tile .cr-color-swatch {
-  height: 1.35rem;
 }
 .color-reference .cr-inspector {
   position: sticky;
@@ -511,24 +485,195 @@ body:has(.color-reference) .sl-markdown-content > h2 {
   font-size: 0.85rem;
   overflow-wrap: anywhere;
 }
+.color-reference .cr-main {
+  display: grid;
+  gap: 1.5rem;
+  min-width: 0;
+}
+.color-reference .cr-swatches {
+  min-width: 0;
+  padding: 1.4rem;
+  border: 1px solid var(--cr-border);
+  border-radius: 1rem;
+  background: var(--cr-surface);
+  scroll-margin-top: 5.5rem;
+}
+.color-reference .cr-swatches h2 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.color-reference .cr-swatch-intro {
+  margin-top: 0.35rem;
+}
+.color-reference .cr-swatch-intro b {
+  font-weight: 600;
+  color: var(--sl-color-text);
+}
+.color-reference .cr-papers {
+  container-type: inline-size;
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1.1rem;
+}
+/* Each canvas card keeps its own paper, like the element panel in that mode. */
+.color-reference .cr-paper {
+  --cr-border: #dedede;
+  --cr-muted: #606060;
+  --cr-accent: #b5472b;
+  color-scheme: light;
+  padding: 0.8rem 0.9rem 0.9rem;
+  border: 1px solid var(--cr-border);
+  border-radius: 0.75rem;
+  background: var(--cr-paper);
+  color: #202623;
+}
+.color-reference .cr-paper[data-mode="dark"] {
+  --cr-border: #333;
+  --cr-muted: #aaa;
+  --cr-accent: #f1ad90;
+  color-scheme: dark;
+  color: #f0f0f0;
+}
+.color-reference .cr-paper-caption {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.65rem;
+  color: var(--cr-muted);
+}
+.color-reference .cr-chip-grid {
+  display: grid;
+  grid-template-columns: 3.6rem repeat(9, minmax(0, 1fr));
+  gap: 0.4rem 0.35rem;
+  align-items: center;
+}
+.color-reference .cr-hue-name {
+  font-size: 0.6rem;
+  line-height: 1.25;
+  text-align: center;
+  white-space: nowrap;
+  color: var(--cr-muted);
+}
+.color-reference .cr-row-name {
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.color-reference .cr-hue-name small,
+.color-reference .cr-row-name small {
+  display: block;
+  font-size: 0.58rem;
+  font-weight: 400;
+  color: var(--cr-muted);
+  font-variant-numeric: tabular-nums;
+}
+.color-reference .cr-chip {
+  min-width: 0;
+  height: 2.2rem;
+  padding: 0;
+  border: 1px solid #8884;
+  border-radius: 0.4rem;
+  transition: transform 100ms;
+}
+.color-reference .cr-chip:hover {
+  transform: translateY(-1px);
+}
+.color-reference .cr-chip[aria-pressed="true"] {
+  box-shadow:
+    0 0 0 2px var(--cr-paper),
+    0 0 0 4px var(--cr-accent);
+}
+/* Narrow palettes drop the hue names; the table below lists them in order. */
+@container (max-width: 28rem) {
+  .color-reference .cr-chip-grid {
+    grid-template-columns: 2.6rem repeat(9, minmax(0, 1fr));
+    gap: 0.3rem 0.2rem;
+  }
+  .color-reference .cr-hue-name {
+    display: none;
+  }
+  .color-reference .cr-chip {
+    height: 1.9rem;
+  }
+}
+.color-reference .cr-values-scroll {
+  margin-top: 1.2rem;
+  overflow-x: auto;
+}
+.color-reference .cr-values {
+  width: 100%;
+  border-collapse: collapse;
+  white-space: nowrap;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+.color-reference .cr-values caption {
+  padding-bottom: 0.5rem;
+  white-space: normal;
+  text-align: left;
+  font-size: 0.7rem;
+  color: var(--cr-muted);
+}
+.color-reference .cr-values th,
+.color-reference .cr-values td {
+  padding: 0.4rem 0.35rem;
+  border-bottom: 1px solid var(--cr-border);
+  text-align: left;
+  vertical-align: middle;
+}
+.color-reference .cr-values th {
+  font-weight: 500;
+}
+.color-reference .cr-values thead th {
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+.color-reference .cr-values th small {
+  display: block;
+  font-size: 0.6rem;
+  font-weight: 400;
+  color: var(--cr-muted);
+  font-variant-numeric: tabular-nums;
+}
+.color-reference .cr-value {
+  display: grid;
+  grid-template-columns: 0.75rem auto;
+  justify-content: start;
+  align-items: center;
+  column-gap: 0.35rem;
+}
+.color-reference .cr-dot {
+  grid-row: span 2;
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 1px solid #8884;
+  border-radius: 0.2rem;
+}
+.color-reference .cr-values code,
+.color-reference .cr-lch {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font:
+    0.68rem/1.35 ui-monospace,
+    SFMono-Regular,
+    monospace;
+}
+.color-reference .cr-lch {
+  font-size: 0.6rem;
+  color: var(--cr-muted);
+}
+.color-reference .cr-none {
+  color: var(--cr-muted);
+}
 @media (max-width: 1200px) {
-  .color-reference .cr-theme {
-    grid-template-columns: 1fr;
-  }
-  .color-reference .cr-theme-strip {
-    grid-row: auto;
-    grid-column: 1;
-    margin-top: 0.5rem;
-  }
-  .color-reference .cr-theme-strip > span {
-    width: 1.25rem;
-    height: 0.5rem;
-  }
   .color-reference .cr-workspace {
     grid-template-columns: minmax(0, 1fr) 17rem;
     gap: 1rem;
   }
-  .color-reference .cr-palette {
+  .color-reference .cr-palette,
+  .color-reference .cr-swatches {
     padding: 1rem;
   }
 }
@@ -569,6 +714,7 @@ body:has(.color-reference) .sl-markdown-content > h2 {
     left: 0;
   }
   .color-reference .cr-themes {
+    grid-template-columns: repeat(2, 1fr);
     gap: 0.5rem;
     margin-bottom: 1rem;
   }
@@ -585,8 +731,8 @@ body:has(.color-reference) .sl-markdown-content > h2 {
   .color-reference .cr-theme-strip {
     gap: 2px;
   }
-  .color-reference .cr-theme-strip > span {
-    width: 0.7rem;
+  .color-reference .cr-paper {
+    padding: 0.65rem;
   }
   .color-reference .cr-toolbar {
     flex-wrap: wrap;
@@ -611,12 +757,6 @@ body:has(.color-reference) .sl-markdown-content > h2 {
     max-width: 11rem;
     text-align: right;
   }
-  .color-reference .cr-supporting .cr-caption {
-    display: none;
-  }
-  .color-reference .cr-support-grid {
-    gap: 0.4rem;
-  }
   .color-reference .cr-footnote {
     flex-direction: column;
     gap: 0.5rem;
@@ -638,13 +778,15 @@ body:has(.color-reference) .sl-markdown-content > h2 {
   .color-reference .cr-theme-name {
     font-size: 0.75rem;
   }
-  .color-reference .cr-palette {
+  .color-reference .cr-palette,
+  .color-reference .cr-swatches {
     padding: 0.8rem;
   }
 }
 @media (prefers-reduced-motion: reduce) {
   .color-reference .cr-theme,
-  .color-reference .cr-tile {
+  .color-reference .cr-tile,
+  .color-reference .cr-chip {
     transition: none;
   }
 }

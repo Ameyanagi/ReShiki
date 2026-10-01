@@ -25,7 +25,7 @@ impl NativeTextStyle {
             bold: self.bold,
             italic: self.italic,
             underline: self.underline,
-            color: self.color.into_document()?,
+            color: self.color.into_color()?,
             script: self.script,
             formula: self.formula,
         })

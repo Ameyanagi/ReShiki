@@ -2,59 +2,77 @@
 use crate::{
     document::{Document, Point},
     graphics::{GraphicStyle, PathCommand},
+    palette::{Color, Hue, Row, StoredColor},
     scene::Primitive,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(try_from = "StoredRingFill")]
 pub struct RingFill {
     /// Consecutive vertices of a closed molecular cycle.
     pub atoms: Vec<u64>,
-    pub color: [u8; 3],
-    /// Imported/pasted colors retain their exact appearance instead of palette adaptation.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub fixed_color: bool,
+    /// Palette tints follow the theme; imported and pasted colors are custom.
+    pub color: Color,
 }
-
-/// Stable palette keys preserve existing files. Light paper uses pastel tints;
-/// dark paper uses medium tones with similar perceptual lightness across hues.
-pub const PALETTE: [(&str, [u8; 3]); 5] = [
-    ("Sky", [201, 224, 248]),
-    ("Mint", [198, 233, 220]),
-    ("Rose", [249, 207, 209]),
-    ("Lilac", [226, 211, 245]),
-    ("Sand", [255, 241, 174]),
-];
-pub fn palette_color(color: [u8; 3], canvas: crate::canvas_theme::CanvasTheme) -> [u8; 3] {
-    if canvas.is_dark() {
-        return match color {
-            [201, 224, 248] => [67, 99, 132],
-            [198, 233, 220] => [58, 108, 87],
-            [249, 207, 209] => [129, 81, 88],
-            [226, 211, 245] => [102, 88, 128],
-            [255, 241, 174] => [116, 92, 52],
-            _ => canvas.color(color),
-        };
-    }
-    match color {
-        [201, 224, 248] => [227, 237, 249],
-        [198, 233, 220] => [222, 242, 232],
-        [249, 207, 209] => [249, 230, 234],
-        [226, 211, 245] => [238, 231, 249],
-        [255, 241, 174] => [248, 241, 213],
-        _ => canvas.color(color),
-    }
+/// Earlier files stored a legacy key or, with `fixed_color`, an exact color.
+#[derive(Deserialize)]
+struct StoredRingFill {
+    atoms: Vec<u64>,
+    color: StoredColor,
+    #[serde(default)]
+    fixed_color: bool,
 }
-
-impl RingFill {
-    pub fn visible_color(&self, canvas: crate::canvas_theme::CanvasTheme) -> [u8; 3] {
-        if self.fixed_color {
-            canvas.color(self.color)
+impl Serialize for RingFill {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        // Custom colors keep the `fixed_color` form that earlier versions read;
+        // Ink and palette tints use the color's own form.
+        let exact = matches!(self.color, Color::Custom(_));
+        let mut fill = serializer.serialize_struct("RingFill", 2 + usize::from(exact))?;
+        fill.serialize_field("atoms", &self.atoms)?;
+        if exact {
+            fill.serialize_field("color", &self.color.rgb())?;
+            fill.serialize_field("fixed_color", &true)?;
         } else {
-            palette_color(self.color, canvas)
+            fill.serialize_field("color", &self.color)?;
         }
+        fill.end()
     }
+}
+impl TryFrom<StoredRingFill> for RingFill {
+    type Error = String;
+    fn try_from(stored: StoredRingFill) -> Result<Self, String> {
+        let color = match stored.color {
+            StoredColor::Legacy(rgb) if stored.fixed_color => Color::Custom(rgb),
+            StoredColor::Legacy([0, 0, 0]) => Color::Ink,
+            StoredColor::Legacy(rgb) => {
+                legacy_hue(rgb).map_or(Color::Custom(rgb), |hue| Color::Palette(hue, Row::Tint))
+            }
+            StoredColor::Current(s) => s.parse()?,
+        };
+        Ok(Self {
+            atoms: stored.atoms,
+            color,
+        })
+    }
+}
+
+/// Keys of the five ring highlights stored by earlier versions, and the named
+/// slots of theme files, with the palette hue each one became.
+pub const PALETTE: [(&str, [u8; 3], Hue); 5] = [
+    ("Sky", [201, 224, 248], Hue::Blue),
+    ("Mint", [198, 233, 220], Hue::Teal),
+    ("Rose", [249, 207, 209], Hue::Red),
+    ("Lilac", [226, 211, 245], Hue::Purple),
+    ("Sand", [255, 241, 174], Hue::Amber),
+];
+fn legacy_hue(key: [u8; 3]) -> Option<Hue> {
+    PALETTE
+        .iter()
+        .find(|(_, rgb, _)| *rgb == key)
+        .map(|(_, _, hue)| *hue)
 }
 
 fn key(atoms: &[u64]) -> Vec<u64> {
@@ -216,7 +234,7 @@ pub fn selected_cycles(doc: &Document, selected: &[u64]) -> Vec<Vec<u64>> {
     cycles.into_iter().collect()
 }
 /// Return the number of rings changed. None removes paint, not bonds.
-pub fn apply(doc: &mut Document, selected: &[u64], color: Option<[u8; 3]>) -> usize {
+pub fn apply(doc: &mut Document, selected: &[u64], color: Option<Color>) -> usize {
     let cycles = selected_cycles(doc, selected);
     let mut changed = 0;
     for atoms in cycles {
@@ -227,10 +245,9 @@ pub fn apply(doc: &mut Document, selected: &[u64], color: Option<[u8; 3]>) -> us
         match (index, color) {
             (Some(i), Some(color)) => {
                 if let Some(fill) = doc.ring_fills.get_mut(i)
-                    && (fill.color != color || fill.fixed_color)
+                    && fill.color != color
                 {
                     fill.color = color;
-                    fill.fixed_color = false;
                     changed += 1;
                 }
             }
@@ -239,15 +256,57 @@ pub fn apply(doc: &mut Document, selected: &[u64], color: Option<[u8; 3]>) -> us
                 changed += 1;
             }
             (None, Some(color)) => {
-                doc.ring_fills.push(RingFill {
-                    atoms,
-                    color,
-                    fixed_color: false,
-                });
+                doc.ring_fills.push(RingFill { atoms, color });
                 changed += 1;
             }
             _ => (),
         }
     }
     changed
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn legacy_ring_fills_migrate_by_key_and_fixed_colors_stay_exact() {
+        let read = |json: serde_json::Value| serde_json::from_value::<RingFill>(json);
+        for (key, hue) in PALETTE.map(|(_, key, hue)| (key, hue)) {
+            let fill = read(serde_json::json!({"atoms": [1, 2, 3], "color": key})).unwrap();
+            assert_eq!(fill.color, Color::Palette(hue, Row::Tint));
+            let fixed = serde_json::json!({"atoms": [1, 2, 3], "color": key, "fixed_color": true});
+            assert_eq!(read(fixed).unwrap().color, Color::Custom(key));
+        }
+        let other = read(serde_json::json!({"atoms": [1, 2, 3], "color": [245, 221, 165]}));
+        assert_eq!(other.unwrap().color, Color::Custom([245, 221, 165]));
+        let current = RingFill {
+            atoms: vec![1, 2, 3],
+            color: Color::Palette(Hue::Indigo, Row::Tint),
+        };
+        let json = serde_json::to_value(&current).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({"atoms": [1, 2, 3], "color": "indigo.tint"})
+        );
+        assert_eq!(read(json).unwrap(), current);
+        // A custom color equal to an old key stays exact after saving.
+        let exact = RingFill {
+            atoms: vec![1, 2, 3],
+            color: Color::Custom([201, 224, 248]),
+        };
+        let json = serde_json::to_value(&exact).unwrap();
+        assert_eq!(json["fixed_color"], true);
+        assert_eq!(read(json).unwrap(), exact);
+        let ink = RingFill {
+            atoms: vec![1, 2, 3],
+            color: Color::Ink,
+        };
+        assert_eq!(read(serde_json::to_value(&ink).unwrap()).unwrap(), ink);
+        let black = RingFill {
+            color: Color::Custom([0; 3]),
+            ..ink
+        };
+        assert_eq!(read(serde_json::to_value(&black).unwrap()).unwrap(), black);
+        assert!(read(serde_json::json!({"atoms": [1], "color": "sky"})).is_err());
+    }
 }

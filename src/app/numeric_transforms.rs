@@ -1,11 +1,16 @@
 //! Explicit, atomic numeric edits using the same geometry as selection handles.
-use super::{App, Message, workspace::muted_text};
-use iced::widget::{checkbox, column, row, text};
+use super::icons::{Glyph, Icon};
+use super::workspace::{command, control, hover_hint, text_width, unit_field};
+use super::{App, Message};
+use iced::widget::{Space, button, canvas, column, container, row, text, tooltip};
 use iced::{Alignment, Element, Length, Task};
 use reshiki::{
     document::{Document, Point},
     editing::{self, Transform},
 };
+
+/// Size of the proportional lock beside H.
+const LOCK: f32 = 20.;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Field {
@@ -18,23 +23,50 @@ pub enum Field {
 }
 
 impl Field {
+    /// Apply applies edited fields in this order, so sizes are final.
     const ALL: [Self; 6] = [
         Self::Rotation,
         Self::TiltX,
         Self::TiltY,
+        Self::Scale,
         Self::Width,
         Self::Height,
-        Self::Scale,
     ];
 
     fn label(self) -> &'static str {
         match self {
-            Self::Rotation => "Rotate °",
-            Self::TiltX => "Tilt X °",
-            Self::TiltY => "Tilt Y °",
-            Self::Width => "Width pt",
-            Self::Height => "Height pt",
-            Self::Scale => "Scale %",
+            Self::Rotation => "Rotate",
+            Self::TiltX => "Tilt X",
+            Self::TiltY => "Tilt Y",
+            Self::Width => "W",
+            Self::Height => "H",
+            Self::Scale => "Scale",
+        }
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::Rotation => "Rotation",
+            Self::Width => "Width",
+            Self::Height => "Height",
+            other => other.label(),
+        }
+    }
+
+    fn unit(self) -> &'static str {
+        match self {
+            Self::Rotation | Self::TiltX | Self::TiltY => "°",
+            Self::Width | Self::Height => "pt",
+            Self::Scale => "%",
+        }
+    }
+
+    fn hint(self) -> &'static str {
+        match self {
+            Self::Rotation => "Relative · positive is clockwise",
+            Self::TiltX | Self::TiltY => "Relative · tilts atoms and shapes, up to ±85° per change",
+            Self::Width | Self::Height => "Includes labels; fonts and line widths stay fixed",
+            Self::Scale => "Relative · scales coordinates uniformly",
         }
     }
 }
@@ -42,8 +74,12 @@ impl Field {
 #[derive(Debug, Clone)]
 pub enum Action {
     Input(Field, String),
+    /// Enter in one field applies only that field.
     Apply(Field),
+    /// The Apply button applies every edited field as one Undo step.
+    ApplyAll,
     Proportional(bool),
+    More(bool),
 }
 
 #[derive(Default, PartialEq)]
@@ -63,6 +99,9 @@ pub(super) struct State {
     dimensions: (String, String),
     scale: String,
     proportional: bool,
+    /// W or H, whichever was typed last; it wins when both are locked.
+    last_size: Field,
+    more: bool,
     error: Option<String>,
 }
 
@@ -78,6 +117,8 @@ impl Default for State {
             dimensions: Default::default(),
             scale: "100".into(),
             proportional: true,
+            last_size: Field::Width,
+            more: false,
             error: None,
         }
     }
@@ -104,6 +145,41 @@ impl State {
             Field::Height => &mut self.height,
             Field::Scale => &mut self.scale,
         }
+    }
+
+    /// Fields that differ from their reset value or readout, including tilt
+    /// hidden under a closed More.
+    fn edited(&self) -> Vec<Field> {
+        Field::ALL
+            .into_iter()
+            .filter(|&field| {
+                let value = self.value(field).trim();
+                match field {
+                    Field::Rotation | Field::TiltX | Field::TiltY => value != "0",
+                    Field::Scale => value != "100",
+                    Field::Width => value != self.dimensions.0,
+                    Field::Height => value != self.dimensions.1,
+                }
+            })
+            .collect()
+    }
+
+    /// What Apply applies: every edited field, except that locked proportions
+    /// keep only the size typed last, since W and H cannot both be met.
+    fn to_apply(&self) -> Vec<Field> {
+        let mut fields = self.edited();
+        let both = [Field::Width, Field::Height]
+            .iter()
+            .all(|field| fields.contains(field));
+        if self.proportional && both {
+            let other = if self.last_size == Field::Width {
+                Field::Height
+            } else {
+                Field::Width
+            };
+            fields.retain(|&field| field != other);
+        }
+        fields
     }
 }
 
@@ -292,10 +368,17 @@ impl App {
         if self.numeric_transforms.key.as_ref() == Some(&key) {
             return;
         }
-        let proportional = self.numeric_transforms.proportional;
+        let State {
+            proportional,
+            last_size,
+            more,
+            ..
+        } = self.numeric_transforms;
         self.numeric_transforms = State {
             key: Some(key),
             proportional,
+            last_size,
+            more,
             ..State::default()
         };
         self.refresh_numeric_dimensions();
@@ -324,7 +407,7 @@ impl App {
 
     // Validate against the caption that would be committed, without ending its
     // draft or consuming history for invalid and unchanged transforms.
-    fn numeric_transform_candidate(&self, field: Field) -> Result<Option<Document>, String> {
+    fn numeric_transform_candidate(&self, fields: &[Field]) -> Result<Option<Document>, String> {
         let source = self.inline_candidate()?;
         let selected = if self.inline_text.is_some() {
             let id = self.inline_label_id().unwrap_or_else(|| self.doc.next_id());
@@ -337,13 +420,23 @@ impl App {
         } else {
             self.selected.clone()
         };
-        let document = transformed(
-            &source,
-            &selected,
-            field,
-            self.numeric_transforms.value(field),
-            self.numeric_transforms.proportional,
-        )?;
+        let mut document = source.clone();
+        for &field in fields {
+            document = transformed(
+                &document,
+                &selected,
+                field,
+                self.numeric_transforms.value(field),
+                self.numeric_transforms.proportional,
+            )
+            .map_err(|error| {
+                if fields.len() > 1 {
+                    format!("{}: {error}", field.name())
+                } else {
+                    error
+                }
+            })?;
+        }
         Ok((document != source).then_some(document))
     }
 
@@ -352,79 +445,185 @@ impl App {
             Action::Input(field, input) => {
                 *self.numeric_transforms.value_mut(field) = input;
                 self.numeric_transforms.error = None;
+                if matches!(field, Field::Width | Field::Height) {
+                    self.numeric_transforms.last_size = field;
+                }
             }
             Action::Proportional(lock) => self.numeric_transforms.proportional = lock,
-            Action::Apply(field) => match self.numeric_transform_candidate(field) {
-                Ok(document) => {
-                    if document.is_some() && !self.finish_inline(true) {
-                        return Task::none();
-                    }
-                    self.numeric_transforms.error = None;
-                    self.numeric_transforms.key = None;
-                    self.error = false;
-                    self.status = if document.is_none() {
-                        "No transform needed".into()
-                    } else {
-                        "Drawing updated".into()
-                    };
-                    if let Some(document) = document {
-                        let before = std::mem::replace(&mut self.doc, document);
-                        self.changed(before);
-                    }
-                }
-                Err(error) => {
-                    self.status = error.clone();
-                    self.error = true;
-                    self.numeric_transforms.error = Some(error);
-                }
-            },
+            Action::More(open) => self.numeric_transforms.more = open,
+            Action::Apply(field) => self.apply_numeric_transforms(&[field], true),
+            Action::ApplyAll => {
+                self.apply_numeric_transforms(&self.numeric_transforms.to_apply(), false)
+            }
         }
         Task::none()
     }
 
-    pub(super) fn numeric_transform_panel(&self) -> Element<'_, Message> {
-        let mut body = column![text("Precise transforms").size(12)].spacing(6);
-        for field in Field::ALL {
-            let enabled = !self.selected.is_empty()
-                && (!matches!(field, Field::TiltX | Field::TiltY)
-                    || crate::canvas::tilt::available(&self.doc, &self.selected));
-            let input = crate::appearance::text_input("", self.numeric_transforms.value(field))
-                .on_input_maybe(
-                    enabled.then_some(move |value| {
-                        Message::NumericTransform(Action::Input(field, value))
-                    }),
-                )
-                .on_submit_maybe(enabled.then_some(Message::NumericTransform(Action::Apply(field))))
-                .size(13)
-                .padding(6)
-                .width(Length::Fill);
-            body = body.push(
-                row![
-                    text(field.label()).size(12).width(66),
-                    input,
-                    super::workspace::command(
-                        "Apply",
-                        Message::NumericTransform(Action::Apply(field))
-                    )
-                    .on_press_maybe(
-                        enabled.then_some(Message::NumericTransform(Action::Apply(field)))
-                    )
-                ]
-                .spacing(6)
-                .align_y(Alignment::Center),
-            );
+    /// Applies `fields`; with `keep`, values typed in other fields stay for
+    /// their own Enter or Apply.
+    fn apply_numeric_transforms(&mut self, fields: &[Field], keep: bool) {
+        match self.numeric_transform_candidate(fields) {
+            Ok(document) => {
+                if document.is_some() && !self.finish_inline(true) {
+                    return;
+                }
+                let state = &self.numeric_transforms;
+                let pending: Vec<_> = state
+                    .edited()
+                    .into_iter()
+                    .filter(|field| keep && !fields.contains(field))
+                    .map(|field| (field, state.value(field).to_owned()))
+                    .collect();
+                self.numeric_transforms.error = None;
+                self.numeric_transforms.key = None;
+                self.error = false;
+                self.status = if document.is_none() {
+                    "No transform needed".into()
+                } else {
+                    "Drawing updated".into()
+                };
+                if let Some(document) = document {
+                    let before = std::mem::replace(&mut self.doc, document);
+                    self.changed(before);
+                }
+                self.sync_numeric_transforms();
+                for (field, value) in pending {
+                    *self.numeric_transforms.value_mut(field) = value;
+                }
+            }
+            Err(error) => {
+                self.status = error.clone();
+                self.error = true;
+                self.numeric_transforms.error = Some(error);
+            }
         }
-        body = body
-            .push(checkbox(self.numeric_transforms.proportional)
-                .label("Lock proportions for width / height")
-                .text_size(12)
-                .on_toggle(|lock| Message::NumericTransform(Action::Proportional(lock))))
-            .push(text("Enter applies one field. Angles and % are relative; positive rotation is clockwise. Tilt affects atoms and shapes (±85°).")
-                .size(11).style(muted_text))
-            .push(text("Dimensions include labels. Fonts and line widths stay fixed; % scales coordinates uniformly.")
-                .size(11).style(muted_text));
-        if let Some(error) = &self.numeric_transforms.error {
-            body = body.push(text(error).size(12).style(iced::widget::text::danger));
+    }
+
+    /// Rotate | Scale and W 🔒 H, with tilt under More and one Apply.
+    pub(super) fn numeric_transform_panel(&self) -> Element<'_, Message> {
+        let state = &self.numeric_transforms;
+        let selected = !self.selected.is_empty();
+        let tilt = selected && crate::canvas::tilt::available(&self.doc, &self.selected);
+        let cell = |label: Element<'static, Message>, field: Field, label_width: f32| {
+            let enabled = if matches!(field, Field::TiltX | Field::TiltY) {
+                tilt
+            } else {
+                selected
+            };
+            let input =
+                crate::appearance::text_input("", state.value(field))
+                    .on_input_maybe(enabled.then_some(move |value| {
+                        Message::NumericTransform(Action::Input(field, value))
+                    }))
+                    .on_submit_maybe(
+                        enabled.then_some(Message::NumericTransform(Action::Apply(field))),
+                    );
+            row![
+                container(label).width(label_width),
+                hover_hint(
+                    unit_field(input, field.unit()),
+                    match field {
+                        _ if enabled => field.hint(),
+                        Field::TiltX | Field::TiltY =>
+                            "Select at least two atoms or a shape to tilt",
+                        _ => "Select objects to transform",
+                    },
+                    tooltip::Position::Top
+                ),
+            ]
+            .spacing(4)
+            .align_y(Alignment::Center)
+            .width(Length::Fill)
+        };
+        let label = |field: Field| text(field.label()).size(12);
+        let lock = hover_hint(
+            button(
+                canvas(Glyph(Icon::Lock(state.proportional), true))
+                    .width(LOCK)
+                    .height(LOCK),
+            )
+            .padding(0)
+            .style(control(state.proportional))
+            .on_press(Message::NumericTransform(Action::Proportional(
+                !state.proportional,
+            ))),
+            if state.proportional {
+                "Proportions locked · W and H scale together\nIf both are edited, Apply uses the one edited last"
+            } else {
+                "Proportions unlocked · W and H change one axis"
+            },
+            tooltip::Position::Top,
+        );
+        // Label columns take the widest label; the lock sits in the second
+        // column beside H, between the W and H fields.
+        let widest = |labels: &[f32]| labels.iter().copied().fold(0., f32::max) + 2.;
+        let width = |field: Field| text_width(field.label(), 12.);
+        let left = widest(&[Field::Rotation, Field::Width, Field::TiltX].map(width));
+        let right = widest(&[
+            width(Field::Scale),
+            width(Field::TiltY),
+            LOCK + 3. + width(Field::Height),
+        ]);
+        let pair = |a: Field, b_label: Element<'static, Message>, b: Field| {
+            row![cell(label(a).into(), a, left), cell(b_label, b, right)]
+                .spacing(8)
+                .align_y(Alignment::Center)
+        };
+        let mut body = column![
+            pair(Field::Rotation, label(Field::Scale).into(), Field::Scale),
+            pair(
+                Field::Width,
+                row![lock, label(Field::Height)]
+                    .spacing(3)
+                    .align_y(Alignment::Center)
+                    .into(),
+                Field::Height
+            ),
+        ]
+        .spacing(8);
+        if state.more {
+            body = body.push(pair(Field::TiltX, label(Field::TiltY).into(), Field::TiltY));
+        }
+        let pending = state.to_apply();
+        let edited = selected && !pending.is_empty();
+        let hidden_tilt = !state.more
+            && pending
+                .iter()
+                .any(|f| matches!(f, Field::TiltX | Field::TiltY));
+        body = body.push(
+            row![
+                command(
+                    match (state.more, hidden_tilt) {
+                        (true, _) => "▾ More: tilt X / Y",
+                        (false, false) => "▸ More: tilt X / Y",
+                        (false, true) => "▸ More: tilt X / Y · edited",
+                    },
+                    Message::NumericTransform(Action::More(!state.more)),
+                ),
+                Space::new().width(Length::Fill),
+                hover_hint(
+                    button(text("Apply").size(12))
+                        .padding([6, 14])
+                        .style(crate::appearance::primary)
+                        .on_press_maybe(
+                            edited.then_some(Message::NumericTransform(Action::ApplyAll))
+                        ),
+                    if edited {
+                        let names: Vec<_> = pending.iter().map(|f| f.name()).collect();
+                        format!(
+                            "Apply {} as one Undo step · Enter applies only its field",
+                            names.join(", ")
+                        )
+                    } else {
+                        "Edit a value first · Enter applies only its field".to_owned()
+                    },
+                    tooltip::Position::Top,
+                ),
+            ]
+            .align_y(Alignment::Center),
+        );
+        if let Some(error) = &state.error {
+            body = body.push(text(error).size(12).style(text::danger));
         }
         body.into()
     }
@@ -518,6 +717,163 @@ mod tests {
             let _ = app.update(Message::Redo);
             assert_eq!(app.doc, changed);
         }
+    }
+
+    #[test]
+    fn apply_button_applies_every_edited_field_as_one_undo_step() {
+        let mut app = fixture();
+        let original = app.doc.clone();
+        let _ = app.update(Message::NumericTransform(Action::ApplyAll));
+        assert!(!app.error);
+        assert_eq!(app.doc, original, "Nothing edited is a no-op");
+        assert!(!app.history.can_undo());
+        let mut sequential = fixture();
+        apply(&mut sequential, Field::Rotation, "72");
+        apply(&mut sequential, Field::Scale, "125");
+        for (field, input) in [(Field::Scale, "125"), (Field::Rotation, "72")] {
+            let _ = app.update(Message::NumericTransform(Action::Input(
+                field,
+                input.into(),
+            )));
+        }
+        let _ = app.update(Message::NumericTransform(Action::ApplyAll));
+        assert!(!app.error, "{}", app.status);
+        assert_eq!(app.doc, sequential.doc, "Rotation applies before scale");
+        let changed = app.doc.clone();
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, original);
+        assert!(!app.history.can_undo(), "One Apply is one Undo step");
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.doc, changed);
+    }
+
+    #[test]
+    fn apply_button_rejects_all_edits_when_one_field_is_invalid() {
+        let mut app = fixture();
+        let original = app.doc.clone();
+        let _ = app.update(Message::NumericTransform(Action::More(true)));
+        for (field, input) in [(Field::Rotation, "72"), (Field::TiltX, "90")] {
+            let _ = app.update(Message::NumericTransform(Action::Input(
+                field,
+                input.into(),
+            )));
+        }
+        let _ = app.update(Message::NumericTransform(Action::ApplyAll));
+        assert!(app.error);
+        assert!(app.status.starts_with("Tilt X: "), "{}", app.status);
+        assert_eq!(app.doc, original);
+        assert!(!app.history.can_undo());
+        assert_eq!(app.numeric_transforms.rotation, "72", "Typed values stay");
+        app.selected = vec![app.doc.graphics[0].id];
+        let _ = app.update(Message::Tick);
+        assert_eq!(app.numeric_transforms.rotation, "0");
+        assert!(
+            app.numeric_transforms.more,
+            "More stays open across selections"
+        );
+    }
+
+    fn input(app: &mut App, field: Field, value: &str) {
+        let _ = app.update(Message::NumericTransform(Action::Input(
+            field,
+            value.into(),
+        )));
+    }
+
+    #[test]
+    fn enter_applies_its_field_and_keeps_values_typed_in_others() {
+        let mut app = fixture();
+        let original = app.doc.clone();
+        for (field, value) in [
+            (Field::Rotation, "72"),
+            (Field::Scale, "125"),
+            (Field::Width, "160"),
+        ] {
+            input(&mut app, field, value);
+        }
+        let _ = app.update(Message::NumericTransform(Action::Apply(Field::Rotation)));
+        assert!(!app.error, "{}", app.status);
+        let state = &app.numeric_transforms;
+        assert_eq!(state.rotation, "0");
+        assert_eq!((state.scale.as_str(), state.width.as_str()), ("125", "160"));
+        assert_ne!(state.dimensions.0, "160");
+        // Enter on an unchanged field keeps them too.
+        let _ = app.update(Message::NumericTransform(Action::Apply(Field::Rotation)));
+        assert_eq!(app.numeric_transforms.scale, "125");
+        let _ = app.update(Message::NumericTransform(Action::Apply(Field::Scale)));
+        let _ = app.update(Message::NumericTransform(Action::Apply(Field::Width)));
+        assert!(!app.error, "{}", app.status);
+        assert_eq!(
+            app.numeric_transforms.width,
+            app.numeric_transforms.dimensions.0
+        );
+        assert_eq!(app.numeric_transforms.width, "160.00");
+        for _ in 0..3 {
+            let _ = app.update(Message::Undo);
+        }
+        assert_eq!(app.doc, original);
+        assert!(!app.history.can_undo(), "Each Enter is one Undo step");
+    }
+
+    #[test]
+    fn locked_apply_uses_the_size_edited_last_and_clears_the_other() {
+        for last in [Field::Width, Field::Height] {
+            let mut app = fixture();
+            let (width, height) = (
+                extent(&app.doc, &app.selected, Field::Width).unwrap(),
+                extent(&app.doc, &app.selected, Field::Height).unwrap(),
+            );
+            let first = if last == Field::Width {
+                Field::Height
+            } else {
+                Field::Width
+            };
+            let target = |field| if field == Field::Width { width } else { height } * 1.5;
+            input(&mut app, first, &format!("{:.2}", target(first) * 2.));
+            input(&mut app, last, &format!("{:.2}", target(last)));
+            let _ = app.update(Message::NumericTransform(Action::ApplyAll));
+            assert!(!app.error, "{}", app.status);
+            let reached = extent(&app.doc, &app.selected, last).unwrap();
+            assert!((reached - target(last)).abs() < 0.01, "{last:?}: {reached}");
+            let state = &app.numeric_transforms;
+            assert_eq!(state.width, state.dimensions.0);
+            assert_eq!(state.height, state.dimensions.1);
+            let _ = app.update(Message::Undo);
+            assert!(!app.history.can_undo(), "One Apply is one Undo step");
+        }
+        // Unlocked, both sizes apply.
+        let mut app = fixture();
+        let _ = app.update(Message::NumericTransform(Action::Proportional(false)));
+        input(&mut app, Field::Width, "150");
+        input(&mut app, Field::Height, "90");
+        assert_eq!(
+            app.numeric_transforms.to_apply(),
+            [Field::Width, Field::Height]
+        );
+    }
+
+    #[test]
+    fn apply_includes_tilt_typed_before_more_was_closed() {
+        let mut app = fixture();
+        let original = app.doc.clone();
+        let mut sequential = fixture();
+        apply(&mut sequential, Field::Rotation, "72");
+        apply(&mut sequential, Field::TiltX, "20");
+        let _ = app.update(Message::NumericTransform(Action::More(true)));
+        input(&mut app, Field::Rotation, "72");
+        input(&mut app, Field::TiltX, "20");
+        let _ = app.update(Message::NumericTransform(Action::More(false)));
+        assert_eq!(
+            app.numeric_transforms.to_apply(),
+            [Field::Rotation, Field::TiltX]
+        );
+        let _ = app.update(Message::NumericTransform(Action::ApplyAll));
+        assert!(!app.error, "{}", app.status);
+        assert_eq!(app.doc, sequential.doc);
+        assert_eq!(app.numeric_transforms.tilt_x, "0");
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.doc, original);
+        assert!(!app.history.can_undo());
     }
 
     #[test]
@@ -889,6 +1245,9 @@ mod tests {
         let directory = std::env::temp_dir().join("reshiki-numeric-transforms-qa");
         std::fs::create_dir_all(&directory).unwrap();
         let mut app = fixture();
+        // Tilt shown, and an edit that enables Apply.
+        app.numeric_transforms.more = true;
+        app.numeric_transforms.scale = "125".into();
         std::fs::write(
             directory.join("numeric-transforms.rsk"),
             serde_json::to_vec_pretty(&app.doc).unwrap(),
@@ -913,18 +1272,34 @@ mod tests {
             );
             assert!(node.size().height <= size.height);
             let layout = iced::advanced::Layout::new(&node);
-            let rows: Vec<_> = layout.children().skip(1).take(6).collect();
-            let input = rows[0].children().nth(1).unwrap().bounds();
-            let buttons: Vec<_> = rows
-                .iter()
-                .map(|row| row.children().nth(2).unwrap().bounds())
-                .collect();
-            for row in &rows {
-                for child in row.children() {
-                    let bounds = child.bounds();
-                    assert!(bounds.x >= 0. && bounds.x + bounds.width <= width as f32 + 0.01);
-                }
+            fn inside(layout: iced::advanced::Layout<'_>, width: f32) {
+                let bounds = layout.bounds();
+                assert!(bounds.x >= 0. && bounds.x + bounds.width <= width + 0.01);
+                layout.children().for_each(|child| inside(child, width));
             }
+            inside(layout, width as f32);
+            // Rotate | Scale, W | 🔒 H, Tilt X | Tilt Y, then More … Apply.
+            let rows: Vec<_> = layout.children().collect();
+            let input = |row: usize, column: usize| {
+                let cell = rows[row].children().nth(column).unwrap();
+                let stack = cell.children().nth(1).unwrap();
+                stack.children().next().unwrap().bounds()
+            };
+            let fields = [
+                (Field::Rotation, input(0, 0)),
+                (Field::Scale, input(0, 1)),
+                (Field::Width, input(1, 0)),
+                (Field::Height, input(1, 1)),
+                (Field::TiltX, input(2, 0)),
+                (Field::TiltY, input(2, 1)),
+            ];
+            fn first(layout: iced::advanced::Layout<'_>) -> iced::advanced::Layout<'_> {
+                layout.children().next().unwrap()
+            }
+            // The lock leads the H label: cell → label container → row → button.
+            let lock = first(first(first(rows[1].children().nth(1).unwrap()))).bounds();
+            let more = rows[3].children().next().unwrap().bounds();
+            let apply_all = rows[3].children().nth(2).unwrap().bounds();
             let mut messages = Vec::new();
             let mut event = |event, cursor| {
                 view.as_widget_mut().update(
@@ -944,44 +1319,26 @@ mod tests {
                 )),
                 mouse::Cursor::Unavailable,
             );
-            let cursor = mouse::Cursor::Available(input.center());
-            event(
-                iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
-                cursor,
-            );
-            event(
-                iced::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
-                cursor,
-            );
-            for (key, physical_key, modifiers, text) in [
-                (
-                    Key::Character("a".into()),
-                    key::Code::KeyA,
-                    keyboard::Modifiers::COMMAND,
-                    None,
-                ),
-                (
-                    Key::Character("7".into()),
-                    key::Code::Digit7,
-                    keyboard::Modifiers::empty(),
-                    Some("7".into()),
-                ),
-                (
-                    Key::Character("2".into()),
-                    key::Code::Digit2,
-                    keyboard::Modifiers::empty(),
-                    Some("2".into()),
-                ),
-                (
-                    Key::Named(key::Named::Enter),
-                    key::Code::Enter,
-                    keyboard::Modifiers::empty(),
-                    None,
-                ),
-            ] {
+            let click = |event: &mut dyn FnMut(iced::Event, mouse::Cursor),
+                         bounds: iced::Rectangle| {
+                let cursor = mouse::Cursor::Available(bounds.center());
+                event(
+                    iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+                    cursor,
+                );
+                event(
+                    iced::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+                    cursor,
+                );
+            };
+            let press = |event: &mut dyn FnMut(iced::Event, mouse::Cursor),
+                         key: Key,
+                         physical_key,
+                         modifiers,
+                         text| {
                 event(
                     iced::Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)),
-                    cursor,
+                    mouse::Cursor::Unavailable,
                 );
                 event(
                     iced::Event::Keyboard(keyboard::Event::KeyPressed {
@@ -993,24 +1350,59 @@ mod tests {
                         text,
                         repeat: false,
                     }),
-                    cursor,
+                    mouse::Cursor::Unavailable,
                 );
+            };
+            let enter = |event: &mut dyn FnMut(iced::Event, mouse::Cursor)| {
+                press(
+                    event,
+                    Key::Named(key::Named::Enter),
+                    key::Code::Enter,
+                    keyboard::Modifiers::empty(),
+                    None,
+                )
+            };
+            click(&mut event, fields[0].1);
+            press(
+                &mut event,
+                Key::Character("a".into()),
+                key::Code::KeyA,
+                keyboard::Modifiers::COMMAND,
+                None,
+            );
+            press(
+                &mut event,
+                Key::Character("7".into()),
+                key::Code::Digit7,
+                keyboard::Modifiers::empty(),
+                Some("7".into()),
+            );
+            press(
+                &mut event,
+                Key::Character("2".into()),
+                key::Code::Digit2,
+                keyboard::Modifiers::empty(),
+                Some("2".into()),
+            );
+            for (_, bounds) in fields {
+                click(&mut event, bounds);
+                enter(&mut event);
             }
-            for bounds in buttons {
-                let cursor = mouse::Cursor::Available(bounds.center());
-                event(
-                    iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
-                    cursor,
-                );
-                event(
-                    iced::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
-                    cursor,
-                );
+            for bounds in [lock, more, apply_all] {
+                click(&mut event, bounds);
             }
             assert!(messages.iter().any(|m| matches!(m, Message::NumericTransform(Action::Input(Field::Rotation, value)) if value == "72")), "{messages:?}");
             for field in Field::ALL {
-                assert!(messages.iter().any(|m| matches!(m, Message::NumericTransform(Action::Apply(actual)) if *actual == field)));
+                assert!(messages.iter().any(|m| matches!(m, Message::NumericTransform(Action::Apply(actual)) if *actual == field)), "Enter in {field:?}: {messages:?}");
             }
+            let sent = |wanted: fn(&Action) -> bool| {
+                messages
+                    .iter()
+                    .any(|m| matches!(m, Message::NumericTransform(action) if wanted(action)))
+            };
+            assert!(sent(|a| matches!(a, Action::Proportional(false))));
+            assert!(sent(|a| matches!(a, Action::More(false))));
+            assert!(sent(|a| matches!(a, Action::ApplyAll)), "{messages:?}");
             let theme = app.theme();
             view.as_widget().draw(
                 &tree,

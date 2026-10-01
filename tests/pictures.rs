@@ -282,7 +282,7 @@ fn exported_pictures_preserve_pixels_transparency_rotation_and_layer_order() {
         Default::default(),
         false,
     );
-    cover.style.fill = Some([200, 100, 50]);
+    cover.style.fill = Some(reshiki::palette::Color::Custom([200, 100, 50]));
     cover.layer = 1;
     doc.graphics.push(cover);
     assert_eq!(sample_quadrants(&doc), vec![[200, 100, 50, 255]; 4]);

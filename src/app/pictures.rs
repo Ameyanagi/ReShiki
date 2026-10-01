@@ -1,4 +1,4 @@
-//! Asynchronous picture insertion and selection-aware size controls.
+//! Asynchronous picture replacement and selection-aware size controls.
 use super::{App, InspectorTab, Message, Point, Tool};
 use iced::{Element, Task};
 use reshiki::{graphics::Graphic, pictures::Picture};
@@ -9,12 +9,11 @@ pub struct Ticket {
     serial: u64,
     epoch: u64,
     revision: u64,
-    replace: Option<u64>,
+    target: u64,
 }
 
 #[derive(Debug, Clone)]
 pub enum Action {
-    Import,
     Replace,
     Loaded(Ticket, Result<Option<Picture>, String>),
     Width(String),
@@ -43,7 +42,7 @@ impl Default for State {
 }
 async fn choose_picture() -> Result<Option<Picture>, String> {
     let Some(file) = rfd::AsyncFileDialog::new()
-        .set_title("Insert a picture — PNG, JPEG, TIFF or WebP")
+        .set_title("Replace the picture — PNG, JPEG, TIFF or WebP")
         .add_filter("Pictures", &["png", "jpg", "jpeg", "tif", "tiff", "webp"])
         .pick_file()
         .await
@@ -95,77 +94,59 @@ impl App {
             || self.cleanup.is_some()
         {
             self.status =
-                "Drawing changed while loading the picture · Import again when ready".into();
+                "Drawing changed while loading the picture · Replace it again when ready".into();
             return;
         }
         let picture = match result {
             Ok(Some(picture)) => picture,
             Ok(None) => {
-                self.status = "Picture import cancelled".into();
+                self.status = "Picture replacement cancelled".into();
                 return;
             }
             Err(error) => {
                 self.error = true;
-                self.status = format!("Could not import picture: {error}");
+                self.status = format!("Could not load picture: {error}");
                 return;
             }
         };
         let before = self.doc.clone();
-        let id = if let Some(id) = ticket.replace {
-            let Some(g) = self
-                .doc
-                .graphics
-                .iter_mut()
-                .find(|g| g.id == id && g.picture.is_some())
-            else {
-                return;
-            };
-            let width = g.axis_x.distance(Point::default());
-            let height = g.axis_y.distance(Point::default());
-            let scale = (width / picture.width() as f32).min(height / picture.height() as f32);
-            if let Err(error) = reshiki::pictures::resize(
-                g,
-                picture.width() as f32 * scale,
-                picture.height() as f32 * scale,
-            ) {
-                self.error = true;
-                self.status = error;
-                return;
-            }
-            g.picture = Some(picture);
-            id
-        } else {
-            let id = self.doc.next_id();
-            self.doc
-                .graphics
-                .push(picture.graphic(id, self.camera.center));
-            id
+        let Some(g) = self
+            .doc
+            .graphics
+            .iter_mut()
+            .find(|g| g.id == ticket.target && g.picture.is_some())
+        else {
+            return;
         };
+        let width = g.axis_x.distance(Point::default());
+        let height = g.axis_y.distance(Point::default());
+        let scale = (width / picture.width() as f32).min(height / picture.height() as f32);
+        if let Err(error) = reshiki::pictures::resize(
+            g,
+            picture.width() as f32 * scale,
+            picture.height() as f32 * scale,
+        ) {
+            self.error = true;
+            self.status = error;
+            return;
+        }
+        g.picture = Some(picture);
         if let Err(error) = self.doc.validate() {
             self.doc = before;
             self.error = true;
-            self.status = format!("Could not insert picture: {error}");
+            self.status = format!("Could not replace picture: {error}");
             return;
         }
-        self.selected = vec![id];
+        self.selected = vec![ticket.target];
         self.changed(before);
         self.tool = Tool::Select;
-        self.import_open = false;
         self.inspector_open = true;
         self.inspector_tab = InspectorTab::Properties;
         self.sync_typography();
         self.sync_graphics();
         self.sync_arrows();
         self.sync_bonds();
-        self.status = if ticket.replace.is_some() {
-            "Picture replaced · Undo restores the original"
-        } else {
-            "Picture inserted · Drag the corner handles to resize"
-        }
-        .into();
-        if ticket.replace.is_none() {
-            self.reveal_picture(id);
-        }
+        self.status = "Picture replaced · Undo restores the original".into();
     }
     pub(super) fn reveal_picture(&mut self, id: u64) {
         if let Some(g) = self
@@ -175,40 +156,39 @@ impl App {
             .find(|g| g.id == id && g.picture.is_some())
         {
             let (lo, hi) = g.bounds();
-            let paper = self.guides.paper(iced::Rectangle::with_size(self.viewport));
-            if paper.width > 100. && paper.height > 100. {
-                self.camera.zoom = self
-                    .camera
-                    .zoom
-                    .min((paper.width - 80.) / (hi.x - lo.x))
-                    .min((paper.height - 80.) / (hi.y - lo.y))
-                    .max(0.001);
-            }
-            self.camera.center = lo.offset((hi.x - lo.x) / 2., (hi.y - lo.y) / 2.);
-            self.fit_to_view = false;
-            self.pages.fit = None;
+            self.reveal_bounds(lo, hi);
         }
+    }
+    /// Centers the view on these bounds, zooming out if they do not fit.
+    pub(super) fn reveal_bounds(&mut self, lo: Point, hi: Point) {
+        let paper = self.guides.paper(iced::Rectangle::with_size(self.viewport));
+        if paper.width > 100. && paper.height > 100. {
+            self.camera.zoom = self
+                .camera
+                .zoom
+                .min((paper.width - 80.) / (hi.x - lo.x))
+                .min((paper.height - 80.) / (hi.y - lo.y))
+                .max(0.001);
+        }
+        self.camera.center = lo.offset((hi.x - lo.x) / 2., (hi.y - lo.y) / 2.);
+        self.fit_to_view = false;
+        self.pages.fit = None;
     }
     pub(super) fn picture_action(&mut self, action: Action) -> Task<Message> {
         match action {
-            Action::Import | Action::Replace => {
+            Action::Replace => {
                 if self.pictures.active.is_some() {
                     return Task::none();
                 }
-                let replace = if matches!(action, Action::Replace) {
-                    let Some(g) = self.selected_picture() else {
-                        return Task::none();
-                    };
-                    Some(g.id)
-                } else {
-                    None
+                let Some(target) = self.selected_picture().map(|g| g.id) else {
+                    return Task::none();
                 };
                 self.pictures.next = self.pictures.next.wrapping_add(1);
                 let ticket = Ticket {
                     serial: self.pictures.next,
                     epoch: self.file_epoch,
                     revision: self.revision,
-                    replace,
+                    target,
                 };
                 self.pictures.active = Some(ticket.serial);
                 self.error = false;
@@ -361,8 +341,7 @@ impl App {
         } else {
             panel = panel.push(text("Multiple pictures selected").size(12));
         }
-        panel.push(row![command("Send to back", Message::GraphicLayer(false)), command("Bring to front", Message::GraphicLayer(true))].spacing(4))
-            .push(text("Drag the corner handles to resize; use the handle above to rotate. Enter applies dimensions. Pictures are saved inside your drawing.").size(11).style(muted_text)).into()
+        panel.push(text("Drag the corner handles to resize; use the handle above to rotate. Enter applies dimensions. Pictures are saved inside your drawing.").size(11).style(muted_text)).into()
     }
 }
 
@@ -385,36 +364,35 @@ mod tests {
         app.doc.add_atom("O", Point::new(200., 0.));
         app
     }
-    fn ticket(app: &mut App, replace: Option<u64>) -> Ticket {
+    /// Inserts a selected picture, as the Import tab does.
+    fn insert(app: &mut App, picture: Picture) -> u64 {
+        let before = app.doc.clone();
+        let id = app.doc.next_id();
+        app.doc.graphics.push(picture.graphic(id, Point::default()));
+        app.selected = vec![id];
+        app.changed(before);
+        id
+    }
+    fn ticket(app: &mut App, target: u64) -> Ticket {
         app.pictures.next += 1;
         app.pictures.active = Some(app.pictures.next);
         Ticket {
             serial: app.pictures.next,
             epoch: app.file_epoch,
             revision: app.revision,
-            replace,
+            target,
         }
     }
     fn finish(app: &mut App, ticket: Ticket, picture: Picture) {
         let _ = app.update(Message::Pictures(Action::Loaded(ticket, Ok(Some(picture)))));
     }
     #[test]
-    fn asynchronous_import_is_one_undo_step_and_never_replaces_a_newer_drawing() {
+    fn asynchronous_replacement_never_changes_a_newer_drawing() {
         let mut app = ready();
-        let before = app.doc.clone();
-        let job = ticket(&mut app, None);
-        finish(&mut app, job, picture(120, 80));
+        let id = insert(&mut app, picture(120, 80));
         let after = app.doc.clone();
-        assert_eq!(after.atoms, before.atoms);
-        assert_eq!(after.graphics.len(), 1);
-        assert_eq!(app.selected, vec![2]);
-        assert!(app.pictures.active.is_none());
-        let _ = app.update(Message::Undo);
-        assert_eq!(app.doc, before);
-        let _ = app.update(Message::Redo);
-        assert_eq!(app.doc, after);
         for new_file in [false, true] {
-            let job = ticket(&mut app, None);
+            let job = ticket(&mut app, id);
             if new_file {
                 app.file_epoch += 1;
             } else {
@@ -424,7 +402,7 @@ mod tests {
             assert_eq!(app.doc, after);
             assert!(app.pictures.active.is_none());
         }
-        let job = ticket(&mut app, None);
+        let job = ticket(&mut app, id);
         let _ = app.update(Message::InlineText(
             super::super::inline_text::Action::Begin(None, Point::default()),
         ));
@@ -435,8 +413,7 @@ mod tests {
     #[test]
     fn replacement_retains_center_rotation_and_layer_and_undo_restores_the_pixels() {
         let mut app = ready();
-        let job = ticket(&mut app, None);
-        finish(&mut app, job, picture(120, 80));
+        insert(&mut app, picture(120, 80));
         let _ = app.update(Message::Transform(reshiki::editing::Transform::Rotate(37.)));
         let _ = app.update(Message::Transform(
             reshiki::editing::Transform::FlipHorizontal,
@@ -447,7 +424,7 @@ mod tests {
             (old.axis_x.x + old.axis_y.x) / 2.,
             (old.axis_x.y + old.axis_y.y) / 2.,
         );
-        let job = ticket(&mut app, Some(old.id));
+        let job = ticket(&mut app, old.id);
         finish(&mut app, job, picture(60, 100));
         let g = &app.doc.graphics[0];
         assert_eq!((g.id, g.layer), (old.id, old.layer));
@@ -468,8 +445,7 @@ mod tests {
     #[test]
     fn numeric_sizes_keep_proportions_and_reject_invalid_input_without_edits() {
         let mut app = ready();
-        let job = ticket(&mut app, None);
-        finish(&mut app, job, picture(120, 80));
+        insert(&mut app, picture(120, 80));
         let before = app.doc.clone();
         for invalid in ["NaN", "-1", "inf", "0", "wrong"] {
             let _ = app.update(Message::Pictures(Action::Width(invalid.into())));
@@ -489,32 +465,55 @@ mod tests {
         let _ = app.update(Message::Pictures(Action::RestoreAspect));
         assert_eq!(app.pictures.height, "40.00");
         let restored = app.doc.clone();
-        app.apply_graphic_style(reshiki::graphics::GraphicChange::Stroke([255, 0, 0]));
+        app.apply_graphic_style(reshiki::graphics::GraphicChange::Stroke(
+            reshiki::palette::Color::Custom([255, 0, 0]),
+        ));
         assert_eq!(app.doc, restored);
         assert_eq!(app.doc.atoms, before.atoms);
     }
     #[test]
     fn cancellation_failure_and_old_job_completion_leave_the_drawing_untouched() {
         let mut app = ready();
+        let id = insert(&mut app, picture(20, 20));
         let before = app.doc.clone();
         for result in [Ok(None), Err("Broken image".into())] {
-            let job = ticket(&mut app, None);
+            let job = ticket(&mut app, id);
             let _ = app.update(Message::Pictures(Action::Loaded(job, result)));
             assert_eq!(app.doc, before);
             assert!(app.pictures.active.is_none());
         }
-        let old = ticket(&mut app, None);
-        let current = ticket(&mut app, None);
+        let old = ticket(&mut app, id);
+        let current = ticket(&mut app, id);
         finish(&mut app, old, picture(20, 20));
         assert_eq!(app.pictures.active, Some(current.serial));
         assert_eq!(app.doc, before);
     }
 
+    /// The context row's Order menu stacks pictures; the panel has no own row.
+    #[test]
+    fn order_commands_stack_a_selected_picture() {
+        use super::super::object_toolbar::Command;
+        let mut app = ready();
+        insert(&mut app, picture(20, 20));
+        let initial = app.doc.graphics[0].layer;
+        for front in [false, true] {
+            let command = Command::Layer(front);
+            assert!(command.enabled(&app, app.alignment_count()));
+            let _ = app.update(command.message());
+            let layer = app.doc.graphics[0].layer;
+            assert!(if front {
+                layer > 0
+            } else {
+                layer < initial.min(0)
+            });
+        }
+        let _ = app.update(Message::Undo);
+        assert!(app.doc.graphics[0].layer < initial.min(0));
+    }
     #[test]
     fn canvas_handle_resizing_refreshes_the_picture_dimensions() {
         let mut app = ready();
-        let job = ticket(&mut app, None);
-        finish(&mut app, job, picture(600, 360));
+        insert(&mut app, picture(600, 360));
         assert_eq!(app.pictures.width, "50.80");
         app.edit(crate::canvas::Edit::Transform {
             ids: app.selected.clone(),

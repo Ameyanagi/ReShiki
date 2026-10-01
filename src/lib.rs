@@ -46,6 +46,7 @@ pub mod ligands;
 #[cfg(windows)]
 mod native_windows;
 pub mod pages;
+pub mod palette;
 pub mod pictures;
 pub mod printing;
 pub mod projection;

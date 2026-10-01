@@ -59,7 +59,16 @@ impl Request {
     }
     pub fn molecule(operation: &str, document: Document) -> Self {
         let graphic_parts = (operation == "export").then(|| {
-            document
+            // Build parts as the scene does, so phase shading matches the canvas,
+            // then give their custom colors back as they appear on the canvas.
+            let canvas = document.canvas_theme;
+            let shown = |color| match color {
+                crate::palette::Color::Custom(rgb) => {
+                    crate::palette::Color::Custom(canvas.color(rgb))
+                }
+                color => color,
+            };
+            crate::canvas_theme::canonical_document(&document)
                 .graphics
                 .iter()
                 .filter(|g| {
@@ -69,7 +78,14 @@ impl Request {
                             | crate::graphics::GraphicKind::Orbital(_)
                     )
                 })
-                .map(|g| (g.id, g.parts()))
+                .map(|g| {
+                    let mut parts = g.parts();
+                    for part in &mut parts {
+                        part.style.stroke = shown(part.style.stroke);
+                        part.style.fill = part.style.fill.map(shown);
+                    }
+                    (g.id, parts)
+                })
                 .collect()
         });
         let graphic_paths = (operation == "export").then(|| {

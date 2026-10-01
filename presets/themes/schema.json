@@ -40,9 +40,59 @@
     },
     "generator": {
       "$ref": "#/$defs/generator"
+    },
+    "hues": {
+      "$ref": "#/$defs/hues"
     }
   },
   "$defs": {
+    "hues": {
+      "description": "Palette hue angles in degrees. Missing slots use the defaults: red 25, orange 55, amber 85, green 145, teal 185, blue 255, indigo 285, purple 320.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "red": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 359
+        },
+        "orange": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 359
+        },
+        "amber": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 359
+        },
+        "green": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 359
+        },
+        "teal": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 359
+        },
+        "blue": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 359
+        },
+        "indigo": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 359
+        },
+        "purple": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 359
+        }
+      }
+    },
     "tone": {
       "type": "object",
       "additionalProperties": false,

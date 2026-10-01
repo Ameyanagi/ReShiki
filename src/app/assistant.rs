@@ -1,8 +1,8 @@
 use super::{App, InspectorTab, Message};
 use crate::canvas::layered::canvas;
 use iced::widget::{
-    Space, button, checkbox, column, container, mouse_area, opaque, row, scrollable, stack, text,
-    text_editor, tooltip,
+    Space, button, checkbox, column, container, mouse_area, opaque, rich_text, row, scrollable,
+    stack, text, text_editor, tooltip,
 };
 use iced::{Alignment, Border, Color, Element, Length, Task};
 use reshiki::assistant::settings::{Preferences, effort_label};
@@ -803,8 +803,13 @@ impl App {
                     drawing_style: self.doc.drawing_style.clone(),
                     format: self.caption_format.clone(),
                     bond_length: self.bond_drawing.length,
+                    // The field shows display colors; the canvas ink stays Ink.
                     bond_color: super::graphics::parse_color(&self.bond_color_input)
-                        .unwrap_or([0; 3]),
+                        .filter(|rgb| *rgb != self.doc.canvas_theme.color([0; 3]))
+                        .map_or(
+                            reshiki::palette::Color::Ink,
+                            reshiki::palette::Color::Custom,
+                        ),
                     arrow_style: self.arrows.style.clone(),
                     labels: self.doc.atom_labels.clone(),
                 };
@@ -1655,10 +1660,11 @@ impl App {
                     );
                 }
                 options = options.push(
-                    text(super::platform_shortcut(
-                        "Paste with ⌘V · Send with ⌘Enter",
-                        "Paste with Ctrl+V · Send with Ctrl+Enter",
-                    ))
+                    rich_text(super::shortcuts::spans(&format!(
+                        "Paste with {} · Send with {}",
+                        super::shortcuts::label(&Message::Paste).unwrap_or_default(),
+                        super::shortcuts::keys(iced::keyboard::Modifiers::COMMAND, "Enter")
+                    )))
                     .size(11),
                 );
             }
@@ -2104,7 +2110,9 @@ mod tests {
             assert_eq!(app.assistant.input.text(), "Replace this scheme");
         }
         let _ = app.update(Message::SelectAll);
-        let _ = app.update(Message::TextStyle(StyleChange::Color([32, 80, 145])));
+        let _ = app.update(Message::TextStyle(StyleChange::Color(
+            reshiki::palette::Color::Custom([32, 80, 145]),
+        )));
         let colored = app.doc.clone();
         assert_ne!(colored, original);
         assert_eq!(app.inspector_tab, InspectorTab::Assistant);

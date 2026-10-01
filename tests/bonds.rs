@@ -51,7 +51,10 @@ fn bond_presets_have_distinct_geometry_and_valid_native_state() {
     else {
         panic!("A solid wedge must have a filled outline");
     };
-    assert_eq!(style.fill, Some([0, 0, 0]));
+    assert_eq!(
+        style.fill.map(reshiki::palette::Color::rgb),
+        Some([0, 0, 0])
+    );
     assert_eq!(commands.last(), Some(&PathCommand::Close));
     let outline = &flattened(commands)[0];
     assert!(outline[0].distance(*outline.last().unwrap()) < 0.001);
@@ -95,7 +98,7 @@ fn wavy_bonds_are_continuous_curves_with_even_pitch_in_every_direction() {
     ] {
         let mut d = single(BondPreset::Wavy);
         d.atoms[1].position = end;
-        d.bonds[0].color = [32, 80, 145];
+        d.bonds[0].color = reshiki::palette::Color::Custom([32, 80, 145]);
         let drawing = scene::primitives(&d);
         assert_eq!(drawing.len(), 1, "A wave must be one stroked path");
         let Primitive::Path {
@@ -107,7 +110,7 @@ fn wavy_bonds_are_continuous_curves_with_even_pitch_in_every_direction() {
             panic!("Expected a smooth path");
         };
         assert!(!filled);
-        assert_eq!(style.stroke, [32, 80, 145]);
+        assert_eq!(style.stroke.rgb(), [32, 80, 145]);
         assert_eq!(style.width_pt, d.drawing_style.line_width_pt);
         assert_eq!(commands.first(), Some(&PathCommand::Move(Point::default())));
         let mut cursor = Point::default();
@@ -160,7 +163,7 @@ fn double_bond_side_reflects_and_reverses_without_changing_order() {
 #[test]
 fn bond_color_reaches_shared_vector_and_raster_exports() {
     let mut d = single(BondPreset::BoldDouble);
-    d.bonds[0].color = [32, 80, 145];
+    d.bonds[0].color = reshiki::palette::Color::Custom([32, 80, 145]);
     let svg = scene::svg(&d);
     assert!(svg.contains("rgb(32,80,145)"));
     let png = reshiki::export::drawing(&d, "png").unwrap();
@@ -242,7 +245,7 @@ async fn bond_gallery_survives_checks_cleanup_and_cdxml_with_appearance_intact()
     let mut gallery = Document::default();
     for (i, preset) in BondPreset::ALL.into_iter().enumerate() {
         let mut d = single(preset);
-        d.bonds[0].color = [32, 80, 145];
+        d.bonds[0].color = reshiki::palette::Color::Custom([32, 80, 145]);
         if [2, 7].contains(&d.bonds[0].order) {
             d.bonds[0].double_position = DoublePosition::Left;
         }

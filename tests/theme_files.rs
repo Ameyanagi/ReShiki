@@ -57,12 +57,13 @@ fn curated_themes_cover_all_elements_and_ring_roles_in_both_modes() {
             for &element in reshiki::editing::ELEMENTS {
                 doc.atoms[0].element = element.into();
                 let ids = doc.all_ids();
-                for (_, key) in reshiki::ring_fills::PALETTE {
-                    reshiki::ring_fills::apply(&mut doc, &ids, Some(key));
+                for hue in reshiki::palette::Hue::ALL {
+                    let tint = reshiki::palette::Color::Palette(hue, reshiki::palette::Row::Tint);
+                    reshiki::ring_fills::apply(&mut doc, &ids, Some(tint));
                     let ink = mode.color(canvas_theme::atom_color(&doc, &doc.atoms[0]));
                     for bg in [
                         mode.background(),
-                        canvas_theme::fill_color(&doc, &doc.ring_fills[0]),
+                        reshiki::palette::Palette::of(&doc).rgb(tint),
                     ] {
                         assert!(
                             contrast(ink, bg) >= TEXT_TARGET,
@@ -174,24 +175,21 @@ fn styles_round_trip_as_native_json_and_chemdraw_stationery() {
 
 #[test]
 fn custom_theme_reaches_figures_editable_exchange_and_transparent_clipboard() {
+    use reshiki::palette::{Color, Hue, Palette, Row};
     let mut theme = theme_files::bundled().unwrap().remove(0);
-    theme
-        .light
-        .ring_fills
-        .insert("Sky".into(), ColorValue::Rgb([240, 226, 247]));
-    theme
-        .dark
-        .ring_fills
-        .insert("Sky".into(), ColorValue::Rgb([86, 70, 105]));
+    theme.hues.set(Hue::Blue, 300);
+    let tint = Color::Palette(Hue::Blue, Row::Tint);
     for mode in CanvasTheme::ALL {
         let mut doc = reshiki::rings::Preset::Regular.document(42., false);
         doc.canvas_theme = mode;
         doc.atoms[0].element = "O".into();
+        let default_fill = Palette::of(&doc).rgb(tint);
         theme.clone().apply(&mut doc).unwrap();
         let ids = doc.all_ids();
-        reshiki::ring_fills::apply(&mut doc, &ids, Some(reshiki::ring_fills::PALETTE[0].1));
+        reshiki::ring_fills::apply(&mut doc, &ids, Some(tint));
         let ink = mode.color(canvas_theme::atom_color(&doc, &doc.atoms[0]));
-        let fill = canvas_theme::fill_color(&doc, &doc.ring_fills[0]);
+        let fill = Palette::of(&doc).rgb(tint);
+        assert_ne!(fill, default_fill, "the theme's hues reach ring interiors");
         let svg = reshiki::scene::svg(&doc);
         let tree = roxmltree::Document::parse(&svg).unwrap();
         let label = tree

@@ -1,4 +1,54 @@
+use super::Message;
+use iced::Task;
 use std::path::PathBuf;
+
+const SAVE: &str = "Save";
+const DONT_SAVE: &str = "Don’t Save";
+
+/// Asks with the system dialog whether to save `name` before continuing a
+/// pending action; the answer arrives as Save, Discard or Cancel.
+pub(super) fn ask_to_save(name: String) -> Task<Message> {
+    iced::window::latest().then(move |window| {
+        let question = format!("Do you want to save the changes you made to “{name}”?");
+        let consequence = "Your changes will be lost if you don’t save them.";
+        // macOS alerts show the title in bold above the description; other
+        // platforms use the title as the window caption.
+        let (title, description) = if cfg!(target_os = "macos") {
+            (question, consequence.to_owned())
+        } else {
+            (
+                "Save changes?".to_owned(),
+                format!("{question} {consequence}"),
+            )
+        };
+        let dialog = rfd::AsyncMessageDialog::new()
+            .set_level(rfd::MessageLevel::Warning)
+            .set_title(title)
+            .set_description(description)
+            .set_buttons(rfd::MessageButtons::YesNoCancelCustom(
+                SAVE.into(),
+                DONT_SAVE.into(),
+                "Cancel".into(),
+            ));
+        match window {
+            Some(id) => iced::window::run(id, move |window| dialog.set_parent(&window).show())
+                .then(|answer| Task::perform(answer, save_answer)),
+            None => Task::perform(dialog.show(), save_answer),
+        }
+    })
+}
+
+/// Platforms without custom buttons answer Yes/No/Cancel in the same order.
+fn save_answer(result: rfd::MessageDialogResult) -> Message {
+    use rfd::MessageDialogResult as Answer;
+    match result {
+        Answer::Yes => Message::Save,
+        Answer::No => Message::Discard,
+        Answer::Custom(label) if label == SAVE => Message::Save,
+        Answer::Custom(label) if label == DONT_SAVE => Message::Discard,
+        _ => Message::Cancel,
+    }
+}
 
 /// Keep native file types and filename completion consistent across save dialogs.
 pub(super) async fn save_path(title: &str, name: &str, extension: &str) -> Option<PathBuf> {
@@ -52,16 +102,14 @@ pub enum Prepared {
 
 pub type Opened = Option<(PathBuf, Result<Prepared, String>)>;
 
-fn prepare(path: &std::path::Path, contents: String) -> Result<Prepared, String> {
+fn prepare(path: &std::path::Path, contents: Vec<u8>) -> Result<Prepared, String> {
     let extension = path
         .extension()
         .and_then(|e| e.to_str())
         .unwrap_or_default()
         .to_ascii_lowercase();
     if reshiki::compatibility::is_native_extension(&extension) {
-        let mut doc: reshiki::document::Document =
-            serde_json::from_str(&contents).map_err(|e| format!("Could not open document: {e}"))?;
-        doc.validate()
+        let mut doc = reshiki::document::Document::from_json(&contents)
             .map_err(|e| format!("Could not open document: {e}"))?;
         doc.version = doc.version.max(15);
         reshiki::atom_labels::clear_computed(&mut doc);
@@ -72,10 +120,14 @@ fn prepare(path: &std::path::Path, contents: String) -> Result<Prepared, String>
             "rxn" => "rxn",
             "rsmi" => "rsmi",
             "cdxml" => "cdxml",
+            "cdx" => "cdx",
             "inchi" => "inchi",
             _ => "smiles",
         };
-        Ok(Prepared::Import { format, contents })
+        Ok(Prepared::Import {
+            format,
+            contents: super::import::contents(format, contents)?,
+        })
     }
 }
 
@@ -84,7 +136,7 @@ fn prepare(path: &std::path::Path, contents: String) -> Result<Prepared, String>
 pub(super) async fn read(path: PathBuf) -> Opened {
     let source = path.clone();
     let result = tokio::task::spawn_blocking(move || {
-        let contents = std::fs::read_to_string(&source).map_err(|e| e.to_string())?;
+        let contents = std::fs::read(&source).map_err(|e| e.to_string())?;
         prepare(&source, contents)
     })
     .await
@@ -93,7 +145,7 @@ pub(super) async fn read(path: PathBuf) -> Opened {
     Some((path, result))
 }
 
-pub(super) async fn prepare_contents(path: PathBuf, contents: Result<String, String>) -> Opened {
+pub(super) async fn prepare_contents(path: PathBuf, contents: Result<Vec<u8>, String>) -> Opened {
     let source = path.clone();
     let result = tokio::task::spawn_blocking(move || prepare(&source, contents?))
         .await
@@ -110,15 +162,17 @@ impl super::App {
         result: Result<Option<PathBuf>, String>,
     ) -> iced::Task<super::Message> {
         self.file_io.saving = false;
+        // The write still releases the serial save slot, but its dialog and
+        // error belong to the document that started it.
+        if epoch != self.file_epoch {
+            return iced::Task::none();
+        }
         if result.is_err() {
             self.autosave.cancel_close();
         }
         match result {
             Ok(Some(path)) => {
-                if epoch != self.file_epoch {
-                    self.status = "Previous document saved".into();
-                    return iced::Task::none();
-                }
+                // Continue the save dialog's action only when nothing is left unsaved.
                 self.saved = *snapshot;
                 self.path = Some(path);
                 self.untitled_name = None;
@@ -131,19 +185,21 @@ impl super::App {
                 self.error = false;
                 if !self.dirty() {
                     self.clear_recovery();
-                }
-                if !self.dirty()
-                    && let Some(action) = self.pending.take()
-                {
-                    return self.perform(action);
+                    if let Some(action) = self.pending.take() {
+                        return self.perform(action);
+                    }
+                } else if self.pending.is_some() {
+                    // Edits made during the write need another answer before
+                    // New, Open or Close can continue.
+                    return ask_to_save(self.document_name());
                 }
             }
-            Ok(None) => {}
+            // A cancelled Save As or a failed save also cancels the dialog's action.
+            Ok(None) => self.pending = None,
             Err(e) => {
-                if epoch == self.file_epoch {
-                    self.status = e;
-                    self.error = true;
-                }
+                self.pending = None;
+                self.status = e;
+                self.error = true;
             }
         }
         iced::Task::none()
@@ -242,7 +298,7 @@ pub(super) fn dispatched_open_key(app: &super::App) -> Key {
 pub(super) fn finish_dispatched_open(
     app: &mut super::App,
     path: PathBuf,
-    contents: Result<String, String>,
+    contents: Result<Vec<u8>, String>,
 ) {
     let key = dispatched_open_key(app);
     let runtime = tokio::runtime::Builder::new_current_thread()
@@ -265,6 +321,7 @@ mod tests {
     use super::*;
     use crate::app::{App, Message, Pending, inline_text};
     use reshiki::document::{Document, Point};
+    use rfd::MessageDialogResult as Answer;
 
     fn prepared() -> Opened {
         let mut document = Document::default();
@@ -329,18 +386,31 @@ mod tests {
             .build()
             .unwrap();
         let (_, invalid) = runtime
-            .block_on(prepare_contents("bad.rsk".into(), Ok("not JSON".into())))
+            .block_on(prepare_contents("bad.rsk".into(), Ok(b"not JSON".to_vec())))
             .unwrap();
         assert!(invalid.unwrap_err().contains("Could not open document"));
         let (_, imported) = runtime
             .block_on(prepare_contents(
                 "example.CDXML".into(),
-                Ok("<CDXML/>".into()),
+                Ok(b"<CDXML/>".to_vec()),
             ))
             .unwrap();
         assert!(
             matches!(imported.unwrap(), Prepared::Import { format: "cdxml", contents } if contents == "<CDXML/>")
         );
+    }
+
+    #[test]
+    fn save_dialog_answers_map_to_save_discard_and_cancel() {
+        for answer in [Answer::Custom(SAVE.into()), Answer::Yes] {
+            assert!(matches!(save_answer(answer), Message::Save));
+        }
+        for answer in [Answer::Custom(DONT_SAVE.into()), Answer::No] {
+            assert!(matches!(save_answer(answer), Message::Discard));
+        }
+        for answer in [Answer::Custom("Cancel".into()), Answer::Cancel, Answer::Ok] {
+            assert!(matches!(save_answer(answer), Message::Cancel));
+        }
     }
 
     #[test]
@@ -365,6 +435,60 @@ mod tests {
         ));
         assert!(!app.file_io.saving);
         assert!(!path.exists());
+    }
+
+    #[test]
+    fn stale_save_results_preserve_the_new_documents_pending_action() {
+        for result in [
+            Ok(Some("old.rsk".into())),
+            Ok(None),
+            Err("Old failure".into()),
+        ] {
+            let (mut app, _) = App::new();
+            let epoch = app.file_epoch;
+            let snapshot = app.doc.clone();
+            let _ = app.update(Message::Save);
+            let _ = app.perform(Pending::New);
+            app.doc.add_atom("O", Point::default());
+            let _ = app.update(Message::New);
+            app.status = "Current drawing".into();
+            let before = app.doc.clone();
+            let _ = app.update(Message::Saved(epoch, Box::new(snapshot), result));
+            assert!(!app.file_io.saving);
+            assert!(matches!(app.pending, Some(Pending::New)));
+            assert_eq!(app.doc, before);
+            assert_eq!(app.status, "Current drawing");
+            assert!(!app.error && app.path.is_none());
+            // The outstanding dialog still answers the new drawing's request.
+            let _ = app.update(Message::Discard);
+            assert!(app.doc.all_ids().is_empty() && app.pending.is_none());
+        }
+    }
+
+    #[test]
+    fn edits_during_a_save_reopen_the_pending_dialog() {
+        let (mut app, _) = App::new();
+        app.doc.add_atom("O", Point::default());
+        let snapshot = app.doc.clone();
+        let _ = app.update(Message::New);
+        let _ = app.update(Message::Save);
+        let before = app.doc.clone();
+        app.doc.add_atom("N", Point::new(80., 0.));
+        app.changed(before);
+        let edited = app.doc.clone();
+        let task = app.update(Message::Saved(
+            app.file_epoch,
+            Box::new(snapshot.clone()),
+            Ok(Some("drawing.rsk".into())),
+        ));
+        assert!(task.units() > 0, "Ask about the edits made during the save");
+        assert!(matches!(app.pending, Some(Pending::New)));
+        assert_eq!(app.saved, snapshot);
+        assert_eq!(app.doc, edited);
+        assert!(app.dirty());
+        let _ = app.update(Message::Cancel);
+        assert!(app.pending.is_none());
+        assert_eq!(app.doc, edited);
     }
 }
 

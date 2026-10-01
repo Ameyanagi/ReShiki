@@ -9,7 +9,7 @@ static EVENTS: Mutex<Option<UnboundedReceiver<reshiki_macos::OpenRequest>>> = Mu
 #[derive(Debug, Clone)]
 pub enum Action {
     Open(reshiki_macos::OpenRequest),
-    Loaded(super::files::Key, PathBuf, Result<String, String>),
+    Loaded(super::files::Key, PathBuf, Result<Vec<u8>, String>),
     Prepared(super::files::Key, super::files::Opened),
     Launched(Result<(), String>),
 }
@@ -53,7 +53,7 @@ impl App {
             && self.atom_text.is_none()
             && self.inline_text.is_none()
             && self.pending.is_none()
-            && !self.import_open
+            && self.imports.is_blank()
             && self.styles.editor.is_none()
     }
 
@@ -68,9 +68,8 @@ impl App {
                         let key = self.file_request_key();
                         tasks.push(Task::perform(
                             async move {
-                                let contents = tokio::fs::read_to_string(&path)
-                                    .await
-                                    .map_err(|e| e.to_string());
+                                let contents =
+                                    tokio::fs::read(&path).await.map_err(|e| e.to_string());
                                 Action::Loaded(key, path, contents)
                             },
                             Message::MacFiles,
@@ -187,7 +186,7 @@ mod tests {
         doc.add_atom("N", Point::default());
         let path = PathBuf::from("/tmp/日本語 drawing.rsk");
         let key = begin_read(&mut app, &path);
-        let contents = serde_json::to_string(&doc).map_err(|e| e.to_string())?;
+        let contents = serde_json::to_vec(&doc).map_err(|e| e.to_string())?;
         let task = app.mac_file_action(Action::Loaded(key, path.clone(), Ok(contents.clone())));
         assert_eq!(
             super::super::files::dispatched_open_key(&app),
@@ -217,7 +216,7 @@ mod tests {
         let path = PathBuf::from("/tmp/first.rsk");
         let mut document = Document::default();
         document.add_atom("N", Point::default());
-        let contents = serde_json::to_string(&document).map_err(|e| e.to_string())?;
+        let contents = serde_json::to_vec(&document).map_err(|e| e.to_string())?;
         let key = begin_read(&mut app, &path);
         let _ = app.mac_file_action(Action::Loaded(key, path.clone(), Ok(contents.clone())));
         assert!(!app.can_open_in_startup_window());
@@ -242,7 +241,7 @@ mod tests {
             let path = PathBuf::from("/tmp/finder.rsk");
             let mut document = Document::default();
             document.add_atom("O", Point::default());
-            let contents = serde_json::to_string(&document).map_err(|e| e.to_string())?;
+            let contents = serde_json::to_vec(&document).map_err(|e| e.to_string())?;
             let key = begin_read(&mut app, &path);
             let _ = app.mac_file_action(Action::Loaded(key, path.clone(), Ok(contents.clone())));
             if edit {
@@ -277,13 +276,13 @@ mod tests {
         let finder_path = PathBuf::from("/tmp/finder.rsk");
         let finder_key = begin_read(&mut app, &finder_path);
         // Dispatch the real menu-open path without polling its native dialog.
-        let menu_task = app.perform(super::super::Pending::Open);
+        let menu_task = app.perform(super::super::Pending::Open(None));
         assert!(menu_task.units() > 0);
         let menu_key = super::super::files::dispatched_open_key(&app);
         assert_ne!(menu_key, finder_key);
         let mut document = Document::default();
         document.add_atom("N", Point::default());
-        let contents = serde_json::to_string(&document).map_err(|e| e.to_string())?;
+        let contents = serde_json::to_vec(&document).map_err(|e| e.to_string())?;
         let followup = app.update(Message::MacFiles(Action::Loaded(
             finder_key,
             finder_path,
@@ -317,7 +316,7 @@ mod tests {
         let _ = app.mac_file_action(Action::Loaded(
             key,
             PathBuf::from("/tmp/other.rsk"),
-            Ok("{}".into()),
+            Ok(b"{}".to_vec()),
         ));
         assert_eq!(app.doc, original);
         assert!(app.path.is_none());
@@ -330,7 +329,7 @@ mod tests {
             let path = PathBuf::from("/tmp/finder.rsk");
             let mut document = Document::default();
             document.add_atom("O", Point::default());
-            let contents = serde_json::to_string(&document).map_err(|e| e.to_string())?;
+            let contents = serde_json::to_vec(&document).map_err(|e| e.to_string())?;
             let key = begin_read(&mut app, &path);
             let _ = app.update(Message::MacFiles(Action::Loaded(
                 key,
@@ -392,11 +391,11 @@ mod tests {
         let original = app.doc.clone();
         let path = PathBuf::from("/tmp/bad.rsk");
         let key = begin_read(&mut app, &path);
-        let task = app.mac_file_action(Action::Loaded(key, path.clone(), Ok("not json".into())));
+        let task = app.mac_file_action(Action::Loaded(key, path.clone(), Ok(b"not json".to_vec())));
         assert!(task.units() > 0);
         assert_eq!(app.doc, original);
         assert!(!app.error, "Validation has not run on the event loop");
-        super::super::files::finish_dispatched_open(&mut app, path, Ok("not json".into()));
+        super::super::files::finish_dispatched_open(&mut app, path, Ok(b"not json".to_vec()));
         assert_eq!(app.doc, original);
         assert!(app.error);
         assert!(app.path.is_none());

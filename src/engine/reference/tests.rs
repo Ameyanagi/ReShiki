@@ -136,7 +136,7 @@ async fn native_cip_is_never_called_for_migrated_app_operations() -> anyhow::Res
         }
         for bond in &mut doc.bonds {
             bond.cip_label = Some("E".into());
-            bond.color = [17, 126, 108];
+            bond.color = crate::palette::Color::Custom([17, 126, 108]);
         }
         for format in [
             None,

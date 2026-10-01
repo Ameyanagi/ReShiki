@@ -58,10 +58,9 @@ impl Default for State {
     }
 }
 impl State {
-    pub(super) fn refresh_inputs(&mut self) {
+    pub(super) fn refresh_inputs(&mut self, palette: &reshiki::palette::Palette) {
         self.numbers = FIELDS.map(|f| f.get(&self.style).to_string());
-        let [r, g, b] = self.style.color;
-        self.color = format!("#{r:02X}{g:02X}{b:02X}");
+        self.color = reshiki::palette::hex(palette.rgb(self.style.color));
     }
 }
 #[derive(Debug, Clone)]
@@ -114,7 +113,8 @@ impl App {
                 self.inspector_tab = InspectorTab::Properties;
             }
         }
-        self.arrows.refresh_inputs();
+        self.arrows
+            .refresh_inputs(&reshiki::palette::Palette::of(&self.doc));
     }
     pub(super) fn arrow_action(&mut self, action: Action) {
         match action {
@@ -139,8 +139,10 @@ impl App {
                 Action::NoGo(v) => s.no_go = v,
                 Action::Dipole(v) => s.dipole = v,
                 Action::ApplyColor => {
-                    s.color = graphics::parse_color(&self.arrows.color)
-                        .ok_or("Use a six-digit hex color, for example #205091")?
+                    s.color = reshiki::palette::Color::Custom(
+                        graphics::parse_color(&self.arrows.color)
+                            .ok_or("Use a six-digit hex color, for example #205091")?,
+                    )
                 }
                 Action::ApplyNumber(f) => f.set(
                     s,
@@ -194,6 +196,9 @@ impl App {
             }
         }
         let before = std::mem::replace(&mut self.doc, next);
+        if matches!(action, Action::ApplyColor) {
+            self.remember_custom(Some(style.color), &before);
+        }
         self.arrows.style = style;
         self.changed(before);
         self.sync_arrows();

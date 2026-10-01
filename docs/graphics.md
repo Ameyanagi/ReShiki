@@ -6,7 +6,7 @@ Implemented and desktop-checked on 2026-09-20. Supported graphics workflows and 
 
 - The main palette now includes rectangles, ellipses, brackets, graphic lines, Bézier curves and arcs. The contextual shape selector also offers rounded rectangles, parentheses and braces.
 - Drag to preview and size an object. Shift constrains boxes/ellipses to a square/circle and lines/curves to 45° directions. Escape cancels. Committing returns to Select.
-- Properties controls stroke color, separate fill color, line width in points, and solid/dashed/dotted strokes. Color swatches and RGB hex entry are available; numeric/hex fields apply with Enter. Brackets offer both, left or right sides.
+- Properties controls stroke color, separate fill color, line width in points, and solid/dashed/dotted strokes. Stroke swatches are the palette's Ink and Strong row, and fill swatches its Tint row, where the crossed-out swatch removes the fill; RGB hex entry is available, and numeric/hex fields apply with Enter. Brackets offer both, left or right sides.
 - Select to move, copy, duplicate, rotate, reflect or proportionally resize. Background graphics leave molecular atoms and bonds selectable. Send to back / Bring to front places graphics behind or above the chemical drawing.
 - Select a curve and choose **Edit curve points**. Drag anchors or control points, then choose Done. Undo/Redo retains the selected curve. Each drag commits one history step.
 

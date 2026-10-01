@@ -12,7 +12,7 @@ Windows desktop Office supports ReShiki OLE objects. Copy the object back into R
 
 Clipboard PNG, PDF and SVG figures always have transparent backgrounds. They retain the visible ink: black bonds and labels from a light canvas, white bonds and labels from a dark canvas. The Windows editable object's EMF+ dual preview keeps bonds and outlined text as vectors. Imported pictures retain their own pixels and transparency. Open an older embedded ReShiki object and press Ctrl+S to refresh its preview, then save the Office document.
 
-Dark editable ChemDraw copies use white bonds and labels without a background rectangle. Pasting between different canvas modes in ReShiki also keeps source ink colors without adding a page background. **View → Interface** affects only the app controls; it never changes clipboard output.
+Dark editable ChemDraw copies use white bonds and labels without a background rectangle. Pasting between ReShiki drawings adds no page background; Ink and palette colors follow the receiving drawing's canvas and theme, and custom colors stay exact. **View → Interface** affects only the app controls; it never changes clipboard output.
 
 macOS retains its existing native drawing/CDX and PDF/PNG/SVG clipboard representations. Mac Office does not provide this Windows OLE activation workflow. Keep the `.rsk` original, edit it in ReShiki and replace the Office figure. A pasted picture alone cannot restore native atoms and bonds. Mac Office round-trip behavior has not been verified by this Windows test run.
 

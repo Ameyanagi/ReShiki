@@ -1,15 +1,14 @@
 # Pictures in drawings
 
-Use **Import → Picture…** to insert a PNG, JPEG, TIFF or WebP file. The drawing stays responsive while the picture loads. Cancel leaves the drawing unchanged. If you switch documents or edit the drawing during loading, import again when ready; a late result never replaces newer work.
+Use **Import → Choose file…**, or drop the file on the drawing, to insert a PNG, JPEG, TIFF or WebP file. The drawing stays responsive while the picture loads. Cancel leaves the drawing unchanged. If you switch documents or edit the drawing during loading, import again when ready; a late result never replaces newer work.
 
 On macOS, ordinary **Paste** accepts pictures when no explicit editable drawing representation takes priority. **Import → Paste picture** chooses the raster representation explicitly. Clipboard reads are asynchronous and reject stale completion. PNG paste respects physical-resolution metadata.
 
-Select a picture to move it, drag a corner to resize proportionally, or use the top handle to rotate. Existing Flip H / Flip V, grouping, alignment and distribution controls also apply. The Picture inspector provides:
+Select a picture to move it, drag a corner to resize proportionally, or use the top handle to rotate. The context row's flip, order, alignment and distribution controls and grouping also apply; **Order ▾** holds **Bring to front** and **Send to back**, with the same stacking order on the canvas and in exports. The Picture inspector provides:
 
 - Width and height in millimetres. Press Enter to apply a dimension. **Link width and height** preserves the current proportions when entering dimensions.
 - **Restore original proportions**, fitted inside the current frame.
 - **Replace picture…**, retaining the center, orientation, reflection and layer while fitting the new picture inside the old frame.
-- **Send to back** and **Bring to front**, with the same stacking order on the canvas and in exports.
 
 Each insertion, replacement and transformation is undoable. Pictures are normalized to embedded PNG data, including transparency, so native files do not depend on the source image. Native Copy/Paste keeps the full frame; SVG/PDF/PNG export includes pictures alongside chemical drawing objects. The assistant can inspect pictures through its rendered canvas image.
 

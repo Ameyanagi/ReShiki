@@ -102,7 +102,7 @@ pub struct Bond {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub secondary_display: Option<String>,
     #[serde(default)]
-    pub color: [u8; 3],
+    pub color: crate::palette::Color,
 }
 fn is_zero(value: &f32) -> bool {
     *value == 0.
@@ -138,6 +138,15 @@ pub struct Arrow {
 }
 fn forward() -> String {
     "forward".into()
+}
+
+/// The newest document format this build reads. Saved files are marked with it.
+pub const VERSION: u32 = 17;
+
+fn newer_version(version: u64) -> String {
+    format!(
+        "This drawing was made with a newer version of ReShiki (document version {version}). Update ReShiki to open it."
+    )
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -180,6 +189,9 @@ pub struct Document {
     pub groups: Vec<crate::grouping::Group>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub reactions: Vec<crate::reactions::Reaction>,
+    /// Recent custom colors for the color picker, newest first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub recent_colors: Vec<crate::color_contrast::Rgb>,
 }
 impl Default for Document {
     fn default() -> Self {
@@ -200,10 +212,60 @@ impl Default for Document {
             graphics: vec![],
             groups: vec![],
             reactions: vec![],
+            recent_colors: vec![],
         }
     }
 }
 impl Document {
+    /// Read a native drawing. The version is read first, so a drawing from a
+    /// newer ReShiki is reported as such instead of as a parse error.
+    pub fn from_json(bytes: &[u8]) -> Result<Self, String> {
+        #[derive(Deserialize)]
+        struct Probe {
+            version: Option<u64>,
+        }
+        if let Ok(Probe {
+            version: Some(version),
+        }) = serde_json::from_slice(bytes)
+            && version > u64::from(VERSION)
+        {
+            return Err(newer_version(version));
+        }
+        let mut doc: Self = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
+        doc.validate()?;
+        doc.migrate();
+        Ok(doc)
+    }
+    /// Bring a drawing read from an earlier document version to the current
+    /// color form. Before version 17 custom colors were light-canvas bytes that
+    /// the dark canvas showed lightness-flipped; they are now exact on both
+    /// canvases, so a dark drawing stores what it showed. Ink and palette colors
+    /// already follow the canvas.
+    pub(crate) fn migrate(&mut self) {
+        const EXACT_COLORS: u32 = 17;
+        if self.version >= EXACT_COLORS || self.canvas_theme.is_light() {
+            return;
+        }
+        let canvas = self.canvas_theme;
+        crate::palette::for_each_color_mut(self, |color| {
+            if let crate::palette::Color::Custom(rgb) = *color {
+                *color = crate::palette::Color::Custom(canvas.color(rgb));
+            }
+        });
+        self.version = EXACT_COLORS;
+    }
+    /// Native file contents, marked with this build's document version.
+    pub fn file_json(&self) -> Result<Vec<u8>, String> {
+        serde_json::to_vec_pretty(&self.current()).map_err(|e| e.to_string())
+    }
+    /// A copy marked with this build's document version, for files, clipboard
+    /// data and recovery drafts, so reading them back never migrates again.
+    pub fn current(&self) -> Self {
+        Self {
+            version: VERSION,
+            ..self.clone()
+        }
+    }
     pub fn next_id(&self) -> u64 {
         self.atoms
             .iter()
@@ -300,7 +362,7 @@ impl Document {
                 stereo_atoms: vec![],
                 double_position: Default::default(),
                 secondary_display: None,
-                color: [0, 0, 0],
+                color: Default::default(),
             });
         }
     }
@@ -398,11 +460,17 @@ impl Document {
                 return Err("Drawing pictures exceed 64 MB or 64 million pixels".into());
             }
         }
-        if !(1..=16).contains(&self.version) {
-            return Err(format!("Unsupported document version {}", self.version));
+        if self.version > VERSION {
+            return Err(newer_version(self.version.into()));
+        }
+        if self.version == 0 {
+            return Err("Unsupported document version 0".into());
         }
         if let Some(layout) = &self.page_layout {
             layout.validate()?;
+        }
+        if self.recent_colors.len() > crate::palette::RECENT_LIMIT {
+            return Err("Too many recent colors".into());
         }
         self.validate_groups()?;
         crate::reactions::validate(self)?;
@@ -571,6 +639,69 @@ impl History {
 mod tests {
     use super::*;
     #[test]
+    fn newer_drawings_are_reported_before_parsing_and_saves_use_the_current_version() {
+        let mut doc = Document::default();
+        let a = doc.add_atom("C", Point::default());
+        let b = doc.add_atom("O", Point::new(42., 0.));
+        doc.add_bond(a, b, 1, "plain");
+        let saved = doc.file_json().unwrap();
+        let reopened = Document::from_json(&saved).unwrap();
+        assert_eq!(reopened.version, VERSION);
+        assert_eq!(
+            doc.version, 15,
+            "saving leaves the drawing in memory unchanged"
+        );
+        assert_eq!(
+            Document {
+                version: 15,
+                ..reopened
+            },
+            doc
+        );
+        // Earlier drawings keep loading.
+        for (file, version) in [
+            (
+                &include_bytes!("../tests/fixtures/legacy-drawing.moruno")[..],
+                1,
+            ),
+            (
+                include_bytes!("../tests/fixtures/palette/legacy-light.rsk"),
+                15,
+            ),
+        ] {
+            assert_eq!(Document::from_json(file).unwrap().version, version);
+        }
+        for version in 1..=VERSION {
+            let mut value = serde_json::to_value(&doc).unwrap();
+            value["version"] = version.into();
+            let bytes = serde_json::to_vec(&value).unwrap();
+            assert_eq!(Document::from_json(&bytes).unwrap().version, version);
+        }
+        // A newer drawing with content this build cannot parse.
+        let mut value = serde_json::to_value(&doc).unwrap();
+        value["bonds"][0]["color"] = serde_json::json!({"gradient": ["red", "blue"]});
+        for version in [u64::from(VERSION) + 1, u64::from(u32::MAX) + 1] {
+            value["version"] = version.into();
+            assert_eq!(
+                Document::from_json(&serde_json::to_vec(&value).unwrap()).unwrap_err(),
+                format!(
+                    "This drawing was made with a newer version of ReShiki (document version {version}). Update ReShiki to open it."
+                )
+            );
+        }
+        doc.version = VERSION + 1;
+        assert!(
+            doc.validate()
+                .unwrap_err()
+                .contains("newer version of ReShiki")
+        );
+        doc.version = 0;
+        assert!(doc.validate().is_err());
+        let error = Document::from_json(b"{\"version\": 17, \"atoms\": 3}").unwrap_err();
+        assert!(!error.contains("newer"), "{error}");
+        assert!(Document::from_json(b"not a drawing").is_err());
+    }
+    #[test]
     fn deleting_atom_removes_bonds_and_undo_restores_exact_document() {
         let mut doc = Document::default();
         let a = doc.add_atom("C", Point::default());
@@ -605,7 +736,7 @@ mod tests {
             stereo_atoms: vec![],
             double_position: Default::default(),
             secondary_display: None,
-            color: [0, 0, 0],
+            color: Default::default(),
         });
         assert!(doc.validate().is_err());
         doc.bonds.clear();

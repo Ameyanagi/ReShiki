@@ -579,7 +579,7 @@ fn benzene() -> Document {
     reshiki::editing::ring(&mut document, Point::default(), 6, false, 42.);
     for (index, bond) in document.bonds.iter_mut().enumerate() {
         bond.order = if index % 2 == 0 { 2 } else { 1 };
-        bond.color = [17, 126, 108];
+        bond.color = reshiki::palette::Color::Custom([17, 126, 108]);
     }
     document
 }

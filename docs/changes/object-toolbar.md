@@ -1,5 +1,12 @@
 # Optional object toolbar (#66)
 
+Issue #78 later moved these commands to the right end of the Select context
+row (**Align ▾**, **Distribute ▾**, **Order ▾**, Flip and Rotate 180°), which
+folds them into one **Arrange ▾** menu when space is short. **View → Arrange
+controls** replaces **View → Object toolbar**, and the renderer check below was
+replaced by `arrange_buttons_match_their_menu_anchors_in_a_fixed_height_row`.
+The rest of this record describes the original toolbar row.
+
 Turn on **View → Object toolbar** for direct access to front/back, edge and
 center alignment, horizontal/vertical distribution, horizontal/vertical
 reflection, and 180° rotation. Hide it with its × control or the same View

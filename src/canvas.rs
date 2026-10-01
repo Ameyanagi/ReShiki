@@ -195,6 +195,13 @@ pub struct State {
     last_click: Option<(std::time::Instant, u64)>,
     modifiers: iced::keyboard::Modifiers,
 }
+impl State {
+    /// Every drag ends here, so a Ctrl/Cmd drag copy never outlives its drag.
+    fn end_gesture(&mut self) -> Option<Gesture> {
+        self.scene.get_mut().release_copy();
+        self.gesture.take()
+    }
+}
 #[derive(Debug)]
 enum Gesture {
     Erase {
@@ -304,6 +311,10 @@ fn rgb(c: [u8; 3]) -> Color {
 }
 
 impl MoleculeCanvas<'_> {
+    /// Ctrl/Cmd drags place a copy with the selection tools; Edit Points only moves points.
+    fn copies(&self, modifiers: iced::keyboard::Modifiers) -> bool {
+        self.tool.selects() && command_held(modifiers)
+    }
     /// Drag offset for the preview and release. A Ctrl/Cmd copy has no bonds to constrain.
     fn move_delta(
         &self,
@@ -311,7 +322,7 @@ impl MoleculeCanvas<'_> {
         requested: World,
         modifiers: iced::keyboard::Modifiers,
     ) -> World {
-        if command_held(modifiers) {
+        if self.copies(modifiers) {
             return if modifiers.shift() {
                 movement::axis_locked(requested)
             } else {
@@ -483,13 +494,13 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                 key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
                 ..
             }) => {
-                if matches!(state.gesture.take(), Some(Gesture::Erase { .. })) {
+                if matches!(state.end_gesture(), Some(Gesture::Erase { .. })) {
                     return Some(Action::publish(Edit::EraseEnd));
                 }
                 Some(Action::request_redraw())
             }
             Event::Window(iced::window::Event::Unfocused) => {
-                let erasing = matches!(state.gesture.take(), Some(Gesture::Erase { .. }));
+                let erasing = matches!(state.end_gesture(), Some(Gesture::Erase { .. }));
                 state.last_click = None;
                 state.cursor = None;
                 Some(Action::publish(if erasing {
@@ -551,7 +562,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                 } else {
                     hit
                 };
-                state.gesture = None;
+                state.end_gesture();
                 state.last_click = None;
                 let position = point?
                     + iced::Vector::new(bounds.x - canvas_bounds.x, bounds.y - canvas_bounds.y);
@@ -866,7 +877,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                 }
             }
             Event::Mouse(mouse::Event::ButtonReleased(_)) => {
-                let gesture = state.gesture.take()?;
+                let gesture = state.end_gesture()?;
                 if matches!(gesture, Gesture::Erase { .. }) {
                     return Some(Action::publish(Edit::EraseEnd).and_capture());
                 }
@@ -1107,7 +1118,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                                 World::new(p.x - start.x, p.y - start.y),
                                 state.modifiers,
                             );
-                            if command_held(state.modifiers) {
+                            if self.copies(state.modifiers) {
                                 Edit::Duplicate(ids, delta.x, delta.y)
                             } else {
                                 Edit::Move(ids, delta.x, delta.y)
@@ -1283,6 +1294,7 @@ impl MoleculeCanvas<'_> {
         let mut ring_selection = None;
         let mut chain_badge = None;
         let mut template_notice = None;
+        let mut rejection: Option<reshiki::editing::RingRejection> = None;
         let mut translation = None;
         if let (Some(Gesture::Tilt(drag)), Some(p)) = (&state.gesture, state.cursor)
             && self.tool == Tool::Tilt
@@ -1466,24 +1478,44 @@ impl MoleculeCanvas<'_> {
             drag.apply(&mut preview, end, state.modifiers.shift());
             ring_selection = Some(drag.ids.clone());
         }
-        if let (Some(Gesture::Ring { start, attached }), Some(p)) = (&state.gesture, state.cursor)
-            && bounds.contains(p)
+        if let Some(p) = state.cursor.filter(|p| bounds.contains(*p))
             && self.tool == Tool::Ring
         {
+            let radius = 10.0 / self.camera.zoom;
             let end = self
                 .camera
                 .world(Point::new(p.x - bounds.x, p.y - bounds.y), bounds);
-            let (anchor, direction) = ring_gesture(*start, end, *attached, 10.0 / self.camera.zoom);
-            ring_selection = reshiki::editing::ring_oriented(
-                &mut preview,
-                anchor,
-                self.ring_size,
-                self.aromatic_ring
-                    || delocalized_ring_size(self.tool, self.ring_size, state.modifiers).is_some(),
-                10.0 / self.camera.zoom,
-                direction,
-            )
-            .ok();
+            let placement = |anchor, direction| {
+                reshiki::editing::ring_placement(
+                    &preview,
+                    anchor,
+                    self.ring_size,
+                    self.aromatic_ring
+                        || delocalized_ring_size(self.tool, self.ring_size, state.modifiers)
+                            .is_some(),
+                    radius,
+                    direction,
+                )
+            };
+            match &state.gesture {
+                Some(Gesture::Ring { start, attached }) => {
+                    let (anchor, direction) = ring_gesture(*start, end, *attached, radius);
+                    match placement(anchor, direction) {
+                        Ok((doc, ids)) => {
+                            preview = doc;
+                            ring_selection = Some(ids);
+                        }
+                        Err(reason) => rejection = Some(reason),
+                    }
+                }
+                // Hovering where a click would attach shows only a rejection.
+                None if self.doc.nearest(end, radius).is_some()
+                    || reshiki::editing::nearest_bond(self.doc, end, radius).is_some() =>
+                {
+                    rejection = placement(end, None).err();
+                }
+                _ => {}
+            }
         }
         if let Tool::RingPreset(preset) = self.tool
             && let Some(p) = state.cursor.filter(|p| bounds.contains(*p))
@@ -1508,7 +1540,10 @@ impl MoleculeCanvas<'_> {
                     preview = doc;
                     for b in &mut preview.bonds {
                         if self.doc.atom(b.a).is_none() || self.doc.atom(b.b).is_none() {
-                            b.color = [17, 126, 108];
+                            b.color = reshiki::palette::Color::Palette(
+                                reshiki::palette::Hue::Teal,
+                                reshiki::palette::Row::Strong,
+                            );
                         }
                     }
                     ring_selection = Some(ids);
@@ -1519,7 +1554,16 @@ impl MoleculeCanvas<'_> {
                         true,
                     ));
                 }
-                Err(error) => template_notice = Some((error.into(), false)),
+                Err(error) => {
+                    let radius = 10. / self.camera.zoom;
+                    template_notice = Some((error.into(), false));
+                    rejection = Some(reshiki::editing::RingRejection {
+                        message: error,
+                        label: reshiki::editing::attachment_label(self.doc, anchor, radius),
+                        outline: vec![],
+                        atom: self.doc.nearest(anchor, radius),
+                    });
+                }
             }
         }
         if self.tool == Tool::Template
@@ -1582,7 +1626,8 @@ impl MoleculeCanvas<'_> {
                         .all_ids()
                         .into_iter()
                         .collect();
-                    let tint = [17, 126, 108];
+                    use reshiki::palette::{Color as Paint, Hue, Row};
+                    let tint = Paint::Palette(Hue::Teal, Row::Strong);
                     for atom in &mut preview.atoms {
                         if !existing.contains(&atom.id) {
                             atom.text_style.get_or_insert_with(Default::default).color = tint;
@@ -1605,7 +1650,7 @@ impl MoleculeCanvas<'_> {
                         if !existing.contains(&graphic.id) {
                             graphic.style.stroke = tint;
                             if graphic.style.fill.is_some() {
-                                graphic.style.fill = Some([220, 239, 233]);
+                                graphic.style.fill = Some(Paint::Palette(Hue::Teal, Row::Tint));
                             }
                         }
                     }
@@ -1633,7 +1678,7 @@ impl MoleculeCanvas<'_> {
             );
             if start.distance(p) < 1.0 / self.camera.zoom {
                 ring_selection = Some(ids.clone());
-            } else if command_held(state.modifiers) {
+            } else if self.copies(state.modifiers) {
                 let part = state.scene.borrow_mut().copy(self.doc, ids);
                 ring_selection = Some(reshiki::editing::append(&mut preview, &part, delta));
             } else if state.scene.borrow_mut().whole_document(self.doc, ids) {
@@ -1690,15 +1735,20 @@ impl MoleculeCanvas<'_> {
             } else {
                 (end, None)
             };
-            ring_selection = reshiki::editing::ring_oriented(
-                &mut preview,
+            match reshiki::editing::ring_placement(
+                &preview,
                 anchor,
                 size,
                 true,
                 10. / self.camera.zoom,
                 direction,
-            )
-            .ok();
+            ) {
+                Ok((doc, ids)) => {
+                    preview = doc;
+                    ring_selection = Some(ids);
+                }
+                Err(reason) => rejection = Some(reason),
+            }
         }
         if let (
             Some(Gesture::Draw {
@@ -1892,27 +1942,42 @@ impl MoleculeCanvas<'_> {
             });
         }
         if let Some((point, content, valid)) = chain_badge {
-            let p = self.camera.screen(point, bounds);
-            let position = Point::new(
-                (p.x + 14.).clamp(4., (bounds.width - 200.).max(4.)),
-                (p.y + 18.).clamp(20., (bounds.height - 30.).max(20.)),
-            );
-            frame.fill_rectangle(
-                position - Vector::new(5., 4.),
-                iced::Size::new(196., 24.),
-                rgb(if valid {
-                    [225, 242, 237]
-                } else {
-                    [253, 235, 233]
-                }),
-            );
-            frame.fill_text(canvas::Text {
+            badge(
+                frame,
+                bounds,
+                self.camera.screen(point, bounds),
                 content,
-                position,
-                color: rgb(if valid { [30, 100, 85] } else { [160, 50, 45] }),
-                size: 12.into(),
-                ..Default::default()
-            });
+                valid,
+            );
+        }
+        // A rejected ring shows where it would go, and why, at the pointer;
+        // the status bar gets the full message if the user clicks anyway.
+        if let (Some(rejection), Some(p)) = (rejection, state.cursor) {
+            let error = rgb([182, 66, 61]);
+            let pointer = Point::new(p.x - bounds.x, p.y - bounds.y);
+            if let [first, rest @ ..] = rejection.outline.as_slice() {
+                let path = Path::new(|b| {
+                    b.move_to(self.camera.screen(*first, bounds));
+                    for point in rest {
+                        b.line_to(self.camera.screen(*point, bounds));
+                    }
+                    b.close();
+                });
+                frame.fill(&path, Color::from_rgba8(182, 66, 61, 0.08));
+                frame.stroke(&path, Stroke::default().with_width(2.).with_color(error));
+            }
+            let marker = rejection
+                .atom
+                .and_then(|id| self.doc.atom(id))
+                .map(|a| self.camera.screen(a.position, bounds))
+                .or(rejection.outline.is_empty().then_some(pointer));
+            if let Some(center) = marker {
+                frame.stroke(
+                    &Path::circle(center, 10.),
+                    Stroke::default().with_width(2.).with_color(error),
+                );
+            }
+            badge(frame, bounds, pointer, rejection.label, false);
         }
         if self.tool == Tool::EditPoints {
             for indicator in reshiki::atom_labels::indicators(&preview)
@@ -2178,6 +2243,38 @@ fn region_selection(
     reshiki::selection_region::combine(selected, &hits, mods.shift(), mods.alt())
 }
 
+/// A one-line label beside the pointer at `p`, kept inside the canvas.
+fn badge(
+    frame: &mut layered::Frame<'_>,
+    bounds: Rectangle,
+    p: Point,
+    content: String,
+    valid: bool,
+) {
+    let width = crate::app::text_width(&content, 12.) + 10.;
+    let position = Point::new(
+        (p.x + 14.).clamp(4., (bounds.width - width - 4.).max(4.)),
+        (p.y + 18.).clamp(20., (bounds.height - 30.).max(20.)),
+    );
+    frame.fill_rectangle(
+        position - Vector::new(5., 4.),
+        iced::Size::new(width, 24.),
+        rgb(if valid {
+            [225, 242, 237]
+        } else {
+            [253, 235, 233]
+        }),
+    );
+    frame.fill_text(canvas::Text {
+        content,
+        position,
+        color: rgb(if valid { [30, 100, 85] } else { [160, 50, 45] }),
+        size: 12.into(),
+        font: iced::Font::with_name(reshiki::style::ui_font_family()),
+        ..Default::default()
+    });
+}
+
 fn ring_gesture(start: World, end: World, attached: bool, radius: f32) -> (World, Option<World>) {
     if attached {
         (start, (start.distance(end) > radius).then_some(end))
@@ -2404,11 +2501,11 @@ fn draw_primitives(
                     }
                 });
                 if filled && let Some(c) = style.fill {
-                    frame.fill(&path, rgb(c));
+                    frame.fill(&path, rgb(c.rgb()));
                 }
                 let dashes: Vec<_> = style.dashes().iter().map(|v| v * camera.zoom).collect();
                 let stroke = Stroke::default()
-                    .with_color(rgb(style.stroke))
+                    .with_color(rgb(style.stroke.rgb()))
                     .with_width(if style.width_pt > 0. {
                         (style.width() * camera.zoom).max(minimum)
                     } else {
@@ -4302,7 +4399,7 @@ mod tests {
             BracketSides::Both,
             false,
         );
-        g.style.fill = Some([220, 239, 233]);
+        g.style.fill = Some(reshiki::palette::Color::Custom([220, 239, 233]));
         doc.graphics.push(g);
         assert_eq!(hit_selection(&doc, World::new(-20., 0.), 5.), vec![a]);
         assert_eq!(hit_selection(&doc, World::default(), 5.), vec![a, b]);
@@ -4889,6 +4986,80 @@ mod tests {
             pointer_gesture_with(&canvas, Point::new(221.0, 171.0), Point::new(251.0, 181.0), Modifiers::SHIFT | Modifiers::ALT),
             Edit::Move(ids, 30.0, 0.0) if ids.len() == 2 && partial.iter().all(|id| ids.contains(id))
         ));
+    }
+
+    #[test]
+    fn command_drag_in_point_edit_mode_moves_the_point() -> Result<(), String> {
+        let mut doc = Document::default();
+        let metal = doc.add_atom("Fe", World::default());
+        let (doc, _) = reshiki::hotkeys::atom_edit(&doc, metal, "j", 42.).ok_or("Shortcut")??;
+        let anchor = doc
+            .atoms
+            .iter()
+            .find(|a| a.attachment.is_some())
+            .ok_or("Point")?;
+        let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+        canvas.tool = Tool::EditPoints;
+        let bounds = Rectangle::with_size(iced::Size::new(400., 300.));
+        let start = canvas.camera.screen(anchor.position, bounds);
+        let modifiers = iced::keyboard::Modifiers::COMMAND;
+        let edit = pointer_gesture_with(&canvas, start, start + Vector::new(35., 25.), modifiers);
+        assert!(
+            matches!(&edit, Edit::Move(ids, ..) if *ids == vec![anchor.id]),
+            "{edit:?}"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn ending_a_command_drag_releases_its_copy() {
+        use iced::keyboard::{Event as Key, Location, Modifiers, key};
+        let mut doc = Document::default();
+        let a = doc.add_atom("C", World::new(-21.0, 0.0));
+        let b = doc.add_atom("O", World::new(21.0, 0.0));
+        doc.add_bond(a, b, 1, "plain");
+        let selected = [a, b];
+        let mut canvas = chain_canvas(&doc, ChainMode::Straight);
+        canvas.tool = Tool::Select;
+        canvas.selected = &selected;
+        let bounds = Rectangle::with_size(iced::Size::new(400., 300.));
+        let start = canvas.camera.screen(World::new(-21.0, 0.0), bounds);
+        let end = start + Vector::new(60., 30.);
+        let cursor = mouse::Cursor::Available(end);
+        let escape = key::Key::Named(key::Named::Escape);
+        for end_drag in [
+            Event::Keyboard(Key::KeyPressed {
+                key: escape.clone(),
+                modified_key: escape.clone(),
+                physical_key: key::Physical::Code(key::Code::Escape),
+                location: Location::Standard,
+                modifiers: Modifiers::COMMAND,
+                text: None,
+                repeat: false,
+            }),
+            Event::Window(iced::window::Event::Unfocused),
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Right)),
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+        ] {
+            let mut state = State {
+                modifiers: Modifiers::COMMAND,
+                ..Default::default()
+            };
+            for event in [
+                mouse::Event::CursorMoved { position: start },
+                mouse::Event::ButtonPressed(mouse::Button::Left),
+                mouse::Event::CursorMoved { position: end },
+            ] {
+                canvas.update(&mut state, &Event::Mouse(event), bounds, cursor);
+            }
+            assert!(matches!(state.gesture, Some(Gesture::Move { .. })));
+            // The drag preview extracts the copy, as drawing a frame does.
+            let copy = state.scene.borrow_mut().copy(&doc, &selected);
+            assert_eq!(copy.atoms.len(), 2);
+            canvas.update(&mut state, &end_drag, bounds, cursor);
+            assert!(state.gesture.is_none(), "{end_drag:?}");
+            assert_eq!(std::rc::Rc::strong_count(&copy), 1, "{end_drag:?}");
+        }
     }
 
     #[test]

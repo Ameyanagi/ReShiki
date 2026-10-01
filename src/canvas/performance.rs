@@ -173,7 +173,7 @@ async fn cached_canvas_matches_fresh_edits_and_committed_drag() {
     let before = doc.clone();
     doc.annotations[0].text = "Edited NH2 caption".into();
     doc.annotations[0].format.style.bold = true;
-    doc.annotations[0].format.style.color = [180, 60, 40];
+    doc.annotations[0].format.style.color = reshiki::palette::Color::Custom([180, 60, 40]);
     doc.translate(&ids[..2], 30., 10.);
     let mut history = reshiki::document::History::default();
     history.commit(before, &doc);

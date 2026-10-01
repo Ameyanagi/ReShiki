@@ -1,6 +1,10 @@
-use crate::{document::Document, storage::write_atomic};
+use crate::{
+    document::{Document, VERSION},
+    storage::write_atomic,
+};
 use serde::{Deserialize, Serialize};
 use std::{
+    borrow::Cow,
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -61,8 +65,9 @@ impl Recovery {
                     return None;
                 }
                 let bytes = std::fs::read(&path).ok()?;
-                let snapshot: Snapshot = serde_json::from_slice(&bytes).ok()?;
+                let mut snapshot: Snapshot = serde_json::from_slice(&bytes).ok()?;
                 snapshot.document.validate().ok()?;
+                snapshot.document.migrate();
                 Some(Candidate { path, snapshot })
             })
             .collect();
@@ -73,10 +78,16 @@ impl Recovery {
         document.validate()?;
         #[derive(Serialize)]
         struct BorrowedSnapshot<'a> {
-            document: &'a Document,
+            document: Cow<'a, Document>,
             source: Option<PathBuf>,
             saved_at: u64,
         }
+        // Drafts carry this build's document version, so restoring never migrates again.
+        let document = if document.version == VERSION {
+            Cow::Borrowed(document)
+        } else {
+            Cow::Owned(document.current())
+        };
         let snapshot = BorrowedSnapshot {
             document,
             source,
@@ -160,6 +171,27 @@ mod tests {
         assert_eq!(store.candidates().len(), 1);
     }
     #[test]
+    fn old_dark_drafts_convert_their_colors_once() {
+        let bytes = include_bytes!("../tests/fixtures/palette/legacy-dark.rsk");
+        let old: Document = serde_json::from_slice(bytes).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let store = Recovery::in_directory(dir.path()).unwrap();
+        let draft = dir.path().join("4294967294-old.json");
+        let snapshot = Snapshot {
+            document: old.clone(),
+            source: None,
+            saved_at: 1,
+        };
+        std::fs::write(&draft, serde_json::to_vec(&snapshot).unwrap()).unwrap();
+        let restored = store.candidates().remove(0).snapshot.document;
+        assert_eq!(restored, Document::from_json(bytes).unwrap());
+        assert_ne!(restored.bonds, old.bonds);
+        // This build's draft is marked current and reads back unchanged.
+        store.save(&restored, None).unwrap();
+        std::fs::rename(&store.session, &draft).unwrap();
+        assert_eq!(store.candidates()[0].snapshot.document, restored);
+    }
+    #[test]
     fn draft_is_durable_and_corrupt_files_are_ignored() {
         let dir = tempfile::tempdir().unwrap();
         let store = Recovery::in_directory(dir.path()).unwrap();
@@ -170,7 +202,7 @@ mod tests {
         std::fs::write(dir.path().join("broken.json"), b"partial json").unwrap();
         let candidates = store.candidates();
         assert_eq!(candidates.len(), 1);
-        assert_eq!(candidates[0].snapshot.document, doc);
+        assert_eq!(candidates[0].snapshot.document, doc.current());
         store.save(&candidates[0].snapshot.document, None).unwrap();
         remove(&candidates[0].path).unwrap();
         assert!(store.session.exists());

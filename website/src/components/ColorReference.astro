@@ -1,15 +1,20 @@
 ---
-import { catalog, hex } from "../lib/color-reference";
-import { paletteTiles, inspector, supportingTiles, type Selection } from "../lib/color-explorer";
+import { catalog } from "../lib/color-reference";
+import { inspector, paletteTiles, paperChips, themeStrip, valuesTable, type Selection } from "../lib/color-explorer";
 import "../styles/color-reference.css";
 const theme = catalog.themes[0];
-const selected: Selection = { kind: "element", index: 6 };
-const descriptions = ["Vivid, balanced color", "Softer chroma, familiar hues", "Classic element hues"];
+const selected: Selection = { kind: "swatch", mode: "light", row: "strong", index: 5 };
+const descriptions: Record<string, string> = {
+  publication: "Ink labels, even-toned hues",
+  presentation: "Vivid, balanced color",
+  pastel: "Softer chroma, familiar hues",
+  jmol: "Classic element hues",
+};
 ---
 
 <div class="color-reference not-content" id="color-reference" data-canvas-mode="light">
   <div class="cr-intro">
-    <p>118 elements. Three palettes. Light and dark.<br /><span>Explore the colors of ReShiki, then take them into your own work.</span></p>
+    <p>Eight hues and Ink at one lightness per row. Four themes. Light and dark.<br /><span>Explore the palettes and 118 element colors of ReShiki, then take them into your own work.</span></p>
     <details class="cr-download-menu">
       <summary><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 15v5h16v-5"/></svg>Download palettes<svg class="cr-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></summary>
       <div class="cr-download-list">
@@ -17,7 +22,7 @@ const descriptions = ["Vivid, balanced color", "Softer chroma, familiar hues", "
         <a href="/colors/palettes.json" download>JSON <small>Complete color data</small></a>
         <a href="/colors/palettes.csv" download>CSV <small>For spreadsheets</small></a>
         <a href="/colors/palettes.css" download>CSS <small>Ready-to-use variables</small></a>
-        <a id="cr-native" href={`/colors/${theme.id}.reshiki-theme`} download>ReShiki theme <small>Presentation · both modes</small></a>
+        <a id="cr-native" href={`/colors/${theme.id}.reshiki-theme`} download>ReShiki theme <small>{theme.name} · both modes</small></a>
       </div>
     </details>
   </div>
@@ -25,38 +30,48 @@ const descriptions = ["Vivid, balanced color", "Softer chroma, familiar hues", "
   <div class="cr-themes" role="group" aria-label="Color theme">
     {catalog.themes.map((item, i) => <button class="cr-theme" type="button" data-theme-id={item.id} aria-pressed={i === 0}>
       <span class="cr-theme-name">{item.name}<span class="cr-selected-mark" aria-hidden="true">✓</span></span>
-      <span class="cr-theme-description">{descriptions[i]}</span>
-      <span class="cr-theme-strip" aria-hidden="true">{[6, 7, 14, 15, 16, 52].map((index) => <span style={`background:${hex(item.modes.light.elements[index].label)}`}></span>)}</span>
+      <span class="cr-theme-description">{descriptions[item.id]}</span>
+      <span class="cr-theme-strip" aria-hidden="true" set:html={themeStrip(item, "light")} />
     </button>)}
   </div>
 
   <div class="cr-workspace">
-    <section class="cr-palette" aria-labelledby="cr-palette-title" id="cr-palette">
-      <div class="cr-toolbar">
-        <h2 id="cr-palette-title">The element palette</h2>
-        <label class="cr-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="cr-search" type="search" placeholder="Find element…" aria-label="Find an element by symbol or atomic number" autocomplete="off" /></label>
-      </div>
-      <div class="cr-table-caption"><p class="cr-caption" id="cr-description">Colors as they appear on white paper.</p>
-        <div class="cr-mode-toggle" role="group" aria-label="Canvas mode">
-          <button type="button" data-canvas-mode="light" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg>Light</button>
-          <button type="button" data-canvas-mode="dark" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5Z"/></svg>Dark</button>
+    <div class="cr-main">
+      <section class="cr-swatches" aria-labelledby="cr-swatch-title" id="cr-swatches">
+        <div class="cr-table-caption"><h2 id="cr-swatch-title">The theme palette</h2><span class="cr-caption" id="cr-swatch-theme">{theme.name}</span></div>
+        <p class="cr-caption cr-swatch-intro"><b>Strong</b> colors bonds, text and strokes. <b>Tint</b> colors fills, ring interiors and highlight boxes. Every hue in a row shares one OKLCH lightness.</p>
+        <div class="cr-papers">
+          {(["light", "dark"] as const).map((mode) => <div class="cr-paper" data-mode={mode} style={`--cr-paper:rgb(${theme.modes[mode].paper.rgb.join(" ")})`}>
+            <span class="cr-paper-caption">{mode === "light" ? "Light canvas" : "Dark canvas"}</span>
+            <div class="cr-chip-grid" data-paper={mode} role="group" aria-label={`${mode === "light" ? "Light" : "Dark"} canvas palette`} set:html={paperChips(theme, selected, mode)} />
+          </div>)}
         </div>
-      </div>
-      <div class="cr-grid" id="cr-elements" aria-label="Periodic table" set:html={paletteTiles(theme, selected, "light")} />
-      <div class="cr-table-footer"><span id="cr-count" role="status">118 elements</span><span>Select an element to inspect its colors <span aria-hidden="true">↗</span></span></div>
-      <section class="cr-supporting" aria-labelledby="cr-support-title">
-        <div class="cr-table-caption"><h3 id="cr-support-title">Paper, ink &amp; ring fills</h3><span class="cr-caption">Shared across themes</span></div>
-        <div class="cr-support-grid" id="cr-support-colors" set:html={supportingTiles(theme, "light")} />
+        <div class="cr-values-scroll" id="cr-values" role="region" aria-label="Palette values" tabindex="0" set:html={valuesTable(theme)} />
       </section>
-    </section>
+
+      <section class="cr-palette" aria-labelledby="cr-palette-title" id="cr-palette">
+        <div class="cr-toolbar">
+          <h2 id="cr-palette-title">Element colors</h2>
+          <label class="cr-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><input id="cr-search" type="search" placeholder="Find element…" aria-label="Find an element by symbol or atomic number" autocomplete="off" /></label>
+        </div>
+        <div class="cr-table-caption"><p class="cr-caption" id="cr-description">Colors as they appear on white paper. Publication labels every element in Ink.</p>
+          <div class="cr-mode-toggle" role="group" aria-label="Canvas mode">
+            <button type="button" data-canvas-mode="light" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></svg>Light</button>
+            <button type="button" data-canvas-mode="dark" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5Z"/></svg>Dark</button>
+          </div>
+        </div>
+        <div class="cr-grid" id="cr-elements" aria-label="Periodic table" set:html={paletteTiles(theme, selected, "light")} />
+        <div class="cr-table-footer"><span id="cr-count" role="status">118 elements</span><span>Select an element to inspect its colors <span aria-hidden="true">↗</span></span></div>
+      </section>
+    </div>
     <aside class="cr-inspector" aria-label="Selected color" id="cr-inspector">
-      <a class="cr-back" href="#cr-palette">← Back to the palette</a>
+      <a class="cr-back" href="#cr-swatches">← Back to the colors</a>
       <div id="cr-inspector-content" set:html={inspector(theme, selected, "light")} />
       <p class="cr-inspector-hint">Click any value to copy it.</p>
     </aside>
   </div>
-  <div class="cr-footnote"><span>ReShiki {catalog.reshiki_version} · Exact sRGB, derived OKLCH</span><a href="#using-the-colors">How to use these colors <span aria-hidden="true">↓</span></a></div>
-  <noscript><p>Enable JavaScript to explore each element. The complete palettes are available in the downloads above.</p></noscript>
+  <div class="cr-footnote"><span>ReShiki {catalog.reshiki_version} · Exact sRGB, derived OKLCH · Default hues</span><a href="#how-the-palette-works">How the palette works <span aria-hidden="true">↓</span></a></div>
+  <noscript><p>Enable JavaScript to switch themes and inspect each color. The complete palettes are available in the downloads above.</p></noscript>
   <p class="cr-copy-status" id="cr-copy-status" role="status" aria-live="polite"></p>
 </div>
 <script>

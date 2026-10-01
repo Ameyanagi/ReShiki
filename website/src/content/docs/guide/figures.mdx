@@ -7,15 +7,15 @@ import Screenshot from "../../../components/Screenshot.astro";
 
 ## Set the drawing style
 
-New documents use **JACS / ACS**. The style selector beside the drawing controls switches directly between **JACS / ACS**, **Nature**, **RSC**, **Angewandte**, and **SYNLETT / SYNTHESIS**. These presets follow publisher instructions or official stationery; the editor links to each publisher. Direct selection updates matching text/strokes and scales the geometry in one Undo step. [Settings and publisher sources](/developer/journal-drawing-presets/).
+New documents use **JACS / ACS**. The style selector in the status bar switches directly between **JACS / ACS**, **Nature**, **RSC**, **Angewandte**, and **SYNLETT / SYNTHESIS**. These presets follow publisher instructions or official stationery; the editor links to each publisher. Direct selection updates matching text/strokes and scales the geometry in one Undo step. [Settings and publisher sources](/developer/journal-drawing-presets/).
 
 Choose **Manage styles…** to edit fonts, label size, bond length and stroke settings with a live sample preview. The fixed footer has **Import**, **Export**, and **Save** icons. Save applies the draft; returning to Properties leaves it unapplied. Export offers a native `.reshiki-style` file or ChemDraw `.cds`. Import accepts those files plus document settings from `.cdx` and `.cdxml`; template artwork and page layout are not imported. **Scale layout with bond length** is off by default in this editor; enable it when existing geometry should resize.
 
 ## Choose canvas colors
 
-[Compare and download every Presentation, Pastel and Jmol color →](/guide/color-palettes/)
+[Compare and download every theme palette and element color →](/guide/color-palettes/)
 
-The adjacent theme selector offers **Publication**, **Presentation**, **Pastel**, **Jmol**, and your saved themes. The **sun/moon** button changes the canvas between white and black paper, independently of journal dimensions. Publication uses neutral ink; the other themes color elements and provide ring-highlight palettes. **View → Interface → Match canvas / Light / Dark** changes only the surrounding interface.
+The theme selector next to it offers **Publication**, **Presentation**, **Pastel**, **Jmol**, and your saved themes. The **sun/moon** button changes the canvas between white and black paper, independently of journal dimensions. Publication labels elements in neutral ink; the other themes color them. Every theme has a palette of eight hues in a **Strong** row for bonds, text and strokes and a **Tint** row for fills and ring interiors; choose them from the color button in the style bar. **View → Interface → Match canvas / Light / Dark** changes only the surrounding interface.
 
 Choose **Manage themes…** to preview, import, export, edit or delete custom themes. Built-ins are protected. **New theme…** lets you choose a reference palette and adjust lightness and color intensity separately for both modes. The periodic tables and molecule previews update live; use the preview icons for labels, solid tiles, interface tiles or ring-fill examples. **B** toggles bold preview symbols. Import opens a draft for review, Save stores and applies it, and Export writes both palettes without applying them. [Theme file format and contribution guide](https://github.com/Ameyanagi/ReShiki/tree/main/presets/themes).
 
@@ -30,11 +30,11 @@ File exports and printing include the visible canvas colors and background. Clip
 | Rectangle, ellipse, brackets | Click to reuse the chosen style; hold or click the corner triangle for presets |
 | Line, curve                  | Tools palette                                                                  |
 | Chemical symbol or orbital   | Hold the toolbar button or click its corner triangle                           |
-| A picture                    | **Import → Picture…**                                                          |
+| A picture                    | **Import → Choose file…**, or drop the file on the drawing                     |
 
 Rectangle presets include rounded, dashed, filled, and square shapes. Ellipses include outline, dashed, filled, and circle presets. Brackets include square brackets, parentheses, and braces, with both sides or either side alone.
 
-Select an object to see its controls in **Properties**. **Molecular properties** shows the calculation scope and formula at the top when atoms are selected. Expand **Atom details**, **Arrange & transform**, or **Grouping & frames** when needed. **Drawing style** remains available below the selection controls.
+Select an object to see its controls in **Properties**. **Molecular properties** shows the calculation scope and formula at the top when atoms are selected. Expand **Atom details**, **Transform**, or **Grouping & frames** when needed. A selection opens at most one section by itself; sections you open stay open. **Drawing style** remains available below the selection controls.
 
 <Screenshot
   src="/manual/properties.png"
@@ -45,9 +45,9 @@ Select artwork to change its style in **Properties**. Pictures can be resized, r
 
 ## Align objects
 
-Select two or more molecules, arrows, or groups. Right-click the selection and choose **Align middles** to put them on the same horizontal centerline. **Align & distribute…** offers the other edges, centers, and spacing options. The same controls appear first in **Properties → Arrange & transform** for multiple objects. Molecules and groups move together, preserving their internal layout. Undo restores the previous positions.
+Select two or more molecules, arrows, or groups. Right-click the selection and choose **Align middles** to put them on the same horizontal centerline. **Align & distribute…** offers the other edges, centers, and spacing options, as do the **Align** and **Distribute** menus at the right end of the context row. Molecules and groups move together, preserving their internal layout. Undo restores the previous positions.
 
-Right-click an atom, bond, arrow, or selected object for editing commands and its relevant properties. Right-click within an existing selection to keep all its objects selected. **Escape** or a click outside closes the menu. Use the middle mouse button to pan.
+Right-click an atom, bond, arrow, or selected object for editing commands and its relevant properties. Commands with a keyboard shortcut show it at the right of the menu. Right-click within an existing selection to keep all its objects selected. **Escape** or a click outside closes the menu. Use the middle mouse button to pan.
 
 <Screenshot
   src="/manual/context-menu.png"

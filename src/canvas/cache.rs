@@ -54,6 +54,12 @@ impl SceneCache {
             .clone()
     }
 
+    /// A cancelled drag leaves the document and selection unchanged, so its
+    /// copy would otherwise stay until one of them changes.
+    pub fn release_copy(&mut self) {
+        self.copy = None;
+    }
+
     pub fn primitives(&mut self, doc: &Document) -> Rc<[Primitive]> {
         self.document(doc);
         self.scene

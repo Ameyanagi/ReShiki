@@ -20,8 +20,9 @@ pub(super) enum Icon {
     Import,
     Export,
     Inspector,
-    Close,
     Keyboard,
+    More,
+    Lock(bool),
 }
 pub(super) struct Glyph(pub Icon, pub bool);
 impl<Message> canvas::Program<Message> for Glyph {
@@ -583,9 +584,31 @@ impl Glyph {
                 line(f, &[(3., 4.), (21., 4.), (21., 20.), (3., 20.), (3., 4.)]);
                 line(f, &[(15., 4.), (15., 20.)]);
             }
-            Icon::Close => {
-                line(f, &[(6., 6.), (18., 18.)]);
-                line(f, &[(18., 6.), (6., 18.)]);
+            Icon::More => {
+                for x in [5., 12., 19.] {
+                    f.fill(&Path::circle(Point::new(x, 12.), 1.8), ink);
+                }
+            }
+            // Drawn in a 20 px box; an open lock lifts its shackle clear.
+            Icon::Lock(locked) => {
+                let body = Path::rounded_rectangle(
+                    Point::new(5., 10.),
+                    iced::Size::new(10., 8.),
+                    1.5.into(),
+                );
+                f.stroke(&body, Stroke::default().with_width(1.4).with_color(ink));
+                let lift = if locked { 0. } else { 3. };
+                let shackle = Path::new(|p| {
+                    p.move_to(Point::new(7., 10.));
+                    p.line_to(Point::new(7., 7. - lift));
+                    p.bezier_curve_to(
+                        Point::new(7., 3. - lift),
+                        Point::new(13., 3. - lift),
+                        Point::new(13., 7. - lift),
+                    );
+                    p.line_to(Point::new(13., if locked { 10. } else { 6. }));
+                });
+                f.stroke(&shackle, Stroke::default().with_width(1.4).with_color(ink));
             }
         }
     }
