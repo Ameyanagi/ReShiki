@@ -224,11 +224,11 @@ impl App {
             ],
         );
         let examples = column![
-            button(text("Open shortcut examples ↗").size(14))
+            button(text("Open shortcut examples").size(14))
                 .padding([10, 16])
                 .on_press(Message::OpenShortcutExamples)
                 .style(control(true)),
-            text("One editable ReShiki file with labeled examples. Opens in a separate window; double-click a structure to select it, then copy and paste into your drawing.")
+            text("One editable drawing with labeled examples. Opens in a tab; double-click a structure to select it, then copy and paste into your drawing. Save creates your own copy.")
                 .size(12).style(muted_text),
         ].spacing(8);
         let body = column![examples, drawing, context, editing, files]

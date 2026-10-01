@@ -1,0 +1,100 @@
+use super::{App, Message, files};
+use iced::Task;
+use std::{ffi::OsString, path::PathBuf};
+
+#[derive(Default)]
+pub(super) struct Arguments {
+    pub(super) paths: Vec<PathBuf>,
+    shortcut_examples: bool,
+    #[cfg(windows)]
+    office_edit: bool,
+}
+
+pub(super) fn parse(args: impl IntoIterator<Item = OsString>) -> Arguments {
+    let mut args = args.into_iter();
+    let mut parsed = Arguments::default();
+    while let Some(arg) = args.next() {
+        if arg == "--open" {
+            if let Some(path) = args.next() {
+                parsed.paths.push(path.into());
+            }
+        } else if arg == "--shortcut-examples" {
+            parsed.shortcut_examples = true;
+        }
+        #[cfg(windows)]
+        if arg == "--office-edit" {
+            parsed.office_edit = true;
+        }
+    }
+    parsed
+}
+
+impl App {
+    pub(super) fn open_startup(&mut self, args: Arguments) -> Task<Message> {
+        #[cfg(windows)]
+        if args.office_edit {
+            self.office_path = args.paths.first().cloned();
+        }
+        if args.paths.is_empty() && args.shortcut_examples {
+            return self.open_shortcut_examples();
+        }
+        let open = files::open_paths(args.paths);
+        if args.shortcut_examples {
+            open.chain(Task::done(Message::OpenShortcutExamples))
+        } else {
+            open
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn repeated_open_keeps_path_order_spaces_and_unicode() {
+        let args = parse(
+            [
+                "--open",
+                "first drawing.rsk",
+                "--open",
+                "資料/構造 β.rsk",
+                "--open",
+            ]
+            .map(OsString::from),
+        );
+        assert_eq!(
+            args.paths,
+            [PathBuf::from("first drawing.rsk"), "資料/構造 β.rsk".into()]
+        );
+        assert!(!args.shortcut_examples);
+    }
+
+    #[test]
+    fn old_single_path_and_shortcut_examples_flags_are_readable() {
+        let args = parse(["--unused", "--open", "old drawing.rsk"].map(OsString::from));
+        assert_eq!(args.paths, [PathBuf::from("old drawing.rsk")]);
+        let args = parse(["--shortcut-examples"].map(OsString::from));
+        assert!(args.paths.is_empty());
+        assert!(args.shortcut_examples);
+        assert!(parse([]).paths.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn paths_do_not_require_utf8() {
+        use std::os::unix::ffi::OsStringExt;
+        let path = OsString::from_vec(b"drawing-\xff.rsk".to_vec());
+        let args = parse([OsString::from("--open"), path.clone()]);
+        assert_eq!(args.paths, [PathBuf::from(path)]);
+    }
+
+    #[test]
+    fn launch_flag_opens_the_same_unbound_examples_tab() {
+        let (mut app, _) = App::new();
+        let _ = app.open_startup(parse(["--shortcut-examples"].map(OsString::from)));
+        assert_eq!(app.document_name(), "Shortcut examples");
+        assert!(app.tab.path.is_none());
+        assert!(!app.dirty());
+    }
+}

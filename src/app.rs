@@ -50,6 +50,7 @@ mod printing;
 mod reactions;
 mod shortcut_examples;
 mod shortcuts;
+mod startup;
 mod tabs;
 mod template_library;
 mod theme_files;
@@ -141,7 +142,6 @@ pub enum Message {
     InsertInput,
     ToggleHelp,
     OpenShortcutExamples,
-    ShortcutExamplesOpened(Result<(), String>),
     Viewport(iced::Size),
     Canvas(Edit),
     Tool(Tool),
@@ -397,29 +397,12 @@ impl App {
             template_index: 0,
             templates: template_library::State::load(),
         };
-        let startup_path = if cfg!(test) {
-            None
+        let startup = if cfg!(test) {
+            startup::Arguments::default()
         } else {
-            let mut args = std::env::args_os().skip(1);
-            args.find(|arg| arg == "--open")
-                .and_then(|_| args.next())
-                .map(PathBuf::from)
+            startup::parse(std::env::args_os().skip(1))
         };
-        #[cfg(windows)]
-        if !cfg!(test) && std::env::args_os().any(|arg| arg == "--office-edit") {
-            app.office_path = startup_path.clone();
-        }
-        let task = if let Some(path) = startup_path {
-            files::open_paths(vec![path])
-        } else if !cfg!(test) && std::env::args_os().any(|arg| arg == "--shortcut-examples") {
-            if let Err(error) = app.load_shortcut_examples() {
-                app.status = format!("Could not open shortcut examples: {error}");
-                app.error = true;
-            }
-            Task::none()
-        } else {
-            Task::none()
-        };
+        let task = app.open_startup(startup);
         let update_check = app.update_action(updates::Action::Check(false));
         (app, Task::batch([task, update_check]))
     }
@@ -1455,15 +1438,8 @@ impl App {
                     self.palette = None;
                 }
             }
-            Message::OpenShortcutExamples => return shortcut_examples::open(),
-            Message::ShortcutExamplesOpened(result) => {
-                self.help_open = false;
-                self.error = result.is_err();
-                self.status = match result {
-                    Ok(()) => "Shortcut examples opened in a separate window".into(),
-                    Err(error) => format!("Could not open shortcut examples: {error}"),
-                };
-            }
+            Message::OpenShortcutExamples if self.pending.is_some() => {}
+            Message::OpenShortcutExamples => return self.open_shortcut_examples(),
             Message::Viewport(size) => {
                 if self.viewport != size {
                     self.viewport = size;
@@ -2008,11 +1984,8 @@ impl App {
                 }
                 #[cfg(windows)]
                 let office_save = self.office_document() && matches!(message, Message::Save);
-                let path = if matches!(message, Message::SaveAs) {
-                    None
-                } else {
-                    self.tab.path.clone()
-                };
+                let (path, suggested_name) =
+                    self.drawing_save_target(matches!(message, Message::SaveAs));
                 if self.file_io.saving {
                     // Only this tab's own save can go on with the dialog's action.
                     if self.file_io.saving_tab != Some(self.tab.id) {
@@ -2025,15 +1998,6 @@ impl App {
                 self.file_io.saving_tab = Some(self.tab.id);
                 let snapshot = std::sync::Arc::new(self.tab.doc.clone());
                 let save_snapshot = std::sync::Arc::clone(&snapshot);
-                let suggested_name = if self.tab.path.is_some() {
-                    self.document_name()
-                } else {
-                    format!(
-                        "{}.{}",
-                        self.document_name(),
-                        reshiki::compatibility::NATIVE_EXTENSION
-                    )
-                };
                 let epoch = self.tab.file_epoch;
                 return Task::perform(
                     async move {

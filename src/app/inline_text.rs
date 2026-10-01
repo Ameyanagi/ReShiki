@@ -639,6 +639,7 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             )
             | Message::New
             | Message::Open
+            | Message::OpenShortcutExamples
             | Message::Tabs(
                 super::tabs::Action::Select(_)
                     | super::tabs::Action::Cycle(_)

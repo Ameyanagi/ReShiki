@@ -1,6 +1,6 @@
 # Shortcuts and editable examples
 
-Open **Help** at the bottom of the tool strip, or press **F1**, then choose **Open shortcut examples**. This opens **one editable ReShiki file** in a separate window. It contains nine sections of labeled structures made with the same operations as the keyboard shortcuts.
+Open **Help** at the bottom of the tool strip, or press **F1**, then choose **Open shortcut examples**. This opens **one editable drawing** in a tab named **Shortcut examples** in the current window. If an unchanged examples tab is already open, it comes to the front. **Save** asks for a location for your own copy. It contains nine sections of labeled structures made with the same operations as the keyboard shortcuts.
 
 [Download the shortcut examples (.rsk)](../assets/examples/shortcut-examples.rsk). This is a single document, not a template collection. Open it with **Open**, or double-click the downloaded file. The gallery uses the normal unbounded canvas, without print pages or a page-navigation panel.
 

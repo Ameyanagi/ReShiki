@@ -1,6 +1,6 @@
 # Shortcut help and direct drawing gestures
 
-Help now opens one editable ReShiki document of labeled examples in a separate window. Copy structures into your drawing, edit them, or save your own reference. Existing work and its Undo history stay in the original window.
+Help opens one editable drawing of labeled examples in a tab named **Shortcut examples** in the current window. An unchanged examples tab comes to the front when opened again. **Save** asks for a location for your own copy. Copy structures into your drawing, edit them, or save your own reference. Existing work and its Undo history stay in their original tabs.
 
 [Download the single reference file](../../assets/examples/shortcut-examples.rsk) · [Complete shortcut list](../contextual-shortcuts.md) · [ReShiki 0.8.0 release notes](../changes-0.8.md)
 
@@ -8,9 +8,9 @@ Groups and templates are available in their current form and may be extended or 
 
 ## Help and examples
 
-Press **F1**, or click **Help** at the bottom of the tools. Choose **Open shortcut examples**. The reference is arranged in nine sections on the ordinary unbounded canvas. Scroll vertically or sideways to pan, hold Cmd/Ctrl while scrolling to zoom at the pointer, or use Fit for an overview. Double-click a structure, copy, switch windows, and paste. Captions stay in the reference; the underlying atoms and bonds remain editable.
+Press **F1**, or click **Help** at the bottom of the tools. Choose **Open shortcut examples**. The reference is arranged in nine sections on the ordinary unbounded canvas. Scroll vertically or sideways to pan, hold Cmd/Ctrl while scrolling to zoom at the pointer, or use Fit for an overview. Double-click a structure, copy, switch tabs, and paste. Captions stay in the reference; the underlying atoms and bonds remain editable.
 
-![Help opens an editable reference in a separate window](../images/shortcut-help/help.png)
+![Help offers an editable shortcut reference](../images/shortcut-help/help.png)
 
 ![One ReShiki file of copyable structures on the normal unbounded canvas](../images/shortcut-help/gallery.png)
 

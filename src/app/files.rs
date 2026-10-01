@@ -156,6 +156,20 @@ pub(super) async fn prepare_contents(path: PathBuf, contents: Result<Vec<u8>, St
 }
 
 impl super::App {
+    pub(super) fn drawing_save_target(&self, save_as: bool) -> (Option<PathBuf>, String) {
+        let path = if save_as { None } else { self.tab.path.clone() };
+        let name = if self.tab.path.is_some() {
+            self.document_name()
+        } else {
+            format!(
+                "{}.{}",
+                self.document_name(),
+                reshiki::compatibility::NATIVE_EXTENSION
+            )
+        };
+        (path, name)
+    }
+
     pub(super) fn file_saved(
         &mut self,
         epoch: u64,
