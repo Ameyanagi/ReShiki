@@ -56,6 +56,7 @@ impl State {
 pub(super) struct Exit {
     closing: Option<iced::window::Id>,
     updating: bool,
+    handoff: bool,
     committed: bool,
 }
 
@@ -65,7 +66,7 @@ impl Exit {
     }
 
     pub(super) fn frozen(&self) -> bool {
-        self.closing() || self.committed
+        self.closing() || self.handoff || self.committed
     }
 
     pub(super) fn committed(&self) -> bool {
@@ -211,16 +212,24 @@ impl App {
     }
 
     fn finish_exit(&mut self) -> Task<Message> {
-        self.exit.committed = true;
-        self.tabs.deferred_results.clear();
         if self.exit.updating {
             self.exit.updating = false;
+            // The installer can still fail. Keep results until it confirms
+            // the handoff, so cancellation can restore every operation.
+            self.exit.handoff = true;
             return Task::done(Message::Updates(super::updates::Action::RecoveryCleared));
         }
+        self.commit_exit();
         self.exit
             .closing
             .take()
             .map_or_else(Task::none, iced::window::close)
+    }
+
+    pub(super) fn commit_exit(&mut self) {
+        self.exit.handoff = false;
+        self.exit.committed = true;
+        self.tabs.deferred_results.clear();
     }
 
     /// Removes a closed tab's draft; a write still running for it finishes
@@ -1001,6 +1010,59 @@ pub(super) mod tests {
         assert_eq!(app.autosaved(key, result).units(), 0);
         let (key, result) = run(app.prepare_autosave().unwrap());
         assert!(app.autosaved(key, result).units() > 0);
+    }
+
+    #[test]
+    fn failed_update_handoff_replays_clipboard_results_on_either_side_of_draft_cleanup() {
+        for background in [false, true] {
+            for before_cleanup in [false, true] {
+                let (mut app, directory) = fixture();
+                app.tab.busy = false;
+                app.tab.clipboard_busy = true;
+                let (id, epoch, revision) = (app.tab.id, app.tab.file_epoch, app.tab.revision);
+                if background {
+                    app.tab.recovery = None;
+                    app.add_tab();
+                    app.tab.recovery = Some(Recovery::in_directory(directory.path()).unwrap());
+                }
+                app.updates.restarting = true;
+                let _ = app.restart_after_recovery();
+                let key = app.tab.autosave.pending.unwrap();
+                let completion = || {
+                    Message::Tab(
+                        id,
+                        Box::new(Message::ClipboardRead {
+                            epoch,
+                            revision,
+                            result: Box::new(Err("Clipboard unavailable".into())),
+                        }),
+                    )
+                };
+                if before_cleanup {
+                    let _ = app.update(completion());
+                }
+                let _ = app.update(Message::Autosaved(key, Ok(None)));
+                assert!(app.exit.frozen() && !app.exit.committed());
+                if !before_cleanup {
+                    let _ = app.update(completion());
+                }
+                assert_eq!(app.tabs.deferred_results.len(), 1);
+                let _ = app.update(Message::Updates(super::super::updates::Action::Restarted(
+                    Err("Installer failed".into()),
+                )));
+                assert!(!app.exit.frozen() && !app.updates.restarting);
+                assert!(app.tabs.deferred_results.is_empty());
+                app.in_tab(id, |app| {
+                    assert!(!app.tab.clipboard_busy);
+                    assert!(app.status.contains("Clipboard unavailable"));
+                    assert!(
+                        app.update(Message::Paste).units() > 0,
+                        "Paste is usable after a failed handoff"
+                    );
+                })
+                .unwrap();
+            }
+        }
     }
 
     #[test]

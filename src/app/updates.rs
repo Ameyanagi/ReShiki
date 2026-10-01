@@ -143,6 +143,7 @@ impl App {
             Action::RecoveryCleared => return self.handoff_update(),
             Action::Restarted(result) => match result {
                 Ok(()) => {
+                    self.commit_exit();
                     return iced::exit();
                 }
                 Err(error) => {
@@ -268,7 +269,11 @@ impl App {
         } else if self.file_io.saving || self.templates.pending() {
             Some("Wait for the current file or library save before restarting.")
         } else if self.strip().any(|tab| {
-            tab.busy || tab.cleanup.is_some() || tab.joining.is_some() || tab.atom_text.is_some()
+            tab.busy
+                || tab.clipboard_busy
+                || tab.cleanup.is_some()
+                || tab.joining.is_some()
+                || tab.atom_text.is_some()
         }) {
             Some("Finish the current editing operation before restarting.")
         } else {
@@ -548,6 +553,24 @@ mod tests {
         assert!(app.update_restart_blocker().is_some());
         app.tabs.background[0].busy = false;
         assert!(app.update_restart_blocker().is_none());
+    }
+
+    #[test]
+    fn clipboard_work_in_any_tab_prevents_update_restart() {
+        for background in [false, true] {
+            let (mut app, _) = App::new();
+            app.tab.busy = false;
+            let id = app.tab.id;
+            app.tab.clipboard_busy = true;
+            if background {
+                app.add_tab();
+            }
+            assert!(app.update_restart_blocker().is_some());
+            let _ = app.restart_for_update();
+            assert!(!app.updates.restarting);
+            app.in_tab(id, |app| app.tab.clipboard_busy = false);
+            assert!(app.update_restart_blocker().is_none());
+        }
     }
 
     #[test]
