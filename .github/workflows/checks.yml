@@ -77,7 +77,7 @@ jobs:
       - run: uv run --locked ty check
       - name: Install Rust for native macOS clipboard and printing checks
         if: runner.os == 'macOS'
-        run: rustup toolchain install 1.95.0 --profile minimal && rustup default 1.95.0
+        run: rustup toolchain install 1.99.0 --profile minimal && rustup default 1.99.0
       - run: uv run --locked python -m unittest discover -s tests -p 'test_*.py'
       - run: uv run --locked python scripts/check_reference_dependencies.py
   rust:
@@ -106,8 +106,8 @@ jobs:
       - name: Install Linux libraries
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libfontconfig1-dev libudev-dev
-      - run: rustup toolchain install 1.95.0 --profile minimal --component rustfmt --component clippy
-      - run: rustup default 1.95.0
+      - run: rustup toolchain install 1.99.0 --profile minimal --component rustfmt --component clippy
+      - run: rustup default 1.99.0
       - uses: Swatinem/rust-cache@63fed3e2fecf6f7b51dc6f043341b79ef82a9ae7 # v2.9.2
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
@@ -167,8 +167,8 @@ jobs:
       - name: Install Linux libraries
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libfontconfig1-dev libudev-dev
-      - run: rustup toolchain install 1.95.0 --profile minimal --component rustfmt --component clippy
-      - run: rustup default 1.95.0
+      - run: rustup toolchain install 1.99.0 --profile minimal --component rustfmt --component clippy
+      - run: rustup default 1.99.0
       - uses: Swatinem/rust-cache@63fed3e2fecf6f7b51dc6f043341b79ef82a9ae7 # v2.9.2
         with:
           shared-key: reference-${{ matrix.shard }}

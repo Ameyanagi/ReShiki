@@ -12,7 +12,7 @@ from pathlib import Path
 
 from build_inchi_helper import INCHI_VERSION
 from build_release import ROOT, numeric_version, run, verify_binary, verify_inchi_worker
-from check_runtime_dependencies import verify_payload, verify_runtime
+from check_runtime_dependencies import verify_macos_workers, verify_payload, verify_runtime
 
 
 class InstallerCheckDirectory(tempfile.TemporaryDirectory):
@@ -221,6 +221,7 @@ def verify_mac_disk_image(output, signed, *, architecture):
         verify_binary(installed / "Contents/MacOS/reshiki", "macos", architecture)
         verify_inchi_worker(installed / "Contents/MacOS/reshiki", INCHI_VERSION)
         verify_runtime(installed / "Contents/MacOS/reshiki", installed)
+        verify_macos_workers(installed / "Contents/MacOS/reshiki")
         run(["codesign", "--verify", "--deep", "--strict", installed])
         if signed:
             from sign_macos import verify_app

@@ -4,7 +4,7 @@ ReShiki uses one Rust application executable for the editor, chemistry and nativ
 
 ## Build and run
 
-Install Rust 1.95 with rustfmt and Clippy, a C/C++ compiler, and Python 3.12 for the build scripts. On Windows, use a Visual Studio tools shell matching your Rust target.
+Install Rust 1.99.0 with rustfmt and Clippy, a C/C++ compiler, and Python 3.12 for the build scripts. The repository pins this compiler and its rustfmt/Clippy components in `rust-toolchain.toml`, and CI uses the same version. On Windows, use a Visual Studio tools shell matching your Rust target.
 
 On macOS, Cargo defaults C/C++ dependencies to Apple Clang from `/usr/bin`, so a GCC installation earlier on `PATH` does not change the compiler. Set `CC_aarch64_apple_darwin` and `CXX_aarch64_apple_darwin` (or the `x86_64_apple_darwin` equivalents for Intel) explicitly to override these repository defaults.
 

@@ -120,8 +120,8 @@ jobs:
       - name: Install Linux libraries
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libfontconfig1-dev libudev-dev
-      - run: rustup toolchain install 1.95.0 --profile minimal --target ${{ matrix.target }}
-      - run: rustup default 1.95.0
+      - run: rustup toolchain install 1.99.0 --profile minimal --target ${{ matrix.target }}
+      - run: rustup default 1.99.0
       - name: Select the native Windows compiler
         if: runner.os == 'Windows'
         uses: ./.github/actions/setup-msvc

@@ -312,10 +312,21 @@ fn stage(asset: &Path, directory: &Path, version: &str) -> Result<PathBuf, Strin
         &std::fs::read(payload.join("build.json")).map_err(|e| e.to_string())?,
     )
     .map_err(|e| e.to_string())?;
+    let self_process =
+        data.pointer("/inchi/runtime").and_then(|v| v.as_str()) == Some("self-process");
+    let licenses = payload.join("Licenses");
+    let complete_licenses = ["LICENSE", "LICENSE-MIT", "LICENSE-APACHE", "NOTICE"]
+        .iter()
+        .all(|name| licenses.join(name).is_file())
+        && (licenses.join("THIRD-PARTY-NOTICES.txt").is_file()
+            || (!self_process
+                && licenses.join("rust").is_dir()
+                && licenses.join("sources").is_dir()
+                && licenses.join("rust-dependencies.json").is_file()));
     if data.get("version").and_then(|v| v.as_str()) != Some(version)
         || !payload.join("reshiki").is_file()
-        || (data.pointer("/inchi/runtime").and_then(|v| v.as_str()) != Some("self-process")
-            && !payload.join("reshiki-inchi-helper").is_file())
+        || (!self_process && !payload.join("reshiki-inchi-helper").is_file())
+        || !complete_licenses
     {
         return Err("Incomplete update package".into());
     }
@@ -504,7 +515,7 @@ mod tests {
     #[test]
     fn helper_replaces_owned_files_and_rolls_back_an_interrupted_install() {
         use std::os::unix::fs::PermissionsExt;
-        for fail in [false, true] {
+        for (fail, missing_licenses) in [(false, false), (true, false), (false, true)] {
             let root = tempfile::tempdir().unwrap();
             let target = root.path().join("installed app");
             let stage = root.path().join("stage");
@@ -522,12 +533,14 @@ mod tests {
             std::fs::write(target.join("reshiki-inchi-helper"), "old helper").unwrap();
             std::fs::create_dir_all(target.join("Licenses/rust/legacy")).unwrap();
             std::fs::write(target.join("Licenses/rust/legacy/LICENSE"), "old license").unwrap();
-            std::fs::create_dir_all(payload.join("Licenses")).unwrap();
-            std::fs::write(
-                payload.join("Licenses/THIRD-PARTY-NOTICES.txt"),
-                "complete notices",
-            )
-            .unwrap();
+            if !missing_licenses {
+                std::fs::create_dir_all(payload.join("Licenses")).unwrap();
+                std::fs::write(
+                    payload.join("Licenses/THIRD-PARTY-NOTICES.txt"),
+                    "complete notices",
+                )
+                .unwrap();
+            }
             std::fs::write(target.join("user drawing.rsk"), "preserve").unwrap();
             let mut script = include_str!("install.sh").to_owned();
             if fail {
@@ -574,12 +587,20 @@ mod tests {
                 );
             } else {
                 assert!(!target.join("reshiki-inchi-helper").exists());
-                assert!(!target.join("Licenses/rust").exists());
-                assert_eq!(
-                    std::fs::read_to_string(target.join("Licenses/THIRD-PARTY-NOTICES.txt"))
-                        .unwrap(),
-                    "complete notices"
-                );
+                if missing_licenses {
+                    assert_eq!(
+                        std::fs::read_to_string(target.join("Licenses/rust/legacy/LICENSE"))
+                            .unwrap(),
+                        "old license"
+                    );
+                } else {
+                    assert!(!target.join("Licenses/rust").exists());
+                    assert_eq!(
+                        std::fs::read_to_string(target.join("Licenses/THIRD-PARTY-NOTICES.txt"))
+                            .unwrap(),
+                        "complete notices"
+                    );
+                }
                 assert_eq!(
                     std::fs::read_to_string(stage.join("previous/reshiki-inchi-helper")).unwrap(),
                     "old helper"
@@ -606,11 +627,16 @@ mod tests {
         } else {
             "x64"
         };
-        for (self_process, old_helper, main_binary) in [
-            (true, false, true),
-            (false, true, true),
-            (false, false, true),
-            (true, false, false),
+        for (self_process, old_helper, main_binary, license_layout) in [
+            (true, false, true, "compact"),
+            (false, true, true, "legacy"),
+            (false, false, true, "compact"),
+            (true, false, false, "compact"),
+            (true, false, true, "missing"),
+            (true, false, true, "empty"),
+            (true, false, true, "project-only"),
+            (true, false, true, "legacy"),
+            (false, true, true, "project-only"),
         ] {
             let root = tempfile::tempdir().unwrap();
             let name = format!("reshiki-0.10.0-linux-{arch}");
@@ -631,6 +657,26 @@ mod tests {
             if old_helper {
                 std::fs::write(payload.join("reshiki-inchi-helper"), "legacy helper").unwrap();
             }
+            if license_layout != "missing" {
+                let licenses = payload.join("Licenses");
+                std::fs::create_dir(&licenses).unwrap();
+                if license_layout != "empty" {
+                    for name in ["LICENSE", "LICENSE-MIT", "LICENSE-APACHE", "NOTICE"] {
+                        std::fs::write(licenses.join(name), "project notice").unwrap();
+                    }
+                }
+                if license_layout == "compact" {
+                    std::fs::write(
+                        licenses.join("THIRD-PARTY-NOTICES.txt"),
+                        "dependency notices",
+                    )
+                    .unwrap();
+                } else if license_layout == "legacy" {
+                    std::fs::create_dir(licenses.join("rust")).unwrap();
+                    std::fs::create_dir(licenses.join("sources")).unwrap();
+                    std::fs::write(licenses.join("rust-dependencies.json"), "{}").unwrap();
+                }
+            }
             let archive = root.path().join("package.tar.gz");
             assert!(
                 Command::new("tar")
@@ -647,7 +693,10 @@ mod tests {
             std::fs::create_dir(&staging).unwrap();
             assert_eq!(
                 stage(&archive, &staging, "0.10.0").is_ok(),
-                main_binary && (self_process || old_helper)
+                main_binary
+                    && (self_process || old_helper)
+                    && (license_layout == "compact"
+                        || (!self_process && license_layout == "legacy"))
             );
         }
     }

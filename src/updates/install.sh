@@ -54,6 +54,8 @@ else
     for name in reshiki reshiki-inchi-helper Licenses build.json README.txt; do
         # Retire an old owned helper even when the new package has no companion.
         # Keep it in the rollback directory until the replacement has succeeded.
+        # Preserve every other owned path if its replacement has disappeared.
+        [ -e "$payload/$name" ] || [ "$name" = reshiki-inchi-helper ] || continue
         if [ -e "$target/$name" ]; then /bin/mv "$target/$name" "$stage/previous/$name"; fi
         if [ -e "$payload/$name" ]; then
             touch "$stage/installed/$name"

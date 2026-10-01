@@ -73,6 +73,8 @@ gh workflow run release.yml --ref main -f sign_macos=true
 
 Each archive is extracted into a temporary directory with spaces outside the checkout. Two launches must return the expected ethanol formula and SMILES with an empty executable search path and unavailable Python/uv overrides. Packages must contain no Python worker or interpreter and create no chemistry environment. The relocated app must relaunch itself for InChI work; packages with companion executables are rejected. macOS signatures are checked again afterward. Record graphical acceptance separately.
 
+Extracted macOS archives and installed disk-image copies also run the actual application with its clipboard and print worker flags. Malformed, empty-write, missing-snapshot and oversized requests must return the expected errors without changing the clipboard or opening a print dialog. Private-pasteboard round trips and Save-to-PDF coordinate tests separately verify native behavior.
+
 Before the native-runtime cutover, the [2026-09-20 release validation](https://github.com/Ameyanagi/ReShiki/actions/runs/35510386732) passed all five package checks, including native ARM Windows/Linux applications, fresh chemistry setup, and offline reuse. Apple Silicon also passed Developer ID signing, notarization, stapling, and Gatekeeper assessment. This manual run did not publish a release.
 
 The [0.9.0 validation record](release-0.9.0-validation.md) records the completed source review, documentation validation, package checks and public-download verification. The [0.8.0 record](release-0.8.0-validation.md) retains the previous release’s evidence.
@@ -148,7 +150,7 @@ Packaging checks the application's selected CPU architecture, including ARM64 on
 
 Build runners are macOS 14 on Apple Silicon, macOS 15 on Intel, Windows Server 2022 x64, Windows 11 ARM, Ubuntu 22.04 x64, and Ubuntu 24.04 ARM. Pass `--target` to `scripts/build_release.py` to select the explicit Rust target; package names derive from that target, including when packaging Python uses a different architecture.
 
-Build on the target operating system with Rust 1.95, a C/C++ compiler and Python 3.12. On Windows, use `python` instead of `python3`. Archives are written to `dist/releases/`.
+Build on the target operating system with Rust 1.99.0, a C/C++ compiler and Python 3.12. On Windows, use `python` instead of `python3`. Archives are written to `dist/releases/`.
 
 On macOS, run `python3 scripts/build_macos_app.py` for a development app. Add `--portable --release` for an optimized bundle in `dist/ReShiki.app`. Both forms include one executable, the icon, license notices and an ad-hoc signature; release signing replaces that signature.
 

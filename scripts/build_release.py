@@ -16,7 +16,11 @@ import tomllib
 import zipfile
 from pathlib import Path
 
-from check_runtime_dependencies import verify_runtime, verify_single_executable
+from check_runtime_dependencies import (
+    verify_macos_workers,
+    verify_runtime,
+    verify_single_executable,
+)
 from license_notices import write_notices
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -274,6 +278,7 @@ def verify_archive(archive_path, signed=False):
         verify_single_executable(binary, folder)
         verify_runtime(binary, folder)
         if platform.system() == "Darwin":
+            verify_macos_workers(binary)
             run(["codesign", "--verify", "--deep", "--strict", app])
         print("Extracted application and native chemistry verified without Python or uv.")
 

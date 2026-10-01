@@ -53,6 +53,38 @@ def verify_single_executable(binary, package):
         raise ValueError(f"Expected only the application executable in {package}; found {found}")
 
 
+def verify_macos_workers(binary):
+    """Exercise packaged worker dispatch without changing the clipboard or printing."""
+    with tempfile.TemporaryDirectory(prefix="ReShiki native workers ") as temporary:
+        root = Path(temporary)
+        requests = [
+            ("--clipboard-worker", b"{}", b"Invalid clipboard request or data"),
+            (
+                "--clipboard-worker",
+                b'{"operation":"write","representations":[]}',
+                b"No supported clipboard representations",
+            ),
+            ("--print-worker", b"{}", b"Invalid print request"),
+            (
+                "--print-worker",
+                json.dumps({"path": str(root / "missing.pdf"), "title": "Smoke check"}).encode(),
+                b"Could not read the print snapshot",
+            ),
+            ("--print-worker", b"x" * 65537, b"Native request is too large"),
+        ]
+        for mode, request, error in requests:
+            result = subprocess.run(
+                [str(Path(binary).resolve()), mode],
+                input=request,
+                cwd=root,
+                capture_output=True,
+                timeout=15,
+            )
+            if result.returncode != 1 or result.stdout or result.stderr.strip() != error:
+                raise ValueError(f"Packaged {mode} did not reject its invalid request correctly")
+    print("Packaged clipboard and print worker entry points passed.")
+
+
 def verify_runtime(binary, package, *, user_data=None):
     package = Path(package).resolve(strict=True)
     binary = Path(binary).resolve(strict=True)

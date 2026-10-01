@@ -164,6 +164,19 @@ pub fn execute(input: &[u8]) -> Result<Vec<u8>, String> {
 mod tests {
     use super::*;
 
+    struct PrivatePasteboard<'a>(&'a NSPasteboard);
+
+    impl Drop for PrivatePasteboard<'_> {
+        fn drop(&mut self) {
+            // SAFETY: This is our uniquely named, still-retained pasteboard.
+            // AppKit's releaseGlobally removes its server registration and
+            // returns void. The binding omits this oneway Objective-C method.
+            unsafe {
+                let _: () = objc2::msg_send![self.0, releaseGlobally];
+            }
+        }
+    }
+
     fn representation(kind: &str, data: &str) -> Representation {
         Representation {
             kind: kind.into(),
@@ -174,6 +187,7 @@ mod tests {
     #[test]
     fn private_pasteboard_priorities_formats_and_invalid_writes() -> Result<(), String> {
         let board = NSPasteboard::pasteboardWithUniqueName();
+        let _release = PrivatePasteboard(&board);
         let native = representation("dev.reshiki.drawing", "native");
         let legacy = representation("dev.moruno.drawing", "legacy");
         let png = representation("public.png", "png");
@@ -215,7 +229,6 @@ mod tests {
             assert!(write(&board, &invalid).is_err());
             assert_eq!(read(&board, false)?, vec![native.clone()]);
         }
-        board.clearContents();
         Ok(())
     }
 }
