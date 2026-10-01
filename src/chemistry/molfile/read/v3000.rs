@@ -400,7 +400,9 @@ fn template_order(r: &Reader<'_>, value: &str) -> Result<()> {
     for entry in fields
         .get(1..)
         .ok_or_else(|| r.invalid("Missing template attachments"))?
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
     {
         let index = r.integer(r.token(entry, 0)?)?;
         let label = r.token(entry, 1)?;

@@ -129,11 +129,11 @@ mod tests {
         anyhow::ensure!(data.len().is_multiple_of(24), "Truncated native corpus");
         let mut count = 0_u64;
         let mut differences = Vec::new();
-        for record in data.chunks_exact(24) {
-            let mut values = record.chunks_exact(8);
+        for record in data.as_chunks::<24>().0.iter() {
+            let mut values = record.as_chunks::<8>().0.iter();
             let mut next = || -> anyhow::Result<u64> {
                 Ok(u64::from_be_bytes(
-                    values.next().context("Missing native value")?.try_into()?,
+                    *values.next().context("Missing native value")?,
                 ))
             };
             let angle = f64::from_bits(next()?);

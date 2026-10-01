@@ -126,22 +126,9 @@ pub fn prepare(doc: Document, title: String) -> Result<Prepared, String> {
 }
 #[cfg(not(windows))]
 fn helper() -> Result<PathBuf, String> {
-    std::env::current_exe()
-        .ok()
-        .and_then(|exe| {
-            let path = exe
-                .parent()?
-                .parent()?
-                .join("Helpers/ReShiki Print.app/Contents/MacOS/reshiki-print");
-            path.is_file().then_some(path)
-        })
-        .or_else(|| {
-            option_env!("RESHIKI_PRINT_HELPER")
-                .map(PathBuf::from)
-                .filter(|p| p.is_file())
-        })
-        .ok_or_else(|| "Native printing is unavailable in this build.".into())
+    std::env::current_exe().map_err(|e| format!("Could not locate the application: {e}"))
 }
+
 #[cfg(not(windows))]
 async fn drain_errors(mut input: impl tokio::io::AsyncRead + Unpin) -> Result<Vec<u8>, String> {
     let mut result = Vec::new();
@@ -186,6 +173,7 @@ pub async fn show_dialog(job: Prepared) -> Result<Outcome, String> {
     })
     .map_err(|e| e.to_string())?;
     let mut command = Command::new(helper);
+    command.arg("--print-worker");
     let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

@@ -157,7 +157,9 @@ fn styled_labels_survive_native_save_and_vector_and_raster_exports() {
     let info = reader.next_frame(&mut pixels).unwrap();
     assert!(
         pixels[..info.buffer_size()]
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .filter(|p| i16::from(p[0]) - i16::from(p[1]) > 30
                 && i16::from(p[0]) - i16::from(p[2]) > 30)
             .count()

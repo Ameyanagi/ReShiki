@@ -8,6 +8,10 @@
     clippy::indexing_slicing
 )]
 
+pub mod clipboard;
+pub mod printing;
+pub mod workers;
+
 use objc2::rc::Retained;
 use objc2::{DefinedClass, MainThreadOnly, define_class, msg_send, sel};
 use objc2_app_kit::{NSApplication, NSApplicationWillFinishLaunchingNotification};

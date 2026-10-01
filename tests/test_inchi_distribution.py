@@ -344,41 +344,24 @@ class HelperTests(unittest.TestCase):
                 return_value=subprocess.CompletedProcess([], 0, stdout=response),
             ):
                 with self.assertRaises((ValueError, UnicodeError)):
-                    build_release.verify_inchi_helper(Path("helper"), "1.07.5")
+                    build_release.verify_inchi_worker(Path("helper"), "1.07.5")
         with patch(
             "build_release.run", return_value=subprocess.CompletedProcess([], 0, stdout=valid)
         ) as run:
-            build_release.verify_inchi_helper(Path("helper"), "1.07.5")
+            build_release.verify_inchi_worker(Path("helper"), "1.07.5")
             self.assertEqual(run.call_args.kwargs["input"][:12], b"RSHINCHI\x03\x00\x00\x00")
-            self.assertEqual(run.call_args.args[0], [Path("helper")])
+            self.assertEqual(run.call_args.args[0], [Path("helper"), "--inchi-worker"])
             self.assertEqual(run.call_args.kwargs["timeout"], 15)
 
-    def test_cargo_build_uses_target_and_production_output_without_c_source(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            target = "aarch64-pc-windows-msvc"
-            output = root / target / "inchi-helper/reshiki-inchi-helper.exe"
-            with (
-                patch("build_release.target_directory", return_value=root),
-                patch("build_release.run") as run,
-                patch("build_release.verify_inchi_build", return_value=(output, {})) as verify,
-            ):
-                self.assertEqual(build_release.prepare_inchi_helper(target), (output, {}))
-            command = run.call_args.args[0]
-            self.assertIn("--production", command)
-            self.assertNotIn("--source", command)
-            self.assertEqual(command[command.index("--target") + 1], target)
-            self.assertEqual(command[command.index("--output") + 1], output.parent)
-            verify.assert_called_once_with(output, target)
+    def test_single_executable_checks_all_targets_and_rejects_companions(self):
+        from check_runtime_dependencies import verify_single_executable
 
-    def test_prebuilt_helper_checks_all_targets_locked_dependency_and_source_identity(self):
-        from build_inchi_helper import INCHI_VERSION, dependency, source_hashes
-
-        hashes = source_hashes(build_release.ROOT)
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             for target, (system, architecture) in build_release.RELEASE_TARGETS.items():
                 with self.subTest(target=target):
+                    package = root / target
+                    package.mkdir()
                     image = bytearray(64)
                     if system == "windows":
                         image[:2] = b"MZ"
@@ -395,36 +378,17 @@ class HelperTests(unittest.TestCase):
                         image[:8] = b"\xcf\xfa\xed\xfe" + (
                             0x0100000C if architecture == "arm64" else 0x01000007
                         ).to_bytes(4, "little")
-                    binary = root / build_release.inchi_helper_name(system)
+                    binary = package / ("reshiki.exe" if system == "windows" else "reshiki")
                     binary.write_bytes(image)
-                    metadata = dict(
-                        inchi_version=INCHI_VERSION,
-                        dependency=dependency(build_release.ROOT),
-                        source_hashes=hashes,
-                        executable_sha256=hashlib.sha256(image).hexdigest(),
-                        target=target,
-                        production=True,
-                    )
-                    record = root / "build.json"
-                    record.write_text(json.dumps(metadata))
-                    helper, details = build_release.verify_inchi_build(binary, target)
-                    self.assertEqual(helper, binary.resolve())
-                    self.assertEqual(details["version"], "1.07.5")
-                    for key in metadata:
-                        record.write_text(json.dumps({**metadata, key: "wrong"}))
-                        with self.assertRaisesRegex(ValueError, "build metadata"):
-                            build_release.verify_inchi_build(binary, target)
-                    changed = {**hashes, "src/chemistry/inchi/kernel.rs": "stale"}
-                    record.write_text(json.dumps({**metadata, "source_hashes": changed}))
-                    with self.assertRaisesRegex(ValueError, "build metadata"):
-                        build_release.verify_inchi_build(binary, target)
-                    binary.write_bytes(b"incorrect architecture")
-                    metadata["executable_sha256"] = hashlib.sha256(binary.read_bytes()).hexdigest()
-                    record.write_text(json.dumps(metadata))
-                    with self.assertRaisesRegex(ValueError, "executable"):
-                        build_release.verify_inchi_build(binary, target)
+                    (package / "THIRD-PARTY-NOTICES.txt").write_text("Complete attribution")
+                    build_release.verify_binary(binary, system, architecture)
+                    verify_single_executable(binary, package)
+                    companion = package / "legacy-worker"
+                    companion.write_bytes(image)
+                    with self.assertRaisesRegex(ValueError, "only the application executable"):
+                        verify_single_executable(binary, package)
 
-    def test_mac_helper_is_copied_before_bundle_signing_and_signed_inside_out(self):
+    def test_mac_worker_payloads_are_retired_before_single_application_signing(self):
         import sign_macos
 
         with tempfile.TemporaryDirectory() as temporary:
@@ -432,8 +396,6 @@ class HelperTests(unittest.TestCase):
             binary = root / "custom-target/debug/reshiki"
             binary.parent.mkdir(parents=True)
             binary.write_bytes(b"\xcf\xfa\xed\xfe")
-            helper = root / "reshiki-inchi-helper"
-            helper.write_bytes(b"\xcf\xfa\xed\xfe" + b"native helper")
             icon = root / "assets/branding/reshiki.icns"
             icon.parent.mkdir(parents=True)
             icon.write_bytes(b"icns fixture")
@@ -441,13 +403,24 @@ class HelperTests(unittest.TestCase):
             legacy = app / "Contents/Resources/chemistry/engine"
             legacy.mkdir(parents=True)
             (legacy / "worker.py").write_text("obsolete")
-            copied = app / "Contents/MacOS/reshiki-inchi-helper"
+            retired = [
+                app / name
+                for name in (
+                    "Contents/MacOS/reshiki-inchi-helper",
+                    "Contents/MacOS/reshiki-clipboard",
+                    "Contents/Helpers/ReShiki Print.app/Contents/MacOS/reshiki-print",
+                )
+            ]
+            for old in retired:
+                old.parent.mkdir(parents=True, exist_ok=True)
+                old.write_bytes(b"\xcf\xfa\xed\xfeold")
+            copied = app / "Contents/MacOS/reshiki"
 
             def run(command, **_kwargs):
-                if command[0] == "swiftc":
-                    Path(command[command.index("-o") + 1]).write_bytes(b"\xcf\xfa\xed\xfe")
-                elif command[0] == "codesign":
-                    self.assertEqual(copied.read_bytes(), helper.read_bytes())
+                self.assertNotEqual(command[0], "swiftc")
+                if command[0] == "codesign":
+                    self.assertEqual(copied.read_bytes(), binary.read_bytes())
+                    self.assertTrue(all(not old.exists() for old in retired))
                     self.assertEqual(
                         (app / "Contents/Resources/ReShiki.icns").read_bytes(), icon.read_bytes()
                     )
@@ -467,7 +440,7 @@ class HelperTests(unittest.TestCase):
                     (destination / "NOTICE").write_text("Native licenses")
 
                 notices.side_effect = write_notice
-                build_release.mac_bundle(app, "debug", inchi_helper=helper)
+                build_release.mac_bundle(app, "debug")
                 notices.assert_called_once_with(app / "Contents/Resources/Licenses")
             with (
                 patch(
@@ -485,6 +458,7 @@ class HelperTests(unittest.TestCase):
                 for call in sign.call_args_list
                 if call.args[0][:2] == ["codesign", "--force"]
             ]
+            self.assertEqual(len(signed), 2)
             self.assertIn(copied, signed)
             self.assertLess(signed.index(copied), signed.index(app))
 
@@ -501,7 +475,6 @@ class HelperTests(unittest.TestCase):
                         executable.parent.mkdir(parents=True)
                         header = b"\xcf\xfa\xed\xfe" + machine.to_bytes(4, "little")
                         executable.write_bytes(header)
-                        executable.with_name("reshiki-inchi-helper").write_bytes(header)
                         (mount / "Applications").symlink_to("/Applications")
                     elif command[0] == "ditto":
                         shutil.copytree(command[1], command[2])
@@ -516,8 +489,9 @@ class HelperTests(unittest.TestCase):
 
                 with (
                     patch("installers.run", side_effect=run),
-                    patch("installers.verify_inchi_helper", side_effect=helper),
+                    patch("installers.verify_inchi_worker", side_effect=helper),
                     patch("installers.verify_runtime") as runtime,
+                    patch("installers.verify_macos_workers") as native_workers,
                 ):
                     installers.verify_mac_disk_image(
                         Path("fixture.dmg"), False, architecture=architecture
@@ -531,8 +505,9 @@ class HelperTests(unittest.TestCase):
                 runtime.assert_called_once_with(
                     checked[0].with_name("reshiki"), checked[0].parents[2]
                 )
+                native_workers.assert_called_once_with(checked[0])
 
-    def test_windows_setup_and_upgrade_verify_the_relocated_helper(self):
+    def test_windows_setup_and_upgrade_verify_the_relocated_application(self):
         import installers
 
         with tempfile.TemporaryDirectory() as temporary:
@@ -543,7 +518,6 @@ class HelperTests(unittest.TestCase):
             header[60:64] = (64).to_bytes(4, "little")
             header += b"PE\0\0" + (0xAA64).to_bytes(2, "little")
             (source / "reshiki.exe").write_bytes(header)
-            (source / "reshiki-inchi-helper.exe").write_bytes(header)
             (source / "build.json").write_text(json.dumps({"architecture": "arm64"}))
             installed = []
 
@@ -564,6 +538,10 @@ class HelperTests(unittest.TestCase):
                         )
                         # Simulate the installer's app-owned cleanup, preserving user sentinels.
                         shutil.rmtree(destination / "chemistry")
+                        (destination / "reshiki-inchi-helper.exe").unlink()
+                        for old_name in ("rust", "sources"):
+                            shutil.rmtree(destination / "Licenses" / old_name)
+                        (destination / "Licenses/rust-dependencies.json").unlink()
                     shutil.copytree(source, destination, dirs_exist_ok=True)
                     (destination / "unins000.exe").touch()
                     installed.append(destination)
@@ -582,7 +560,7 @@ class HelperTests(unittest.TestCase):
             checked = []
 
             def helper(binary, version):
-                self.assertEqual(binary, installed[-1] / "reshiki-inchi-helper.exe")
+                self.assertEqual(binary, installed[-1] / "reshiki.exe")
                 self.assertTrue(binary.is_file())
                 self.assertEqual(version, "1.07.5")
                 checked.append(binary)
@@ -591,7 +569,7 @@ class HelperTests(unittest.TestCase):
                 patch("installers.sys.platform", "win32"),
                 patch.dict(sys.modules, {"winreg": registry}),
                 patch("installers.run", side_effect=run),
-                patch("installers.verify_inchi_helper", side_effect=helper),
+                patch("installers.verify_inchi_worker", side_effect=helper),
                 patch("installers.verify_runtime") as runtime,
             ):
                 installers.verify_windows_installer(Path("setup.exe"), source)
@@ -602,11 +580,11 @@ class HelperTests(unittest.TestCase):
             self.assertEqual(len(installed), 2)
             self.assertEqual(len(checked), 1)
 
-    def test_packaged_native_helper_executes_when_supplied_for_validation(self):
-        binary = os.environ.get("RESHIKI_TEST_PACKAGED_INCHI_HELPER")
+    def test_packaged_application_worker_executes_when_supplied_for_validation(self):
+        binary = os.environ.get("RESHIKI_TEST_PACKAGED_APP")
         if binary is None:
-            self.skipTest("Optional independently built native package helper")
-        build_release.verify_inchi_helper(Path(binary), "1.07.5")
+            self.skipTest("Optional independently built application")
+        build_release.verify_inchi_worker(Path(binary), "1.07.5")
 
 
 if __name__ == "__main__":

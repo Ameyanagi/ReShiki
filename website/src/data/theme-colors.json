@@ -2,7 +2,7 @@
   "label_context": "Automatic labels on plain paper, with no ring fills or explicit object overrides.",
   "oklch_units": "L: 0–1; C: chroma; h: degrees (0–360). Rounded to six decimals from final RGB.",
   "palette_context": "Strong colors bonds, text and strokes; Tint colors fills, ring interiors and highlight boxes. Each row shares one OKLCH lightness and target chroma per theme and canvas. Default hue angles.",
-  "reshiki_version": "0.9.1-nightly",
+  "reshiki_version": "0.10.0",
   "rgb_space": "sRGB, 8-bit channels (0–255)",
   "sources": [
     "https://jmol.sourceforge.net/jscolors/",

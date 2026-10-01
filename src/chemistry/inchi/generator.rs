@@ -144,7 +144,7 @@ async fn read_limited(
 
 /// Return the kernel status even when it produces no identifier. Chemistry
 /// warnings/errors are distinct from transport, timeout and process failures.
-/// The executable is launched directly, without arguments or a shell.
+/// The executable is launched directly in InChI worker mode, without a shell.
 pub async fn generate(helper: &Path, input: &Input, timeout: Duration) -> Result<Output, Error> {
     generate_with_limits(
         helper,
@@ -227,6 +227,7 @@ fn validate_limits(limits: Limits) -> Result<(), Error> {
 fn helper_command(helper: &Path) -> Command {
     let mut command = Command::new(helper);
     command
+        .arg("--inchi-worker")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

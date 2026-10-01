@@ -2482,6 +2482,8 @@ dependencies = [
  "bitflags 2.13.2",
  "block2 0.6.2",
  "objc2 0.6.4",
+ "objc2-core-foundation",
+ "objc2-core-graphics",
  "objc2-foundation 0.3.2",
 ]
 
@@ -2645,6 +2647,18 @@ dependencies = [
  "block2 0.5.1",
  "objc2 0.5.2",
  "objc2-foundation 0.2.2",
+]
+
+[[package]]
+name = "objc2-pdf-kit"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c14ed801ae810c6ba487cedd7616bb48f9a8e37940042f57e862538e2c7db117"
+dependencies = [
+ "bitflags 2.13.2",
+ "objc2 0.6.4",
+ "objc2-core-graphics",
+ "objc2-foundation 0.3.2",
 ]
 
 [[package]]
@@ -3315,7 +3329,7 @@ dependencies = [
 
 [[package]]
 name = "reshiki"
-version = "0.9.1"
+version = "0.10.0"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -3331,6 +3345,7 @@ dependencies = [
  "reqwest",
  "reshiki-depict-math",
  "reshiki-macos",
+ "reshiki-process-heap",
  "reshiki-windows",
  "resvg",
  "rfd",
@@ -3357,11 +3372,22 @@ version = "0.1.0"
 name = "reshiki-macos"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "objc2 0.6.4",
  "objc2-app-kit 0.3.2",
+ "objc2-core-graphics",
  "objc2-foundation 0.3.2",
+ "objc2-pdf-kit",
+ "pdf-writer",
+ "serde",
+ "serde_json",
+ "tempfile",
  "tokio",
 ]
+
+[[package]]
+name = "reshiki-process-heap"
+version = "0.1.0"
 
 [[package]]
 name = "reshiki-windows"

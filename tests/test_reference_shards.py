@@ -103,12 +103,32 @@ class ReferenceShardTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             runner.commands_for([], 0)
 
+    def test_native_print_is_recognized_and_runs_in_exactly_one_shard(self):
+        data = metadata(["one", "two", "three", "four"])
+        data["packages"][1].update(
+            name="reshiki-macos", targets=[{"name": "native_print", "kind": ["test"]}]
+        )
+        shards = runner.assign_targets(runner.integration_targets(data), 4)
+        commands = [
+            command
+            for index, selected in enumerate(shards)
+            for command in runner.commands_for(selected, index)
+            if "native_print" in command
+        ]
+        self.assertEqual(
+            commands,
+            [["cargo", "test", "--locked", "--package", "reshiki-macos", "--test", "native_print"]],
+        )
+        data["packages"][1]["targets"].append({"name": "unassigned", "kind": ["test"]})
+        with self.assertRaises(ValueError):
+            runner.integration_targets(data)
+
     def test_batches_preserve_reference_flags_and_run_workspace_units_and_docs_once(self):
         shards = runner.assign_targets(["alpha", "beta", "gamma", "delta", "epsilon"], 4)
         all_commands = []
         for index, selected in enumerate(shards):
             commands = runner.commands_for(selected, index)
-            self.assertEqual(len(commands), 3 if index == 0 else 1)
+            self.assertEqual(len(commands), 4 if index == 0 else 1)
             integration = commands[0]
             self.assertEqual(integration.count("--test"), len(selected))
             actual = [integration[i + 1] for i, arg in enumerate(integration) if arg == "--test"]
@@ -117,6 +137,8 @@ class ReferenceShardTests(unittest.TestCase):
             for command in commands:
                 self.assertEqual(command[:2], ["cargo", "test"])
                 self.assertIn("--locked", command)
+                if "native_print" in command:
+                    continue
                 self.assertIn("--no-fail-fast", command)
                 self.assertEqual(command[command.index("--features") + 1], "rdkit-reference")
                 self.assertNotIn("--", command)
@@ -128,7 +150,12 @@ class ReferenceShardTests(unittest.TestCase):
         self.assertIn("--doc", workspace[1])
 
     def test_failed_batch_is_reported_and_later_batches_still_execute(self):
-        for results, expected in [([101, 0, 0], 101), ([0, 3, 7], 3), ([0, 0, 0], 0)]:
+        for results, expected in [
+            ([101, 0, 0, 0], 101),
+            ([0, 3, 7, 0], 3),
+            ([0, 0, 0, 5], 5),
+            ([0, 0, 0, 0], 0),
+        ]:
             with self.subTest(results=results), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 responses = [
@@ -140,7 +167,7 @@ class ReferenceShardTests(unittest.TestCase):
                 with patch.object(runner.subprocess, "run", side_effect=responses) as cargo:
                     with contextlib.redirect_stdout(io.StringIO()):
                         self.assertEqual(runner.run_shard(0, 4, root), expected)
-                self.assertEqual(cargo.call_count, 4)
+                self.assertEqual(cargo.call_count, 5)
                 manifest = json.loads((root / "artifacts/reference-shard-0.json").read_text())
                 self.assertEqual(manifest["returncode"], expected)
                 self.assertEqual([batch["returncode"] for batch in manifest["commands"]], results)
@@ -181,6 +208,7 @@ class ReferenceShardTests(unittest.TestCase):
                 OSError("cannot launch cargo"),
                 subprocess.CompletedProcess([], 0),
                 subprocess.CompletedProcess([], 0),
+                subprocess.CompletedProcess([], 0),
             ]
             with patch.object(runner.subprocess, "run", side_effect=responses) as cargo:
                 with (
@@ -188,7 +216,7 @@ class ReferenceShardTests(unittest.TestCase):
                     contextlib.redirect_stderr(io.StringIO()),
                 ):
                     self.assertEqual(runner.run_shard(0, 4, root), 127)
-            self.assertEqual(cargo.call_count, 4)
+            self.assertEqual(cargo.call_count, 5)
             manifest = json.loads((root / "artifacts/reference-shard-0.json").read_text())
             self.assertEqual(manifest["commands"][0]["error"], "cannot launch cargo")
             self.assertEqual(manifest["commands"][-1]["status"], "passed")

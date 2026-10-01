@@ -1,6 +1,6 @@
 # Architecture
 
-ReShiki owns its editable document and chemistry operations in Rust. The bundled official InChI kernel runs in an isolated helper process. Python/RDKit is retained only as an optional development reference.
+ReShiki owns its editable document and chemistry operations in Rust. The pinned Rust InChI kernel runs in an isolated worker mode of the same executable. Python/RDKit is retained only as an optional development reference.
 
 ```mermaid
 flowchart LR
@@ -11,7 +11,7 @@ flowchart LR
     Scene --> SVG[SVG export]
     App --> Local[ChemistryEngine / LocalEngine]
     Local --> Rust[Rust chemistry and drawing interchange]
-    Rust <--> InChI[Isolated native InChI helper]
+    Rust <--> InChI[Same executable in isolated InChI worker mode]
 ```
 
 ## Modules
@@ -30,7 +30,7 @@ flowchart LR
 | `src/editing.rs`                               | Clipboard remapping, transforms, component arrangement and ring placement      |
 | `src/recovery.rs`                              | Atomic session snapshots and recovery candidates                               |
 | `src/clipboard.rs`, `src/app/clipboard.rs`     | Native multi-format Copy/Paste, asynchronous completion guards and safe Cut    |
-| `native/macos/Clipboard.swift`                 | Bounded single-item AppKit pasteboard bridge                                   |
+| `native/macos/src/clipboard.rs`                | Bounded single-item AppKit pasteboard bridge                                   |
 | `native/windows/`                              | Windows clipboard, printing and editable Office objects through a safe API     |
 | `src/exchange/`                                | Editable drawing export, bounded CDX/CDXML codec and legacy text encodings     |
 | `engine/cdx_exchange.py`                       | Python reference codec retained for differential tests                         |
@@ -63,9 +63,9 @@ The file-open panel is intentionally unfiltered, so opening a supported file doe
 
 ## Native chemistry
 
-Application code forbids `unsafe`; required Win32 calls stay in the isolated `native/windows` crate. Sanitization and ring failures use `thiserror`, preserving the failed stage and underlying ring error. Tests, examples, build scripts and the Windows helper use `anyhow` for propagation and context. Existing string-error APIs are converted explicitly at those boundaries. Prefer iterator transformations when they clarify data flow; use bounded loops for stateful graph traversal.
+Application code forbids `unsafe`; required platform calls stay in `native/windows` and `native/macos`, and the bounded worker allocator stays in `crates/process-heap`. Sanitization and ring failures use `thiserror`, preserving the failed stage and underlying ring error. Tests, examples, build scripts and the Windows helper use `anyhow` for propagation and context. Existing string-error APIs are converted explicitly at those boundaries. Prefer iterator transformations when they clarify data flow; use bounded loops for stateful graph traversal.
 
-The app uses `LocalEngine`, which implements `ChemistryEngine`. Rust handles imports, analysis, cleanup, abbreviations, aromatic display and molecular/drawing exports. It prepares chemistry, computes properties and full CIP labels, lays out molecules and reconstructs drawings; the standalone helper supplies InChI. Blocking tasks keep chemistry off the UI executor. Cached drawing labels never determine chemical identity.
+The app uses `LocalEngine`, which implements `ChemistryEngine`. Rust handles imports, analysis, cleanup, abbreviations, aromatic display and molecular/drawing exports. It prepares chemistry, computes properties and full CIP labels, lays out molecules and reconstructs drawings; an isolated worker process of the same executable supplies InChI. Blocking tasks keep chemistry off the UI executor. Cached drawing labels never determine chemical identity.
 
 Default builds have no Python worker or uv setup. Ordinary tests exercise the native application. `cargo test --features rdkit-reference` adds the original backend, captured native fixtures and live differential tests. This feature is disabled in release packages and is not a runtime plugin ABI.
 
@@ -103,9 +103,9 @@ Rust can select and orient wedge/hash bonds from existing stereo tags, including
 
 `tests/drawing_output.rs` compares 12,218 drawing outputs with direct native bond-assignment APIs and the original document converter. Canonical ranking matches the reference’s drawing defaults. Full CIP results include changed bond-stereo controls as well as labels; reconstruction maps both back to stable IDs. Styles, groups, captions and aromatic circles are retained, and the result remains one undoable edit. Imports, cleanup and figure interchange use the same checked Rust drawing conversion.
 
-Aromatic-circle toggles prepare both chemical states, update selected rings and verify matching canonical SMILES in Rust before returning the edit. `engine::native_aromatic` completes analysis through the standalone helper without starting Python. Independent tests compare complete responses and rejected inputs, including partial fused-ring selections, heterocycle hydrogens, stereo and undo/redo. Guarded routing checks cancellation, concurrent snapshots and helper failures without fallback.
+Aromatic-circle toggles prepare both chemical states, update selected rings and verify matching canonical SMILES in Rust before returning the edit. `engine::native_aromatic` completes analysis through the isolated InChI worker without starting Python. Independent tests compare complete responses and rejected inputs, including partial fused-ring selections, heterocycle hydrogens, stereo and undo/redo. Guarded routing checks cancellation, concurrent snapshots and helper failures without fallback.
 
-Abbreviation detection and replacement run in Rust with the 31 existing presets. Matching preserves native priority, overlap and selection rules; replacement retains attachment IDs, styles and group/reaction membership. Fixed template coordinates match the pinned native platform. Independent tests compare original-worker results, complete app responses, concurrent requests, numeric transport and undo. Final drawing reconstruction and full CIP labeling use Rust; the standalone helper supplies InChI. The adapted coordinate norm and its license are recorded in `licenses/cpython/`.
+Abbreviation detection and replacement run in Rust with the 31 existing presets. Matching preserves native priority, overlap and selection rules; replacement retains attachment IDs, styles and group/reaction membership. Fixed template coordinates match the pinned native platform. Independent tests compare original-worker results, complete app responses, concurrent requests, numeric transport and undo. Final drawing reconstruction and full CIP labeling use Rust; the isolated InChI worker supplies InChI. The adapted coordinate norm and its license are recorded in `licenses/cpython/`.
 
 MOL export writes V2000/V3000 in Rust from the prepared molecule. Dative bonds, large graphs and large coordinates select V3000 automatically. `tests/molfile.rs` compares exact native output, including wedge endpoint reversals, unspecified double bonds, isotope/charge/radical records and format boundaries. Engine tests reimport exported structures and compare identities, atom maps, masses and stereo. They also preserve the existing rejection of generic R atoms as queries on MOL import.
 
@@ -125,7 +125,7 @@ RXN and reaction SMILES import use Rust readers and canvas assembly, preserving 
 
 Reaction SMILES import retains explicit H, grouped reactants, disconnected agents and global CX annotations. Existing conformers keep their coordinates and dimension; the Rust solver lays out only participants without coordinates. CX attachment markers guide Rust wedge selection. Untyped CX properties travel separately to the layout pass, preserving numeric conversion errors only when the native algorithm reads those values.
 
-Rust supplies 2D coordinates, labels and the editable drawing; the standalone helper supplies InChI. CX coordinates used for perception can be nonfinite; they never enter drawing APIs. Complete-response tests include templates, isotope/stereo cases, names, malformed input and optional source fixtures. Concurrent imports keep separate layout results. Transport tests forbid native parsing, H removal, sanitization, Kekulé/wedge generation and drawing conversion. Explicit zero atom maps and independent atom/bond aromatic flags survive transport.
+Rust supplies 2D coordinates, labels and the editable drawing; the isolated InChI worker supplies InChI. CX coordinates used for perception can be nonfinite; they never enter drawing APIs. Complete-response tests include templates, isotope/stereo cases, names, malformed input and optional source fixtures. Concurrent imports keep separate layout results. Transport tests forbid native parsing, H removal, sanitization, Kekulé/wedge generation and drawing conversion. Explicit zero atom maps and independent atom/bond aromatic flags survive transport.
 
 Hydrogen removal preserves isotope H, protected group members, winding and double-bond controls. Invalid properties on removed hydrogens are discarded before validation. Query bonds removed with hydrogen are allowed; surviving queries are rejected. Malformed metadata and excessive work return typed errors without changing input.
 
@@ -143,11 +143,11 @@ Runtime analysis derives InChIKeys in `src/chemistry/inchi/key.rs` using safe Ru
 
 `chemistry::inchi::input` prepares owned atom, bond and stereo records for InChI 1.07.3 without FFI. Independent captures compare the exact arrays passed by the original adapter to its generator, including conformer absence, isotope/H handling and ordered bonds. Invalid indices and undefined native stereo inputs return typed errors without changing the source molecule.
 
-`chemistry::inchi::generator` calls a standalone Rust helper using the pinned `cosmolkit-inchi` Cargo dependency. ReShiki supplies its existing molecular property cache, sanitization and stereo routines through toolkit traits. Bounded versioned frames carry molecular graphs and diagnostics; the dependency does not expose raw C records or warning masks. Deadlines and cancellation terminate the helper process. A Rust allocator bounds live allocations during the operation, including the adapter and response; this is not an RSS or stack limit. Runtime routes discover the helper beside the executable. Release builds verify its locked dependency, source hashes, architecture and operation after extraction or installation. See `tools/inchi-helper/README.md`.
+`chemistry::inchi::generator` relaunches the application with `--inchi-worker`, using the pinned `cosmolkit-inchi` Cargo dependency. ReShiki supplies its existing molecular property cache, sanitization and stereo routines through toolkit traits. Bounded versioned frames carry molecular graphs and diagnostics; the dependency does not expose raw C records or warning masks. Deadlines and cancellation terminate the helper process. A Rust allocator bounds live allocations during the operation, including the adapter and response; this is not an RSS or stack limit. Runtime routes use `current_exe()`; an absolute developer override can select a transport-test executable. Release packages contain exactly one application executable. Build metadata records the locked InChI dependency, and checks validate architecture and worker operations after extraction or installation. See `tools/inchi-helper/README.md`.
 
 Runtime InChI reconstruction runs inside the Rust helper through the dependency's molecular API and ReShiki toolkit callbacks. The async reader returns the reconstructed state, diagnostics and unspecified-bond identities; it compares 1,848 original imports and complete reconstruction outcomes, plus 25 text boundaries. `chemistry::inchi::output` supplies the sanitization and hydrogen-removal callbacks and retains reconstruction from detached C records for independent development reference checks, including all 19 reachable cleanup rules. Those C records do not cross the runtime helper protocol. Native InChI imports then use the Rust layout and drawing pipeline.
 
-Cargo builds the helper from its locked dependency graph. The fork's compatibility fixes are part of the pinned Git revision; the build does not patch a private C source copy. Build provenance records that dependency identity, local source hashes, target architecture and executable checksum.
+Cargo builds the app and its worker modes from one locked dependency graph. The fork's compatibility fixes are part of the pinned Git revision; the build does not patch a private C source copy. A separate development-only executable shares the worker implementation for independent transport and fault tests; it is never copied into releases.
 
 `engine::native_response` builds the default Analyze, abbreviation and ordinary molecular export responses from immutable prepared state. Blocking chemistry runs off the async executor; helper cancellation cannot publish an edit. `engine::native_import` completes imports with existing coordinates or generated Rust layouts. Differential tests compare complete original-worker responses and rejected inputs. Isolated subprocess tests forbid Python startup on native routes and check helper failures without fallback. Reference-feature tests retain the independent original backend.
 
@@ -179,15 +179,15 @@ Element, isotope, allowed-valence and outer-electron data come from RDKit `Relea
 
 Regenerate descriptor rules with `uv run --locked python scripts/regenerate_descriptor_data.py --rdkit-source ~/dev/rdkit`, then `bun run --bun oxfmt src/chemistry/descriptor_data.json`. The generator verifies source checksums and compiles the fixed queries into checked-in data. The application reads that data without invoking Python or parsing SMARTS.
 
-Packages contain no Python interpreter, worker project or uv environment. Native InChI runs from `Contents/MacOS` on macOS or beside the application executable on Windows/Linux. Archive and installer checks exercise relocated binaries with Python/uv unavailable and reject chemistry-cache creation. macOS bundles retain license notices and signing; Windows upgrades remove only the old app-owned `chemistry` directory, preserving user data and caches.
+Packages contain no Python interpreter, worker project, uv environment or companion executables. Archive and installer checks exercise the relocated application with Python/uv unavailable and reject chemistry-cache creation. macOS bundles retain their icon, license notices and signing. Windows upgrades retire the app-owned old chemistry directory, InChI helper and expanded license trees, preserving user data and caches. The `Licenses` directory contains the four project license/notice files and `THIRD-PARTY-NOTICES.txt`; indexed SHA-256 references share only byte-identical texts, preserving every dependency declaration, nested notice and source attribution.
 
 ## Native clipboard
 
-On macOS, explicit Copy/Paste starts a bundled AppKit helper with JSON on stdin/stdout and base64 representations. The helper prepares one item with a private ReShiki document, supported editable binary drawing data and PDF/PNG/SVG alternatives. Copy Image omits the editable structure and adds an embedded raster drawing object with physical bounds for readers that ignore PNG resolution metadata. The helper does not monitor clipboard changes or read previous contents during Copy.
+On macOS, explicit Copy/Paste relaunches the same executable with `--clipboard-worker`, using Rust AppKit bindings with JSON on stdin/stdout and base64 representations. The helper prepares one item with a private ReShiki document, supported editable binary drawing data and PDF/PNG/SVG alternatives. Copy Image omits the editable structure and adds an embedded raster drawing object with physical bounds for readers that ignore PNG resolution metadata. The helper does not monitor clipboard changes or read previous contents during Copy.
 
 The app accepts `format: "cdx"` with base64 input/output. `LocalEngine` converts it in Rust and applies the same native import path as CDXML. The binary codec bounds input, output, nesting, object count and property count. Unsupported object properties and query predicates return errors. The optional reference worker retains its original CDX path as a test oracle.
 
-Clipboard tasks capture document epoch and revision. Cut removes the captured selection only after a successful write and only if the drawing remains unchanged. Paste validates and inserts in one Undo step, rejecting stale results. Rendering uses a snapshot and runs off the UI thread. The build script compiles the Swift helper beside the app executable; development builds use the helper compiled by Cargo's build script. Windows uses its native clipboard and editable Office object bridge; Linux retains text clipboard exchange.
+Clipboard tasks capture document epoch and revision. Cut removes the captured selection only after a successful write and only if the drawing remains unchanged. Paste validates and inserts in one Undo step, rejecting stale results. Rendering uses a snapshot and runs off the UI thread. The same entry point works in development and installed packages; no Swift compiler or separate clipboard binary is needed. Printing uses `--print-worker` with a bounded PDF snapshot and Rust AppKit/PDFKit bindings, keeping native dialogs off the editor event loop. Windows uses its native clipboard and editable Office object bridge; Linux retains text clipboard exchange.
 
 Chemical abbreviations store presentation metadata over the complete atom/bond graph. Cleanup requires selected atoms in the desktop. Rust splits connected components, redraws the requested atoms/molecules, pins unselected atoms and preserves each component’s placement. Cleanup results remain transient until Apply; a revision and document epoch reject stale previews, and Apply commits one history step. Template connection preview and insertion use the same pure geometry operation.
 

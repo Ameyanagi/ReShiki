@@ -186,13 +186,13 @@ fn permutation_odd(order: &[(u32, usize)], work: &mut Work) -> Result<bool, Stri
         while i > 0 {
             work.spend(1)?;
             odd ^= (*at(&tree, i)? & 1) != 0;
-            i -= i & i.wrapping_neg();
+            i -= i.isolate_lowest_one();
         }
         i = position + 1;
         while i < tree.len() {
             work.spend(1)?;
             *tree.get_mut(i).ok_or("Missing parity slot")? += 1;
-            i += i & i.wrapping_neg();
+            i += i.isolate_lowest_one();
         }
     }
     Ok(odd)

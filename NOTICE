@@ -23,8 +23,9 @@ Dependencies retain the licenses declared by their respective projects;
 the project-level dual license does not relicense them.
 
 Binary distributions include a Licenses directory. It contains this notice,
-the project license texts, sources/ with the licenses/ records above, and
-rust/ with dependency license texts and notices. rust-dependencies.json
-records the dependency versions and upstream license declarations.
+the project license texts, and THIRD-PARTY-NOTICES.txt with the source
+attribution records, dependency versions and declarations, and complete
+upstream license texts and notices. Identical texts are included once,
+with an explicit reference for each dependency and original source file.
 
 On macOS these files are inside ReShiki.app/Contents/Resources/Licenses.

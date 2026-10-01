@@ -14,7 +14,7 @@ use std::{collections::BTreeMap, path::Path};
 
 /// The reference describes Nightly builds until the palette ships in a stable
 /// release; set this to false when regenerating for that release.
-const NIGHTLY: bool = true;
+const NIGHTLY: bool = false;
 
 fn color(rgb: Rgb) -> Value {
     let lch = Oklch::from_rgb(rgb);

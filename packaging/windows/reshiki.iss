@@ -44,8 +44,12 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked
 Name: "fileassoc"; Description: "Open .rsk and older ReShiki drawings with ReShiki"
 
 [InstallDelete]
-; Retire only the former app-owned worker. Never remove user caches or drawings.
+; Retire only former app-owned executables and license layouts. Preserve user data.
 Type: filesandordirs; Name: "{app}\chemistry"
+Type: files; Name: "{app}\reshiki-inchi-helper.exe"
+Type: filesandordirs; Name: "{app}\Licenses\rust"
+Type: filesandordirs; Name: "{app}\Licenses\sources"
+Type: files; Name: "{app}\Licenses\rust-dependencies.json"
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs

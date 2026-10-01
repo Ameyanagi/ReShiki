@@ -740,7 +740,9 @@ fn normalized_picture_payloads(xml: &str) -> anyhow::Result<String> {
             anyhow::ensure!(hex.len() % 2 == 0, "Invalid PNG hex");
             let bytes = hex
                 .as_bytes()
-                .chunks_exact(2)
+                .as_chunks::<2>()
+                .0
+                .iter()
                 .map(|pair| Ok(u8::from_str_radix(std::str::from_utf8(pair)?, 16)?))
                 .collect::<anyhow::Result<Vec<_>>>()?;
             let image = image::load_from_memory(&bytes)?.to_rgba8();

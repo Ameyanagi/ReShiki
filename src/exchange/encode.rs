@@ -195,7 +195,7 @@ fn encode_value(p: &Property, value: &str, element: &str) -> Result<Vec<u8>> {
                 return Err("Invalid curve points".into());
             }
             let mut data = word(points.len() / 2)?.to_vec();
-            for pair in points.chunks_exact(2) {
+            for pair in points.as_chunks::<2>().0.iter() {
                 append(
                     &mut data,
                     &encode_coordinates(&pair.join(" "), "CDXPoint2D")?,

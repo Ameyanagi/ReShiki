@@ -11,8 +11,8 @@ import time
 from pathlib import Path
 
 from build_inchi_helper import INCHI_VERSION
-from build_release import ROOT, numeric_version, run, verify_binary, verify_inchi_helper
-from check_runtime_dependencies import verify_payload, verify_runtime
+from build_release import ROOT, numeric_version, run, verify_binary, verify_inchi_worker
+from check_runtime_dependencies import verify_macos_workers, verify_payload, verify_runtime
 
 
 class InstallerCheckDirectory(tempfile.TemporaryDirectory):
@@ -117,12 +117,24 @@ def verify_windows_installer(installer, source):
                     legacy.mkdir(parents=True)
                     (legacy / "worker.py").write_text("Legacy worker", encoding="utf-8")
                     (legacy.parent / "uv.lock").write_text("Legacy lock", encoding="utf-8")
+                    (destination / "reshiki-inchi-helper.exe").write_bytes(b"retired helper")
+                    for old_name in (
+                        "rust/legacy/LICENSE",
+                        "sources/legacy/NOTICE",
+                        "rust-dependencies.json",
+                    ):
+                        old = destination / "Licenses" / old_name
+                        old.parent.mkdir(parents=True, exist_ok=True)
+                        old.write_text("Legacy license payload", encoding="utf-8")
                 run([installer, *flags], timeout=180)
                 with winreg.OpenKey(winreg.HKEY_CURRENT_USER, ole_key) as key:
                     command, _ = winreg.QueryValueEx(key, "")
                 if command != f'"{destination / "reshiki.exe"}" --ole-server':
                     raise ValueError("Installed Office editor registration is incorrect")
                 verify_payload(destination)
+                for old_name in ("rust", "sources", "rust-dependencies.json"):
+                    if (destination / "Licenses" / old_name).exists():
+                        raise ValueError("Installer retained the legacy license tree")
                 # Every shipped byte must survive setup and upgrade.
                 for original in source.rglob("*"):
                     if original.is_file():
@@ -133,9 +145,9 @@ def verify_windows_installer(installer, source):
                         ):
                             raise ValueError(f"Installed file mismatch: {original.name}")
             metadata = json.loads((source / "build.json").read_text(encoding="utf-8"))
-            helper = destination / "reshiki-inchi-helper.exe"
-            verify_binary(helper, "windows", metadata["architecture"])
-            verify_inchi_helper(helper, INCHI_VERSION)
+            binary = destination / "reshiki.exe"
+            verify_binary(binary, "windows", metadata["architecture"])
+            verify_inchi_worker(binary, INCHI_VERSION)
             verify_runtime(destination / "reshiki.exe", destination, user_data=user_data)
         finally:
             uninstaller = destination / "unins000.exe"
@@ -207,10 +219,9 @@ def verify_mac_disk_image(output, signed, *, architecture):
         finally:
             run(["hdiutil", "detach", mount])
         verify_binary(installed / "Contents/MacOS/reshiki", "macos", architecture)
-        helper = installed / "Contents/MacOS/reshiki-inchi-helper"
-        verify_binary(helper, "macos", architecture)
-        verify_inchi_helper(helper, INCHI_VERSION)
+        verify_inchi_worker(installed / "Contents/MacOS/reshiki", INCHI_VERSION)
         verify_runtime(installed / "Contents/MacOS/reshiki", installed)
+        verify_macos_workers(installed / "Contents/MacOS/reshiki")
         run(["codesign", "--verify", "--deep", "--strict", installed])
         if signed:
             from sign_macos import verify_app

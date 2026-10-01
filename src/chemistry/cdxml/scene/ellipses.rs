@@ -50,11 +50,11 @@ pub(super) fn remove(tree: &mut Tree, prepared: &PreparedCdxml) -> Result<Vec<us
             continue;
         }
         let points: Vec<_> = values
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|xy| {
-                let [x, y] = xy else {
-                    return Err(SceneError::Limit);
-                };
+                let [x, y] = xy;
                 Ok(Point::new(
                     (x * prepared.source_scale) as f32,
                     (y * prepared.source_scale) as f32,

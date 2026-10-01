@@ -31,6 +31,9 @@ TARGET_SECONDS = {
     "smiles_traversal": 58,
 }
 DEFAULT_SECONDS = 20
+# Non-root integration targets need a package-qualified command. Keep their
+# assignment explicit so a new workspace test can never silently disappear.
+WORKSPACE_TARGET_SHARDS = {("reshiki-macos", "native_print"): 0}
 
 
 def integration_targets(metadata: object) -> list[str]:
@@ -49,7 +52,11 @@ def integration_targets(metadata: object) -> list[str]:
             isinstance(package, dict)
             and package.get("id") in members
             and package.get("name") != "reshiki"
-            and any("test" in target.get("kind", []) for target in package.get("targets", []))
+            and any(
+                "test" in target.get("kind", [])
+                and (package.get("name"), target.get("name")) not in WORKSPACE_TARGET_SHARDS
+                for target in package.get("targets", [])
+            )
         ):
             raise ValueError("New workspace integration tests need an explicit shard assignment")
     targets = matches[0].get("targets")
@@ -98,6 +105,9 @@ def commands_for(targets: list[str], index: int) -> list[list[str]]:
         commands.extend(
             [common + ["--workspace", "--lib", "--bins"], common + ["--workspace", "--doc"]]
         )
+    for (package, target), assigned in WORKSPACE_TARGET_SHARDS.items():
+        if index == assigned:
+            commands.append(["cargo", "test", "--locked", "--package", package, "--test", target])
     return commands
 
 

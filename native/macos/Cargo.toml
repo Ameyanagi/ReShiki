@@ -3,12 +3,17 @@ name = "reshiki-macos"
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
-description = "Native macOS document-open integration for ReShiki"
+description = "Native macOS document, clipboard and printing integration for ReShiki"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6.4"
 objc2-foundation = { version = "0.3.2", default-features = false, features = [
   "std",
+  "NSArray",
+  "NSData",
+  "NSDictionary",
+  "NSGeometry",
+  "NSValue",
   "NSAppleEventDescriptor",
   "NSAppleEventManager",
   "NSObject",
@@ -20,6 +25,55 @@ objc2-foundation = { version = "0.3.2", default-features = false, features = [
 objc2-app-kit = { version = "0.3.2", default-features = false, features = [
   "std",
   "NSApplication",
+  "NSRunningApplication",
+  "objc2-core-foundation",
+  "NSGraphicsContext",
+  "NSPasteboard",
+  "NSPasteboardItem",
+  "NSPrintInfo",
+  "NSPrintOperation",
+  "NSPrintPanel",
+  "NSView",
+  "NSWindow",
+  "objc2-core-graphics",
   "NSResponder",
 ] }
 tokio = { version = "1", features = ["sync"] }
+
+[target.'cfg(target_os = "macos")'.dependencies.objc2-pdf-kit]
+version = "0.3.2"
+default-features = false
+features = ["std", "PDFDocument", "PDFPage", "objc2-core-graphics"]
+
+[target.'cfg(target_os = "macos")'.dependencies.objc2-core-graphics]
+version = "0.3.2"
+default-features = false
+features = ["std", "CGContext", "CGGeometry", "CGAffineTransform"]
+
+[target.'cfg(target_os = "macos")'.dependencies.serde]
+version = "1"
+features = ["derive"]
+
+[target.'cfg(target_os = "macos")'.dependencies.serde_json]
+version = "1"
+
+[target.'cfg(target_os = "macos")'.dependencies.base64]
+version = "0.22"
+
+[target.'cfg(target_os = "macos")'.dev-dependencies]
+pdf-writer = "0.12.1"
+tempfile = "3"
+objc2-core-graphics = { version = "0.3.2", default-features = false, features = [
+  "std",
+  "CGContext",
+  "CGGeometry",
+  "CGAffineTransform",
+  "CGBitmapContext",
+  "CGColorSpace",
+  "CGImage",
+] }
+
+[[test]]
+name = "native_print"
+path = "tests/native_print.rs"
+harness = false

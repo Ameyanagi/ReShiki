@@ -110,6 +110,7 @@ export default defineConfig({
           label: "Developer",
           collapsed: true,
           items: [
+            { label: "ReShiki 0.10.0", slug: "developer/changes-0.10" },
             { label: "ReShiki 0.9.1", slug: "developer/changes-0.9.1" },
             { label: "ReShiki 0.9.0", slug: "developer/changes-0.9" },
             { label: "ReShiki 0.8.0", slug: "developer/changes-0.8" },

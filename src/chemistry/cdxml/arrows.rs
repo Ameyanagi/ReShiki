@@ -324,7 +324,9 @@ impl ArrowReader {
             ));
         }
         let points = values
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|pair| point(&pair.join(" "), source_scale))
             .collect::<Result<Vec<_>>>()?;
         if flags.dashed {

@@ -54,7 +54,7 @@ impl PreviewBitmap {
             };
             let previous = SelectObject(dc, bitmap);
             let output = std::slice::from_raw_parts_mut(pixels.cast::<u8>(), image.as_raw().len());
-            for (source, target) in image.pixels().zip(output.chunks_exact_mut(4)) {
+            for (source, target) in image.pixels().zip(output.as_chunks_mut::<4>().0.iter_mut()) {
                 for (destination, channel) in [2, 1, 0].into_iter().enumerate() {
                     target[destination] =
                         ((u32::from(source[channel]) * u32::from(source[3]) + 127) / 255) as u8;
@@ -355,11 +355,11 @@ mod tests {
             unit: png::Unit::Meter,
         }));
         let mut pixels = vec![0; 40 * 20 * 4];
-        for row in pixels.chunks_exact_mut(40 * 4) {
-            for pixel in row[10 * 4..20 * 4].chunks_exact_mut(4) {
+        for row in pixels.as_chunks_mut::<160>().0.iter_mut() {
+            for pixel in row[10 * 4..20 * 4].as_chunks_mut::<4>().0.iter_mut() {
                 pixel.copy_from_slice(&[255, 0, 0, 128]);
             }
-            for pixel in row[20 * 4..].chunks_exact_mut(4) {
+            for pixel in row[20 * 4..].as_chunks_mut::<4>().0.iter_mut() {
                 pixel.copy_from_slice(&[20, 150, 220, 255]);
             }
         }
@@ -414,7 +414,9 @@ mod tests {
             let bitmap = CreateDIBSection(dc, &info, DIB_RGB_COLORS, &mut pixels, None, 0).unwrap();
             let old = SelectObject(dc, bitmap);
             for pixel in std::slice::from_raw_parts_mut(pixels.cast::<u8>(), 160 * 80 * 4)
-                .chunks_exact_mut(4)
+                .as_chunks_mut::<4>()
+                .0
+                .iter_mut()
             {
                 pixel.copy_from_slice(&[40, 200, 60, 255]);
             }
@@ -434,7 +436,9 @@ mod tests {
             let _ = GdiFlush();
             let result = std::slice::from_raw_parts(pixels.cast::<u8>(), 160 * 80 * 4);
             let colored = result
-                .chunks_exact(4)
+                .as_chunks::<4>()
+                .0
+                .iter()
                 .filter(|p| p[0] > 200 && p[1] > 120 && p[1] < 180 && p[2] < 50)
                 .count();
             let at = |x: usize| &result[(40 * 160 + x) * 4..(40 * 160 + x) * 4 + 3];

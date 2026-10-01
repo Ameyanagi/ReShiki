@@ -10,15 +10,18 @@ import re
 import shutil
 import struct
 import subprocess
-import sys
 import tarfile
 import tempfile
 import tomllib
 import zipfile
 from pathlib import Path
 
-from check_runtime_dependencies import verify_runtime
-from license_notices import copy_notices
+from check_runtime_dependencies import (
+    verify_macos_workers,
+    verify_runtime,
+    verify_single_executable,
+)
+from license_notices import write_notices
 
 ROOT = Path(__file__).resolve().parents[1]
 RELEASE_TARGETS = {
@@ -102,59 +105,8 @@ def verify_binary(binary, system, architecture):
         raise ValueError(f"Expected {system} {architecture} executable, found {machine}: {binary}")
 
 
-def inchi_helper_name(system):
-    return "reshiki-inchi-helper.exe" if system == "windows" else "reshiki-inchi-helper"
-
-
-def verify_inchi_build(binary, target, *, require_production=True):
-    from build_inchi_helper import INCHI_VERSION, dependency, source_hashes
-
-    binary = Path(binary).resolve(strict=True)
-    metadata = json.loads(binary.with_name("build.json").read_text(encoding="utf-8"))
-    required = dict(
-        inchi_version=INCHI_VERSION,
-        dependency=dependency(ROOT),
-        source_hashes=source_hashes(ROOT),
-        executable_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
-        target=target,
-    )
-    if (
-        any(metadata.get(key) != value for key, value in required.items())
-        or type(metadata.get("production")) is not bool
-        or (require_production and not metadata["production"])
-    ):
-        raise ValueError("InChI helper build metadata does not match this source and target")
-    verify_binary(binary, *release_platform(target))
-    return binary, dict(
-        version=INCHI_VERSION,
-        dependency=required["dependency"],
-        build_executable_sha256=required["executable_sha256"],
-    )
-
-
-def prepare_inchi_helper(target, *, prebuilt=None, require_production=True):
-    if prebuilt is not None:
-        return verify_inchi_build(prebuilt, target, require_production=require_production)
-    output = target_directory() / target / "inchi-helper"
-    run(
-        [
-            sys.executable,
-            ROOT / "scripts/build_inchi_helper.py",
-            "--output",
-            output,
-            "--target",
-            target,
-            "--production",
-            "--jobs",
-            "4",
-        ],
-        cwd=ROOT,
-    )
-    return verify_inchi_build(output / inchi_helper_name(release_platform(target)[0]), target)
-
-
-def verify_inchi_helper(binary, version):
-    """Parse methane with the packaged pure Rust helper and validate its graph."""
+def verify_inchi_worker(binary, version):
+    """Parse methane by relaunching the packaged application in Rust worker mode."""
     body = json.dumps(
         dict(
             heap_bytes=64 * 1024 * 1024,
@@ -167,7 +119,9 @@ def verify_inchi_helper(binary, version):
         )
     ).encode()
     request = b"RSHINCHI" + struct.pack("<HHI", 3, 0, len(body)) + body
-    response = run([binary], input=request, capture_output=True, timeout=15).stdout
+    response = run(
+        [binary, "--inchi-worker"], input=request, capture_output=True, timeout=15
+    ).stdout
     if (
         len(response) > 8 * 1024 * 1024
         or response[:12] != b"RSHINCHI\x03\x00\x00\x00"
@@ -197,15 +151,25 @@ def verify_inchi_helper(binary, version):
 
 
 def notices(destination):
-    destination.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(ROOT / "licenses", destination / "sources", dirs_exist_ok=True)
-    with (destination / "rust-dependencies.json").open("w") as stream:
-        run(["cargo", "metadata", "--format-version", "1", "--locked"], cwd=ROOT, stdout=stream)
-    metadata = json.loads((destination / "rust-dependencies.json").read_text(encoding="utf-8"))
-    copy_notices(ROOT, destination, metadata)
+    metadata = json.loads(
+        run(
+            ["cargo", "metadata", "--format-version", "1", "--locked"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        ).stdout
+    )
+    write_notices(ROOT, destination, metadata)
 
 
-def mac_bundle(destination, profile, *, target=None, inchi_helper=None):
+def remove_owned_path(path):
+    if path.is_symlink() or path.is_file():
+        path.unlink()
+    elif path.is_dir():
+        shutil.rmtree(path)
+
+
+def mac_bundle(destination, profile, *, target=None):
     executable = destination / "Contents/MacOS/reshiki"
     executable.parent.mkdir(parents=True, exist_ok=True)
     staged = executable.with_suffix(".new")
@@ -214,86 +178,52 @@ def mac_bundle(destination, profile, *, target=None, inchi_helper=None):
         build /= target
     shutil.copy2(build / profile / "reshiki", staged)
     staged.replace(executable)
-    if inchi_helper is not None:
-        shutil.copy2(inchi_helper, executable.with_name(inchi_helper_name("macos")))
-    print_app = destination / "Contents/Helpers/ReShiki Print.app"
-    helpers = [
-        ("Clipboard", executable.with_name("reshiki-clipboard")),
-        ("Print", print_app / "Contents/MacOS/reshiki-print"),
-    ]
-    for name, binary in helpers:
-        binary.parent.mkdir(parents=True, exist_ok=True)
-        staged = binary.with_suffix(".new")
-        swift_target = []
-        if target:
-            architecture = target.split("-", 1)[0].replace("aarch64", "arm64")
-            minimum = os.environ.get("MACOSX_DEPLOYMENT_TARGET", "14.0")
-            swift_target = ["-target", f"{architecture}-apple-macosx{minimum}"]
-        run(
-            [
-                "swiftc",
-                "-O",
-                *swift_target,
-                ROOT / f"native/macos/{name}Support.swift",
-                ROOT / f"native/macos/{name}.swift",
-                "-o",
-                staged,
-            ]
-        )
-        staged.replace(binary)
-    for bundle, name, identifier, binary in [
-        (destination, "ReShiki", "dev.reshiki.editor", "reshiki"),
-        (print_app, "ReShiki Print", "dev.reshiki.print", "reshiki-print"),
-    ]:
-        info = dict(
-            CFBundleName=name,
-            CFBundleDisplayName=name,
-            CFBundleIdentifier=identifier,
-            CFBundleExecutable=binary,
-            CFBundlePackageType="APPL",
-            CFBundleShortVersionString=numeric_version(version()),
-            CFBundleVersion=numeric_version(version()),
-            ReShikiPackageVersion=version(),
-            NSHighResolutionCapable=True,
-            LSMinimumSystemVersion=os.environ.get("MACOSX_DEPLOYMENT_TARGET", "14.0"),
-        )
-        if bundle == print_app:
-            info["LSUIElement"] = True
-        else:
-            resources = bundle / "Contents/Resources"
-            resources.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(ROOT / "assets/branding/reshiki.icns", resources / "ReShiki.icns")
-            info["CFBundleIconFile"] = "ReShiki.icns"
-            info["CFBundleDocumentTypes"] = [
-                dict(
-                    CFBundleTypeName="ReShiki drawing",
-                    CFBundleTypeRole="Editor",
-                    LSHandlerRank="Owner",
-                    CFBundleTypeExtensions=["rsk", "reshiki", "moruno"],
-                    LSItemContentTypes=["dev.reshiki.drawing"],
-                    CFBundleTypeIconFile="ReShiki.icns",
-                )
-            ]
-            info["UTExportedTypeDeclarations"] = [
-                dict(
-                    UTTypeIdentifier="dev.reshiki.drawing",
-                    UTTypeDescription="ReShiki drawing",
-                    UTTypeConformsTo=["public.json"],
-                    UTTypeTagSpecification={
-                        "public.filename-extension": ["rsk", "reshiki", "moruno"]
-                    },
-                )
-            ]
-        with (bundle / "Contents/Info.plist").open("wb") as stream:
-            plistlib.dump(info, stream)
-    # Reusing a development bundle must not retain the previous worker payload.
-    chemistry = destination / "Contents/Resources/chemistry"
-    if chemistry.is_symlink() or chemistry.is_file():
-        chemistry.unlink()
-    elif chemistry.exists():
-        shutil.rmtree(chemistry)
-    notices(destination / "Contents/Resources/Licenses")
-    # Development/manual unsigned builds. Release signing replaces these signatures.
+    info = dict(
+        CFBundleName="ReShiki",
+        CFBundleDisplayName="ReShiki",
+        CFBundleIdentifier="dev.reshiki.editor",
+        CFBundleExecutable="reshiki",
+        CFBundlePackageType="APPL",
+        CFBundleShortVersionString=numeric_version(version()),
+        CFBundleVersion=numeric_version(version()),
+        ReShikiPackageVersion=version(),
+        NSHighResolutionCapable=True,
+        LSMinimumSystemVersion=os.environ.get("MACOSX_DEPLOYMENT_TARGET", "14.0"),
+        CFBundleIconFile="ReShiki.icns",
+        CFBundleDocumentTypes=[
+            dict(
+                CFBundleTypeName="ReShiki drawing",
+                CFBundleTypeRole="Editor",
+                LSHandlerRank="Owner",
+                CFBundleTypeExtensions=["rsk", "reshiki", "moruno"],
+                LSItemContentTypes=["dev.reshiki.drawing"],
+                CFBundleTypeIconFile="ReShiki.icns",
+            )
+        ],
+        UTExportedTypeDeclarations=[
+            dict(
+                UTTypeIdentifier="dev.reshiki.drawing",
+                UTTypeDescription="ReShiki drawing",
+                UTTypeConformsTo=["public.json"],
+                UTTypeTagSpecification={"public.filename-extension": ["rsk", "reshiki", "moruno"]},
+            )
+        ],
+    )
+    resources = destination / "Contents/Resources"
+    resources.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(ROOT / "assets/branding/reshiki.icns", resources / "ReShiki.icns")
+    with (destination / "Contents/Info.plist").open("wb") as stream:
+        plistlib.dump(info, stream)
+    # A rebuilt development bundle must retire only the former app-owned payload.
+    for old in (
+        "Contents/Resources/chemistry",
+        "Contents/MacOS/reshiki-inchi-helper",
+        "Contents/MacOS/reshiki-clipboard",
+        "Contents/Helpers/ReShiki Print.app",
+    ):
+        remove_owned_path(destination / old)
+    notices(resources / "Licenses")
+    # Development/manual builds; release signing replaces the ad-hoc signature.
     run(["codesign", "--force", "--deep", "--sign", "-", destination])
     return destination
 
@@ -344,17 +274,11 @@ def verify_archive(archive_path, signed=False):
         else:
             binary = folder / ("reshiki.exe" if metadata["platform"] == "windows" else "reshiki")
         verify_binary(binary, metadata["platform"], metadata["architecture"])
-        helper = binary.with_name(inchi_helper_name(metadata["platform"]))
-        verify_binary(helper, metadata["platform"], metadata["architecture"])
-        if platform.system() == "Darwin":
-            for companion in (
-                app / "Contents/MacOS/reshiki-clipboard",
-                app / "Contents/Helpers/ReShiki Print.app/Contents/MacOS/reshiki-print",
-            ):
-                verify_binary(companion, metadata["platform"], metadata["architecture"])
-        verify_inchi_helper(helper, metadata["inchi_helper"]["version"])
+        verify_inchi_worker(binary, metadata["inchi"]["version"])
+        verify_single_executable(binary, folder)
         verify_runtime(binary, folder)
         if platform.system() == "Darwin":
+            verify_macos_workers(binary)
             run(["codesign", "--verify", "--deep", "--strict", app])
         print("Extracted application and native chemistry verified without Python or uv.")
 
@@ -370,9 +294,6 @@ def main():
     )
     parser.add_argument("--target", choices=sorted(RELEASE_TARGETS))
     parser.add_argument("--check-tag-only", action="store_true")
-    parser.add_argument(
-        "--inchi-helper", type=Path, help="Already built Rust helper with matching build.json"
-    )
     args = parser.parse_args()
     if args.tag:
         check_tag(args.tag)
@@ -386,7 +307,6 @@ def main():
         raise ValueError(
             "Build and verify a release on a runner with the matching operating system"
         )
-    helper, helper_metadata = prepare_inchi_helper(target, prebuilt=args.inchi_helper)
     name = f"reshiki-{version()}-{system}-{arch}"
     # Keep dependency notices outside Cargo's target tree: rust-cache treats
     # nested crate sources as build output and removes their test directories.
@@ -395,26 +315,30 @@ def main():
     if folder.exists():
         shutil.rmtree(folder)
     folder.mkdir(parents=True)
-    run(["cargo", "build", "--release", "--locked", "--target", target], cwd=ROOT)
+    run(
+        ["cargo", "build", "--release", "--locked", "--bin", "reshiki", "--target", target],
+        cwd=ROOT,
+    )
     build = target_directory() / target / "release"
     binary_name = "reshiki.exe" if system == "windows" else "reshiki"
     verify_binary(build / binary_name, system, arch)
     if system == "macos":
-        app = mac_bundle(folder / "ReShiki.app", "release", target=target, inchi_helper=helper)
+        app = mac_bundle(folder / "ReShiki.app", "release", target=target)
         if args.sign:
             from sign_macos import sign_and_notarize
 
             sign_and_notarize(app)
     else:
         shutil.copy2(build / binary_name, folder / binary_name)
-        shutil.copy2(helper, folder / inchi_helper_name(system))
         notices(folder / "Licenses")
+    from build_inchi_helper import INCHI_VERSION, dependency
+
     metadata = dict(
         version=version(),
         platform=system,
         architecture=arch,
         rust_target=target,
-        inchi_helper=helper_metadata,
+        inchi=dict(version=INCHI_VERSION, dependency=dependency(ROOT), runtime="self-process"),
         signed=args.sign,
         notarized=args.sign,
         commit=os.environ.get("GITHUB_SHA", "local"),
@@ -426,7 +350,7 @@ def main():
         "Keep the entire extracted folder together.\n"
         "Documentation: https://reshiki.com/\n"
         + (
-            "Windows 11 on ARM is required. The app and chemistry helper are native ARM64.\n"
+            "Windows 11 on ARM is required. The application is native ARM64.\n"
             if system == "windows" and arch == "arm64"
             else ""
         )

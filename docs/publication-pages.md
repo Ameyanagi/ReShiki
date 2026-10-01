@@ -70,7 +70,7 @@ from each, and rendered the expected vector drawing on both sheets.
 selection isolation, preserved labels and indicator positions, oversize rejection
 and physical PDF dimensions. App tests cover cancellation, failures, duplicate
 jobs, stale results and Page setup drafts. On macOS, `tests/test_native_print.py`
-compiles the production Swift renderer and verifies Save-to-PDF output for
+compiles the production Rust AppKit/PDFKit renderer and verifies Save-to-PDF output for
 portrait, landscape and custom sizes, 100% and 50% scales, page order and ranges.
 It also rejects malformed requests before opening native UI.
 

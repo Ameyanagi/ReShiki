@@ -1,4 +1,4 @@
-# Rust InChI helper
+# Rust InChI worker
 
 The helper uses `cosmolkit-inchi = 0.3.0` (InChI 1.07.5) from
 [Ameyanagi/COSMolKit](https://github.com/Ameyanagi/COSMolKit), pinned to commit
@@ -11,20 +11,17 @@ sanitation, hydrogen-removal and stereochemistry routines through its toolkit
 traits. No InChI C source, FFI binding, native archive, RDKit installation or
 Python interpreter is required at runtime.
 
+Release packages contain only the application executable. The app relaunches `current_exe()` with `--inchi-worker` before initializing graphics or native UI. Its clipboard and printing modes on macOS use the same executable as well. Each operation still has its own process, pipes, deadline and heap budget.
+
+A development-only executable shares `src/chemistry/inchi/worker.rs` and the same allocator for independent transport tests:
+
 ```sh
 python3 scripts/build_inchi_helper.py
-# Release artifact, with dependency/source/target metadata:
+# Optimized test executable with dependency/source/target metadata:
 python3 scripts/build_inchi_helper.py --production --target aarch64-apple-darwin
 ```
 
-The build script needs Python 3.11 or newer and Cargo. Development builds also
-compile a dependency-free Rust fault-injection executable for transport tests.
-Its startup check runs only when the target matches the Rust compiler's host;
-cross-target builds leave execution to the destination platform.
-Production builds use `cargo build --locked --release --bin reshiki-inchi-helper`.
-The release packager verifies Cargo.lock's dependency identity, all local Rust
-source hashes, the executable checksum and architecture. Installed applications
-only discover an existing sibling helper; they never download or build one.
+The test build script needs Python 3.11 or newer and Cargo; it also compiles a dependency-free Rust fault-injection stub unless `--production` is selected. Its startup check runs only when the target matches the compiler host. None of these test executables is shipped. `RESHIKI_INCHI_HELPER` accepts only an absolute, existing developer override; normal runtime never searches PATH, downloads a helper or invokes a compiler.
 
 One process handles one immutable request. Bounded input/output pipes, a
 120-second maximum deadline and `kill_on_drop` preserve timeout and cancellation

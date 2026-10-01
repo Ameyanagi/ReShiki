@@ -1,6 +1,7 @@
 """Exercise the real macOS print renderer using Save to PDF, never a printer job."""
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -16,30 +17,38 @@ class NativePrintingTests(unittest.TestCase):
         cls.addClassCleanup(cls.temporary.cleanup)
         cls.root = Path(__file__).resolve().parents[1]
         cls.directory = Path(cls.temporary.name)
-        cls.renderer = cls.compile("tests/native_print.swift", "print-tests")
-        cls.helper = cls.compile("native/macos/Print.swift", "print-helper")
-
-    @classmethod
-    def compile(cls, source, name):
-        executable = cls.directory / name
         result = subprocess.run(
             [
-                "swiftc",
-                str(cls.root / "native/macos/PrintSupport.swift"),
-                str(cls.root / source),
-                "-o",
-                str(executable),
+                os.environ.get("CARGO", "cargo"),
+                "test",
+                "--locked",
+                "-p",
+                "reshiki-macos",
+                "--test",
+                "native_print",
+                "--no-run",
+                "--message-format=json",
             ],
+            cwd=cls.root,
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=300,
         )
         if result.returncode:
             raise RuntimeError(result.stdout + result.stderr)
-        return executable
+        artifacts = [
+            json.loads(line) for line in result.stdout.splitlines() if line.startswith("{")
+        ]
+        cls.renderer = next(
+            Path(item["executable"])
+            for item in artifacts
+            if item.get("reason") == "compiler-artifact"
+            and item.get("target", {}).get("name") == "native_print"
+            and item.get("executable")
+        )
 
     def test_physical_pages_scale_positions_and_page_ranges(self):
-        result = subprocess.run([str(self.renderer)], capture_output=True, text=True, timeout=60)
+        result = subprocess.run([str(self.renderer)], capture_output=True, text=True, timeout=300)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_malformed_requests_exit_without_showing_a_dialog(self):
@@ -55,7 +64,7 @@ class NativePrintingTests(unittest.TestCase):
         for request in requests:
             with self.subTest(length=len(request)):
                 result = subprocess.run(
-                    [str(self.helper)], input=request, capture_output=True, timeout=10
+                    [str(self.renderer), "--worker"], input=request, capture_output=True, timeout=10
                 )
                 self.assertEqual(result.returncode, 1, result.stderr.decode(errors="replace"))
                 self.assertEqual(result.stdout, b"")

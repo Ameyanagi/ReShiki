@@ -66,7 +66,9 @@ jobs:
           cat > notes.md <<EOF
           Development build from main at [$NIGHTLY_COMMIT](https://github.com/$GH_REPO/commit/$NIGHTLY_COMMIT).
 
-          Development builds include the native chemistry helper. Use copies of drawings when testing. Installers replace an existing ReShiki installation; choose a portable archive in a separate folder to retain Stable.
+          Each package includes one application executable, with native chemistry, clipboard and printing workers launched from that same executable, plus five license/notice files. Use copies of drawings when testing. Installers replace an existing ReShiki installation; choose a portable archive in a separate folder to retain Stable.
+
+          Linux 0.9.1 users must download and extract the archive manually because that version's updater expects the retired companion executable.
 
           macOS applications and disk images are signed with Developer ID, notarized and stapled. Windows and Linux packages remain unsigned.
 

@@ -16,8 +16,8 @@ jobs:
       UV_PYTHON: cpython-3.12-windows-x86_64-none
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - run: rustup toolchain install 1.95.0 --profile minimal
-      - run: rustup default 1.95.0
+      - run: rustup toolchain install 1.99.0 --profile minimal
+      - run: rustup default 1.99.0
       - uses: Swatinem/rust-cache@63fed3e2fecf6f7b51dc6f043341b79ef82a9ae7 # v2.9.2
         with:
           shared-key: rust

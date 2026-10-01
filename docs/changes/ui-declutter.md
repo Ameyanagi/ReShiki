@@ -2,7 +2,7 @@
 
 Resolves the layout and control cleanup requested in
 [issue #78](https://github.com/Ameyanagi/ReShiki/issues/78). The
-[release notes](../changes-unreleased.md#less-crowded-interface) describe the
+[release notes](../changes-0.10.md#less-crowded-interface) describe the
 changes; this record holds the screenshots and how they were made.
 
 ## Capture

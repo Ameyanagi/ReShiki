@@ -88,7 +88,9 @@ fn compare_xml(actual: &str, expected: &str, name: &str) -> anyhow::Result<()> {
                 let pixels = |s: &str| -> anyhow::Result<image::RgbaImage> {
                     let bytes = s
                         .as_bytes()
-                        .chunks_exact(2)
+                        .as_chunks::<2>()
+                        .0
+                        .iter()
                         .map(|p| {
                             u8::from_str_radix(std::str::from_utf8(p)?, 16)
                                 .map_err(anyhow::Error::from)
