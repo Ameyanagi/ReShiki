@@ -3,7 +3,7 @@
 //! The dependency owns InChI and its RDKit adapter. ReShiki supplies the same
 //! property cache, Kekulé assignment, hydrogen removal and stereo perception
 //! used by the rest of the application. No C library or foreign calls are used.
-use super::{input, output};
+use super::{input, output, validation};
 use crate::chemistry::{
     ELEMENTS,
     electronic::Hybridization,
@@ -36,12 +36,19 @@ pub struct Molecule {
 }
 impl Molecule {
     pub fn prepare(state: &State, positions: Option<&[Point3]>) -> Result<Self, input::Error> {
-        // Retain the application's established validation and explicit bounds.
+        validation::molecule(state, positions)?;
+        // Run the compatibility preflight once, before transport. It preserves
+        // the application's early-empty results and chemical preparation errors.
         input::prepare(state, positions)?;
         Ok(Self {
             state: state.clone(),
             positions: positions.map(<[Point3]>::to_vec),
         })
+    }
+
+    /// Check an untrusted serialized molecule without rerunning chemistry.
+    pub fn validate(&self) -> Result<(), input::Error> {
+        validation::molecule(&self.state, self.positions.as_deref())
     }
 }
 
@@ -535,7 +542,7 @@ fn text(bytes: Vec<u8>) -> Result<String, String> {
 
 /// Run only in the isolated helper: the caller enforces time and heap limits.
 pub fn generate(input: &Molecule) -> Result<Generated, String> {
-    input::prepare(&input.state, input.positions.as_deref()).map_err(|e| e.to_string())?;
+    input.validate().map_err(|e| e.to_string())?;
     let conformers = input
         .positions
         .as_ref()

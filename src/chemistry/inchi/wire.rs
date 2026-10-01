@@ -99,8 +99,7 @@ impl Request {
         }
         match &self.operation {
             Operation::Generate(m) => {
-                super::input::prepare(&m.state, m.positions.as_deref())
-                    .map_err(|e| e.to_string())?;
+                m.validate().map_err(|e| e.to_string())?;
             }
             Operation::Read { inchi, .. } if inchi.len() > generator::MAX_INCHI_BYTES => {
                 return Err("InChI text exceeds its byte limit".into());

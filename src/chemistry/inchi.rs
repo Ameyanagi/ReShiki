@@ -6,6 +6,7 @@ pub mod input;
 pub mod kernel;
 pub mod key;
 pub mod output;
+mod validation;
 pub mod wire;
 
 /// Version of the reference implementation used for these operations.

@@ -39,6 +39,12 @@ protocol `u16 = 3`, reserved `u16 = 0`, and JSON body length `u32`. Frames are
 limited to 8 MiB, and InChI text to 2 MiB. Unknown fields, trailing bytes,
 malformed UTF-8, invalid dimensions, indices and budgets are rejected.
 
+Every molecular boundary checks graph and annotation dimensions, cached ring
+indices and edges, stereo references and finite coordinates without recomputing
+chemistry. The application runs the legacy generation preflight once to retain
+its early-empty results and preparation errors. Transport and helper validation
+do not repeat that preflight or construct discarded native input records.
+
 Requests contain `heap_bytes` and an `operation`: `Generate` carries a detached
 molecular state and optional coordinates; `Read` carries an InChI string and
 sanitization/hydrogen-removal options. Responses contain the kernel `version`

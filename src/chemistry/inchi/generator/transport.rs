@@ -1,11 +1,12 @@
 use super::{Error, MAX_REQUEST_BYTES, Output, Status};
 use crate::chemistry::inchi::{
     kernel::{self, Molecule},
-    output, wire,
+    output, validation, wire,
 };
 
 pub(super) fn encode(input: &Molecule, heap_bytes: usize) -> Result<Vec<u8>, Error> {
-    super::super::input::prepare(&input.state, input.positions.as_deref())
+    input
+        .validate()
         .map_err(|_| Error::Input("Invalid molecular graph, annotations or coordinates"))?;
     let request = wire::Request {
         heap_bytes,
@@ -88,7 +89,7 @@ pub(super) fn decode_import(bytes: &[u8]) -> Result<kernel::Imported, Error> {
     )?;
     strings(&[&result.message, &result.log])?;
     if let Some(state) = &result.state {
-        super::super::input::prepare(state, None)
+        validation::molecule(state, None)
             .map_err(|_| Error::Protocol("Invalid imported molecule"))?;
         if result.unspecified_bonds.len() != state.graph.bonds.len() {
             return Err(Error::Protocol("Invalid imported bond identities"));
@@ -102,6 +103,182 @@ pub(super) fn decode_import(bytes: &[u8]) -> Result<kernel::Imported, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::chemistry::{smiles, stereo::Point3};
+
+    fn molecule() -> Molecule {
+        Molecule {
+            state: smiles::prepare("C1CCC1").unwrap().state,
+            positions: Some(vec![Point3::default(); 4]),
+        }
+    }
+
+    fn imported(molecule: &Molecule) -> Vec<u8> {
+        wire::encode(
+            &wire::Response {
+                version: kernel::VERSION.into(),
+                result: Ok(wire::Reply::Imported(Box::new(kernel::Imported {
+                    status: 0,
+                    message: String::new(),
+                    log: String::new(),
+                    state: Some(molecule.state.clone()),
+                    unspecified_bonds: vec![false; molecule.state.graph.bonds.len()],
+                    diagnostics: vec![],
+                }))),
+            },
+            super::super::MAX_RESPONSE_BYTES,
+        )
+        .unwrap()
+    }
+
+    fn assert_invalid_state(molecule: Molecule, name: &str) {
+        let budget = super::super::DEFAULT_HEAP_BYTES;
+        assert!(molecule.validate().is_err(), "{name}: molecule validation");
+        assert!(
+            matches!(encode(&molecule, budget), Err(Error::Input(_))),
+            "{name}: request encoding"
+        );
+        assert!(
+            matches!(decode_import(&imported(&molecule)), Err(Error::Protocol(_))),
+            "{name}: response decoding"
+        );
+        assert!(
+            Molecule::prepare(&molecule.state, molecule.positions.as_deref()).is_err(),
+            "{name}: application preparation"
+        );
+        assert!(kernel::generate(&molecule).is_err(), "{name}: kernel entry");
+        assert!(
+            wire::Request {
+                heap_bytes: budget,
+                operation: wire::Operation::Generate(Box::new(molecule)),
+            }
+            .validate()
+            .is_err(),
+            "{name}: helper request validation"
+        );
+    }
+
+    #[test]
+    fn serialized_annotation_dimensions_are_checked_at_every_boundary() {
+        let original = serde_json::to_value(molecule()).unwrap();
+        for field in [
+            "/state/metadata/atoms",
+            "/state/metadata/bonds",
+            "/state/directions",
+            "/state/valences",
+            "/state/conjugated",
+            "/state/hybridizations",
+            "/state/properties/atoms",
+            "/state/properties/bond_codes",
+        ] {
+            for grow in [false, true] {
+                let mut value = original.clone();
+                let array = value.pointer_mut(field).unwrap().as_array_mut().unwrap();
+                if grow {
+                    array.push(array.first().unwrap().clone());
+                } else {
+                    array.pop();
+                }
+                assert_invalid_state(
+                    serde_json::from_value(value).unwrap(),
+                    &format!("{field}, grow={grow}"),
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn serialized_ring_and_stereo_indices_are_checked() {
+        for ring in [vec![0, 1], vec![0, 1, 1], vec![0, 1, 4], vec![0, 1, 3]] {
+            let mut molecule = molecule();
+            molecule.state.rings.atoms = vec![ring];
+            assert_invalid_state(molecule, "invalid cached cycle");
+        }
+        let mut uninitialized = molecule();
+        uninitialized.state.rings.kind = crate::chemistry::stereo::perception::RingKind::None;
+        assert_invalid_state(uninitialized, "uninitialized ring cache with cycles");
+        for member in [0, 5, -5, i32::MIN] {
+            let mut molecule = molecule();
+            molecule
+                .state
+                .properties
+                .atoms
+                .first_mut()
+                .unwrap()
+                .ring_members = Some(vec![member]);
+            assert_invalid_state(molecule, "invalid stereo ring member");
+        }
+        let mut molecule = molecule();
+        molecule
+            .state
+            .metadata
+            .bonds
+            .first_mut()
+            .unwrap()
+            .stereo_atoms = vec![4];
+        assert_invalid_state(molecule, "invalid stereo atom");
+    }
+
+    #[test]
+    fn generation_boundaries_reject_invalid_coordinates() {
+        for positions in [
+            vec![],
+            vec![
+                Point3 {
+                    x: f64::INFINITY,
+                    y: 0.0,
+                    z: 0.0
+                };
+                4
+            ],
+        ] {
+            let mut molecule = molecule();
+            molecule.positions = Some(positions);
+            assert!(molecule.validate().is_err());
+            assert!(encode(&molecule, super::super::DEFAULT_HEAP_BYTES).is_err());
+            assert!(
+                wire::Request {
+                    heap_bytes: super::super::DEFAULT_HEAP_BYTES,
+                    operation: wire::Operation::Generate(Box::new(molecule)),
+                }
+                .validate()
+                .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn structural_boundaries_do_not_run_chemical_preparation() {
+        // An odd aromatic carbon cycle cannot be kekulized. It is still a
+        // structurally valid unsanitized state and can cross the Read boundary.
+        let mut state = smiles::prepare("C1CCCC1").unwrap().state;
+        for atom in &mut state.graph.atoms {
+            atom.aromatic = true;
+        }
+        for bond in &mut state.graph.bonds {
+            bond.aromatic = true;
+            bond.order = 4;
+        }
+        state.valences = state.graph.provisional_valences().unwrap();
+        let molecule = Molecule {
+            state,
+            positions: None,
+        };
+        assert!(matches!(
+            Molecule::prepare(&molecule.state, None),
+            Err(crate::chemistry::inchi::input::Error::Kekule(_))
+        ));
+        let budget = super::super::DEFAULT_HEAP_BYTES;
+        let request = encode(&molecule, budget).unwrap();
+        wire::decode::<wire::Request>(&request, MAX_REQUEST_BYTES)
+            .unwrap()
+            .validate()
+            .unwrap();
+        let actual = decode_import(&imported(&molecule)).unwrap();
+        assert_eq!(
+            serde_json::to_value(actual.state.unwrap()).unwrap(),
+            serde_json::to_value(molecule.state).unwrap()
+        );
+    }
 
     fn generated(status: Status, inchi: &str) -> Vec<u8> {
         wire::encode(

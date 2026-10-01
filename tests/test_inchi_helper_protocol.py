@@ -126,6 +126,17 @@ class ProtocolTests(unittest.TestCase):
         changed = copy.deepcopy(state)
         changed["valences"] = []
         malformed.append(changed)
+        for field, value in (("conjugated", [False]), ("hybridizations", [])):
+            changed = copy.deepcopy(state)
+            changed[field] = value
+            malformed.append(changed)
+        for field, value in (("atoms", []), ("bond_codes", [None])):
+            changed = copy.deepcopy(state)
+            changed["properties"][field] = value
+            malformed.append(changed)
+        changed = copy.deepcopy(state)
+        changed["rings"] = dict(kind="symmetric", atoms=[[0, 0, 0]])
+        malformed.append(changed)
         changed = copy.deepcopy(state)
         changed["graph"]["bonds"] = [dict(a=0, b=2, order=1, aromatic=False)]
         malformed.append(changed)
