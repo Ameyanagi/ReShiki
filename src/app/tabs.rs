@@ -938,6 +938,48 @@ mod tests {
     }
 
     #[test]
+    fn a_dialogs_save_waits_only_for_its_own_tabs_save_in_progress() {
+        let saved = |app: &mut App, id, epoch, snapshot| {
+            let _ = app.update(Message::Tab(
+                id,
+                Box::new(Message::Saved(
+                    epoch,
+                    Box::new(snapshot),
+                    Ok(Some("first.rsk".into())),
+                )),
+            ));
+        };
+        // Another tab's save cannot continue the dialog's close, so the
+        // answer cancels it instead of leaving tabs and closing blocked.
+        let mut app = ready();
+        edit(&mut app, "N");
+        app.tab.path = Some("first.rsk".into());
+        let (first, epoch, snapshot) = (app.tab.id, app.tab.file_epoch, app.tab.doc.clone());
+        assert!(app.update(Message::Save).units() > 0);
+        let _ = app.update(Message::New);
+        edit(&mut app, "C");
+        let _ = app.update(Message::Tabs(Action::Close(None)));
+        assert!(matches!(app.pending, Some(Pending::CloseTab(_))));
+        let _ = app.update(Message::Save);
+        assert!(app.pending.is_none());
+        saved(&mut app, first, epoch, snapshot);
+        assert!(app.pending.is_none() && !app.tabs.background[0].edited);
+        let _ = app.update(Message::Tabs(Action::Cycle(true)));
+        assert_eq!(app.tab.id, first, "Tabs switch again");
+        // The tab's own save in progress still closes it once it lands.
+        let mut app = ready();
+        edit(&mut app, "N");
+        app.tab.path = Some("first.rsk".into());
+        let (first, epoch, snapshot) = (app.tab.id, app.tab.file_epoch, app.tab.doc.clone());
+        assert!(app.update(Message::Save).units() > 0);
+        let _ = app.update(Message::Tabs(Action::Close(None)));
+        let _ = app.update(Message::Save);
+        assert!(matches!(app.pending, Some(Pending::CloseTab(id)) if id == first));
+        saved(&mut app, first, epoch, snapshot);
+        assert!(app.pending.is_none() && app.tab.id != first);
+    }
+
+    #[test]
     fn the_dialogs_save_closes_its_tab_after_a_finder_file_took_the_front() {
         let mut app = ready();
         edit(&mut app, "N");

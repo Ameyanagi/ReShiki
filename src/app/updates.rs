@@ -265,11 +265,9 @@ impl App {
             Some("Finish or clear the assistant draft and input before restarting.")
         } else if self.file_io.saving || self.templates.pending() {
             Some("Wait for the current file or library save before restarting.")
-        } else if self.tab.busy
-            || self.tab.cleanup.is_some()
-            || self.tab.joining.is_some()
-            || self.tab.atom_text.is_some()
-        {
+        } else if self.strip().any(|tab| {
+            tab.busy || tab.cleanup.is_some() || tab.joining.is_some() || tab.atom_text.is_some()
+        }) {
             Some("Finish the current editing operation before restarting.")
         } else {
             None
@@ -451,6 +449,17 @@ mod tests {
         assert!(!app.updates.restarting);
         assert!(app.tab.atom_text.is_some());
         let _ = app.atom_text_action(super::super::atom_text::Action::Cancel);
+        assert!(app.update_restart_blocker().is_none());
+    }
+
+    #[test]
+    fn work_in_a_tab_behind_the_front_prevents_update_restart() {
+        let (mut app, _) = App::new();
+        app.tab.busy = true;
+        let _ = app.update(Message::New);
+        assert!(app.tabs.background[0].busy, "A busy tab is not reused");
+        assert!(app.update_restart_blocker().is_some());
+        app.tabs.background[0].busy = false;
         assert!(app.update_restart_blocker().is_none());
     }
 

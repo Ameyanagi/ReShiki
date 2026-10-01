@@ -81,6 +81,8 @@ pub(super) async fn save_path(title: &str, name: &str, extension: &str) -> Optio
 #[derive(Default)]
 pub(super) struct State {
     pub(super) saving: bool,
+    /// The tab whose save is in progress.
+    pub(super) saving_tab: Option<super::document_tab::TabId>,
 }
 
 #[derive(Debug, Clone)]

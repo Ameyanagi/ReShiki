@@ -2055,10 +2055,15 @@ impl App {
                     self.tab.path.clone()
                 };
                 if self.file_io.saving {
+                    // Only this tab's own save can go on with the dialog's action.
+                    if self.file_io.saving_tab != Some(self.tab.id) {
+                        self.pending = None;
+                    }
                     self.status = "A document save is already in progress".into();
                     return Task::none();
                 }
                 self.file_io.saving = true;
+                self.file_io.saving_tab = Some(self.tab.id);
                 let snapshot = std::sync::Arc::new(self.tab.doc.clone());
                 let save_snapshot = std::sync::Arc::clone(&snapshot);
                 let suggested_name = if self.tab.path.is_some() {
