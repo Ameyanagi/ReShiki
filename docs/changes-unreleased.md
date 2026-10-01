@@ -47,6 +47,8 @@ While you drag objects with Select or Lasso, their edges and center snap to the 
 
 Several drawings can be open in one window. The tabs take the place of the file name in the header, so the header keeps its height. Each tab shows the drawing's name, a dot while it has unsaved changes, and × to close it on the tab in front or under the pointer; **+** starts a new drawing. When the tabs do not fit, they shrink to a minimum width and the rest move into a **▾** list, which takes the place of **+**.
 
+Assistant, Import, Export, Cleanup and Save As use compact header icons to leave more room for tabs. Hover over an icon to see its command and shortcut.
+
 - **New**, **Open**, files opened from Finder or the Dock, `--open` and dropped `.rsk` files open in a new tab, or in the tab in front if it holds an unchanged empty Untitled drawing. A file that is already open brings its tab to the front. New and Open no longer ask to save.
 - **Close tab** (⌘W or Ctrl+W, or ×) asks with the save dialog if the tab has unsaved changes. Closing the last tab leaves one empty Untitled tab. Closing the window asks about each unsaved tab in turn, bringing it to the front; **Cancel** stops the close. On macOS, ⌘Q still quits at once and keeps every tab's recovery draft.
 - **Switching.** Click a tab, press **Ctrl+Tab** or **Ctrl+Shift+Tab**, or ⌘1–⌘8 (Ctrl+1–8) for a tab and ⌘9 (Ctrl+9) for the last one. None of these keys had another use. Each tab keeps its zoom, scroll position, selection, Undo history, cleanup preview and inspector sections; the tool stays the same across tabs.

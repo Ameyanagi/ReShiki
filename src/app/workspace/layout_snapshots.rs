@@ -755,7 +755,11 @@ async fn tab_strip_clicks_switch_and_close_tabs() {
     many_tabs(&mut app);
     let _ = app.update(Message::Tabs(Action::Menu(false)));
     let found = tabs_in(&app, size);
-    assert_eq!(found[0].len(), 1, "Only the front tab fits: {found:?}");
+    assert_eq!(
+        found[0].len(),
+        3,
+        "Compact header leaves room for three tabs: {found:?}"
+    );
     let more = found[1][0];
     assert_eq!(
         click(&app, &renderer, size, more.center()),

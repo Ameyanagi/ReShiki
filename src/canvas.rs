@@ -2366,15 +2366,16 @@ impl GridCache {
         frame.cached(&self.geometry, |frame| {
             let dots = grid_dots(camera, bounds, step);
             for (major, radius, alpha) in [(false, 0.9, 0.3), (true, 1.3, 0.6)] {
-                let path = Path::new(|b| {
-                    for (point, _) in dots.iter().filter(|(_, m)| *m == major) {
-                        b.circle(*point, radius);
-                    }
-                });
-                frame.fill(
-                    &path,
-                    crate::appearance::color(dark, Color::from_rgba8(90, 104, 99, alpha)),
-                );
+                let dot = Path::circle(Point::ORIGIN, radius);
+                let color = crate::appearance::color(dark, Color::from_rgba8(90, 104, 99, alpha));
+                // Separate circles avoid the tessellator's cross-contour work
+                // on a single path containing thousands of disconnected dots.
+                for (point, _) in dots.iter().filter(|(_, m)| *m == major) {
+                    frame.with_save(|frame| {
+                        frame.translate(Vector::new(point.x, point.y));
+                        frame.fill(&dot, color);
+                    });
+                }
             }
         });
     }

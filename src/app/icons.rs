@@ -14,6 +14,9 @@ pub(super) enum Icon {
     New,
     Open,
     Save,
+    SaveAs,
+    Assistant(bool),
+    Cleanup,
     Trash,
     Undo,
     Redo,
@@ -550,6 +553,67 @@ impl Glyph {
                 );
                 line(f, &[(8., 3.), (8., 9.), (17., 9.), (17., 3.)]);
                 line(f, &[(8., 21.), (8., 14.), (17., 14.), (17., 21.)]);
+            }
+            Icon::SaveAs => {
+                line(
+                    f,
+                    &[
+                        (8., 21.),
+                        (3., 21.),
+                        (3., 3.),
+                        (16., 3.),
+                        (19., 6.),
+                        (19., 8.),
+                    ],
+                );
+                line(f, &[(7., 3.), (7., 9.), (15., 9.), (15., 3.)]);
+                line(f, &[(7., 21.), (7., 14.), (10., 14.)]);
+                line(
+                    f,
+                    &[
+                        (10., 22.),
+                        (11., 17.),
+                        (19., 9.),
+                        (23., 13.),
+                        (15., 21.),
+                        (10., 22.),
+                    ],
+                );
+                line(f, &[(17., 11.), (21., 15.)]);
+            }
+            Icon::Assistant(working) => {
+                for (x, y, r) in [(9., 13., 7.), (19., 5., 3.)] {
+                    let inset = r * 0.28;
+                    line(
+                        f,
+                        &[
+                            (x, y - r),
+                            (x + inset, y - inset),
+                            (x + r, y),
+                            (x + inset, y + inset),
+                            (x, y + r),
+                            (x - inset, y + inset),
+                            (x - r, y),
+                            (x - inset, y - inset),
+                            (x, y - r),
+                        ],
+                    );
+                }
+                if working {
+                    f.fill(
+                        &Path::circle(Point::new(20., 20.), 2.2),
+                        Color::from_rgb8(17, 126, 108),
+                    );
+                }
+            }
+            Icon::Cleanup => {
+                line(f, &[(18., 2.), (11., 11.)]);
+                line(
+                    f,
+                    &[(10., 10.), (15., 14.), (10., 22.), (2., 17.), (10., 10.)],
+                );
+                line(f, &[(8., 15.), (5., 18.)]);
+                line(f, &[(11., 17.), (8., 20.)]);
             }
             Icon::Undo | Icon::Redo => {
                 let points = [

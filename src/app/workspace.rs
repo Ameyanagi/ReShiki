@@ -675,7 +675,12 @@ impl App {
                 Some(Message::Save),
                 false
             ),
-            command("Save as", Message::SaveAs),
+            icon_button(
+                Icon::SaveAs,
+                keyed("Save as", &Message::SaveAs),
+                Some(Message::SaveAs),
+                false
+            ),
             divider(),
             icon_button(
                 Icon::Undo,
@@ -697,18 +702,20 @@ impl App {
             responsive(move |size| self.tab_strip(size.width))
                 .width(Length::Fill)
                 .height(Length::Shrink),
-            command(
+            icon_button(
+                Icon::Assistant(self.assistant.busy),
                 if self.assistant.busy {
-                    "● Assistant · Working"
+                    "Assistant · Working"
                 } else {
                     "Assistant"
                 },
-                Message::Assistant(super::assistant::Action::Open)
+                Some(Message::Assistant(super::assistant::Action::Open)),
+                self.inspector_open && self.inspector_tab == InspectorTab::Assistant
             ),
-            action(
+            icon_button(
                 Icon::Import,
-                "Import",
-                Message::Inspector(InspectorTab::Import),
+                keyed("Import", &Message::Inspector(InspectorTab::Import)),
+                Some(Message::Inspector(InspectorTab::Import)),
                 self.inspector_open && self.inspector_tab == InspectorTab::Import
             ),
             command(
@@ -720,12 +727,16 @@ impl App {
                 Message::Analyze
             )
             .on_press_maybe((!self.tab.busy).then_some(Message::Analyze)),
-            command("Clean up…", Message::Clean)
-                .on_press_maybe((!self.tab.busy).then_some(Message::Clean)),
-            action(
+            icon_button(
+                Icon::Cleanup,
+                keyed("Clean up…", &Message::Clean),
+                (!self.tab.busy).then_some(Message::Clean),
+                false
+            ),
+            icon_button(
                 Icon::Export,
-                "Export",
-                Message::Inspector(InspectorTab::Export),
+                keyed("Export", &Message::Inspector(InspectorTab::Export)),
+                Some(Message::Inspector(InspectorTab::Export)),
                 self.inspector_open && self.inspector_tab == InspectorTab::Export
             ),
             icon_button(
@@ -2586,25 +2597,6 @@ fn icon_button_at(
         hint,
         position,
     )
-    .into()
-}
-fn action(
-    icon: Icon,
-    label: &'static str,
-    message: Message,
-    active: bool,
-) -> Element<'static, Message> {
-    button(
-        row![
-            iced::widget::canvas(Glyph(icon, true)).width(24).height(24),
-            text(label).size(12)
-        ]
-        .spacing(5)
-        .align_y(Alignment::Center),
-    )
-    .on_press(message)
-    .style(control(active))
-    .padding([6, 9])
     .into()
 }
 pub(super) fn section(label: &str) -> iced::widget::Text<'_> {
