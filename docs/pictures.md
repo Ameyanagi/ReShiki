@@ -1,6 +1,6 @@
 # Pictures in drawings
 
-Use **Import → Choose file…**, or drop the file on the drawing, to insert a PNG, JPEG, TIFF or WebP file. The drawing stays responsive while the picture loads. Cancel leaves the drawing unchanged. If you switch documents or edit the drawing during loading, import again when ready; a late result never replaces newer work.
+Use **Import → Choose file…**, or drop the file on the drawing, to insert a PNG, JPEG, TIFF or WebP file. The drawing stays responsive while the picture loads. Cancel leaves the drawing unchanged. If you switch tabs during loading, the picture still lands in the tab that requested it. If that drawing changes during loading, import again when ready; a late result never replaces newer work.
 
 On macOS, ordinary **Paste** accepts pictures when no explicit editable drawing representation takes priority. **Import → Paste picture** chooses the raster representation explicitly. Clipboard reads are asynchronous and reject stale completion. PNG paste respects physical-resolution metadata.
 

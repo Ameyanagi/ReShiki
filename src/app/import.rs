@@ -728,6 +728,54 @@ mod tests {
     }
 
     #[test]
+    fn background_file_insertion_keeps_its_status_guards_and_undo() {
+        use crate::app::tabs::{Action as Tabs, tests::Front};
+        for stale in [false, true] {
+            let mut app = ready();
+            let id = app.tab.id;
+            let ticket = Ticket {
+                epoch: app.tab.file_epoch,
+                revision: app.tab.revision,
+            };
+            app.tab.busy = true;
+            if stale {
+                let before = app.tab.doc.clone();
+                app.tab.doc.add_atom("N", Point::default());
+                app.changed(before);
+            }
+            let before = app.tab.doc.clone();
+            let front = Front::new(&mut app);
+            let mut drawing = Document::default();
+            drawing.add_atom("O", Point::default());
+            let batch = Batch {
+                label: "caffeine.mol".into(),
+                drawings: vec![drawing],
+                warnings: vec![],
+            };
+            let _ = app.update(Message::Tab(
+                id,
+                Box::new(Message::Imports(Action::Loaded(
+                    ticket,
+                    Box::new(Ok(batch)),
+                ))),
+            ));
+            front.assert_unchanged(&app);
+            assert!(!app.tabs.background[0].busy);
+            let _ = app.update(Message::Tabs(Tabs::Select(id)));
+            if stale {
+                assert_eq!(app.tab.doc, before);
+                assert!(app.status.contains("changed"));
+            } else {
+                assert!(app.status.starts_with("Inserted caffeine.mol"));
+                assert_eq!(app.tab.doc.atoms.len(), before.atoms.len() + 1);
+                let _ = app.update(Message::Undo);
+                assert_eq!(app.tab.doc, before);
+                assert!(!app.tab.history.can_undo());
+            }
+        }
+    }
+
+    #[test]
     fn files_route_by_extension_and_label_the_drop() {
         let insert = paths(&[
             "caffeine.MOL",

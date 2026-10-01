@@ -102,6 +102,63 @@ mod tests {
     }
 
     #[test]
+    fn background_labels_refresh_without_adding_an_undo_step() {
+        use crate::app::tabs::{Action, tests::Front};
+        let (mut app, oxygen) = fixture();
+        let before = app.tab.doc.clone();
+        let _ = app.update(Message::ContextKey("o".into()));
+        let (id, key) = (app.tab.id, app.tab.label_refresh.pending.unwrap());
+        let result = compute(&app);
+        let front = Front::new(&mut app);
+        let _ = app.update(Message::Tab(
+            id,
+            Box::new(Message::LabelsReady(key, result)),
+        ));
+        front.assert_unchanged(&app);
+        let tab = &app.tabs.background[0];
+        assert!(tab.label_refresh.pending.is_none());
+        assert_eq!(tab.doc.atom(oxygen).unwrap().label_h, 1);
+        assert_eq!(tab.revision, key.revision);
+        let _ = app.update(Message::Tabs(Action::Select(id)));
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before, "Undo still reverts the original edit");
+        assert!(!app.tab.history.can_undo());
+    }
+
+    #[test]
+    fn stale_background_labels_schedule_their_next_refresh_in_the_same_tab() {
+        use crate::app::tabs::tests::Front;
+        let (mut app, oxygen) = fixture();
+        let _ = app.update(Message::ContextKey("o".into()));
+        let (id, key) = (app.tab.id, app.tab.label_refresh.pending.unwrap());
+        let result = compute(&app);
+        let _ = app.update(Message::ContextKey("n".into()));
+        let revision = app.tab.revision;
+        let front = Front::new(&mut app);
+        let task = app.update(Message::Tab(
+            id,
+            Box::new(Message::LabelsReady(key, result)),
+        ));
+        assert!(task.units() > 0);
+        front.assert_unchanged(&app);
+        assert!(app.tab.label_refresh.pending.is_none());
+        let tab = &app.tabs.background[0];
+        assert_eq!(tab.doc.atom(oxygen).unwrap().element, "N");
+        assert_eq!(tab.doc.atom(oxygen).unwrap().label_h, 0);
+        let next = tab.label_refresh.pending.unwrap();
+        assert_eq!(next.revision, revision);
+        assert_eq!(next.epoch, key.epoch);
+        let result = app.in_tab(id, |app| compute(app)).unwrap();
+        let _ = app.update(Message::Tab(
+            id,
+            Box::new(Message::LabelsReady(next, result)),
+        ));
+        front.assert_unchanged(&app);
+        assert_eq!(app.tabs.background[0].doc.atom(oxygen).unwrap().label_h, 2);
+        assert!(app.tabs.background[0].label_refresh.pending.is_none());
+    }
+
+    #[test]
     fn oxygen_starts_immediately_and_labels_do_not_edit_history_or_selection() {
         let (mut app, oxygen) = fixture();
         let task = app.update(Message::ContextKey("o".into()));

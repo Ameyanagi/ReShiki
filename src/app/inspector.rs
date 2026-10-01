@@ -1377,6 +1377,54 @@ mod tests {
     use super::*;
     use reshiki::editing::Transform;
     #[test]
+    fn background_properties_use_their_tabs_snapshot_and_selection() {
+        use crate::app::tabs::tests::Front;
+        for stale in [false, true] {
+            let (mut app, _) = App::new();
+            app.tab.busy = false;
+            let atom = app.tab.doc.add_atom("N", crate::app::Point::default());
+            app.tab.selected = vec![atom];
+            let id = app.tab.id;
+            let _ = app.update(Message::InspectorAction(Action::RefreshProperties));
+            let key = app.tab.inspector_ui.pending.clone().unwrap();
+            if stale {
+                let before = app.tab.doc.clone();
+                app.tab.doc.add_atom("O", crate::app::Point::new(42., 0.));
+                app.changed(before);
+            }
+            let before = app.tab.doc.clone();
+            let front = Front::new(&mut app);
+            let _ = app.update(Message::Tab(
+                id,
+                Box::new(Message::InspectorAction(Action::PropertiesCalculated(
+                    key.clone(),
+                    Box::new(Err("Property notice".into())),
+                ))),
+            ));
+            front.assert_unchanged(&app);
+            let tab = &app.tabs.background[0];
+            assert_eq!(tab.doc, before);
+            assert!(tab.inspector_ui.pending.is_none());
+            if stale {
+                assert!(tab.inspector_ui.properties.is_none());
+            } else {
+                assert_eq!(tab.inspector_ui.properties.as_ref().unwrap().0, key);
+                assert_eq!(
+                    tab.inspector_ui
+                        .properties
+                        .as_ref()
+                        .unwrap()
+                        .1
+                        .as_ref()
+                        .unwrap_err(),
+                    "Property notice"
+                );
+                assert!(!tab.history.can_undo());
+            }
+        }
+    }
+
+    #[test]
     fn collapsed_sections_do_not_build_hidden_content() {
         let (mut app, _) = App::new();
         let builds = std::cell::Cell::new(0);

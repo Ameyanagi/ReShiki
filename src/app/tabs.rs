@@ -210,7 +210,7 @@ impl App {
             .tabs
             .background
             .remove(if index < active { index } else { index - 1 });
-        let mut previous = std::mem::replace(&mut self.tab, next);
+        let mut previous = self.replace_front(next);
         previous.edited = previous.dirty();
         previous.hover = None;
         self.tabs
@@ -239,8 +239,6 @@ impl App {
         } else if self.tab.fit_to_view {
             self.fit();
         }
-        self.error = false;
-        self.status = super::READY.into();
     }
 
     /// Takes the front tab out of the strip and brings its right neighbor, or
@@ -256,7 +254,7 @@ impl App {
         } else {
             self.fresh_tab()
         };
-        let closed = std::mem::replace(&mut self.tab, next);
+        let closed = self.replace_front(next);
         self.enter_tab();
         closed
     }
@@ -264,8 +262,14 @@ impl App {
     /// Closes the front tab without asking and removes its draft.
     pub(super) fn close_active_tab(&mut self) -> Task<Message> {
         let closed = self.remove_active();
-        self.status = format!("Closed {}", closed.name());
         self.retire(closed)
+    }
+
+    fn replace_front(&mut self, next: DocumentTab) -> DocumentTab {
+        let mut previous = std::mem::replace(&mut self.tab, next);
+        previous.status = std::mem::replace(&mut self.status, std::mem::take(&mut self.tab.status));
+        previous.error = std::mem::replace(&mut self.error, self.tab.error);
+        previous
     }
 
     /// Runs `f` with the tab `id` in front, without the effects of switching.
@@ -275,8 +279,12 @@ impl App {
         }
         let index = self.tabs.background.iter().position(|tab| tab.id == id)?;
         let swap = |app: &mut Self| {
-            if let Some(tab) = app.tabs.background.get_mut(index) {
-                std::mem::swap(&mut app.tab, tab);
+            if let Some(previous) = app.tabs.background.get_mut(index) {
+                std::mem::swap(&mut app.tab, previous);
+                std::mem::swap(&mut app.status, &mut previous.status);
+                std::mem::swap(&mut app.status, &mut app.tab.status);
+                std::mem::swap(&mut app.error, &mut previous.error);
+                std::mem::swap(&mut app.error, &mut app.tab.error);
             }
         };
         swap(self);
@@ -368,12 +376,10 @@ impl App {
         self.ask(Pending::CloseWindow(window, self.tab.id, discarded))
     }
 
-    /// A result of work a tab started before it left the front, or before it
-    /// closed. Saves, drafts, labels, properties and file imports still land
-    /// in their tab; other document work is dropped, releasing the tab's
-    /// in-progress flags. App-wide results are handled as usual.
+    /// Async results land in their originating tab with its normal guards and
+    /// history. UI controls stay in front; follow-up tasks keep the tab tag.
+    /// Closed tabs discard document results, but finish save/draft bookkeeping.
     pub(super) fn background_result(&mut self, id: TabId, message: Message) -> Task<Message> {
-        use super::{import, inspector, pictures, shortcuts};
         if self.tab_index(id).is_none() {
             return match message {
                 Message::Autosaved(key, _) => self.retired(id, key),
@@ -415,42 +421,14 @@ impl App {
                 self.pending = pending;
                 done(task)
             }
-            Message::LabelsReady(key, result) => {
-                self.in_tab(id, |app| app.labels_ready(key, result));
-                Task::none()
-            }
-            Message::InspectorAction(action @ inspector::Action::PropertiesCalculated(..)) => {
-                done(self.in_tab(id, |app| app.inspector_action(action)))
-            }
-            Message::EngineDone {
-                revision,
-                kind: Job::ImportFile,
-                result,
-            } => done(self.in_tab(id, |app| {
-                app.engine_done(revision, Job::ImportFile, *result)
+            message if document_result(&message) => done(self.in_tab(id, |app| {
+                let (tool, inspector_open, inspector_tab) =
+                    (app.tool, app.inspector_open, app.inspector_tab);
+                let task = app.update_front(message, true);
+                (app.tool, app.inspector_open, app.inspector_tab) =
+                    (tool, inspector_open, inspector_tab);
+                task
             })),
-            Message::EngineDone { kind, result, .. } => {
-                self.in_tab(id, |app| app.tab.busy = false);
-                match kind {
-                    Job::Export(format) => export_result(*result, format),
-                    _ => Task::none(),
-                }
-            }
-            Message::Imports(import::Action::Loaded(..)) => {
-                self.in_tab(id, |app| app.tab.busy = false);
-                Task::none()
-            }
-            Message::ClipboardWritten { .. } | Message::ClipboardRead { .. } => {
-                self.in_tab(id, |app| app.tab.clipboard_busy = false);
-                Task::none()
-            }
-            Message::Pictures(pictures::Action::Loaded(..)) => {
-                self.in_tab(id, |app| app.tab.pictures.active = None);
-                Task::none()
-            }
-            Message::Pasted(_) | Message::Shortcut(shortcuts::Action::Copied { .. }) => {
-                Task::none()
-            }
             message => self.update(message),
         }
     }
@@ -642,6 +620,7 @@ fn document_result(message: &Message) -> bool {
     matches!(
         message,
         Message::EngineDone { .. }
+            | Message::Exported(_)
             | Message::LabelsReady(..)
             | Message::InspectorAction(super::inspector::Action::PropertiesCalculated(..))
             | Message::Imports(import::Action::Loaded(..))
@@ -734,7 +713,7 @@ fn close_style(theme: &Theme, status: button::Status) -> button::Style {
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use super::*;
     use crate::app::inspector;
     use reshiki::document::{Document, Point};
@@ -767,6 +746,82 @@ mod tests {
 
     fn select(app: &mut App, id: TabId) {
         let _ = app.update(Message::Tabs(Action::Select(id)));
+    }
+
+    pub(in crate::app) struct Front {
+        id: TabId,
+        index: usize,
+        document: Document,
+        revision: u64,
+        selected: Vec<u64>,
+    }
+
+    impl Front {
+        pub(in crate::app) fn new(app: &mut App) -> Self {
+            app.add_tab();
+            let atom = edit(app, "S");
+            app.tab.selected = vec![atom];
+            app.tab.camera.center = Point::new(90., -30.);
+            app.tab.camera.zoom = 1.7;
+            app.tool = crate::canvas::Tool::Erase;
+            app.inspector_open = false;
+            app.inspector_tab = super::super::InspectorTab::Import;
+            app.tab.inspector_ui.update(inspector::Action::Section(
+                inspector::Section::Transform,
+                true,
+            ));
+            app.context_menu = Some(super::super::context_menu::State {
+                position: iced::Point::new(12., 34.),
+                page: Default::default(),
+            });
+            app.style_menu = Some(super::super::color_popover::Menu::Align);
+            app.imports.menu = true;
+            app.tabs.menu = true;
+            app.help_open = true;
+            app.view_open = true;
+            app.status = "Front tab status".into();
+            app.error = true;
+            Self {
+                id: app.tab.id,
+                index: app.tabs.active,
+                document: app.tab.doc.clone(),
+                revision: app.tab.revision,
+                selected: app.tab.selected.clone(),
+            }
+        }
+
+        pub(in crate::app) fn assert_unchanged(&self, app: &App) {
+            assert_eq!(app.tab.id, self.id);
+            assert_eq!(app.tabs.active, self.index);
+            assert_eq!(app.tab.doc, self.document);
+            assert_eq!(app.tab.revision, self.revision);
+            assert_eq!(app.tab.selected, self.selected);
+            assert_eq!(app.tab.camera.center, Point::new(90., -30.));
+            assert_eq!(app.tab.camera.zoom, 1.7);
+            assert_eq!(app.tool, crate::canvas::Tool::Erase);
+            assert!(!app.inspector_open);
+            assert_eq!(app.inspector_tab, super::super::InspectorTab::Import);
+            assert_eq!(
+                app.tab.inspector_ui.expanded(inspector::Section::Transform),
+                Some(true)
+            );
+            assert_eq!(
+                app.context_menu.as_ref().unwrap().position,
+                iced::Point::new(12., 34.)
+            );
+            assert!(matches!(
+                app.style_menu,
+                Some(super::super::color_popover::Menu::Align)
+            ));
+            assert!(app.imports.menu && app.tabs.menu && app.help_open && app.view_open);
+            assert_eq!(app.status, "Front tab status");
+            assert!(app.error);
+            assert!(!app.tab.busy && !app.tab.clipboard_busy);
+            assert!(
+                app.tab.labels_dirty,
+                "Follow-up labels belong to the background tab"
+            );
+        }
     }
 
     #[test]
@@ -862,50 +917,285 @@ mod tests {
     }
 
     #[test]
-    fn a_late_engine_result_for_one_tab_never_changes_another() {
-        let mut app = ready();
-        let _ = app.update(Message::Analyze);
-        assert!(app.tab.busy);
-        let (first, revision) = (app.tab.id, app.tab.revision);
-        let _ = app.update(Message::New);
-        let second = app.tab.id;
-        assert_ne!(first, second, "A busy tab is not reused");
-        // Revisions can match across tabs; the tab tag keeps results apart.
-        app.tab.revision = revision;
-        let result = |kind| {
-            Message::Tab(
-                first,
+    fn background_engine_results_apply_in_their_own_history() {
+        for kind in [Job::Insert, Job::Import, Job::ImportFile] {
+            let mut app = ready();
+            let before = app.tab.doc.clone();
+            let _ = app.update(Message::Analyze);
+            let (id, revision) = (app.tab.id, app.tab.revision);
+            let front = Front::new(&mut app);
+            let _ = app.update(Message::Tab(
+                id,
                 Box::new(Message::EngineDone {
                     revision,
                     kind,
                     result: imported("O"),
                 }),
-            )
-        };
-        let _ = app.update(result(Job::Import));
-        assert!(app.tab.doc.all_ids().is_empty());
-        select(&mut app, first);
-        assert!(!app.tab.busy, "The dropped result released its tab");
-        assert!(app.tab.doc.all_ids().is_empty());
-        // A file import fills the tab that was opened for it, even from behind.
-        app.tab.busy = true;
-        select(&mut app, second);
-        let _ = app.update(result(Job::ImportFile));
-        assert!(app.tab.doc.all_ids().is_empty());
-        select(&mut app, first);
+            ));
+            front.assert_unchanged(&app);
+            let tab = &app.tabs.background[0];
+            assert!(!tab.busy && tab.edited);
+            assert_eq!(tab.doc.atoms[0].element, "O");
+            select(&mut app, id);
+            assert!(app.status.contains("structure") || app.status.contains("Structure"));
+            let _ = app.update(Message::Undo);
+            assert_eq!(app.tab.doc, before);
+            assert!(
+                !app.tab.history.can_undo(),
+                "Exactly one step for the result"
+            );
+        }
+    }
+
+    #[test]
+    fn background_checks_and_cleanup_previews_stay_with_their_drawing() {
+        for cleanup in [false, true] {
+            let mut app = ready();
+            let atom = app.tab.doc.add_atom("N", Point::default());
+            app.tab.selected = vec![atom];
+            app.tab.busy = true;
+            let (id, revision) = (app.tab.id, app.tab.revision);
+            let before = app.tab.doc.clone();
+            let mut computed = before.clone();
+            let kind = if cleanup {
+                computed.atoms[0].position = Point::new(42., 10.);
+                Job::Clean(super::super::cleanup::CleanupJob {
+                    options: Default::default(),
+                    selection: vec![atom],
+                    serial: app.tab.cleanup_serial,
+                    epoch: app.tab.file_epoch,
+                })
+            } else {
+                computed.atoms[0].label_h = 3;
+                Job::Analyze
+            };
+            let front = Front::new(&mut app);
+            assert_eq!(
+                app.update(Message::Tab(
+                    id,
+                    Box::new(Message::EngineDone {
+                        revision,
+                        kind,
+                        result: Box::new(Ok(Response {
+                            document: Some(computed.clone()),
+                            analysis: None,
+                            output: None,
+                            engine_version: "test".into(),
+                            warnings: vec![],
+                        })),
+                    })
+                ))
+                .units(),
+                0
+            );
+            front.assert_unchanged(&app);
+            let tab = &app.tabs.background[0];
+            assert!(!tab.busy && !tab.history.can_undo());
+            if cleanup {
+                assert_eq!(tab.doc, before);
+                assert_eq!(tab.cleanup.as_ref().unwrap().document, computed);
+                select(&mut app, id);
+                let _ = app.update(Message::ApplyCleanup);
+                assert_eq!(app.tab.doc, computed);
+                let _ = app.update(Message::Undo);
+                assert_eq!(app.tab.doc, before);
+                assert!(!app.tab.history.can_undo());
+            } else {
+                assert_eq!(tab.doc, computed);
+                assert_eq!(tab.status, "No chemistry errors found");
+            }
+        }
+    }
+
+    #[test]
+    fn background_pasted_drawing_is_one_undo_step() {
+        let mut app = ready();
+        let before = app.tab.doc.clone();
+        let id = app.tab.id;
+        let mut part = Document::default();
+        part.add_atom("O", Point::default());
+        let contents = format!(
+            "{}{}",
+            reshiki::editing::CLIPBOARD_PREFIX,
+            serde_json::to_string(&part.current()).unwrap()
+        );
+        let front = Front::new(&mut app);
+        let _ = app.update(Message::Tab(id, Box::new(Message::Pasted(Some(contents)))));
+        front.assert_unchanged(&app);
+        select(&mut app, id);
+        assert_eq!(app.status, "Selection pasted");
         assert_eq!(app.tab.doc.atoms[0].element, "O");
-        // Results for a closed tab are dropped.
-        let _ = app.update(Message::Tabs(Action::Close(Some(second))));
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
+    }
+
+    #[test]
+    fn background_pasted_text_starts_its_follow_up_in_the_same_tab() {
+        let mut app = ready();
+        let (id, revision) = (app.tab.id, app.tab.revision);
+        let front = Front::new(&mut app);
+        let task = app.update(Message::Tab(
+            id,
+            Box::new(Message::Pasted(Some("CO".into()))),
+        ));
+        assert!(task.units() > 0);
+        front.assert_unchanged(&app);
+        assert!(app.tabs.background[0].busy);
+        assert_eq!(app.tabs.background[0].status, "Working…");
         let _ = app.update(Message::Tab(
-            second,
+            id,
             Box::new(Message::EngineDone {
-                revision: 0,
-                kind: Job::Import,
-                result: imported("S"),
+                revision,
+                kind: Job::Insert,
+                result: imported("O"),
             }),
         ));
-        assert_eq!(app.strip().count(), 1);
-        assert_eq!(app.tab.doc.atoms[0].element, "O");
+        front.assert_unchanged(&app);
+        assert!(!app.tabs.background[0].busy);
+        assert!(
+            !app.tabs.background[0].labels_dirty,
+            "Its label task was started too"
+        );
+        assert_eq!(app.tabs.background[0].doc.atoms[0].element, "O");
+    }
+
+    #[test]
+    fn stale_and_failed_background_engine_results_release_their_tab() {
+        for failed in [false, true] {
+            let mut app = ready();
+            let _ = app.update(Message::Analyze);
+            let (id, revision) = (app.tab.id, app.tab.revision);
+            edit(&mut app, "N");
+            let before = app.tab.doc.clone();
+            let front = Front::new(&mut app);
+            let _ = app.update(Message::Tab(
+                id,
+                Box::new(Message::EngineDone {
+                    revision,
+                    kind: Job::Insert,
+                    result: if failed {
+                        Box::new(Err("Calculation failed".into()))
+                    } else {
+                        imported("O")
+                    },
+                }),
+            ));
+            front.assert_unchanged(&app);
+            let tab = &app.tabs.background[0];
+            assert_eq!(tab.doc, before);
+            assert!(!tab.busy);
+            assert_eq!(tab.error, failed);
+            assert!(tab.status.contains(if failed {
+                "Calculation failed"
+            } else {
+                "newer edits"
+            }));
+        }
+    }
+
+    #[test]
+    fn closed_tab_results_are_dropped_and_do_not_leave_busy_flags() {
+        let mut app = ready();
+        let id = app.tab.id;
+        app.tab.busy = true;
+        app.tab.clipboard_busy = true;
+        app.add_tab();
+        let _ = app.update(Message::Tabs(Action::Close(Some(id))));
+        assert!(app.tab_index(id).is_none());
+        let front = Front::new(&mut app);
+        for message in [
+            Message::EngineDone {
+                revision: 0,
+                kind: Job::Insert,
+                result: imported("O"),
+            },
+            Message::ClipboardRead {
+                epoch: 0,
+                revision: 0,
+                result: Box::new(Err("late read".into())),
+            },
+            Message::ClipboardWritten {
+                epoch: 0,
+                revision: 0,
+                cut_ids: vec![1],
+                result: Err("late copy".into()),
+            },
+            Message::Pasted(Some("CO".into())),
+        ] {
+            assert_eq!(app.update(Message::Tab(id, Box::new(message))).units(), 0);
+            front.assert_unchanged(&app);
+            assert!(app.strip().all(|tab| !tab.busy && !tab.clipboard_busy));
+        }
+    }
+
+    #[test]
+    fn nested_tab_work_keeps_each_status_with_its_document() {
+        let mut app = ready();
+        let first = app.tab.id;
+        app.status = "First".into();
+        app.error = true;
+        app.add_tab();
+        let second = app.tab.id;
+        app.status = "Second".into();
+        app.in_tab(first, |app| {
+            assert_eq!(app.status, "First");
+            assert!(app.error);
+            app.in_tab(second, |app| {
+                assert_eq!(app.status, "Second");
+                assert!(!app.error);
+                app.status = "Second updated".into();
+                app.error = true;
+            });
+            assert_eq!(app.status, "First");
+            app.status = "First updated".into();
+            app.error = false;
+        });
+        assert_eq!(app.tab.id, second);
+        assert_eq!(app.status, "Second updated");
+        assert!(app.error);
+        select(&mut app, first);
+        assert_eq!(app.status, "First updated");
+        assert!(!app.error);
+    }
+
+    #[test]
+    fn status_and_errors_follow_tabs_through_switches_and_background_results() {
+        let mut app = ready();
+        let first = app.tab.id;
+        app.status = "First error".into();
+        app.error = true;
+        app.add_tab();
+        let second = app.tab.id;
+        assert_eq!(app.status, super::super::READY);
+        assert!(!app.error);
+        app.status = "Second status".into();
+        for _ in 0..2 {
+            select(&mut app, first);
+            assert_eq!(app.status, "First error");
+            assert!(app.error);
+            select(&mut app, second);
+            assert_eq!(app.status, "Second status");
+            assert!(!app.error);
+        }
+        let _ = app.update(Message::Tab(
+            first,
+            Box::new(Message::EngineDone {
+                revision: 0,
+                kind: Job::Analyze,
+                result: Box::new(Err("Background error".into())),
+            }),
+        ));
+        assert_eq!(app.status, "Second status");
+        assert!(!app.error);
+        select(&mut app, first);
+        assert_eq!(app.status, "Background error");
+        assert!(app.error);
+        select(&mut app, second);
+        let _ = app.update(Message::Tabs(Action::Close(None)));
+        assert_eq!(app.tab.id, first);
+        assert_eq!(app.status, "Background error");
+        assert!(app.error);
     }
 
     #[test]

@@ -23,6 +23,9 @@ pub(super) struct DocumentTab {
     pub(super) id: TabId,
     /// Whether this tab had unsaved changes when it last left the front.
     pub(super) edited: bool,
+    /// Parked status; the current tab uses `App::status` and `App::error`.
+    pub(super) status: String,
+    pub(super) error: bool,
     // Document, history and file identity.
     pub(super) doc: Document,
     pub(super) saved: Document,
@@ -98,6 +101,8 @@ impl DocumentTab {
         Self {
             id: TabId(0),
             edited: false,
+            status: super::READY.into(),
+            error: false,
             doc: Document::default(),
             saved: Document::default(),
             history: History::default(),

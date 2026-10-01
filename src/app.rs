@@ -318,6 +318,7 @@ pub struct App {
     appearance: crate::appearance::Settings,
     engine: LocalEngine,
     figure_exporting: bool,
+    // The current tab's status; parked with its document when it leaves the front.
     status: String,
     error: bool,
     file_io: files::State,
@@ -713,13 +714,13 @@ impl App {
             let task = tagged(self.background_result(id, *message), id);
             return Task::batch([task, self.start_autosave()]);
         }
-        let task = self.update_front(message);
+        let task = self.update_front(message, false);
         // Results of the work this message started belong to the tab now in
         // front, which may be one it just opened or brought forward.
         tagged(task, self.tab.id)
     }
 
-    fn update_front(&mut self, message: Message) -> Task<Message> {
+    fn update_front(&mut self, message: Message, background: bool) -> Task<Message> {
         #[cfg(target_os = "macos")]
         if let Message::MacFiles(action) = message {
             return self.mac_file_action(action);
@@ -729,7 +730,11 @@ impl App {
             &message,
             Message::EngineDone { .. } | Message::LabelsReady(..)
         );
-        let task = self.update_inner(message);
+        let task = if background {
+            self.update_document_result(message)
+        } else {
+            self.update_inner(message)
+        };
         let task = Task::batch([task, self.start_label_refresh(), self.start_autosave()]);
         self.sync_numeric_transforms();
         if refresh_dimensions {
@@ -737,7 +742,10 @@ impl App {
         }
         // Include inspector changes made by tool-specific handlers, which can
         // return early. Ordinary updates within a panel retain its scroll state.
-        if previous != self.inspector_tab && self.inspector_tab != InspectorTab::Assistant {
+        if !background
+            && previous != self.inspector_tab
+            && self.inspector_tab != InspectorTab::Assistant
+        {
             Task::batch([
                 task,
                 iced::widget::operation::snap_to(
@@ -1627,17 +1635,6 @@ impl App {
                 }
             }
             Message::CopyImage => return self.copy_native(false, true),
-            Message::ClipboardWritten {
-                epoch,
-                revision,
-                cut_ids,
-                result,
-            } => self.clipboard_written(epoch, revision, cut_ids, result),
-            Message::ClipboardRead {
-                epoch,
-                revision,
-                result,
-            } => self.clipboard_read(epoch, revision, *result),
             Message::Copy(cut) => {
                 if reshiki::clipboard::available() {
                     return self.copy_native(cut, false);
@@ -1669,39 +1666,6 @@ impl App {
                     return self.paste_native(false);
                 }
                 return iced::clipboard::read().map(Message::Pasted);
-            }
-            Message::Pasted(contents) => {
-                if let Some(contents) = contents.filter(|s| !s.trim().is_empty()) {
-                    if let Some(json) = editing::clipboard_json(&contents) {
-                        match Document::from_json(json.as_bytes()) {
-                            Ok(part) => {
-                                let part = reshiki::canvas_theme::for_native_paste(
-                                    part,
-                                    self.tab.doc.canvas_theme,
-                                );
-                                let center = editing::center(&part, &part.all_ids());
-                                let before = self.tab.doc.clone();
-                                self.tab.selected = editing::append(
-                                    &mut self.tab.doc,
-                                    &part,
-                                    Point::new(
-                                        self.tab.camera.center.x - center.x + 24.0,
-                                        self.tab.camera.center.y - center.y + 24.0,
-                                    ),
-                                );
-                                self.changed(before);
-                                self.tool = Tool::Select;
-                                self.status = "Selection pasted".into();
-                            }
-                            Err(e) => {
-                                self.status = format!("Could not paste: {e}");
-                                self.error = true;
-                            }
-                        }
-                    } else {
-                        return self.run(input_request(&contents), Job::Insert);
-                    }
-                }
             }
             Message::Duplicate => {
                 let part = editing::selection(&self.tab.doc, &self.tab.selected);
@@ -1890,11 +1854,6 @@ impl App {
                 }
             }
             Message::Clean => return self.begin_cleanup(None, None),
-            Message::EngineDone {
-                revision,
-                kind,
-                result,
-            } => return self.engine_done(revision, kind, *result),
             Message::Undo | Message::Redo => {
                 self.tab.erase_stroke = false;
                 self.tab.cleanup = None;
@@ -2126,6 +2085,78 @@ impl App {
                 return self.run(request, Job::Export(format));
             }
             Message::FigureExported(result) => self.figure_exported(result),
+            message @ (Message::EngineDone { .. }
+            | Message::ClipboardWritten { .. }
+            | Message::ClipboardRead { .. }
+            | Message::Pasted(_)
+            | Message::Exported(_)) => return self.update_document_result(message),
+        }
+        if reveal_inspector {
+            iced::widget::operation::snap_to(
+                "inspector-content",
+                iced::widget::operation::RelativeOffset::START,
+            )
+        } else {
+            Task::none()
+        }
+    }
+    /// Background delivery calls these handlers without front-tab input or focus handling.
+    fn update_document_result(&mut self, message: Message) -> Task<Message> {
+        match message {
+            Message::LabelsReady(key, result) => self.labels_ready(key, result),
+            Message::InspectorAction(action) => return self.inspector_action(action),
+            Message::Pictures(action) => return self.picture_action(action),
+            Message::Imports(action) => return self.import_action(action),
+            Message::Shortcut(action) => return self.shortcut_action(action),
+            Message::ClipboardWritten {
+                epoch,
+                revision,
+                cut_ids,
+                result,
+            } => self.clipboard_written(epoch, revision, cut_ids, result),
+            Message::ClipboardRead {
+                epoch,
+                revision,
+                result,
+            } => self.clipboard_read(epoch, revision, *result),
+            Message::Pasted(contents) => {
+                if let Some(contents) = contents.filter(|s| !s.trim().is_empty()) {
+                    if let Some(json) = editing::clipboard_json(&contents) {
+                        match Document::from_json(json.as_bytes()) {
+                            Ok(part) => {
+                                let part = reshiki::canvas_theme::for_native_paste(
+                                    part,
+                                    self.tab.doc.canvas_theme,
+                                );
+                                let center = editing::center(&part, &part.all_ids());
+                                let before = self.tab.doc.clone();
+                                self.tab.selected = editing::append(
+                                    &mut self.tab.doc,
+                                    &part,
+                                    Point::new(
+                                        self.tab.camera.center.x - center.x + 24.0,
+                                        self.tab.camera.center.y - center.y + 24.0,
+                                    ),
+                                );
+                                self.changed(before);
+                                self.tool = Tool::Select;
+                                self.status = "Selection pasted".into();
+                            }
+                            Err(e) => {
+                                self.status = format!("Could not paste: {e}");
+                                self.error = true;
+                            }
+                        }
+                    } else {
+                        return self.run(input_request(&contents), Job::Insert);
+                    }
+                }
+            }
+            Message::EngineDone {
+                revision,
+                kind,
+                result,
+            } => return self.engine_done(revision, kind, *result),
             Message::Exported(result) => match result {
                 Ok(Some(path)) => {
                     self.status = format!(
@@ -2140,17 +2171,11 @@ impl App {
                     self.error = true;
                 }
             },
+            _ => {}
         }
-        if reveal_inspector {
-            iced::widget::operation::snap_to(
-                "inspector-content",
-                iced::widget::operation::RelativeOffset::START,
-            )
-        } else {
-            Task::none()
-        }
+        Task::none()
     }
-    /// A chemistry job's result for the drawing in front.
+    /// A chemistry job's result for its originating drawing.
     fn engine_done(
         &mut self,
         revision: u64,

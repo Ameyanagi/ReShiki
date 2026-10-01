@@ -395,6 +395,48 @@ mod tests {
         let _ = app.update(Message::Pictures(Action::Loaded(ticket, Ok(Some(picture)))));
     }
     #[test]
+    fn background_picture_replacement_keeps_the_front_and_its_focus() {
+        use crate::app::tabs::{Action as Tabs, tests::Front};
+        for stale in [false, true] {
+            let mut app = ready();
+            let target = insert(&mut app, picture(120, 80));
+            app.tab.history = Default::default();
+            let job = ticket(&mut app, target);
+            let id = app.tab.id;
+            if stale {
+                let before = app.tab.doc.clone();
+                app.tab.doc.add_atom("N", Point::default());
+                app.changed(before);
+            }
+            let before = app.tab.doc.clone();
+            let front = Front::new(&mut app);
+            let task = app.update(Message::Tab(
+                id,
+                Box::new(Message::Pictures(Action::Loaded(
+                    job,
+                    Ok(Some(picture(60, 90))),
+                ))),
+            ));
+            front.assert_unchanged(&app);
+            assert!(app.tabs.background[0].pictures.active.is_none());
+            if !stale {
+                assert_eq!(task.units(), 0, "No inspector scroll or focus operation");
+            }
+            let _ = app.update(Message::Tabs(Tabs::Select(id)));
+            if stale {
+                assert_eq!(app.tab.doc, before);
+                assert!(app.status.contains("changed"));
+            } else {
+                assert_ne!(app.tab.doc, before);
+                assert!(app.status.contains("Picture replaced"));
+                let _ = app.update(Message::Undo);
+                assert_eq!(app.tab.doc, before);
+                assert!(!app.tab.history.can_undo());
+            }
+        }
+    }
+
+    #[test]
     fn asynchronous_replacement_never_changes_a_newer_drawing() {
         let mut app = ready();
         let id = insert(&mut app, picture(120, 80));

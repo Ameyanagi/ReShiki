@@ -203,6 +203,58 @@ mod tests {
     }
 
     #[test]
+    fn background_clipboard_reads_and_cuts_keep_the_front_unchanged() {
+        use crate::app::tabs::{Action, tests::Front};
+        for cut in [false, true] {
+            for stale in [false, true] {
+                let (mut app, _) = App::new();
+                app.tab.busy = false;
+                app.tab.doc.add_atom("N", Point::default());
+                let (id, epoch, revision) = (app.tab.id, app.tab.file_epoch, app.tab.revision);
+                let cut_ids = app.tab.doc.all_ids();
+                app.tab.clipboard_busy = true;
+                if stale {
+                    let before = app.tab.doc.clone();
+                    app.tab.doc.add_atom("C", Point::new(42., 0.));
+                    app.changed(before);
+                }
+                let before = app.tab.doc.clone();
+                let front = Front::new(&mut app);
+                let mut part = Document::default();
+                part.add_atom("O", Point::default());
+                let message = if cut {
+                    Message::ClipboardWritten {
+                        epoch,
+                        revision,
+                        cut_ids,
+                        result: success(),
+                    }
+                } else {
+                    Message::ClipboardRead {
+                        epoch,
+                        revision,
+                        result: Box::new(Ok(part.into())),
+                    }
+                };
+                let _ = app.update(Message::Tab(id, Box::new(message)));
+                front.assert_unchanged(&app);
+                assert!(!app.tabs.background[0].clipboard_busy);
+                let _ = app.update(Message::Tabs(Action::Select(id)));
+                if stale {
+                    assert_eq!(app.tab.doc, before);
+                    assert!(app.status.contains("changed"));
+                } else {
+                    assert_ne!(app.tab.doc, before);
+                    assert!(app.status.contains(if cut { "cut" } else { "pasted" }));
+                    let _ = app.update(Message::Undo);
+                    assert_eq!(app.tab.doc, before);
+                    assert!(!app.tab.history.can_undo());
+                }
+            }
+        }
+    }
+
+    #[test]
     fn successful_picture_fallback_has_a_concise_status_and_retains_details() {
         let (mut app, _) = App::new();
         app.clipboard_written(

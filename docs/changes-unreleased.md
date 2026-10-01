@@ -52,7 +52,7 @@ Several drawings can be open in one window. The tabs take the place of the file 
 - **Recovery.** Each tab has its own recovery draft. At the next launch, **Restore** opens every draft as a tab, the latest in front.
 - The window title names the drawing in front, and the Help panel lists the tab shortcuts.
 
-Work that a tab started, such as a chemistry check, an import or a clipboard read, never changes another tab. If you switch tabs before it finishes, a save, recovery draft, label update or opened file still completes in its own tab; other results are dropped, and you can run them again.
+Work that a tab started, such as a chemistry check, an import or a clipboard read, never changes another tab. If you switch tabs before it finishes, the result still completes in its own tab with the same checks for newer edits. Imports, pastes, cuts and picture replacements keep their own Undo steps; labels and properties refresh as usual. The front drawing, view and controls stay unchanged. Each tab retains its latest status or error, shown when you return. Results for closed tabs are discarded.
 
 ## Loaded canvas performance
 
