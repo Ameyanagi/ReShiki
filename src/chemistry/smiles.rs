@@ -406,7 +406,7 @@ impl Reader<'_> {
             if ends.len() % 2 != 0 {
                 return Err(self.invalid());
             }
-            for pair in ends.chunks_exact(2) {
+            for pair in ends.as_chunks::<2>().0.iter() {
                 let first = pair.first().ok_or(Error::Limit)?;
                 let second = pair.get(1).ok_or(Error::Limit)?;
                 let (chosen, other) = if first.spec.order.is_some() {

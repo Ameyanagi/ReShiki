@@ -400,12 +400,24 @@ mod tests {
                 let pixels = &pixels[..frame.buffer_size()];
                 if clipboard {
                     assert_eq!(pixels[3], 0, "Clipboard surround must be transparent");
-                    assert!(pixels.chunks_exact(4).any(|p| p[3] > 0 && p[3] < 255));
+                    assert!(
+                        pixels
+                            .as_chunks::<4>()
+                            .0
+                            .iter()
+                            .any(|p| p[3] > 0 && p[3] < 255)
+                    );
                 } else {
                     assert_eq!(&pixels[..3], &theme.background());
-                    assert!(pixels.chunks_exact(4).all(|p| p[3] == 255));
+                    assert!(pixels.as_chunks::<4>().0.iter().all(|p| p[3] == 255));
                 }
-                assert!(pixels.chunks_exact(4).any(|p| p[..3] == [180, 50, 55]));
+                assert!(
+                    pixels
+                        .as_chunks::<4>()
+                        .0
+                        .iter()
+                        .any(|p| p[..3] == [180, 50, 55])
+                );
             }
         }
     }

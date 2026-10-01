@@ -179,7 +179,7 @@ pub(super) fn read(
             continue;
         }
         let mut matches = true;
-        for (xy, expected) in values.chunks_exact(2).zip(expected) {
+        for (xy, expected) in values.as_chunks::<2>().0.iter().zip(expected) {
             let p = point(&xy.join(" "), prepared.source_scale)?;
             matches &= (p.x - expected.x).abs() < 0.02 && (p.y - expected.y).abs() < 0.02;
         }

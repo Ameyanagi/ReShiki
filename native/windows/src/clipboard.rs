@@ -377,7 +377,9 @@ fn read_packet(picture_only: bool) -> Result<Packet> {
             return Err(anyhow::anyhow!("Invalid clipboard Unicode text"));
         }
         let utf16: Vec<_> = bytes
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|b| u16::from_le_bytes([b[0], b[1]]))
             .take_while(|c| *c != 0)
             .collect();

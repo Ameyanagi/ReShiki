@@ -356,13 +356,13 @@ impl<'a> Context<'a> {
             while i > 0 {
                 work.spend(1)?;
                 odd ^= (*at(&tree, i)? & 1) != 0;
-                i -= i & i.wrapping_neg();
+                i -= i.isolate_lowest_one();
             }
             i = p + 1;
             while i < tree.len() {
                 work.spend(1)?;
                 *tree.get_mut(i).ok_or("Missing wedge parity slot")? += 1;
-                i += i & i.wrapping_neg();
+                i += i.isolate_lowest_one();
             }
         }
         if ordered.len() == 3 && at(&ordered, 2)?.0 - at(&ordered, 1)?.0 >= PI - PI * 1.9 / 180.0 {

@@ -15,6 +15,8 @@ Their distribution terms are retained in `LICENSE-IJG`.
 
 Changes from the registry source:
 
+- `lib.rs` omits the ignored crate-level `macro_use` attribute, which Rust 1.99
+  diagnoses as invalid on crates. Module and external-crate attributes remain unchanged.
 - `mcu.rs::post_process` supplies real image dimensions to `worker.rs::upsample`.
 - `worker.rs::upsample` uses `upsampler/compatible.rs::sample` for horizontal,
   vertical and combined 2:1 sampling. The checked scalar filter uses real

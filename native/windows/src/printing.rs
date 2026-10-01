@@ -294,7 +294,7 @@ fn draw(graphics: &Graphics, s: &Snapshot, page: usize) -> Result<()> {
                 let image = super::clipboard::bitmap(&bytes)?;
                 let (width, height) = image.dimensions();
                 let mut bgra = image.into_raw();
-                for pixel in bgra.chunks_exact_mut(4) {
+                for pixel in bgra.as_chunks_mut::<4>().0.iter_mut() {
                     pixel.swap(0, 2);
                 }
                 let mut bitmap = Bitmap::default();
@@ -405,7 +405,7 @@ pub(super) fn render(data: &[u8], dpi: f32) -> Result<Vec<u8>> {
         }
         draw(&graphics, &s, 0)?;
     }
-    for pixel in pixels.chunks_exact_mut(4) {
+    for pixel in pixels.as_chunks_mut::<4>().0.iter_mut() {
         pixel.swap(0, 2);
     }
     let mut output = Vec::new();

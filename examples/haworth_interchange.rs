@@ -57,8 +57,10 @@ async fn main() -> anyhow::Result<()> {
         anyhow::ensure!(
             pixels
                 .data()
-                .chunks_exact(4)
-                .any(|rgba| rgba != [255, 255, 255, 255]),
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .any(|rgba| *rgba != [255, 255, 255, 255]),
             "Empty SVG for {id}"
         );
         pixels.save_png(directory.join(id).join("svg-render-check.png"))?;

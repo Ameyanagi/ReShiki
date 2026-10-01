@@ -45,7 +45,7 @@ unsafe impl GlobalAlloc for BoundedHeap {
         let budget = BUDGET.load(Ordering::SeqCst);
         let charge = if budget == 0 { 0 } else { layout.size() };
         if charge != 0
-            && let Err(used) = USED.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |used| {
+            && let Err(used) = USED.try_update(Ordering::SeqCst, Ordering::SeqCst, |used| {
                 used.checked_add(charge).filter(|&value| value <= budget)
             })
         {

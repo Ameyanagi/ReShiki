@@ -138,14 +138,18 @@ fn all_graphics_render_in_vector_and_raster_exports_with_colors_and_dashes() {
     let pixels = &pixels[..info.buffer_size()];
     assert!(
         pixels
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .filter(|p| p[0] == 249 && p[1] == 223 && p[2] == 225)
             .count()
             > 1000
     );
     assert!(
         pixels
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .filter(|p| p[0] == 32 && p[1] == 80 && p[2] == 145)
             .count()
             > 100

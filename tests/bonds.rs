@@ -173,7 +173,9 @@ fn bond_color_reaches_shared_vector_and_raster_exports() {
     let info = reader.next_frame(&mut pixels).unwrap();
     assert!(
         pixels[..info.buffer_size()]
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .any(|p| p[2] > 110 && p[0] < 60)
     );
     assert!(

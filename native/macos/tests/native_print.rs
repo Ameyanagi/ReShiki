@@ -93,7 +93,7 @@ mod check {
         }
         drop(context);
         let (mut left, mut right, mut top, mut bottom) = (width, 0, height, 0);
-        for (index, pixel) in bytes.chunks_exact(4).enumerate() {
+        for (index, pixel) in bytes.as_chunks::<4>().0.iter().enumerate() {
             if pixel[0] < 128 {
                 let (x, y) = (index % width, index / width);
                 left = left.min(x);

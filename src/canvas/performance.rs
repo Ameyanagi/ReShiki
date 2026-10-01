@@ -254,8 +254,10 @@ async fn cached_canvas_matches_fresh_edits_and_committed_drag() {
     // Algebraically equivalent camera/point translations can differ by a few
     // floating-point ulps at antialiased edges; bound both area and mean error.
     let changed = preview
-        .chunks_exact(4)
-        .zip(committed.chunks_exact(4))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(committed.as_chunks::<4>().0.iter())
         .filter(|(a, b)| a.iter().zip(*b).any(|(a, b)| a.abs_diff(*b) > 8))
         .count();
     let error: u64 = preview
