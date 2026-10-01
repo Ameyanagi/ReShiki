@@ -94,6 +94,56 @@ class GitDependencyTests(unittest.TestCase):
 
 
 class RustBuildTests(unittest.TestCase):
+    def test_development_builds_run_the_stub_only_on_the_compiler_host(self):
+        host = "x86_64-apple-darwin"
+        for requested in (None, *BUILDER.SUPPORTED_TARGETS):
+            target = requested or host
+            with self.subTest(target=requested), tempfile.TemporaryDirectory() as temporary:
+                output = Path(temporary).resolve()
+                suffix = ".exe" if "windows" in target else ""
+                stub = output / ("inchi-helper-stub" + suffix)
+                starts = []
+
+                def run(command, **_kwargs):
+                    stdout = ""
+                    if command == ["test-rustc", "-vV"]:
+                        stdout = "rustc test\nhost: " + host + "\n"
+                    elif command[0] == "test-rustc":
+                        self.assertEqual(command[command.index("--target") + 1], target)
+                        self.assertEqual(Path(command[command.index("-o") + 1]), stub)
+                        stub.write_bytes(b"target test executable")
+                    elif command[:2] == ["test-cargo", "metadata"]:
+                        stdout = json.dumps(dict(target_directory=str(output)))
+                    elif command[:2] == ["test-cargo", "build"]:
+                        self.assertEqual(command[command.index("--target") + 1], target)
+                        self.assertIn("--locked", command)
+                        self.assertNotIn("--release", command)
+                        binary = output / target / "debug" / ("reshiki-inchi-helper" + suffix)
+                        binary.parent.mkdir(parents=True)
+                        binary.write_bytes(b"target helper executable")
+                    else:
+                        self.assertEqual(command, [str(stub)])
+                        self.assertEqual(target, host, "Cannot execute a cross-target stub")
+                        starts.append(command)
+                    return subprocess.CompletedProcess(command, 0, stdout, "")
+
+                arguments = ["build_inchi_helper.py", "--output", temporary]
+                if requested:
+                    arguments.extend(["--target", requested])
+                with (
+                    patch.object(sys, "argv", arguments),
+                    patch.dict(os.environ, {"CARGO": "test-cargo", "RUSTC": "test-rustc"}),
+                    patch.object(BUILDER, "verify_executable", return_value=target),
+                    patch.object(BUILDER.subprocess, "run", side_effect=run),
+                    patch("builtins.print"),
+                ):
+                    BUILDER.main()
+                metadata = json.loads((output / "build.json").read_text())
+                self.assertFalse(metadata["production"])
+                self.assertEqual(metadata["target"], target)
+                self.assertTrue(stub.is_file())
+                self.assertEqual(len(starts), int(target == host))
+
     def test_production_targets_use_only_locked_cargo_build(self):
         for target in BUILDER.SUPPORTED_TARGETS:
             with self.subTest(target=target), tempfile.TemporaryDirectory() as temporary:

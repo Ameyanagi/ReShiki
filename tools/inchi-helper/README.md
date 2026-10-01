@@ -19,6 +19,8 @@ python3 scripts/build_inchi_helper.py --production --target aarch64-apple-darwin
 
 The build script needs Python 3.11 or newer and Cargo. Development builds also
 compile a dependency-free Rust fault-injection executable for transport tests.
+Its startup check runs only when the target matches the Rust compiler's host;
+cross-target builds leave execution to the destination platform.
 Production builds use `cargo build --locked --release --bin reshiki-inchi-helper`.
 The release packager verifies Cargo.lock's dependency identity, all local Rust
 source hashes, the executable checksum and architecture. Installed applications

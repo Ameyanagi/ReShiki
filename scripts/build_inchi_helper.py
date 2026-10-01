@@ -108,14 +108,11 @@ def main():
     root = ROOT
     cargo = os.environ.get("CARGO", "cargo")
     rustc = os.environ.get("RUSTC", "rustc")
-    target = args.target
     compiler = subprocess.run([rustc, "-vV"], check=True, capture_output=True, text=True).stdout
-    if not target:
-        target = next(
-            line.removeprefix("host: ")
-            for line in compiler.splitlines()
-            if line.startswith("host: ")
-        )
+    host = next(
+        line.removeprefix("host: ") for line in compiler.splitlines() if line.startswith("host: ")
+    )
+    target = args.target or host
     if target not in SUPPORTED_TARGETS:
         raise ValueError(f"Unsupported helper target: {target}")
     output = (args.output or root / "artifacts/inchi-helper").resolve()
@@ -168,8 +165,10 @@ def main():
             ],
             check=True,
         )
-        # Verify startup before fault tests copy/link the binary under mode names.
-        subprocess.run([str(stub)], input=b"", capture_output=True, timeout=60, check=True)
+        # Warm native test executables before fault tests copy/link them. A
+        # cross-target executable can only be checked on its destination host.
+        if target == host:
+            subprocess.run([str(stub)], input=b"", capture_output=True, timeout=60, check=True)
     record = dict(
         inchi_version=INCHI_VERSION,
         dependency=dependency(root),

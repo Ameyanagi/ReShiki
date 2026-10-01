@@ -29,6 +29,7 @@ fn main() {
         "version" => json = json.replace("1.07.5", "wrong"),
         "rejected" => json = r#"{"version":"1.07.5","result":{"Err":"Rejected test request"}}"#.into(),
         "status" | "read-status" => json = json.replace("\"status\":0", "\"status\":99"),
+        "failed-identifier" => json = json.replace("\"status\":0", "\"status\":2"),
         "nonstandard" => json = json.replace("InChI=1S/", "InChI=1/"),
         "string-length" => json = json.replace("InChI=1S/CH4/h1H4", &"x".repeat(2*1024*1024+1)),
         "read-counts" => json = json.replace("\"directions\":[]", "\"directions\":[\"none\"]"),

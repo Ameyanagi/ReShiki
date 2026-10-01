@@ -62,10 +62,16 @@ pub(super) fn decode(bytes: &[u8]) -> Result<Output, Error> {
     if !result.inchi.is_empty() && !result.inchi.starts_with("InChI=1S/") {
         return Err(Error::Protocol("Expected a standard InChI"));
     }
+    let status = Status::from_code(
+        i16::try_from(result.status).map_err(|_| Error::Protocol("Invalid status"))?,
+    )?;
+    if !status.is_success() && !result.inchi.is_empty() {
+        return Err(Error::Protocol(
+            "Helper returned an identifier with a failure status",
+        ));
+    }
     Ok(Output {
-        status: Status::from_code(
-            i16::try_from(result.status).map_err(|_| Error::Protocol("Invalid status"))?,
-        )?,
+        status,
         inchi: result.inchi,
         message: result.message,
         log: result.log,
@@ -91,4 +97,62 @@ pub(super) fn decode_import(bytes: &[u8]) -> Result<kernel::Imported, Error> {
         return Err(Error::Protocol("Bond identities without a molecule"));
     }
     Ok(*result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn generated(status: Status, inchi: &str) -> Vec<u8> {
+        wire::encode(
+            &wire::Response {
+                version: kernel::VERSION.into(),
+                result: Ok(wire::Reply::Generated(kernel::Generated {
+                    status: i32::from(status.code()),
+                    inchi: inchi.into(),
+                    message: String::new(),
+                    log: String::new(),
+                    auxiliary: String::new(),
+                    diagnostics: vec![],
+                })),
+            },
+            super::super::MAX_RESPONSE_BYTES,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn failure_statuses_cannot_publish_an_identifier() {
+        for status in [
+            Status::Break,
+            Status::Skipped,
+            Status::Empty,
+            Status::Error,
+            Status::Fatal,
+            Status::Unknown,
+            Status::Busy,
+        ] {
+            assert!(
+                matches!(
+                    decode(&generated(status, "InChI=1S/CH4/h1H4")),
+                    Err(Error::Protocol(_))
+                ),
+                "{status:?} with an identifier must be a protocol error"
+            );
+            let empty = decode(&generated(status, "")).unwrap();
+            assert_eq!(empty.status, status);
+            assert!(empty.inchi.is_empty());
+        }
+    }
+
+    #[test]
+    fn successful_and_warning_statuses_preserve_identifiers() {
+        for status in [Status::Success, Status::Warning] {
+            for inchi in ["", "InChI=1S/CH4/h1H4"] {
+                let result = decode(&generated(status, inchi)).unwrap();
+                assert_eq!(result.status, status);
+                assert_eq!(result.inchi, inchi);
+            }
+        }
+    }
 }

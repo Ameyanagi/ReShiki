@@ -22,6 +22,9 @@ use cosmolkit_inchi::{
 };
 use serde::{Deserialize, Serialize};
 
+#[cfg(test)]
+mod tests;
+
 pub const VERSION: &str = "1.07.5";
 pub const CRATE_VERSION: &str = "0.3.0";
 
@@ -207,8 +210,8 @@ struct Toolkit {
     unspecified: Vec<bool>,
 }
 impl Toolkit {
-    // Preserve caches, rings and computed properties between callbacks while
-    // accepting graph edits performed by the dependency's own cleanup pass.
+    // Preserve caches only for the same ordered graph. Cleanup can change
+    // connectivity or chemical fields without changing atom and bond counts.
     fn refresh(&mut self, molecule: &InchiMolecule) -> Result<State, InchiToolkitError> {
         let atoms = molecule
             .atoms()
@@ -255,12 +258,7 @@ impl Toolkit {
         let graph = Graph { atoms, bonds };
         graph.validate().map_err(error)?;
         let mut state = match &self.state {
-            Some(state)
-                if state.graph.atoms.len() == graph.atoms.len()
-                    && state.graph.bonds.len() == graph.bonds.len() =>
-            {
-                state.clone()
-            }
+            Some(state) if state.graph == graph => state.clone(),
             _ => State {
                 metadata: Metadata::unspecified(&graph),
                 directions: vec![],

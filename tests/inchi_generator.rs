@@ -197,6 +197,7 @@ async fn helper_failures_are_bounded_and_typed() -> anyhow::Result<()> {
         "resource-used",
         "resource-truncated",
         "status",
+        "failed-identifier",
         "string-length",
         "nonstandard",
         "trailing",
@@ -237,9 +238,9 @@ async fn helper_failures_are_bounded_and_typed() -> anyhow::Result<()> {
             | ("oversized" | "stderr" | "string-length", Err(Error::Limit(_)))
             | ("hang", Err(Error::Timeout)) => true,
             (
-                "protocol" | "truncated" | "status" | "nonstandard" | "trailing" | "utf8"
-                | "resource-scope" | "resource-reason" | "resource-budget" | "resource-used"
-                | "resource-truncated",
+                "protocol" | "truncated" | "status" | "failed-identifier" | "nonstandard"
+                | "trailing" | "utf8" | "resource-scope" | "resource-reason" | "resource-budget"
+                | "resource-used" | "resource-truncated",
                 Err(Error::Protocol(_)),
             ) => true,
             ("exit", Err(Error::Exit { code: Some(17), .. })) => true,
