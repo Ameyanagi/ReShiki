@@ -107,7 +107,8 @@ class RestartArgumentsTests(unittest.TestCase):
                         capture_output=True,
                         text=True,
                         encoding="utf-8",
-                        timeout=10,
+                        # Allow cold PowerShell startup on shared CI runners.
+                        timeout=30,
                     )
                     self.assertEqual(json.loads(result.stdout), " ".join(expected[:count]))
 
