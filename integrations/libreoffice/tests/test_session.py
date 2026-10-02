@@ -401,6 +401,26 @@ class SessionTests(unittest.TestCase):
                 self.assertEqual((frame.Size.Width, frame.Size.Height), (600, 200))
                 self.assertEqual((other.Size.Width, other.Size.Height), (400, 500))
 
+    def test_calc_frame_lookup_preserves_scale_and_other_sheet_objects(self):
+        for dimensions, expected in (((100, 200), (300, 400)), ((200, 100), (600, 200))):
+            with self.subTest(dimensions=dimensions):
+                self.object.native, self.object.png, self.object.extent = self.old
+                frame, other = self.presentation_host(dimensions)
+                host = self.object.client.getComponent()
+                pages = host.getDrawPages()
+                host.supportsService = lambda name: name == "com.sun.star.sheet.SpreadsheetDocument"
+                host.getSheets = lambda: SimpleNamespace(
+                    getCount=pages.getCount,
+                    getByIndex=lambda index: SimpleNamespace(
+                        getDrawPage=lambda: pages.getByIndex(index)
+                    ),
+                )
+                with patch.object(self.object, "_write"):
+                    self.object._accept(self.session, self.new, threading.Event())
+                self.assertIsNone(self.session["error"])
+                self.assertEqual((frame.Size.Width, frame.Size.Height), expected)
+                self.assertEqual((other.Size.Width, other.Size.Height), (400, 500))
+
     def test_failed_acceptance_restores_the_impress_frame_and_stored_drawing(self):
         frame, other = self.presentation_host((200, 100))
         stored = []
