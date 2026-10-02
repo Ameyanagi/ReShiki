@@ -436,14 +436,19 @@ async fn touch_uses_finger_position_for_submenu_clicks_and_outside_dismissal() {
 #[tokio::test]
 #[ignore = "Opt-in real renderer/menu input regression"]
 async fn grabbed_scrollbar_keeps_scrolling_outside_panel_and_releases_there() {
-    let mut ui = Ui::new(Size::new(600., 300.)).await;
+    let mut ui = Ui::new(Size::new(600., 1000.)).await;
     let mut app = selected_ring(Point::new(15., 15.));
     let original = app.tab.doc.clone();
-    let target = index(&app, Page::Main, "Copy as");
+    let target = index(&app, Page::Main, "Delete");
+    let (last_row, _, natural_panels) = ui.inspect(&app, 0, target);
+    // Derive the compact viewport from the actual laid-out last row. Copy as
+    // can remain visible in a 300px menu even while later rows overflow.
+    let content_height = last_row.y + last_row.height - natural_panels[0].y;
+    ui.viewport = Rectangle::with_size(Size::new(600., content_height / 2.));
     let (before, viewport, panels) = ui.inspect(&app, 0, target);
     assert!(
-        before.y > viewport.y + viewport.height,
-        "Compact menu must overflow"
+        before.y > viewport.y + viewport.height + 40.,
+        "The measured compact menu must overflow by more than the drag assertion: row={before:?}, viewport={viewport:?}"
     );
     // The native scrollbar is 10px wide; its initial thumb begins at the top.
     let grab = Point::new(viewport.x + viewport.width - 5., viewport.y + 5.);
