@@ -171,7 +171,7 @@ fn atom_ink(
         palette.canonical(explicit)
     } else {
         let mut ink = element_color(doc, &atom.element, doc.canvas_theme);
-        if !doc.ring_fills.is_empty() {
+        if !doc.ring_fills.is_empty() || crate::highlights::atom_color(doc, atom).is_some() {
             let backgrounds = label_backgrounds(doc, palette, atom);
             ink = crate::color_contrast::ensure_contrast(
                 ink,
@@ -215,6 +215,11 @@ fn label_backgrounds(
     palette: &Palette,
     atom: &crate::document::Atom,
 ) -> Vec<[u8; 3]> {
+    if let Some(color) = crate::highlights::atom_color(doc, atom) {
+        // The atom halo covers the complete label, so its ink is read against
+        // the halo rather than the paper or ring fill beneath it.
+        return vec![palette.rgb(color)];
+    }
     std::iter::once(doc.canvas_theme.background())
         .chain(
             doc.ring_fills
@@ -266,6 +271,7 @@ pub fn resolved_document(
     if doc.custom_theme.is_none()
         && doc.color_theme.is_publication()
         && doc.ring_fills.is_empty()
+        && !crate::highlights::any(doc)
         && !crate::palette::any_color(doc, |c| matches!(c, Color::Palette(..)))
     {
         return std::borrow::Cow::Borrowed(doc);
