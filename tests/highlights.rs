@@ -221,3 +221,40 @@ fn shared_atoms_and_fused_bonds_keep_paint_when_duplicate_geometry_is_removed() 
         );
     }
 }
+
+#[test]
+fn typed_preset_replacement_keeps_label_and_anchor_paint_and_colors_new_members() {
+    use reshiki::atom_text::{self, Mode};
+    for (element, first, replacement) in [("O", "OMe", "OEt"), ("C", "Cp", "Cp*")] {
+        let mut doc = Document::default();
+        let anchor = doc.add_atom(element, Point::default());
+        highlights::apply(&mut doc, &[anchor], tint(Hue::Red));
+        doc = atom_text::apply(&doc, anchor, first, Mode::Group).unwrap();
+        assert_eq!(doc.abbreviation(anchor).unwrap().highlight, tint(Hue::Red));
+        highlights::apply(&mut doc, &[anchor], tint(Hue::Blue));
+        assert_eq!(doc.atom(anchor).unwrap().display.highlight, tint(Hue::Red));
+        let replaced = atom_text::apply(&doc, anchor, replacement, Mode::Group).unwrap();
+        assert_eq!(
+            replaced.abbreviation(anchor).unwrap().highlight,
+            tint(Hue::Blue)
+        );
+        assert_eq!(
+            replaced.atom(anchor).unwrap().display.highlight,
+            tint(Hue::Red)
+        );
+        assert!(
+            replaced
+                .atoms
+                .iter()
+                .filter(|a| a.id != anchor)
+                .all(|a| a.display.highlight == tint(Hue::Blue))
+        );
+        assert!(
+            replaced
+                .bonds
+                .iter()
+                .all(|b| b.highlight == tint(Hue::Blue))
+        );
+        replaced.validate().unwrap();
+    }
+}

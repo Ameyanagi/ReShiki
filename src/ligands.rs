@@ -18,6 +18,7 @@ pub fn replace(doc: &Document, id: u64, label: &str) -> Result<Document, String>
         return Ok(doc.clone());
     }
     let anchor = doc.atom(id).ok_or("Missing ligand endpoint")?;
+    let highlight = crate::highlights::atom_color(doc, anchor);
     let remove = doc
         .abbreviation(id)
         .map(|g| g.members.clone())
@@ -139,7 +140,7 @@ pub fn replace(doc: &Document, id: u64, label: &str) -> Result<Document, String>
         }
     }
     result.abbreviations.push(Abbreviation {
-        highlight: None,
+        highlight,
         alignment: doc
             .abbreviation(id)
             .map(|g| g.alignment)
@@ -149,6 +150,9 @@ pub fn replace(doc: &Document, id: u64, label: &str) -> Result<Document, String>
         anchor: id,
         members,
     });
+    if let Some(color) = highlight {
+        crate::highlights::apply(&mut result, &[id], Some(color));
+    }
     result.validate()?;
     Ok(result)
 }
