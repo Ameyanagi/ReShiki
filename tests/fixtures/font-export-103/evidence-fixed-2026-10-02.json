@@ -1,0 +1,1116 @@
+{
+  "date": "2026-10-02",
+  "production_change_commit": "150f02eb8a4443fbe5fe3edf965db9bd98698ce3",
+  "historical_baseline": "evidence-2026-10-02.json",
+  "scope": "Compatible local usvg 0.45.1/svg2pdf 0.13.0 weight patches plus application face metrics; external dependency versions unchanged.",
+  "macos": {
+    "os": "macOS 26.5.1 (25F80)",
+    "architecture": "aarch64-apple-darwin",
+    "rustc": "1.99.0",
+    "rust_tests": 5,
+    "clippy_all_targets_all_features_deny_warnings": "passed",
+    "raster_report": [
+      {
+        "case": "labels",
+        "requested": "unset",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "480",
+        "height": "180",
+        "dark_coverage_sum": "2578630",
+        "difference_ratio": "0.008194"
+      },
+      {
+        "case": "labels",
+        "requested": "normal",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "480",
+        "height": "180",
+        "dark_coverage_sum": "2578630",
+        "difference_ratio": "0.008194"
+      },
+      {
+        "case": "labels",
+        "requested": "400",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "480",
+        "height": "180",
+        "dark_coverage_sum": "2578630",
+        "difference_ratio": "0.008194"
+      },
+      {
+        "case": "labels",
+        "requested": "bold",
+        "expected": "700",
+        "matched_static_weight": "700",
+        "width": "480",
+        "height": "180",
+        "dark_coverage_sum": "3954755",
+        "difference_ratio": "0.001398"
+      },
+      {
+        "case": "labels",
+        "requested": "700",
+        "expected": "700",
+        "matched_static_weight": "700",
+        "width": "480",
+        "height": "180",
+        "dark_coverage_sum": "3954755",
+        "difference_ratio": "0.001398"
+      },
+      {
+        "case": "reported-svg",
+        "requested": "unset",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "737",
+        "height": "889",
+        "dark_coverage_sum": "7750654",
+        "difference_ratio": "0.007349"
+      },
+      {
+        "case": "reported-svg",
+        "requested": "normal",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "737",
+        "height": "889",
+        "dark_coverage_sum": "7750654",
+        "difference_ratio": "0.007349"
+      },
+      {
+        "case": "reported-svg",
+        "requested": "400",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "737",
+        "height": "889",
+        "dark_coverage_sum": "7750654",
+        "difference_ratio": "0.007349"
+      },
+      {
+        "case": "reported-svg",
+        "requested": "bold",
+        "expected": "700",
+        "matched_static_weight": "700",
+        "width": "737",
+        "height": "889",
+        "dark_coverage_sum": "10306803",
+        "difference_ratio": "0.008682"
+      },
+      {
+        "case": "reported-svg",
+        "requested": "700",
+        "expected": "700",
+        "matched_static_weight": "700",
+        "width": "737",
+        "height": "889",
+        "dark_coverage_sum": "10306803",
+        "difference_ratio": "0.008682"
+      },
+      {
+        "case": "cff2-labels",
+        "requested": "unset",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "480",
+        "height": "180",
+        "dark_coverage_sum": "2579789",
+        "difference_ratio": "0.011316"
+      },
+      {
+        "case": "cff2-labels",
+        "requested": "normal",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "480",
+        "height": "180",
+        "dark_coverage_sum": "2579789",
+        "difference_ratio": "0.011316"
+      },
+      {
+        "case": "cff2-labels",
+        "requested": "400",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "480",
+        "height": "180",
+        "dark_coverage_sum": "2579789",
+        "difference_ratio": "0.011316"
+      },
+      {
+        "case": "cff2-labels",
+        "requested": "bold",
+        "expected": "700",
+        "matched_static_weight": "700",
+        "width": "480",
+        "height": "180",
+        "dark_coverage_sum": "3955312",
+        "difference_ratio": "0.004647"
+      },
+      {
+        "case": "cff2-labels",
+        "requested": "700",
+        "expected": "700",
+        "matched_static_weight": "700",
+        "width": "480",
+        "height": "180",
+        "dark_coverage_sum": "3955312",
+        "difference_ratio": "0.004647"
+      },
+      {
+        "case": "cff2-reported-svg",
+        "requested": "unset",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "737",
+        "height": "889",
+        "dark_coverage_sum": "7750536",
+        "difference_ratio": "0.008741"
+      },
+      {
+        "case": "cff2-reported-svg",
+        "requested": "normal",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "737",
+        "height": "889",
+        "dark_coverage_sum": "7750536",
+        "difference_ratio": "0.008741"
+      },
+      {
+        "case": "cff2-reported-svg",
+        "requested": "400",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "737",
+        "height": "889",
+        "dark_coverage_sum": "7750536",
+        "difference_ratio": "0.008741"
+      },
+      {
+        "case": "cff2-reported-svg",
+        "requested": "bold",
+        "expected": "700",
+        "matched_static_weight": "700",
+        "width": "737",
+        "height": "889",
+        "dark_coverage_sum": "10309360",
+        "difference_ratio": "0.013917"
+      },
+      {
+        "case": "cff2-reported-svg",
+        "requested": "700",
+        "expected": "700",
+        "matched_static_weight": "700",
+        "width": "737",
+        "height": "889",
+        "dark_coverage_sum": "10309360",
+        "difference_ratio": "0.013917"
+      }
+    ],
+    "pdf_report": {
+      "status": "passed",
+      "pdfs": [
+        {
+          "file": "ttf-400-variable.pdf",
+          "text": "H N O ",
+          "fonts": [
+            {
+              "weight": 400,
+              "advances": [
+                728.0,
+                723.0,
+                742.0
+              ],
+              "subtype": "/CIDFontType2"
+            }
+          ],
+          "poppler_pixel_difference_ratio": 0.0007596700782644458
+        },
+        {
+          "file": "ttf-400-static.pdf",
+          "text": "H N O ",
+          "fonts": [
+            {
+              "weight": 400,
+              "advances": [
+                728.0,
+                723.0,
+                742.0
+              ],
+              "subtype": "/CIDFontType2"
+            }
+          ]
+        },
+        {
+          "file": "ttf-700-variable.pdf",
+          "text": "H N O ",
+          "fonts": [
+            {
+              "weight": 700,
+              "advances": [
+                757.0,
+                749.0,
+                770.0
+              ],
+              "subtype": "/CIDFontType2"
+            }
+          ],
+          "poppler_pixel_difference_ratio": 0.00045269134204803445
+        },
+        {
+          "file": "ttf-700-static.pdf",
+          "text": "H N O ",
+          "fonts": [
+            {
+              "weight": 700,
+              "advances": [
+                757.0,
+                749.0,
+                770.0
+              ],
+              "subtype": "/CIDFontType2"
+            }
+          ]
+        },
+        {
+          "file": "ttf-mixed-variable.pdf",
+          "text": "H N O \nH N O ",
+          "fonts": [
+            {
+              "weight": 700,
+              "advances": [
+                757.0,
+                749.0,
+                770.0
+              ],
+              "subtype": "/CIDFontType2"
+            },
+            {
+              "weight": 400,
+              "advances": [
+                728.0,
+                723.0,
+                742.0
+              ],
+              "subtype": "/CIDFontType2"
+            }
+          ],
+          "poppler_pixel_difference_ratio": 0.0005738021311466388
+        },
+        {
+          "file": "ttf-mixed-static.pdf",
+          "text": "H N O \nH N O ",
+          "fonts": [
+            {
+              "weight": 400,
+              "advances": [
+                728.0,
+                723.0,
+                742.0
+              ],
+              "subtype": "/CIDFontType2"
+            },
+            {
+              "weight": 700,
+              "advances": [
+                757.0,
+                749.0,
+                770.0
+              ],
+              "subtype": "/CIDFontType2"
+            }
+          ]
+        },
+        {
+          "file": "cff2-400-variable.pdf",
+          "text": "H N O ",
+          "fonts": [
+            {
+              "weight": 400,
+              "advances": [
+                728.0,
+                723.0,
+                742.0
+              ],
+              "subtype": "/CIDFontType2"
+            }
+          ],
+          "poppler_pixel_difference_ratio": 0.014501496102689538
+        },
+        {
+          "file": "cff2-400-static.pdf",
+          "text": "H N O ",
+          "fonts": [
+            {
+              "weight": 400,
+              "advances": [
+                728.0,
+                723.0,
+                742.0
+              ],
+              "subtype": "/CIDFontType0"
+            }
+          ]
+        },
+        {
+          "file": "cff2-700-variable.pdf",
+          "text": "H N O ",
+          "fonts": [
+            {
+              "weight": 700,
+              "advances": [
+                757.0,
+                749.0,
+                770.0
+              ],
+              "subtype": "/CIDFontType2"
+            }
+          ],
+          "poppler_pixel_difference_ratio": 0.005305322902670869
+        },
+        {
+          "file": "cff2-700-static.pdf",
+          "text": "H N O ",
+          "fonts": [
+            {
+              "weight": 700,
+              "advances": [
+                757.0,
+                749.0,
+                770.0
+              ],
+              "subtype": "/CIDFontType0"
+            }
+          ]
+        },
+        {
+          "file": "cff2-mixed-variable.pdf",
+          "text": "H N O \nH N O ",
+          "fonts": [
+            {
+              "weight": 400,
+              "advances": [
+                728.0,
+                723.0,
+                742.0
+              ],
+              "subtype": "/CIDFontType2"
+            },
+            {
+              "weight": 700,
+              "advances": [
+                757.0,
+                749.0,
+                770.0
+              ],
+              "subtype": "/CIDFontType2"
+            }
+          ],
+          "poppler_pixel_difference_ratio": 0.008930394366943352
+        },
+        {
+          "file": "cff2-mixed-static.pdf",
+          "text": "H N O \nH N O ",
+          "fonts": [
+            {
+              "weight": 400,
+              "advances": [
+                728.0,
+                723.0,
+                742.0
+              ],
+              "subtype": "/CIDFontType0"
+            },
+            {
+              "weight": 700,
+              "advances": [
+                757.0,
+                749.0,
+                770.0
+              ],
+              "subtype": "/CIDFontType0"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "linux": {
+    "os": "Arch Linux rolling",
+    "architecture": "x86_64-unknown-linux-gnu",
+    "rustc": "1.94.1",
+    "raster_report": [
+      {
+        "case": "labels",
+        "requested": "unset",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "480",
+        "height": "180",
+        "dark_coverage_sum": "2578630",
+        "difference_ratio": "0.008194"
+      },
+      {
+        "case": "labels",
+        "requested": "normal",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "480",
+        "height": "180",
+        "dark_coverage_sum": "2578630",
+        "difference_ratio": "0.008194"
+      },
+      {
+        "case": "labels",
+        "requested": "400",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "480",
+        "height": "180",
+        "dark_coverage_sum": "2578630",
+        "difference_ratio": "0.008194"
+      },
+      {
+        "case": "labels",
+        "requested": "bold",
+        "expected": "700",
+        "matched_static_weight": "700",
+        "width": "480",
+        "height": "180",
+        "dark_coverage_sum": "3954755",
+        "difference_ratio": "0.001398"
+      },
+      {
+        "case": "labels",
+        "requested": "700",
+        "expected": "700",
+        "matched_static_weight": "700",
+        "width": "480",
+        "height": "180",
+        "dark_coverage_sum": "3954755",
+        "difference_ratio": "0.001398"
+      },
+      {
+        "case": "reported-svg",
+        "requested": "unset",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "737",
+        "height": "889",
+        "dark_coverage_sum": "7750654",
+        "difference_ratio": "0.007349"
+      },
+      {
+        "case": "reported-svg",
+        "requested": "normal",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "737",
+        "height": "889",
+        "dark_coverage_sum": "7750654",
+        "difference_ratio": "0.007349"
+      },
+      {
+        "case": "reported-svg",
+        "requested": "400",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "737",
+        "height": "889",
+        "dark_coverage_sum": "7750654",
+        "difference_ratio": "0.007349"
+      },
+      {
+        "case": "reported-svg",
+        "requested": "bold",
+        "expected": "700",
+        "matched_static_weight": "700",
+        "width": "737",
+        "height": "889",
+        "dark_coverage_sum": "10306803",
+        "difference_ratio": "0.008682"
+      },
+      {
+        "case": "reported-svg",
+        "requested": "700",
+        "expected": "700",
+        "matched_static_weight": "700",
+        "width": "737",
+        "height": "889",
+        "dark_coverage_sum": "10306803",
+        "difference_ratio": "0.008682"
+      },
+      {
+        "case": "cff2-labels",
+        "requested": "unset",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "480",
+        "height": "180",
+        "dark_coverage_sum": "2579789",
+        "difference_ratio": "0.011316"
+      },
+      {
+        "case": "cff2-labels",
+        "requested": "normal",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "480",
+        "height": "180",
+        "dark_coverage_sum": "2579789",
+        "difference_ratio": "0.011316"
+      },
+      {
+        "case": "cff2-labels",
+        "requested": "400",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "480",
+        "height": "180",
+        "dark_coverage_sum": "2579789",
+        "difference_ratio": "0.011316"
+      },
+      {
+        "case": "cff2-labels",
+        "requested": "bold",
+        "expected": "700",
+        "matched_static_weight": "700",
+        "width": "480",
+        "height": "180",
+        "dark_coverage_sum": "3955312",
+        "difference_ratio": "0.004647"
+      },
+      {
+        "case": "cff2-labels",
+        "requested": "700",
+        "expected": "700",
+        "matched_static_weight": "700",
+        "width": "480",
+        "height": "180",
+        "dark_coverage_sum": "3955312",
+        "difference_ratio": "0.004647"
+      },
+      {
+        "case": "cff2-reported-svg",
+        "requested": "unset",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "737",
+        "height": "889",
+        "dark_coverage_sum": "7750536",
+        "difference_ratio": "0.008741"
+      },
+      {
+        "case": "cff2-reported-svg",
+        "requested": "normal",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "737",
+        "height": "889",
+        "dark_coverage_sum": "7750536",
+        "difference_ratio": "0.008741"
+      },
+      {
+        "case": "cff2-reported-svg",
+        "requested": "400",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "737",
+        "height": "889",
+        "dark_coverage_sum": "7750536",
+        "difference_ratio": "0.008741"
+      },
+      {
+        "case": "cff2-reported-svg",
+        "requested": "bold",
+        "expected": "700",
+        "matched_static_weight": "700",
+        "width": "737",
+        "height": "889",
+        "dark_coverage_sum": "10309360",
+        "difference_ratio": "0.013917"
+      },
+      {
+        "case": "cff2-reported-svg",
+        "requested": "700",
+        "expected": "700",
+        "matched_static_weight": "700",
+        "width": "737",
+        "height": "889",
+        "dark_coverage_sum": "10309360",
+        "difference_ratio": "0.013917"
+      }
+    ],
+    "pdf_report": {
+      "status": "passed",
+      "pdfs": [
+        {
+          "file": "ttf-400-variable.pdf",
+          "text": "H N O ",
+          "fonts": [
+            {
+              "weight": 400,
+              "advances": [
+                728.0,
+                723.0,
+                742.0
+              ],
+              "subtype": "/CIDFontType2"
+            }
+          ],
+          "poppler_pixel_difference_ratio": 0.0007596700782644458
+        },
+        {
+          "file": "ttf-400-static.pdf",
+          "text": "H N O ",
+          "fonts": [
+            {
+              "weight": 400,
+              "advances": [
+                728.0,
+                723.0,
+                742.0
+              ],
+              "subtype": "/CIDFontType2"
+            }
+          ]
+        },
+        {
+          "file": "ttf-700-variable.pdf",
+          "text": "H N O ",
+          "fonts": [
+            {
+              "weight": 700,
+              "advances": [
+                757.0,
+                749.0,
+                770.0
+              ],
+              "subtype": "/CIDFontType2"
+            }
+          ],
+          "poppler_pixel_difference_ratio": 0.00045269134204803445
+        },
+        {
+          "file": "ttf-700-static.pdf",
+          "text": "H N O ",
+          "fonts": [
+            {
+              "weight": 700,
+              "advances": [
+                757.0,
+                749.0,
+                770.0
+              ],
+              "subtype": "/CIDFontType2"
+            }
+          ]
+        },
+        {
+          "file": "ttf-mixed-variable.pdf",
+          "text": "H N O \nH N O ",
+          "fonts": [
+            {
+              "weight": 700,
+              "advances": [
+                757.0,
+                749.0,
+                770.0
+              ],
+              "subtype": "/CIDFontType2"
+            },
+            {
+              "weight": 400,
+              "advances": [
+                728.0,
+                723.0,
+                742.0
+              ],
+              "subtype": "/CIDFontType2"
+            }
+          ],
+          "poppler_pixel_difference_ratio": 0.0005738021311466388
+        },
+        {
+          "file": "ttf-mixed-static.pdf",
+          "text": "H N O \nH N O ",
+          "fonts": [
+            {
+              "weight": 400,
+              "advances": [
+                728.0,
+                723.0,
+                742.0
+              ],
+              "subtype": "/CIDFontType2"
+            },
+            {
+              "weight": 700,
+              "advances": [
+                757.0,
+                749.0,
+                770.0
+              ],
+              "subtype": "/CIDFontType2"
+            }
+          ]
+        },
+        {
+          "file": "cff2-400-variable.pdf",
+          "text": "H N O ",
+          "fonts": [
+            {
+              "weight": 400,
+              "advances": [
+                728.0,
+                723.0,
+                742.0
+              ],
+              "subtype": "/CIDFontType2"
+            }
+          ],
+          "poppler_pixel_difference_ratio": 0.014501496102689538
+        },
+        {
+          "file": "cff2-400-static.pdf",
+          "text": "H N O ",
+          "fonts": [
+            {
+              "weight": 400,
+              "advances": [
+                728.0,
+                723.0,
+                742.0
+              ],
+              "subtype": "/CIDFontType0"
+            }
+          ]
+        },
+        {
+          "file": "cff2-700-variable.pdf",
+          "text": "H N O ",
+          "fonts": [
+            {
+              "weight": 700,
+              "advances": [
+                757.0,
+                749.0,
+                770.0
+              ],
+              "subtype": "/CIDFontType2"
+            }
+          ],
+          "poppler_pixel_difference_ratio": 0.005305322902670869
+        },
+        {
+          "file": "cff2-700-static.pdf",
+          "text": "H N O ",
+          "fonts": [
+            {
+              "weight": 700,
+              "advances": [
+                757.0,
+                749.0,
+                770.0
+              ],
+              "subtype": "/CIDFontType0"
+            }
+          ]
+        },
+        {
+          "file": "cff2-mixed-variable.pdf",
+          "text": "H N O \nH N O ",
+          "fonts": [
+            {
+              "weight": 700,
+              "advances": [
+                757.0,
+                749.0,
+                770.0
+              ],
+              "subtype": "/CIDFontType2"
+            },
+            {
+              "weight": 400,
+              "advances": [
+                728.0,
+                723.0,
+                742.0
+              ],
+              "subtype": "/CIDFontType2"
+            }
+          ],
+          "poppler_pixel_difference_ratio": 0.008930394366943352
+        },
+        {
+          "file": "cff2-mixed-static.pdf",
+          "text": "H N O \nH N O ",
+          "fonts": [
+            {
+              "weight": 700,
+              "advances": [
+                757.0,
+                749.0,
+                770.0
+              ],
+              "subtype": "/CIDFontType0"
+            },
+            {
+              "weight": 400,
+              "advances": [
+                728.0,
+                723.0,
+                742.0
+              ],
+              "subtype": "/CIDFontType0"
+            }
+          ]
+        }
+      ]
+    },
+    "native_font_inventory": {
+      "fontconfig": "2.18.1",
+      "noto-fonts-cjk": "20240730-1",
+      "fc_match_family": "Noto Sans CJK JP",
+      "style": "Regular",
+      "path": "/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc",
+      "index": 0,
+      "sha256": "b76b0433203017ca80401b2ee0dd69350349871c4b19d504c34dbdd80541690a"
+    },
+    "note": "Hermetic backend tests, not a Fedora or native UI reproduction; host fonts were not loaded by the probe or changed.",
+    "rust_tests": 5
+  },
+  "controls": {
+    "regeneration": "All eight font files, CFF2 outline TSV, OFL and both source manifests regenerated byte-identically.",
+    "static_png_regression": "All 30 TrueType static control PNGs are byte-identical before and after the patch.",
+    "outline_checks": "Matching commands and exact advances. TrueType points differ by at most 0.5 font unit from independently rounded static controls; CFF2 points differ by at most 0.002 font unit from the unrounded FontTools glyph evaluator.",
+    "png_bound": "Sum of absolute RGBA differences / reference dark coverage <= 0.02; maximum production value 0.013917.",
+    "pdf_bound": "Sum of absolute RGB differences / sum of reference RGB ink <= 0.02 at 144 dpi; maximum value 0.014502.",
+    "cross_architecture": "macOS and Linux TSV rows byte-identical."
+  },
+  "independent_review": {
+    "pdf_objects": "All 12 PDFs: distinct mixed-weight resources, ToUnicode H/N/O, correct CID/font-file kinds, exact PDF W and embedded hmtx, instance FontBBox contains actual embedded glyphs.",
+    "pdf_raster_dpi": [
+      96,
+      300
+    ],
+    "max_normalized_difference": 0.014821,
+    "source_review": "No unresolved correctness finding. Original licenses/notices preserved; NOTICE-RESHIKI.md records archive checksums and modifications."
+  },
+  "optional_renderer_comparison": {
+    "version": "resvg/usvg 0.48.1",
+    "true_type_cases": "All 10 are pixel-exact to static 400/700 controls.",
+    "cff2_cases": "Three regular-weight molecule cases exceed the same 2% static raster bound (maximum 0.024368); the optional oracle command exits 1. Retained as a diagnostic, not production acceptance. Production CFF2 matches independent unrounded FontTools outlines.",
+    "report": [
+      {
+        "case": "labels",
+        "requested": "unset",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "480",
+        "height": "180",
+        "dark_coverage_sum": "2573484",
+        "difference_ratio": "0.000000"
+      },
+      {
+        "case": "labels",
+        "requested": "normal",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "480",
+        "height": "180",
+        "dark_coverage_sum": "2573484",
+        "difference_ratio": "0.000000"
+      },
+      {
+        "case": "labels",
+        "requested": "400",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "480",
+        "height": "180",
+        "dark_coverage_sum": "2573484",
+        "difference_ratio": "0.000000"
+      },
+      {
+        "case": "labels",
+        "requested": "bold",
+        "expected": "700",
+        "matched_static_weight": "700",
+        "width": "480",
+        "height": "180",
+        "dark_coverage_sum": "3957961",
+        "difference_ratio": "0.000000"
+      },
+      {
+        "case": "labels",
+        "requested": "700",
+        "expected": "700",
+        "matched_static_weight": "700",
+        "width": "480",
+        "height": "180",
+        "dark_coverage_sum": "3957961",
+        "difference_ratio": "0.000000"
+      },
+      {
+        "case": "reported-svg",
+        "requested": "unset",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "737",
+        "height": "889",
+        "dark_coverage_sum": "7738926",
+        "difference_ratio": "0.000000"
+      },
+      {
+        "case": "reported-svg",
+        "requested": "normal",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "737",
+        "height": "889",
+        "dark_coverage_sum": "7738926",
+        "difference_ratio": "0.000000"
+      },
+      {
+        "case": "reported-svg",
+        "requested": "400",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "737",
+        "height": "889",
+        "dark_coverage_sum": "7738926",
+        "difference_ratio": "0.000000"
+      },
+      {
+        "case": "reported-svg",
+        "requested": "bold",
+        "expected": "700",
+        "matched_static_weight": "700",
+        "width": "737",
+        "height": "889",
+        "dark_coverage_sum": "10326139",
+        "difference_ratio": "0.000000"
+      },
+      {
+        "case": "reported-svg",
+        "requested": "700",
+        "expected": "700",
+        "matched_static_weight": "700",
+        "width": "737",
+        "height": "889",
+        "dark_coverage_sum": "10326139",
+        "difference_ratio": "0.000000"
+      },
+      {
+        "case": "cff2-labels",
+        "requested": "unset",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "480",
+        "height": "180",
+        "dark_coverage_sum": "2582433",
+        "difference_ratio": "0.016757"
+      },
+      {
+        "case": "cff2-labels",
+        "requested": "normal",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "480",
+        "height": "180",
+        "dark_coverage_sum": "2582433",
+        "difference_ratio": "0.016757"
+      },
+      {
+        "case": "cff2-labels",
+        "requested": "400",
+        "expected": "400",
+        "matched_static_weight": "400",
+        "width": "480",
+        "height": "180",
+        "dark_coverage_sum": "2582433",
+        "difference_ratio": "0.016757"
+      },
+      {
+        "case": "cff2-labels",
+        "requested": "bold",
+        "expected": "700",
+        "matched_static_weight": "700",
+        "width": "480",
+        "height": "180",
+        "dark_coverage_sum": "3944396",
+        "difference_ratio": "0.005708"
+      },
+      {
+        "case": "cff2-labels",
+        "requested": "700",
+        "expected": "700",
+        "matched_static_weight": "700",
+        "width": "480",
+        "height": "180",
+        "dark_coverage_sum": "3944396",
+        "difference_ratio": "0.005708"
+      },
+      {
+        "case": "cff2-reported-svg",
+        "requested": "unset",
+        "expected": "400",
+        "matched_static_weight": "none",
+        "width": "737",
+        "height": "889",
+        "dark_coverage_sum": "7759384",
+        "difference_ratio": "0.024368"
+      },
+      {
+        "case": "cff2-reported-svg",
+        "requested": "normal",
+        "expected": "400",
+        "matched_static_weight": "none",
+        "width": "737",
+        "height": "889",
+        "dark_coverage_sum": "7759384",
+        "difference_ratio": "0.024368"
+      },
+      {
+        "case": "cff2-reported-svg",
+        "requested": "400",
+        "expected": "400",
+        "matched_static_weight": "none",
+        "width": "737",
+        "height": "889",
+        "dark_coverage_sum": "7759384",
+        "difference_ratio": "0.024368"
+      },
+      {
+        "case": "cff2-reported-svg",
+        "requested": "bold",
+        "expected": "700",
+        "matched_static_weight": "700",
+        "width": "737",
+        "height": "889",
+        "dark_coverage_sum": "10309458",
+        "difference_ratio": "0.013021"
+      },
+      {
+        "case": "cff2-reported-svg",
+        "requested": "700",
+        "expected": "700",
+        "matched_static_weight": "700",
+        "width": "737",
+        "height": "889",
+        "dark_coverage_sum": "10309458",
+        "difference_ratio": "0.013021"
+      }
+    ]
+  },
+  "remaining": [
+    "Combined application workspace/build checks handled by integration.",
+    "Actual native Fedora editor/UI, selected font identity, 100% and 422% zoom, clipboard and printing acceptance were not performed by this probe.",
+    "Original reporter font bytes and native drawing are not available."
+  ]
+}
