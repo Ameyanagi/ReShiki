@@ -124,6 +124,67 @@ async fn reaction_fixture(
             "cas_search": "not tested"
         }));
     }
+    // Use exactly the same preparation path as the Copy As command. This file
+    // is the receiver-test payload, not a separately handcrafted JSON probe.
+    let copied = reshiki::clipboard::prepare_as(
+        engine.clone(),
+        document.clone(),
+        reshiki::clipboard::CopyFormat::ChemDoodleReaction,
+    )
+    .await
+    .map_err(anyhow::Error::msg)?;
+    let text = copied.text().context("Missing ChemDoodle clipboard text")?;
+    let json: serde_json::Value = serde_json::from_str(text)?;
+    let molecules = json["m"]
+        .as_array()
+        .context("Missing ChemDoodle molecules")?;
+    ensure!(molecules.len() == 2, "ChemDoodle participant count changed");
+    for (side, orders, hydrogens) in [(0, [1, 1], [3, 2, 1]), (1, [1, 2], [3, 1, 0])] {
+        let molecule = &molecules[side];
+        let atoms = molecule["a"]
+            .as_array()
+            .context("Missing ChemDoodle atoms")?;
+        let bonds = molecule["b"]
+            .as_array()
+            .context("Missing ChemDoodle bonds")?;
+        ensure!(
+            atoms.len() == 3 && bonds.len() == 2,
+            "ChemDoodle graph count changed"
+        );
+        for (i, element) in ["C", "C", "O"].iter().enumerate() {
+            ensure!(
+                atoms[i]["l"] == *element && atoms[i]["c"] == 0 && atoms[i]["h"] == hydrogens[i],
+                "ChemDoodle atom identity changed"
+            );
+        }
+        for (i, order) in orders.iter().enumerate() {
+            ensure!(
+                bonds[i]["b"] == i && bonds[i]["e"] == i + 1 && bonds[i]["o"] == *order,
+                "ChemDoodle connectivity changed"
+            );
+        }
+        let role = if side == 0 { "rs" } else { "ps" };
+        ensure!(
+            json["s"][0][role] == json!([atoms[0]["i"]]),
+            "ChemDoodle role changed"
+        );
+    }
+    ensure!(
+        json["s"][0]["a"] == "synthetic",
+        "ChemDoodle reaction arrow changed"
+    );
+    let filename = format!("{name}.chemdoodle.json");
+    fs::write(output.join(&filename), text)?;
+    formats.push(json!({
+        "file": filename,
+        "sha256": format!("{:x}", Sha256::digest(text.as_bytes())),
+        "source": "clipboard::prepare_as(CopyFormat::ChemDoodleReaction).text()",
+        "local_validation": "Expected atom identities, H counts, bonds, arrow and role references passed",
+        "local_round_trip": "Not applicable: ReShiki does not import ChemDoodle JSON",
+        "export_warnings": copied.notices,
+        "cas_editor_import": "not tested",
+        "cas_search": "not tested"
+    }));
     println!(
         "{name}: {input} · native/RXN/reaction-SMILES role and connectivity round trips passed"
     );

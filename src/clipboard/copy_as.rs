@@ -3,6 +3,7 @@
 use super::{CDX_TYPES, LIMIT, Representation};
 use crate::{document::Document, engine::LocalEngine, export};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
+mod chemdoodle;
 
 const TEXT: &str = "public.utf8-plain-text";
 
@@ -18,9 +19,10 @@ pub enum CopyFormat {
     Cdx,
     Rxn,
     ReactionSmiles,
+    ChemDoodleReaction,
 }
 impl CopyFormat {
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::Png,
         Self::Svg,
         Self::Pdf,
@@ -31,6 +33,7 @@ impl CopyFormat {
         Self::Cdx,
         Self::Rxn,
         Self::ReactionSmiles,
+        Self::ChemDoodleReaction,
     ];
 
     pub fn label(self) -> &'static str {
@@ -46,6 +49,7 @@ impl CopyFormat {
             Self::Cdx => "CDX",
             Self::Rxn => "RXN · V3000",
             Self::ReactionSmiles => "Reaction SMILES",
+            Self::ChemDoodleReaction => "ChemDoodle JSON · reaction",
         }
     }
 
@@ -61,11 +65,15 @@ impl CopyFormat {
             Self::Cdx => "cdx",
             Self::Rxn => "rxn",
             Self::ReactionSmiles => "rsmi",
+            Self::ChemDoodleReaction => "chemdoodle-reaction",
         }
     }
 
     pub fn is_reaction(self) -> bool {
-        matches!(self, Self::Rxn | Self::ReactionSmiles)
+        matches!(
+            self,
+            Self::Rxn | Self::ReactionSmiles | Self::ChemDoodleReaction
+        )
     }
 
     pub fn is_molecular(self) -> bool {
@@ -95,7 +103,11 @@ impl CopyFormat {
             }
         }
         if self.is_reaction() {
-            return reaction_reason(doc);
+            return reaction_reason(doc).or_else(|| {
+                (self == Self::ChemDoodleReaction)
+                    .then(|| chemdoodle::reason(doc))
+                    .flatten()
+            });
         }
         None
     }
@@ -103,7 +115,7 @@ impl CopyFormat {
 
 fn reaction_reason(doc: &Document) -> Option<&'static str> {
     let [reaction] = doc.reactions.as_slice() else {
-        return Some("RXN and reaction SMILES need one complete defined reaction.");
+        return Some("Reaction formats need one complete defined reaction.");
     };
     if reaction.reactants.is_empty() || reaction.products.is_empty() {
         return Some("Assign reactants and products in Reactions before copying.");
@@ -179,7 +191,13 @@ pub async fn prepare_as(
     }
 
     let mut notices = Vec::new();
-    let (bytes, text) = if matches!(format, CopyFormat::Png | CopyFormat::Svg | CopyFormat::Pdf) {
+    let (bytes, text) = if format == CopyFormat::ChemDoodleReaction {
+        let output = tokio::task::spawn_blocking(move || chemdoodle::write(&original))
+            .await
+            .map_err(|error| format!("Could not prepare ChemDoodle JSON: {error}"))??;
+        notices.push("Reaction structure and roles copied as ChemDoodle JSON. Captions, drawing styles and other artwork are not included; keep the native drawing.".into());
+        (output.as_bytes().to_vec(), Some(output))
+    } else if matches!(format, CopyFormat::Png | CopyFormat::Svg | CopyFormat::Pdf) {
         let (doc, notice) = export::figure_document(&engine, original).await?;
         notices.extend(notice);
         let figure = tokio::task::spawn_blocking(move || {
@@ -249,7 +267,10 @@ fn from_output(
         CopyFormat::Smiles => &["org.opensmiles.smiles"],
         CopyFormat::Cdxml => &["chemical/x-cdxml"],
         CopyFormat::Cdx => &CDX_TYPES,
-        CopyFormat::Inchi | CopyFormat::Rxn | CopyFormat::ReactionSmiles => &[],
+        CopyFormat::Inchi
+        | CopyFormat::Rxn
+        | CopyFormat::ReactionSmiles
+        | CopyFormat::ChemDoodleReaction => &[],
     };
     let count = kinds.len() + usize::from(text.is_some());
     if bytes.len() > LIMIT / count.max(1) {
@@ -375,6 +396,7 @@ mod tests {
             CopyFormat::Inchi,
             CopyFormat::Rxn,
             CopyFormat::ReactionSmiles,
+            CopyFormat::ChemDoodleReaction,
         ] {
             let copy = from_output(format, b"text".to_vec(), Some("text".into()), vec![]).unwrap();
             assert_eq!(copy.representations.len(), 1);
