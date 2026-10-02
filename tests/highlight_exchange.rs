@@ -70,6 +70,127 @@ fn actual_prime_native_files_preserve_atom_and_bond_highlights() -> Result {
 }
 
 #[test]
+fn native_clipboard_and_expand_label_preserve_independent_group_paint() -> Result {
+    // These exact files were saved after real Prime Copy/New/Paste and
+    // Structure > Expand Label. Native loading truncated the original input
+    // decimals to cyan green=229 and yellow green=197; retain those facts.
+    let cyan = Color::Custom([129, 229, 255]);
+    let yellow = Color::Custom([255, 197, 0]);
+    for (text, contracted) in [
+        (
+            include_str!("fixtures/structure-highlights/native-contracted.cdxml"),
+            true,
+        ),
+        (
+            include_str!("fixtures/structure-highlights/native-expanded.cdxml"),
+            false,
+        ),
+    ] {
+        let source = import_cdxml(text)?.document;
+        assert_eq!(source.abbreviations.len(), usize::from(contracted));
+        if contracted {
+            assert_eq!(source.abbreviations[0].highlight, Some(cyan));
+        }
+        for back in std::iter::once(source.clone()).chain(both(&source)?) {
+            assert_eq!(back.atoms.len(), 3);
+            assert_eq!(back.bonds.len(), 2);
+            assert_eq!(
+                back.atoms
+                    .iter()
+                    .filter(|a| a.display.highlight == Some(RED))
+                    .count(),
+                1
+            );
+            assert_eq!(
+                back.atoms
+                    .iter()
+                    .filter(|a| a.display.highlight == Some(cyan))
+                    .count(),
+                1
+            );
+            assert_eq!(
+                back.atoms
+                    .iter()
+                    .filter(|a| a.display.highlight.is_none())
+                    .count(),
+                1
+            );
+            assert_eq!(
+                back.bonds
+                    .iter()
+                    .filter(|b| b.highlight == Some(yellow))
+                    .count(),
+                1
+            );
+            assert_eq!(
+                back.bonds.iter().filter(|b| b.highlight.is_none()).count(),
+                1
+            );
+            assert!(back.bonds.iter().all(|b| b.order == 1));
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn every_rgb_channel_survives_native_truncation_and_cdx_rounding() -> Result {
+    let mut source = Document::default();
+    for channel in 0..=u8::MAX {
+        let id = source.add_atom("C", Point::new(f32::from(channel) * 28., 0.));
+        source.atom_mut(id).ok_or("atom")?.display.highlight = Some(Color::Custom([channel; 3]));
+    }
+    let text = xml(&source)?;
+    let parsed = roxmltree::Document::parse(&text)?;
+    let colors = parsed
+        .descendants()
+        .find(|n| n.has_tag_name("colortable"))
+        .ok_or("color table")?
+        .children()
+        .filter(|n| n.has_tag_name("color"))
+        .collect::<Vec<_>>();
+    let atoms = parsed
+        .descendants()
+        .filter(|n| n.has_tag_name("n"))
+        .collect::<Vec<_>>();
+    assert_eq!(atoms.len(), 256);
+    for (atom, channel) in atoms.into_iter().zip(0..=u8::MAX) {
+        let index = atom
+            .attribute("highlightColor")
+            .ok_or("highlight index")?
+            .parse::<usize>()?;
+        let color = colors
+            .get(index.checked_sub(2).ok_or("special color")?)
+            .ok_or("color")?;
+        for axis in ["r", "g", "b"] {
+            let value = color.attribute(axis).ok_or("component")?.parse::<f64>()?;
+            assert_eq!(
+                (value * 255.).trunc(),
+                f64::from(channel),
+                "native channel {channel}"
+            );
+            assert_eq!(
+                (value * 255.).round(),
+                f64::from(channel),
+                "rounded channel {channel}"
+            );
+            assert_eq!(
+                (value * 65535.).round(),
+                f64::from(channel) * 257.,
+                "CDX channel {channel}"
+            );
+            assert!((0.0..=1.0).contains(&value));
+            if channel == 0 || channel == 255 {
+                assert_eq!(value, f64::from(channel) / 255.);
+            } else {
+                assert!(value > f64::from(channel) / 255.);
+                assert!(value - f64::from(channel) / 255. <= 0.00000001000001);
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn atom_bond_and_literal_black_paint_survive_both_editable_formats() -> Result {
     let mut source = Document::default();
     let a = source.add_atom("C", Point::new(0., 0.));

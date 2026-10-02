@@ -484,7 +484,20 @@ impl<'a> Writer<'a> {
         let attrs = ["r", "g", "b"]
             .into_iter()
             .zip(rgb)
-            .map(|(axis, c)| (axis, format!("{:.8}", f64::from(c) / 255.)))
+            .map(|(axis, c)| {
+                // ChemDraw truncates decimal components when recovering the
+                // 8-bit color. Nearest-decimal formatting can fall below the
+                // channel boundary (129/255 -> 0.50588235 -> 128). Choose the
+                // next 8-place decimal above it using integer arithmetic.
+                // The bias is <= 1e-8 and still rounds to the exact original
+                // 16-bit CDX channel. Preserve the black/white endpoints.
+                let component = match c {
+                    0 => "0.00000000".into(),
+                    255 => "1.00000000".into(),
+                    c => format!("0.{:08}", u64::from(c) * 100_000_000 / 255 + 1),
+                };
+                (axis, component)
+            })
             .collect::<Vec<_>>();
         self.tree.add(Some(self.colors), "color", attrs)?;
         self.color_ids.insert(rgb, id);
