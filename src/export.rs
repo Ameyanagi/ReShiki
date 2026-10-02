@@ -83,7 +83,13 @@ pub fn clipboard_png(doc: &Document) -> Result<Vec<u8>, String> {
 }
 
 pub fn clipboard_drawing(doc: &Document, format: &str) -> Result<Vec<u8>, String> {
-    Ok(render_drawing(doc, format, true)?.bytes)
+    Ok(clipboard_figure(doc, format)?.bytes)
+}
+
+/// Preserve format details (including bounded PNG dimensions/DPI) in an
+/// explicit format-copy receipt as well as in file-export receipts.
+pub fn clipboard_figure(doc: &Document, format: &str) -> Result<Figure, String> {
+    render_drawing(doc, format, true)
 }
 
 #[cfg(windows)]

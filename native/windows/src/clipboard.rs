@@ -51,6 +51,9 @@ fn mapped(kind: &str) -> &str {
         "public.png" => "PNG",
         "public.svg-image" => "image/svg+xml",
         "com.adobe.pdf" => "PDF",
+        // MOL text is not MDLCT's length-prefixed binary line encoding.
+        "com.mdli.molfile" => "chemical/x-mdl-molfile",
+        "org.opensmiles.smiles" => "SMILES",
         _ => kind,
     }
 }
@@ -336,6 +339,7 @@ fn read_packet(picture_only: bool) -> Result<Packet> {
             ("ChemDraw XML", "public.cdxml"),
             ("chemical/x-cdxml", "public.cdxml"),
             ("MDLCT", "com.mdli.molfile"),
+            ("chemical/x-mdl-molfile", "com.mdli.molfile"),
             ("SMILES", "org.opensmiles.smiles"),
         ]);
     }
@@ -417,6 +421,40 @@ pub(super) fn invoke(bytes: &[u8]) -> Result<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn explicit_structure_formats_keep_native_bytes_and_unicode_text() {
+        for (kind, name, data) in [
+            (
+                "com.mdli.molfile",
+                "chemical/x-mdl-molfile",
+                "MOL\nM  END\n",
+            ),
+            ("org.opensmiles.smiles", "SMILES", "CO"),
+            (
+                "chemical/x-cdxml",
+                "chemical/x-cdxml",
+                "<CDXML>日本語</CDXML>",
+            ),
+        ] {
+            let representations = [kind, "public.utf8-plain-text"]
+                .into_iter()
+                .map(|kind| Representation {
+                    kind: kind.into(),
+                    data: STANDARD.encode(data),
+                })
+                .collect();
+            let formats = prepare_formats(representations, false).unwrap();
+            assert_eq!(formats.len(), 2);
+            assert_eq!(formats[&format(name).unwrap()], data.as_bytes());
+            let unicode: Vec<_> = data
+                .encode_utf16()
+                .chain(Some(0))
+                .flat_map(u16::to_le_bytes)
+                .collect();
+            assert_eq!(formats[&UNICODE], unicode);
+        }
+    }
+
     #[test]
     fn editable_office_copy_omits_standalone_bitmap_but_copy_image_keeps_it() {
         let image = image::RgbaImage::from_pixel(20, 10, image::Rgba([30, 70, 150, 255]));

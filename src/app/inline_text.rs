@@ -652,6 +652,7 @@ pub(super) fn commits_draft(message: &Message) -> bool {
             | Message::Export(_)
             | Message::Copy(_)
             | Message::CopyImage
+            | Message::CopyAs(_)
             | Message::CopySmiles
             | Message::Paste
             | Message::PastePicture

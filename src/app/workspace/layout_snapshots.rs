@@ -407,9 +407,16 @@ fn smart_guides(renderer: &mut iced::Renderer, size: Size, output: &Path) {
 
 type Setup = fn(&mut App);
 
-const STATES: [(&str, Setup); 19] = [
+const STATES: [(&str, Setup); 20] = [
     ("default", |_| {}),
     ("molecule", molecule),
+    ("copy-as", |app| {
+        molecule(app);
+        app.context_menu = Some(crate::app::context_menu::State {
+            position: iced::Point::new(36., 24.),
+            page: crate::app::context_menu::Page::CopyAs,
+        });
+    }),
     ("mixed", mixed),
     ("ring-tool", ring_tool),
     ("arc", arc),

@@ -200,6 +200,12 @@ pub enum Message {
     CopySmiles,
     Copy(bool),
     CopyImage,
+    CopyAs(reshiki::clipboard::CopyFormat),
+    CopyAsPrepared(
+        clipboard::CopyAsKey,
+        Box<Result<reshiki::clipboard::PreparedCopy, String>>,
+    ),
+    CopyAsWritten(clipboard::CopyAsKey, Result<Vec<String>, String>),
     ClipboardWritten {
         epoch: u64,
         revision: u64,
@@ -320,6 +326,10 @@ pub struct App {
     appearance: crate::appearance::Settings,
     engine: LocalEngine,
     figure_exporting: bool,
+    /// Serializes clipboard preparation/publication across document tabs.
+    copy_as_busy: bool,
+    /// Native writes can outlive a closed tab; do not let them overtake a new copy.
+    native_copy_busy: bool,
     // The current tab's status; parked with its document when it leaves the front.
     status: String,
     error: bool,
@@ -380,6 +390,8 @@ impl App {
             appearance: crate::appearance::Settings::load(),
             engine: LocalEngine::default(),
             figure_exporting: false,
+            copy_as_busy: false,
+            native_copy_busy: false,
             // A recovery offer in the status bar is the launch message.
             status: if recovered.is_empty() { READY } else { "" }.into(),
             error: false,
@@ -994,6 +1006,8 @@ impl App {
                     | Message::Opened(_)
                     | Message::ClipboardRead { .. }
                     | Message::ClipboardWritten { .. }
+                    | Message::CopyAsPrepared(..)
+                    | Message::CopyAsWritten(..)
             ) && !self.answers_save_dialog(&message)
             {
                 if !matches!(message, Message::Canvas(_)) {
@@ -1643,7 +1657,12 @@ impl App {
                 }
             }
             Message::CopyImage => return self.copy_native(false, true),
+            Message::CopyAs(format) => return self.copy_as(format),
             Message::Copy(cut) => {
+                if self.clipboard_working() {
+                    self.status = "A clipboard operation is already in progress".into();
+                    return Task::none();
+                }
                 if reshiki::clipboard::available() {
                     return self.copy_native(cut, false);
                 }
@@ -1970,6 +1989,10 @@ impl App {
                 }
             },
             Message::CopySmiles => {
+                if self.clipboard_working() {
+                    self.status = "A clipboard operation is already in progress".into();
+                    return Task::none();
+                }
                 if let Some(a) = self.property_analysis() {
                     return iced::clipboard::write(a.smiles.clone());
                 }
@@ -2083,6 +2106,8 @@ impl App {
             Message::FigureExported(result) => self.figure_exported(result),
             message @ (Message::EngineDone { .. }
             | Message::ClipboardWritten { .. }
+            | Message::CopyAsPrepared(..)
+            | Message::CopyAsWritten(..)
             | Message::ClipboardRead { .. }
             | Message::Pasted(_)
             | Message::Exported(_)) => return self.update_document_result(message),
@@ -2108,6 +2133,8 @@ impl App {
             Message::Pictures(action) => return self.picture_action(action),
             Message::Imports(action) => return self.import_action(action),
             Message::Shortcut(action) => return self.shortcut_action(action),
+            Message::CopyAsPrepared(key, result) => return self.copy_as_prepared(key, *result),
+            Message::CopyAsWritten(key, result) => self.copy_as_written(key, result),
             Message::ClipboardWritten {
                 epoch,
                 revision,
