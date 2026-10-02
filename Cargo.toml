@@ -13,7 +13,13 @@ default = []
 rdkit-reference = []
 
 [workspace]
-members = ["native/macos", "native/windows", "native/linux", "crates/depict-math", "crates/process-heap"]
+members = [
+  "native/macos",
+  "native/windows",
+  "native/linux",
+  "crates/depict-math",
+  "crates/process-heap",
+]
 default-members = ["."]
 
 [target.'cfg(target_os = "macos")'.dependencies]
