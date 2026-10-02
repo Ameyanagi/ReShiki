@@ -23,6 +23,11 @@ fn fixture(element: &str) -> (App, u64, Vec<u64>) {
     let ring = app.tab.doc.atoms[0].clone();
     let target = app.tab.doc.add_atom(element, ring.position.offset(42., 0.));
     app.tab.doc.add_bond(ring.id, target, 1, "plain");
+    let other = app.tab.doc.add_atom("C", Point::new(400., 200.));
+    let end = app.tab.doc.add_atom("C", Point::new(442., 200.));
+    app.tab.doc.add_bond(other, end, 1, "plain");
+    // Bond edits invalidate computed H counts across the document. Populate
+    // the visible label only after the entire fixture graph is constructed.
     let atom = app.tab.doc.atom_mut(target).unwrap();
     atom.label_h = match element {
         "C" => 3,
@@ -32,9 +37,6 @@ fn fixture(element: &str) -> (App, u64, Vec<u64>) {
     };
     atom.display.hydrogens = Some(true);
     atom.display.hydrogen_position = HydrogenPosition::Right;
-    let other = app.tab.doc.add_atom("C", Point::new(400., 200.));
-    let end = app.tab.doc.add_atom("C", Point::new(442., 200.));
-    app.tab.doc.add_bond(other, end, 1, "plain");
     let unrelated = vec![other, end];
     app.tab.selected = unrelated.clone();
     (app, target, unrelated)
@@ -42,26 +44,37 @@ fn fixture(element: &str) -> (App, u64, Vec<u64>) {
 
 /// An actual rendered glyph away from the atom center, rather than a hit-test
 /// implementation's own expected rectangle.
+#[track_caller]
 fn glyph_center(doc: &Document, text: &str) -> Point {
-    reshiki::scene::primitives(doc)
+    let runs: Vec<_> = reshiki::scene::primitives(doc)
         .into_iter()
-        .find_map(|primitive| match primitive {
+        .filter_map(|primitive| match primitive {
             Primitive::Text {
                 position,
                 text: run,
                 size,
                 style,
                 ..
-            } => run.find(text).map(|start| {
-                position.offset(
-                    reshiki::style::styled_text_width(&run[..start], size, &style)
-                        + reshiki::style::styled_text_width(text, size, &style) / 2.,
-                    size / 2.,
-                )
-            }),
+            } => Some((position, run, size, style)),
             _ => None,
         })
-        .expect("Expected rendered label glyph")
+        .collect();
+    runs.iter()
+        .find_map(|(position, run, size, style)| {
+            run.find(text).map(|start| {
+                position.offset(
+                    reshiki::style::styled_text_width(&run[..start], *size, style)
+                        + reshiki::style::styled_text_width(text, *size, style) / 2.,
+                    *size / 2.,
+                )
+            })
+        })
+        .unwrap_or_else(|| {
+            panic!(
+                "Expected rendered label glyph {text:?}; actual runs: {:?}",
+                runs.iter().map(|(_, run, _, _)| run).collect::<Vec<_>>()
+            )
+        })
 }
 
 fn hover(app: &mut App, point: Point) {
