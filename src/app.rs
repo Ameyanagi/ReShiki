@@ -2015,13 +2015,8 @@ impl App {
                     self.front_pending();
                 }
                 #[cfg(windows)]
-                let office_save = self.office_document() && matches!(message, Message::Save);
-                #[cfg(windows)]
-                let retry_libreoffice_save = windows_libreoffice_save::is_embedded_save(
-                    self.office_host,
-                    self.office_document(),
-                    matches!(message, Message::Save),
-                );
+                let office_host = (self.office_document() && matches!(message, Message::Save))
+                    .then_some(self.office_host);
                 let (path, suggested_name) =
                     self.drawing_save_target(matches!(message, Message::SaveAs));
                 if self.file_io.saving {
@@ -2054,22 +2049,9 @@ impl App {
                         tokio::task::spawn_blocking(move || {
                             let bytes = save_snapshot.file_json()?;
                             #[cfg(windows)]
-                            if office_save {
-                                reshiki_windows::prepare_office_save(&save_path);
-                            }
-                            #[cfg(windows)]
-                            if retry_libreoffice_save {
-                                windows_libreoffice_save::write_atomic(&save_path, &bytes)
-                                    .map_err(|error| error.to_string())?;
-                            } else {
-                                reshiki::storage::write_atomic(&save_path, &bytes)?;
-                            }
+                            windows_libreoffice_save::save(&save_path, &bytes, office_host)?;
                             #[cfg(not(windows))]
                             reshiki::storage::write_atomic(&save_path, &bytes)?;
-                            #[cfg(windows)]
-                            if office_save {
-                                reshiki_windows::wait_for_office_save(&save_path, &bytes)?;
-                            }
                             Ok::<_, String>(())
                         })
                         .await
