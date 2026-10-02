@@ -146,6 +146,77 @@ class SessionTests(unittest.TestCase):
         self.assertTrue(done.is_set())
         self.assertIn("no longer available", self.session["error"])
 
+    def test_no_init_completes_host_save_as_before_accepting_deferred_edit(self):
+        for target in (
+            ("new storage", "New Object"),
+            ("old storage", "Object 1"),
+            ("third storage", "Other Object"),
+        ):
+            with self.subTest(target=target):
+                obj = extension.Embedded(None, self.old)
+                obj.parent, obj.entry = "old storage", "Object 1"
+                session = {"directory": self.root, "accepted": self.old[0], "error": None}
+                obj.session = session
+                stored = []
+
+                class Client:
+                    def saveObject(self):
+                        obj.storeOwn()
+
+                    def getComponent(self):
+                        return None
+
+                obj.client = Client()
+                done = threading.Event()
+                with (
+                    patch.object(
+                        obj,
+                        "_write",
+                        side_effect=lambda parent, name: stored.append((parent, name, obj.native)),
+                    ),
+                    patch.object(extension, "post", side_effect=lambda ctx, action: action()),
+                ):
+                    obj.storeAsEntry("new storage", "New Object", (), ())
+                    obj._accept(session, self.new, done)
+                    self.assertFalse(done.is_set())
+                    obj.setPersistentEntry(*target, 2, (), ())
+                self.assertTrue(done.is_set())
+                self.assertEqual((obj.parent, obj.entry), target)
+                self.assertEqual(stored[-1], (*target, self.new[0]))
+                self.assertEqual(session["accepted"], self.new[0])
+                self.assertIsNone(session["error"])
+                self.assertIsNone(obj.pending)
+
+    def test_host_rejection_after_no_init_keeps_saved_native_and_does_not_acknowledge(self):
+        stored = {}
+        owner = self.object
+
+        class Client:
+            def saveObject(self):
+                owner.storeOwn()
+                raise RuntimeError("host rejected after Save As")
+
+        self.object.client = Client()
+        done = threading.Event()
+        with (
+            patch.object(
+                self.object,
+                "_write",
+                side_effect=lambda parent, name: stored.__setitem__((parent, name), owner.native),
+            ),
+            patch.object(extension, "post", side_effect=lambda ctx, action: action()),
+        ):
+            self.object.storeAsEntry("new storage", "New Object", (), ())
+            self.object._accept(self.session, self.new, done)
+            self.object.setPersistentEntry("new storage", "New Object", 2, (), ())
+        self.assertTrue(done.is_set())
+        self.assertEqual(stored, {("new storage", "New Object"): self.old[0]})
+        self.assertEqual((self.object.native, self.object.png, self.object.extent), self.old)
+        self.assertEqual(self.session["accepted"], self.old[0])
+        self.assertIn("host rejected", self.session["error"])
+        self.assertFalse((self.root / "accepted.json").exists())
+        self.assertIsNone(self.object.pending)
+
     def test_host_frame_rounding_does_not_change_intrinsic_extent(self):
         for _ in range(20):
             width, height = self.object.extent
