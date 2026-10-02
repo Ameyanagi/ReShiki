@@ -68,6 +68,15 @@ boundary, with a normalized bias of at most `1e-8`; black/white endpoints and
 the exact 16-bit CDX channels stay unchanged. Tests cover all 256 channel
 values under truncating and rounding receivers.
 
+An actual Prime 26.0.0.6599 open/display/Save As check then verified a prepared
+256-node grayscale grid using that same decimal encoding. Each saved node ID
+was matched to its original channel: all 256 saved colors reconstructed to the
+intended 8-bit RGB value, with no missing nodes or mismatches. The source file
+hash remained unchanged. [The compact native receipt](color-precision-provenance.json)
+records input/output hashes and every source/native palette component. Native
+components use ChemDraw's four-decimal output precision, so this comparison
+recovers each 8-bit channel by rounding `component * 255`.
+
 Native paste and Save completed asynchronously. An immediate read briefly
 showed an empty page; the completed file and visible pasted structure were
 subsequently verified. That timing observation is not evidence of a malformed
