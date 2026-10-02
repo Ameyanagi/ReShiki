@@ -13,6 +13,11 @@ not change the drawing. Changing the selection, undoing, or applying with
 (Issue #78 replaced the original six rows, each with its own Apply, with this
 compact grid.)
 
+You can also double-click the rotation handle to focus **Rotate**, a corner to
+focus **Scale**, or an edge handle to focus **W / H**. The inspector reveals the
+field and selects its value for replacement. This does not apply a transform
+or discard other draft values.
+
 - **Rotate** (°) is a relative angle; positive values rotate clockwise. For
   example, enter `72` for a pentagon-sized turn. It uses the same stable
   [selection rotation center](../selection-transforms.md) as the keyboard and
