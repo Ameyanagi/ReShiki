@@ -755,17 +755,18 @@ impl App {
     fn tool_palette(&self) -> Element<'_, Message> {
         use reshiki::graphics::GraphicKind as G;
         let ring = format!(
-            "Rings · r\nOn empty canvas with no atom/bond selected:\nj: Benzene with alternating bonds · {}: cyclopentadiene\n{}: toggle saturated/aromatic ring drawing, keeping its size.\n{} with regular rings, Benzene or cyclopentadiene: place the circle form.",
+            "Rings · r\nj → benzene · {} → cyclopentadiene\n(empty canvas; no atom/bond selected)\n{} → saturated ↔ aromatic, same size\n{} → circle (regular / j / {})",
             keys(Modifiers::SHIFT, "J"),
             keys(Modifiers::SHIFT, "R"),
-            keys(Modifiers::COMMAND, "click")
+            keys(Modifiers::COMMAND, "click"),
+            keys(Modifiers::SHIFT, "J")
         );
         let chain = format!(
-            "Straight chain · {}\nOn empty canvas with no atom/bond selected.",
+            "Straight chain · {}\n(empty canvas; no atom/bond selected)",
             keys(Modifiers::SHIFT, "X")
         );
         let select = format!(
-            "Select / move · Space / {}\nWith Select active, Space selects the most recently edited molecule.\nv also selects this tool on empty canvas with no atom/bond selected.\nEsc cancels the current operation or returns to Select.",
+            "Select / move · Space / {}\nSpace in Select → recent molecule\nv → Select\n(empty canvas; no atom/bond selected)\nEsc → cancel / Select",
             keys(Modifiers::SHIFT, "Space")
         );
         let single = super::palettes::bond_hint(BondPreset::Single, "Single bond");
@@ -776,22 +777,22 @@ impl App {
             |preset| super::palettes::bond_hint(preset, &format!("Other bonds · {preset}")),
         );
         let brackets = format!(
-            "Brackets / parentheses / braces\n{}: Brackets with the last chosen style and sides, on empty canvas with no atom/bond selected.",
+            "Brackets / parentheses / braces\n{} → brackets, last style / sides\n(empty canvas; no atom/bond selected)",
             keys(Modifiers::SHIFT, "T")
         );
         let symbols = format!(
-            "Chemical symbols\n{}: circled plus on empty canvas with no atom/bond selected.",
+            "Chemical symbols\n{} → circled plus\n(empty canvas; no atom/bond selected)",
             keys(Modifiers::SHIFT, "E")
         );
         let orbitals = format!(
-            "Orbitals\n{}: p orbital on empty canvas with no atom/bond selected.",
+            "Orbitals\n{} → p orbital\n(empty canvas; no atom/bond selected)",
             keys(Modifiers::SHIFT, "G")
         );
         let tools = [
             (Tool::Select, select.as_str()),
             (
                 Tool::Lasso,
-                "Lasso select · l\nOn empty canvas with no atom/bond selected.",
+                "Lasso select · l\n(empty canvas; no atom/bond selected)",
             ),
             (
                 Tool::Tilt,
@@ -800,7 +801,7 @@ impl App {
             (Tool::Erase, "Eraser · Drag to erase"),
             (
                 Tool::Atom,
-                "Atom label · c / n / o…\nChoose an element on empty canvas with no atom/bond selected; replace its label at an atom. Hover an element for its keys.",
+                "Atom label · c / n / o…\n(empty canvas; no atom/bond selected)\nAtom: c / n / o… → replace\nElement hover → keys",
             ),
             (Tool::Bond(1), single.as_str()),
             (Tool::Bond(2), double.as_str()),
@@ -814,11 +815,11 @@ impl App {
             ),
             (
                 Tool::Arrow,
-                "Reaction & electron-flow arrows · e / a\nChoose the current arrow style on empty canvas with no atom/bond selected.",
+                "Reaction & electron-flow arrows\ne / a → current style\n(empty canvas; no atom/bond selected)",
             ),
             (
                 Tool::Text,
-                "Text label · t\nOn empty canvas with no atom/bond selected.",
+                "Text label · t\n(empty canvas; no atom/bond selected)",
             ),
             (Tool::Graphic(self.toolbar.rectangle.kind), "Rectangles"),
             (
@@ -857,9 +858,9 @@ impl App {
                 .width(36)
                 .height(36);
                 let hint = if family == Some(super::palettes::Family::Bonds) {
-                    format!("{hint}\nClick for styles")
+                    format!("{hint}\nClick: styles")
                 } else if family.is_some() {
-                    format!("{hint}\nHold or click the corner for options")
+                    format!("{hint}\nHold / corner: options")
                 } else {
                     (*hint).to_owned()
                 };
