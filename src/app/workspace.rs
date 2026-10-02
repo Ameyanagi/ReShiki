@@ -754,55 +754,45 @@ impl App {
 
     fn tool_palette(&self) -> Element<'_, Message> {
         use reshiki::graphics::GraphicKind as G;
-        let ring = format!(
-            "Rings · r\nj → benzene · {} → cyclopentadiene\n(empty canvas; no atom/bond selected)\n{} → saturated ↔ aromatic, same size\n{} → circle (regular / j / {})",
-            keys(Modifiers::SHIFT, "J"),
-            keys(Modifiers::SHIFT, "R"),
-            keys(Modifiers::COMMAND, "click"),
-            keys(Modifiers::SHIFT, "J")
-        );
-        let chain = format!(
-            "Straight chain · {}\n(empty canvas; no atom/bond selected)",
-            keys(Modifiers::SHIFT, "X")
-        );
-        let select = format!(
-            "Select / move · Space / {}\nSpace in Select → recent molecule\nv → Select\n(empty canvas; no atom/bond selected)\nEsc → cancel / Select",
-            keys(Modifiers::SHIFT, "Space")
+        let ring = if let Tool::RingPreset(preset) = self.toolbar.ring {
+            super::palettes::ring_hint(
+                &preset.to_string(),
+                &super::palettes::Action::RingPreset(preset),
+            )
+        } else {
+            "Rings · r".into()
+        };
+        let chain = format!("Straight chain · {}", keys(Modifiers::SHIFT, "X"));
+        let atom = format!(
+            "Atom label · {}",
+            super::palettes::element_hint(&self.element)
         );
         let single = super::palettes::bond_hint(BondPreset::Single, "Single bond");
         let double = super::palettes::bond_hint(BondPreset::Double, "Double bond");
         let triple = super::palettes::bond_hint(BondPreset::Triple, "Triple bond");
         let other_bonds = self.toolbar.bond.bond_preset().map_or_else(
             || "Other bonds".into(),
-            |preset| super::palettes::bond_hint(preset, &format!("Other bonds · {preset}")),
+            |preset| super::palettes::bond_hint(preset, preset.name()),
         );
-        let brackets = format!(
-            "Brackets / parentheses / braces\n{} → brackets, last style / sides\n(empty canvas; no atom/bond selected)",
-            keys(Modifiers::SHIFT, "T")
+        let arrow = format!("{} · e", self.tab.arrow_style);
+        let rectangle = self.toolbar.rectangle.kind.to_string();
+        let ellipse = self.toolbar.ellipse.kind.to_string();
+        let brackets = super::palettes::graphic_hint(
+            self.toolbar.bracket.kind,
+            &self.toolbar.bracket.kind.to_string(),
         );
-        let symbols = format!(
-            "Chemical symbols\n{} → circled plus\n(empty canvas; no atom/bond selected)",
-            keys(Modifiers::SHIFT, "E")
-        );
-        let orbitals = format!(
-            "Orbitals\n{} → p orbital\n(empty canvas; no atom/bond selected)",
-            keys(Modifiers::SHIFT, "G")
-        );
+        let graphic_hint = |tool, fallback| match tool {
+            Tool::Graphic(kind) => super::palettes::graphic_hint(kind, &kind.to_string()),
+            _ => String::from(fallback),
+        };
+        let symbols = graphic_hint(self.toolbar.symbol, "Chemical symbols");
+        let orbitals = graphic_hint(self.toolbar.orbital, "Orbitals");
         let tools = [
-            (Tool::Select, select.as_str()),
-            (
-                Tool::Lasso,
-                "Lasso select · l\n(empty canvas; no atom/bond selected)",
-            ),
-            (
-                Tool::Tilt,
-                "3D tilt · Drag a ring or selection · Shift snaps to 15°",
-            ),
-            (Tool::Erase, "Eraser · Drag to erase"),
-            (
-                Tool::Atom,
-                "Atom label · c / n / o…\n(empty canvas; no atom/bond selected)\nAtom: c / n / o… → replace\nElement hover → keys",
-            ),
+            (Tool::Select, "Select / move · v"),
+            (Tool::Lasso, "Lasso select · l"),
+            (Tool::Tilt, "3D tilt"),
+            (Tool::Erase, "Eraser"),
+            (Tool::Atom, atom.as_str()),
             (Tool::Bond(1), single.as_str()),
             (Tool::Bond(2), double.as_str()),
             (Tool::Bond(3), triple.as_str()),
@@ -813,19 +803,13 @@ impl App {
                 Tool::Chain(reshiki::chains::ChainMode::Snaking),
                 "Snaking chain",
             ),
+            (Tool::Arrow, arrow.as_str()),
+            (Tool::Text, "Text label · t"),
             (
-                Tool::Arrow,
-                "Reaction & electron-flow arrows\ne / a → current style\n(empty canvas; no atom/bond selected)",
+                Tool::Graphic(self.toolbar.rectangle.kind),
+                rectangle.as_str(),
             ),
-            (
-                Tool::Text,
-                "Text label · t\n(empty canvas; no atom/bond selected)",
-            ),
-            (Tool::Graphic(self.toolbar.rectangle.kind), "Rectangles"),
-            (
-                Tool::Graphic(self.toolbar.ellipse.kind),
-                "Ellipses / circles",
-            ),
+            (Tool::Graphic(self.toolbar.ellipse.kind), ellipse.as_str()),
             (Tool::Graphic(self.toolbar.bracket.kind), brackets.as_str()),
             (Tool::Graphic(G::Line), "Graphic line"),
             (Tool::Graphic(G::Curve), "Bézier curve"),
@@ -857,17 +841,10 @@ impl App {
                 })
                 .width(36)
                 .height(36);
-                let hint = if family == Some(super::palettes::Family::Bonds) {
-                    format!("{hint}\nClick: styles")
-                } else if family.is_some() {
-                    format!("{hint}\nHold / corner: options")
-                } else {
-                    (*hint).to_owned()
-                };
                 let item: Element<'_, Message> = if self.palette.is_some() {
                     item.into()
                 } else {
-                    hover_hint(item, hint, tooltip::Position::Right).into()
+                    hover_hint(item, (*hint).to_owned(), tooltip::Position::Right).into()
                 };
                 line = line.push(item);
             }
@@ -922,7 +899,7 @@ impl App {
                 .padding([5, 10])
                 .on_press(Message::ToggleHelp)
                 .style(control(self.help_open)),
-                "Help, shortcuts and editable examples (F1)",
+                "Help · F1",
                 tooltip::Position::Right,
             )
         ]
