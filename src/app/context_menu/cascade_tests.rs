@@ -392,3 +392,89 @@ async fn keyboard_navigation_reveals_rows_and_escape_closes_the_whole_cascade() 
     assert_eq!(app.tab.doc, original);
     assert!(!app.tab.history.can_undo());
 }
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer/menu input regression"]
+async fn touch_uses_finger_position_for_submenu_clicks_and_outside_dismissal() {
+    let mut ui = Ui::new(Size::new(960., 740.)).await;
+    let mut app = selected_ring(Point::new(15., 15.));
+    let original = app.tab.doc.clone();
+    let selection = app.tab.selected.clone();
+    let point = ui.row(&mut app, 0, "Copy as");
+    let id = iced::touch::Finger(1);
+    for event in [
+        iced::touch::Event::FingerPressed {
+            id,
+            position: point,
+        },
+        iced::touch::Event::FingerLifted {
+            id,
+            position: point,
+        },
+    ] {
+        ui.event(&mut app, Event::Touch(event), mouse::Cursor::Unavailable);
+    }
+    assert_eq!(
+        app.context_menu.as_ref().unwrap().children[0].page,
+        Page::CopyAs
+    );
+    ui.event(
+        &mut app,
+        Event::Touch(iced::touch::Event::FingerPressed {
+            id,
+            position: Point::new(950., 730.),
+        }),
+        // A stale mouse position must not override the finger outside the menu.
+        mouse::Cursor::Available(point),
+    );
+    assert!(app.context_menu.is_none());
+    assert_eq!(app.tab.doc, original);
+    assert_eq!(app.tab.selected, selection);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer/menu input regression"]
+async fn grabbed_scrollbar_keeps_scrolling_outside_panel_and_releases_there() {
+    let mut ui = Ui::new(Size::new(600., 300.)).await;
+    let mut app = selected_ring(Point::new(15., 15.));
+    let original = app.tab.doc.clone();
+    let target = index(&app, Page::Main, "Copy as");
+    let (before, viewport, panels) = ui.inspect(&app, 0, target);
+    assert!(
+        before.y > viewport.y + viewport.height,
+        "Compact menu must overflow"
+    );
+    // The native scrollbar is 10px wide; its initial thumb begins at the top.
+    let grab = Point::new(viewport.x + viewport.width - 5., viewport.y + 5.);
+    ui.event(
+        &mut app,
+        Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+        mouse::Cursor::Available(grab),
+    );
+    let outside = Point::new(
+        panels[0].x + panels[0].width + 40.,
+        viewport.y + viewport.height - 10.,
+    );
+    assert!(!panels[0].contains(outside));
+    ui.hover(&mut app, outside);
+    let (after, _, _) = ui.inspect(&app, 0, target);
+    assert!(
+        after.y < before.y - 40.,
+        "Dragging outside the panel must still move the content"
+    );
+    assert!(app.context_menu.is_some());
+    ui.event(
+        &mut app,
+        Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+        mouse::Cursor::Available(outside),
+    );
+    ui.hover(&mut app, Point::new(outside.x, viewport.y + 10.));
+    let (released, _, _) = ui.inspect(&app, 0, target);
+    assert_eq!(
+        released.y, after.y,
+        "Releasing outside the panel ends the drag"
+    );
+    assert_eq!(app.tab.doc, original);
+    assert!(!app.tab.history.can_undo());
+}

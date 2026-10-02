@@ -14,11 +14,11 @@ use iced::{Element, Event, Length, Point, Rectangle, Renderer, Size, Theme, Vect
 const MARGIN: f32 = 6.;
 
 pub(super) fn row_id(level: usize, index: usize) -> Id {
-    Id::new(format!("context-menu-{level}-item-{index}"))
+    Id::from(format!("context-menu-{level}-item-{index}"))
 }
 
 pub(super) fn scroll_id(level: usize) -> Id {
-    Id::new(format!("context-menu-{level}-scroll"))
+    Id::from(format!("context-menu-{level}-scroll"))
 }
 
 pub(super) struct Panel<'a> {
@@ -238,13 +238,27 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
             shell.capture_event();
             return;
         }
+        // Touch events carry their own location even when no mouse cursor is
+        // available (or the mouse is still over a different menu panel).
+        let cursor = match event {
+            Event::Touch(
+                iced::touch::Event::FingerPressed { position, .. }
+                | iced::touch::Event::FingerMoved { position, .. }
+                | iced::touch::Event::FingerLifted { position, .. }
+                | iced::touch::Event::FingerLost { position, .. },
+            ) => mouse::Cursor::Available(*position),
+            _ => cursor,
+        };
         let layouts: Vec<_> = layout.children().collect();
         let hovered = layouts
             .iter()
             .skip(1)
             .rposition(|layout| cursor.is_over(layout.bounds()));
-        if matches!(event, Event::Mouse(mouse::Event::ButtonPressed(_)))
-            && hovered.is_none()
+        if matches!(
+            event,
+            Event::Mouse(mouse::Event::ButtonPressed(_))
+                | Event::Touch(iced::touch::Event::FingerPressed { .. })
+        ) && hovered.is_none()
             && cursor.is_over(layout.bounds())
         {
             shell.publish(Message::ContextMenu(Action::Close));
@@ -280,7 +294,10 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
                 if hovered == Some(level) {
                     cursor
                 } else {
-                    mouse::Cursor::Unavailable
+                    // An already grabbed scrollbar still needs its pointer
+                    // position after leaving this panel. Levitating suppresses
+                    // hover/press handling while preserving drag coordinates.
+                    cursor.levitate()
                 },
                 renderer,
                 clipboard,
