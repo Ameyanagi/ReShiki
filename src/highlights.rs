@@ -134,6 +134,8 @@ pub(crate) fn primitives(doc: &Document) -> Vec<Primitive> {
     }
     let mut bonds: BTreeMap<_, Vec<_>> = BTreeMap::new();
     let mut covered: HashMap<(u64, Color), f32> = HashMap::new();
+    let mut incident_colors = HashMap::new();
+    let mut mixed_junctions = HashSet::new();
     for bond in &doc.bonds {
         let Some(color) = bond.highlight.filter(|_| doc.bond_visible(bond.a, bond.b)) else {
             continue;
@@ -158,6 +160,12 @@ pub(crate) fn primitives(doc: &Document) -> Vec<Primitive> {
             Point::new(-u.y, u.x),
         ));
         for id in [bond.a, bond.b] {
+            if incident_colors
+                .insert(id, color)
+                .is_some_and(|previous| previous != color)
+            {
+                mixed_junctions.insert(id);
+            }
             covered
                 .entry((id, color))
                 .and_modify(|r| *r = r.max(radius))
@@ -172,7 +180,11 @@ pub(crate) fn primitives(doc: &Document) -> Vec<Primitive> {
         let (a, b, rx, ry) = label_shape(doc, atom);
         // A matching bond cap already covers an unlabeled atom. Drawing the
         // same boundary twice would darken its antialiased edge.
-        if a == b && rx == ry && covered.get(&(atom.id, color)).is_some_and(|r| *r >= rx) {
+        if a == b
+            && rx == ry
+            && !mixed_junctions.contains(&atom.id)
+            && covered.get(&(atom.id, color)).is_some_and(|r| *r >= rx)
+        {
             continue;
         }
         atoms.entry(color).or_default().extend(capsule(
