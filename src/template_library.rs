@@ -227,7 +227,9 @@ pub fn standard_path() -> Result<PathBuf, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{LibraryLock, lock_error};
+    #[cfg(unix)]
+    use super::LibraryLock;
+    use super::lock_error;
     use std::{fs::TryLockError, io};
 
     #[cfg(unix)]
