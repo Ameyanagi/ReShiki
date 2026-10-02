@@ -136,6 +136,12 @@ fn theme_resolution_and_paste_preserve_exact_highlight_colors_once() {
                 &resolved
             );
             for target in CanvasTheme::ALL {
+                let native = canvas_theme::for_native_paste(doc.clone(), target);
+                assert_eq!(native.abbreviation(b).unwrap().highlight, tint(Hue::Blue));
+                assert_eq!(
+                    native.atom(c).unwrap().display.highlight,
+                    Some(Color::Custom([0; 3]))
+                );
                 let pasted = canvas_theme::for_paste(doc.clone(), target);
                 assert_eq!(
                     pasted.abbreviation(b).unwrap().highlight,

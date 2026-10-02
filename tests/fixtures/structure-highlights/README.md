@@ -24,6 +24,14 @@ The small extracted input's SHA-256 is
 | --- | ---: | --- |
 | `native-prime.cdxml` | 3619 | `e79bb62077dd7847c96e3c095e79d52aecad95e68fc7f90df3afa8fcc21796b3` |
 | `native-prime.cdx` | 1629 | `74cbe8aea7e614ef94e73c1ab1211959c34708150eaea3f0956ac69989ddc757` |
+| `native-prime.svg` | 2134 | `1bbbd27dfdf36174b68626302b201c995f7846bde4d4086a9b603c780fe90b0d` |
+
+The SVG was saved through Prime from the same small input. It is an independent
+geometry reference: at Arial 10 pt its unlabelled atom/bond capsule radius is
+approximately 3.092 pt. The OH halo follows the text ink bounds with elliptical
+caps of radius 2.624805 pt horizontally and 5.2496 pt vertically. Renderer tests
+compare the native capsule path directly; text halo extents use the actual
+installed font's ink bounds so other platforms retain legible padding.
 
 Native CDXML uses the `highlightColor` attribute on `n` and `b` objects.
 The matching CDX property is `0x0308`, a two-byte little-endian color-table

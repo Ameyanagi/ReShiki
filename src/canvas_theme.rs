@@ -310,6 +310,23 @@ pub fn resolved_document(
         atom.display.hydrogen_color = Some(visible(hydrogen_ink(doc, &palette, original)));
         atom.display.color_override = true;
     }
+    for (bond, original) in resolved.bonds.iter_mut().zip(&doc.bonds) {
+        if original.color != Color::Ink {
+            continue;
+        }
+        if let Some(background) = original.highlight.map(|color| palette.rgb(color))
+            && let Some(rgb) = crate::color_contrast::ensure_contrast(
+                ink,
+                &[background],
+                crate::color_contrast::TEXT_MIN,
+            )
+            && rgb != ink
+        {
+            // Automatic ink can change contrast on a highlight without
+            // overwriting the stored bond color or a manual foreground color.
+            bond.color = Color::Custom(rgb);
+        }
+    }
     resolved.color_theme = ColorTheme::Publication;
     resolved.custom_theme = None;
     std::borrow::Cow::Owned(resolved)
