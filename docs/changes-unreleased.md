@@ -55,6 +55,13 @@ See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
   · [Evidence and image provenance](changes/issue-work-2026-10-02.md#copy-as-and-compact-controls-110-78)
   · [Issue #110](https://github.com/Ameyanagi/ReShiki/issues/110) · @Ameyanagi.
 
+- **Under review — Windows security evidence:** collect exact-file Defender
+  scan results with artifact hashes, matched scan events and unchanged
+  protection settings. Final development binaries passed; release-package and
+  additional antivirus qualification remain open.
+  [Evidence protocol](windows-security-evidence.md)
+  · [Issue #62](https://github.com/Ameyanagi/ReShiki/issues/62) · @Ameyanagi.
+
 - **Under review — Combined interface acceptance:** expand the shared regression
   fixtures and record targeted macOS checks for compact controls, transforms,
   arc editing and history. Final Windows, accessibility and performance gates
