@@ -70,11 +70,32 @@ They exercised the empty, molecule, mixed-selection, Transform and arc contexts;
 numeric Enter/Apply with saved Undo/Redo results; mixed arrow width; arc endpoint
 editing and reopen; import cancellation; and unsaved-close cancellation. Copy as
 was opened at selected-object and whole-drawing scope, **without copying**.
-The expanded menu retest later stopped at a cross-application computer-use
-capture failure (`cgWindowNotFound`). No native Windows walkthrough, complete
-keyboard/accessibility traversal, or final Nightly latency measurement is
-established here. The [#78 acceptance matrix](ui-declutter-validation.md) remains
-the full checklist.
+
+The final native macOS **`ca4c52e`** app subsequently passed the actual
+**Copy as → ChemDoodle JSON · reaction → system clipboard → SciFinder**
+workflow. Opening the public `ethanol-oxidation.rsk` fixture through the native
+file chooser, then opening the menu with no selection and with all six atoms,
+four bonds and the arrow selected, showed all **11 formats** and the explanatory
+footer without clipping. Both actual menu actions produced identical **609-byte**
+JSON payloads, matching the generated fixture:
+`97a93e043a53e9cefd5b29b9eefc6e79051e54cb361d264fb023ee3ba718a8d9`
+(SHA-256). Right-clicking a selected atom retained the complete reaction
+selection; right-clicking blank canvas instead offered whole-drawing scope.
+
+Ordinary **Cmd+V** from that system clipboard into the existing authorized
+Edge SciFinder ChemDoodle session loaded ethanol as **reactant**, acetaldehyde
+as **product**, and the forward arrow. The selected native copy was submitted
+as an **As Drawn** reaction search and returned the expected ethanol
+**64-17-5 → acetaldehyde 75-07-0** scheme. The observed counts of 2,070 reactions
+and 1,383 in the alcohol-oxidation group describe that run, not a permanent
+acceptance oracle. Menu, feedback and receiver screenshots were inspected
+through computer use; no standalone screenshot files were saved. See the
+[handoff guide](../scifinder-handoff.md) for the steps and chemical limits.
+This verifies one simple forward reaction, without agents, maps or stereo.
+
+No complete native Windows walkthrough, keyboard/accessibility traversal,
+ChemDraw repeat, or final Nightly latency measurement is established here.
+The [#78 acceptance matrix](ui-declutter-validation.md) remains the full checklist.
 
 ## Physical units and retained input focus (#89)
 
@@ -118,9 +139,9 @@ See [drawing-style behavior](../drawing-styles.md).
 | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [#56](https://github.com/Ameyanagi/ReShiki/issues/56)                                                                  | Template saves distinguish lock contention from OS errors. An explicit-unlock guard releases an inherited file description on both successful and failed saves. Linux passed 2 guard tests, 6 library integration tests and 20 parallel repetitions (120 integration-test passes) after reproducing the inherited-lock race.                                                                                                                                                                      | These are transaction/process checks; a drawing comparison does not apply. The observed follow-up used `de6e517` plus `42769cb`, integrated as `f6fe3a4`.                                                                                                                                                                  |
 | [#107](https://github.com/Ameyanagi/ReShiki/issues/107)                                                                | Safe macOS print-info construction and explicit little-endian OLE descriptor encoding replace two unsafe operations. macOS `1404b1c` passed 3 native-crate tests and a 12-case PDF print matrix. Windows `8b7cecb` passed 12 native-crate tests, including actual `IDataObject::GetData` comparison with the 84-byte descriptor fixture.                                                                                                                                                          | Windows evidence is x64 Windows 11 Pro 26200, MSVC 19.43.34809 / SDK 22621, Rust 1.99.0. No new Office GUI, printer, ARM64 Windows or whole-issue unsafe-audit completion is implied. Output is intended to remain unchanged.                                                                                              |
-| [#95](https://github.com/Ameyanagi/ReShiki/issues/95)                                                                  | [Manual SciFinder handoff](../scifinder-handoff.md) was exercised in authenticated Edge on macOS: generated ethanol MOL, stereo/abbreviation SMILES, and the exact production ChemDoodle reaction preparation output. The reaction retained ethanol as reactant and acetaldehyde as product, and the submitted search returned the expected transformation.                                                                                                                                       | Browser import/search evidence is separate from a native ReShiki menu-click/system-clipboard test, which was blocked by the capture failure. No direct CAS API integration or unsupported reaction-feature claim.                                                                                                          |
+| [#95](https://github.com/Ameyanagi/ReShiki/issues/95)                                                                  | [Manual SciFinder handoff](../scifinder-handoff.md) was exercised in authenticated Edge on macOS: generated ethanol MOL, stereo/abbreviation SMILES, and the exact production ChemDoodle reaction preparation output. The reaction retained ethanol as reactant and acetaldehyde as product, and the submitted search returned the expected transformation.                                                                                                                                       | The final `ca4c52e` native whole/selected Copy as actions, system-clipboard paste and reaction search also passed, as recorded above. No direct CAS API integration or unsupported reaction-feature claim.                                                                                                                 |
 | [#109](https://github.com/Ameyanagi/ReShiki/issues/109), related [#83](https://github.com/Ameyanagi/ReShiki/issues/83) | The optional [LibreOffice ODF adapter](../../integrations/libreoffice/README.md#validation-status) passed installed-extension, real-renderer headless checks in Writer/Calc/Impress on macOS, Linux and Windows: two objects, two save/reopen cycles and all six cross-platform exchange directions preserved native data, stored PNG and intrinsic extent. Follow-up checks also verified host frame dimensions within 0.03 mm. Linux adds persistent, bounded multi-format clipboard ownership. | Final real-worker persistence and frame checks passed at `ca4c52e` on all three platforms; all six frame-aware exchanges also passed. Scripted editor save-back is not actual ReShiki desktop editing. Native host paste/double-click/edit/copy-back remains separate. OOXML and ONLYOFFICE are outside the adapter scope. |
-| [#110](https://github.com/Ameyanagi/ReShiki/issues/110)                                                                | Copy as prepares a selection or whole-drawing snapshot, checks tab/revision/selection before publication, and serializes ordinary Copy with Copy as even if the source tab closes. Conversion failures leave the clipboard untouched. [Tests](../../src/app/clipboard.rs) cover stale and closed-tab results; format tests cover figures, molecules and reactions.                                                                                                                                | The final eleven-row menu is verified by renderer output. The prepared-payload SciFinder check does not prove the native menu action or system clipboard flow.                                                                                                                                                             |
+| [#110](https://github.com/Ameyanagi/ReShiki/issues/110)                                                                | Copy as prepares a selection or whole-drawing snapshot, checks tab/revision/selection before publication, and serializes ordinary Copy with Copy as even if the source tab closes. Conversion failures leave the clipboard untouched. [Tests](../../src/app/clipboard.rs) cover stale and closed-tab results; format tests cover figures, molecules and reactions.                                                                                                                                | Final renderer output and native macOS whole/selected menus verify all eleven rows. Actual ChemDoodle reaction menu actions, clipboard payloads and the receiver search passed for the stated public fixture; other format/platform combinations remain separate.                                                          |
 
 Linux clipboard evidence includes **6 unit tests, 4 serial Xvfb protocol
 tests**, the actual application's `--clipboard-worker` process smoke, and an
@@ -133,6 +154,15 @@ and the two snapshot tests generating 11 style and 42 layout PNGs. These are
 Linux/X11 protocol, renderer and pipe tests; no actual Linux
 desktop or compositor-specific Wayland session was verified. A Wayland
 compositor must provide an allowed data-control protocol.
+
+On Windows x64, the frozen `ca4c52e` native MSVC workspace run with
+`--no-default-features` passed **1,092 tests**, with **0 failures and 26 ignored**.
+The separate `rdkit-reference` run passed **40 captured-fixture tests** and
+**1 aromatic golden test**, with the actual InChI helper required. Workspace
+check/Clippy and reference-feature Clippy also passed under Rust 1.99.0,
+MSVC 19.43.34809 and SDK 22621. These are native CLI tests, not desktop or
+Office interaction checks. The full live RDKit differential shards were not
+run; captured fixtures and the native helper were exercised.
 
 The frozen **`ca4c52e`** executables used by the final real-renderer LibreOffice
 persistence and host-frame checks were:
@@ -160,10 +190,12 @@ The immutable native macOS app receipts were:
 | --------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
 | `fb1bb6d` | `d904634b7174810e598411a4c7f5818013c5edf9584af17ffdde5536ac3bb894` | Targeted two-size interface, transforms/arcs/history and earlier Copy as visibility |
 | `771a186` | `17ae8f2de9a90bb84cd5053586c040477c4ba8d3a927851c1b5fa3f1806ff6bb` | Unit-input focus correction and persisted history                                   |
+| `ca4c52e` | `36eab2b3da9ee879f01aac8d31aec38e2358b8b771655af1a9d0af38fbcfb507` | Whole/selected eleven-format menu, actual reaction clipboard and SciFinder search   |
 
-These receipts identify prior builds, not the final integrated executable.
-They do not make later menu, font or host-integration changes retrospectively
-tested. No new keyboard shortcut was introduced by this issue-work set.
+The first two receipts identify prior builds; their broader checks were not
+repeated in full on `ca4c52e`. The final native receipt covers the stated
+Copy as/SciFinder workflow only. No new keyboard shortcut was introduced by
+this issue-work set.
 
 ## Third-party provenance
 
