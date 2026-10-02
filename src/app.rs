@@ -2388,10 +2388,7 @@ impl App {
                 self.tab.selected = selected;
                 self.tool = Tool::Select;
                 self.sync_typography();
-                self.context_menu = Some(context_menu::State {
-                    position,
-                    page: Default::default(),
-                });
+                self.context_menu = Some(context_menu::State::new(position, Default::default()));
             }
             return;
         }

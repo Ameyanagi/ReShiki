@@ -3,10 +3,12 @@ use super::object_toolbar::Command;
 use super::workspace::horizontal_line;
 use super::{App, InspectorTab, Message, inspector};
 use crate::canvas::Tool;
-use iced::widget::{
-    Space, button, column, container, mouse_area, opaque, rich_text, row, scrollable, stack, text,
-};
-use iced::{Border, Color, Element, Length, Point, Task};
+use iced::widget::{button, column, container, rich_text, row, scrollable, text};
+use iced::{Border, Color, Element, Length, Point, Task, keyboard::key::Named};
+
+mod cascade;
+#[cfg(test)]
+mod cascade_tests;
 use reshiki::{
     bonds::BondPreset,
     editing::{Arrange, Transform},
@@ -69,7 +71,7 @@ mod tests {
         let (mut app, _) = App::new();
         app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
         let original = app.tab.doc.clone();
-        assert!(labels(&app, Page::Main).contains(&"Copy as…"));
+        assert!(labels(&app, Page::Main).contains(&"Copy as"));
         assert!(
             app.context_entries(Page::CopyAs)
                 .iter()
@@ -91,11 +93,19 @@ mod tests {
                     && *enabled == (format != CopyFormat::Rxn))
             }));
         }
-        app.context_menu = Some(State {
-            position: Point::new(20., 20.),
-            page: Page::CopyAs,
-        });
-        run_item(&mut app, Page::CopyAs, "‹ Back")?;
+        app.context_menu = Some(State::new(Point::new(20., 20.), Page::Main));
+        let _ = app.context_action(Action::Page(Page::CopyAs));
+        assert_eq!(
+            app.context_menu
+                .as_ref()
+                .unwrap()
+                .children
+                .last()
+                .unwrap()
+                .page,
+            Page::CopyAs
+        );
+        let _ = app.context_action(Action::Page(Page::Main));
         assert_eq!(
             app.context_menu.as_ref().map(|state| state.page),
             Some(Page::Main)
@@ -171,7 +181,7 @@ mod tests {
                 "Undo",
                 "Redo",
                 "Paste",
-                "Copy as…",
+                "Copy as",
                 "Select all",
                 "Fit drawing"
             ]
@@ -179,17 +189,17 @@ mod tests {
         app.tab.selected = vec![atom];
         let single = labels(&app, Page::Main);
         assert!(single.contains(&"Edit atom label…"));
-        assert!(!single.contains(&"3D tilt…"));
-        assert!(!single.contains(&"Bond appearance…"));
+        assert!(!single.contains(&"3D tilt"));
+        assert!(!single.contains(&"Bond appearance"));
         assert!(single.contains(&"Select molecule"));
         app.tab.selected = ring.clone();
         let molecule = labels(&app, Page::Main);
         assert!(!molecule.contains(&"Select molecule"));
         for expected in [
-            "3D tilt…",
-            "Arrange & transform…",
-            "Bond appearance…",
-            "Attachment points…",
+            "3D tilt",
+            "Arrange & transform",
+            "Bond appearance",
+            "Attachment points",
         ] {
             assert!(molecule.contains(&expected), "Missing {expected}");
         }
@@ -197,13 +207,13 @@ mod tests {
         assert!(labels(&app, Page::Bonds).contains(&"Bond in front"));
         assert!(!labels(&app, Page::Align).contains(&"Align middles"));
         app.tab.selected.push(arrow);
-        assert!(!labels(&app, Page::Main).contains(&"Attachment points…"));
+        assert!(!labels(&app, Page::Main).contains(&"Attachment points"));
         assert!(labels(&app, Page::Align).contains(&"Align middles"));
         app.tab.selected = vec![arrow];
         let arrow_items = labels(&app, Page::Main);
         assert!(arrow_items.contains(&"Reverse arrow"));
-        assert!(!arrow_items.contains(&"3D tilt…"));
-        assert!(!arrow_items.contains(&"Bond appearance…"));
+        assert!(!arrow_items.contains(&"3D tilt"));
+        assert!(!arrow_items.contains(&"Bond appearance"));
         assert_eq!(app.tab.doc, before);
         assert!(!app.tab.history.can_undo());
         Ok(())
@@ -227,15 +237,18 @@ mod tests {
                 position: Point::new(20., 20.),
                 selected: ids.clone(),
             });
-            run_item(&mut app, Page::Main, "3D tilt…")?;
+            run_item(&mut app, Page::Main, "3D tilt")?;
             assert!(matches!(
-                app.context_menu.as_ref().map(|s| s.page),
+                app.context_menu
+                    .as_ref()
+                    .and_then(|s| s.children.last())
+                    .map(|child| child.page),
                 Some(Page::Tilt)
             ));
-            run_item(&mut app, Page::Tilt, "‹ Back")?;
+            let _ = app.context_action(Action::Page(Page::Main));
             assert_eq!(app.tab.doc, before);
             assert!(!app.tab.history.can_undo());
-            run_item(&mut app, Page::Main, "3D tilt…")?;
+            run_item(&mut app, Page::Main, "3D tilt")?;
             run_item(&mut app, Page::Tilt, label)?;
             let mut expected = before.clone();
             reshiki::projection::tilt(&mut expected, &ids, degrees, around_x);
@@ -401,12 +414,43 @@ pub enum Action {
     /// Toggle a context row menu at this x offset over the canvas.
     Open(Page, f32),
     Page(Page),
+    Hover(usize, usize),
+    Activate(usize, usize),
+    CloseAfter(usize),
+    Key(Named),
     Run(Box<Message>),
     Properties(bool),
 }
 pub(super) struct State {
     pub position: Point,
     pub page: Page,
+    children: Vec<Child>,
+    focused: Option<(usize, usize)>,
+    keyboard: bool,
+}
+#[derive(Clone, Copy)]
+struct Child {
+    page: Page,
+    anchor: usize,
+}
+impl State {
+    pub(super) fn new(position: Point, page: Page) -> Self {
+        Self {
+            position,
+            page,
+            children: vec![],
+            focused: None,
+            keyboard: false,
+        }
+    }
+
+    fn page_at(&self, level: usize) -> Option<Page> {
+        if level == 0 {
+            Some(self.page)
+        } else {
+            self.children.get(level - 1).map(|child| child.page)
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -461,7 +505,7 @@ impl App {
                 command("Redo", Message::Redo, self.tab.history.can_redo()),
                 Separator,
                 command("Paste", Message::Paste, !self.tab.clipboard_busy),
-                submenu("Copy as…", Page::CopyAs),
+                submenu("Copy as", Page::CopyAs),
                 command(
                     "Select all",
                     Message::SelectAll,
@@ -517,7 +561,7 @@ impl App {
                     }
                 }
                 if tilt {
-                    entries.push(submenu("3D tilt…", Page::Tilt));
+                    entries.push(submenu("3D tilt", Page::Tilt));
                 }
                 if self.tab.doc.atoms.iter().any(|a| {
                     self.tab.selected.contains(&a.id)
@@ -530,9 +574,9 @@ impl App {
                         true,
                     ));
                 }
-                entries.push(submenu("Arrange & transform…", Page::Align));
+                entries.push(submenu("Arrange & transform", Page::Align));
                 if bonds {
-                    entries.push(submenu("Bond appearance…", Page::Bonds));
+                    entries.push(submenu("Bond appearance", Page::Bonds));
                 }
                 let real_atoms = self
                     .tab
@@ -546,7 +590,7 @@ impl App {
                     })
                     .count();
                 if (2..=300).contains(&real_atoms) && real_atoms == self.tab.selected.len() {
-                    entries.push(submenu("Attachment points…", Page::Attachments));
+                    entries.push(submenu("Attachment points", Page::Attachments));
                 }
                 if self
                     .tab
@@ -569,7 +613,7 @@ impl App {
                 entries.push(Separator);
                 entries.push(command("Cut", Message::Copy(true), true));
                 entries.push(command("Copy", Message::Copy(false), true));
-                entries.push(submenu("Copy as…", Page::CopyAs));
+                entries.push(submenu("Copy as", Page::CopyAs));
                 entries.push(command("Paste", Message::Paste, !self.tab.clipboard_busy));
                 entries.push(command("Duplicate", Message::Duplicate, true));
                 entries.push(Separator);
@@ -585,14 +629,11 @@ impl App {
                 use reshiki::clipboard::{CopyFormat, selection_or_drawing};
                 let snapshot = selection_or_drawing(&self.tab.doc, &self.tab.selected);
                 let busy = self.clipboard_working();
-                let mut entries = vec![
-                    submenu("‹ Back", Page::Main),
-                    Hint(if self.tab.selected.is_empty() {
-                        "Copy as · whole drawing"
-                    } else {
-                        "Copy as · selected objects"
-                    }),
-                ];
+                let mut entries = vec![Hint(if self.tab.selected.is_empty() {
+                    "Copy as · whole drawing"
+                } else {
+                    "Copy as · selected objects"
+                })];
                 let mut reasons = Vec::new();
                 for format in CopyFormat::ALL {
                     if matches!(
@@ -623,7 +664,6 @@ impl App {
                 entries
             }
             Page::Tilt => vec![
-                submenu("‹ Back", Page::Main),
                 Hint("3D tilt · selected objects"),
                 command("Drag to tilt", Message::Tool(Tool::Tilt), tilt),
                 Separator,
@@ -641,7 +681,6 @@ impl App {
             ],
             Page::Align => {
                 let mut entries = vec![
-                    submenu("‹ Back", Page::Main),
                     Hint("Rotate & reflect"),
                     command(
                         "Rotate −30°",
@@ -710,7 +749,7 @@ impl App {
                 entries
             }
             Page::Bonds => {
-                let mut entries = vec![submenu("‹ Back", Page::Main), Hint("Bond appearance")];
+                let mut entries = vec![Hint("Bond appearance")];
                 entries.push(command("Bond in front", Message::BondDepth(true), bonds));
                 entries.push(command("Bond behind", Message::BondDepth(false), bonds));
                 if reshiki::rings::selected_cycle(&self.tab.doc, &self.tab.selected).is_some() {
@@ -771,7 +810,6 @@ impl App {
                 .map(|c| command(c.menu, c.message, c.enabled))
                 .collect(),
             Page::Attachments => vec![
-                submenu("‹ Back", Page::Main),
                 Hint("Attach to selected atoms"),
                 command(
                     "Multi-center attachment",
@@ -832,23 +870,59 @@ impl App {
                     .context_menu
                     .as_ref()
                     .is_some_and(|menu| menu.page == page);
-                self.context_menu = (!open).then(|| State {
-                    position: Point::new(x, 0.),
-                    page,
-                });
+                self.context_menu = (!open).then(|| State::new(Point::new(x, 0.), page));
+            }
+            Action::Page(Page::Main) => {
+                if let Some(menu) = &mut self.context_menu {
+                    menu.children.clear();
+                    menu.focused = None;
+                }
             }
             Action::Page(page) => {
-                let origin = self.context_menu.as_ref().map(|menu| {
-                    let (position, _, _) = self.context_geometry(menu);
-                    position
+                let target = self.context_menu.as_ref().and_then(|menu| {
+                    (0..=menu.children.len()).rev().find_map(|level| {
+                        self.context_entries(menu.page_at(level)?)
+                            .iter()
+                            .position(|entry| {
+                                matches!(entry, Entry::Item {
+                                action: Action::Page(target), enabled: true, ..
+                            } if *target == page)
+                            })
+                            .map(|index| (level, index))
+                    })
                 });
-                if let Some(menu) = &mut self.context_menu {
-                    menu.page = page;
-                    if let Some(position) = origin {
-                        menu.position = position;
+                if let Some((level, index)) = target {
+                    self.context_hover(level, index, true);
+                }
+            }
+            Action::Hover(level, index) => self.context_hover(level, index, true),
+            Action::Activate(level, index) => {
+                let entry = self
+                    .context_menu
+                    .as_ref()
+                    .and_then(|menu| menu.page_at(level))
+                    .and_then(|page| self.context_entries(page).get(index).cloned());
+                if let Some(Entry::Item {
+                    action,
+                    enabled: true,
+                    ..
+                }) = entry
+                {
+                    if matches!(action, Action::Page(_)) {
+                        self.context_hover(level, index, true);
+                    } else {
+                        return self.context_action(action);
                     }
                 }
             }
+            Action::CloseAfter(level) => {
+                if let Some(menu) = &mut self.context_menu {
+                    menu.children.truncate(level);
+                    menu.focused = None;
+                    menu.keyboard = false;
+                }
+            }
+            Action::Key(key) => return self.context_key_action(key),
             Action::Run(message) => {
                 self.context_menu = None;
                 return self.update(*message);
@@ -867,81 +941,158 @@ impl App {
         Task::none()
     }
 
-    fn context_geometry(&self, menu: &State) -> (Point, f32, f32) {
+    fn context_hover(&mut self, level: usize, index: usize, open: bool) {
+        let entry = self
+            .context_menu
+            .as_ref()
+            .and_then(|menu| menu.page_at(level))
+            .and_then(|page| self.context_entries(page).get(index).cloned());
+        let Some(menu) = &mut self.context_menu else {
+            return;
+        };
+        let Some(Entry::Item {
+            action, enabled, ..
+        }) = entry
+        else {
+            return;
+        };
+        menu.focused = Some((level, index));
+        menu.keyboard = false;
+        let child = match action {
+            Action::Page(page) if enabled && open => Some(page),
+            _ => None,
+        };
+        if menu
+            .children
+            .get(level)
+            .is_some_and(|current| Some(current.page) == child && current.anchor == index)
+        {
+            return;
+        }
+        menu.children.truncate(level);
+        if let Some(page) = child {
+            menu.children.push(Child {
+                page,
+                anchor: index,
+            });
+        }
+    }
+
+    fn context_key_action(&mut self, key: Named) -> Task<Message> {
+        if key == Named::Escape {
+            self.context_menu = None;
+            return Task::none();
+        }
+        let Some(menu) = &self.context_menu else {
+            return Task::none();
+        };
+        let level = menu.focused.map_or(menu.children.len(), |(level, _)| level);
+        let focused = menu
+            .focused
+            .filter(|(at, _)| *at == level)
+            .map(|(_, index)| index);
+        let Some(page) = menu.page_at(level) else {
+            return Task::none();
+        };
+        let entries = self.context_entries(page);
+        let enabled: Vec<_> = entries
+            .iter()
+            .enumerate()
+            .filter_map(|(index, entry)| {
+                matches!(entry, Entry::Item { enabled: true, .. }).then_some(index)
+            })
+            .collect();
+        match key {
+            Named::ArrowDown | Named::ArrowUp | Named::Home | Named::End => {
+                let current =
+                    focused.and_then(|index| enabled.iter().position(|value| *value == index));
+                let next = match key {
+                    Named::Home => enabled.first(),
+                    Named::End => enabled.last(),
+                    Named::ArrowDown => current
+                        .map(|at| (at + 1) % enabled.len())
+                        .and_then(|at| enabled.get(at))
+                        .or_else(|| enabled.first()),
+                    _ => current
+                        .map(|at| (at + enabled.len() - 1) % enabled.len())
+                        .and_then(|at| enabled.get(at))
+                        .or_else(|| enabled.last()),
+                }
+                .copied();
+                if let Some(index) = next {
+                    self.context_hover(level, index, false);
+                    self.context_menu.as_mut().unwrap().keyboard = true;
+                }
+            }
+            Named::ArrowLeft => {
+                if let Some(menu) = &mut self.context_menu
+                    && let Some(child) = menu.children.pop()
+                {
+                    menu.focused = Some((menu.children.len(), child.anchor));
+                    menu.keyboard = true;
+                }
+            }
+            Named::ArrowRight | Named::Enter | Named::Space => {
+                let index = focused.or_else(|| enabled.first().copied());
+                if let Some(index) = index {
+                    if let Some(Entry::Item {
+                        action: Action::Page(child),
+                        enabled: true,
+                        ..
+                    }) = entries.get(index)
+                    {
+                        let first = self
+                            .context_entries(*child)
+                            .iter()
+                            .position(|entry| matches!(entry, Entry::Item { enabled: true, .. }));
+                        self.context_hover(level, index, true);
+                        if let Some(menu) = &mut self.context_menu {
+                            menu.focused = first.map(|index| (level + 1, index));
+                            menu.keyboard = true;
+                        }
+                    } else if key != Named::ArrowRight {
+                        return self.context_action(Action::Activate(level, index));
+                    }
+                }
+            }
+            _ => {}
+        }
+        Task::none()
+    }
+
+    fn context_width(&self, page: Page) -> f32 {
         use super::workspace::{font_width, text_width};
-        let header = usize::from(matches!(menu.page, Page::Main) && !self.tab.selected.is_empty());
-        let entries = self.context_entries(menu.page);
-        let count = entries.len() + header;
-        // Wide enough for the longest label and its shortcut, as on Windows.
-        let content = entries
+        let content = self
+            .context_entries(page)
             .iter()
             .filter_map(|entry| match entry {
                 Entry::Item { label, action, .. } => Some(
                     text_width(label, 12.)
-                        + shortcut(action).map_or(0., |keys| {
-                            SHORTCUT_GAP
-                                + super::shortcuts::spans(&keys)
-                                    .iter()
-                                    .map(|run| match run.font {
-                                        Some(font) => font_width(&run.text, 11., font),
-                                        None => text_width(&run.text, 11.),
-                                    })
-                                    .sum::<f32>()
-                        }),
+                        + if matches!(action, Action::Page(_)) {
+                            24.
+                        } else {
+                            shortcut(action).map_or(0., |keys| {
+                                SHORTCUT_GAP
+                                    + super::shortcuts::spans(&keys)
+                                        .iter()
+                                        .map(|run| match run.font {
+                                            Some(font) => font_width(&run.text, 11., font),
+                                            None => text_width(&run.text, 11.),
+                                        })
+                                        .sum::<f32>()
+                            })
+                        },
                 ),
                 _ => None,
             })
             .fold(0., f32::max);
-        let width = (content + 30.)
-            .max(232.)
-            .min((self.viewport.width - 12.).max(1.));
-        let height = ((count as f32 * 30.) + 12.).min((self.viewport.height - 12.).max(1.));
-        let x = menu
-            .position
-            .x
-            .min((self.viewport.width - width - 6.).max(6.))
-            .max(6.);
-        let y = menu
-            .position
-            .y
-            .min((self.viewport.height - height - 6.).max(6.))
-            .max(6.);
-        (Point::new(x, y), width, height)
+        (content + 30.).max(232.)
     }
 
-    pub(super) fn with_context_menu<'a>(
-        &'a self,
-        base: Element<'a, Message>,
-    ) -> Element<'a, Message> {
-        let Some(menu) = &self.context_menu else {
-            return base;
-        };
-        let item = |label: String, action: Action, enabled: bool| {
-            let destructive = matches!(&action, Action::Run(message) if matches!(message.as_ref(), Message::Delete));
-            let label = text(label).size(12).width(Length::Fill);
-            let label = if destructive {
-                label.style(crate::appearance::text_color(Color::from_rgb8(167, 59, 51)))
-            } else {
-                label
-            };
-            let mut content = row![label]
-                .spacing(SHORTCUT_GAP)
-                .align_y(iced::Alignment::Center);
-            if let Some(keys) = shortcut(&action) {
-                content = content.push(
-                    rich_text(super::shortcuts::spans(&keys))
-                        .size(11)
-                        .style(super::workspace::muted_text),
-                );
-            }
-            button(content)
-                .padding([6, 10])
-                .width(Length::Fill)
-                .style(button::text)
-                .on_press_maybe(enabled.then_some(Message::ContextMenu(action)))
-        };
+    fn context_panel(&self, menu: &State, page: Page, level: usize) -> cascade::Panel<'_> {
         let mut entries = column![].spacing(1);
-        if matches!(menu.page, Page::Main) && !self.tab.selected.is_empty() {
+        let mut items = Vec::new();
+        if matches!(page, Page::Main) && !self.tab.selected.is_empty() {
             entries = entries.push(
                 container(
                     text(self.selection_summary())
@@ -951,13 +1102,60 @@ impl App {
                 .padding([5, 10]),
             );
         }
-        for entry in self.context_entries(menu.page) {
+        for (index, entry) in self.context_entries(page).into_iter().enumerate() {
             entries = match entry {
                 Entry::Item {
                     label,
                     action,
                     enabled,
-                } => entries.push(item(label.into(), action, enabled)),
+                } => {
+                    let destructive = matches!(&action, Action::Run(message) if matches!(message.as_ref(), Message::Delete));
+                    let label = text(label).size(12).width(Length::Fill);
+                    let label = if destructive {
+                        label.style(crate::appearance::text_color(Color::from_rgb8(167, 59, 51)))
+                    } else {
+                        label
+                    };
+                    let mut content = row![label]
+                        .spacing(SHORTCUT_GAP)
+                        .align_y(iced::Alignment::Center);
+                    if matches!(action, Action::Page(_)) {
+                        content = content.push(text("›").size(16));
+                    } else if let Some(keys) = shortcut(&action) {
+                        content = content.push(
+                            rich_text(super::shortcuts::spans(&keys))
+                                .size(11)
+                                .style(super::workspace::muted_text),
+                        );
+                    }
+                    let active = enabled
+                        && (menu.focused == Some((level, index))
+                            || menu
+                                .children
+                                .get(level)
+                                .is_some_and(|child| child.anchor == index));
+                    let item = button(content)
+                        .padding([6, 10])
+                        .width(Length::Fill)
+                        .style(move |theme: &iced::Theme, status| {
+                            let mut style = button::text(theme, status);
+                            if active {
+                                style.background = Some(
+                                    Color {
+                                        a: 0.12,
+                                        ..theme.palette().primary
+                                    }
+                                    .into(),
+                                );
+                            }
+                            style
+                        })
+                        .on_press_maybe(
+                            enabled.then_some(Message::ContextMenu(Action::Activate(level, index))),
+                        );
+                    items.push(index);
+                    entries.push(container(item).id(cascade::row_id(level, index)))
+                }
                 Entry::Separator => entries.push(horizontal_line()),
                 Entry::Hint(label) => entries.push(
                     container(text(label).size(11).style(super::workspace::muted_text))
@@ -965,46 +1163,57 @@ impl App {
                 ),
             };
         }
-        let (position, width, height) = self.context_geometry(menu);
-        let popup = container(scrollable(entries))
-            .padding(5)
-            .width(width)
-            .max_height(height)
-            .style(|theme| {
-                crate::appearance::container(
-                    theme,
-                    container::Style {
-                        background: Some(Color::WHITE.into()),
-                        border: Border {
-                            color: Color::from_rgb8(192, 204, 201),
-                            width: 1.,
-                            radius: 7.into(),
-                        },
-                        shadow: crate::appearance::surface_shadow(iced::Shadow {
-                            color: Color::from_rgba8(20, 40, 35, 0.18),
-                            offset: iced::Vector::new(0., 4.),
-                            blur_radius: 12.,
-                        }),
-                        ..Default::default()
+        let content = container(
+            scrollable(entries)
+                .id(cascade::scroll_id(level))
+                .height(Length::Shrink),
+        )
+        .padding(5)
+        .width(self.context_width(page))
+        .style(|theme| {
+            crate::appearance::container(
+                theme,
+                container::Style {
+                    background: Some(Color::WHITE.into()),
+                    border: Border {
+                        color: Color::from_rgb8(192, 204, 201),
+                        width: 1.,
+                        radius: 7.into(),
                     },
-                )
-            });
-        stack![
-            base,
-            mouse_area(
-                container(Space::new())
-                    .width(Length::Fill)
-                    .height(Length::Fill)
+                    shadow: crate::appearance::surface_shadow(iced::Shadow {
+                        color: Color::from_rgba8(20, 40, 35, 0.18),
+                        offset: iced::Vector::new(0., 4.),
+                        blur_radius: 12.,
+                    }),
+                    ..Default::default()
+                },
             )
-            .on_press(Message::ContextMenu(Action::Close))
-            .on_right_press(Message::ContextMenu(Action::Close)),
-            container(opaque(popup)).padding(iced::Padding {
-                left: position.x,
-                top: position.y,
-                right: 0.,
-                bottom: 0.
+        })
+        .into();
+        cascade::Panel {
+            page,
+            content,
+            items,
+            anchor: level
+                .checked_sub(1)
+                .and_then(|at| menu.children.get(at))
+                .map(|child| child.anchor),
+        }
+    }
+
+    pub(super) fn with_context_menu<'a>(
+        &'a self,
+        base: Element<'a, Message>,
+    ) -> Element<'a, Message> {
+        let Some(menu) = &self.context_menu else {
+            return base;
+        };
+        let panels = (0..=menu.children.len())
+            .filter_map(|level| {
+                menu.page_at(level)
+                    .map(|page| self.context_panel(menu, page, level))
             })
-        ]
-        .into()
+            .collect();
+        Element::new(cascade::Cascade::new(base, panels, menu))
     }
 }
