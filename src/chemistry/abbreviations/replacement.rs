@@ -426,6 +426,7 @@ pub fn replace_with_policy(
         }
     }
     result.abbreviations.push(Abbreviation {
+        highlight: None,
         alignment: Default::default(),
         label: label.into(),
         reverse_label: preset.reverse_label.clone(),
