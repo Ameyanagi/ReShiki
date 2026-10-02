@@ -139,6 +139,7 @@ pub fn replace(doc: &Document, id: u64, label: &str) -> Result<Document, String>
         }
     }
     result.abbreviations.push(Abbreviation {
+        highlight: None,
         alignment: doc
             .abbreviation(id)
             .map(|g| g.alignment)

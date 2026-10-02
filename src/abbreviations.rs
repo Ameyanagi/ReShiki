@@ -5,6 +5,9 @@ use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Abbreviation {
+    /// Paint behind the contracted label, separate from its internal atoms.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub highlight: Option<crate::palette::Color>,
     pub label: String,
     #[serde(default)]
     pub reverse_label: String,
@@ -293,6 +296,7 @@ impl Document {
             .or_else(|| members.first().copied())
             .ok_or("Select atoms to abbreviate")?;
         let abbreviation = Abbreviation {
+            highlight: None,
             alignment: Default::default(),
             label: label.trim().into(),
             reverse_label: reverse_label.trim().into(),

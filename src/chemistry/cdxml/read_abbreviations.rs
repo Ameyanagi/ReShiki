@@ -188,6 +188,7 @@ pub fn read_abbreviations(
             .map(&mut identify)
             .collect::<Result<Vec<_>>>()?;
         result.push(DrawingAbbreviation {
+            highlight: None,
             alignment: {
                 let source = nodes
                     .get(&record.anchor)
