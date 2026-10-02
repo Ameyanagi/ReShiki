@@ -48,6 +48,8 @@ mod pictures;
 mod popover;
 mod printing;
 mod reactions;
+#[cfg(test)]
+mod rotation_tests;
 mod shortcut_examples;
 mod shortcuts;
 mod startup;
