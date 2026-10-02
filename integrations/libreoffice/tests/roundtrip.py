@@ -24,11 +24,11 @@ def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def drawings(document, kind):
+def objects_with_frames(document, kind):
     if kind == "swriter":
         values = document.EmbeddedObjects
         return [
-            values.getByIndex(i).getExtendedControlOverEmbeddedObject()
+            (values.getByIndex(i).getExtendedControlOverEmbeddedObject(), values.getByIndex(i))
             for i in range(values.getCount())
         ]
     page = (
@@ -40,15 +40,19 @@ def drawings(document, kind):
     for i in range(page.getCount()):
         shape = page.getByIndex(i)
         if hasattr(shape, "EmbeddedObject") and shape.EmbeddedObject:
-            result.append(shape.EmbeddedObject)
+            result.append((shape.EmbeddedObject, shape))
     return result
 
 
+def drawings(document, kind):
+    return [obj for obj, _ in objects_with_frames(document, kind)]
+
+
 def verify(document, kind, native, png, extent):
-    objects = drawings(document, kind)
-    if len(objects) != 2 or len({obj.getEntryName() for obj in objects}) != 2:
+    objects = objects_with_frames(document, kind)
+    if len(objects) != 2 or len({obj.getEntryName() for obj, _ in objects}) != 2:
         raise AssertionError("Two inserted objects must retain distinct identities.")
-    for obj in objects:
+    for obj, frame in objects:
         component = obj.getComponent()
         if component.getTransferData(extension.flavor(extension.NATIVE_MIME)).value != native:
             raise AssertionError("Native data changed during persistence or copy-back.")
@@ -57,6 +61,13 @@ def verify(document, kind, native, png, extent):
         actual = obj.getVisualAreaSize(1)
         if (actual.Width, actual.Height) != tuple(extent):
             raise AssertionError("Intrinsic physical drawing extent changed during persistence.")
+        frame_size = (
+            (frame.Width, frame.Height)
+            if kind == "swriter"
+            else (frame.Size.Width, frame.Size.Height)
+        )
+        if any(abs(actual - expected) > 3 for actual, expected in zip(frame_size, extent)):
+            raise AssertionError("Host frame does not preserve the drawing's physical size.")
 
 
 def main():
@@ -105,6 +116,7 @@ def main():
         "extent": extent,
         "renderer_executable_sha256": digest(args.reshiki.read_bytes()) if args.reshiki else None,
         "desktop_clipboard_or_activation_tested": False,
+        "host_frame_size_checked": True,
         "cases": [],
         "imported_cases": [],
     }
