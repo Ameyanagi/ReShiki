@@ -38,6 +38,8 @@ pub struct Settings {
     pub arrange_controls: bool,
     /// Snap dragged objects to other objects' edges, centers and gaps.
     pub smart_guides: bool,
+    /// Display/input preference for the five physical Drawing Style fields.
+    pub drawing_style_unit: reshiki::style::units::Unit,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -45,6 +47,35 @@ impl Default for Settings {
             mode: Mode::default(),
             arrange_controls: true,
             smart_guides: true,
+            drawing_style_unit: Default::default(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod settings_tests {
+    use super::*;
+    use reshiki::style::units::Unit;
+
+    #[test]
+    fn drawing_units_preserve_legacy_and_unrelated_preferences() {
+        for json in [
+            r#"{"mode":"dark","arrange_controls":false}"#,
+            r#"{"mode":"dark","arrange_controls":false,"drawing_style_unit":"future-unit"}"#,
+        ] {
+            let settings: Settings = serde_json::from_str(json).unwrap();
+            assert_eq!(settings.drawing_style_unit, Unit::Points);
+            assert_eq!(settings.mode, Mode::Dark);
+            assert!(!settings.arrange_controls);
+        }
+        for unit in Unit::ALL {
+            let settings = Settings {
+                drawing_style_unit: unit,
+                ..Default::default()
+            };
+            let saved = serde_json::to_vec(&settings).unwrap();
+            let loaded: Settings = serde_json::from_slice(&saved).unwrap();
+            assert_eq!(loaded.drawing_style_unit, unit);
         }
     }
 }
