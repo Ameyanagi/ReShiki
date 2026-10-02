@@ -1,8 +1,7 @@
 {
   "date": "2026-10-02",
   "documentation_snapshot": "ca4c52ede708abe3ece09463cdb9acca0a2a151e",
-  "platform": "macOS 26.5.1 arm64",
-  "copy_policy": "Original PNG bytes copied unchanged; all four inspected at original size. These are renderer outputs, not native desktop screenshots.",
+  "copy_policy": "Original PNG bytes copied unchanged; all five published images inspected at original size. These are renderer outputs, not native desktop screenshots.",
   "assets": [
     {
       "file": "font-normal-before.png",
@@ -10,7 +9,8 @@
       "description": "Controlled SVG backend baseline; normal/400 requested, unpatched usvg 0.45.1, isolated variable font with default weight 100",
       "pixel_dimensions": [737, 889],
       "bytes": 58382,
-      "sha256": "55557c3b4261d68a0f7837f3e1c18455557c0f340b58515c6bb15912bd2c9438"
+      "sha256": "55557c3b4261d68a0f7837f3e1c18455557c0f340b58515c6bb15912bd2c9438",
+      "platform": "macOS 26.5.1 arm64"
     },
     {
       "file": "font-normal-after.png",
@@ -18,23 +18,41 @@
       "description": "Controlled SVG backend with production weight patch; same input, family substitution, 1200 dpi and framing as before",
       "pixel_dimensions": [737, 889],
       "bytes": 57912,
-      "sha256": "0f60319a50e9e2671472555df58caec49de5dad43be7d61f144ceead925e777d"
+      "sha256": "0f60319a50e9e2671472555df58caec49de5dad43be7d61f144ceead925e777d",
+      "platform": "macOS 26.5.1 arm64"
     },
     {
       "file": "copy-as-1040.png",
-      "source_commit": "de6e517",
-      "description": "Application widget renderer, ten-format Copy as menu, selected benzene, light interface, 100% canvas zoom; predates ChemDoodle row",
+      "source_commit": "ca4c52ede708abe3ece09463cdb9acca0a2a151e",
+      "source_tree": "2cfb72c53f6025e55b910fd9a0846b8b0ebd8665",
+      "platform": "Arch Linux7.0.14 x86_64 glibc2.43",
+      "toolchain": "Rust1.99.0",
+      "description": "Actual Iced/WGPU headless renderer under isolated Xvfb; all eleven Copy as formats, selected benzene, three reaction rows disabled with explanation, light interface, 100% canvas zoom",
       "pixel_dimensions": [1040, 680],
-      "bytes": 137232,
-      "sha256": "49eddef513a6ab987134e667123b7986af7b673aefe9080333805bb9bbbc362e"
+      "bytes": 122948,
+      "sha256": "e11383f227da1c09a2afb856d99dd100b1ed31d34fbc95a27f603c8c54ceb747"
     },
     {
       "file": "transform-1040.png",
-      "source_commit": "de6e517",
-      "description": "Application widget renderer, selected benzene with Transform and More open, light interface, 100% canvas zoom",
+      "source_commit": "ca4c52ede708abe3ece09463cdb9acca0a2a151e",
+      "source_tree": "2cfb72c53f6025e55b910fd9a0846b8b0ebd8665",
+      "platform": "Arch Linux7.0.14 x86_64 glibc2.43",
+      "toolchain": "Rust1.99.0",
+      "description": "Actual Iced/WGPU headless renderer under isolated Xvfb; selected benzene with Transform and More open, light interface, 100% canvas zoom",
       "pixel_dimensions": [1040, 680],
-      "bytes": 115078,
-      "sha256": "4820d4933153acefff2cde698c503f08d19d12ceea0af7e8842a2fc986dcbf09"
+      "bytes": 102919,
+      "sha256": "557bd3e273a6613c98b4aac04ee24ce93021ba158186fbb760ba715ef68ef3d8"
+    },
+    {
+      "file": "style-units-1280.png",
+      "source_commit": "ca4c52ede708abe3ece09463cdb9acca0a2a151e",
+      "source_tree": "2cfb72c53f6025e55b910fd9a0846b8b0ebd8665",
+      "platform": "Arch Linux7.0.14 x86_64 glibc2.43",
+      "toolchain": "Rust1.99.0",
+      "description": "Actual Iced/WGPU headless renderer under isolated Xvfb; Nature style draft with Dimension units selector set to pt, light interface and canvas, 100% canvas zoom",
+      "pixel_dimensions": [1280, 820],
+      "bytes": 101514,
+      "sha256": "d0b9ae17fff73b038b5e09c972ffd29c2af45852badccec8826c58a470390862"
     }
   ]
 }
