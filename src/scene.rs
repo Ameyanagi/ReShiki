@@ -27,6 +27,19 @@ pub(crate) fn atom_label_bounds(a: &Atom, doc: &Document) -> Option<(Point, Poin
     text_bounds(&atom_label(a, doc))
 }
 
+/// The atom owning a visible label, including its hydrogens, isotope and charge.
+/// Keep this separate from geometric nearest-atom searches used for bond growth.
+pub fn atom_label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> {
+    doc.atoms.iter().rev().find_map(|atom| {
+        let (lo, hi) = atom_label_bounds(atom, doc)?;
+        (point.x >= lo.x - radius
+            && point.x <= hi.x + radius
+            && point.y >= lo.y - radius
+            && point.y <= hi.y + radius)
+            .then_some(atom.id)
+    })
+}
+
 #[cfg(test)]
 pub(crate) fn atom_label_ink_boxes(a: &Atom, doc: &Document) -> Vec<(Point, Point)> {
     label_ink_boxes(&atom_label(a, doc))

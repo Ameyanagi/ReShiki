@@ -11,6 +11,9 @@ use reshiki::{
     hotkeys,
 };
 
+#[cfg(test)]
+mod atom_target_tests;
+
 #[derive(Debug, Clone)]
 pub enum Action {
     ReactionCopy,
@@ -373,7 +376,14 @@ impl App {
             .hover
             .filter(|(_, epoch)| *epoch == self.tab.file_epoch)
             .map(|(p, _)| p);
-        let hovered_atom = point.and_then(|p| self.tab.doc.nearest(p, 10. / self.tab.camera.zoom));
+        let hovered_atom = point.and_then(|p| {
+            let radius = 10. / self.tab.camera.zoom;
+            // The visible label owns its hydrogens, isotope and charge even
+            // when their glyphs extend beyond the atom's center hit radius.
+            // Do not pad the label here: nearby bonds must remain targetable.
+            reshiki::scene::atom_label_hit(&self.tab.doc, p, 0.)
+                .or_else(|| self.tab.doc.nearest(p, radius))
+        });
         let hovered_bond = if hovered_atom.is_none() {
             point
                 .and_then(|p| editing::nearest_bond(&self.tab.doc, p, 7. / self.tab.camera.zoom))
@@ -427,9 +437,9 @@ impl App {
         }
         if key == "g" {
             if let Some(id) = atom {
-                self.tab.selected = vec![id];
+                self.edit(crate::canvas::Edit::Select(vec![id]));
             } else if let Some((a, b)) = bond {
-                self.tab.selected = vec![a, b];
+                self.edit(crate::canvas::Edit::Select(vec![a, b]));
             }
             return Task::none();
         }
@@ -450,13 +460,13 @@ impl App {
                 }));
             }
             if let Some(id) = atom {
-                self.tab.selected = vec![id];
+                self.edit(crate::canvas::Edit::Select(vec![id]));
                 if ["=", "Enter"].contains(&key) {
                     return self
                         .update(Message::AtomText(super::atom_text::Action::Begin(Some(id))));
                 }
             } else if let Some((a, b)) = bond {
-                self.tab.selected = vec![a, b];
+                self.edit(crate::canvas::Edit::Select(vec![a, b]));
             }
             return self.update(Message::Inspector(InspectorTab::Properties));
         }
