@@ -380,6 +380,17 @@ class Embedded(
         self._read(self.parent, self.entry)
 
     def setPersistentEntry(self, parent, name, mode, media, args):
+        if self.pending is not None and mode == 2:  # NO_INIT completes host Save As
+            if self.pending == (parent, name):
+                self.saveCompleted(True)
+            else:
+                # The host can reject the staged destination or select another
+                # storage. Retarget before releasing a deferred edit callback.
+                if (self.parent, self.entry) != (parent, name):
+                    self.readonly = any(item.Name == "ReadOnly" and item.Value for item in media)
+                    self.parent, self.entry = parent, name
+                self.saveCompleted(False)
+            return
         self._ready()
         self.readonly = any(item.Name == "ReadOnly" and item.Value for item in media)
         if mode == 0:  # DEFAULT_INIT
