@@ -615,6 +615,105 @@ fn far_hydrogen_label_targets_its_atom_for_growth_replacement_charge_and_propert
 }
 
 #[test]
+fn clicked_hydrogen_label_targets_its_atom_after_real_mouse_press_and_release() {
+    use crate::canvas::label_click_tests::{aniline, click_edits, subscript_ink};
+    for zoom in [0.5, 1.99, 3.] {
+        for rulers in [false, true] {
+            for previously_selected in [false, true] {
+                let (mut app, _) = App::new();
+                app.tab.busy = false;
+                let (doc, target) = aniline();
+                let point = subscript_ink(&doc);
+                assert!(doc.nearest(point, 10. / zoom).is_none());
+                app.tab.doc = doc;
+                app.tab.camera = crate::canvas::Camera {
+                    center: Point::new(7., -9.),
+                    zoom,
+                };
+                app.tab.selected = if previously_selected {
+                    vec![app.tab.doc.atoms[1].id]
+                } else {
+                    vec![]
+                };
+                let before = app.tab.doc.clone();
+                let edits = click_edits(
+                    &app.tab.doc,
+                    &app.tab.selected,
+                    app.tab.camera,
+                    point,
+                    rulers,
+                );
+                assert!(matches!(
+                    edits.as_slice(),
+                    [Edit::Hover(Some(_)), Edit::Hover(None), Edit::Select(ids)]
+                        if ids.as_slice() == [target]
+                ));
+                for edit in edits {
+                    let _ = app.update(Message::Canvas(edit));
+                }
+                assert_eq!(app.tab.doc, before);
+                assert_eq!(app.tab.selected, vec![target]);
+                assert!(app.tab.hover.is_none(), "Gestures still invalidate hover");
+                assert!(!app.tab.history.can_undo(), "Selecting does not edit");
+                // No pointer motion after mouse-up: the click's atom selection
+                // must carry this key even though the gesture cleared hover.
+                key(&mut app, "9");
+                assert!(!app.error, "{zoom}, rulers={rulers}: {}", app.status);
+                assert_eq!(app.tab.doc.atoms.len(), 9);
+                assert_eq!(app.tab.doc.bonds.len(), 9);
+                let added: Vec<_> = app
+                    .tab
+                    .doc
+                    .atoms
+                    .iter()
+                    .filter(|atom| before.atom(atom.id).is_none())
+                    .collect();
+                assert_eq!(added.len(), 2);
+                for atom in added {
+                    assert_eq!(atom.element, "C");
+                    assert!(app.tab.doc.bonds.iter().any(|bond| {
+                        (bond.a == target && bond.b == atom.id)
+                            || (bond.b == target && bond.a == atom.id)
+                    }));
+                }
+                for bond in &before.bonds {
+                    assert!(app.tab.doc.bonds.contains(bond), "Original ring is intact");
+                }
+                assert_one_undo(&mut app, &before);
+            }
+        }
+    }
+}
+
+#[test]
+fn clicked_atom_label_does_not_bypass_the_modal_text_editor() {
+    use crate::canvas::label_click_tests::{aniline, click_edits, subscript_ink};
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let (doc, target) = aniline();
+    app.tab.doc = doc;
+    app.tab.camera.zoom = 1.99;
+    for edit in click_edits(
+        &app.tab.doc,
+        &[],
+        app.tab.camera,
+        subscript_ink(&app.tab.doc),
+        false,
+    ) {
+        let _ = app.update(Message::Canvas(edit));
+    }
+    assert_eq!(app.tab.selected, vec![target]);
+    let before = app.tab.doc.clone();
+    let _ = app.update(Message::AtomText(super::super::atom_text::Action::Begin(
+        Some(target),
+    )));
+    assert!(app.tab.atom_text.is_some());
+    key(&mut app, "9");
+    assert_eq!(app.tab.doc, before);
+    assert!(!app.tab.history.can_undo());
+}
+
+#[test]
 fn label_hotspots_follow_hydrogen_position_isotopes_charge_and_abbreviations() {
     for variant in [
         "left",
