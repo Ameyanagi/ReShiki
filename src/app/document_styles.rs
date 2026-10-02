@@ -799,7 +799,7 @@ mod tests {
             ("5 m", "m", "5"),
             ("", "5 mm", "5"),
             ("5.", "0 mm", "5"),
-            ("1e", "0 mm", "1"),
+            ("5e", "0 mm", "5"),
         ] {
             let current = input(app.tab.styles.editor.as_ref().unwrap(), Field::Bond)
                 .text
@@ -871,9 +871,13 @@ mod tests {
                         "focus after {raw:?}"
                     );
                 }
+                let editor = app.tab.styles.editor.as_ref().unwrap();
+                let candidate = editor.candidate();
                 assert_eq!(
-                    app.tab.styles.editor.as_ref().unwrap().candidate().is_ok(),
-                    valid
+                    candidate.is_ok(),
+                    valid,
+                    "Bond length {raw:?} in {} produced {candidate:?}",
+                    editor.display_unit,
                 );
             }
             let (status, committed) = event(
