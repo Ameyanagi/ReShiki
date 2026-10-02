@@ -625,7 +625,7 @@ class Embedded(
                 host.setModified(True)
             self.event("OnVisAreaChanged")
             if frame is not None:
-                # Impress's full client only repaints an external editor's
+                # Calc/Impress full clients only repaint an external editor's
                 # changed view. Preserve the user's scale when sizing its frame.
                 frame.Size = size(
                     max(1, round(frame_size[0] * self.extent[0] / old[2][0])),
@@ -661,7 +661,10 @@ class Embedded(
             completed.set()
 
     def _drawing_frame(self, host):
-        if not hasattr(host, "supportsService") or not any(
+        if not hasattr(host, "supportsService"):
+            return None
+        spreadsheet = host.supportsService("com.sun.star.sheet.SpreadsheetDocument")
+        if not spreadsheet and not any(
             host.supportsService(name)
             for name in (
                 "com.sun.star.presentation.PresentationDocument",
@@ -681,16 +684,20 @@ class Embedded(
                         return found
             return None
 
-        collections = [host.getDrawPages()]
-        if hasattr(host, "getMasterPages"):
-            collections.append(host.getMasterPages())
-        pages = [
-            collection.getByIndex(index)
-            for collection in collections
-            for index in range(collection.getCount())
-        ]
-        if hasattr(host, "getHandoutMasterPage"):
-            pages.append(host.getHandoutMasterPage())
+        if spreadsheet:
+            sheets = host.getSheets()
+            pages = [sheets.getByIndex(index).getDrawPage() for index in range(sheets.getCount())]
+        else:
+            collections = [host.getDrawPages()]
+            if hasattr(host, "getMasterPages"):
+                collections.append(host.getMasterPages())
+            pages = [
+                collection.getByIndex(index)
+                for collection in collections
+                for index in range(collection.getCount())
+            ]
+            if hasattr(host, "getHandoutMasterPage"):
+                pages.append(host.getHandoutMasterPage())
         for page in pages:
             frame = find(page)
             if frame is None and hasattr(page, "getNotesPage"):
@@ -698,7 +705,7 @@ class Embedded(
                 frame = find(page.getNotesPage())
             if frame is not None:
                 return frame
-        raise IOException("Cannot locate the embedded drawing's slide frame.", self)
+        raise IOException("Cannot locate the embedded drawing's host frame.", self)
 
     def _finish(self, session):
         if self.session is not session:
