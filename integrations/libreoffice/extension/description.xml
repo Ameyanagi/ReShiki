@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<description xmlns="http://openoffice.org/extensions/description/2006" xmlns:d="http://openoffice.org/extensions/description/2006" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:l="http://libreoffice.org/extensions/description/2011">
+  <identifier value="dev.reshiki.libreoffice"/>
+  <version value="0.1.0"/>
+  <display-name><name lang="en-US">ReShiki Editable Drawings</name></display-name>
+  <publisher><name xlink:href="https://github.com/Ameyanagi/ReShiki" lang="en-US">ReShiki</name></publisher>
+  <dependencies><l:LibreOffice-minimal-version value="25.8" d:name="LibreOffice 25.8"/></dependencies>
+</description>

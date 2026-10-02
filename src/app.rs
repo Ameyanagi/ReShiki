@@ -334,8 +334,8 @@ pub struct App {
     status: String,
     error: bool,
     file_io: files::State,
-    #[cfg(windows)]
     office_path: Option<PathBuf>,
+    office_host: &'static str,
     pending: Option<Pending>,
     ring_size: u8,
     aromatic_ring: bool,
@@ -396,8 +396,8 @@ impl App {
             status: if recovered.is_empty() { READY } else { "" }.into(),
             error: false,
             file_io: files::State::default(),
-            #[cfg(windows)]
             office_path: None,
+            office_host: "Office",
             pending: None,
             ring_size: 6,
             aromatic_ring: false,
@@ -503,14 +503,7 @@ impl App {
         self.tab.dirty()
     }
     fn office_document(&self) -> bool {
-        #[cfg(windows)]
-        {
-            self.tab.path.is_some() && self.tab.path == self.office_path
-        }
-        #[cfg(not(windows))]
-        {
-            false
-        }
+        self.tab.path.is_some() && self.tab.path == self.office_path
     }
     fn run(&mut self, request: Request, kind: Job) -> Task<Message> {
         if self.tab.busy {

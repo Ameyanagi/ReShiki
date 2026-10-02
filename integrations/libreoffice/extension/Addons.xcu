@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<oor:component-data xmlns:oor="http://openoffice.org/2001/registry" oor:name="Addons" oor:package="org.openoffice.Office">
+  <node oor:name="AddonUI">
+    <node oor:name="OfficeMenuBar">
+      <node oor:name="dev.reshiki.libreoffice.Menu" oor:op="replace">
+        <prop oor:name="Title"><value xml:lang="en-US">ReShiki</value></prop>
+        <prop oor:name="Target"><value>_self</value></prop>
+        <node oor:name="Submenu">
+          <node oor:name="Paste" oor:op="replace">
+            <prop oor:name="Title"><value xml:lang="en-US">Paste ReShiki Drawing</value></prop>
+            <prop oor:name="URL"><value>dev.reshiki.libreoffice:paste</value></prop>
+            <prop oor:name="Target"><value>_self</value></prop>
+          </node>
+          <node oor:name="Edit" oor:op="replace">
+            <prop oor:name="Title"><value xml:lang="en-US">Edit in ReShiki</value></prop>
+            <prop oor:name="URL"><value>dev.reshiki.libreoffice:edit</value></prop>
+            <prop oor:name="Target"><value>_self</value></prop>
+          </node>
+          <node oor:name="Copy" oor:op="replace">
+            <prop oor:name="Title"><value xml:lang="en-US">Copy Editable Drawing</value></prop>
+            <prop oor:name="URL"><value>dev.reshiki.libreoffice:copy</value></prop>
+            <prop oor:name="Target"><value>_self</value></prop>
+          </node>
+          <node oor:name="Configure" oor:op="replace">
+            <prop oor:name="Title"><value xml:lang="en-US">Choose ReShiki App…</value></prop>
+            <prop oor:name="URL"><value>dev.reshiki.libreoffice:configure</value></prop>
+            <prop oor:name="Target"><value>_self</value></prop>
+          </node>
+        </node>
+      </node>
+    </node>
+  </node>
+</oor:component-data>
