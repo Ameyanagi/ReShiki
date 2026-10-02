@@ -41,7 +41,7 @@ impl SelectionBox {
         let (lo, hi) = scene::selection_bounds(doc, ids)?;
         Some(Self {
             corners: [lo, World::new(hi.x, lo.y), hi, World::new(lo.x, hi.y)],
-            pivot: editing::center(doc, ids),
+            pivot: editing::rotation_center(doc, ids)?,
             camera,
             bounds,
         })
@@ -381,6 +381,116 @@ mod tests {
                 .offset(radius * angle.sin(), -radius * angle.cos());
             assert!((drag.values(end, false).1 - 22.0).abs() < 0.001);
             assert_eq!(drag.values(end, true), (1.0, 15.0));
+        }
+    }
+
+    #[test]
+    fn repeated_asymmetric_rotation_drags_keep_the_pivot_and_preview_geometry() {
+        use reshiki::{
+            document::{Annotation, Arrow},
+            graphics::{Graphic, GraphicKind},
+        };
+        let points = |doc: &Document| {
+            doc.atoms
+                .iter()
+                .map(|a| a.position)
+                .chain(doc.annotations.iter().map(|a| a.position))
+                .chain(doc.arrows.iter().flat_map(|a| [a.start, a.end]))
+                .chain(
+                    doc.graphics
+                        .iter()
+                        .flat_map(|g| g.commands().into_iter().flat_map(|c| c.points())),
+                )
+                .collect::<Vec<_>>()
+        };
+        for mixed in [false, true] {
+            let mut source = Document::default();
+            source.add_atom("C", World::new(-20., -10.));
+            source.add_atom("C", World::new(40., 0.));
+            source.add_atom("N", World::new(0., 50.));
+            let expected_pivot = if mixed {
+                source.annotations.push(Annotation {
+                    id: source.next_id(),
+                    position: World::new(120., 60.),
+                    text: "Upright".into(),
+                    format: Default::default(),
+                });
+                source.arrows.push(Arrow::new(
+                    source.next_id(),
+                    World::new(80., -60.),
+                    World::new(160., -20.),
+                    Default::default(),
+                    Default::default(),
+                ));
+                source.graphics.push(Graphic::dragged(
+                    source.next_id(),
+                    GraphicKind::Rectangle,
+                    World::new(-140., -40.),
+                    World::new(-80., 60.),
+                    Default::default(),
+                    Default::default(),
+                    false,
+                ));
+                // Three atoms, caption, arrow midpoint, rectangle frame center.
+                World::new(25., 70. / 6.)
+            } else {
+                World::new(20. / 3., 40. / 3.)
+            };
+            let ids = source.all_ids();
+            for zoom in [0.5, 1., 3.] {
+                let camera = Camera {
+                    center: World::new(30., -15.),
+                    zoom,
+                };
+                let bounds = Rectangle::new(Point::new(80., 100.), Size::new(400., 300.));
+                let mut doc = source.clone();
+                for _ in 0..6 {
+                    let selection = SelectionBox::new(&doc, &ids, camera, bounds).unwrap();
+                    assert!(selection.pivot.distance(expected_pivot) < 0.0001);
+                    let start = camera.world(selection.rotation_grip(), bounds);
+                    let drag = TransformDrag::new(selection, Handle::Rotate, start, &ids);
+                    let (s, c) = 15_f32.to_radians().sin_cos();
+                    let x = start.x - drag.pivot.x;
+                    let y = start.y - drag.pivot.y;
+                    let end = drag.pivot.offset(x * c - y * s, x * s + y * c);
+                    assert_eq!(drag.values(end, true), (1., 15.));
+                    let before = doc.clone();
+                    let mut preview = before.clone();
+                    drag.apply(&mut preview, end, true);
+                    assert_eq!(doc, before);
+                    let super::super::Edit::Transform {
+                        ids,
+                        pivot,
+                        scale,
+                        rotation,
+                    } = drag.into_edit(end, true)
+                    else {
+                        panic!("Rotation must emit a transform");
+                    };
+                    editing::transform_about(&mut doc, &ids, pivot, scale, rotation);
+                    assert_eq!(doc, preview, "Preview and release must use the same pivot");
+                }
+                // Independent 90-degree oracle, with no call to the production center.
+                let expected: Vec<_> = points(&source)
+                    .into_iter()
+                    .map(|p| {
+                        World::new(
+                            expected_pivot.x - (p.y - expected_pivot.y),
+                            expected_pivot.y + (p.x - expected_pivot.x),
+                        )
+                    })
+                    .collect();
+                let scale = expected
+                    .iter()
+                    .fold(1_f32, |m, p| m.max(p.x.abs()).max(p.y.abs()));
+                let epsilon = (8. * f32::EPSILON * scale).max(0.0001);
+                for (actual, expected) in points(&doc).into_iter().zip(expected) {
+                    assert!(
+                        actual.distance(expected) <= epsilon,
+                        "{actual:?} != {expected:?}"
+                    );
+                }
+            }
         }
     }
 }

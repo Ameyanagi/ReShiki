@@ -1,6 +1,9 @@
 use crate::document::{Document, Point};
 use std::collections::{HashMap, HashSet};
 
+mod rotation;
+pub use rotation::center as rotation_center;
+
 pub const CLIPBOARD_PREFIX: &str = "RESHIKI_DRAWING_V1\n";
 
 /// Add the chosen element from an existing atom, or join an existing endpoint.
@@ -296,7 +299,14 @@ pub fn transform(doc: &mut Document, ids: &[u64], transform: Transform) {
         crate::projection::tilt(doc, ids, degrees, matches!(transform, Transform::TiltX(_)));
         return;
     }
-    let center = center(doc, ids);
+    let center = if matches!(transform, Transform::Rotate(_)) {
+        let Some(center) = rotation_center(doc, ids) else {
+            return;
+        };
+        center
+    } else {
+        center(doc, ids)
+    };
     let convert = |p: Point| {
         let x = p.x - center.x;
         let y = p.y - center.y;

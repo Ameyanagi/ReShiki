@@ -135,3 +135,97 @@ fn rotation_menu_steps_and_toolbar_half_turn_are_consistent() {
     let _ = app.update(super::object_toolbar::Command::Rotate.message());
     assert_coordinates(&app.tab.doc, &original);
 }
+
+#[test]
+fn rotation_commands_keep_mixed_groups_and_upright_caption_anchors() {
+    use reshiki::{
+        document::{Annotation, Arrow},
+        graphics::{Graphic, GraphicKind},
+    };
+    let mut app = fixture(17., Point::new(250., -130.));
+    app.tab.doc.annotations.push(Annotation {
+        id: app.tab.doc.next_id(),
+        position: Point::new(350., 20.),
+        text: "Caption".into(),
+        format: Default::default(),
+    });
+    app.tab.doc.arrows.push(Arrow::new(
+        app.tab.doc.next_id(),
+        Point::new(340., -100.),
+        Point::new(460., -60.),
+        reshiki::arrows::Preset::Fishhook,
+        Default::default(),
+    ));
+    app.tab.doc.graphics.push(Graphic::dragged(
+        app.tab.doc.next_id(),
+        GraphicKind::Arc,
+        Point::new(100., -160.),
+        Point::new(170., -70.),
+        Default::default(),
+        Default::default(),
+        false,
+    ));
+    app.tab.selected = app.tab.doc.all_ids();
+    app.tab.doc.group_selection(&app.tab.selected).unwrap();
+    app.sync_numeric_transforms();
+    let original = app.tab.doc.clone();
+    let selected = app.tab.selected.clone();
+    let mut single = fixture(0., Point::default());
+    single.tab.doc = original.clone();
+    single.tab.selected = selected.clone();
+    single.sync_numeric_transforms();
+    for _ in 0..6 {
+        key(&mut app, Named::ArrowDown);
+    }
+    numeric(&mut single, 90., true);
+    assert_coordinates(&app.tab.doc, &single.tab.doc);
+    let points = |doc: &Document| {
+        doc.annotations
+            .iter()
+            .map(|a| a.position)
+            .chain(doc.arrows.iter().flat_map(|a| {
+                [Some(a.start), Some(a.end), a.control_point()]
+                    .into_iter()
+                    .flatten()
+            }))
+            .chain(
+                doc.graphics
+                    .iter()
+                    .flat_map(|g| g.commands().into_iter().flat_map(|c| c.points())),
+            )
+            .collect::<Vec<_>>()
+    };
+    for (actual, expected) in points(&app.tab.doc)
+        .into_iter()
+        .zip(points(&single.tab.doc))
+    {
+        assert!(actual.distance(expected) < 0.0005);
+    }
+    assert_eq!(app.tab.selected, selected);
+    assert_eq!(app.tab.doc.groups, original.groups);
+    assert_eq!(
+        app.tab.doc.annotations[0].format,
+        original.annotations[0].format
+    );
+    assert_eq!(app.tab.doc.arrows[0].style, original.arrows[0].style);
+    assert_eq!(app.tab.doc.graphics[0].style, original.graphics[0].style);
+    for _ in 0..6 {
+        let _ = app.update(Message::Undo);
+    }
+    assert_eq!(app.tab.doc, original);
+    assert_eq!(app.tab.selected, selected);
+
+    let mut caption = fixture(0., Point::default());
+    caption.tab.doc = Document::default();
+    caption.tab.doc.annotations.push(Annotation {
+        id: 1,
+        position: Point::new(20., -40.),
+        text: "Keep upright".into(),
+        format: Default::default(),
+    });
+    caption.tab.selected = vec![1];
+    let before = caption.tab.doc.clone();
+    key(&mut caption, Named::ArrowDown);
+    assert_eq!(caption.tab.doc, before);
+    assert!(!caption.tab.history.can_undo());
+}

@@ -1,10 +1,14 @@
 # Selection resize and rotation handles
 
-Updated 2026-09-17.
+Updated 2026-10-02.
 
 With Select active, selected structures have a teal bounding box with four square corner handles and a circular rotation handle above the box. Double-click an atom to select its connected molecule, or use Cmd/Ctrl+A to select all objects and activate Select. A lone selected atom keeps its circle without a transform box.
 
 Drag a corner to resize proportionally about the opposite corner. Crossing the opposite corner clamps to a small positive scale instead of reflecting the molecule. Drag the circular handle to rotate about the selection center; hold Shift to snap to 15° increments. The rotation box follows the live preview and returns to an axis-aligned bound on release. Escape or window focus loss cancels the drag. Completed drags create one Undo step, and clicking a handle without moving creates none.
+
+Rotation uses the mean of the selected visible atom positions, plus one stable reference point for each selected caption, arrow or graphic. The keyboard, numeric Rotate field, menus and rotation handle use the same center. A turn followed by its inverse restores placement, and incremental turns agree with one turn by the total angle, within coordinate roundoff. The center can be offset from the middle of the selection box. Resizing and reflection keep their existing centers.
+
+An upright caption contributes its insertion point, an arrow its endpoint midpoint, and a framed shape its frame center. Arcs use their parent ellipse center; lines and Bézier curves use their endpoint midpoint. Scientific symbols and orbitals use their placement anchor, and custom paths use their local control-coordinate bounds center. A lone caption stays in place when rotated. Hidden abbreviation atoms move with their visible anchor without adding weight to the center; derived ring-centroid markers add no weight. Changing font sizes or stroke widths does not move the rotation center.
 
 The box includes atom labels. Transformations change selected coordinates, preserving whole-molecule connectivity and stereochemistry. JACS font sizes and line widths remain fixed; labels and annotations remain upright. Partial selections retain the existing boundary stereochemistry invalidation behavior. Selection decorations are canvas overlays and are not exported.
 

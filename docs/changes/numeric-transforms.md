@@ -14,7 +14,10 @@ not change the drawing. Changing the selection, undoing, or applying with
 compact grid.)
 
 - **Rotate** (°) is a relative angle; positive values rotate clockwise. For
-  example, enter `72` for a pentagon-sized turn.
+  example, enter `72` for a pentagon-sized turn. It uses the same stable
+  [selection rotation center](../selection-transforms.md) as the keyboard and
+  rotation handle. Repeating `15` then `−15` restores placement, within
+  coordinate roundoff, including after native save/reopen.
 - **Tilt X / Tilt Y** (°, under **More**) use the existing orthographic
   projection, with an allowed change of −85° through 85°. As with the existing
   tilt controls, atoms and shapes tilt; arrows and upright captions do not.
