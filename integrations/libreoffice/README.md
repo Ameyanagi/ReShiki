@@ -61,21 +61,31 @@ macOS LibreOffice 25.8.4.2, Linux LibreOffice 25.8.7, and Windows LibreOffice
 distinct objects through two save/close/reopen cycles, with byte-identical native
 data and PNG and unchanged intrinsic extent. All six directions of ODF exchange
 between the three platforms also passed import, save, close, and reopen checks.
+Both persistence and interchange checks verify actual host frame dimensions
+within 0.03 mm to allow host-unit rounding. Writer insertion initializes its
+frame from the drawing's physical size.
 Rendering a drawing again can use different locally installed fonts; exchanging
 the document preserves its stored preview and extent.
 
-The subsequent Writer insertion fix initializes its host frame to the drawing's
-physical size instead of Writer's default square. The installed updated package
-passed additional Linux and Windows checks for host frame dimensions, including
-save/reopen rounding. The earlier interchange checks verified intrinsic extent;
-the updated macOS package and frame-size interchange checks remain pending.
+The latest real-worker persistence checks used these immutable executables:
 
-A macOS headless check also used a scripted editor with the real renderer to
-exercise asynchronous save-back in all three hosts. It verified the host's
-acceptance receipt, updated native data, PNG and extent, isolation from a second
-object, temporary-file cleanup, and persistence after reopening. Desktop
-double-click activation, editing in the actual ReShiki window, and system
-clipboard exchange remain separate acceptance checks.
+| Platform | ReShiki source | Executable SHA-256                                                 |
+| -------- | -------------- | ------------------------------------------------------------------ |
+| macOS    | `ca4c52e`      | `36eab2b3da9ee879f01aac8d31aec38e2358b8b771655af1a9d0af38fbcfb507` |
+| Linux    | `ca4c52e`      | `2c526a98eab0c6e2ad6a5931caaf3eae59a50f2b43dc24cbfba5cdcfe6fc2b31` |
+| Windows  | `7f06dcf`      | `a70f0fe10c4fa30c68c2843ad6f2849199d008543fba46daee4952d120c33029` |
+
+The installed adapter source SHA-256 was
+`4c7d9cacec62eaa1b59175f462376c0b376bbd9dcde99c00fc0b954107d47531`.
+The final Windows executable rerun remains pending.
+
+macOS and Linux headless checks also used a scripted editor with the real
+renderer to exercise asynchronous save-back in all three hosts. They verified
+the host's acceptance receipt, updated native data, PNG, intrinsic extent and
+host frame dimensions, isolation from a second object, temporary-file cleanup,
+and persistence after reopening. Desktop double-click activation, editing in
+the actual ReShiki window, and system clipboard exchange remain separate
+acceptance checks.
 
 `tests/test_session.py` runs with matching Python UNO bindings and covers the
 final-save/process-exit race, a host failure after committing storage, deferred
