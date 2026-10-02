@@ -278,13 +278,25 @@ class Embedded(
             return
         event = uno.createUnoStruct("com.sun.star.lang.EventObject")
         event.Source = self
-        for listener in tuple(self.states):
-            listener.changingState(event, old, value)
-        self.state = value
+        try:
+            for listener in tuple(self.states):
+                try:
+                    listener.changingState(event, old, value)
+                except (WrongStateException, UnoRuntimeException):
+                    pass
+        finally:
+            # Notifications cannot veto a launched editor or its completed exit.
+            self.state = value
         if self.client and (old == ACTIVE or value == ACTIVE):
-            self.client.visibilityChanged(value == ACTIVE)
+            try:
+                self.client.visibilityChanged(value == ACTIVE)
+            except (WrongStateException, UnoRuntimeException):
+                pass
         for listener in tuple(self.states):
-            listener.stateChanged(event, old, value)
+            try:
+                listener.stateChanged(event, old, value)
+            except UnoRuntimeException:
+                pass
         # Impress caches no replacement image for an in-place UI state. Tell
         # the host to rebuild its view after every actual lifecycle transition.
         self.event("OnVisAreaChanged")
@@ -470,8 +482,12 @@ class Embedded(
                 "error": None,
             }
             self.session = session
-            self._set_state(ACTIVE)
-            threading.Thread(target=self._watch, args=(session, program), daemon=True).start()
+            try:
+                self._set_state(ACTIVE)
+            finally:
+                # Even an unexpected notification failure must leave the
+                # launched editor watched so its saves and exit are handled.
+                threading.Thread(target=self._watch, args=(session, program), daemon=True).start()
         except Exception as error:
             show_error(self.ctx, error)
 

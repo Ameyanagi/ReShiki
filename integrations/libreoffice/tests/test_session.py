@@ -308,6 +308,148 @@ class SessionTests(unittest.TestCase):
         self.assertIsNone(self.object.session)
         self.assertIn("launch failed", str(show.call_args.args[1]))
 
+    def test_advisory_uno_failures_do_not_abandon_editor_or_skip_other_listeners(self):
+        for stage, error_type in (
+            ("changing", extension.WrongStateException),
+            ("changing", extension.UnoRuntimeException),
+            ("changed", extension.UnoRuntimeException),
+            ("visible", extension.WrongStateException),
+            ("visible", extension.UnoRuntimeException),
+        ):
+            with self.subTest(stage=stage, error_type=error_type):
+                obj = extension.Embedded(None, self.old)
+                obj.state = extension.RUNNING
+                events = []
+
+                def notify(kind):
+                    if kind == stage:
+                        raise error_type("advisory notification failed", obj)
+
+                class FailingListener:
+                    def changingState(self, *args):
+                        notify("changing")
+
+                    def stateChanged(self, *args):
+                        notify("changed")
+
+                class Listener:
+                    def changingState(self, event, old, new):
+                        events.append(("changing", old, new))
+
+                    def stateChanged(self, event, old, new):
+                        events.append(("changed", old, new))
+
+                    def notifyEvent(self, event):
+                        events.append((event.EventName, obj.getCurrentState()))
+
+                class Client:
+                    def visibilityChanged(self, visible):
+                        notify("visible")
+
+                listener = Listener()
+                obj.client = Client()
+                obj.addStateChangeListener(FailingListener())
+                obj.addStateChangeListener(listener)
+                obj.addEventListener(listener)
+                directory = self.root / ("advisory-" + stage + "-" + error_type.__name__)
+                directory.mkdir()
+                with (
+                    patch.object(extension, "executable", return_value="/test/editor"),
+                    patch.object(extension.tempfile, "mkdtemp", return_value=str(directory)),
+                    patch.object(extension.subprocess, "Popen"),
+                    patch.object(extension.threading, "Thread") as thread,
+                    patch.object(extension, "show_error") as show,
+                ):
+                    obj.doVerb(0)
+                    thread.return_value.start.assert_called_once_with()
+                    self.assertIs(thread.call_args.kwargs["args"][0], obj.session)
+                    self.assertEqual(obj.getCurrentState(), extension.ACTIVE)
+                    self.assertEqual(obj.session["accepted"], self.old[0])
+                    self.assertFalse((directory / "accepted.json").exists())
+                    obj._finish(obj.session)
+                    show.assert_not_called()
+                self.assertEqual(obj.getCurrentState(), extension.RUNNING)
+                self.assertIsNone(obj.session)
+                self.assertFalse(directory.exists())
+                self.assertEqual(obj.native, self.old[0])
+                self.assertEqual(
+                    events,
+                    [
+                        ("changing", 1, 2),
+                        ("changed", 1, 2),
+                        ("OnVisAreaChanged", 2),
+                        ("changing", 2, 1),
+                        ("changed", 2, 1),
+                        ("OnVisAreaChanged", 1),
+                    ],
+                )
+
+    def test_unexpected_activation_notification_failure_still_starts_watcher(self):
+        obj = self.object
+        obj.session = None
+        directory = self.root / "unexpected-edit"
+        directory.mkdir()
+        with (
+            patch.object(extension, "executable", return_value="/test/editor"),
+            patch.object(extension.tempfile, "mkdtemp", return_value=str(directory)),
+            patch.object(extension.subprocess, "Popen"),
+            patch.object(extension.threading, "Thread") as thread,
+            patch.object(obj, "_set_state", side_effect=RuntimeError("unexpected notice")),
+            patch.object(extension, "show_error") as show,
+        ):
+            obj.doVerb(0)
+        thread.return_value.start.assert_called_once_with()
+        self.assertIs(thread.call_args.kwargs["args"][0], obj.session)
+        self.assertEqual(obj.session["accepted"], self.old[0])
+        self.assertTrue((directory / "drawing.rsk").exists())
+        self.assertIn("unexpected notice", str(show.call_args.args[1]))
+
+    def test_advisory_failure_preserves_rejected_save_and_recovery_file(self):
+        obj = self.object
+        obj.state = extension.ACTIVE
+        path = self.root / "drawing.rsk"
+        path.write_bytes(self.new[0])
+        self.session["path"] = path
+
+        class Client:
+            def saveObject(self):
+                raise RuntimeError("host rejected saved drawing")
+
+            def visibilityChanged(self, visible):
+                raise extension.WrongStateException("visibility notice failed", obj)
+
+        obj.client = Client()
+        done = threading.Event()
+        with patch.object(obj, "_write"), patch.object(extension, "show_error") as show:
+            obj._accept(self.session, self.new, done)
+            obj._finish(self.session)
+        self.assertTrue(done.is_set())
+        self.assertIsNone(obj.session)
+        self.assertEqual(obj.getCurrentState(), extension.RUNNING)
+        self.assertEqual(obj.native, self.old[0])
+        self.assertEqual(self.session["accepted"], self.old[0])
+        self.assertEqual(path.read_bytes(), self.new[0])
+        self.assertFalse((self.root / "accepted.json").exists())
+        self.assertIn("host rejected saved drawing", str(show.call_args.args[1]))
+
+    def test_unexpected_finish_notification_failure_leaves_no_active_session(self):
+        obj = self.object
+        obj.state = extension.ACTIVE
+        directory = self.root / "finished-edit"
+        directory.mkdir()
+        self.session["directory"] = directory
+
+        class Listener:
+            def changingState(self, *args):
+                raise RuntimeError("unexpected finish notice")
+
+        obj.addStateChangeListener(Listener())
+        with self.assertRaisesRegex(RuntimeError, "unexpected finish notice"):
+            obj._finish(self.session)
+        self.assertIsNone(obj.session)
+        self.assertEqual(obj.getCurrentState(), extension.RUNNING)
+        self.assertFalse(directory.exists())
+
 
 if __name__ == "__main__":
     unittest.main()
