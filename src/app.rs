@@ -3737,8 +3737,11 @@ mod tests {
             app.tool = Tool::Ring;
             app.aromatic_ring = false;
             app.ring_size = 6;
-            let carbon = app.tab.doc.add_atom("C", Point::default());
-            app.tab.doc.atom_mut(carbon).unwrap().explicit_h = 4;
+            app.tab.doc = Document::from_json(include_bytes!(
+                "../tests/fixtures/ui-declutter/ring-rejection.rsk"
+            ))
+            .unwrap();
+            let carbon = app.tab.doc.atoms[0].id;
             let original = app.tab.doc.clone();
             // A valid placement is one history entry; an invalid attempt after
             // Undo must leave that entry available to Redo.
@@ -3990,6 +3993,64 @@ mod tests {
             reshiki::style::DEFAULT.bond_length_world
         );
         assert!(app.tab.doc.arrows.is_empty());
+    }
+
+    #[test]
+    fn arrow_width_in_mixed_selection_preserves_bonds_and_other_objects() {
+        use arrows::{Action, Field};
+
+        for selected in [vec![10], vec![1, 2, 3, 10, 20]] {
+            let (mut app, _) = App::new();
+            app.tab.doc = Document::from_json(include_bytes!(
+                "../tests/fixtures/ui-declutter/mixed-arrow-width.rsk"
+            ))
+            .unwrap();
+            app.tab.saved = app.tab.doc.clone();
+            let _ = app.update(Message::Canvas(Edit::Select(selected.clone())));
+            let before = app.tab.doc.clone();
+            assert!(!app.tab.history.can_undo());
+
+            let _ = app.update(Message::ArrowAction(Action::Number(
+                Field::Line,
+                "1.5".into(),
+            )));
+            assert_eq!(app.tab.doc, before, "Typing must not change the drawing");
+            assert!(!app.tab.history.can_undo());
+            let _ = app.update(Message::ArrowAction(Action::ApplyNumber(Field::Line)));
+            assert!(!app.error, "{}", app.status);
+
+            let mut expected = before.clone();
+            expected
+                .arrows
+                .iter_mut()
+                .find(|arrow| arrow.id == 10)
+                .unwrap()
+                .style
+                .as_mut()
+                .unwrap()
+                .width_pt = 1.5;
+            assert_eq!(app.tab.doc.drawing_style, before.drawing_style);
+            assert_eq!(app.tab.doc.bonds, before.bonds);
+            assert_eq!(
+                app.tab.doc, expected,
+                "Only the selected arrow width changes"
+            );
+            assert_eq!(app.tab.selected, selected);
+            let saved = serde_json::to_vec(&app.tab.doc).unwrap();
+            assert_eq!(Document::from_json(&saved).unwrap(), expected);
+
+            let _ = app.update(Message::Undo);
+            assert_eq!(app.tab.doc, before);
+            assert_eq!(app.tab.selected, selected);
+            assert!(
+                !app.tab.history.can_undo(),
+                "Apply is exactly one Undo step"
+            );
+            let _ = app.update(Message::Redo);
+            assert_eq!(app.tab.doc, expected);
+            assert_eq!(app.tab.selected, selected);
+            assert_eq!(app.tab.arrows.style.width_pt, 1.5);
+        }
     }
 
     #[test]

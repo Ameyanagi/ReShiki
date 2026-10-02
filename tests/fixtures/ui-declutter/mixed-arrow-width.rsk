@@ -1,0 +1,175 @@
+{
+  "version": 17,
+  "drawing_style": {
+    "name": "UI QA bond width 0.8 pt",
+    "font_family": "Arial",
+    "bond_length_world": 42.0,
+    "bond_length_pt": 14.4,
+    "font_size_pt": 10.0,
+    "line_width_pt": 0.8,
+    "bold_width_pt": 2.0,
+    "margin_width_pt": 1.6,
+    "hash_spacing_pt": 2.5,
+    "bond_spacing_ratio": 0.18,
+    "png_dpi": 1200
+  },
+  "atoms": [
+    {
+      "id": 1,
+      "element": "C",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "label_h": 3
+    },
+    {
+      "id": 2,
+      "element": "C",
+      "position": {
+        "x": 36.37306696,
+        "y": -21
+      },
+      "label_h": 2
+    },
+    {
+      "id": 3,
+      "element": "O",
+      "position": {
+        "x": 72.74613392,
+        "y": 0
+      },
+      "label_h": 1
+    },
+    {
+      "id": 4,
+      "element": "C",
+      "position": {
+        "x": 0,
+        "y": 130
+      },
+      "label_h": 3
+    },
+    {
+      "id": 5,
+      "element": "C",
+      "position": {
+        "x": 36.37306696,
+        "y": 109
+      },
+      "label_h": 2
+    },
+    {
+      "id": 6,
+      "element": "N",
+      "position": {
+        "x": 72.74613392,
+        "y": 130
+      },
+      "label_h": 2
+    }
+  ],
+  "bonds": [
+    {
+      "a": 1,
+      "b": 2,
+      "order": 1,
+      "display": "bold"
+    },
+    {
+      "a": 2,
+      "b": 3,
+      "order": 1,
+      "display": "plain"
+    },
+    {
+      "a": 4,
+      "b": 5,
+      "order": 1,
+      "display": "plain"
+    },
+    {
+      "a": 5,
+      "b": 6,
+      "order": 1,
+      "display": "plain"
+    }
+  ],
+  "arrows": [
+    {
+      "id": 10,
+      "start": {
+        "x": 120,
+        "y": 0
+      },
+      "end": {
+        "x": 230,
+        "y": 0
+      },
+      "kind": "forward",
+      "control": {
+        "x": 175,
+        "y": -30
+      },
+      "style": {
+        "width_pt": 1.2,
+        "head_length_pt": 7.5
+      }
+    },
+    {
+      "id": 11,
+      "start": {
+        "x": 120,
+        "y": 130
+      },
+      "end": {
+        "x": 230,
+        "y": 130
+      },
+      "kind": "forward",
+      "style": {
+        "width_pt": 0.45,
+        "pattern": "dashed"
+      }
+    }
+  ],
+  "graphics": [
+    {
+      "id": 20,
+      "kind": "rectangle",
+      "origin": {
+        "x": 270,
+        "y": -20
+      },
+      "axis_x": {
+        "x": 60,
+        "y": 0
+      },
+      "axis_y": {
+        "x": 0,
+        "y": 40
+      },
+      "style": {
+        "width_pt": 0.3
+      }
+    }
+  ],
+  "annotations": [
+    {
+      "id": 30,
+      "position": {
+        "x": 0,
+        "y": -80
+      },
+      "text": "Edit the upper arrow only"
+    },
+    {
+      "id": 31,
+      "position": {
+        "x": 0,
+        "y": 180
+      },
+      "text": "Keep the lower molecule and arrow unchanged"
+    }
+  ]
+}

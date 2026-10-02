@@ -1,0 +1,17 @@
+{
+  "version": 17,
+  "atoms": [
+    {
+      "id": 1,
+      "element": "C",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "explicit_h": 4,
+      "no_implicit": true,
+      "label_h": 4
+    }
+  ],
+  "bonds": []
+}
