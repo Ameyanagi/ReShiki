@@ -218,16 +218,15 @@ pub(super) fn element_hint(symbol: &str) -> String {
         "I" => "i".into(),
         "Li" => shift("L"),
         "Si" => shift("S"),
-        "Br" => return "Br\nb at an atom replaces its label with Br.".into(),
+        "Br" => return "Br\nAtom: b → Br".into(),
         _ => return symbol.into(),
     };
-    let mut hint = format!(
-        "{symbol} · {key}\nChoose on empty canvas with no atom/bond selected; replace at an atom."
-    );
-    if symbol == "Cl" {
-        hint.push_str("\nAt an atom, l also works.");
-    }
-    hint
+    let atom_key = if symbol == "Cl" {
+        format!("{key} / l")
+    } else {
+        key.clone()
+    };
+    format!("{symbol} · {key}\n(empty canvas; no atom/bond selected)\nAtom: {atom_key} → {symbol}")
 }
 
 pub(super) fn bond_hint(preset: BondPreset, label: &str) -> String {
@@ -235,18 +234,18 @@ pub(super) fn bond_hint(preset: BondPreset, label: &str) -> String {
     use iced::keyboard::Modifiers;
     let shift = |key| super::shortcuts::keys(Modifiers::SHIFT, key);
     let detail = match preset {
-        Single => "x / b / 1: choose on empty canvas with no atom/bond selected.\nAt a bond: 1 makes it single.".into(),
-        Double => "2: choose on empty canvas with no atom/bond selected.\nAt a bond: 2 makes it double; repeat to cycle line placement.".into(),
-        Triple => "3: choose on empty canvas with no atom/bond selected.\nAt a bond: 3 makes it triple.".into(),
-        Quadruple => "4: choose on empty canvas with no atom/bond selected.".into(),
-        Wedge => "At a bond: w applies a solid wedge.\nAt an atom: 4 grows a wedged bond.".into(),
-        HashedWedge => format!("At a bond: h / {} applies a hashed wedge.\nAt an atom: 5 grows a hashed wedge.", shift("W")),
-        Wavy => "At a bond: y applies a wavy bond.".into(),
-        Bold => "At a bond: b applies a bold bond.".into(),
-        Dashed => "At a bond: d applies a dashed bond.".into(),
-        Hashed => format!("At a bond: {} applies a hashed bond.", shift("H")),
-        DashedDouble => format!("At a bond: {} applies a partial double bond.", shift("D")),
-        BoldDouble => format!("At a bond: {} applies a bold double bond.", shift("B")),
+        Single => "x / b / 1 → select\n(empty canvas; no atom/bond selected)\nBond: 1 → single".into(),
+        Double => "2 → select\n(empty canvas; no atom/bond selected)\nBond: 2 → double; repeat → cycle lines".into(),
+        Triple => "3 → select\n(empty canvas; no atom/bond selected)\nBond: 3 → triple".into(),
+        Quadruple => "4 → select\n(empty canvas; no atom/bond selected)".into(),
+        Wedge => "Bond: w → wedge\nAtom: 4 → grow wedge".into(),
+        HashedWedge => format!("Bond: h / {} → hashed wedge\nAtom: 5 → grow hashed wedge", shift("W")),
+        Wavy => "Bond: y → wavy".into(),
+        Bold => "Bond: b → bold".into(),
+        Dashed => "Bond: d → dashed".into(),
+        Hashed => format!("Bond: {} → hashed", shift("H")),
+        DashedDouble => format!("Bond: {} → partial double", shift("D")),
+        BoldDouble => format!("Bond: {} → bold double", shift("B")),
         _ => return label.into(),
     };
     format!("{label}\n{detail}")
@@ -255,23 +254,23 @@ pub(super) fn bond_hint(preset: BondPreset, label: &str) -> String {
 fn ring_hint(label: &str, action: &Action) -> String {
     use iced::keyboard::Modifiers;
     let detail = match action {
-        Action::Ring(3, false) => "At an atom or bond: v attaches a 3-membered ring.".into(),
-        Action::Ring(4, false) => "At an atom: u attaches a 4-membered ring.\nAt a bond: 4 fuses a 4-membered ring.".into(),
-        Action::Ring(5, false) => "At an atom: 7 attaches a 5-membered ring.\nAt a bond: 5 fuses a 5-membered ring.".into(),
-        Action::Ring(6, false) => "At an atom or bond: 6 attaches a 6-membered ring.".into(),
-        Action::Ring(7, false) => "At a bond: 7 fuses a 7-membered ring.".into(),
-        Action::Ring(8, false) => "At a bond: 8 fuses an 8-membered ring.".into(),
+        Action::Ring(3, false) => "Atom: v → attach\nBond: v → fuse".into(),
+        Action::Ring(4, false) => "Atom: u → attach\nBond: 4 → fuse".into(),
+        Action::Ring(5, false) => "Atom: 7 → attach\nBond: 5 → fuse".into(),
+        Action::Ring(6, false) => "Atom: 6 → attach\nBond: 6 → fuse".into(),
+        Action::Ring(7, false) => "Bond: 7 → fuse".into(),
+        Action::Ring(8, false) => "Bond: 8 → fuse".into(),
         Action::Ring(_, true) => format!(
-            "{} while placing a regular ring, Benzene or cyclopentadiene draws a circle.\nWith an aromatic ring selected and the pointer off atoms/bonds: a toggles circle / alternating bonds.",
+            "{} → circle (regular / benzene / cyclopentadiene)\na → circle ↔ alternating bonds\n(aromatic ring selected; pointer off atoms/bonds)",
             super::shortcuts::keys(Modifiers::COMMAND, "click")
         ),
-        Action::RingPreset(RingPreset::Benzene) => "j: choose alternating-bond Benzene on empty canvas with no atom/bond selected.\nAt an atom: 3 / a attaches phenyl. At a bond: a fuses benzene.".into(),
+        Action::RingPreset(RingPreset::Benzene) => "j → select\n(empty canvas; no atom/bond selected)\nAtom: 3 / a → phenyl\nBond: a → fused benzene".into(),
         Action::RingPreset(RingPreset::Cyclopentadiene) => format!(
-            "{}: choose on empty canvas with no atom/bond selected.\nAt a bond: z fuses cyclopentadiene.",
+            "{} → select\n(empty canvas; no atom/bond selected)\nBond: z → fuse",
             super::shortcuts::keys(Modifiers::SHIFT, "J")
         ),
-        Action::RingPreset(RingPreset::ChairUp) => "At a bond: 9 fuses Chair A.".into(),
-        Action::RingPreset(RingPreset::ChairDown) => "At a bond: 0 fuses Chair B.".into(),
+        Action::RingPreset(RingPreset::ChairUp) => "Bond: 9 → fuse".into(),
+        Action::RingPreset(RingPreset::ChairDown) => "Bond: 0 → fuse".into(),
         _ => return label.into(),
     };
     format!("{label}\n{detail}")
@@ -279,21 +278,19 @@ fn ring_hint(label: &str, action: &Action) -> String {
 
 fn graphic_hint(kind: GraphicKind, label: &str) -> String {
     use iced::keyboard::Modifiers;
-    let (key, detail) = match kind {
-        GraphicKind::Brackets => (
-            "T",
-            "Select Brackets using the last chosen style and sides.",
-        ),
-        GraphicKind::Symbol(reshiki::scientific::SymbolKind::CirclePlus) => {
-            ("E", "Select the circled plus tool.")
+    let key = match kind {
+        GraphicKind::Brackets => {
+            return format!(
+                "{label}\n{} → brackets, last style / sides\n(empty canvas; no atom/bond selected)",
+                super::shortcuts::keys(Modifiers::SHIFT, "T")
+            );
         }
-        GraphicKind::Orbital(reshiki::scientific::OrbitalKind::P) => {
-            ("G", "Select the p orbital tool.")
-        }
+        GraphicKind::Symbol(reshiki::scientific::SymbolKind::CirclePlus) => "E",
+        GraphicKind::Orbital(reshiki::scientific::OrbitalKind::P) => "G",
         _ => return label.into(),
     };
     format!(
-        "{label} · {}\n{detail}\nUse on empty canvas with no atom/bond selected.",
+        "{label} · {}\n(empty canvas; no atom/bond selected)",
         super::shortcuts::keys(Modifiers::SHIFT, key)
     )
 }
