@@ -7,7 +7,13 @@ use iced::widget::{
     Space, button, checkbox, column, combo_box, container, row, scrollable, text, tooltip,
 };
 use iced::{Alignment, Element, Length, Task};
-use reshiki::{document_styles::Preset, style::DrawingStyle};
+use reshiki::{
+    document_styles::Preset,
+    style::{
+        DrawingStyle,
+        units::{self, Dimension, Unit},
+    },
+};
 
 fn command(label: &str) -> iced::widget::Button<'_, Message> {
     button(text(label).size(12)).padding([7, 9])
@@ -231,7 +237,7 @@ mod tests {
     fn every_preset_survives_editor_fields_without_becoming_custom() {
         for preset in Preset::ALL {
             let style = preset.style();
-            let mut editor = Editor::new(&DrawingStyle::default(), 0);
+            let mut editor = Editor::new(&DrawingStyle::default(), 0, Unit::Points);
             editor.set(&style);
             assert_eq!(editor.candidate().unwrap(), style, "{preset}");
         }
@@ -289,6 +295,320 @@ mod tests {
         assert!(app.tab.doc.drawing_style.is_default());
         assert_eq!(app.tab.caption_format.style.size_pt, 10.);
         assert_eq!(app.tab.drawing_length_input, "14.4");
+    }
+
+    fn send(app: &mut App, action: Action) {
+        let _ = app.update(Message::DrawingStyle(action));
+    }
+
+    fn input(editor: &Editor, field: Field) -> &Input {
+        &editor.inputs.iter().find(|(f, _)| *f == field).unwrap().1
+    }
+
+    fn legacy_style_app() -> App {
+        use reshiki::{
+            document::Point,
+            graphics::{BracketSides, Graphic, GraphicKind, GraphicStyle},
+            typography::TextStyle,
+        };
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let id = app.tab.doc.add_atom("N", Point::new(17.125, 31.75));
+        app.tab.doc.atom_mut(id).unwrap().text_style = Some(TextStyle {
+            size_pt: 10.0005,
+            ..Default::default()
+        });
+        app.tab.doc.graphics.push(Graphic::dragged(
+            id + 1,
+            GraphicKind::Line,
+            Point::new(90.25, 11.),
+            Point::new(132.5, 11.),
+            GraphicStyle {
+                width_pt: 0.6005,
+                ..Default::default()
+            },
+            BracketSides::Both,
+            false,
+        ));
+        app.tab.doc.version = 14;
+        app.tab.doc.validate().unwrap();
+        app.tab.saved = app.tab.doc.clone();
+        app
+    }
+
+    #[test]
+    fn display_only_apply_preserves_legacy_document_and_near_matching_overrides() {
+        let mut app = legacy_style_app();
+        let before = app.tab.doc.clone();
+        let revision = app.tab.revision;
+        let bond_settings = app.tab.drawing_length_input.clone();
+        let graphic_settings = app.tab.graphic_width_input.clone();
+        send(&mut app, Action::Open);
+        for _ in 0..100 {
+            for unit in Unit::ALL {
+                send(&mut app, Action::DisplayUnit(unit));
+                assert_eq!(
+                    app.tab.styles.editor.as_ref().unwrap().candidate().unwrap(),
+                    before.drawing_style
+                );
+                assert_eq!(app.tab.doc, before);
+                assert!(!app.dirty());
+                assert!(!app.tab.history.can_undo());
+                assert!(!app.tab.history.can_redo());
+            }
+        }
+        send(&mut app, Action::Advanced(true));
+        let text = input(app.tab.styles.editor.as_ref().unwrap(), Field::Bond)
+            .text
+            .clone();
+        send(&mut app, Action::Input(Field::Bond, text));
+        send(&mut app, Action::CommitField(Field::Bond));
+        assert!(
+            !app.tab
+                .styles
+                .editor
+                .as_ref()
+                .unwrap()
+                .apply_semantics_requested
+        );
+        send(&mut app, Action::Apply);
+        assert!(app.tab.styles.editor.is_none());
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.saved, before);
+        assert_eq!(app.tab.revision, revision);
+        assert_eq!(app.tab.drawing_length_input, bond_settings);
+        assert_eq!(app.tab.graphic_width_input, graphic_settings);
+        assert!(!app.dirty());
+        assert!(!app.tab.history.can_undo());
+        let reopened =
+            reshiki::document::Document::from_json(&serde_json::to_vec(&app.tab.doc).unwrap())
+                .unwrap();
+        assert_eq!(reopened.version, 14);
+        assert_eq!(reopened.drawing_style, before.drawing_style);
+        assert_eq!(reopened.graphics, before.graphics);
+    }
+
+    #[test]
+    fn equal_style_deliberate_actions_keep_existing_apply_semantics() {
+        for action in 0..5 {
+            let mut app = legacy_style_app();
+            let before = app.tab.doc.clone();
+            send(&mut app, Action::Open);
+            match action {
+                0 => send(&mut app, Action::Preset(Preset::Jacs)),
+                1 => {
+                    let (serial, epoch) = (app.tab.styles.serial, app.tab.file_epoch);
+                    send(
+                        &mut app,
+                        Action::Loaded(serial, epoch, Ok(Some(before.drawing_style.clone()))),
+                    );
+                }
+                2 => {
+                    send(&mut app, Action::Matching(false));
+                    send(&mut app, Action::Matching(true));
+                }
+                3 => {
+                    send(&mut app, Action::Scale(true));
+                    send(&mut app, Action::Scale(false));
+                }
+                _ => {
+                    send(&mut app, Action::Input(Field::Bond, "14.4 pt".into()));
+                    send(&mut app, Action::Name(before.drawing_style.name.clone()));
+                }
+            }
+            send(&mut app, Action::DisplayUnit(Unit::Millimetres));
+            let editor = app.tab.styles.editor.as_ref().unwrap();
+            assert!(editor.apply_semantics_requested);
+            assert_eq!(editor.candidate().unwrap(), before.drawing_style);
+            send(&mut app, Action::Apply);
+            assert_eq!(app.tab.doc.version, 15);
+            assert_eq!(
+                app.tab.doc.atoms[0].text_style.as_ref().unwrap().size_pt,
+                10.
+            );
+            assert_eq!(app.tab.doc.graphics[0].style.width_pt, 0.6);
+            assert!(app.dirty());
+            assert!(app.tab.history.can_undo());
+            let _ = app.update(Message::Undo);
+            assert_eq!(app.tab.doc, before);
+            assert!(
+                !app.tab.history.can_undo(),
+                "one Apply is one history entry"
+            );
+        }
+    }
+
+    #[test]
+    fn all_presets_and_native_precision_survive_display_cycles() {
+        for mut style in Preset::ALL.into_iter().map(Preset::style) {
+            // Older native files can retain a derived length within tolerance.
+            style.bond_length_world += 0.0001;
+            style.validate().unwrap();
+            let mut editor = Editor::new(&style, 0, Unit::Points);
+            for _ in 0..100 {
+                for unit in Unit::ALL {
+                    editor.change_unit(unit).unwrap();
+                    assert_eq!(editor.candidate().unwrap(), style);
+                }
+            }
+            assert!(!editor.apply_semantics_requested);
+        }
+    }
+
+    #[test]
+    fn unfinished_input_blocks_switch_and_apply_without_accepting_a_prefix() {
+        let mut app = legacy_style_app();
+        let before = app.tab.doc.clone();
+        send(&mut app, Action::Open);
+        for raw in ["", "-", ".", "5.", "1e", "5 m", "0,5 cm", "1e999", "-0"] {
+            send(&mut app, Action::Input(Field::Bond, raw.into()));
+            let accepted = input(app.tab.styles.editor.as_ref().unwrap(), Field::Bond).accepted;
+            send(&mut app, Action::DisplayUnit(Unit::Millimetres));
+            send(&mut app, Action::CommitField(Field::Bond));
+            send(&mut app, Action::Apply);
+            let editor = app.tab.styles.editor.as_ref().unwrap();
+            assert_eq!(input(editor, Field::Bond).text, raw);
+            assert_eq!(input(editor, Field::Bond).accepted, accepted);
+            assert!(editor.candidate().is_err());
+            assert_eq!(editor.display_unit, Unit::Points);
+            assert_eq!(app.appearance.drawing_style_unit, Unit::Points);
+            assert_eq!(app.tab.doc, before);
+            assert!(!app.dirty());
+        }
+        send(&mut app, Action::Input(Field::Bond, "0.5 cm".into()));
+        let candidate = app.tab.styles.editor.as_ref().unwrap().candidate().unwrap();
+        assert_eq!(
+            input(app.tab.styles.editor.as_ref().unwrap(), Field::Bond).accepted,
+            before.drawing_style.bond_length_pt
+        );
+        send(&mut app, Action::DisplayUnit(Unit::Millimetres));
+        let editor = app.tab.styles.editor.as_ref().unwrap();
+        assert_eq!(editor.candidate().unwrap(), candidate);
+        assert_eq!(input(editor, Field::Bond).text, "5");
+        assert_eq!(app.tab.doc, before);
+        send(&mut app, Action::CommitField(Field::Bond));
+        assert_eq!(app.tab.doc, before);
+        send(&mut app, Action::Cancel);
+        assert_eq!(app.appearance.drawing_style_unit, Unit::Millimetres);
+        assert_eq!(app.tab.doc, before);
+        send(&mut app, Action::Open);
+        assert_eq!(
+            app.tab.styles.editor.as_ref().unwrap().display_unit,
+            Unit::Millimetres
+        );
+    }
+
+    #[test]
+    fn font_and_percentage_keep_their_units_and_do_not_block_dimension_switches() {
+        let style = DrawingStyle::default();
+        let mut editor = Editor::new(&style, 0, Unit::Points);
+        editor
+            .inputs
+            .iter_mut()
+            .find(|(f, _)| *f == Field::FontSize)
+            .unwrap()
+            .1
+            .text = "10 mm".into();
+        assert!(
+            editor
+                .candidate()
+                .unwrap_err()
+                .contains("Label size uses pt")
+        );
+        editor.change_unit(Unit::Centimetres).unwrap();
+        editor
+            .inputs
+            .iter_mut()
+            .find(|(f, _)| *f == Field::FontSize)
+            .unwrap()
+            .1
+            .text = "10 pt".into();
+        assert_eq!(editor.candidate().unwrap(), style);
+        assert_eq!(input(&editor, Field::Spacing).text, "18");
+        editor
+            .inputs
+            .iter_mut()
+            .find(|(f, _)| *f == Field::Line)
+            .unwrap()
+            .1
+            .text = "3 pt".into();
+        assert!(editor.candidate().unwrap_err().contains("Bold width"));
+        editor.change_unit(Unit::Millimetres).unwrap();
+        assert!(
+            editor.candidate().is_err(),
+            "switching units must not hide cross-field validation"
+        );
+    }
+
+    #[test]
+    fn background_style_drafts_keep_incomplete_units_until_a_commit_boundary() {
+        let mut app = legacy_style_app();
+        let before = app.tab.doc.clone();
+        send(&mut app, Action::Open);
+        send(&mut app, Action::Input(Field::Bond, "5 m".into()));
+        app.add_tab();
+        app.tab.busy = false;
+        send(&mut app, Action::Open);
+        send(&mut app, Action::DisplayUnit(Unit::Millimetres));
+        let hidden = app.tabs.background[0].styles.editor.as_ref().unwrap();
+        assert_eq!(hidden.display_unit, Unit::Points);
+        assert_eq!(input(hidden, Field::Bond).text, "5 m");
+        app.select_tab(0);
+        let editor = app.tab.styles.editor.as_ref().unwrap();
+        assert_eq!(editor.display_unit, Unit::Points);
+        assert!(
+            editor
+                .unit_notice
+                .as_ref()
+                .unwrap()
+                .contains("still uses pt")
+        );
+        assert_eq!(input(editor, Field::Bond).text, "5 m");
+        send(&mut app, Action::Input(Field::Bond, "5 mm".into()));
+        assert_eq!(
+            app.tab.styles.editor.as_ref().unwrap().display_unit,
+            Unit::Points
+        );
+        send(&mut app, Action::CommitField(Field::Bond));
+        let editor = app.tab.styles.editor.as_ref().unwrap();
+        assert_eq!(editor.display_unit, Unit::Millimetres);
+        assert!(editor.unit_notice.is_none());
+        let candidate = editor.candidate().unwrap();
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
+        app.select_tab(1);
+        send(&mut app, Action::DisplayUnit(Unit::Centimetres));
+        app.select_tab(0);
+        let editor = app.tab.styles.editor.as_ref().unwrap();
+        assert_eq!(editor.display_unit, Unit::Centimetres);
+        assert_eq!(editor.candidate().unwrap(), candidate);
+        assert_eq!(app.tab.doc, before);
+    }
+
+    #[test]
+    fn a_real_unit_input_applies_once_and_history_restores_the_exact_document() {
+        let mut app = legacy_style_app();
+        let before = app.tab.doc.clone();
+        send(&mut app, Action::Open);
+        send(&mut app, Action::Input(Field::Bond, "0.5 cm".into()));
+        send(&mut app, Action::Input(Field::Line, "0.25 mm".into()));
+        send(&mut app, Action::CommitField(Field::Line));
+        assert_eq!(app.tab.doc, before);
+        send(&mut app, Action::DisplayUnit(Unit::Centimetres));
+        send(&mut app, Action::Apply);
+        let after = app.tab.doc.clone();
+        assert_eq!(
+            after.drawing_style.bond_length_pt,
+            units::parse("5 mm", Unit::Points).unwrap().points
+        );
+        assert_eq!(after.atoms[0].position, before.atoms[0].position);
+        assert!(app.dirty());
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+        assert!(!app.tab.history.can_undo());
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, after);
+        assert_eq!(app.appearance.drawing_style_unit, Unit::Centimetres);
     }
 
     #[tokio::test]
@@ -502,16 +822,103 @@ pub enum Field {
     Spacing,
 }
 impl Field {
-    fn label(self) -> &'static str {
-        match self {
-            Self::Bond => "Bond length (pt)",
-            Self::FontSize => "Label size (pt)",
-            Self::Line => "Line width (pt)",
-            Self::Bold => "Bold width (pt)",
-            Self::Margin => "Label margin (pt)",
-            Self::Hash => "Hash spacing (pt)",
-            Self::Spacing => "Bond spacing (%)",
+    fn dimension(self) -> Option<Dimension> {
+        Some(match self {
+            Self::Bond => Dimension::Bond,
+            Self::Line => Dimension::Line,
+            Self::Bold => Dimension::Bold,
+            Self::Margin => Dimension::Margin,
+            Self::Hash => Dimension::Hash,
+            Self::FontSize | Self::Spacing => return None,
+        })
+    }
+    fn label(self, unit: Unit) -> String {
+        if let Some(dimension) = self.dimension() {
+            format!("{} ({unit})", dimension.name())
+        } else {
+            match self {
+                Self::FontSize => "Label size (pt)",
+                _ => "Bond spacing (%)",
+            }
+            .into()
         }
+    }
+    fn format(self, value: f32, unit: Unit) -> String {
+        if self.dimension().is_some() {
+            units::format(value, unit)
+        } else {
+            value.to_string()
+        }
+    }
+    fn parse(self, text: &str, unit: Unit) -> Result<f32, String> {
+        let value = if self == Self::Spacing {
+            text.trim()
+                .parse::<f32>()
+                .map_err(|_| "Enter a number for bond spacing (%).".to_string())?
+        } else {
+            let parsed = units::parse(
+                text,
+                if self == Self::FontSize {
+                    Unit::Points
+                } else {
+                    unit
+                },
+            )
+            .map_err(|error| format!("{}: {error}", self.label(unit)))?;
+            if self == Self::FontSize && parsed.unit != Unit::Points {
+                return Err("Label size uses pt; enter a bare number or add pt.".into());
+            }
+            parsed.points
+        };
+        self.validate(value, unit)?;
+        Ok(value)
+    }
+    fn validate(self, value: f32, unit: Unit) -> Result<(), String> {
+        if let Some(dimension) = self.dimension() {
+            return dimension.validate(value, unit);
+        }
+        let (min, max, suffix) = if self == Self::FontSize {
+            (4., 144., "pt")
+        } else {
+            (5., 40., "%")
+        };
+        if value.is_finite() && (min..=max).contains(&value) {
+            Ok(())
+        } else {
+            Err(format!(
+                "{} must be between {min} and {max} {suffix}.",
+                self.label(unit)
+            ))
+        }
+    }
+}
+
+/// `accepted` is never reconstructed from rounded display text. While typing,
+/// candidate() reads a provisional value without accepting or applying it.
+struct Input {
+    text: String,
+    rendered: String,
+    accepted: f32,
+}
+impl Input {
+    fn new(field: Field, value: f32, unit: Unit) -> Self {
+        let text = field.format(value, unit);
+        Self {
+            rendered: text.clone(),
+            text,
+            accepted: value,
+        }
+    }
+    fn value(&self, field: Field, unit: Unit) -> Result<f32, String> {
+        if self.text == self.rendered {
+            field.validate(self.accepted, unit)?;
+            Ok(self.accepted)
+        } else {
+            field.parse(&self.text, unit)
+        }
+    }
+    fn accept(&mut self, field: Field, value: f32, unit: Unit) {
+        *self = Self::new(field, value, unit);
     }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -561,6 +968,8 @@ pub enum Action {
     Name(String),
     Font(String),
     Input(Field, String),
+    CommitField(Field),
+    DisplayUnit(Unit),
     Advanced(bool),
     Matching(bool),
     Scale(bool),
@@ -578,17 +987,23 @@ pub struct State {
 pub struct Editor {
     font_options: iced::widget::combo_box::State<String>,
     original: DrawingStyle,
+    base: DrawingStyle,
     epoch: u64,
     name: String,
     font: String,
-    inputs: Vec<(Field, String)>,
+    inputs: Vec<(Field, Input)>,
+    display_unit: Unit,
+    unit_notice: Option<String>,
+    /// Preserve deliberate Apply semantics even if the candidate equals the
+    /// original (matching overrides can still be normalized).
+    apply_semantics_requested: bool,
     advanced: bool,
     export_menu: bool,
     matching: bool,
     scale: bool,
 }
 impl Editor {
-    fn new(style: &DrawingStyle, epoch: u64) -> Self {
+    fn new(style: &DrawingStyle, epoch: u64, unit: Unit) -> Self {
         let mut editor = Self {
             font_options: iced::widget::combo_box::State::new(
                 reshiki::style::font_families()
@@ -597,10 +1012,14 @@ impl Editor {
                     .collect(),
             ),
             original: style.clone(),
+            base: style.clone(),
             epoch,
             name: String::new(),
             font: String::new(),
             inputs: vec![],
+            display_unit: unit,
+            unit_notice: None,
+            apply_semantics_requested: false,
             advanced: false,
             export_menu: false,
             matching: true,
@@ -610,8 +1029,10 @@ impl Editor {
         editor
     }
     fn set(&mut self, style: &DrawingStyle) {
+        self.base = style.clone();
         self.name = style.name.clone();
         self.font = style.font_family.clone();
+        self.unit_notice = None;
         self.inputs = [
             (Field::FontSize, style.font_size_pt),
             (Field::Bond, style.bond_length_pt),
@@ -622,34 +1043,92 @@ impl Editor {
             (Field::Spacing, style.bond_spacing_ratio * 100.),
         ]
         .into_iter()
-        .map(|(field, n)| (field, n.to_string()))
+        .map(|(field, n)| (field, Input::new(field, n, self.display_unit)))
         .collect();
     }
     fn candidate(&self) -> Result<DrawingStyle, String> {
-        let mut style = self.original.clone();
+        let mut style = self.base.clone();
         style.name = self.name.trim().into();
         style.font_family = self.font.trim().into();
         for (field, input) in &self.inputs {
-            let value = input
-                .trim()
-                .parse::<f32>()
-                .map_err(|_| format!("Enter a number for {}.", field.label().to_lowercase()))?;
+            let value = input.value(*field, self.display_unit)?;
+            if let Some(dimension) = field.dimension() {
+                // Preserve imported/native derived coordinates exactly for an
+                // unchanged point value, even within validation tolerance.
+                if value.to_bits() != dimension.get(&style).to_bits() {
+                    dimension.set(&mut style, value);
+                }
+                continue;
+            }
             match field {
-                Field::Bond => style.set_bond_length(value),
                 Field::FontSize => style.font_size_pt = value,
-                Field::Line => style.line_width_pt = value,
-                Field::Bold => style.bold_width_pt = value,
-                Field::Margin => style.margin_width_pt = value,
-                Field::Hash => style.hash_spacing_pt = value,
-                Field::Spacing => style.bond_spacing_ratio = value / 100.,
+                Field::Spacing if value != style.bond_spacing_ratio * 100. => {
+                    style.bond_spacing_ratio = value / 100.
+                }
+                _ => {}
             }
         }
         style.validate()?;
         Ok(style)
     }
+
+    fn change_unit(&mut self, unit: Unit) -> Result<(), String> {
+        if self.display_unit == unit {
+            self.unit_notice = None;
+            return Ok(());
+        }
+        // Preflight the whole conversion before touching any text or value.
+        let values = self
+            .inputs
+            .iter()
+            .enumerate()
+            .filter(|(_, (field, _))| field.dimension().is_some())
+            .map(|(index, (field, input))| {
+                input
+                    .value(*field, self.display_unit)
+                    .map(|value| (index, value))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        for (index, value) in values {
+            let (field, input) = &mut self.inputs[index];
+            input.accept(*field, value, unit);
+        }
+        self.display_unit = unit;
+        self.unit_notice = None;
+        Ok(())
+    }
+
+    fn commit_field(&mut self, field: Field) -> Result<(), String> {
+        if let Some((_, input)) = self.inputs.iter_mut().find(|(f, _)| *f == field) {
+            let value = input.value(field, self.display_unit)?;
+            input.accept(field, value, self.display_unit);
+        }
+        Ok(())
+    }
+
+    fn mark_custom(&mut self) {
+        self.apply_semantics_requested = true;
+        if Preset::ALL.iter().any(|p| self.name == p.to_string()) || self.name == "Presentation" {
+            self.name = "Custom".into();
+        }
+    }
 }
 
 impl App {
+    /// Hidden invalid drafts retain their original unit context. Retry only at
+    /// a deliberate boundary, never halfway through typing a number.
+    pub(super) fn sync_drawing_style_unit(&mut self) {
+        let preferred = self.appearance.drawing_style_unit;
+        if let Some(editor) = &mut self.tab.styles.editor
+            && editor.change_unit(preferred).is_err()
+        {
+            editor.unit_notice = Some(format!(
+                "This draft still uses {}. Finish the dimension and press Enter to use {preferred}.",
+                editor.display_unit
+            ));
+        }
+    }
+
     pub(super) fn quick_drawing_style(&mut self, choice: Choice) -> Task<Message> {
         match choice {
             Choice::Details | Choice::Custom => {
@@ -657,6 +1136,7 @@ impl App {
                 if choice == Choice::Custom
                     && let Some(editor) = &mut self.tab.styles.editor
                 {
+                    editor.apply_semantics_requested = true;
                     editor.name = "Custom".into();
                 }
                 task
@@ -728,6 +1208,7 @@ impl App {
                 self.tab.styles.editor = Some(Editor::new(
                     &self.tab.doc.drawing_style,
                     self.tab.file_epoch,
+                    self.appearance.drawing_style_unit,
                 ));
                 self.inspector_tab = InspectorTab::DrawingStyle;
                 self.inspector_open = true;
@@ -747,16 +1228,27 @@ impl App {
                     Err("The document style changed. Reopen Drawing style before applying.".into())
                 } else {
                     editor.candidate().and_then(|style| {
+                        if !editor.apply_semantics_requested && style == self.tab.doc.drawing_style
+                        {
+                            return Ok(None);
+                        }
                         reshiki::document_styles::apply(
                             &self.tab.doc,
                             style,
                             editor.matching,
                             editor.scale,
                         )
+                        .map(Some)
                     })
                 };
                 match result {
-                    Ok(doc) => {
+                    Ok(None) => {
+                        self.tab.styles.editor = None;
+                        self.inspector_tab = InspectorTab::Properties;
+                        self.status = "Drawing style unchanged".into();
+                        self.error = false;
+                    }
+                    Ok(Some(doc)) => {
                         let before = self.tab.doc.clone();
                         self.tab.doc = doc;
                         self.changed(before);
@@ -770,6 +1262,30 @@ impl App {
                         self.status = error;
                         self.error = true;
                     }
+                }
+            }
+            Action::DisplayUnit(unit) => {
+                let Some(editor) = &mut self.tab.styles.editor else {
+                    return Task::none();
+                };
+                if let Err(error) = editor.change_unit(unit) {
+                    editor.unit_notice = Some(format!("Units unchanged. {error}"));
+                    return Task::none();
+                }
+                self.appearance.drawing_style_unit = unit;
+                if let Err(error) = self.appearance.save() {
+                    self.status = format!("Could not save dimension unit preference: {error}");
+                    self.error = true;
+                }
+            }
+            Action::CommitField(field) => {
+                let Some(editor) = &mut self.tab.styles.editor else {
+                    return Task::none();
+                };
+                if let Err(error) = editor.commit_field(field) {
+                    editor.unit_notice = Some(error);
+                } else {
+                    self.sync_drawing_style_unit();
                 }
             }
             Action::Load => {
@@ -814,6 +1330,7 @@ impl App {
                 match result {
                     Ok(Some(style)) => {
                         if let Some(editor) = &mut self.tab.styles.editor {
+                            editor.apply_semantics_requested = true;
                             editor.set(&style);
                         }
                     }
@@ -873,33 +1390,46 @@ impl App {
             action => {
                 if let Some(editor) = &mut self.tab.styles.editor {
                     match action {
-                        Action::Preset(preset) => editor.set(&preset.style()),
-                        Action::Custom => editor.name = "Custom".into(),
-                        Action::Name(name) => editor.name = name,
+                        Action::Preset(preset) => {
+                            editor.apply_semantics_requested = true;
+                            editor.set(&preset.style());
+                        }
+                        Action::Custom => {
+                            editor.apply_semantics_requested = true;
+                            editor.name = "Custom".into();
+                        }
+                        Action::Name(name) => {
+                            editor.apply_semantics_requested |= editor.name != name;
+                            editor.name = name;
+                        }
                         Action::Font(font) => {
-                            editor.font = font;
-                            if Preset::ALL.iter().any(|p| editor.name == p.to_string())
-                                || editor.name == "Presentation"
-                            {
-                                editor.name = "Custom".into();
+                            if editor.font != font {
+                                editor.font = font;
+                                editor.mark_custom();
                             }
                         }
                         Action::Input(field, value) => {
                             if let Some((_, input)) =
                                 editor.inputs.iter_mut().find(|(f, _)| *f == field)
+                                && input.text != value
                             {
-                                *input = value;
-                            }
-                            if Preset::ALL.iter().any(|p| editor.name == p.to_string())
-                                || editor.name == "Presentation"
-                            {
-                                editor.name = "Custom".into();
+                                input.text = value;
+                                editor.mark_custom();
+                                if editor.display_unit == self.appearance.drawing_style_unit {
+                                    editor.unit_notice = None;
+                                }
                             }
                         }
                         Action::Advanced(value) => editor.advanced = value,
                         Action::ExportMenu(value) => editor.export_menu = value,
-                        Action::Matching(value) => editor.matching = value,
-                        Action::Scale(value) => editor.scale = value,
+                        Action::Matching(value) => {
+                            editor.apply_semantics_requested = true;
+                            editor.matching = value;
+                        }
+                        Action::Scale(value) => {
+                            editor.apply_semantics_requested = true;
+                            editor.scale = value;
+                        }
                         _ => {}
                     }
                 }
@@ -1012,16 +1542,30 @@ impl App {
             .padding(7)
             .width(Length::Fill),
         );
-        for (field, value) in &editor.inputs {
+        body = body.push(
+            row![
+                text("Dimension units").size(12).width(Length::Fill),
+                super::workspace::hover_hint(
+                    crate::appearance::pick_list(Unit::ALL, Some(editor.display_unit), move |unit| action(Action::DisplayUnit(unit)))
+                        .text_size(12).padding(6).width(104),
+                    "Bare dimensions use this unit. Add cm, mm or pt to override. Label size always uses pt. Other tools keep their labeled units.",
+                    tooltip::Position::Top,
+                ),
+            ].align_y(Alignment::Center).spacing(8),
+        );
+        for (field, input) in &editor.inputs {
             if !editor.advanced && !matches!(field, Field::FontSize | Field::Bond | Field::Line) {
                 continue;
             }
             let field = *field;
             body = body.push(
                 row![
-                    text(field.label()).size(12).width(Length::Fill),
-                    crate::appearance::text_input("", value)
+                    text(field.label(editor.display_unit))
+                        .size(12)
+                        .width(Length::Fill),
+                    crate::appearance::text_input("", &input.text)
                         .on_input(move |s| action(Action::Input(field, s)))
+                        .on_submit(action(Action::CommitField(field)))
                         .size(13)
                         .padding(6)
                         .width(104)
@@ -1066,6 +1610,9 @@ impl App {
         body = body.push(text("Load .cds, .cdx or .cdxml for label fonts and bond settings. Template artwork and page layout are not imported.")
             .size(11).style(super::workspace::muted_text));
         let mut footer = column![super::workspace::horizontal_line()].spacing(8);
+        if let Some(notice) = &editor.unit_notice {
+            footer = footer.push(text(notice).size(11).style(super::workspace::muted_text));
+        }
         if let Err(error) = &candidate {
             footer = footer.push(text(error.clone()).size(12).style(
                 crate::appearance::text_color(iced::Color::from_rgb8(164, 54, 47)),
