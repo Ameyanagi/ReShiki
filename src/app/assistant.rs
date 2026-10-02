@@ -136,6 +136,11 @@ impl Drop for State {
     }
 }
 impl State {
+    #[cfg(test)]
+    pub(super) fn input_text(&self) -> String {
+        self.input.text()
+    }
+
     pub(super) fn has_unfinished_work(&self) -> bool {
         self.busy
             || self.draft.is_some()
@@ -1474,6 +1479,7 @@ impl App {
             .map(|m| effort_label(state.preferences.effort(m)))
             .unwrap_or("Reasoning");
         let editor = text_editor(&state.input)
+            .id("assistant-input")
             .placeholder(if state.messages.is_empty() {
                 "Describe a molecule, or paste an image…"
             } else {
@@ -1481,6 +1487,9 @@ impl App {
             })
             .on_action(|a| Message::Assistant(Action::Input(a)))
             .key_binding(|key| {
+                if !matches!(key.status, text_editor::Status::Focused { .. }) {
+                    return text_editor::Binding::from_key_press(key);
+                }
                 if key.modifiers.command()
                     && key.key == iced::keyboard::Key::Named(iced::keyboard::key::Named::Enter)
                 {

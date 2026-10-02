@@ -20,30 +20,44 @@ pub fn wrap(
     content: Element<'_, Message>,
     help_open: bool,
     image_open: bool,
+    updates_open: bool,
+    atom_text_open: bool,
 ) -> Element<'_, Message> {
-    Element::new(FileShortcuts(content, help_open, image_open))
+    Element::new(FileShortcuts {
+        content,
+        help_open,
+        image_open,
+        updates_open,
+        atom_text_open,
+    })
 }
 
-struct FileShortcuts<'a>(Element<'a, Message>, bool, bool);
+struct FileShortcuts<'a> {
+    content: Element<'a, Message>,
+    help_open: bool,
+    image_open: bool,
+    updates_open: bool,
+    atom_text_open: bool,
+}
 
 impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
     fn tag(&self) -> tree::Tag {
-        self.0.as_widget().tag()
+        self.content.as_widget().tag()
     }
     fn state(&self) -> tree::State {
-        self.0.as_widget().state()
+        self.content.as_widget().state()
     }
     fn children(&self) -> Vec<Tree> {
-        self.0.as_widget().children()
+        self.content.as_widget().children()
     }
     fn diff(&self, tree: &mut Tree) {
-        self.0.as_widget().diff(tree);
+        self.content.as_widget().diff(tree);
     }
     fn size(&self) -> Size<Length> {
-        self.0.as_widget().size()
+        self.content.as_widget().size()
     }
     fn size_hint(&self) -> Size<Length> {
-        self.0.as_widget().size_hint()
+        self.content.as_widget().size_hint()
     }
     fn layout(
         &mut self,
@@ -51,7 +65,7 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
-        self.0.as_widget_mut().layout(tree, renderer, limits)
+        self.content.as_widget_mut().layout(tree, renderer, limits)
     }
     fn draw(
         &self,
@@ -63,7 +77,7 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
-        self.0
+        self.content
             .as_widget()
             .draw(tree, renderer, theme, style, layout, cursor, viewport);
     }
@@ -74,7 +88,7 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
         renderer: &Renderer,
         operation: &mut dyn Operation,
     ) {
-        self.0
+        self.content
             .as_widget_mut()
             .operate(tree, layout, renderer, operation);
     }
@@ -89,7 +103,22 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        if self.2
+        // Updates has no text fields. Stop keys before file routing and any
+        // still-focused editor underneath the dialog sees them.
+        if self.updates_open && matches!(event, Event::Keyboard(_) | Event::InputMethod(_)) {
+            if matches!(
+                event,
+                Event::Keyboard(keyboard::Event::KeyPressed {
+                    key: keyboard::Key::Named(keyboard::key::Named::Escape),
+                    ..
+                })
+            ) {
+                shell.publish(Message::Updates(super::updates::Action::Show(false)));
+            }
+            shell.capture_event();
+            return;
+        }
+        if self.image_open
             && let Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) = event
         {
             if matches!(key, keyboard::Key::Named(keyboard::key::Named::Escape)) {
@@ -100,7 +129,23 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
             shell.capture_event();
             return;
         }
-        if self.1
+        // A text input consumes Escape to unfocus itself. The atom-label
+        // dialog promises Cancel on the first press, including while typing.
+        if self.atom_text_open
+            && matches!(
+                event,
+                Event::Keyboard(keyboard::Event::KeyPressed {
+                    key: keyboard::Key::Named(keyboard::key::Named::Escape),
+                    ..
+                })
+            )
+        {
+            shell.publish(Message::AtomText(super::atom_text::Action::Cancel));
+            shell.capture_event();
+            return;
+        }
+        if self.help_open
+            && !self.atom_text_open
             && let Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) = event
         {
             if matches!(key, keyboard::Key::Named(keyboard::key::Named::Escape))
@@ -120,11 +165,11 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
         }
         let untyped = without_command_text(event);
         let event = untyped.as_ref().unwrap_or(event);
-        self.0.as_widget_mut().update(
+        self.content.as_widget_mut().update(
             tree, event, layout, cursor, renderer, clipboard, shell, viewport,
         );
         if let Some(mut fields) = Fields::after(event, shell.is_event_captured()) {
-            self.0
+            self.content
                 .as_widget_mut()
                 .operate(tree, layout, renderer, &mut fields);
             fields.finish(shell);
@@ -138,7 +183,7 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
-        self.0
+        self.content
             .as_widget()
             .mouse_interaction(tree, layout, cursor, viewport, renderer)
     }
@@ -150,7 +195,12 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
         viewport: &Rectangle,
         translation: Vector,
     ) -> Option<overlay::Element<'a, Message, Theme, Renderer>> {
-        self.0
+        // A popover in the workspace must not float above the modal dialog or
+        // receive keys before this wrapper does.
+        if self.updates_open {
+            return None;
+        }
+        self.content
             .as_widget_mut()
             .overlay(tree, layout, renderer, viewport, translation)
             .map(|overlay| overlay::Element::new(Box::new(FieldKeys(overlay))))
