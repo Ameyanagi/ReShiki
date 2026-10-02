@@ -274,6 +274,47 @@ fn automatic_bond_ink_stays_legible_on_exact_highlights_without_mutating_its_col
 }
 
 #[test]
+fn atom_halo_stays_above_different_incident_bond_colors_in_both_insertion_orders() {
+    for canvas in CanvasTheme::ALL {
+        for reverse in [false, true] {
+            let mut doc = Document::default();
+            doc.canvas_theme = canvas;
+            let center = doc.add_atom("C", Point::default());
+            let left = doc.add_atom("C", Point::new(-42., 0.));
+            let right = doc.add_atom("C", Point::new(42., 0.));
+            let cyan = Color::Custom([129, 230, 255]);
+            let yellow = Color::Custom([255, 198, 0]);
+            doc.atom_mut(center).unwrap().display.highlight = Some(cyan);
+            doc.add_bond(center, left, 1, "plain");
+            doc.add_bond(center, right, 1, "plain");
+            doc.bonds[0].highlight = Some(cyan);
+            doc.bonds[1].highlight = Some(yellow);
+            if reverse {
+                doc.bonds.reverse();
+            }
+            let colors: Vec<_> = scene::primitives(&doc)
+                .iter()
+                .filter_map(|primitive| match primitive {
+                    Primitive::Path {
+                        style,
+                        filled: true,
+                        ..
+                    } => style.fill.map(|color| canvas.color(color.rgb())),
+                    _ => None,
+                })
+                .filter(|rgb| *rgb == [129, 230, 255] || *rgb == [255, 198, 0])
+                .collect();
+            assert_eq!(
+                colors.len(),
+                3,
+                "two underlays plus the independent atom halo"
+            );
+            assert_eq!(colors.last(), Some(&[129, 230, 255]));
+        }
+    }
+}
+
+#[test]
 #[ignore = "Opt-in native highlight comparison artifacts"]
 fn write_native_highlight_comparison_artifacts() {
     let folder = std::path::PathBuf::from(std::env::var("RESHIKI_HIGHLIGHT_EVIDENCE_DIR").unwrap());
