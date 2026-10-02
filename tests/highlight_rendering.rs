@@ -315,6 +315,166 @@ fn atom_halo_stays_above_different_incident_bond_colors_in_both_insertion_orders
 }
 
 #[test]
+fn atom_halo_stays_above_an_unrelated_crossing_bond_color() {
+    let mut doc = Document::default();
+    let center = doc.add_atom("C", Point::default());
+    let left = doc.add_atom("C", Point::new(-42., 0.));
+    let above = doc.add_atom("C", Point::new(0., -42.));
+    let below = doc.add_atom("C", Point::new(0., 42.));
+    let cyan = Color::Custom([129, 230, 255]);
+    let yellow = Color::Custom([255, 198, 0]);
+    doc.atom_mut(center).unwrap().display.highlight = Some(cyan);
+    doc.add_bond(center, left, 1, "plain");
+    doc.add_bond(above, below, 1, "plain");
+    doc.bonds[0].highlight = Some(cyan);
+    doc.bonds[1].highlight = Some(yellow);
+    let drawing = scene::primitives(&doc);
+    let colors: Vec<_> = drawing
+        .iter()
+        .filter_map(|primitive| match primitive {
+            Primitive::Path {
+                style,
+                filled: true,
+                ..
+            } if style.fill == Some(cyan) || style.fill == Some(yellow) => style.fill,
+            _ => None,
+        })
+        .collect();
+    assert_eq!(colors, [cyan, yellow, cyan]);
+}
+
+fn inside_paint(point: Point, contours: &[Vec<Point>]) -> bool {
+    contours.iter().any(|contour| {
+        let mut inside = false;
+        for pair in contour.windows(2) {
+            let [a, b] = pair else { continue };
+            if reshiki::graphics::segment_distance(point, *a, *b) < 0.001 {
+                return true;
+            }
+            if (a.y > point.y) != (b.y > point.y)
+                && point.x < (b.x - a.x) * (point.y - a.y) / (b.y - a.y) + a.x
+            {
+                inside = !inside;
+            }
+        }
+        inside
+    })
+}
+
+fn paint_contours(drawing: &[Primitive], color: Color) -> Vec<Vec<Point>> {
+    drawing
+        .iter()
+        .flat_map(|primitive| match primitive {
+            Primitive::Path {
+                commands,
+                style,
+                filled: true,
+            } if style.fill == Some(color) => reshiki::graphics::flattened(commands),
+            _ => Vec::new(),
+        })
+        .collect()
+}
+
+#[test]
+fn wavy_bond_ink_is_inside_its_highlight_with_small_fonts_and_thick_lines() {
+    for (font_size, line_width) in [(4., 1.), (10., 2.)] {
+        let mut doc = Document::default();
+        doc.drawing_style.font_size_pt = font_size;
+        doc.drawing_style.line_width_pt = line_width;
+        let a = doc.add_atom("C", Point::default());
+        let b = doc.add_atom("C", Point::new(42., 0.));
+        doc.add_bond(a, b, 1, "wavy");
+        let paint = Color::Custom([190, 230, 240]);
+        doc.bonds[0].highlight = Some(paint);
+        let drawing = scene::primitives(&doc);
+        let contours = paint_contours(&drawing, paint);
+        let mut sampled = 0;
+        for primitive in &drawing {
+            if let Primitive::Path {
+                commands,
+                style,
+                filled: false,
+            } = primitive
+            {
+                for point in reshiki::graphics::flattened(commands).into_iter().flatten() {
+                    for angle in (0..8).map(|i| i as f32 * std::f32::consts::FRAC_PI_4) {
+                        let edge = point.offset(
+                            angle.cos() * style.width() / 2.,
+                            angle.sin() * style.width() / 2.,
+                        );
+                        assert!(
+                            inside_paint(edge, &contours),
+                            "font {font_size}pt, line {line_width}pt: {edge:?}"
+                        );
+                        sampled += 1;
+                    }
+                }
+            }
+        }
+        assert!(sampled > 100);
+    }
+}
+
+#[test]
+fn sharp_bold_and_wedge_junction_ink_stays_inside_its_highlight() {
+    for display in ["bold", "wedge", "hollow_wedge"] {
+        for angle in [10_f32, 30., 90., 150.] {
+            let mut doc = Document::default();
+            doc.drawing_style.font_size_pt = 10.;
+            doc.drawing_style.line_width_pt = 0.6;
+            doc.drawing_style.bold_width_pt = 2.;
+            let a = doc.add_atom("C", Point::default());
+            let b = doc.add_atom("C", Point::new(42., 0.));
+            let c = doc.add_atom(
+                "C",
+                Point::new(
+                    angle.to_radians().cos() * 42.,
+                    angle.to_radians().sin() * 42.,
+                ),
+            );
+            // Wide ends meet at the central atom.
+            doc.add_bond(b, a, 1, display);
+            doc.add_bond(c, a, 1, display);
+            let paint = Color::Custom([190, 230, 240]);
+            for bond in &mut doc.bonds {
+                bond.highlight = Some(paint);
+            }
+            let drawing = scene::primitives(&doc);
+            let contours = paint_contours(&drawing, paint);
+            let mut sampled = 0;
+            for primitive in &drawing {
+                let (points, stroke) = match primitive {
+                    Primitive::Path {
+                        commands,
+                        style,
+                        filled,
+                    } if style.fill != Some(paint) => (
+                        reshiki::graphics::flattened(commands)
+                            .into_iter()
+                            .flatten()
+                            .collect(),
+                        if *filled { 0. } else { style.width() / 2. },
+                    ),
+                    Primitive::Polygon(points) => (points.clone(), 0.),
+                    _ => continue,
+                };
+                for point in points {
+                    for direction in (0..8).map(|i| i as f32 * std::f32::consts::FRAC_PI_4) {
+                        let edge = point.offset(direction.cos() * stroke, direction.sin() * stroke);
+                        assert!(
+                            inside_paint(edge, &contours),
+                            "{display}, {angle} degrees: {edge:?}"
+                        );
+                        sampled += 1;
+                    }
+                }
+            }
+            assert!(sampled > 0);
+        }
+    }
+}
+
+#[test]
 #[ignore = "Opt-in native highlight comparison artifacts"]
 fn write_native_highlight_comparison_artifacts() {
     let folder = std::path::PathBuf::from(std::env::var("RESHIKI_HIGHLIGHT_EVIDENCE_DIR").unwrap());
