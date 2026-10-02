@@ -245,6 +245,107 @@ const CONTRACTED: &str = r#"<CDXML BondLength="28">
 <b id="11" B="3" E="4"/></fragment></page></CDXML>"#;
 
 #[test]
+fn contracted_and_expanded_atom_ink_follow_their_own_highlight_backgrounds() -> Result {
+    use reshiki::{
+        canvas_theme::{self, CanvasTheme},
+        color_contrast,
+        palette::Palette,
+    };
+    fn text_rgb(node: roxmltree::Node<'_, '_>) -> Result<[u8; 3]> {
+        let run = node
+            .children()
+            .find(|n| n.has_tag_name("t"))
+            .and_then(|n| n.children().find(|n| n.has_tag_name("s")))
+            .ok_or("label run")?;
+        let index = run
+            .attribute("color")
+            .ok_or("text color")?
+            .parse::<usize>()?;
+        if index < 2 {
+            return Ok(if index == 0 { [0; 3] } else { [255; 3] });
+        }
+        let color = node
+            .document()
+            .descendants()
+            .find(|n| n.has_tag_name("colortable"))
+            .and_then(|n| {
+                n.children()
+                    .filter(|n| n.has_tag_name("color"))
+                    .nth(index - 2)
+            })
+            .ok_or("palette color")?;
+        let mut rgb = [0; 3];
+        for (value, axis) in rgb.iter_mut().zip(["r", "g", "b"]) {
+            *value = (color.attribute(axis).ok_or("channel")?.parse::<f64>()? * 255.).round() as u8;
+        }
+        Ok(rgb)
+    }
+    for canvas in [CanvasTheme::Light, CanvasTheme::Dark] {
+        for manual in [None, Some(Color::Custom([71, 40, 210])), Some(Color::Ink)] {
+            let mut source = import_cdxml(CONTRACTED)?.document;
+            source.canvas_theme = canvas;
+            let anchor = source.abbreviations[0].anchor;
+            source.abbreviations[0].highlight = Some(Color::Custom([0; 3]));
+            let atom = source.atom_mut(anchor).ok_or("anchor")?;
+            atom.display.highlight = Some(Color::Custom([255; 3]));
+            atom.display.color_override = manual.is_some();
+            atom.display.hydrogen_color = None;
+            atom.text_style = manual.map(|color| reshiki::typography::TextStyle {
+                color,
+                ..Default::default()
+            });
+            let expected_outer = canvas.color(canvas_theme::atom_color(
+                &source,
+                source.atom(anchor).ok_or("anchor")?,
+            ));
+            let mut expanded = source.clone();
+            expanded.abbreviations.clear();
+            let expected_inner = canvas.color(canvas_theme::atom_color(
+                &expanded,
+                expanded.atom(anchor).ok_or("expanded anchor")?,
+            ));
+            if let Some(color) = manual {
+                assert_eq!(expected_outer, Palette::of(&source).rgb(color));
+                assert_eq!(expected_inner, expected_outer);
+            } else {
+                assert_ne!(expected_inner, expected_outer);
+                assert!(
+                    color_contrast::contrast(expected_outer, [0; 3]) >= color_contrast::TEXT_MIN
+                );
+                assert!(
+                    color_contrast::contrast(expected_inner, [255; 3]) >= color_contrast::TEXT_MIN
+                );
+            }
+            let before = source.clone();
+            let written = xml(&source)?;
+            for written in [written.clone(), from_cdx(&to_cdx(&written)?)?] {
+                let tree = roxmltree::Document::parse(&written)?;
+                let outer = tree
+                    .descendants()
+                    .find(|n| n.attribute("NodeType") == Some("Fragment"))
+                    .ok_or("outer label")?;
+                let inner = outer
+                    .descendants()
+                    .find(|n| n.has_tag_name("n") && n.attribute("Element") == Some("8"))
+                    .ok_or("inner oxygen")?;
+                assert_eq!(
+                    text_rgb(outer)?,
+                    expected_outer,
+                    "visible label, {canvas:?}, {manual:?}"
+                );
+                assert_eq!(
+                    text_rgb(inner)?,
+                    expected_inner,
+                    "native expanded atom, {canvas:?}, {manual:?}"
+                );
+            }
+            assert_eq!(source, before);
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn contracted_label_paint_preserves_existing_internal_colors() -> Result {
     let source = import_cdxml(CONTRACTED)?.document;
     let group = source.abbreviations.first().ok_or("contracted label")?;
