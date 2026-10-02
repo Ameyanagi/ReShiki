@@ -585,8 +585,72 @@ fn sharp_bold_and_wedge_junction_ink_stays_inside_its_highlight() {
 fn write_native_highlight_comparison_artifacts() {
     let folder = std::path::PathBuf::from(std::env::var("RESHIKI_HIGHLIGHT_EVIDENCE_DIR").unwrap());
     std::fs::create_dir_all(&folder).unwrap();
+    // Start with the actual native clipboard fixture, then make the visible
+    // label and its hidden oxygen require opposite automatic foregrounds.
+    // The resulting editable files below come from the production writer.
+    let mut autoink = reshiki::chemistry::cdxml::import_cdxml(include_str!(
+        "fixtures/structure-highlights/native-contracted.cdxml"
+    ))
+    .unwrap()
+    .document;
+    autoink.canvas_theme = CanvasTheme::Light;
+    let anchor = autoink.abbreviations[0].anchor;
+    autoink.abbreviations[0].highlight = Some(Color::Custom([0; 3]));
+    let atom = autoink.atom_mut(anchor).unwrap();
+    atom.display.highlight = Some(Color::Custom([255; 3]));
+    atom.display.color_override = false;
+    atom.display.hydrogen_color = None;
+    atom.text_style = None;
+    let ink = |doc: &Document| {
+        doc.canvas_theme.color(reshiki::canvas_theme::atom_color(
+            doc,
+            doc.atom(anchor).unwrap(),
+        ))
+    };
+    let mut expanded = autoink.clone();
+    assert_eq!(expanded.expand_abbreviations(&[anchor]), 1);
+    let outer_ink = ink(&autoink);
+    let inner_ink = ink(&expanded);
+    assert_ne!(outer_ink, inner_ink);
+    assert!(reshiki::color_contrast::contrast(outer_ink, [0; 3]) >= 4.5);
+    assert!(reshiki::color_contrast::contrast(inner_ink, [255; 3]) >= 4.5);
+    let palette = reshiki::palette::Palette::of(&autoink);
+    let expected = serde_json::json!({
+        "scenario": "Automatic ink on a black contracted OMe halo and white internal oxygen halo",
+        "source_fixture": "tests/fixtures/structure-highlights/native-contracted.cdxml",
+        "generation": "ReShiki Document via the production editable and figure exporters",
+        "foreground_mode": "automatic",
+        "contracted_label": {
+            "text": "OMe", "highlight_rgb": [0, 0, 0], "text_rgb": outer_ink,
+            "abbreviation_count": 1
+        },
+        "expanded_anchor": {
+            "element": "O", "highlight_rgb": [255, 255, 255], "text_rgb": inner_ink,
+            "abbreviation_count": 0
+        },
+        "native_acceptance": "Open CDXML or CDX in Prime; Copy/New/Paste; Expand Label; save both states. Compare the label/oxygen foregrounds and all atom/bond highlights with this expectation.",
+        "atoms": autoink.atoms.iter().map(|atom| serde_json::json!({
+            "rsk_id": atom.id, "element": atom.element, "charge": atom.charge,
+            "highlight_rgb": atom.display.highlight.map(|color| palette.rgb(color))
+        })).collect::<Vec<_>>(),
+        "bonds": autoink.bonds.iter().map(|bond| serde_json::json!({
+            "rsk_atom_ids": [bond.a, bond.b], "order": bond.order,
+            "highlight_rgb": bond.highlight.map(|color| palette.rgb(color))
+        })).collect::<Vec<_>>()
+    });
+    std::fs::write(
+        folder.join("reshiki-ome-auto-ink.expected.json"),
+        serde_json::to_vec_pretty(&expected).unwrap(),
+    )
+    .unwrap();
+    std::fs::write(
+        folder.join("reshiki-ome-auto-ink-expanded.svg"),
+        scene::svg(&expanded),
+    )
+    .unwrap();
     for (name, doc) in [
         ("reshiki-native-prime", native()),
+        ("reshiki-ome-auto-ink", autoink),
         (
             "reshiki-native-prime-acs-font10",
             reshiki::chemistry::cdxml::import_cdxml(include_str!(
