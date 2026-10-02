@@ -219,8 +219,11 @@ class Embedded(
         return size(*self.extent)
 
     def setVisualAreaSize(self, aspect, value):
-        if value.Width > 0 and value.Height > 0:
-            self.extent = (value.Width, value.Height)
+        # This drawing does not reflow to the host's frame. Writer supplies its
+        # rounded twip dimensions on each reopen; adopting them as the intrinsic
+        # size causes cumulative growth. Frame scaling belongs to the container,
+        # while only a newly rendered drawing changes our physical extent.
+        pass
 
     def getPreferredVisualRepresentation(self, aspect):
         result = uno.createUnoStruct("com.sun.star.embed.VisualRepresentation")

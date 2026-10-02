@@ -146,6 +146,13 @@ class SessionTests(unittest.TestCase):
         self.assertTrue(done.is_set())
         self.assertIn("no longer available", self.session["error"])
 
+    def test_host_frame_rounding_does_not_change_intrinsic_extent(self):
+        for _ in range(20):
+            width, height = self.object.extent
+            self.object.setVisualAreaSize(1, extension.size(width + 1, height + 1))
+        self.assertEqual(self.object.extent, self.old[2])
+        self.assertEqual(self.object.native, self.old[0])
+
 
 if __name__ == "__main__":
     unittest.main()
