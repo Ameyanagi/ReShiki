@@ -1,0 +1,40 @@
+{
+  "issue": "https://github.com/Ameyanagi/ReShiki/issues/103",
+  "source": {
+    "repository": "https://github.com/notofonts/noto-cjk",
+    "revision": "f8d157532fbfaeda587e826d4cd5b21a49186f7c",
+    "url": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/Variable/TTF/Subset/NotoSansJP-VF.ttf",
+    "sha256": "f4b373b226668ee33a6e54b02823dcd2d1209f17159f777421ae8c2275160369",
+    "license_url": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/LICENSE",
+    "copyright": "\u00a9 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'.",
+    "axes": [
+      {
+        "tag": "wght",
+        "min": 100.0,
+        "default": 100.0,
+        "max": 900.0
+      }
+    ],
+    "original_family": "Noto Sans JP",
+    "face_index": 0
+  },
+  "generation": {
+    "script": "tools/font-export-probe/prepare_fixture.py",
+    "fonttools": "4.61.1",
+    "characters": "HNO",
+    "family": "ReShiki Font Export Fixture",
+    "static_weights": [
+      100,
+      400,
+      700
+    ],
+    "note": "Subset and rename; retain the original 100 default in the variable fixture."
+  },
+  "files": {
+    "static-100.subset.ttf": "ecb11792a1832d4ce46f46d5f048bdd8d06890376348928fb7c38de216c049db",
+    "static-400.subset.ttf": "50a74d4c0b5ff6e176bc4323fafd8a8859f2d421e021ac4136393454310643e0",
+    "static-700.subset.ttf": "455c03503bab5bb69198c38110363beb22af697a925c79b1f4a77d792d51d07d",
+    "variable-default-100.subset.ttf": "7f686016a8c988d238235e3ee1486b48173ae45348e437e1a471aea6edff7089",
+    "OFL.txt": "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2"
+  }
+}
