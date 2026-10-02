@@ -185,6 +185,32 @@ mod tests {
     }
 
     #[test]
+    fn explicit_structure_copies_offer_native_data_and_plain_text() -> Result<(), String> {
+        let board = NSPasteboard::pasteboardWithUniqueName();
+        let _release = PrivatePasteboard(&board);
+        for (kind, data) in [
+            ("com.mdli.molfile", "MOL\nM  END\n"),
+            ("org.opensmiles.smiles", "CO"),
+            ("chemical/x-cdxml", "<CDXML>日本語</CDXML>"),
+        ] {
+            let native = representation(kind, data);
+            write(
+                &board,
+                &[
+                    native.clone(),
+                    representation("public.utf8-plain-text", data),
+                ],
+            )?;
+            assert_eq!(read(&board, false)?, vec![native]);
+            let text = board
+                .dataForType(&NSString::from_str("public.utf8-plain-text"))
+                .ok_or("Missing clipboard text")?;
+            assert_eq!(text.to_vec(), data.as_bytes());
+        }
+        Ok(())
+    }
+
+    #[test]
     fn private_pasteboard_priorities_formats_and_invalid_writes() -> Result<(), String> {
         let board = NSPasteboard::pasteboardWithUniqueName();
         let _release = PrivatePasteboard(&board);

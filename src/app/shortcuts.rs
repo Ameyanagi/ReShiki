@@ -22,11 +22,6 @@ pub enum Action {
     Nudge(f32, f32),
     Join,
     CopyText(&'static str),
-    Copied {
-        epoch: u64,
-        revision: u64,
-        result: Result<String, String>,
-    },
 }
 
 /// The shortcut of a menu or context row command, as `keys` shows it.
@@ -286,50 +281,14 @@ impl App {
                     self.status = "Select a structure to copy".into();
                     return Task::none();
                 }
-                let engine = self.engine.clone();
-                let mut request = super::Request::molecule(
-                    "export",
-                    editing::selection(&self.tab.doc, &self.tab.selected),
-                );
-                request.format = Some(format.into());
-                let (epoch, revision) = (self.tab.file_epoch, self.tab.revision);
-                return Task::perform(
-                    async move {
-                        engine
-                            .request(request)
-                            .await?
-                            .output
-                            .ok_or_else(|| "No text was exported".into())
-                    },
-                    move |result| {
-                        Message::Shortcut(Action::Copied {
-                            epoch,
-                            revision,
-                            result,
-                        })
-                    },
-                );
-            }
-            Action::Copied {
-                epoch,
-                revision,
-                result,
-            } => {
-                if epoch != self.tab.file_epoch || revision != self.tab.revision {
-                    self.status = "Drawing changed; copy the structure again".into();
-                    return Task::none();
+                if let Some(format) = reshiki::clipboard::CopyFormat::ALL
+                    .into_iter()
+                    .find(|candidate| candidate.code() == format)
+                {
+                    return self.copy_as(format);
                 }
-                match result {
-                    Ok(text) => {
-                        self.status = "Structure text copied".into();
-                        self.error = false;
-                        return iced::clipboard::write(text);
-                    }
-                    Err(error) => {
-                        self.status = error;
-                        self.error = true;
-                    }
-                }
+                self.status = "Unsupported copy format".into();
+                self.error = true;
             }
         }
         Task::none()

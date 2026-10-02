@@ -4,9 +4,21 @@ On Windows, macOS and supported Linux desktop sessions, select drawing objects a
 
 Use **Ctrl+Shift+C** / **Cmd+Shift+C**, or **Export → Copy image**, for a picture of the selection. With nothing selected, it copies the whole drawing. This supplies PDF, PNG and SVG; PNG starts at 1200 dpi. On Windows, large raster previews use a lower resolution to fit clipboard and picture limits, with a notice showing the actual DPI. Resolution metadata preserves the physical size; editable drawing data and vector formats keep their precision. A raster-only drawing representation also carries explicit publication-size bounds for compatible drawing applications. A pasted picture does not contain editable atoms or bonds. View aids such as grid, rulers and crosshair are excluded.
 
-On Windows, normal Copy supplies an editable Office object with the full drawing and a cached preview. Double-click opens ReShiki; **Ctrl+S** updates the open Office document. Copy Image supplies a static figure with SVG text converted to outlines to preserve label placement. SVG file export continues to contain text. [Office editing steps](windows.md#edit-a-drawing-in-office).
+## Copy as
+
+Right-click and choose **Copy as…** to choose one format: **PNG**, **SVG**, **PDF**, **MOL**, **SMILES**, **InChI**, **CDXML**, **CDX**, **RXN · V3000**, or **Reaction SMILES**. The submenu says **selected objects** when there is a selection and **whole drawing** otherwise. It uses the same selection rules as ordinary Copy, retaining required abbreviation and attachment members. It does not automatically select the rest of a partially selected molecule; use **Select molecule** first when that is what you need.
+
+PNG, SVG and PDF copy the visible figure without the canvas background. Molecular formats copy chemical data, not captions or figure layout. Select a molecule within a reaction for MOL, SMILES or InChI. RXN and reaction SMILES require one complete, explicitly defined reaction with reactants and products; a drawn arrow alone does not assign roles. The submenu explains unavailable formats. CDXML and CDX use the strict drawing exporters and do not silently substitute a picture when a feature cannot be represented.
+
+Conversion finishes before the clipboard changes. If conversion fails, or the drawing or selection changes before it is ready, the previous clipboard stays intact. Format warnings appear in the copy receipt. Switching tabs keeps the request with its source drawing; closing that tab before preparation completes discards it. No drawing, selection or Undo history is changed by Copy as.
+
+Text formats also provide ordinary clipboard text. On platforms without native clipboard support, **SVG text** copies the SVG markup; PNG, PDF and CDX remain unavailable and can be exported as files instead. Normal **Copy**, **Copy image**, and their shortcuts keep their existing purpose. The SMILES/MOL/CDXML text shortcuts use the same conversion and warning handling, and still require a selection. For a manual database-search handoff, see [SciFinder structure handoff](scifinder-handoff.md).
+
+Tracked in [#110](https://github.com/Ameyanagi/ReShiki/issues/110). Clipboard recipients choose which offered representation they accept; a successful copy does not establish that another application imported it correctly.
 
 ## Office and macOS
+
+On Windows, normal Copy supplies an editable Office object with the full drawing and a cached preview. Double-click opens ReShiki; **Ctrl+S** updates the open Office document. Copy Image supplies a static figure with SVG text converted to outlines to preserve label placement. SVG file export continues to contain text. [Office editing steps](windows.md#edit-a-drawing-in-office).
 
 Windows desktop Office supports ReShiki OLE objects. Copy the object back into ReShiki to recover its native drawing; Paste picture explicitly reads its preview. Copy Image remains the command for applications that only accept pictures. Normal Copy omits standalone PNG/SVG/bitmap formats because Word prefers them over the editable object; it retains the metafile presentation required by Office.
 
