@@ -814,10 +814,10 @@ pub(super) mod tests {
                 inspector::Section::Transform,
                 true,
             ));
-            app.context_menu = Some(super::super::context_menu::State {
-                position: iced::Point::new(12., 34.),
-                page: Default::default(),
-            });
+            app.context_menu = Some(super::super::context_menu::State::new(
+                iced::Point::new(12., 34.),
+                Default::default(),
+            ));
             app.style_menu = Some(super::super::color_popover::Menu::Align);
             app.imports.menu = true;
             app.tabs.menu = true;
