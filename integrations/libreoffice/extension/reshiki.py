@@ -610,6 +610,7 @@ class Embedded(
             return
         old = self.native, self.png, self.extent
         save_attempted = False
+        frame, frame_size = None, None
         try:
             if self.disposed or self.session is not session or not self.client:
                 raise RuntimeError("The host drawing is no longer available.")
@@ -617,9 +618,19 @@ class Embedded(
             save_attempted = True
             self.client.saveObject()
             host = self.client.getComponent()
+            frame = self._drawing_frame(host)
+            if frame is not None:
+                frame_size = frame.Size.Width, frame.Size.Height
             if hasattr(host, "setModified"):
                 host.setModified(True)
             self.event("OnVisAreaChanged")
+            if frame is not None:
+                # Impress's full client only repaints an external editor's
+                # changed view. Preserve the user's scale when sizing its frame.
+                frame.Size = size(
+                    max(1, round(frame_size[0] * self.extent[0] / old[2][0])),
+                    max(1, round(frame_size[1] * self.extent[1] / old[2][1])),
+                )
             self.event("OnSaveDone")
             acknowledgement = {
                 "version": 1,
@@ -633,8 +644,12 @@ class Embedded(
             self.native, self.png, self.extent = old
             if save_attempted:
                 try:
-                    self._write(self.parent, self.entry)
-                    self.event("OnVisAreaChanged")
+                    try:
+                        self._write(self.parent, self.entry)
+                        self.event("OnVisAreaChanged")
+                    finally:
+                        if frame_size is not None:
+                            frame.Size = size(*frame_size)
                 except Exception as rollback_error:
                     error = RuntimeError(
                         str(error)
@@ -644,6 +659,46 @@ class Embedded(
             session["error"] = str(error)
         finally:
             completed.set()
+
+    def _drawing_frame(self, host):
+        if not hasattr(host, "supportsService") or not any(
+            host.supportsService(name)
+            for name in (
+                "com.sun.star.presentation.PresentationDocument",
+                "com.sun.star.drawing.DrawingDocument",
+            )
+        ):
+            return None
+
+        def find(shapes):
+            for index in range(shapes.getCount()):
+                shape = shapes.getByIndex(index)
+                if getattr(shape, "PersistName", None) == self.entry:
+                    return shape
+                if hasattr(shape, "getCount"):
+                    found = find(shape)
+                    if found is not None:
+                        return found
+            return None
+
+        collections = [host.getDrawPages()]
+        if hasattr(host, "getMasterPages"):
+            collections.append(host.getMasterPages())
+        pages = [
+            collection.getByIndex(index)
+            for collection in collections
+            for index in range(collection.getCount())
+        ]
+        if hasattr(host, "getHandoutMasterPage"):
+            pages.append(host.getHandoutMasterPage())
+        for page in pages:
+            frame = find(page)
+            if frame is None and hasattr(page, "getNotesPage"):
+                # Inspect each notes page once; never follow notes recursively.
+                frame = find(page.getNotesPage())
+            if frame is not None:
+                return frame
+        raise IOException("Cannot locate the embedded drawing's slide frame.", self)
 
     def _finish(self, session):
         if self.session is not session:
