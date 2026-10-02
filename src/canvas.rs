@@ -108,6 +108,17 @@ impl Tool {
         }
     }
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransformField {
+    Rotation,
+    Scale,
+    Width,
+    Height,
+}
+
+#[cfg(test)]
+mod transform_shortcut_tests;
+
 #[derive(Debug, Clone)]
 pub enum Edit {
     ContextMenu {
@@ -118,6 +129,8 @@ pub enum Edit {
     EraseTo(World, World),
     EraseEnd,
     BeginText(u64),
+    /// Open an existing numeric control without transforming the drawing.
+    BeginTransform(TransformField),
     Hover(Option<World>),
     Chain {
         points: Vec<World>,
@@ -196,7 +209,15 @@ pub struct State {
     gesture: Option<Gesture>,
     cursor: Option<Point>,
     last_click: Option<(std::time::Instant, u64)>,
+    last_transform_click: Option<HandleClick>,
     modifiers: iced::keyboard::Modifiers,
+}
+
+struct HandleClick {
+    at: std::time::Instant,
+    handle: Handle,
+    ids: Vec<u64>,
+    position: Point,
 }
 impl State {
     /// Every drag ends here, so a Ctrl/Cmd drag copy never outlives its drag.
@@ -559,6 +580,23 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
             .or(cursor.position())
             .map(|p| Point::new(p.x - bounds.x, p.y - bounds.y));
         let inside = point.is_some_and(|p| Rectangle::with_size(bounds.size()).contains(p));
+        if matches!(
+            event,
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
+        ) && !inside
+            || matches!(
+                event,
+                Event::Keyboard(iced::keyboard::Event::KeyPressed { .. })
+                    | Event::Window(iced::window::Event::Unfocused)
+                    | Event::Mouse(
+                        mouse::Event::ButtonPressed(mouse::Button::Right | mouse::Button::Middle)
+                            | mouse::Event::WheelScrolled { .. }
+                            | mouse::Event::CursorLeft
+                    )
+            )
+        {
+            state.last_transform_click = None;
+        }
         match event {
             Event::Keyboard(iced::keyboard::Event::ModifiersChanged(_)) => {
                 Some(Action::request_redraw())
@@ -646,6 +684,8 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                 Some(Action::capture())
             }
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) if inside => {
+                // Only another press on a transform handle can complete the pair.
+                let last_transform_click = state.last_transform_click.take();
                 let p = self.camera.world(point?, bounds);
                 if self.tool == Tool::Erase {
                     state.gesture = Some(Gesture::Erase { last: p });
@@ -774,6 +814,7 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                     && let Some(handle) = selection.hit(point?)
                 {
                     state.last_click = None;
+                    state.last_transform_click = last_transform_click;
                     state.gesture = Some(Gesture::Transform(Box::new(TransformDrag::new(
                         selection,
                         handle,
@@ -912,6 +953,9 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                         );
                     }
                 }
+                if let Some(Gesture::Transform(drag)) = &mut state.gesture {
+                    drag.track_pointer(self.camera.world(point?, bounds), self.camera.zoom);
+                }
                 if let Some(Gesture::Lasso { points }) = &mut state.gesture {
                     let p = self.camera.world(point?, bounds);
                     if points
@@ -1031,7 +1075,33 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
                     }
                     Gesture::AtomIndicator { owner } => Edit::AtomIndicator(owner, p),
                     Gesture::GraphicPoint { id, index } => Edit::GraphicPoint(id, index, p),
-                    Gesture::Transform(drag) => drag.into_edit(p, state.modifiers.shift()),
+                    Gesture::Transform(drag) => {
+                        if inside && drag.is_click(p, self.camera.zoom) {
+                            let position = point?;
+                            let now = std::time::Instant::now();
+                            let repeated = state.last_transform_click.take().is_some_and(|last| {
+                                last.handle == drag.handle
+                                    && last.ids == drag.ids
+                                    && last.position.distance(position) < 4.
+                                    && now.duration_since(last.at).as_millis() < 450
+                            });
+                            if repeated {
+                                return Some(
+                                    Action::publish(Edit::BeginTransform(drag.handle.field()))
+                                        .and_capture(),
+                                );
+                            }
+                            state.last_transform_click = Some(HandleClick {
+                                at: now,
+                                handle: drag.handle,
+                                ids: drag.ids,
+                                position,
+                            });
+                            return Some(Action::request_redraw().and_capture());
+                        }
+                        state.last_transform_click = None;
+                        drag.into_edit(p, state.modifiers.shift())
+                    }
                     Gesture::Tilt(drag) => {
                         if !inside || self.tool != Tool::Tilt {
                             return Some(Action::request_redraw().and_capture());

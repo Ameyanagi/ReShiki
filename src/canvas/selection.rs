@@ -3,7 +3,7 @@ use iced::widget::canvas::{Path, Stroke};
 use iced::{Color, Point, Rectangle, Size, mouse};
 use reshiki::{document::Document, editing, scene};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Handle {
     Resize(usize),
     Edge(usize),
@@ -11,6 +11,15 @@ pub(super) enum Handle {
 }
 
 impl Handle {
+    pub fn field(self) -> super::TransformField {
+        match self {
+            Self::Rotate => super::TransformField::Rotation,
+            Self::Resize(_) => super::TransformField::Scale,
+            Self::Edge(0 | 2) => super::TransformField::Height,
+            Self::Edge(_) => super::TransformField::Width,
+        }
+    }
+
     pub fn cursor(self) -> mouse::Interaction {
         match self {
             Self::Rotate => mouse::Interaction::Grab,
@@ -183,6 +192,7 @@ pub(super) struct TransformDrag {
     start: World,
     corner: World,
     offset: World,
+    moved: bool,
 }
 
 impl TransformDrag {
@@ -214,7 +224,16 @@ impl TransformDrag {
             start,
             corner,
             offset: World::new(start.x - corner.x, start.y - corner.y),
+            moved: false,
         }
+    }
+
+    pub fn track_pointer(&mut self, end: World, zoom: f32) {
+        self.moved |= self.start.distance(end) * zoom >= 1.;
+    }
+
+    pub fn is_click(&self, end: World, zoom: f32) -> bool {
+        !self.moved && self.start.distance(end) * zoom < 1.
     }
 
     pub fn values(&self, end: World, snap_angle: bool) -> (f32, f32) {
