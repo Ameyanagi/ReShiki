@@ -51,6 +51,8 @@ mod reactions;
 #[cfg(test)]
 mod rotation_tests;
 mod shortcut_examples;
+#[cfg(test)]
+mod shortcut_focus_tests;
 mod shortcuts;
 mod startup;
 mod tabs;
@@ -808,6 +810,16 @@ impl App {
         if let Message::FilePrepared(opened) = message {
             return self.file_prepared(opened);
         }
+        if self.updates.open {
+            match message {
+                Message::Updates(action) => return self.update_action(action),
+                Message::Escape => return self.update_action(updates::Action::Show(false)),
+                _ if !updates::background(&message) && !self.answers_save_dialog(&message) => {
+                    return Task::none();
+                }
+                _ => {}
+            }
+        }
         let Some(message) = self.prepare_molecule_shortcut(message) else {
             return Task::none();
         };
@@ -887,10 +899,6 @@ impl App {
         }
         if let Message::Updates(action) = message {
             return self.update_action(action);
-        }
-        if self.updates.open && matches!(message, Message::Escape) {
-            self.updates.open = false;
-            return Task::none();
         }
         if let Message::Join(action) = message {
             return self.join_action(action);
@@ -3047,11 +3055,13 @@ impl App {
 
     pub fn view(&self) -> Element<'_, Message> {
         file_shortcuts::wrap(
-            self.with_assistant_image(self.with_atom_text(
-                self.with_updates(self.with_help(self.with_palette(self.workspace()))),
+            self.with_updates(self.with_assistant_image(
+                self.with_atom_text(self.with_help(self.with_palette(self.workspace()))),
             )),
             self.help_open,
             self.assistant.viewed_image.is_some(),
+            self.updates.open,
+            self.tab.atom_text.is_some(),
         )
     }
 }
