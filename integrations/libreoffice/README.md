@@ -64,6 +64,12 @@ between the three platforms also passed import, save, close, and reopen checks.
 Rendering a drawing again can use different locally installed fonts; exchanging
 the document preserves its stored preview and extent.
 
+The subsequent Writer insertion fix initializes its host frame to the drawing's
+physical size instead of Writer's default square. The installed updated package
+passed additional Linux and Windows checks for host frame dimensions, including
+save/reopen rounding. The earlier interchange checks verified intrinsic extent;
+the updated macOS package and frame-size interchange checks remain pending.
+
 A macOS headless check also used a scripted editor with the real renderer to
 exercise asynchronous save-back in all three hosts. It verified the host's
 acceptance receipt, updated native data, PNG and extent, isolation from a second
@@ -76,8 +82,9 @@ final-save/process-exit race, a host failure after committing storage, deferred
 acceptance during Save As, stale session rejection, and intrinsic size
 preservation across host rounding. `tests/roundtrip.py`
 connects to an isolated headless LibreOffice profile with the extension installed
-and checks the actual package's source hash, object identities, data, PNG, extent,
-save/reopen, and transfer-data copy-back. For example:
+and checks the actual package's source hash, object identities, data, PNG,
+intrinsic extent, host frame dimensions, save/reopen, and transfer-data copy-back.
+For example:
 
 ```sh
 python3 integrations/libreoffice/tests/roundtrip.py \
