@@ -179,12 +179,23 @@ impl Library {
             .open(lock_path)
             .map_err(|e| e.to_string())?;
         lock.try_lock().map_err(lock_error)?;
+        // A concurrent process spawn can briefly inherit the same open file
+        // description. Release explicitly before close, including error paths.
+        let _lock = LibraryLock(lock);
         if Self::load(path)? != *expected {
             return Err("The library changed in another window. Reload it before saving.".into());
         }
         self.save(path)
     }
 }
+struct LibraryLock(std::fs::File);
+
+impl Drop for LibraryLock {
+    fn drop(&mut self) {
+        let _ = self.0.unlock();
+    }
+}
+
 fn lock_error(error: std::fs::TryLockError) -> String {
     match error {
         std::fs::TryLockError::WouldBlock => {
@@ -216,8 +227,37 @@ pub fn standard_path() -> Result<PathBuf, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::lock_error;
+    use super::{LibraryLock, lock_error};
     use std::{fs::TryLockError, io};
+
+    #[cfg(unix)]
+    #[test]
+    fn guard_releases_lock_even_while_a_duplicate_description_survives() {
+        for fail in [false, true] {
+            let file = tempfile::NamedTempFile::new().unwrap();
+            let lock = file.reopen().unwrap();
+            lock.lock().unwrap();
+            let retained = lock.try_clone().unwrap();
+            let contender = file.reopen().unwrap();
+            let result = (|| {
+                let _lock = LibraryLock(lock);
+                assert!(matches!(
+                    contender.try_lock(),
+                    Err(TryLockError::WouldBlock)
+                ));
+                if fail {
+                    return Err("save failed");
+                }
+                Ok(())
+            })();
+            assert_eq!(result.is_err(), fail);
+            contender
+                .try_lock()
+                .expect("guard must release the shared description");
+            contender.unlock().unwrap();
+            drop(retained);
+        }
+    }
 
     #[test]
     fn lock_errors_distinguish_contention_from_io_failures() {
