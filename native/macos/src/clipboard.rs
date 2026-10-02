@@ -291,7 +291,10 @@ mod tests {
             let items = board.pasteboardItems().ok_or("Missing pasteboard items")?;
             assert_eq!(items.len(), 1, "{format}");
             let item = items.firstObject().ok_or("Missing pasteboard item")?;
-            let actual: HashSet<_> = item.types().iter().map(|kind| kind.to_string()).collect();
+            let types = item.types();
+            let actual: HashSet<_> = (0..types.len())
+                .map(|index| types.objectAtIndex(index).to_string())
+                .collect();
             assert_eq!(
                 actual,
                 expected.iter().map(|kind| (*kind).to_owned()).collect(),
