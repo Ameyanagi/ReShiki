@@ -7,17 +7,15 @@ use crate::{
 };
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-// Native ChemDraw 26 SVG at Arial 10 pt has a 3.092 pt atom/capsule radius.
-// A label adds half that radius above/below its ink, with 2:1 elliptical caps.
-// Scale with label size and widen only when the molecular strokes require it.
-const ATOM_RADIUS_EM: f32 = 0.3092;
+// Native ChemDraw 26 exports at two label sizes match the outer four-rail
+// bond envelope for their atom/capsule radius. Label pills add half this radius
+// around their ink and use 2:1 elliptical caps. Padding stays fixed when the
+// label size changes.
 const KAPPA: f32 = 0.552_284_8;
 
-fn radius(doc: &Document, atom: Option<&Atom>) -> f32 {
-    doc.drawing_style.world(
-        atom.and_then(|a| a.text_style.as_ref())
-            .map_or(doc.drawing_style.font_size_pt, |style| style.size_pt),
-    ) * ATOM_RADIUS_EM
+fn radius(doc: &Document) -> f32 {
+    let style = &doc.drawing_style;
+    style.bond_length_world * style.bond_spacing_ratio * 1.5 + style.line_width() / 2.
 }
 
 fn bond_radius(doc: &Document, bond: &Bond, joins: &crate::bond_joins::Joins<'_>) -> f32 {
@@ -58,7 +56,7 @@ fn bond_radius(doc: &Document, bond: &Bond, joins: &crate::bond_joins::Joins<'_>
             ));
         }
     }
-    radius(doc, None).max(envelope + style.line_width())
+    radius(doc).max(envelope + style.line_width())
 }
 
 fn label_bounds(doc: &Document, atom: &Atom) -> Option<(Point, Point)> {
@@ -81,7 +79,7 @@ fn label_bounds(doc: &Document, atom: &Atom) -> Option<(Point, Point)> {
 
 /// Elliptical label caps are centered on the left and right ink bounds.
 fn label_shape(doc: &Document, atom: &Atom) -> (Point, Point, f32, f32) {
-    let radius = radius(doc, Some(atom));
+    let radius = radius(doc);
     if let Some((lo, hi)) = label_bounds(doc, atom) {
         let ry = (hi.y - lo.y + radius) / 2.;
         let y = (lo.y + hi.y) / 2.;

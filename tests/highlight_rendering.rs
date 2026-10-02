@@ -24,9 +24,9 @@ fn numbers(text: &str) -> Vec<f32> {
 
 // The native yellow capsule uses only Move, Cubic and Close. Reading its path
 // here keeps its geometry an independent oracle, not a Rust-generated golden.
-fn native_capsule() -> Vec<PathCommand> {
+fn native_capsule(source: &str) -> Vec<PathCommand> {
     let svg = roxmltree::Document::parse_with_options(
-        include_str!("fixtures/structure-highlights/native-prime.svg"),
+        source,
         roxmltree::ParsingOptions {
             allow_dtd: true,
             ..Default::default()
@@ -117,7 +117,9 @@ fn capsule_geometry_matches_the_actual_chemdraw_prime_svg() {
     );
     let actual = capsule_metrics(commands, a, b, doc.drawing_style.points_per_world());
     let expected = capsule_metrics(
-        &native_capsule(),
+        &native_capsule(include_str!(
+            "fixtures/structure-highlights/native-prime.svg"
+        )),
         Point::new(130., 60.),
         Point::new(115.08, 76.58),
         1.,
@@ -127,6 +129,108 @@ fn capsule_geometry_matches_the_actual_chemdraw_prime_svg() {
             (actual - expected).abs() < 0.002,
             "native {expected} pt vs ReShiki {actual} pt"
         );
+    }
+}
+
+#[test]
+fn native_highlight_padding_follows_bond_spacing_independently_of_label_size() {
+    for (source, svg) in [
+        (
+            include_str!("fixtures/structure-highlights/native-prime.cdxml"),
+            include_str!("fixtures/structure-highlights/native-prime.svg"),
+        ),
+        (
+            include_str!("fixtures/structure-highlights/authored-acs-font10.cdxml"),
+            include_str!("fixtures/structure-highlights/native-prime-acs-font10.svg"),
+        ),
+        (
+            include_str!("fixtures/structure-highlights/authored-acs-font20.cdxml"),
+            include_str!("fixtures/structure-highlights/native-prime-acs-font20.svg"),
+        ),
+    ] {
+        let doc = reshiki::chemistry::cdxml::import_cdxml(source)
+            .unwrap()
+            .document;
+        let yellow = Color::Custom([255, 198, 0]);
+        let cyan = Color::Custom([129, 230, 255]);
+        let bond = doc
+            .bonds
+            .iter()
+            .find(|b| b.highlight == Some(yellow))
+            .unwrap();
+        let a = doc.atom(bond.a).unwrap().position;
+        let b = doc.atom(bond.b).unwrap().position;
+        let drawing = scene::primitives(&doc);
+        let painted = |color| {
+            drawing
+                .iter()
+                .find_map(|p| match p {
+                    Primitive::Path {
+                        commands,
+                        style,
+                        filled: true,
+                    } if style.fill == Some(color) => Some(commands),
+                    _ => None,
+                })
+                .unwrap()
+        };
+        let actual = capsule_metrics(painted(yellow), a, b, doc.drawing_style.points_per_world());
+        let expected = capsule_metrics(
+            &native_capsule(svg),
+            Point::new(130., 60.),
+            Point::new(115.08, 76.58),
+            1.,
+        );
+        for (actual, expected) in actual.into_iter().zip(expected) {
+            assert!(
+                (actual - expected).abs() < 0.002,
+                "native {expected}pt vs {actual}pt at label size {}pt",
+                doc.drawing_style.font_size_pt
+            );
+        }
+        let parsed = roxmltree::Document::parse_with_options(
+            svg,
+            roxmltree::ParsingOptions {
+                allow_dtd: true,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let native_label = parsed
+            .descendants()
+            .find(|n| n.attribute("fill") == Some("#81e6ff"))
+            .unwrap();
+        let mut tokens = native_label
+            .attribute("d")
+            .unwrap()
+            .split(|c: char| c == ',' || c.is_whitespace());
+        assert!(tokens.any(|t| t == "A"));
+        let expected_rx = tokens.next().unwrap().parse::<f32>().unwrap() * 0.05;
+        let expected_ry = tokens.next().unwrap().parse::<f32>().unwrap() * 0.05;
+        let [
+            PathCommand::Move(_),
+            PathCommand::Line(top),
+            PathCommand::Cubic(_, _, side),
+            ..,
+        ] = painted(cyan).as_slice()
+        else {
+            panic!("Expected an elliptical text capsule");
+        };
+        let rx = (side.x - top.x) * doc.drawing_style.points_per_world();
+        let ry = (side.y - top.y) * doc.drawing_style.points_per_world();
+        assert!((rx * 2. - ry).abs() < 0.002);
+        // Exact native text dimensions apply when its Arial face is installed.
+        // Fallback fonts retain their own ink metrics and the same bond padding.
+        if reshiki::style::glyph_metrics('O', &doc.drawing_style.text_style()).0 == "Arial" {
+            assert!(
+                (rx - expected_rx).abs() < 0.002,
+                "native label rx {expected_rx}pt vs {rx}pt"
+            );
+            assert!(
+                (ry - expected_ry).abs() < 0.002,
+                "native label ry {expected_ry}pt vs {ry}pt"
+            );
+        }
     }
 }
 
@@ -381,6 +485,7 @@ fn wavy_bond_ink_is_inside_its_highlight_with_small_fonts_and_thick_lines() {
         let mut doc = Document::default();
         doc.drawing_style.font_size_pt = font_size;
         doc.drawing_style.line_width_pt = line_width;
+        doc.drawing_style.bond_spacing_ratio = 0.05;
         let a = doc.add_atom("C", Point::default());
         let b = doc.add_atom("C", Point::new(42., 0.));
         doc.add_bond(a, b, 1, "wavy");
@@ -423,6 +528,7 @@ fn sharp_bold_and_wedge_junction_ink_stays_inside_its_highlight() {
             doc.drawing_style.font_size_pt = 10.;
             doc.drawing_style.line_width_pt = 0.6;
             doc.drawing_style.bold_width_pt = 2.;
+            doc.drawing_style.bond_spacing_ratio = 0.12;
             let a = doc.add_atom("C", Point::default());
             let b = doc.add_atom("C", Point::new(42., 0.));
             let c = doc.add_atom(
@@ -479,24 +585,39 @@ fn sharp_bold_and_wedge_junction_ink_stays_inside_its_highlight() {
 fn write_native_highlight_comparison_artifacts() {
     let folder = std::path::PathBuf::from(std::env::var("RESHIKI_HIGHLIGHT_EVIDENCE_DIR").unwrap());
     std::fs::create_dir_all(&folder).unwrap();
-    let doc = native();
-    std::fs::write(
-        folder.join("reshiki-native-prime.rsk"),
-        doc.file_json().unwrap(),
-    )
-    .unwrap();
-    for extension in ["svg", "pdf", "png"] {
+    for (name, doc) in [
+        ("reshiki-native-prime", native()),
+        (
+            "reshiki-native-prime-acs-font10",
+            reshiki::chemistry::cdxml::import_cdxml(include_str!(
+                "fixtures/structure-highlights/authored-acs-font10.cdxml"
+            ))
+            .unwrap()
+            .document,
+        ),
+        (
+            "reshiki-native-prime-acs-font20",
+            reshiki::chemistry::cdxml::import_cdxml(include_str!(
+                "fixtures/structure-highlights/authored-acs-font20.cdxml"
+            ))
+            .unwrap()
+            .document,
+        ),
+    ] {
+        std::fs::write(folder.join(format!("{name}.rsk")), doc.file_json().unwrap()).unwrap();
+        for extension in ["svg", "pdf", "png"] {
+            std::fs::write(
+                folder.join(format!("{name}.{extension}")),
+                reshiki::export::clipboard_drawing(&doc, extension).unwrap(),
+            )
+            .unwrap();
+        }
+        let xml = reshiki::exchange::drawing::write(&doc, Default::default()).unwrap();
+        std::fs::write(folder.join(format!("{name}.cdxml")), &xml).unwrap();
         std::fs::write(
-            folder.join(format!("reshiki-native-prime.{extension}")),
-            reshiki::export::clipboard_drawing(&doc, extension).unwrap(),
+            folder.join(format!("{name}.cdx")),
+            reshiki::exchange::to_cdx(&xml).unwrap(),
         )
         .unwrap();
     }
-    let xml = reshiki::exchange::drawing::write(&doc, Default::default()).unwrap();
-    std::fs::write(folder.join("reshiki-native-prime.cdxml"), &xml).unwrap();
-    std::fs::write(
-        folder.join("reshiki-native-prime.cdx"),
-        reshiki::exchange::to_cdx(&xml).unwrap(),
-    )
-    .unwrap();
 }
