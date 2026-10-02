@@ -210,6 +210,7 @@ class Embedded(
         self.native, self.png, self.extent = initial or (b"", b"", (1, 1))
         self.parent, self.entry, self.pending = None, "", None
         self.replacements = []
+        self.persisted, self.persist_error = None, None
         self.deferred_update = None
         self.client, self.state, self.readonly = None, LOADED, False
         self.events, self.states, self.closes = [], [], []
@@ -469,10 +470,16 @@ class Embedded(
             storage.dispose()
 
     def storeOwn(self):
-        self._ready()
-        if self.readonly:
-            raise IOException("The document is read-only.", self)
-        self._write(self.parent, self.entry)
+        self.persisted, self.persist_error = None, None
+        try:
+            self._ready()
+            if self.readonly:
+                raise IOException("The document is read-only.", self)
+            self._write(self.parent, self.entry)
+        except Exception as error:
+            self.persist_error = str(error)
+            raise
+        self.persisted = self.native, self.png, self.extent
         self.event("OnSaveDone")
 
     def isReadonly(self):
@@ -616,7 +623,14 @@ class Embedded(
                 raise RuntimeError("The host drawing is no longer available.")
             self.native, self.png, self.extent = data
             save_attempted = True
+            self.persisted, self.persist_error = None, None
             self.client.saveObject()
+            # Native clients may catch a storeOwn exception and return normally.
+            # Acknowledgement requires our exact drawing to have been committed.
+            if self.persisted != data:
+                raise IOException(
+                    self.persist_error or "LibreOffice did not store the edited drawing.", self
+                )
             host = self.client.getComponent()
             frame = self._drawing_frame(host)
             if frame is not None:
