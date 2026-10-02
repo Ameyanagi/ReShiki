@@ -224,6 +224,44 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(self.object.extent, self.old[2])
         self.assertEqual(self.object.native, self.old[0])
 
+    def test_persistence_writes_fallback_preview_to_the_requested_container(self):
+        ctx = extension.uno.getComponentContext()
+        factory = extension.service(ctx, "com.sun.star.embed.StorageFactory")
+        old_parent, new_parent = factory.createInstance(), factory.createInstance()
+
+        def replacement(parent, name):
+            images = parent.openStorageElement("ObjectReplacements", 3)
+            try:
+                stream = images.openStreamElement(name, 3)
+                source = stream.getInputStream()
+                try:
+                    self.assertEqual(stream.getPropertyValue("MediaType"), "image/png")
+                    self.assertTrue(stream.getPropertyValue("UseCommonStoragePasswordEncryption"))
+                    return source.readBytes(None, extension.LIMIT)[1].value
+                finally:
+                    source.closeInput()
+                    stream.dispose()
+            finally:
+                images.dispose()
+
+        try:
+            obj = extension.Embedded(ctx, self.old)
+            obj.parent, obj.entry = old_parent, "ReShiki-first"
+            obj.storeOwn()
+            untouched = extension.Embedded(ctx, (self.old[0], b"other preview", self.old[2]))
+            untouched.parent, untouched.entry = old_parent, "ReShiki-other"
+            untouched.storeOwn()
+            obj.native, obj.png, obj.extent = self.new
+            obj.storeAsEntry(new_parent, "ReShiki-renamed", (), ())
+            self.assertEqual(replacement(new_parent, "ReShiki-renamed"), self.new[1])
+            self.assertEqual(replacement(old_parent, "ReShiki-first"), self.old[1])
+            self.assertEqual(replacement(old_parent, "ReShiki-other"), b"other preview")
+            obj.saveCompleted(True)
+            self.assertEqual((obj.parent, obj.entry), (new_parent, "ReShiki-renamed"))
+        finally:
+            old_parent.dispose()
+            new_parent.dispose()
+
     def test_external_editor_never_advertises_inplace_ui_states(self):
         self.assertEqual(self.object.getReachableStates(), (0, 1, 2))
         for unsupported in (3, 4):

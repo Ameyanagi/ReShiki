@@ -369,6 +369,25 @@ class Embedded(
         finally:
             storage.dispose()
 
+        # An active object's fallback is not copied by LibreOffice's Save As
+        # path when link updates are disabled. Persist our already-rendered PNG
+        # in the requested container so its draw:image reference stays valid.
+        images = parent.openStorageElement("ObjectReplacements", 7)
+        try:
+            stream = images.openStreamElement(name, 12)
+            stream.setPropertyValue("MediaType", "image/png")
+            stream.setPropertyValue("UseCommonStoragePasswordEncryption", True)
+            output = stream.getOutputStream()
+            output.writeBytes(uno.ByteSequence(self.png))
+            output.closeOutput()
+            stream.dispose()
+            images.commit()
+        except Exception:
+            images.revert()
+            raise
+        finally:
+            images.dispose()
+
     def _read(self, parent, name):
         storage = parent.openStorageElement(name, 1)
         try:
