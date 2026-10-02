@@ -1,9 +1,12 @@
 """Synthetic evidence must never turn a skipped, unrelated or failed scan into a pass."""
 
 import argparse
+import base64
 import copy
 import csv
 import json
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -55,6 +58,14 @@ def fixture():
                 "ExclusionPath": None,
                 "ExclusionExtension": [],
                 "ExclusionProcess": None,
+                "UnknownThreatDefaultAction": 0,
+                "LowThreatDefaultAction": 0,
+                "ModerateThreatDefaultAction": 0,
+                "HighThreatDefaultAction": 0,
+                "SevereThreatDefaultAction": 0,
+                "ThreatIDDefaultAction_Ids": None,
+                "ThreatIDDefaultAction_Actions": None,
+                "MAPSReporting": 2,
             },
         },
         "host": {
@@ -198,6 +209,109 @@ class SecurityEvidenceTests(unittest.TestCase):
         evidence["after"]["status"]["data"]["AntivirusSignatureVersion"] = "new definition"
         self.assertEqual(security.evaluate(evidence)["status"], "incomplete")
 
+    def test_recovered_protection_failure_or_history_purge_never_passes(self):
+        for number in (3002, 3007, 5001, 5004, 5007, 5008, 5010, 5012, 5101, 1013, 1014):
+            with self.subTest(number=number):
+                evidence = fixture()
+                evidence["events"]["data"]["records"].append(
+                    event(number, {}, "2026-10-02T01:00:15Z")
+                )
+                report = security.evaluate(evidence)
+                self.assertEqual(report["status"], "incomplete")
+                self.assertTrue(any(str(number) in reason for reason in report["reasons"]))
+
+    def test_preexisting_target_detection_survives_history_disappearance(self):
+        for purge in (False, True):
+            evidence = fixture()
+            evidence["before"]["threats"]["data"] = [
+                {"Resources": ["file:_" + TARGET], "DetectionID": "target-before"}
+            ]
+            if purge:
+                evidence["events"]["data"]["records"].append(event(1013, {}))
+            report = security.evaluate(evidence)
+            self.assertEqual(report["status"], "detection_recorded")
+            self.assertTrue(any("disappeared" in reason for reason in report["reasons"]))
+        evidence = fixture()
+        evidence["before"]["threats"]["data"] = [
+            {"Resources": [r"file:_C:\other.exe"], "DetectionID": "unrelated-before"}
+        ]
+        self.assertEqual(security.evaluate(evidence)["status"], "incomplete")
+
+    def test_non_remediating_unknown_or_missing_default_actions_never_pass(self):
+        keys = (
+            "UnknownThreatDefaultAction",
+            "LowThreatDefaultAction",
+            "ModerateThreatDefaultAction",
+            "HighThreatDefaultAction",
+            "SevereThreatDefaultAction",
+        )
+        for key in keys:
+            for action in (6, 8, 9, 11, 99, "Allow", None, False):
+                with self.subTest(key=key, action=action):
+                    evidence = fixture()
+                    for phase in ("before", "after"):
+                        evidence[phase]["preferences"]["data"][key] = action
+                    self.assertEqual(security.evaluate(evidence)["status"], "incomplete")
+            evidence = fixture()
+            for phase in ("before", "after"):
+                del evidence[phase]["preferences"]["data"][key]
+            self.assertEqual(security.evaluate(evidence)["status"], "incomplete")
+
+    def test_threat_specific_actions_require_known_remediation_and_valid_pairs(self):
+        for ids, actions in (
+            ([123], [6]),
+            ([123], [8]),
+            ([123], [9]),
+            ([123], [11]),
+            ([123], [99]),
+            ([123], [None]),
+            ([123], ["Quarantine"]),
+            ([123], [False]),
+            ([123], None),
+            (None, [2]),
+            ([123, 456], [2]),
+            ([123, 123], [2, 3]),
+            ([0], [2]),
+            (["unknown"], [2]),
+        ):
+            with self.subTest(ids=ids, actions=actions):
+                evidence = fixture()
+                for phase in ("before", "after"):
+                    prefs = evidence[phase]["preferences"]["data"]
+                    prefs["ThreatIDDefaultAction_Ids"] = ids
+                    prefs["ThreatIDDefaultAction_Actions"] = actions
+                self.assertEqual(security.evaluate(evidence)["status"], "incomplete")
+        for key in ("ThreatIDDefaultAction_Ids", "ThreatIDDefaultAction_Actions"):
+            evidence = fixture()
+            for phase in ("before", "after"):
+                del evidence[phase]["preferences"]["data"][key]
+            self.assertEqual(security.evaluate(evidence)["status"], "incomplete")
+        for action in (0, 1, 2, 3, 10):
+            evidence = fixture()
+            for phase in ("before", "after"):
+                prefs = evidence[phase]["preferences"]["data"]
+                for key in security.DEFAULT_ACTION_FIELDS:
+                    prefs[key] = action
+                prefs["ThreatIDDefaultAction_Ids"] = [123]
+                prefs["ThreatIDDefaultAction_Actions"] = [action]
+            self.assertEqual(security.evaluate(evidence)["status"], "scan_completed_no_detection")
+
+    def test_captured_policy_change_requires_review_without_a_config_event(self):
+        for key, value in (("MAPSReporting", 0), ("LowThreatDefaultAction", 2)):
+            evidence = fixture()
+            evidence["after"]["preferences"]["data"][key] = value
+            report = security.evaluate(evidence)
+            self.assertEqual(report["status"], "incomplete")
+            self.assertIn(
+                "Captured protection policy changed during this window", report["reasons"]
+            )
+
+    def test_empty_host_metadata_does_not_establish_complete_evidence(self):
+        for value in ({"ok": True}, {"ok": True, "data": {}}, {"ok": True, "data": None}):
+            evidence = fixture()
+            evidence["after"]["host"] = value
+            self.assertEqual(security.evaluate(evidence)["status"], "incomplete")
+
     def test_quarantined_target_is_a_detection_even_when_command_succeeds(self):
         for fields in (
             {"Path": "file:_" + TARGET, "Action": "Quarantine"},
@@ -246,6 +360,65 @@ class SecurityEvidenceTests(unittest.TestCase):
             security.subprocess, "run", side_effect=FileNotFoundError("powershell.exe")
         ):
             self.assertEqual(security.run_probe("snapshot", TARGET, START, 1)["ok"], False)
+
+    @unittest.skipUnless(
+        shutil.which("powershell.exe") or shutil.which("pwsh"), "PowerShell required"
+    )
+    def test_probe_preserves_action_policy_and_rejects_unsupported_properties(self):
+        powershell = shutil.which("powershell.exe") or shutil.which("pwsh")
+        prefs = fixture()["before"]["preferences"]["data"] | {
+            "SubmitSamplesConsent": 1,
+            "PUAProtection": 1,
+            "DisableBlockAtFirstSeen": False,
+            "CloudBlockLevel": 0,
+            "LowThreatDefaultAction": 6,
+            "ThreatIDDefaultAction_Ids": [123, 456],
+            "ThreatIDDefaultAction_Actions": [2, 6],
+        }
+        for missing in (None, "LowThreatDefaultAction", "ThreatIDDefaultAction_Ids"):
+            with self.subTest(missing=missing):
+                values = dict(prefs)
+                if missing:
+                    del values[missing]
+                # All OS queries are mocked in a separate PowerShell process. No
+                # real scan, file access, protection read or policy change occurs.
+                command = "\n".join(
+                    [
+                        "$fakePreferences = ConvertFrom-Json '"
+                        + json.dumps(values).replace("'", "''")
+                        + "'",
+                        "function Get-MpPreference { $fakePreferences }",
+                        "function Get-MpComputerStatus { throw 'mock unavailable' }",
+                        "function Get-MpThreatDetection { throw 'mock unavailable' }",
+                        "function Get-CimInstance { throw 'mock unavailable' }",
+                        "function Get-AuthenticodeSignature { throw 'mock unavailable' }",
+                        "function Get-Content { throw 'mock unavailable' }",
+                        "& '"
+                        + str(security.PROBE).replace("'", "''")
+                        + "' -Mode snapshot -Target 'C:\\mock.txt'",
+                    ]
+                )
+                encoded = base64.b64encode(command.encode("utf-16-le")).decode("ascii")
+                result = subprocess.run(
+                    [
+                        powershell,
+                        "-NoLogo",
+                        "-NoProfile",
+                        "-NonInteractive",
+                        "-EncodedCommand",
+                        encoded,
+                    ],
+                    capture_output=True,
+                    timeout=30,
+                    check=True,
+                )
+                actual = json.loads(result.stdout.decode("utf-8-sig"))["preferences"]
+                if missing:
+                    self.assertFalse(actual["ok"])
+                    self.assertIn(missing, actual["error"])
+                else:
+                    self.assertTrue(actual["ok"])
+                    self.assertEqual(actual["data"], prefs)
 
     def test_collector_writes_raw_evidence_and_skips_wrong_hash_before_scan(self):
         with tempfile.TemporaryDirectory() as temporary:

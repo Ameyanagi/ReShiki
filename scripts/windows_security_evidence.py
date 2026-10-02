@@ -20,6 +20,18 @@ from pathlib import Path
 PROBE = Path(__file__).with_name("windows_security_probe.ps1")
 PROVIDER = "Microsoft-Windows-Windows Defender"
 DETECTION_EVENTS = {1006, 1007, 1008, 1015, 1116, 1117, 1118, 1119}
+PROTECTION_REVIEW_EVENTS = {3002, 3007, 5001, 5004, 5007, 5008, 5010, 5012, 5101}
+HISTORY_REVIEW_EVENTS = {1013, 1014}
+DEFAULT_ACTION_FIELDS = (
+    "UnknownThreatDefaultAction",
+    "LowThreatDefaultAction",
+    "ModerateThreatDefaultAction",
+    "HighThreatDefaultAction",
+    "SevereThreatDefaultAction",
+)
+# Default (security intelligence), Clean, Quarantine, Remove, Block. Allow (6)
+# suppresses detection events; user-defined/no-action/unknown policies need review.
+REMEDIATING_ACTIONS = {0, 1, 2, 3, 10}
 ACTIVE_FIELDS = (
     "AMServiceEnabled",
     "AntivirusEnabled",
@@ -175,6 +187,27 @@ def protection_problems(snapshot):
         for key in ("ExclusionPath", "ExclusionExtension", "ExclusionProcess"):
             if key not in prefs or prefs[key]:
                 problems.append(f"{key} requires review; no exclusion matching is assumed")
+        for key in DEFAULT_ACTION_FIELDS:
+            action = prefs.get(key)
+            if type(action) is not int or action not in REMEDIATING_ACTIONS:
+                problems.append(f"{key} is non-remediating, user-defined or unknown")
+        ids_key, actions_key = "ThreatIDDefaultAction_Ids", "ThreatIDDefaultAction_Actions"
+        if ids_key not in prefs or actions_key not in prefs:
+            problems.append("Threat-specific action policy could not be read")
+        else:
+            ids, actions = objects(prefs[ids_key]), objects(prefs[actions_key])
+            if (
+                len(ids) != len(actions)
+                or any(type(threat_id) is not int or threat_id <= 0 for threat_id in ids)
+                or len(set(map(str, ids))) != len(ids)
+            ):
+                problems.append("Threat-specific action policy pairs are incomplete or ambiguous")
+            if any(
+                type(action) is not int or action not in REMEDIATING_ACTIONS for action in actions
+            ):
+                problems.append(
+                    "Threat-specific action is non-remediating, user-defined or unknown"
+                )
     return problems
 
 
@@ -200,10 +233,18 @@ def evaluate(evidence) -> dict:
                 detected = True
             else:
                 reasons.append("An unattributed threat event in this window requires review")
-        if event["id"] in {5001, 5004, 5007}:
-            reasons.append("Protection configuration changed during this window")
+        if event["id"] in PROTECTION_REVIEW_EVENTS:
+            reasons.append(
+                f"Protection failure, recovery or configuration event {event['id']} requires review"
+            )
+        if event["id"] in HISTORY_REVIEW_EVENTS:
+            reasons.append(f"Threat history deletion event {event['id']} requires review")
     old_threats = {json.dumps(item, sort_keys=True) for item in objects(data(before, "threats"))}
-    for item in objects(data(after, "threats")):
+    new_threats = {json.dumps(item, sort_keys=True) for item in objects(data(after, "threats"))}
+    if old_threats - new_threats:
+        reasons.append("Prior threat records disappeared or changed during this window")
+    # A later history purge must not erase target detection evidence already captured.
+    for item in objects(data(before, "threats")) + objects(data(after, "threats")):
         if any(
             resource_matches(value, request["target"]) for value in objects(item.get("Resources"))
         ):
@@ -214,7 +255,8 @@ def evaluate(evidence) -> dict:
         reasons.extend(f"{name}: {problem}" for problem in protection_problems(snapshot))
         if snapshot.get("threats", {}).get("ok") is not True:
             reasons.append(f"{name}: threat history unavailable")
-        if snapshot.get("host", {}).get("ok") is not True:
+        host = data(snapshot, "host")
+        if not isinstance(host, dict) or not host:
             reasons.append(f"{name}: Windows host metadata unavailable")
         file = evidence.get(f"file_{name}", {})
         if file.get("ok") is not True or file.get("sha256") != expected:
@@ -227,6 +269,8 @@ def evaluate(evidence) -> dict:
     ]
     if versions[0] != versions[1]:
         reasons.append("Engine/platform/definitions changed; rerun to qualify one version")
+    if data(before, "preferences") != data(after, "preferences"):
+        reasons.append("Captured protection policy changed during this window")
     scan_id = completed_scan(evidence, events)
     if (
         evidence.get("scan", {}).get("state") != "returned"
