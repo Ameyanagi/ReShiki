@@ -72,6 +72,7 @@ pub(super) fn keeps_open(message: &Message) -> bool {
             | Message::TextColor(_)
             | Message::ApplyTextColor
             | Message::ClearRingFill
+            | Message::ClearHighlights
             | Message::TextStyle(StyleChange::Color(_))
             | Message::Canvas(crate::canvas::Edit::Hover(_))
             | Message::InspectorScroll(_)
@@ -262,6 +263,13 @@ impl App {
         }
     }
 
+    fn highlights_empty(&self) -> bool {
+        self.tab.color_scope == ColorScope::Highlights && {
+            let colors = reshiki::highlights::selected_colors(&self.tab.doc, &self.tab.selected);
+            !colors.is_empty() && colors.iter().all(Option::is_none)
+        }
+    }
+
     fn theme_name(&self) -> String {
         self.tab
             .doc
@@ -366,7 +374,9 @@ impl App {
             format!(
                 "Color · {} · Apply to {}",
                 current.map_or_else(
-                    || String::from(if self.rings_unfilled() {
+                    || String::from(if self.highlights_empty() {
+                        "No highlight"
+                    } else if self.rings_unfilled() {
                         "No fill"
                     } else {
                         "Mixed"
@@ -415,8 +425,12 @@ impl App {
         .spacing(8)
         .align_y(Alignment::Center);
         let no_fill = (
-            self.rings_unfilled(),
-            (self.tab.color_scope == ColorScope::Rings).then_some(Message::ClearRingFill),
+            self.rings_unfilled() || self.highlights_empty(),
+            match self.tab.color_scope {
+                ColorScope::Rings => Some(Message::ClearRingFill),
+                ColorScope::Highlights => Some(Message::ClearHighlights),
+                _ => None,
+            },
         );
         let mut custom = row![hover_hint(
             button(
@@ -526,7 +540,10 @@ impl App {
             // Rounded down, so a ratio shown as 3.0 always passes 3:1.
             let ratio = (contrast(rgb, canvas_theme.background()) * 10.).floor() / 10.;
             let side = canvas_theme.to_string().to_lowercase();
-            if ratio < 3. {
+            if self.tab.color_scope == ColorScope::Highlights {
+                // Highlight paint is a background. Its contrast with the paper
+                // is not the legibility measure used for ordinary ink.
+            } else if ratio < 3. {
                 body = body.push(
                     text(format!(
                         "Low contrast on the {side} canvas · {ratio:.1}:1. Lines need 3:1, labels 4.5:1."
@@ -764,7 +781,14 @@ pub(super) fn palette_row<'a>(
             "Ink · black on the light canvas, white on the dark one".into(),
             message,
         ),
-        Row::Tint => swatch(None, canvas_theme, size, active, "No fill".into(), message),
+        Row::Tint => {
+            let label = if matches!(message, Some(Message::ClearHighlights)) {
+                "Clear highlights"
+            } else {
+                "No fill"
+            };
+            swatch(None, canvas_theme, size, active, label.into(), message)
+        }
     };
     let swatches = Hue::ALL.into_iter().map(|h| {
         let (active, message) = hue(h);

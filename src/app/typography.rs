@@ -11,9 +11,16 @@ pub enum ColorScope {
     Text,
     Bonds,
     Rings,
+    Highlights,
 }
 impl ColorScope {
-    pub const ALL: [Self; 4] = [Self::All, Self::Text, Self::Bonds, Self::Rings];
+    pub const ALL: [Self; 5] = [
+        Self::All,
+        Self::Text,
+        Self::Bonds,
+        Self::Rings,
+        Self::Highlights,
+    ];
 }
 impl std::fmt::Display for ColorScope {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -22,6 +29,7 @@ impl std::fmt::Display for ColorScope {
             Self::Text => "Text",
             Self::Bonds => "Bonds",
             Self::Rings => "Ring interiors",
+            Self::Highlights => "Highlights",
         })
     }
 }
@@ -171,6 +179,16 @@ impl App {
             .collect()
     }
     pub(super) fn current_selection_color(&self) -> Option<Paint> {
+        if self.tab.color_scope == ColorScope::Highlights {
+            let colors: Vec<_> =
+                reshiki::highlights::selected_colors(&self.tab.doc, &self.tab.selected)
+                    .into_iter()
+                    .collect::<Option<_>>()?;
+            return colors
+                .first()
+                .copied()
+                .filter(|first| colors.iter().all(|c| c == first));
+        }
         if self.tab.color_scope == ColorScope::Rings {
             let colors: Vec<_> = self
                 .selected_ring_fills()
@@ -456,6 +474,20 @@ impl App {
             )
         };
     }
+    pub(super) fn apply_highlight_color(&mut self, color: Option<Paint>) {
+        let before = self.tab.doc.clone();
+        let count = reshiki::highlights::apply(&mut self.tab.doc, &self.tab.selected, color);
+        self.remember_custom(color, &before);
+        self.changed(before);
+        self.sync_color_input();
+        self.status = if count == 0 {
+            "Select atoms or bonds to change their highlights".into()
+        } else if color.is_some() {
+            "Highlights applied".into()
+        } else {
+            "Highlights cleared".into()
+        };
+    }
     /// Keep a custom color that was just used in the drawing for the picker.
     pub(super) fn remember_custom(&mut self, color: Option<Paint>, before: &Document) {
         if let Some(Paint::Custom(rgb)) = color
@@ -465,6 +497,10 @@ impl App {
         }
     }
     pub(super) fn apply_selection_color(&mut self, color: Paint) {
+        if self.tab.color_scope == ColorScope::Highlights {
+            self.apply_highlight_color(Some(color));
+            return;
+        }
         if self.tab.color_scope == ColorScope::Rings {
             self.apply_ring_color(Some(color));
             return;
@@ -634,6 +670,44 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn highlight_scope_applies_and_clears_without_changing_ink_or_chemistry() {
+        let (mut app, _) = App::new();
+        app.tab.doc = Document::default();
+        let a = app.tab.doc.add_atom("C", Point::default());
+        let b = app.tab.doc.add_atom("O", Point::new(42., 0.));
+        app.tab.doc.add_bond(a, b, 1, "plain");
+        app.tab.doc.reconcile_molecule_groups();
+        app.tab.selected = vec![a, b];
+        app.tab.labels_dirty = false;
+        let original = app.tab.doc.clone();
+        let color = Paint::Palette(reshiki::palette::Hue::Amber, reshiki::palette::Row::Tint);
+        let _ = app.update(Message::ColorScope(ColorScope::Highlights));
+        let _ = app.update(Message::TextStyle(StyleChange::Color(color)));
+        assert!(reshiki::highlights::any(&app.tab.doc));
+        assert!(!chemistry_changed(&original, &app.tab.doc));
+        assert!(
+            !app.tab.labels_dirty,
+            "appearance keeps calculated labels current"
+        );
+        assert_eq!(app.current_selection_color(), Some(color));
+        let painted = app.tab.doc.clone();
+        let revision = app.tab.revision;
+        let _ = app.update(Message::TextStyle(StyleChange::Color(color)));
+        assert_eq!(app.tab.revision, revision, "same paint is a no-op");
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, original);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, painted);
+        let _ = app.update(Message::ClearHighlights);
+        assert_eq!(app.tab.doc, original);
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, painted);
+        assert!(super::super::color_popover::keeps_open(
+            &Message::ClearHighlights
+        ));
+    }
 
     fn group(app: &mut App, label: &str, x: f32) -> Result<u64, String> {
         let id = app.tab.doc.add_atom("C", Point::new(x, 0.));
