@@ -10,7 +10,7 @@ use objc2_app_kit::{
 };
 use objc2_core_graphics::CGContext;
 use objc2_foundation::{
-    MainThreadMarker, NSDictionary, NSNumber, NSPoint, NSRange, NSRect, NSSize, NSString, NSURL,
+    MainThreadMarker, NSNumber, NSPoint, NSRange, NSRect, NSSize, NSString, NSURL,
 };
 use objc2_pdf_kit::{PDFDisplayBox, PDFDocument, PDFPage};
 use serde::{Deserialize, Serialize};
@@ -189,9 +189,7 @@ pub(crate) fn print_operation(
 ) -> Retained<NSPrintOperation> {
     let size = snapshot.page_size;
     let count = snapshot.pages.len();
-    // SAFETY: An empty dictionary contains no incorrectly typed attributes.
-    let info =
-        unsafe { NSPrintInfo::initWithDictionary(NSPrintInfo::alloc(), &NSDictionary::new()) };
+    let info = NSPrintInfo::new();
     info.setOrientation(NSPaperOrientation::Portrait);
     info.setPaperSize(NSSize::new(
         size.width.min(size.height),
