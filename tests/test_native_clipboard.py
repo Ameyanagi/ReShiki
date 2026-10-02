@@ -27,7 +27,7 @@ class NativeClipboardTests(unittest.TestCase):
             timeout=300,
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("1 passed", result.stdout)
+        self.assertRegex(result.stdout, r"test result: ok\. [1-9]\d* passed; 0 failed;")
 
 
 if __name__ == "__main__":
