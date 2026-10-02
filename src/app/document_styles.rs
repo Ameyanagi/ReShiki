@@ -1386,16 +1386,15 @@ impl Editor {
         let values = self
             .inputs
             .iter()
-            .enumerate()
-            .filter(|(_, (field, _))| field.dimension().is_some())
-            .map(|(index, (field, input))| {
-                input
-                    .value(*field, self.display_unit)
-                    .map(|value| (index, value))
-            })
+            .filter(|(field, _)| field.dimension().is_some())
+            .map(|(field, input)| input.value(*field, self.display_unit))
             .collect::<Result<Vec<_>, _>>()?;
-        for (index, value) in values {
-            let (field, input) = &mut self.inputs[index];
+        for ((field, input), value) in self
+            .inputs
+            .iter_mut()
+            .filter(|(field, _)| field.dimension().is_some())
+            .zip(values)
+        {
             input.accept(*field, value, unit);
         }
         self.display_unit = unit;
