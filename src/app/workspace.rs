@@ -754,7 +754,10 @@ impl App {
 
     fn tool_palette(&self) -> Element<'_, Message> {
         use reshiki::graphics::GraphicKind as G;
-        let ring = format!("Rings · r / Aromatic · {}", keys(Modifiers::SHIFT, "R"));
+        let ring = format!(
+            "Rings · r / Aromatic · {}\nBenzene with alternating bonds: press j over empty canvas.",
+            keys(Modifiers::SHIFT, "R")
+        );
         let chain = format!("Straight chain · {}", keys(Modifiers::SHIFT, "X"));
         let tools = [
             (Tool::Select, "Select / move · Space"),
