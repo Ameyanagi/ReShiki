@@ -389,6 +389,42 @@ mod tests {
     }
 
     #[test]
+    fn display_only_apply_preserves_imported_style_string_whitespace() {
+        let mut app = legacy_style_app();
+        app.tab.doc.drawing_style.name = " Imported ".into();
+        app.tab.doc.drawing_style.font_family = " Arial ".into();
+        app.tab.doc.validate().unwrap();
+        app.tab.saved = app.tab.doc.clone();
+        let before = app.tab.doc.clone();
+        let revision = app.tab.revision;
+        send(&mut app, Action::Open);
+        send(&mut app, Action::DisplayUnit(Unit::Millimetres));
+        assert_eq!(
+            app.tab.styles.editor.as_ref().unwrap().candidate().unwrap(),
+            before.drawing_style
+        );
+        send(&mut app, Action::Apply);
+        assert!(app.tab.styles.editor.is_none());
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.saved, before);
+        assert_eq!(app.tab.revision, revision);
+        assert!(!app.dirty());
+        assert!(!app.tab.history.can_undo());
+
+        send(&mut app, Action::Open);
+        send(&mut app, Action::Name(" Renamed ".into()));
+        send(&mut app, Action::Font(" Helvetica ".into()));
+        let edited = app.tab.styles.editor.as_ref().unwrap().candidate().unwrap();
+        assert_eq!(edited.name, "Renamed");
+        assert_eq!(edited.font_family, "Helvetica");
+        send(&mut app, Action::Apply);
+        assert_eq!(app.tab.doc.drawing_style, edited);
+        assert!(app.tab.history.can_undo());
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before);
+    }
+
+    #[test]
     fn equal_style_deliberate_actions_keep_existing_apply_semantics() {
         for action in 0..5 {
             let mut app = legacy_style_app();
@@ -1048,8 +1084,14 @@ impl Editor {
     }
     fn candidate(&self) -> Result<DrawingStyle, String> {
         let mut style = self.base.clone();
-        style.name = self.name.trim().into();
-        style.font_family = self.font.trim().into();
+        // Imported styles can contain surrounding whitespace. Preserve an
+        // untouched string exactly, just as we preserve untouched dimensions.
+        if self.name != self.base.name {
+            style.name = self.name.trim().into();
+        }
+        if self.font != self.base.font_family {
+            style.font_family = self.font.trim().into();
+        }
         for (field, input) in &self.inputs {
             let value = input.value(*field, self.display_unit)?;
             if let Some(dimension) = field.dimension() {
