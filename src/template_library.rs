@@ -178,12 +178,22 @@ impl Library {
             .write(true)
             .open(lock_path)
             .map_err(|e| e.to_string())?;
-        lock.try_lock()
-            .map_err(|_| "Another window is saving templates. Try again.".to_string())?;
+        lock.try_lock().map_err(lock_error)?;
         if Self::load(path)? != *expected {
             return Err("The library changed in another window. Reload it before saving.".into());
         }
         self.save(path)
+    }
+}
+fn lock_error(error: std::fs::TryLockError) -> String {
+    match error {
+        std::fs::TryLockError::WouldBlock => {
+            "Another window is saving templates. Try again.".into()
+        }
+        std::fs::TryLockError::Error(error) => format!(
+            "Could not lock the template library ({:?}): {error}",
+            error.kind()
+        ),
     }
 }
 fn new_id() -> String {
@@ -202,4 +212,34 @@ pub fn standard_path() -> Result<PathBuf, String> {
     let root = crate::compatibility::data_directory()?;
     std::fs::create_dir_all(&root).map_err(|e| e.to_string())?;
     Ok(root.join("templates.json"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::lock_error;
+    use std::{fs::TryLockError, io};
+
+    #[test]
+    fn lock_errors_distinguish_contention_from_io_failures() {
+        assert_eq!(
+            lock_error(TryLockError::WouldBlock),
+            "Another window is saving templates. Try again."
+        );
+
+        let error = io::Error::from_raw_os_error(5);
+        let message = error.to_string();
+        let kind = format!("{:?}", error.kind());
+        let reported = lock_error(TryLockError::Error(error));
+        assert!(reported.starts_with("Could not lock the template library"));
+        assert!(reported.contains(&message));
+        assert!(reported.contains(&kind));
+
+        assert_eq!(
+            lock_error(TryLockError::Error(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "File locking is unavailable",
+            ))),
+            "Could not lock the template library (Unsupported): File locking is unavailable"
+        );
+    }
 }
