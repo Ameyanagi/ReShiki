@@ -1,0 +1,46 @@
+{
+  "source": {
+    "repository": "https://github.com/notofonts/noto-cjk",
+    "revision": "f8d157532fbfaeda587e826d4cd5b21a49186f7c",
+    "url": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/Variable/OTF/Subset/NotoSansJP-VF.otf",
+    "sha256": "85e5ef353081175fb9f764f037c550dd4b5ad913cb030c0de98a5d4d4018014b",
+    "license_url": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/LICENSE",
+    "copyright": "\u00a9 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'.",
+    "axes": [
+      {
+        "tag": "wght",
+        "min": 100.0,
+        "default": 100.0,
+        "max": 900.0
+      }
+    ],
+    "original_family": "Noto Sans JP",
+    "face_index": 0
+  },
+  "generation": {
+    "script": "tools/font-export-probe/prepare_fixture.py",
+    "fonttools": "4.61.1",
+    "characters": "HNO",
+    "family": "ReShiki Font Export Fixture",
+    "static_weights": [
+      100,
+      400,
+      700
+    ],
+    "note": "CFF2 variable subset plus independently instantiated CFF1 static controls.",
+    "dropped_tables": [
+      "VORG",
+      "VVAR",
+      "vhea",
+      "vmtx"
+    ],
+    "outline_oracle": "FontTools getGlyphSet(location={wght: weight}) with RecordingPen, before static instancing"
+  },
+  "files": {
+    "cff2-outline-controls.tsv": "2a0c98e6009e2782e228fe74be277457cf0fc68259e9d1d85e748c263b79b188",
+    "cff-static-100.subset.otf": "de8f34861575b022cfec98127a1a6caa43d1c19693e9a197909188e45ad89698",
+    "cff-static-400.subset.otf": "cee4de28b537a723c05f46193b0d9691e95b9278284529006c0c64bcfdaf1c6e",
+    "cff-static-700.subset.otf": "c3556bc5c9968d6bc83f81e34c58e6eea59139694b03b3b64b05dca4e5e839fc",
+    "cff2-variable-default-100.subset.otf": "8c841cd3d1a8876631092fe10d53b6649e72cfbaa392b399b06dbecec95ea8ed"
+  }
+}

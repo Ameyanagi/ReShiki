@@ -11,6 +11,7 @@ import json
 from pathlib import Path
 
 from fontTools import subset
+from fontTools.pens.recordingPen import RecordingPen
 from fontTools.ttLib import TTFont
 from fontTools.varLib.instancer import instantiateVariableFont
 
@@ -18,6 +19,8 @@ REVISION = "f8d157532fbfaeda587e826d4cd5b21a49186f7c"
 BASE_URL = f"https://raw.githubusercontent.com/notofonts/noto-cjk/{REVISION}/Sans"
 SOURCE_URL = f"{BASE_URL}/Variable/TTF/Subset/NotoSansJP-VF.ttf"
 SOURCE_SHA256 = "f4b373b226668ee33a6e54b02823dcd2d1209f17159f777421ae8c2275160369"
+CFF2_URL = f"{BASE_URL}/Variable/OTF/Subset/NotoSansJP-VF.otf"
+CFF2_SHA256 = "85e5ef353081175fb9f764f037c550dd4b5ad913cb030c0de98a5d4d4018014b"
 LICENSE_URL = f"{BASE_URL}/LICENSE"
 LICENSE_SHA256 = "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2"
 FAMILY = "ReShiki Font Export Fixture"
@@ -52,12 +55,19 @@ def rename(font, style):
             )
     for name_id, text in names.items():
         table.setName(text, name_id, 3, 1, 0x409)
+    if "CFF " in font:
+        cff = font["CFF "].cff
+        cff.fontNames = [names[6]]
+        top = cff.topDictIndex[0]
+        top.FamilyName = FAMILY
+        top.FullName = names[4]
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", required=True, type=Path)
     parser.add_argument("--license", required=True, type=Path)
+    parser.add_argument("--cff2-source", type=Path)
     parser.add_argument("--output", type=Path, default=DESTINATION)
     args = parser.parse_args()
     if importlib.metadata.version("fonttools") != FONTTOOLS_VERSION:
@@ -132,6 +142,63 @@ def main():
     }
     (args.output / "source.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print(json.dumps(manifest, indent=2))
+
+    if args.cff2_source:
+        if sha256(args.cff2_source.read_bytes()) != CFF2_SHA256:
+            parser.error("CFF2 source checksum does not match the pinned upstream font")
+        cff2 = TTFont(args.cff2_source, recalcTimestamp=False)
+        assert "CFF2" in cff2
+        # This horizontal-label fixture does not exercise vertical metrics.
+        # FontTools does not instance VORG alongside VVAR, so omit those tables.
+        vertical_tables = ["VORG", "VVAR", "vhea", "vmtx"]
+        for tag in vertical_tables:
+            if tag in cff2:
+                del cff2[tag]
+        subsetter = subset.Subsetter(options=options)
+        subsetter.populate(text="HNO")
+        subsetter.subset(cff2)
+        cff2_files = {}
+        # CFF2 static instancing rounds relative deltas, whose errors accumulate.
+        # Preserve an independent unrounded outline oracle as well as static fonts.
+        outline_rows = []
+        for weight in [100, 400, 700]:
+            glyphs = cff2.getGlyphSet(location={"wght": weight})
+            for character in "HNO":
+                pen = RecordingPen()
+                glyphs[cff2.getBestCmap()[ord(character)]].draw(pen)
+                for command, points in pen.value:
+                    if command == "closePath":
+                        continue
+                    kind = {"moveTo": 0, "lineTo": 1, "curveTo": 3}[command]
+                    coordinates = " ".join(str(c) for point in points for c in point)
+                    outline_rows.append(f"{weight} {character} {kind} {coordinates}\n")
+        name = "cff2-outline-controls.tsv"
+        (args.output / name).write_text("".join(outline_rows))
+        cff2_files[name] = sha256((args.output / name).read_bytes())
+        for weight, style in [(100, "Thin"), (400, "Regular"), (700, "Bold")]:
+            static = instantiateVariableFont(
+                cff2, {"wght": weight}, inplace=False, downgradeCFF2=True
+            )
+            rename(static, style)
+            name = f"cff-static-{weight}.subset.otf"
+            static.save(args.output / name)
+            cff2_files[name] = sha256((args.output / name).read_bytes())
+        rename(cff2, "Thin")
+        name = "cff2-variable-default-100.subset.otf"
+        cff2.save(args.output / name)
+        cff2_files[name] = sha256((args.output / name).read_bytes())
+        cff2_manifest = {
+            "source": {**manifest["source"], "url": CFF2_URL, "sha256": CFF2_SHA256},
+            "generation": {
+                **manifest["generation"],
+                "note": "CFF2 variable subset plus independently instantiated CFF1 static controls.",
+                "dropped_tables": vertical_tables,
+                "outline_oracle": "FontTools getGlyphSet(location={wght: weight}) with RecordingPen, before static instancing",
+            },
+            "files": cff2_files,
+        }
+        (args.output / "source-cff2.json").write_text(json.dumps(cff2_manifest, indent=2) + "\n")
+        print(json.dumps(cff2_manifest, indent=2))
 
 
 if __name__ == "__main__":
