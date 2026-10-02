@@ -105,6 +105,53 @@ class SessionTests(unittest.TestCase):
         self.assertTrue(done.is_set())
         self.assertFalse((self.root / "accepted.json").exists())
 
+    def test_swallowed_store_failure_cannot_acknowledge_the_editor_save(self):
+        owner = self.object
+        path = self.root / "drawing.rsk"
+        path.write_bytes(self.new[0])
+        self.session["path"] = path
+        stored = []
+
+        class Client:
+            def saveObject(self):
+                try:
+                    owner.storeOwn()
+                except extension.IOException:
+                    pass  # Native SfxInPlaceClient also suppresses this exception.
+
+            def getComponent(self):
+                return None
+
+        def write(parent, name):
+            stored.append(owner.native)
+            if owner.native == self.new[0]:
+                raise extension.IOException("injected drawing storage failure", owner)
+
+        owner.client = Client()
+        done = threading.Event()
+        with (
+            patch.object(owner, "_write", side_effect=write),
+            patch.object(extension, "show_error"),
+        ):
+            owner._accept(self.session, self.new, done)
+            owner._finish(self.session)
+        self.assertTrue(done.is_set())
+        self.assertEqual(stored, [self.new[0], self.old[0]])
+        self.assertEqual((owner.native, owner.png, owner.extent), self.old)
+        self.assertEqual(self.session["accepted"], self.old[0])
+        self.assertIn("injected drawing storage failure", self.session["error"])
+        self.assertFalse((self.root / "accepted.json").exists())
+        self.assertEqual(path.read_bytes(), self.new[0])
+
+    def test_noop_host_cannot_reuse_a_previous_persistence_receipt(self):
+        self.object.persisted = self.new
+        self.object.client = SimpleNamespace(saveObject=lambda: None, getComponent=lambda: None)
+        with patch.object(self.object, "_write"):
+            self.object._accept(self.session, self.new, threading.Event())
+        self.assertIn("did not store", self.session["error"])
+        self.assertEqual(self.session["accepted"], self.old[0])
+        self.assertFalse((self.root / "accepted.json").exists())
+
     def test_saveback_waits_for_save_as_destination_acceptance(self):
         stored = []
         owner = self.object
