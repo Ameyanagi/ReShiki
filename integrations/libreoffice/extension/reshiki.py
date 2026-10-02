@@ -26,6 +26,7 @@ from com.sun.star.embed import (
     XEmbeddedObjectCreator,
     XEmbedPersist,
 )
+from com.sun.star.embed.EmbedStates import ACTIVE, LOADED, RUNNING
 from com.sun.star.frame import XDispatch, XDispatchProvider
 from com.sun.star.io import IOException
 from com.sun.star.lang import XComponent, XInitialization, XServiceInfo
@@ -180,7 +181,7 @@ class Embedded(
         self.native, self.png, self.extent = initial or (b"", b"", (1, 1))
         self.parent, self.entry, self.pending = None, "", None
         self.deferred_update = None
-        self.client, self.state, self.readonly = None, 0, False
+        self.client, self.state, self.readonly = None, LOADED, False
         self.events, self.states, self.closes = [], [], []
         self.session = None
         self.disposed = False
@@ -264,22 +265,32 @@ class Embedded(
                 pass
 
     def changeState(self, value):
-        if value == 4:
+        if value == ACTIVE:
             self.doVerb(0)
             return
-        if value not in (0, 1):
+        if value not in (LOADED, RUNNING):
             raise IOException("ReShiki supports editing in its own window.", self)
+        self._set_state(value)
+
+    def _set_state(self, value):
         old = self.state
+        if old == value:
+            return
         event = uno.createUnoStruct("com.sun.star.lang.EventObject")
         event.Source = self
         for listener in tuple(self.states):
             listener.changingState(event, old, value)
         self.state = value
+        if self.client and (old == ACTIVE or value == ACTIVE):
+            self.client.visibilityChanged(value == ACTIVE)
         for listener in tuple(self.states):
             listener.stateChanged(event, old, value)
+        # Impress caches no replacement image for an in-place UI state. Tell
+        # the host to rebuild its view after every actual lifecycle transition.
+        self.event("OnVisAreaChanged")
 
     def getReachableStates(self):
-        return (0, 1, 4)
+        return (LOADED, RUNNING, ACTIVE)
 
     def getCurrentState(self):
         return self.state
@@ -459,7 +470,7 @@ class Embedded(
                 "error": None,
             }
             self.session = session
-            self.state = 4
+            self._set_state(ACTIVE)
             threading.Thread(target=self._watch, args=(session, program), daemon=True).start()
         except Exception as error:
             show_error(self.ctx, error)
@@ -552,7 +563,7 @@ class Embedded(
         else:
             shutil.rmtree(session["directory"])
         self.session = None
-        self.state = 1
+        self._set_state(RUNNING)
 
 
 class Factory(unohelper.Base, XEmbeddedObjectCreator, XServiceInfo):

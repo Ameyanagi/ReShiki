@@ -224,6 +224,90 @@ class SessionTests(unittest.TestCase):
         self.assertEqual(self.object.extent, self.old[2])
         self.assertEqual(self.object.native, self.old[0])
 
+    def test_external_editor_never_advertises_inplace_ui_states(self):
+        self.assertEqual(self.object.getReachableStates(), (0, 1, 2))
+        for unsupported in (3, 4):
+            with self.assertRaises(extension.IOException):
+                self.object.changeState(unsupported)
+
+    def test_external_editor_activation_and_finish_notify_state_visibility_and_repaint(self):
+        obj = self.object
+        obj.session = None
+        obj.state = 1
+        events = []
+
+        class Listener:
+            def changingState(self, event, old, new):
+                events.append(("changing", old, new, obj.getCurrentState()))
+
+            def stateChanged(self, event, old, new):
+                events.append(("changed", old, new, obj.getCurrentState()))
+
+            def notifyEvent(self, event):
+                events.append((event.EventName, obj.getCurrentState()))
+
+        class Client:
+            def visibilityChanged(self, visible):
+                events.append(("visible", visible, obj.getCurrentState()))
+
+        obj.client = Client()
+        listener = Listener()
+        obj.addStateChangeListener(listener)
+        obj.addEventListener(listener)
+        directory = self.root / "edit"
+        directory.mkdir()
+        with (
+            patch.object(extension, "executable", return_value="/test/editor"),
+            patch.object(extension.tempfile, "mkdtemp", return_value=str(directory)),
+            patch.object(extension.subprocess, "Popen") as launch,
+            patch.object(extension.threading, "Thread"),
+        ):
+            obj.doVerb(0)
+        self.assertEqual(
+            launch.call_args.args[0],
+            ["/test/editor", "--open", str(directory / "drawing.rsk"), "--libreoffice-edit"],
+        )
+        self.assertEqual(obj.getCurrentState(), 2)
+        self.assertEqual(
+            events,
+            [
+                ("changing", 1, 2, 1),
+                ("visible", True, 2),
+                ("changed", 1, 2, 2),
+                ("OnVisAreaChanged", 2),
+            ],
+        )
+        events.clear()
+        obj._finish(obj.session)
+        self.assertEqual(obj.getCurrentState(), 1)
+        self.assertEqual(
+            events,
+            [
+                ("changing", 2, 1, 2),
+                ("visible", False, 1),
+                ("changed", 2, 1, 1),
+                ("OnVisAreaChanged", 1),
+            ],
+        )
+        self.assertIsNone(obj.session)
+        self.assertFalse(directory.exists())
+
+    def test_failed_editor_launch_does_not_report_an_active_window(self):
+        self.object.session = None
+        self.object.state = 1
+        directory = self.root / "failed-edit"
+        directory.mkdir()
+        with (
+            patch.object(extension, "executable", return_value="/missing/editor"),
+            patch.object(extension.tempfile, "mkdtemp", return_value=str(directory)),
+            patch.object(extension.subprocess, "Popen", side_effect=OSError("launch failed")),
+            patch.object(extension, "show_error") as show,
+        ):
+            self.object.doVerb(0)
+        self.assertEqual(self.object.getCurrentState(), 1)
+        self.assertIsNone(self.object.session)
+        self.assertIn("launch failed", str(show.call_args.args[1]))
+
 
 if __name__ == "__main__":
     unittest.main()
