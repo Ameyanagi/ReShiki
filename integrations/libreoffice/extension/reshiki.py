@@ -14,6 +14,7 @@ import tempfile
 import threading
 import time
 import uuid
+from contextlib import suppress
 from pathlib import Path
 
 import uno
@@ -25,6 +26,7 @@ from com.sun.star.embed import (
     XEmbeddedObject,
     XEmbeddedObjectCreator,
     XEmbedPersist,
+    XTransactionListener,
 )
 from com.sun.star.embed.EmbedStates import ACTIVE, LOADED, RUNNING
 from com.sun.star.frame import XDispatch, XDispatchProvider
@@ -167,6 +169,33 @@ def show_error(ctx, message):
         box.dispose()
 
 
+class ReplacementTransaction(unohelper.Base, XTransactionListener):
+    def __init__(self, owner, parent, name, png):
+        self.owner, self.parent, self.name, self.png = owner, parent, name, png
+
+    def preCommit(self, event):
+        self.owner._write_replacement(self.parent, self.name, self.png)
+
+    def commited(self, event):
+        self.cancel()
+
+    def preRevert(self, event):
+        pass
+
+    def reverted(self, event):
+        self.cancel()
+
+    def disposing(self, event):
+        self.cancel(disposed=True)
+
+    def cancel(self, disposed=False):
+        if self.owner is not None:
+            if not disposed:
+                self.parent.removeTransactionListener(self)
+            self.owner.replacements.remove(self)
+            self.owner, self.parent = None, None
+
+
 class Embedded(
     unohelper.Base,
     XEmbeddedObject,
@@ -180,6 +209,7 @@ class Embedded(
         self.ctx = ctx
         self.native, self.png, self.extent = initial or (b"", b"", (1, 1))
         self.parent, self.entry, self.pending = None, "", None
+        self.replacements = []
         self.deferred_update = None
         self.client, self.state, self.readonly = None, LOADED, False
         self.events, self.states, self.closes = [], [], []
@@ -369,23 +399,48 @@ class Embedded(
         finally:
             storage.dispose()
 
+    def _queue_replacement(self, parent, name):
+        # StoreAsChildren owns the image substorage during object callbacks.
+        # Its handle is released before the destination's preCommit event.
+        # Keep the exact PNG paired with this stored native-data snapshot.
+        for transaction in tuple(self.replacements):
+            if transaction.parent == parent and transaction.name == name:
+                transaction.cancel()
+        transaction = ReplacementTransaction(self, parent, name, self.png)
+        parent.addTransactionListener(transaction)
+        self.replacements.append(transaction)
+
+    def _write_replacement(self, parent, name, png):
         # An active object's fallback is not copied by LibreOffice's Save As
         # path when link updates are disabled. Persist our already-rendered PNG
         # in the requested container so its draw:image reference stays valid.
         images = parent.openStorageElement("ObjectReplacements", 7)
         try:
             stream = images.openStreamElement(name, 12)
-            stream.setPropertyValue("MediaType", "image/png")
-            stream.setPropertyValue("UseCommonStoragePasswordEncryption", True)
-            output = stream.getOutputStream()
-            output.writeBytes(uno.ByteSequence(self.png))
-            output.closeOutput()
-            stream.dispose()
+            output = None
+            try:
+                stream.setPropertyValue("MediaType", "image/png")
+                stream.setPropertyValue("UseCommonStoragePasswordEncryption", True)
+                output = stream.getOutputStream()
+                output.writeBytes(uno.ByteSequence(png))
+                output.closeOutput()
+            except Exception:
+                if output is not None:
+                    with suppress(Exception):
+                        output.closeOutput()
+                with suppress(Exception):
+                    stream.dispose()
+                raise
+            else:
+                stream.dispose()
             images.commit()
         except Exception:
-            images.revert()
+            with suppress(Exception):
+                images.revert()
+            with suppress(Exception):
+                images.dispose()
             raise
-        finally:
+        else:
             images.dispose()
 
     def _read(self, parent, name):
@@ -450,15 +505,21 @@ class Embedded(
     def storeToEntry(self, parent, name, media, args):
         self._ready()
         self._write(parent, name)
+        self._queue_replacement(parent, name)
 
     def storeAsEntry(self, parent, name, media, args):
         self._ready()
         self._write(parent, name)
+        self._queue_replacement(parent, name)
         self.pending = (parent, name)
 
     def saveCompleted(self, use_new):
         if use_new and self.pending:
             self.parent, self.entry = self.pending
+        elif self.pending:
+            for transaction in tuple(self.replacements):
+                if (transaction.parent, transaction.name) == self.pending:
+                    transaction.cancel()
         self.pending = None
         if self.deferred_update:
             session, data, completed = self.deferred_update
