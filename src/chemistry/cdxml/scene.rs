@@ -63,6 +63,8 @@ pub struct NativeCaption {
 pub struct SceneAtom {
     pub id: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub highlight: Option<[u8; 3]>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub text_style: Option<NativeTextStyle>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hydrogen_color: Option<[u8; 3]>,
@@ -167,6 +169,7 @@ fn atom_slot(
     let slot = atoms.len();
     atoms.push(SceneAtom {
         id,
+        highlight: None,
         text_style: None,
         hydrogen_color: None,
         marks: Vec::new(),
@@ -442,11 +445,39 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
         slots.entry(id).or_insert(base.atoms.len());
         base.atoms.push(SceneAtom {
             id,
+            highlight: None,
             text_style: Some(style),
             hydrogen_color,
             marks: Vec::new(),
             display: None,
         });
+    }
+    // Use the same checked coordinate/element association as text and marks.
+    // A highlighted skeletal carbon has no label, so this cannot be folded
+    // into the styled-label loop above.
+    for (ordinal, node) in nodes
+        .iter()
+        .enumerate()
+        .filter(|(_, n)| n.has_tag_name("n"))
+    {
+        let Some(color) =
+            presentation::highlight(node.attribute("highlightColor"), &prepared.palette.colors)?
+        else {
+            continue;
+        };
+        let position = point(
+            node.attribute("p").ok_or(SceneError::Missing("p"))?,
+            prepared.source_scale,
+        )?;
+        let id = association.identify_with_tolerance(
+            &tree,
+            *order.get(ordinal).ok_or(SceneError::Limit)?,
+            position,
+            0.01,
+            "Could not safely associate CDXML highlight with its atom",
+        )?;
+        let slot = atom_slot(&mut base.atoms, &mut slots, id)?;
+        base.atoms.get_mut(slot).ok_or(SceneError::Limit)?.highlight = Some(color.into_document()?);
     }
     let marks = super::read_marks(&prepared.expanded_xml, &association, prepared.source_scale)?;
     for patch in marks.atoms {

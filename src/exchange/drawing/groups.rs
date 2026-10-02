@@ -358,6 +358,10 @@ impl Writer<'_> {
                     ("Z", z),
                 ],
             )?;
+            if let Some(color) = group.highlight {
+                let color = self.color(color)?;
+                self.tree.set(outer, "highlightColor", color)?;
+            }
             let id = self.id()?;
             let inner = self.tree.add(Some(outer), "fragment", [("id", id)])?;
             for id in &group.members {

@@ -153,6 +153,13 @@ fn write_impl(
                 .ring_fills
                 .iter()
                 .any(|fill| fill.atoms.iter().all(|id| g.members.contains(id)))
+            // An anchor's paint is distinct from an explicit contracted label
+            // highlight. Promoting it to the wrapper would paint previously
+            // clear internal atoms/bonds when ChemDraw expands the label.
+            || g.highlight.is_none()
+                && document
+                    .atom(g.anchor)
+                    .is_some_and(|atom| atom.display.highlight.is_some())
     };
     let mut expanded;
     let document = if document.abbreviations.iter().any(needs_expansion) {
