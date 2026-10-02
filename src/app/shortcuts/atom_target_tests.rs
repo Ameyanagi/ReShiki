@@ -52,10 +52,13 @@ fn glyph_center(doc: &Document, text: &str) -> Point {
                 size,
                 style,
                 ..
-            } if run == text => Some(position.offset(
-                reshiki::style::styled_text_width(&run, size, &style) / 2.,
-                size / 2.,
-            )),
+            } => run.find(text).map(|start| {
+                position.offset(
+                    reshiki::style::styled_text_width(&run[..start], size, &style)
+                        + reshiki::style::styled_text_width(text, size, &style) / 2.,
+                    size / 2.,
+                )
+            }),
             _ => None,
         })
         .expect("Expected rendered label glyph")
