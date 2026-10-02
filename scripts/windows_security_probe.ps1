@@ -66,10 +66,22 @@ else {
                 SmartAppControlState, IsTamperProtected
         }
         preferences = Capture {
-            Get-MpPreference | Select-Object DisableRealtimeMonitoring, DisableBehaviorMonitoring,
-                DisableIOAVProtection, DisableArchiveScanning, ExclusionPath, ExclusionExtension,
-                ExclusionProcess, MAPSReporting, SubmitSamplesConsent, PUAProtection,
-                DisableBlockAtFirstSeen, CloudBlockLevel
+            $preferences = Get-MpPreference
+            $names = @(
+                'DisableRealtimeMonitoring', 'DisableBehaviorMonitoring', 'DisableIOAVProtection',
+                'DisableArchiveScanning', 'ExclusionPath', 'ExclusionExtension', 'ExclusionProcess',
+                'MAPSReporting', 'SubmitSamplesConsent', 'PUAProtection', 'DisableBlockAtFirstSeen',
+                'CloudBlockLevel', 'UnknownThreatDefaultAction', 'LowThreatDefaultAction',
+                'ModerateThreatDefaultAction', 'HighThreatDefaultAction', 'SevereThreatDefaultAction',
+                'ThreatIDDefaultAction_Ids', 'ThreatIDDefaultAction_Actions'
+            )
+            foreach ($name in $names) {
+                # Select-Object alone silently substitutes null for unsupported properties.
+                if ($null -eq $preferences.PSObject.Properties[$name]) {
+                    throw "Protection policy property is unavailable: $name"
+                }
+            }
+            $preferences | Select-Object -Property $names
         }
         threats = Capture {
             Get-MpThreatDetection | Select-Object * -ExcludeProperty CimClass, CimInstanceProperties, CimSystemProperties

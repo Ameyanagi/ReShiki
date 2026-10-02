@@ -77,13 +77,24 @@ Logs can contain local paths and protection-policy details; review before sharin
   event 1001 Scan IDs, successful command completion, unchanged expected file
   hashes, active normal Defender status and complete threat/policy/event data.
 - `detection_recorded` retains a target-path detection/action even if the command
-  returned 0 or quarantine removed the file. Historical threat records contain
+  returned 0, quarantine removed the file, or a record present before the scan
+  disappeared afterward. Historical threat records contain
   paths, not necessarily the scanned sample's hash: review timing and resources
   before attributing an old detection to new bytes at the same path.
 - `incomplete` includes missing targets, hash changes, passive/disabled or unknown
   protection, stale definitions, unreadable/truncated logs, cancellation, missing
-  completion, policy changes and unattributed new detections. Any reported
+  completion, protection failure/recovery events, history deletion attempts or
+  disappearing records, policy changes and unattributed new detections. Any reported
   exclusion requires review; the helper does not guess whether it applies.
+
+Both policy snapshots must include all five threat-severity default actions and
+the paired threat-ID/action overrides. Only the security-intelligence default (0)
+and Clean, Quarantine, Remove or Block (1/2/3/10) qualify automatically. Allow (6)
+can suppress detection events; user-defined, non-remediating, unknown, missing or
+ambiguous actions require review. Captured policy changes also require review
+even without a configuration event. Evidence from older collectors that omitted
+these fields remains readable but reevaluates as incomplete; collect fresh
+evidence rather than filling historical gaps with today's settings.
 
 Signature status is recorded separately and does not affect the antivirus verdict.
 Unknown-publisher/UAC, SmartScreen, Smart App Control and runtime-loader failures
@@ -112,6 +123,8 @@ uv run --no-project --python 3.12 python -m unittest tests.test_windows_security
 ```
 
 The tests use synthetic event/status fixtures, not malware or real scan results.
+When PowerShell is available, they also invoke the probe with mocked OS queries
+to check that action policies are preserved and unsupported properties fail.
 
 Collector validation on 2026-10-02 also used an ordinary text file on Windows 11
 Pro 25H2 x64 (26200.9457), Windows PowerShell 5.1 and Python 3.12.13 in an elevated
@@ -123,7 +136,17 @@ nonzero status. All 12 regression tests also passed on that host. This verifies
 collection mechanics, not ReShiki release acceptance, standard-user behavior or
 GUI interaction. No application/installer bytes were scanned or executed.
 
+Subsequent review added the action-policy requirements above. The earlier native
+text-scan evidence omitted those fields and now reevaluates as incomplete. All 19
+updated regression tests passed on macOS/PowerShell 7 and Windows/PowerShell 5.1.
+A separate read-only Windows snapshot confirmed five default actions of 0 and no
+threat-specific overrides; it does not establish policy during the earlier scan.
+No new native scan or policy change was performed for this follow-up.
+
 See Microsoft's [Defender event reference](https://learn.microsoft.com/en-us/defender-endpoint/troubleshoot-microsoft-defender-antivirus),
 [Start-MpScan](https://learn.microsoft.com/en-us/powershell/module/defender/start-mpscan)
 and [Get-MpComputerStatus](https://learn.microsoft.com/en-us/powershell/module/defender/get-mpcomputerstatus)
-for the underlying commands and scan/detection event fields.
+for the underlying commands and scan/detection event fields. Microsoft's
+[remediation guidance](https://learn.microsoft.com/en-us/defender-endpoint/configure-remediation-microsoft-defender-antivirus)
+and [action values](https://learn.microsoft.com/en-us/powershell/module/defender/set-mppreference#description)
+explain the policy checks.
