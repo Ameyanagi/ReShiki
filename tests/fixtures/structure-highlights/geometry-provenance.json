@@ -1,0 +1,72 @@
+{
+  "recorded": "2026-10-03",
+  "files": [
+    {
+      "file": "authored-acs-font10.cdxml",
+      "source_evidence": "minimal-highlight-acs-font10.cdxml",
+      "bytes": 1262,
+      "sha256": "2c887226d86d64c6e9c5f003df0286a145398ec848774122d0c0b632b9c1271e",
+      "origin": "Independently authored minimal five-atom CDXML with explicit drawing attributes"
+    },
+    {
+      "file": "authored-acs-font20.cdxml",
+      "source_evidence": "minimal-highlight-acs-font20.cdxml",
+      "bytes": 1262,
+      "sha256": "efcefed37650ff2aaf6a3a3b6a7a2033d9569d12b2c4562ca7ee5d0c4eed02bb",
+      "origin": "Independently authored minimal five-atom CDXML with explicit drawing attributes"
+    },
+    {
+      "file": "native-prime-acs-font10.svg",
+      "source_evidence": "prime-minimal-highlight-acs-font10.svg",
+      "bytes": 2164,
+      "sha256": "4e33c993845f126f3e86a8e7ae61235666ea779722605e673ab4aa1e41c7a0e9",
+      "origin": "ChemDraw Prime 26.0.0.6599 Save As SVG, actual macOS UI on 2026-10-03"
+    },
+    {
+      "file": "native-prime-acs-font20.svg",
+      "source_evidence": "prime-minimal-highlight-font20.svg",
+      "bytes": 2161,
+      "sha256": "af0d3cb2dc110af741baeeb7630bbea7cb7edf02aef89a81d8bd3549b077cd1b",
+      "origin": "ChemDraw Prime 26.0.0.6599 Save As SVG, actual macOS UI on 2026-10-03"
+    }
+  ],
+  "controlled_changes": {
+    "label_size_pt": [
+      10,
+      20
+    ],
+    "bond_length_pt": 14.4,
+    "bond_spacing_ratio": 0.18,
+    "line_width_pt": 0.6,
+    "bold_width_pt": 2,
+    "margin_width_pt": 1.6
+  },
+  "native_observations": {
+    "acs_bond_capsule_path_identical_at_both_font_sizes": true,
+    "acs_bond_radius_pt": 4.188,
+    "acs10_label_cap_radii_pt": [
+      2.898805,
+      5.7976
+    ],
+    "acs20_label_cap_radii_pt": [
+      4.75061,
+      9.5012
+    ],
+    "original_fixture_bond_radius_pt": 3.092,
+    "original_fixture_label_cap_radii_pt": [
+      2.624805,
+      5.2496
+    ]
+  },
+  "geometry_rule": {
+    "base_radius": "1.5 * bond_length * bond_spacing_ratio + 0.5 * line_width",
+    "label_vertical_radius": "(actual label ink height + base_radius) / 2",
+    "label_horizontal_cap_radius": "label_vertical_radius / 2",
+    "status": "Empirical match to three independent native exports; other line/bond/spacing extremes use actual molecular ink coverage as a lower bound."
+  },
+  "exclusions": [
+    "Prime does not expose Professional highlight authoring controls.",
+    "No claim of native toolbar authoring.",
+    "Other installed fonts can have different text ink metrics; the bond radius is independent of font size."
+  ]
+}
