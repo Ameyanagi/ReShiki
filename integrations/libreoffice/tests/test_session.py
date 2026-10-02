@@ -118,6 +118,7 @@ class SessionTests(unittest.TestCase):
         self.object.client = Client()
         done = threading.Event()
         with (
+            patch.object(self.object, "_queue_replacement"),
             patch.object(
                 self.object,
                 "_write",
@@ -169,6 +170,7 @@ class SessionTests(unittest.TestCase):
                 obj.client = Client()
                 done = threading.Event()
                 with (
+                    patch.object(obj, "_queue_replacement"),
                     patch.object(
                         obj,
                         "_write",
@@ -199,6 +201,7 @@ class SessionTests(unittest.TestCase):
         self.object.client = Client()
         done = threading.Event()
         with (
+            patch.object(self.object, "_queue_replacement"),
             patch.object(
                 self.object,
                 "_write",
@@ -247,12 +250,15 @@ class SessionTests(unittest.TestCase):
         try:
             obj = extension.Embedded(ctx, self.old)
             obj.parent, obj.entry = old_parent, "ReShiki-first"
-            obj.storeOwn()
+            obj.storeToEntry(old_parent, obj.entry, (), ())
+            old_parent.commit()
             untouched = extension.Embedded(ctx, (self.old[0], b"other preview", self.old[2]))
             untouched.parent, untouched.entry = old_parent, "ReShiki-other"
-            untouched.storeOwn()
+            untouched.storeToEntry(old_parent, untouched.entry, (), ())
+            old_parent.commit()
             obj.native, obj.png, obj.extent = self.new
             obj.storeAsEntry(new_parent, "ReShiki-renamed", (), ())
+            new_parent.commit()
             self.assertEqual(replacement(new_parent, "ReShiki-renamed"), self.new[1])
             self.assertEqual(replacement(old_parent, "ReShiki-first"), self.old[1])
             self.assertEqual(replacement(old_parent, "ReShiki-other"), b"other preview")
@@ -261,6 +267,72 @@ class SessionTests(unittest.TestCase):
         finally:
             old_parent.dispose()
             new_parent.dispose()
+
+    def test_host_image_lock_is_respected_until_destination_precommit(self):
+        ctx = extension.uno.getComponentContext()
+        parent = extension.service(ctx, "com.sun.star.embed.StorageFactory").createInstance()
+        images = parent.openStorageElement("ObjectReplacements", 7)
+        obj = extension.Embedded(ctx, self.old)
+        obj.parent, obj.entry = parent, "ReShiki-first"
+        try:
+            obj.storeOwn()
+            obj.storeAsEntry(parent, obj.entry, (), ())
+            self.assertEqual(len(obj.replacements), 1)
+            # The queued replacement is immutable even if later work changes PNG.
+            obj.png = self.new[1]
+            images.dispose()
+            images = None
+            parent.commit()
+            self.assertEqual(obj.replacements, [])
+            images = parent.openStorageElement("ObjectReplacements", 3)
+            stream = images.openStreamElement(obj.entry, 3)
+            source = stream.getInputStream()
+            try:
+                self.assertEqual(source.readBytes(None, extension.LIMIT)[1].value, self.old[1])
+            finally:
+                source.closeInput()
+                stream.dispose()
+            obj.saveCompleted(True)
+        finally:
+            if images is not None:
+                images.dispose()
+            parent.dispose()
+
+    def test_failed_cache_precommit_aborts_and_revert_removes_listener(self):
+        ctx = extension.uno.getComponentContext()
+        parent = extension.service(ctx, "com.sun.star.embed.StorageFactory").createInstance()
+        images = parent.openStorageElement("ObjectReplacements", 7)
+        obj = extension.Embedded(ctx, self.old)
+        try:
+            obj.storeAsEntry(parent, "ReShiki-first", (), ())
+            with self.assertRaises(extension.IOException):
+                parent.commit()
+            self.assertEqual(len(obj.replacements), 1)
+            images.dispose()
+            images = None
+            parent.revert()
+            self.assertEqual(obj.replacements, [])
+            obj.saveCompleted(False)
+            self.assertFalse(parent.hasByName("ReShiki-first"))
+        finally:
+            if images is not None:
+                images.dispose()
+            parent.dispose()
+
+    def test_rejected_save_as_and_disposed_destination_cancel_cached_preview(self):
+        ctx = extension.uno.getComponentContext()
+        factory = extension.service(ctx, "com.sun.star.embed.StorageFactory")
+        for rejected in (False, True):
+            with self.subTest(rejected=rejected):
+                parent = factory.createInstance()
+                obj = extension.Embedded(ctx, self.old)
+                obj.storeAsEntry(parent, "ReShiki-first", (), ())
+                if rejected:
+                    obj.saveCompleted(False)
+                    parent.commit()
+                    self.assertFalse(parent.hasByName("ObjectReplacements"))
+                parent.dispose()
+                self.assertEqual(obj.replacements, [])
 
     def test_external_editor_never_advertises_inplace_ui_states(self):
         self.assertEqual(self.object.getReachableStates(), (0, 1, 2))
