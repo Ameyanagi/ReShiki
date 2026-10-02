@@ -89,4 +89,14 @@ A ChemDraw 26 test copied a caffeine drawing with two filled rings into ChemDraw
 
 Automated tests cover independent native clipboard data, supported exchange fixtures, Unicode font runs, large property lengths, truncation, duplicate identifiers, invalid base64, query rejection, stale asynchronous completion and failed Cut. The raster wrapper is checked for image-only contents, unchanged PNG bytes and physical bounds. Local desktop artifacts are under `artifacts/clipboard-qa-20260920/` and are ignored by Git. These examples establish the tested subset, not universal external-document compatibility.
 
+The macOS adapter maps the portable `chemical/x-cdxml` representation to
+ChemDraw's `com.revvity.cdxml`, `com.perkinelmer.cdxml` and
+`com.cambridgesoft.cdxml` types, retaining the exact UTF-8 text fallback.
+[`NSPasteboardItem` requires a UTI](https://developer.apple.com/documentation/appkit/nspasteboarditem/setdata(_:fortype:)),
+so a MIME string containing `/` cannot be passed directly. These aliases are
+declared by ChemDraw 26's bundle metadata. Unique-pasteboard regressions check
+the exact native types and bytes for all eleven Copy as format packets, plus
+unchanged prior contents after invalid, conflicting or oversized writes. The
+64 MB combined limit includes the expanded native aliases.
+
 Linux transport tests additionally cover multi-format selection publication, a 2 MiB X11 incremental image transfer, replacement and one-shot owners, rejected oversized transfer headers, stalled recipients, and atomic rejection of invalid writes. These are isolated Xvfb and process/pipe checks; they do not establish native GUI or compositor-specific Wayland compatibility. [Transport design and test commands](../native/linux/README.md).
