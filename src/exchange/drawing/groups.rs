@@ -442,6 +442,20 @@ impl Writer<'_> {
                 .text_style
                 .clone()
                 .unwrap_or_default();
+            let original = self
+                .atom_indices
+                .get(&group.anchor)
+                .and_then(|&index| self.original.atoms.get(index))
+                .filter(|atom| atom.id == group.anchor)
+                .ok_or_else(|| invalid("Missing original abbreviation anchor"))?;
+            // The label's paint can differ from its hidden anchor's halo.
+            // Keep each automatic foreground legible when ChemDraw expands
+            // the label; explicit user foreground colors still take priority.
+            style.color = crate::palette::Color::Custom(
+                self.original
+                    .canvas_theme
+                    .color(crate::canvas_theme::atom_color(self.original, original)),
+            );
             style.formula = true;
             style.script = crate::typography::Script::Normal;
             let mut attributes = vec![

@@ -89,6 +89,7 @@ impl P {
 
 struct Writer<'a> {
     doc: &'a Document,
+    original: &'a Document,
     /// The source document's palette, for colors in export options.
     palette: crate::palette::Palette,
     options: Options<'a>,
@@ -129,7 +130,7 @@ fn write_impl(
     variable_labels: bool,
 ) -> Result<String> {
     let original = document;
-    let resolved = crate::canvas_theme::resolved_document(document);
+    let resolved = crate::canvas_theme::resolved_exchange_document(document);
     let document = resolved.as_ref();
     document.validate().map_err(invalid)?;
     if document
@@ -209,7 +210,12 @@ fn write_impl(
             "CDXML cannot yet preserve non-stereochemical front-bond emphasis or projected wedge styles. Restore plain bond appearance before editable export, or use ReShiki (.rsk), SVG, PNG or PDF to retain the appearance.",
         ));
     }
-    let mut w = Writer::new(document, options, crate::palette::Palette::of(original))?;
+    let mut w = Writer::new(
+        document,
+        original,
+        options,
+        crate::palette::Palette::of(original),
+    )?;
     w.variable_labels = variable_labels;
     w.atoms(&graph)?;
     w.bonds()?;
@@ -317,6 +323,7 @@ impl<'a> Writer<'a> {
     }
     fn new(
         doc: &'a Document,
+        original: &'a Document,
         options: Options<'a>,
         palette: crate::palette::Palette,
     ) -> Result<Self> {
@@ -416,6 +423,7 @@ impl<'a> Writer<'a> {
         let fragment = tree.add(Some(page), "fragment", [("id", "2".into())])?;
         let mut w = Self {
             doc,
+            original,
             palette,
             options,
             tree,

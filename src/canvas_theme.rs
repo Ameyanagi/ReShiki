@@ -166,13 +166,21 @@ fn atom_ink(
     palette: &Palette,
     atom: &crate::document::Atom,
 ) -> [u8; 3] {
+    atom_ink_on(doc, palette, atom, crate::highlights::atom_color(doc, atom))
+}
+fn atom_ink_on(
+    doc: &crate::document::Document,
+    palette: &Palette,
+    atom: &crate::document::Atom,
+    highlight: Option<Color>,
+) -> [u8; 3] {
     let explicit = atom.text_style.as_ref().map_or(Color::Ink, |s| s.color);
     if atom.display.color_override || explicit != Color::Ink {
         palette.canonical(explicit)
     } else {
         let mut ink = element_color(doc, &atom.element, doc.canvas_theme);
-        if !doc.ring_fills.is_empty() || crate::highlights::atom_color(doc, atom).is_some() {
-            let backgrounds = label_backgrounds(doc, palette, atom);
+        if !doc.ring_fills.is_empty() || highlight.is_some() {
+            let backgrounds = label_backgrounds_on(doc, palette, atom, highlight);
             ink = crate::color_contrast::ensure_contrast(
                 ink,
                 &backgrounds,
@@ -200,11 +208,19 @@ fn hydrogen_ink(
     palette: &Palette,
     atom: &crate::document::Atom,
 ) -> [u8; 3] {
+    hydrogen_ink_on(doc, palette, atom, crate::highlights::atom_color(doc, atom))
+}
+fn hydrogen_ink_on(
+    doc: &crate::document::Document,
+    palette: &Palette,
+    atom: &crate::document::Atom,
+    highlight: Option<Color>,
+) -> [u8; 3] {
     atom.display.hydrogen_color.map_or_else(
         || {
             let mut hydrogen = atom.clone();
             hydrogen.element = "H".into();
-            atom_ink(doc, palette, &hydrogen)
+            atom_ink_on(doc, palette, &hydrogen, highlight)
         },
         |color| palette.canonical(color),
     )
@@ -215,7 +231,15 @@ fn label_backgrounds(
     palette: &Palette,
     atom: &crate::document::Atom,
 ) -> Vec<[u8; 3]> {
-    if let Some(color) = crate::highlights::atom_color(doc, atom) {
+    label_backgrounds_on(doc, palette, atom, crate::highlights::atom_color(doc, atom))
+}
+fn label_backgrounds_on(
+    doc: &crate::document::Document,
+    palette: &Palette,
+    atom: &crate::document::Atom,
+    highlight: Option<Color>,
+) -> Vec<[u8; 3]> {
+    if let Some(color) = highlight {
         // The atom halo covers the complete label, so its ink is read against
         // the halo rather than the paper or ring fill beneath it.
         return vec![palette.rgb(color)];
@@ -268,6 +292,22 @@ pub fn label_contrast_issues(doc: &crate::document::Document) -> Vec<u64> {
 pub fn resolved_document(
     doc: &crate::document::Document,
 ) -> std::borrow::Cow<'_, crate::document::Document> {
+    resolve_document(doc, false)
+}
+
+/// Editable formats keep the contracted label and its underlying atoms as
+/// separate text objects. Resolve internal atom ink against its own halo;
+/// the writer resolves each visible wrapper label against the group paint.
+pub(crate) fn resolved_exchange_document(
+    doc: &crate::document::Document,
+) -> std::borrow::Cow<'_, crate::document::Document> {
+    resolve_document(doc, true)
+}
+
+fn resolve_document(
+    doc: &crate::document::Document,
+    expanded_atoms: bool,
+) -> std::borrow::Cow<'_, crate::document::Document> {
     if doc.custom_theme.is_none()
         && doc.color_theme.is_publication()
         && doc.ring_fills.is_empty()
@@ -306,8 +346,14 @@ pub fn resolved_document(
         let style = atom
             .text_style
             .get_or_insert_with(|| doc.drawing_style.text_style());
-        style.color = visible(atom_ink(doc, &palette, original));
-        atom.display.hydrogen_color = Some(visible(hydrogen_ink(doc, &palette, original)));
+        let highlight = if expanded_atoms {
+            original.display.highlight
+        } else {
+            crate::highlights::atom_color(doc, original)
+        };
+        style.color = visible(atom_ink_on(doc, &palette, original, highlight));
+        atom.display.hydrogen_color =
+            Some(visible(hydrogen_ink_on(doc, &palette, original, highlight)));
         atom.display.color_override = true;
     }
     for (bond, original) in resolved.bonds.iter_mut().zip(&doc.bonds) {
