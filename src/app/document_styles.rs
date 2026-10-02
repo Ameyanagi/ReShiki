@@ -648,6 +648,265 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "Opt-in renderer input check"]
+    async fn drawing_style_fields_keep_focus_through_incomplete_units() {
+        use iced::advanced::{
+            Layout, layout, mouse,
+            renderer::Headless,
+            widget::{
+                Id, Operation, Tree,
+                operation::{Focusable, TextInput},
+            },
+        };
+        use iced::keyboard::{self, Key, Modifiers, key};
+        use iced::{Event, Rectangle, Size};
+
+        struct Find<'a> {
+            text: &'a str,
+            bounds: Option<Rectangle>,
+            matching: bool,
+            focused: bool,
+        }
+        impl Operation for Find<'_> {
+            fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+                operate(self);
+            }
+            fn text_input(&mut self, _: Option<&Id>, bounds: Rectangle, state: &mut dyn TextInput) {
+                self.matching = state.text() == self.text;
+                if self.matching {
+                    self.bounds = Some(bounds);
+                }
+            }
+            fn focusable(&mut self, _: Option<&Id>, _: Rectangle, state: &mut dyn Focusable) {
+                if self.matching {
+                    self.focused |= state.is_focused();
+                }
+                self.matching = false;
+            }
+        }
+        fn inspect(
+            app: &App,
+            renderer: &iced::Renderer,
+            tree: &mut Tree,
+            viewport: Rectangle,
+            text: &str,
+        ) -> (Rectangle, bool) {
+            let mut view = app.view();
+            tree.diff(view.as_widget());
+            let node = view.as_widget_mut().layout(
+                tree,
+                renderer,
+                &layout::Limits::new(viewport.size(), viewport.size()),
+            );
+            let mut find = Find {
+                text,
+                bounds: None,
+                matching: false,
+                focused: false,
+            };
+            view.as_widget_mut()
+                .operate(tree, Layout::new(&node), renderer, &mut find);
+            (find.bounds.expect("the Bond length field"), find.focused)
+        }
+        fn event(
+            app: &mut App,
+            renderer: &iced::Renderer,
+            tree: &mut Tree,
+            viewport: Rectangle,
+            event: Event,
+            cursor: mouse::Cursor,
+        ) -> (iced::event::Status, bool) {
+            let mut view = app.view();
+            tree.diff(view.as_widget());
+            let node = view.as_widget_mut().layout(
+                tree,
+                renderer,
+                &layout::Limits::new(viewport.size(), viewport.size()),
+            );
+            let mut messages = Vec::new();
+            let mut shell = iced::advanced::Shell::new(&mut messages);
+            view.as_widget_mut().update(
+                tree,
+                &event,
+                Layout::new(&node),
+                cursor,
+                renderer,
+                &mut iced::advanced::clipboard::Null,
+                &mut shell,
+                &viewport,
+            );
+            let status = shell.event_status();
+            drop(view);
+            let committed = messages.iter().any(|message| {
+                matches!(
+                    message,
+                    Message::DrawingStyle(Action::CommitField(Field::Bond))
+                )
+            });
+            for message in messages {
+                let _ = app.update(message);
+            }
+            (status, committed)
+        }
+        let press = |key: Key, code, modifiers, text: Option<&str>| {
+            Event::Keyboard(keyboard::Event::KeyPressed {
+                modified_key: key.clone(),
+                key,
+                physical_key: key::Physical::Code(code),
+                location: keyboard::Location::Standard,
+                modifiers,
+                text: text.map(Into::into),
+                repeat: false,
+            })
+        };
+        let character = |c: char| {
+            let code = match c {
+                ' ' => key::Code::Space,
+                '.' => key::Code::Period,
+                '0' => key::Code::Digit0,
+                '1' => key::Code::Digit1,
+                '5' => key::Code::Digit5,
+                'e' => key::Code::KeyE,
+                'm' => key::Code::KeyM,
+                _ => unreachable!(),
+            };
+            press(
+                Key::Character(c.to_string().into()),
+                code,
+                Modifiers::empty(),
+                Some(&c.to_string()),
+            )
+        };
+        let renderer = <iced::Renderer as Headless>::new(
+            iced::Font::with_name(reshiki::style::ui_font_family()),
+            iced::Pixels(16.),
+            None,
+        )
+        .await
+        .unwrap();
+        let mut app = legacy_style_app();
+        let before = app.tab.doc.clone();
+        send(&mut app, Action::Open);
+        send(&mut app, Action::DisplayUnit(Unit::Millimetres));
+        let viewport = Rectangle::with_size(Size::new(1280., 1000.));
+        let mut tree = Tree::empty();
+        let command = if cfg!(target_os = "macos") {
+            Modifiers::LOGO
+        } else {
+            Modifiers::CTRL
+        };
+        for (incomplete, completion, normalized) in [
+            ("5 m", "m", "5"),
+            ("", "5 mm", "5"),
+            ("5.", "0 mm", "5"),
+            ("1e", "0 mm", "1"),
+        ] {
+            let current = input(app.tab.styles.editor.as_ref().unwrap(), Field::Bond)
+                .text
+                .clone();
+            let (bounds, _) = inspect(&app, &renderer, &mut tree, viewport, &current);
+            for mouse_event in [
+                mouse::Event::ButtonPressed(mouse::Button::Left),
+                mouse::Event::ButtonReleased(mouse::Button::Left),
+            ] {
+                event(
+                    &mut app,
+                    &renderer,
+                    &mut tree,
+                    viewport,
+                    Event::Mouse(mouse_event),
+                    mouse::Cursor::Available(bounds.center()),
+                );
+            }
+            for key_event in [
+                Event::Keyboard(keyboard::Event::ModifiersChanged(command)),
+                press(Key::Character("a".into()), key::Code::KeyA, command, None),
+                Event::Keyboard(keyboard::Event::ModifiersChanged(Modifiers::empty())),
+            ] {
+                event(
+                    &mut app,
+                    &renderer,
+                    &mut tree,
+                    viewport,
+                    key_event,
+                    mouse::Cursor::Unavailable,
+                );
+            }
+            let mut raw = String::new();
+            if incomplete.is_empty() {
+                event(
+                    &mut app,
+                    &renderer,
+                    &mut tree,
+                    viewport,
+                    press(
+                        Key::Named(key::Named::Backspace),
+                        key::Code::Backspace,
+                        Modifiers::empty(),
+                        None,
+                    ),
+                    mouse::Cursor::Unavailable,
+                );
+                assert!(inspect(&app, &renderer, &mut tree, viewport, "").1);
+            }
+            for (text, valid) in [(incomplete, false), (completion, true)] {
+                for c in text.chars() {
+                    event(
+                        &mut app,
+                        &renderer,
+                        &mut tree,
+                        viewport,
+                        character(c),
+                        mouse::Cursor::Unavailable,
+                    );
+                    raw.push(c);
+                    assert_eq!(
+                        input(app.tab.styles.editor.as_ref().unwrap(), Field::Bond).text,
+                        raw
+                    );
+                    // Reconcile the changed view before checking focus, exactly
+                    // where removing the header's children used to lose it.
+                    assert!(
+                        inspect(&app, &renderer, &mut tree, viewport, &raw).1,
+                        "focus after {raw:?}"
+                    );
+                }
+                assert_eq!(
+                    app.tab.styles.editor.as_ref().unwrap().candidate().is_ok(),
+                    valid
+                );
+            }
+            let (status, committed) = event(
+                &mut app,
+                &renderer,
+                &mut tree,
+                viewport,
+                press(
+                    Key::Named(key::Named::Enter),
+                    key::Code::Enter,
+                    Modifiers::empty(),
+                    None,
+                ),
+                mouse::Cursor::Unavailable,
+            );
+            assert_eq!(status, iced::event::Status::Captured);
+            assert!(
+                committed,
+                "Enter must reach the field, not a global shortcut"
+            );
+            assert_eq!(app.inspector_tab, InspectorTab::DrawingStyle);
+            assert_eq!(
+                input(app.tab.styles.editor.as_ref().unwrap(), Field::Bond).text,
+                normalized
+            );
+            assert!(!inspect(&app, &renderer, &mut tree, viewport, normalized).1);
+            assert_eq!(app.tab.doc, before);
+            assert!(!app.dirty());
+            assert!(!app.tab.history.can_undo());
+        }
+    }
+
+    #[tokio::test]
     #[ignore = "Manual GPU snapshots without opening or controlling desktop windows"]
     async fn drawing_style_headless_snapshot() {
         use iced::advanced::{layout, mouse, renderer::Headless, widget::Tree};
@@ -1492,7 +1751,7 @@ impl App {
             .as_ref()
             .ok()
             .and_then(|style| Preset::ALL.into_iter().find(|p| p.style() == *style));
-        let mut body = column![
+        let mut header = column![
             command("‹ Properties")
                 .on_press(action(Action::Cancel))
                 .style(button::text),
@@ -1517,7 +1776,7 @@ impl App {
         ]
         .spacing(10);
         if let Some(preset) = preset {
-            body = body
+            header = header
                 .push(
                     text(preset.description())
                         .size(12)
@@ -1529,7 +1788,7 @@ impl App {
                         .style(button::text),
                 );
         } else {
-            body = body.push(
+            header = header.push(
                 text("Customize the current settings, then save a reusable style file.")
                     .size(12)
                     .style(super::workspace::muted_text),
@@ -1555,7 +1814,7 @@ impl App {
             preview.canvas_theme = self.tab.doc.canvas_theme;
             preview.color_theme = self.tab.doc.color_theme;
             preview.custom_theme = self.tab.doc.custom_theme.clone();
-            body = body.push(
+            header = header.push(
                 container(
                     canvas(DrawingThumbnail(preview))
                         .height(85)
@@ -1564,6 +1823,11 @@ impl App {
                 .style(super::workspace::panel),
             );
         }
+        // Keep conditional preset guidance and preview in one subtree. Iced
+        // reconciles column children by position: removing either before an
+        // input would otherwise move its state to a different widget and lose
+        // focus in the middle of an incomplete number or unit suffix.
+        let mut body = column![header].spacing(10);
         body = body.push(
             crate::appearance::text_input("Style name", &editor.name)
                 .on_input(move |s| action(Action::Name(s)))
