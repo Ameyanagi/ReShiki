@@ -140,6 +140,8 @@ pub fn replace(doc: &Document, id: u64, label: &str) -> Result<Document, String>
         }
     }
     result.abbreviations.push(Abbreviation {
+        label_style: doc.abbreviation(id).and_then(|g| g.label_style.clone()),
+        label_color_override: doc.abbreviation(id).is_some_and(|g| g.label_color_override),
         highlight,
         alignment: doc
             .abbreviation(id)

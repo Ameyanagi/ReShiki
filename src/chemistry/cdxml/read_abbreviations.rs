@@ -198,6 +198,8 @@ pub fn read_abbreviations(
             .map(&mut identify)
             .collect::<Result<Vec<_>>>()?;
         result.push(DrawingAbbreviation {
+            label_style: None,
+            label_color_override: false,
             highlight: super::presentation::highlight(record.highlight.as_deref(), &colors)
                 .and_then(|value| value.map(|color| color.into_document()).transpose())
                 .map_err(|error| Error::Invalid(error.to_string()))?
