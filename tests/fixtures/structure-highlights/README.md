@@ -41,6 +41,34 @@ foreground color is a separate property.
 
 These fixtures establish native import/display/save preservation. ChemDraw
 Prime has no highlight authoring toolbar; Professional toolbar authoring is
-outside this fixture's evidence. The contracted-label tests use an
-independently authored OMe graph and the documented fill-only-missing
-propagation rule; they do not claim native toolbar authoring.
+outside this fixture's evidence.
+
+## Native clipboard and contracted labels
+
+An independently authored OMe graph was opened in Prime, copied, pasted into
+a new native document, and saved as `native-contracted.cdxml`. Prime's
+**Structure > Expand Label** command then produced `native-expanded.cdxml`.
+These are actual native saves from 2026-10-03, not simulated clipboard output.
+The visible label had cyan paint, the internal oxygen had red paint, and the
+internal bond had yellow paint. Expansion kept that red/yellow paint, filled
+the previously clear internal carbon with cyan, and left the external carbon
+and bond clear.
+
+| Native output | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `native-contracted.cdxml` | 3654 | `98619747e3c7e4a8872e233b8fb154994c22280e7714da2dba56d3a4ed0571b4` |
+| `native-expanded.cdxml` | 3244 | `1df0d101b93df02fb09b249d6dfd405d7de30aae447ddfbf5c69bdf6df151e74` |
+
+The original short-decimal fixture encoded green `230/255` as `0.901960784`
+and `198/255` as `0.776470588`. Prime truncated those values to green 229 and
+197, respectively. The regression fixtures intentionally preserve the actual
+native result: cyan `[129,229,255]`, yellow `[255,197,0]`, and red `[223,71,62]`.
+ReShiki's writer now emits a decimal immediately above each interior channel
+boundary, with a normalized bias of at most `1e-8`; black/white endpoints and
+the exact 16-bit CDX channels stay unchanged. Tests cover all 256 channel
+values under truncating and rounding receivers.
+
+Native paste and Save completed asynchronously. An immediate read briefly
+showed an empty page; the completed file and visible pasted structure were
+subsequently verified. That timing observation is not evidence of a malformed
+input or failed clipboard transfer.
