@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<components xmlns="http://openoffice.org/2010/uno-components">
+  <component loader="com.sun.star.loader.Python" uri="reshiki.py">
+    <implementation name="dev.reshiki.libreoffice.EmbeddedFactory">
+      <service name="dev.reshiki.libreoffice.EmbeddedFactory"/>
+    </implementation>
+    <implementation name="dev.reshiki.libreoffice.ProtocolHandler">
+      <service name="com.sun.star.frame.ProtocolHandler"/>
+    </implementation>
+  </component>
+</components>

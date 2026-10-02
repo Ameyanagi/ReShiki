@@ -1,4 +1,5 @@
 //! Explicit native Copy/Paste with editable and image representations.
+pub mod libreoffice;
 use crate::{
     document::Document,
     editing,

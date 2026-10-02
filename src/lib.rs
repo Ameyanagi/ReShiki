@@ -42,6 +42,7 @@ pub mod grouping;
 pub mod haworth;
 pub mod hotkeys;
 pub mod joining;
+pub mod libreoffice;
 pub mod ligands;
 #[cfg(windows)]
 mod native_windows;
