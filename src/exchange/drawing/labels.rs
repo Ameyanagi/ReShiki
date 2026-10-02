@@ -124,6 +124,10 @@ impl Writer<'_> {
             )?;
             self.atom_nodes.push(node);
             self.objects.push((a.id, node));
+            if let Some(color) = a.display.highlight {
+                let color = self.color(color)?;
+                self.tree.set(node, "highlightColor", color)?;
+            }
             for (key, value) in [
                 ("Charge", i64::from(a.charge)),
                 ("Isotope", i64::from(a.isotope)),
@@ -354,6 +358,10 @@ impl Writer<'_> {
             )?;
             if b.order == 4 && b.projection {
                 self.tree.set(n, "IgnoreWarnings", "yes")?;
+            }
+            if let Some(color) = b.highlight {
+                let color = self.color(color)?;
+                self.tree.set(n, "highlightColor", color)?;
             }
             if let Some(second) = &b.secondary_display {
                 self.tree.set(n, "Display2", display(second)?)?;

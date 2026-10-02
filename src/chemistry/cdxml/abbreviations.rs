@@ -12,6 +12,9 @@ pub struct Abbreviation {
     /// None preserves the original reader's supported absent-ID case.
     pub anchor: Option<String>,
     pub members: Vec<Option<String>>,
+    /// Explicit contracted-label paint; the expanded atoms retain their own.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub highlight: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -167,6 +170,7 @@ struct Expanded {
     bonds: usize,
 }
 fn flatten_one(tree: &mut Tree, outer: usize) -> Result<Expanded> {
+    let highlight = tree.node(outer)?.attr("highlightColor").map(str::to_owned);
     // Python snapshots wrappers before editing, then rebuilds parents from the
     // surviving root for each one. A wrapper discarded by an earlier expansion
     // must therefore fail, even though its arena allocation still exists.
@@ -410,6 +414,11 @@ fn flatten_one(tree: &mut Tree, outer: usize) -> Result<Expanded> {
             significant(target[1] + x * s + y * c)
         );
         tree.node_mut(node)?.set("p", p.clone());
+        if let Some(color) = &highlight
+            && tree.node(node)?.attr("highlightColor").is_none()
+        {
+            tree.node_mut(node)?.set("highlightColor", color.clone());
+        }
         for text in tree.children(node, "t")? {
             tree.node_mut(text)?.set("p", p.clone());
         }
@@ -418,6 +427,11 @@ fn flatten_one(tree: &mut Tree, outer: usize) -> Result<Expanded> {
     }
     for bond in bonds {
         if !removed_bonds.contains(&bond) {
+            if let Some(color) = &highlight
+                && tree.node(bond)?.attr("highlightColor").is_none()
+            {
+                tree.node_mut(bond)?.set("highlightColor", color.clone());
+            }
             tree.append(parent, bond)?;
         }
     }
@@ -481,6 +495,7 @@ fn flatten_one(tree: &mut Tree, outer: usize) -> Result<Expanded> {
             reverse_label,
             anchor: anchor_id,
             members,
+            highlight,
         },
         atoms: 1 + connections.len(),
         bonds: removed_bonds.len(),

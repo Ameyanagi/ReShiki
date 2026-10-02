@@ -185,6 +185,7 @@ impl CdxmlScene {
             bond.double_position = old.double_position;
             bond.z_order = old.z_order;
             bond.color = old.color;
+            bond.highlight = old.highlight;
             if let Some(value) = previous.indicator {
                 bond.indicator = indicator(value)?;
             }
@@ -235,6 +236,7 @@ impl CdxmlScene {
                 atom.display.hide_charge = hidden_charge;
                 atom.display.hydrogen_color =
                     old.hydrogen_color.map(crate::palette::Color::imported);
+                atom.display.highlight = old.highlight.map(crate::palette::Color::Custom);
             }
         }
         if !previous.is_empty() {
