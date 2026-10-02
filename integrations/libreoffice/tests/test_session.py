@@ -9,6 +9,7 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 SOURCE = Path(__file__).parents[1] / "extension" / "reshiki.py"
@@ -333,6 +334,90 @@ class SessionTests(unittest.TestCase):
                     self.assertFalse(parent.hasByName("ObjectReplacements"))
                 parent.dispose()
                 self.assertEqual(obj.replacements, [])
+
+    def presentation_host(self, dimensions, location="slide"):
+        class Shapes:
+            def __init__(self, *values):
+                self.values = values
+
+            def getCount(self):
+                return len(self.values)
+
+            def getByIndex(self, index):
+                return self.values[index]
+
+        frame = SimpleNamespace(PersistName=self.object.entry, Size=extension.size(*dimensions))
+        other = SimpleNamespace(PersistName="Other object", Size=extension.size(400, 500))
+        other_page, target_page = Shapes(other), Shapes(Shapes(frame))
+        pages, masters, handout = Shapes(other_page), Shapes(), Shapes()
+        if location == "slide":
+            pages.values += (target_page,)
+        elif location == "notes":
+            other_page.getNotesPage = lambda: target_page
+        elif location == "master":
+            masters.values = (target_page,)
+        elif location == "master notes":
+            master_page = Shapes()
+            master_page.getNotesPage = lambda: target_page
+            masters.values = (master_page,)
+        elif location == "handout":
+            handout = target_page
+        # Notes-page references need not be followed recursively.
+        target_page.getNotesPage = lambda: target_page
+        host = SimpleNamespace(
+            supportsService=lambda name: name == "com.sun.star.presentation.PresentationDocument",
+            getDrawPages=lambda: pages,
+            getMasterPages=lambda: masters,
+            getHandoutMasterPage=lambda: handout,
+            setModified=lambda value: None,
+        )
+        self.object.client = SimpleNamespace(
+            saveObject=self.object.storeOwn, getComponent=lambda: host
+        )
+        return frame, other
+
+    def test_impress_saveback_resizes_only_its_frame_and_preserves_user_scale(self):
+        for dimensions, expected in (((100, 200), (300, 400)), ((200, 100), (600, 200))):
+            with self.subTest(dimensions=dimensions):
+                self.object.native, self.object.png, self.object.extent = self.old
+                frame, other = self.presentation_host(dimensions)
+                done = threading.Event()
+                with patch.object(self.object, "_write"):
+                    self.object._accept(self.session, self.new, done)
+                self.assertTrue(done.is_set())
+                self.assertIsNone(self.session["error"])
+                self.assertEqual((frame.Size.Width, frame.Size.Height), expected)
+                self.assertEqual((other.Size.Width, other.Size.Height), (400, 500))
+                self.assertEqual(self.session["accepted"], self.new[0])
+
+    def test_impress_frame_lookup_includes_notes_and_all_master_containers(self):
+        for location in ("notes", "master", "master notes", "handout"):
+            with self.subTest(location=location):
+                self.object.native, self.object.png, self.object.extent = self.old
+                frame, other = self.presentation_host((200, 100), location)
+                with patch.object(self.object, "_write"):
+                    self.object._accept(self.session, self.new, threading.Event())
+                self.assertIsNone(self.session["error"])
+                self.assertEqual((frame.Size.Width, frame.Size.Height), (600, 200))
+                self.assertEqual((other.Size.Width, other.Size.Height), (400, 500))
+
+    def test_failed_acceptance_restores_the_impress_frame_and_stored_drawing(self):
+        frame, other = self.presentation_host((200, 100))
+        stored = []
+        done = threading.Event()
+        with (
+            patch.object(
+                self.object, "_write", side_effect=lambda *args: stored.append(self.object.native)
+            ),
+            patch.object(Path, "write_text", side_effect=OSError("acknowledgement rejected")),
+        ):
+            self.object._accept(self.session, self.new, done)
+        self.assertTrue(done.is_set())
+        self.assertIn("acknowledgement rejected", self.session["error"])
+        self.assertEqual(stored, [self.new[0], self.old[0]])
+        self.assertEqual((frame.Size.Width, frame.Size.Height), (200, 100))
+        self.assertEqual((other.Size.Width, other.Size.Height), (400, 500))
+        self.assertEqual(self.session["accepted"], self.old[0])
 
     def test_external_editor_never_advertises_inplace_ui_states(self):
         self.assertEqual(self.object.getReachableStates(), (0, 1, 2))
