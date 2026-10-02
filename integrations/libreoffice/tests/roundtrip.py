@@ -55,8 +55,8 @@ def verify(document, kind, native, png, extent):
         if component.getTransferData(extension.flavor("image/png")).value != png:
             raise AssertionError("Preview bytes changed during persistence.")
         actual = obj.getVisualAreaSize(1)
-        if abs(actual.Width - extent[0]) > 2 or abs(actual.Height - extent[1]) > 2:
-            raise AssertionError("Physical drawing extent changed beyond host unit rounding.")
+        if (actual.Width, actual.Height) != tuple(extent):
+            raise AssertionError("Intrinsic physical drawing extent changed during persistence.")
 
 
 def main():
