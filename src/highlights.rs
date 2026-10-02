@@ -98,7 +98,11 @@ pub(crate) fn atom_bounds(doc: &Document, atom: &Atom) -> Option<(Point, Point)>
     Some((a.offset(-rx, -ry), b.offset(rx, ry)))
 }
 
-pub(crate) fn bond_bounds(doc: &Document, bond: &Bond) -> Option<(Point, Point)> {
+pub(crate) fn bond_bounds(
+    doc: &Document,
+    bond: &Bond,
+    joins: &crate::bond_joins::Joins<'_>,
+) -> Option<(Point, Point)> {
     bond.highlight?;
     if !doc.bond_visible(bond.a, bond.b) {
         return None;
@@ -106,7 +110,7 @@ pub(crate) fn bond_bounds(doc: &Document, bond: &Bond) -> Option<(Point, Point)>
     let a = doc.atom(bond.a)?.position;
     let b = doc.atom(bond.b)?.position;
     // The cubic circle approximation can extend 0.0273% beyond its radius.
-    let radius = bond_radius(doc, bond, &crate::bond_joins::Joins::new(doc)) * 1.0003;
+    let radius = bond_radius(doc, bond, joins) * 1.0003;
     Some((
         Point::new(a.x.min(b.x) - radius, a.y.min(b.y) - radius),
         Point::new(a.x.max(b.x) + radius, a.y.max(b.y) + radius),
