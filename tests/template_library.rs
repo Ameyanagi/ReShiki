@@ -159,23 +159,93 @@ fn concurrent_library_updates_and_corrupt_files_cannot_overwrite_saved_templates
         .add("Ethanol", "Reagents", ethanol(), Anchor::Auto)
         .unwrap();
     first.save_checked(&path, &original).unwrap();
+    let saved = std::fs::read(&path).unwrap();
     let mut stale = original.clone();
     stale
         .add("Another fragment", "Reagents", ethanol(), Anchor::Atom(2))
         .unwrap();
-    assert!(stale.save_checked(&path, &original).is_err());
+    assert_eq!(
+        stale.save_checked(&path, &original).unwrap_err(),
+        "The library changed in another window. Reload it before saving."
+    );
     assert_eq!(Library::load(&path).unwrap(), first);
+    assert_eq!(std::fs::read(&path).unwrap(), saved);
     let lock = std::fs::OpenOptions::new()
         .read(true)
         .write(true)
         .open(path.with_extension("json.lock"))
         .unwrap();
     lock.lock().unwrap();
-    assert!(stale.save_checked(&path, &first).is_err());
+    // A duplicate keeps the Unix lock alive after drop; explicitly release the
+    // test-owned lock without depending on other handles closing first.
+    #[cfg(unix)]
+    let retained_lock = lock.try_clone().unwrap();
+    assert_eq!(
+        stale.save_checked(&path, &first).unwrap_err(),
+        "Another window is saving templates. Try again."
+    );
+    assert_eq!(std::fs::read(&path).unwrap(), saved);
+    lock.unlock().expect("release the test-owned template lock");
     drop(lock);
     stale.save_checked(&path, &first).unwrap();
+    #[cfg(unix)]
+    drop(retained_lock);
     assert_eq!(Library::load(&path).unwrap(), stale);
     std::fs::write(&path, b"broken library").unwrap();
-    assert!(first.save_checked(&path, &stale).is_err());
+    assert!(
+        first
+            .save_checked(&path, &stale)
+            .unwrap_err()
+            .starts_with("Invalid template collection:")
+    );
     assert_eq!(std::fs::read(&path).unwrap(), b"broken library");
+}
+
+#[test]
+fn checked_invalid_library_preserves_saved_bytes_and_releases_lock() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("templates.json");
+    let original = Library::default();
+    let mut first = original.clone();
+    first
+        .add("Ethanol", "Reagents", ethanol(), Anchor::Auto)
+        .unwrap();
+    first.save_checked(&path, &original).unwrap();
+    let saved = std::fs::read(&path).unwrap();
+    let mut invalid = first.clone();
+    invalid.templates[0].anchor = Anchor::Atom(999);
+    assert_eq!(
+        invalid.save_checked(&path, &first).unwrap_err(),
+        "Template attachment point is missing"
+    );
+    assert_eq!(std::fs::read(&path).unwrap(), saved);
+
+    let mut next = first.clone();
+    next.templates[0].name = "Renamed ethanol".into();
+    next.save_checked(&path, &first).unwrap();
+    assert_eq!(Library::load(&path).unwrap(), next);
+}
+
+#[cfg(unix)]
+#[test]
+fn duplicated_lock_keeps_contention_until_explicit_release() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("templates.json.lock");
+    let lock = std::fs::File::create(&path).unwrap();
+    lock.lock().unwrap();
+    let retained_lock = lock.try_clone().unwrap();
+    drop(lock);
+
+    let contender = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&path)
+        .unwrap();
+    assert!(matches!(
+        contender.try_lock(),
+        Err(std::fs::TryLockError::WouldBlock)
+    ));
+    retained_lock.unlock().unwrap();
+    contender.try_lock().unwrap();
+    contender.unlock().unwrap();
 }
