@@ -73,11 +73,10 @@ The latest real-worker persistence checks used these immutable executables:
 | -------- | -------------- | ------------------------------------------------------------------ |
 | macOS    | `ca4c52e`      | `36eab2b3da9ee879f01aac8d31aec38e2358b8b771655af1a9d0af38fbcfb507` |
 | Linux    | `ca4c52e`      | `2c526a98eab0c6e2ad6a5931caaf3eae59a50f2b43dc24cbfba5cdcfe6fc2b31` |
-| Windows  | `7f06dcf`      | `a70f0fe10c4fa30c68c2843ad6f2849199d008543fba46daee4952d120c33029` |
+| Windows  | `ca4c52e`      | `8f4badabc41c5d623165ed5f7f47227e463e4e622f99ea91370455440d3c385c` |
 
 The installed adapter source SHA-256 was
 `4c7d9cacec62eaa1b59175f462376c0b376bbd9dcde99c00fc0b954107d47531`.
-The final Windows executable rerun remains pending.
 
 macOS and Linux headless checks also used a scripted editor with the real
 renderer to exercise asynchronous save-back in all three hosts. They verified
