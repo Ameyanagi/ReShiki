@@ -586,6 +586,7 @@ def insert(ctx, document, value):
             obj = document.createInstance("com.sun.star.text.TextEmbeddedObject")
             obj.StreamName = entry
             obj.AnchorType = uno.Enum("com.sun.star.text.TextContentAnchorType", "AS_CHARACTER")
+            obj.Width, obj.Height = initial[2]
             cursor = document.CurrentController.getViewCursor()
             document.Text.insertTextContent(cursor, obj, False)
             attached = True
