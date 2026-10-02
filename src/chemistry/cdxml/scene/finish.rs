@@ -17,6 +17,7 @@ fn indicator(value: NativeStereo) -> Result<StereoDisplay> {
 }
 fn display(value: NativeAtomDisplay) -> Result<AtomDisplay> {
     Ok(AtomDisplay {
+        highlight: None,
         hydrogen_color: None,
         color_override: false,
         hide_charge: false,

@@ -182,6 +182,9 @@ pub struct Number {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AtomDisplay {
+    /// Persistent paint behind the atom or its complete visible label.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub highlight: Option<crate::palette::Color>,
     /// Separate attached-H ink when preserving a themed label across paste/export.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hydrogen_color: Option<crate::palette::Color>,
