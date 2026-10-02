@@ -200,6 +200,8 @@ fn large_group_connectivity_is_iterative() -> anyhow::Result<()> {
     }
     doc.abbreviations
         .push(reshiki::abbreviations::Abbreviation {
+            label_style: None,
+            label_color_override: false,
             highlight: None,
             alignment: Default::default(),
             label: "Polymer".into(),

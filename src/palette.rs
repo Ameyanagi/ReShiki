@@ -445,6 +445,9 @@ pub fn for_each_color_mut(doc: &mut Document, mut visit: impl FnMut(&mut Color))
         visit(&mut fill.color);
     }
     for group in &mut doc.abbreviations {
+        if let Some(style) = &mut group.label_style {
+            visit(&mut style.color);
+        }
         if let Some(color) = &mut group.highlight {
             visit(color);
         }
@@ -479,14 +482,20 @@ pub fn any_color(doc: &Document, test: impl Fn(Color) -> bool) -> bool {
         .iter()
         .flat_map(|g| std::iter::once(g.style.stroke).chain(g.style.fill));
     let fills = doc.ring_fills.iter().map(|f| f.color);
-    let highlights = doc.abbreviations.iter().filter_map(|g| g.highlight);
+    let abbreviations = doc.abbreviations.iter().flat_map(|g| {
+        g.label_style
+            .as_ref()
+            .map(|style| style.color)
+            .into_iter()
+            .chain(g.highlight)
+    });
     atoms
         .chain(bonds)
         .chain(texts)
         .chain(arrows)
         .chain(graphics)
         .chain(fills)
-        .chain(highlights)
+        .chain(abbreviations)
         .any(test)
 }
 
