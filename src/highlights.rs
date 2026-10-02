@@ -20,7 +20,7 @@ fn radius(doc: &Document, atom: Option<&Atom>) -> f32 {
     ) * ATOM_RADIUS_EM
 }
 
-fn bond_radius(doc: &Document, bond: &Bond) -> f32 {
+fn bond_radius(doc: &Document, bond: &Bond, joins: &crate::bond_joins::Joins<'_>) -> f32 {
     let style = &doc.drawing_style;
     let spacing = style.bond_length_world * style.bond_spacing_ratio;
     let offset = match bond.order {
@@ -41,7 +41,24 @@ fn bond_radius(doc: &Document, bond: &Bond) -> f32 {
     } else {
         style.line_width() / 2.
     };
-    radius(doc, None).max(offset + ink + style.line_width())
+    let wave = if bond.display == "wavy" && bond.order != 2 {
+        style.line_width() * 1.25
+    } else {
+        0.
+    };
+    let mut envelope = offset.max(wave) + ink;
+    // A sharp joined corner can extend farther than half the bold width.
+    // Reuse the actual bounded outline, rather than estimating its angle.
+    if joins.needed(bond)
+        && let Some((a, b)) = doc.atom(bond.a).zip(doc.atom(bond.b))
+    {
+        for point in joins.polygon(bond, a.position, b.position) {
+            envelope = envelope.max(crate::graphics::segment_distance(
+                point, a.position, b.position,
+            ));
+        }
+    }
+    radius(doc, None).max(envelope + style.line_width())
 }
 
 fn label_bounds(doc: &Document, atom: &Atom) -> Option<(Point, Point)> {
@@ -91,7 +108,7 @@ pub(crate) fn bond_bounds(doc: &Document, bond: &Bond) -> Option<(Point, Point)>
     let a = doc.atom(bond.a)?.position;
     let b = doc.atom(bond.b)?.position;
     // The cubic circle approximation can extend 0.0273% beyond its radius.
-    let radius = bond_radius(doc, bond) * 1.0003;
+    let radius = bond_radius(doc, bond, &crate::bond_joins::Joins::new(doc)) * 1.0003;
     Some((
         Point::new(a.x.min(b.x) - radius, a.y.min(b.y) - radius),
         Point::new(a.x.max(b.x) + radius, a.y.max(b.y) + radius),
@@ -134,8 +151,7 @@ pub(crate) fn primitives(doc: &Document) -> Vec<Primitive> {
     }
     let mut bonds: BTreeMap<_, Vec<_>> = BTreeMap::new();
     let mut covered: HashMap<(u64, Color), f32> = HashMap::new();
-    let mut incident_colors = HashMap::new();
-    let mut mixed_junctions = HashSet::new();
+    let joins = crate::bond_joins::Joins::new(doc);
     for bond in &doc.bonds {
         let Some(color) = bond.highlight.filter(|_| doc.bond_visible(bond.a, bond.b)) else {
             continue;
@@ -143,7 +159,7 @@ pub(crate) fn primitives(doc: &Document) -> Vec<Primitive> {
         let Some((a, b)) = doc.atom(bond.a).zip(doc.atom(bond.b)) else {
             continue;
         };
-        let radius = bond_radius(doc, bond);
+        let radius = bond_radius(doc, bond, &joins);
         let length = a.position.distance(b.position);
         let u = if length > 0.001 {
             Point::new(
@@ -160,12 +176,6 @@ pub(crate) fn primitives(doc: &Document) -> Vec<Primitive> {
             Point::new(-u.y, u.x),
         ));
         for id in [bond.a, bond.b] {
-            if incident_colors
-                .insert(id, color)
-                .is_some_and(|previous| previous != color)
-            {
-                mixed_junctions.insert(id);
-            }
             covered
                 .entry((id, color))
                 .and_modify(|r| *r = r.max(radius))
@@ -178,11 +188,12 @@ pub(crate) fn primitives(doc: &Document) -> Vec<Primitive> {
             continue;
         };
         let (a, b, rx, ry) = label_shape(doc, atom);
-        // A matching bond cap already covers an unlabeled atom. Drawing the
-        // same boundary twice would darken its antialiased edge.
+        // A matching bond cap covers an unlabeled atom when no other bond
+        // color can overpaint it (including unrelated crossing bonds). Avoid
+        // drawing that same boundary twice and darkening its antialiased edge.
         if a == b
             && rx == ry
-            && !mixed_junctions.contains(&atom.id)
+            && bonds.len() == 1
             && covered.get(&(atom.id, color)).is_some_and(|r| *r >= rx)
         {
             continue;
