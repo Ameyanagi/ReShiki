@@ -1,0 +1,22 @@
+[package]
+name = "reshiki-font-export-probe"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "MIT OR Apache-2.0"
+
+# Deliberately isolated from the application and its native build dependencies.
+[workspace]
+
+[features]
+oracle = ["dep:resvg_oracle"]
+
+[dependencies]
+resvg = { version = "=0.45.1", default-features = false, features = ["text"] }
+resvg_oracle = { package = "resvg", version = "=0.48.1", optional = true, default-features = false, features = [
+  "text",
+] }
+ttf-parser = "=0.25.1"
+
+[profile.dev]
+debug = 0
