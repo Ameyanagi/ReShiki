@@ -108,9 +108,9 @@ def main():
             first = rt.drawings(document, kind)[0]
             first.doVerb(0)
             deadline = time.monotonic() + 40
-            while first.getCurrentState() == 4 and time.monotonic() < deadline:
+            while first.getCurrentState() == e.ACTIVE and time.monotonic() < deadline:
                 time.sleep(0.1)
-            assert first.getCurrentState() == 1, (kind, "edit session did not finish")
+            assert first.getCurrentState() == e.RUNNING, (kind, "edit session did not finish")
             assert verify(document, kind, (expected, original)) == identities
             receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
             assert receipt["accepted_sha256"] == rt.digest(edited)
