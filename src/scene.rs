@@ -27,6 +27,18 @@ pub(crate) fn atom_label_bounds(a: &Atom, doc: &Document) -> Option<(Point, Poin
     text_bounds(&atom_label(a, doc))
 }
 
+/// Ink extents for persistent label backgrounds, excluding font line padding.
+pub(crate) fn atom_label_ink_bounds(a: &Atom, doc: &Document) -> Option<(Point, Point)> {
+    label_ink_boxes(&atom_label(a, doc))
+        .into_iter()
+        .reduce(|(lo, hi), (a, b)| {
+            (
+                Point::new(lo.x.min(a.x), lo.y.min(a.y)),
+                Point::new(hi.x.max(b.x), hi.y.max(b.y)),
+            )
+        })
+}
+
 /// The atom owning a visible label, including its hydrogens, isotope and charge.
 /// Keep this separate from geometric nearest-atom searches used for bond growth.
 pub fn atom_label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> {
@@ -475,6 +487,18 @@ pub fn selections_bounds(doc: &Document, selections: &[Vec<u64>]) -> Vec<Option<
         if let Some((lo, hi)) = text_bounds(&atom_label(atom, doc)) {
             grow(atom.id, &mut [lo, hi].into_iter());
         }
+        if let Some((lo, hi)) = crate::highlights::atom_bounds(doc, atom) {
+            grow(atom.id, &mut [lo, hi].into_iter());
+        }
+    }
+    for bond in &doc.bonds {
+        if owners
+            .get(&bond.a)
+            .is_some_and(|owner| Some(owner) == owners.get(&bond.b))
+            && let Some((lo, hi)) = crate::highlights::bond_bounds(doc, bond)
+        {
+            grow(bond.a, &mut [lo, hi].into_iter());
+        }
     }
     for a in doc
         .annotations
@@ -644,6 +668,7 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             .flat_map(graphic_primitive),
     );
     out.extend(doc.ring_fills.iter().filter_map(|fill| fill.primitive(doc)));
+    out.extend(crate::highlights::primitives(doc));
     let arcs = crate::ring_arcs::render(doc);
     // A partial curve replaces the ring's circle, not its aromatic membership.
     // Retain every ring here so its other edges do not gain fallback dashes.
