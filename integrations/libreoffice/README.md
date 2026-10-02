@@ -55,12 +55,32 @@ outside this ODF adapter's contract.
 
 ## Validation status
 
-Development probes on macOS LibreOffice 25.8.4.2 have exercised real Writer,
-Calc, and Impress custom UNO factory creation, ODF save/close/reopen, and native
-data/preview/extent restoration. Those probes were headless. Packaged extension
-installation, external editor save-back, clipboard exchange, desktop interaction,
-and Windows/Linux interchange are separate acceptance checks; a successful
-headless factory probe alone is not a support certification.
+The installed package has passed headless Writer, Calc, and Impress checks on
+macOS LibreOffice 25.8.4.2 and Linux LibreOffice 25.8.7: two distinct objects,
+two save/close/reopen cycles, byte-identical native data and PNG, and physical
+extent preservation within the host's unit rounding. macOS also used the real
+ReShiki preview worker; the initial Linux persistence test used a supplied
+packet. External editor save-back, desktop clipboard exchange and activation,
+Windows, and document interchange remain separate acceptance checks.
+
+`tests/test_session.py` runs with matching Python UNO bindings and covers the
+final-save/process-exit race, a host failure after committing storage, deferred
+acceptance during Save As, and stale session rejection. `tests/roundtrip.py`
+connects to an isolated headless LibreOffice profile with the extension installed
+and checks the actual package's source hash, object identities, data, PNG, extent,
+save/reopen, and transfer-data copy-back. For example:
+
+```sh
+python3 integrations/libreoffice/tests/roundtrip.py \
+  --uno-url 'uno:pipe,name=reshiki-test;urp;StarOffice.ComponentContext' \
+  --reshiki /path/to/reshiki --drawing tests/fixtures/ui-drawn-ethanol.reshiki \
+  --output /tmp/reshiki-roundtrip
+```
+
+`--packet` accepts a saved preview-worker JSON response instead of running the
+renderer; reports identify that limitation. `--incoming` also loads and resaves
+the `roundtrip-2.odt`, `.ods`, and `.odp` files from another test host. These are
+headless integration checks, not substitutes for the required desktop workflow.
 
 The immutable object class is `8E86A932-EBBE-4E9F-8D26-CA2D82096856`. Its ODF
 substorage media type is `application/vnd.reshiki.embedded-drawing`; entries are

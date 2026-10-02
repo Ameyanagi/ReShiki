@@ -39,7 +39,6 @@ FACTORY = "dev.reshiki.libreoffice.EmbeddedFactory"
 HANDLER = "dev.reshiki.libreoffice.ProtocolHandler"
 PROTOCOL = "dev.reshiki.libreoffice:"
 LIMIT = 64 * 1024 * 1024
-_pending_insert = None
 
 
 def prop(name, value):
@@ -550,13 +549,9 @@ class Factory(unohelper.Base, XEmbeddedObjectCreator, XServiceInfo):
         return (FACTORY,)
 
     def createInstanceInitNew(self, class_id, class_name, parent, name, args):
-        if _pending_insert is None:
-            raise IOException(
-                "Use ReShiki → Paste ReShiki Drawing to insert an editable drawing.", self
-            )
-        result = Embedded(self.ctx, _pending_insert)
-        result.setPersistentEntry(parent, name, 1, (), args)
-        return result
+        raise IOException(
+            "Use ReShiki → Paste ReShiki Drawing to insert an editable drawing.", self
+        )
 
     def createInstanceInitFromEntry(self, parent, name, media, args):
         result = Embedded(self.ctx)
@@ -576,16 +571,21 @@ class Factory(unohelper.Base, XEmbeddedObjectCreator, XServiceInfo):
 
 
 def insert(ctx, document, value):
-    global _pending_insert
     initial = packet(value)
-    _pending_insert = initial
+    storage = document.getDocumentStorage()
+    entry = "ReShiki-" + uuid.uuid4().hex
+    # Import through the public existing-storage path. Every object has its own
+    # immutable entry; no shared factory seed can cross concurrent insertions.
+    Embedded(ctx, initial)._write(storage, entry)
+    obj, page, attached = None, None, False
     try:
         if document.supportsService("com.sun.star.text.TextDocument"):
             obj = document.createInstance("com.sun.star.text.TextEmbeddedObject")
-            obj.CLSID = CLASS_ID
+            obj.StreamName = entry
             obj.AnchorType = uno.Enum("com.sun.star.text.TextContentAnchorType", "AS_CHARACTER")
             cursor = document.CurrentController.getViewCursor()
             document.Text.insertTextContent(cursor, obj, False)
+            attached = True
         else:
             obj = document.createInstance("com.sun.star.drawing.OLE2Shape")
             if document.supportsService("com.sun.star.sheet.SpreadsheetDocument"):
@@ -593,12 +593,20 @@ def insert(ctx, document, value):
             else:
                 page = document.CurrentController.getCurrentPage()
             page.add(obj)
-            obj.CLSID = CLASS_ID
+            attached = True
+            obj.PersistName = entry
             obj.Size = size(*initial[2])
         document.setModified(True)
         return obj
-    finally:
-        _pending_insert = None
+    except Exception:
+        if attached:
+            if page is not None:
+                page.remove(obj)
+            else:
+                document.Text.removeTextContent(obj)
+        if storage.hasByName(entry):
+            storage.removeElement(entry)
+        raise
 
 
 def selected(document):
