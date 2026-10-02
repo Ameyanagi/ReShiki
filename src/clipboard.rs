@@ -8,13 +8,18 @@ use crate::{
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 use std::{path::PathBuf, process::Stdio, time::Duration};
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     process::Command,
 };
+
+#[cfg(target_os = "linux")]
+mod linux;
+#[cfg(target_os = "linux")]
+use linux::invoke;
 
 const NATIVE: &str = "dev.reshiki.drawing";
 const LIMIT: usize = 64 * 1024 * 1024;
@@ -154,10 +159,17 @@ fn embedded_png(png: &[u8]) -> Result<Vec<u8>, String> {
 }
 
 pub fn available() -> bool {
-    cfg!(any(target_os = "macos", windows))
+    #[cfg(target_os = "linux")]
+    {
+        reshiki_linux::clipboard_available()
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        cfg!(any(target_os = "macos", windows))
+    }
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 fn helper() -> Result<PathBuf, String> {
     if !cfg!(target_os = "macos") {
         return Err("Native clipboard is unavailable on this platform".into());
@@ -181,7 +193,7 @@ async fn invoke(operation: &str, representations: &[Representation]) -> Result<P
     serde_json::from_slice(&output).map_err(|e| e.to_string())
 }
 
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "linux")))]
 async fn invoke(operation: &str, representations: &[Representation]) -> Result<Packet, String> {
     let input = serde_json::to_vec(&CommandRequest {
         operation,

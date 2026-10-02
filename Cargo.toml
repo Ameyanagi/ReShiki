@@ -13,11 +13,14 @@ default = []
 rdkit-reference = []
 
 [workspace]
-members = ["native/macos", "native/windows", "crates/depict-math", "crates/process-heap"]
+members = ["native/macos", "native/windows", "native/linux", "crates/depict-math", "crates/process-heap"]
 default-members = ["."]
 
 [target.'cfg(target_os = "macos")'.dependencies]
 reshiki-macos = { path = "native/macos" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+reshiki-linux = { path = "native/linux" }
 
 [target.'cfg(windows)'.dependencies]
 reshiki-windows = { path = "native/windows" }
