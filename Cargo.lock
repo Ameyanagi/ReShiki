@@ -3344,6 +3344,7 @@ dependencies = [
  "png 0.17.16",
  "reqwest",
  "reshiki-depict-math",
+ "reshiki-linux",
  "reshiki-macos",
  "reshiki-process-heap",
  "reshiki-windows",
@@ -3367,6 +3368,20 @@ dependencies = [
 [[package]]
 name = "reshiki-depict-math"
 version = "0.1.0"
+
+[[package]]
+name = "reshiki-linux"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "rustix 1.1.4",
+ "serde",
+ "serde_json",
+ "wayland-client",
+ "wayland-protocols",
+ "wayland-protocols-wlr",
+ "x11rb",
+]
 
 [[package]]
 name = "reshiki-macos"

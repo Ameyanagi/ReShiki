@@ -37,6 +37,15 @@ fn main() -> iced::Result {
         reshiki::chemistry::inchi::worker::run();
         return Ok(());
     }
+    #[cfg(target_os = "linux")]
+    if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--clipboard-worker")) {
+        if let Err(error) = reshiki_linux::clipboard_worker() {
+            use std::io::Write;
+            let _ = writeln!(std::io::stderr(), "{error}");
+            std::process::exit(1);
+        }
+        return Ok(());
+    }
     #[cfg(target_os = "macos")]
     {
         let worker = match std::env::args_os()
