@@ -56,16 +56,25 @@ outside this ODF adapter's contract.
 ## Validation status
 
 The installed package has passed headless Writer, Calc, and Impress checks on
-macOS LibreOffice 25.8.4.2 and Linux LibreOffice 25.8.7: two distinct objects,
-two save/close/reopen cycles, byte-identical native data and PNG, and physical
-intrinsic extent preservation. macOS also used the real
-ReShiki preview worker; the initial Linux persistence test used a supplied
-packet. External editor save-back, desktop clipboard exchange and activation,
-Windows, and document interchange remain separate acceptance checks.
+macOS LibreOffice 25.8.4.2, Linux LibreOffice 25.8.7, and Windows LibreOffice
+26.8.0.3. Each platform used the real ReShiki preview worker and preserved two
+distinct objects through two save/close/reopen cycles, with byte-identical native
+data and PNG and unchanged intrinsic extent. All six directions of ODF exchange
+between the three platforms also passed import, save, close, and reopen checks.
+Rendering a drawing again can use different locally installed fonts; exchanging
+the document preserves its stored preview and extent.
+
+A macOS headless check also used a scripted editor with the real renderer to
+exercise asynchronous save-back in all three hosts. It verified the host's
+acceptance receipt, updated native data, PNG and extent, isolation from a second
+object, temporary-file cleanup, and persistence after reopening. Desktop
+double-click activation, editing in the actual ReShiki window, and system
+clipboard exchange remain separate acceptance checks.
 
 `tests/test_session.py` runs with matching Python UNO bindings and covers the
 final-save/process-exit race, a host failure after committing storage, deferred
-acceptance during Save As, stale session rejection, and intrinsic size preservation across host rounding. `tests/roundtrip.py`
+acceptance during Save As, stale session rejection, and intrinsic size
+preservation across host rounding. `tests/roundtrip.py`
 connects to an isolated headless LibreOffice profile with the extension installed
 and checks the actual package's source hash, object identities, data, PNG, extent,
 save/reopen, and transfer-data copy-back. For example:
