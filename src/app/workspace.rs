@@ -755,45 +755,82 @@ impl App {
     fn tool_palette(&self) -> Element<'_, Message> {
         use reshiki::graphics::GraphicKind as G;
         let ring = format!(
-            "Rings · r / Aromatic · {}\nBenzene with alternating bonds: press j over empty canvas.",
-            keys(Modifiers::SHIFT, "R")
+            "Rings · r\nOn empty canvas with no atom/bond selected:\nj: Benzene with alternating bonds · {}: cyclopentadiene\n{}: toggle saturated/aromatic ring drawing, keeping its size.\n{} with regular rings, Benzene or cyclopentadiene: place the circle form.",
+            keys(Modifiers::SHIFT, "J"),
+            keys(Modifiers::SHIFT, "R"),
+            keys(Modifiers::COMMAND, "click")
         );
-        let chain = format!("Straight chain · {}", keys(Modifiers::SHIFT, "X"));
+        let chain = format!(
+            "Straight chain · {}\nOn empty canvas with no atom/bond selected.",
+            keys(Modifiers::SHIFT, "X")
+        );
+        let select = format!(
+            "Select / move · Space / {}\nWith Select active, Space selects the most recently edited molecule.\nv also selects this tool on empty canvas with no atom/bond selected.\nEsc cancels the current operation or returns to Select.",
+            keys(Modifiers::SHIFT, "Space")
+        );
+        let single = super::palettes::bond_hint(BondPreset::Single, "Single bond");
+        let double = super::palettes::bond_hint(BondPreset::Double, "Double bond");
+        let triple = super::palettes::bond_hint(BondPreset::Triple, "Triple bond");
+        let other_bonds = self.toolbar.bond.bond_preset().map_or_else(
+            || "Other bonds".into(),
+            |preset| super::palettes::bond_hint(preset, &format!("Other bonds · {preset}")),
+        );
+        let brackets = format!(
+            "Brackets / parentheses / braces\n{}: Brackets with the last chosen style and sides, on empty canvas with no atom/bond selected.",
+            keys(Modifiers::SHIFT, "T")
+        );
+        let symbols = format!(
+            "Chemical symbols\n{}: circled plus on empty canvas with no atom/bond selected.",
+            keys(Modifiers::SHIFT, "E")
+        );
+        let orbitals = format!(
+            "Orbitals\n{}: p orbital on empty canvas with no atom/bond selected.",
+            keys(Modifiers::SHIFT, "G")
+        );
         let tools = [
-            (Tool::Select, "Select / move · Space"),
-            (Tool::Lasso, "Lasso select · l"),
+            (Tool::Select, select.as_str()),
+            (
+                Tool::Lasso,
+                "Lasso select · l\nOn empty canvas with no atom/bond selected.",
+            ),
             (
                 Tool::Tilt,
                 "3D tilt · Drag a ring or selection · Shift snaps to 15°",
             ),
             (Tool::Erase, "Eraser · Drag to erase"),
-            (Tool::Atom, "Atom label · c, n, o…"),
-            (Tool::Bond(1), "Single bond · x / 1"),
-            (Tool::Bond(2), "Double bond · 2"),
-            (Tool::Bond(3), "Triple bond · 3"),
-            (self.toolbar.bond, "Other bonds"),
+            (
+                Tool::Atom,
+                "Atom label · c / n / o…\nChoose an element on empty canvas with no atom/bond selected; replace its label at an atom. Hover an element for its keys.",
+            ),
+            (Tool::Bond(1), single.as_str()),
+            (Tool::Bond(2), double.as_str()),
+            (Tool::Bond(3), triple.as_str()),
+            (self.toolbar.bond, other_bonds.as_str()),
             (self.toolbar.ring, ring.as_str()),
             (Tool::Chain(reshiki::chains::ChainMode::Straight), &chain),
             (
                 Tool::Chain(reshiki::chains::ChainMode::Snaking),
                 "Snaking chain",
             ),
-            (Tool::Arrow, "Reaction & electron-flow arrows · e"),
-            (Tool::Text, "Text label · t"),
+            (
+                Tool::Arrow,
+                "Reaction & electron-flow arrows · e / a\nChoose the current arrow style on empty canvas with no atom/bond selected.",
+            ),
+            (
+                Tool::Text,
+                "Text label · t\nOn empty canvas with no atom/bond selected.",
+            ),
             (Tool::Graphic(self.toolbar.rectangle.kind), "Rectangles"),
             (
                 Tool::Graphic(self.toolbar.ellipse.kind),
                 "Ellipses / circles",
             ),
-            (
-                Tool::Graphic(self.toolbar.bracket.kind),
-                "Brackets / parentheses / braces",
-            ),
+            (Tool::Graphic(self.toolbar.bracket.kind), brackets.as_str()),
             (Tool::Graphic(G::Line), "Graphic line"),
             (Tool::Graphic(G::Curve), "Bézier curve"),
             (Tool::Graphic(G::Arc), "Arc"),
-            (self.toolbar.symbol, "Chemical symbols"),
-            (self.toolbar.orbital, "Orbitals"),
+            (self.toolbar.symbol, symbols.as_str()),
+            (self.toolbar.orbital, orbitals.as_str()),
         ];
         let mut palette = column![section("TOOLS")]
             .spacing(6)
@@ -820,9 +857,9 @@ impl App {
                 .width(36)
                 .height(36);
                 let hint = if family == Some(super::palettes::Family::Bonds) {
-                    format!("{hint} · Click for styles")
+                    format!("{hint}\nClick for styles")
                 } else if family.is_some() {
-                    format!("{hint} · Hold or click the corner for options")
+                    format!("{hint}\nHold or click the corner for options")
                 } else {
                     (*hint).to_owned()
                 };
@@ -845,7 +882,7 @@ impl App {
         ] {
             let mut line = row![].spacing(4);
             for symbol in pair {
-                line = line.push(
+                line = line.push(hover_hint(
                     button(text(symbol).size(13).center())
                         .width(36)
                         .height(30)
@@ -855,7 +892,9 @@ impl App {
                             &self.tab.doc,
                             symbol,
                         )),
-                );
+                    super::palettes::element_hint(symbol),
+                    tooltip::Position::Right,
+                ));
             }
             palette = palette.push(line);
         }
