@@ -104,6 +104,9 @@ anyhow = "1"
 [patch.crates-io]
 # Preserve libjpeg's small-component and edge chroma sampling semantics.
 zune-jpeg = { path = "vendor/zune-jpeg" }
+# Preserve requested variable-font weights through SVG and selectable PDF text.
+usvg = { path = "vendor/usvg" }
+svg2pdf = { path = "vendor/svg2pdf" }
 
 # Independent oracle suites explicitly require the development reference.
 

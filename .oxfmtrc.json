@@ -6,6 +6,8 @@
     "output/**",
     "assets/**",
     "tests/fixtures/**",
+    "vendor/usvg/**",
+    "vendor/svg2pdf/**",
     "engine/cdx_schema.py",
     "website/.astro/**",
     "website/dist/**",

@@ -17,6 +17,15 @@ resvg_oracle = { package = "resvg", version = "=0.48.1", optional = true, defaul
   "text",
 ] }
 ttf-parser = "=0.25.1"
+svg2pdf = { version = "=0.13.0", default-features = false, features = ["text"] }
 
 [profile.dev]
 debug = 0
+
+[patch.crates-io]
+usvg = { path = "../../vendor/usvg" }
+svg2pdf = { path = "../../vendor/svg2pdf" }
+
+[[test]]
+name = "application_regressions"
+path = "../../tests/font_export_103.rs"
