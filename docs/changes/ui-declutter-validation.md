@@ -15,10 +15,12 @@ commits. They are not native desktop captures of the final tabbed interface.
 
 ## Execution record
 
-No new native run is recorded in this document yet. Populate the table with
-the exact integrated candidate and linked results after execution. A check
-that was unavailable stays **not run**; Windows CI cannot replace its native
-walkthrough or Office activation checks.
+Targeted native macOS checks on `fb1bb6d`, and the `771a186` unit-input focus
+retest, are recorded in the [October 2 evidence summary](issue-work-2026-10-02.md).
+They do not complete this final-candidate matrix. Populate the table with the
+exact integrated candidate and linked results after execution. A check that was
+unavailable stays **not run**; Windows CI cannot replace its native walkthrough
+or Office activation checks.
 
 | Run                 | Required coverage                                                           | Current result                                           |
 | ------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------- |

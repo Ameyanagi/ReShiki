@@ -1,0 +1,40 @@
+{
+  "date": "2026-10-02",
+  "documentation_snapshot": "ca4c52ede708abe3ece09463cdb9acca0a2a151e",
+  "platform": "macOS 26.5.1 arm64",
+  "copy_policy": "Original PNG bytes copied unchanged; all four inspected at original size. These are renderer outputs, not native desktop screenshots.",
+  "assets": [
+    {
+      "file": "font-normal-before.png",
+      "source_commit": "da5751d",
+      "description": "Controlled SVG backend baseline; normal/400 requested, unpatched usvg 0.45.1, isolated variable font with default weight 100",
+      "pixel_dimensions": [737, 889],
+      "bytes": 58382,
+      "sha256": "55557c3b4261d68a0f7837f3e1c18455557c0f340b58515c6bb15912bd2c9438"
+    },
+    {
+      "file": "font-normal-after.png",
+      "source_commit": "7f06dcf",
+      "description": "Controlled SVG backend with production weight patch; same input, family substitution, 1200 dpi and framing as before",
+      "pixel_dimensions": [737, 889],
+      "bytes": 57912,
+      "sha256": "0f60319a50e9e2671472555df58caec49de5dad43be7d61f144ceead925e777d"
+    },
+    {
+      "file": "copy-as-1040.png",
+      "source_commit": "de6e517",
+      "description": "Application widget renderer, ten-format Copy as menu, selected benzene, light interface, 100% canvas zoom; predates ChemDoodle row",
+      "pixel_dimensions": [1040, 680],
+      "bytes": 137232,
+      "sha256": "49eddef513a6ab987134e667123b7986af7b673aefe9080333805bb9bbbc362e"
+    },
+    {
+      "file": "transform-1040.png",
+      "source_commit": "de6e517",
+      "description": "Application widget renderer, selected benzene with Transform and More open, light interface, 100% canvas zoom",
+      "pixel_dimensions": [1040, 680],
+      "bytes": 115078,
+      "sha256": "4820d4933153acefff2cde698c503f08d19d12ceea0af7e8842a2fc986dcbf09"
+    }
+  ]
+}
