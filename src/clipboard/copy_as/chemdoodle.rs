@@ -145,17 +145,22 @@ fn molecule(doc: &Document, participant: &Participant) -> Result<(Value, String)
         .zip(&state.graph.atoms)
         .zip(&state.valences)
         .map(|((source, atom), valence)| {
-            let mut value = json!({
-                "i": format!("a{}", source.id), "l": source.element,
-                "x": source.position.x, "y": source.position.y,
-                "c": atom.charge,
+            let mut value = serde_json::Map::from_iter([
+                ("i".into(), json!(format!("a{}", source.id))),
+                ("l".into(), json!(source.element)),
+                ("x".into(), json!(source.position.x)),
+                ("y".into(), json!(source.position.y)),
+                ("c".into(), json!(atom.charge)),
                 // h is the count attached to this atom, not separate H vertices.
-                "h": u32::from(atom.explicit_hydrogens) + valence.implicit_hydrogens
-            });
+                (
+                    "h".into(),
+                    json!(u32::from(atom.explicit_hydrogens) + valence.implicit_hydrogens),
+                ),
+            ]);
             if atom.isotope != 0 {
-                value["m"] = json!(atom.isotope);
+                value.insert("m".into(), json!(atom.isotope));
             }
-            value
+            Value::Object(value)
         })
         .collect();
     let bonds: Vec<_> = state
@@ -173,8 +178,12 @@ pub(super) fn write(doc: &Document) -> Result<String, String> {
     if let Some(reason) = super::reaction_reason(doc).or_else(|| reason(doc)) {
         return Err(reason.into());
     }
-    let reaction = &doc.reactions[0];
-    let arrow = &doc.arrows[0];
+    let [reaction] = doc.reactions.as_slice() else {
+        return Err("Reaction formats need one complete defined reaction.".into());
+    };
+    let [arrow] = doc.arrows.as_slice() else {
+        return Err("ChemDoodle reaction copy requires a single forward reaction arrow.".into());
+    };
     let mut molecules = Vec::new();
     let mut reactants = Vec::new();
     let mut products = Vec::new();
