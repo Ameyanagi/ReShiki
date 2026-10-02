@@ -199,6 +199,105 @@ fn graphic_options(family: Family) -> Vec<(String, GraphicOption)> {
     }
     options
 }
+
+// Tool keys can edit a pointed or selected atom/bond instead. Keep that
+// distinction in hover hints, including palette entries with contextual keys.
+pub(super) fn element_hint(symbol: &str) -> String {
+    use iced::keyboard::Modifiers;
+    let shift = |key| super::shortcuts::keys(Modifiers::SHIFT, key);
+    let key = match symbol {
+        "C" => "c".into(),
+        "N" => "n / w".into(),
+        "O" => "o / q".into(),
+        "S" => "s".into(),
+        "P" => "p".into(),
+        "F" => "f".into(),
+        "H" => "h".into(),
+        "B" => shift("B"),
+        "Cl" => shift("C"),
+        "I" => "i".into(),
+        "Li" => shift("L"),
+        "Si" => shift("S"),
+        "Br" => return "Br\nb at an atom replaces its label with Br.".into(),
+        _ => return symbol.into(),
+    };
+    let mut hint = format!(
+        "{symbol} · {key}\nChoose on empty canvas with no atom/bond selected; replace at an atom."
+    );
+    if symbol == "Cl" {
+        hint.push_str("\nAt an atom, l also works.");
+    }
+    hint
+}
+
+pub(super) fn bond_hint(preset: BondPreset, label: &str) -> String {
+    use BondPreset::*;
+    use iced::keyboard::Modifiers;
+    let shift = |key| super::shortcuts::keys(Modifiers::SHIFT, key);
+    let detail = match preset {
+        Single => "x / b / 1: choose on empty canvas with no atom/bond selected.\nAt a bond: 1 makes it single.".into(),
+        Double => "2: choose on empty canvas with no atom/bond selected.\nAt a bond: 2 makes it double; repeat to cycle line placement.".into(),
+        Triple => "3: choose on empty canvas with no atom/bond selected.\nAt a bond: 3 makes it triple.".into(),
+        Quadruple => "4: choose on empty canvas with no atom/bond selected.".into(),
+        Wedge => "At a bond: w applies a solid wedge.\nAt an atom: 4 grows a wedged bond.".into(),
+        HashedWedge => format!("At a bond: h / {} applies a hashed wedge.\nAt an atom: 5 grows a hashed wedge.", shift("W")),
+        Wavy => "At a bond: y applies a wavy bond.".into(),
+        Bold => "At a bond: b applies a bold bond.".into(),
+        Dashed => "At a bond: d applies a dashed bond.".into(),
+        Hashed => format!("At a bond: {} applies a hashed bond.", shift("H")),
+        DashedDouble => format!("At a bond: {} applies a partial double bond.", shift("D")),
+        BoldDouble => format!("At a bond: {} applies a bold double bond.", shift("B")),
+        _ => return label.into(),
+    };
+    format!("{label}\n{detail}")
+}
+
+fn ring_hint(label: &str, action: &Action) -> String {
+    use iced::keyboard::Modifiers;
+    let detail = match action {
+        Action::Ring(3, false) => "At an atom or bond: v attaches a 3-membered ring.".into(),
+        Action::Ring(4, false) => "At an atom: u attaches a 4-membered ring.\nAt a bond: 4 fuses a 4-membered ring.".into(),
+        Action::Ring(5, false) => "At an atom: 7 attaches a 5-membered ring.\nAt a bond: 5 fuses a 5-membered ring.".into(),
+        Action::Ring(6, false) => "At an atom or bond: 6 attaches a 6-membered ring.".into(),
+        Action::Ring(7, false) => "At a bond: 7 fuses a 7-membered ring.".into(),
+        Action::Ring(8, false) => "At a bond: 8 fuses an 8-membered ring.".into(),
+        Action::Ring(_, true) => format!(
+            "{} while placing a regular ring, Benzene or cyclopentadiene draws a circle.\nWith an aromatic ring selected and the pointer off atoms/bonds: a toggles circle / alternating bonds.",
+            super::shortcuts::keys(Modifiers::COMMAND, "click")
+        ),
+        Action::RingPreset(RingPreset::Benzene) => "j: choose alternating-bond Benzene on empty canvas with no atom/bond selected.\nAt an atom: 3 / a attaches phenyl. At a bond: a fuses benzene.".into(),
+        Action::RingPreset(RingPreset::Cyclopentadiene) => format!(
+            "{}: choose on empty canvas with no atom/bond selected.\nAt a bond: z fuses cyclopentadiene.",
+            super::shortcuts::keys(Modifiers::SHIFT, "J")
+        ),
+        Action::RingPreset(RingPreset::ChairUp) => "At a bond: 9 fuses Chair A.".into(),
+        Action::RingPreset(RingPreset::ChairDown) => "At a bond: 0 fuses Chair B.".into(),
+        _ => return label.into(),
+    };
+    format!("{label}\n{detail}")
+}
+
+fn graphic_hint(kind: GraphicKind, label: &str) -> String {
+    use iced::keyboard::Modifiers;
+    let (key, detail) = match kind {
+        GraphicKind::Brackets => (
+            "T",
+            "Select Brackets using the last chosen style and sides.",
+        ),
+        GraphicKind::Symbol(reshiki::scientific::SymbolKind::CirclePlus) => {
+            ("E", "Select the circled plus tool.")
+        }
+        GraphicKind::Orbital(reshiki::scientific::OrbitalKind::P) => {
+            ("G", "Select the p orbital tool.")
+        }
+        _ => return label.into(),
+    };
+    format!(
+        "{label} · {}\n{detail}\nUse on empty canvas with no atom/bond selected.",
+        super::shortcuts::keys(Modifiers::SHIFT, key)
+    )
+}
+
 impl App {
     pub(super) fn palette_action(&mut self, action: Action) -> iced::Task<Message> {
         match action {
@@ -321,7 +420,7 @@ impl App {
                                         symbol,
                                     ))
                                     .on_press(Message::Palette(Action::Atom(symbol.into()))),
-                                format!("{symbol} · Atomic number {number}"),
+                                format!("{}\nAtomic number {number}", element_hint(symbol)),
                                 tooltip::Position::Bottom,
                             ));
                         }
@@ -365,7 +464,7 @@ impl App {
                                 self.tool.bond_preset() == Some(*preset),
                             ))
                             .on_press(Message::Palette(Action::Bond(*preset))),
-                            preset.name(),
+                            bond_hint(*preset, preset.name()),
                             tooltip::Position::Bottom,
                         ));
                     }
@@ -421,7 +520,7 @@ impl App {
                                 _ => false,
                             }))
                             .on_press(Message::Palette(action.clone())),
-                            label.clone(),
+                            ring_hint(label, action),
                             tooltip::Position::Bottom,
                         ));
                     }
@@ -536,7 +635,7 @@ impl App {
                 for options in graphic_options(family).chunks(3) {
                     let mut line = row![].spacing(8);
                     for (label, option) in options {
-                        line = line.push(
+                        line = line.push(super::workspace::hover_hint(
                             button(
                                 column![
                                     canvas(PalettePreview(option.document()))
@@ -552,7 +651,9 @@ impl App {
                                     && self.toolbar.graphic(self.tool) == Some(option),
                             ))
                             .on_press(Message::Palette(Action::Graphic(option.clone()))),
-                        );
+                            graphic_hint(option.kind, label),
+                            tooltip::Position::Bottom,
+                        ));
                     }
                     body = body.push(line);
                 }
@@ -581,7 +682,7 @@ impl App {
                             Tool::Graphic(kind) => kind.to_string(),
                             _ => String::new(),
                         };
-                        line = line.push(
+                        line = line.push(super::workspace::hover_hint(
                             button(
                                 column![
                                     canvas(super::icons::Glyph(
@@ -597,7 +698,13 @@ impl App {
                             .padding(6)
                             .style(super::workspace::control(self.tool == tool))
                             .on_press(Message::Palette(Action::Tool(tool))),
-                        );
+                            if let Tool::Graphic(kind) = tool {
+                                graphic_hint(kind, &label)
+                            } else {
+                                label
+                            },
+                            tooltip::Position::Bottom,
+                        ));
                     }
                     body = body.push(line);
                 }
