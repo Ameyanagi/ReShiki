@@ -92,7 +92,7 @@ Automated tests cover independent native clipboard data, supported exchange fixt
 The macOS adapter maps the portable `chemical/x-cdxml` representation to
 ChemDraw's `com.revvity.cdxml`, `com.perkinelmer.cdxml` and
 `com.cambridgesoft.cdxml` types, retaining the exact UTF-8 text fallback.
-[`NSPasteboardItem` requires a UTI](https://developer.apple.com/documentation/appkit/nspasteboarditem/setdata(_:fortype:)),
+[`NSPasteboardItem` requires a UTI](<https://developer.apple.com/documentation/appkit/nspasteboarditem/setdata(_:fortype:)>),
 so a MIME string containing `/` cannot be passed directly. These aliases are
 declared by ChemDraw 26's bundle metadata. Unique-pasteboard regressions check
 the exact native types and bytes for all eleven Copy as format packets, plus
