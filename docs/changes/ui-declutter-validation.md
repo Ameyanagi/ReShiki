@@ -17,17 +17,19 @@ commits. They are not native desktop captures of the final tabbed interface.
 
 Targeted native macOS checks on `fb1bb6d`, and the `771a186` unit-input focus
 retest, are recorded in the [October 2 evidence summary](issue-work-2026-10-02.md).
-They do not complete this final-candidate matrix. Populate the table with the
+The same summary includes the final `ca4c52e` Linux headless renderer's Copy as
+and drawing-style examples. These checks do not complete this native
+final-candidate matrix. Populate the table with the
 exact integrated candidate and linked results after execution. A check that was
 unavailable stays **not run**; Windows CI cannot replace its native walkthrough
 or Office activation checks.
 
-| Run                 | Required coverage                                                           | Current result                                           |
-| ------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------- |
-| macOS               | Two-size combined interface, keyboard/focus, supported ChemDraw repeat      | Not run on the final candidate                           |
-| Windows             | Two-size combined interface, keyboard/focus, EMF and Word/PowerPoint/Excel  | Not run on the final candidate                           |
-| Nightly performance | Help opening, gallery opening and loaded interactions, separately           | Not measured on the final candidate                      |
-| Linux               | Compatible UI/export smoke, including the Fedora font report when available | Not run; additional coverage, not a new #78 release gate |
+| Run                 | Required coverage                                                           | Current result                                                 |
+| ------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| macOS               | Two-size combined interface, keyboard/focus, supported ChemDraw repeat      | Not run on the final candidate                                 |
+| Windows             | Two-size combined interface, keyboard/focus, EMF and Word/PowerPoint/Excel  | Not run on the final candidate                                 |
+| Nightly performance | Help opening, gallery opening and loaded interactions, separately           | Not measured on the final candidate                            |
+| Linux               | Compatible UI/export smoke, including the Fedora font report when available | Final headless renderer checked; native desktop/Fedora not run |
 
 For each run retain the commit, application version/Nightly run ID, executable
 SHA-256, build mode, OS/version/architecture, renderer, display scaling and

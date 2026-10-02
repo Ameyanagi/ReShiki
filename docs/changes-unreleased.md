@@ -41,6 +41,7 @@ See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
   or cm while stored styles keep their physical size. Incomplete input retains
   focus so it can be finished before applying.
   [Details](drawing-styles.md#settings)
+  · [Dimension units image](images/issue-work-2026-10-02/style-units-1280.png)
   · [Native check](changes/issue-work-2026-10-02.md#physical-units-and-retained-input-focus-89)
   · [Issue #89](https://github.com/Ameyanagi/ReShiki/issues/89) · @Ameyanagi.
 
@@ -61,7 +62,7 @@ See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
   formats for selected objects or the whole drawing. Stale preparation results
   cannot overwrite a newer ReShiki copy.
   [Formats and limits](clipboard.md)
-  · [Earlier menu image](images/issue-work-2026-10-02/copy-as-1040.png)
+  · [Menu image](images/issue-work-2026-10-02/copy-as-1040.png)
   · [Evidence and image provenance](changes/issue-work-2026-10-02.md#copy-as-and-compact-controls-110-78)
   · [Issue #110](https://github.com/Ameyanagi/ReShiki/issues/110) · @Ameyanagi.
 
