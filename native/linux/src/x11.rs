@@ -330,11 +330,10 @@ impl Clipboard {
         if !pairs.len().is_multiple_of(2) {
             return Err("Unpaired X11 MULTIPLE request".into());
         }
-        for pair in pairs.chunks_exact_mut(2) {
-            if let [target, destination] = pair
-                && (*target == self.atoms.multiple
-                    || *destination == property
-                    || self.convert(window, *target, *destination).is_err())
+        for [target, destination] in pairs.as_chunks_mut::<2>().0 {
+            if *target == self.atoms.multiple
+                || *destination == property
+                || self.convert(window, *target, *destination).is_err()
             {
                 *destination = NONE;
             }
