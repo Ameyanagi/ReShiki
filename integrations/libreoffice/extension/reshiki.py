@@ -97,9 +97,15 @@ def executable(ctx):
 def worker(program, mode, data=b""):
     # Disk-backed output avoids trusting a faulty subprocess to bound stdout.
     with tempfile.TemporaryFile() as output, tempfile.TemporaryFile() as errors:
-        result = subprocess.run(
-            [program, mode], input=data, stdout=output, stderr=errors, timeout=90, check=False
-        )
+        try:
+            result = subprocess.run(
+                [program, mode], input=data, stdout=output, stderr=errors, timeout=90, check=False
+            )
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(
+                "ReShiki took too long to start or complete the operation. "
+                "Open ReShiki once, then retry."
+            ) from None
         errors.seek(0)
         message = errors.read(8192).decode("utf-8", "replace").strip()
         if result.returncode:
