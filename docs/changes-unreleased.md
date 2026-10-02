@@ -2,6 +2,12 @@
 
 See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
 
+- **Under review — Atom shortcut targeting and growth:** shortcuts recognize
+  complete atom labels, dimethyl and saturated rings use a nitrogen target when
+  its valence allows, and terminal carbonyls continue the carbon chain before
+  placing oxygen. Selection shortcuts refresh their property fields.
+  [Details](contextual-shortcuts.md) · @Ameyanagi.
+
 - **Under review — Handle shortcuts for precise transforms:** double-click a
   rotation, corner or edge handle to open the matching numeric field, ready to
   type. Opening a field leaves the drawing and Undo history unchanged.

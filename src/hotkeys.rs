@@ -241,15 +241,31 @@ pub fn atom_edit(
                 } else {
                     id
                 };
+                // Reserve the normal zigzag continuation for carbon. Placing
+                // oxygen first would put it in that slot and grow methyl out
+                // of the other side. An internal ketone needs no new carbon.
+                focus = if templates::valence(&result, center) == 2 {
+                    sprout(&mut result, center, "C", BondPreset::Single, length, false)?
+                } else {
+                    center
+                };
                 sprout(&mut result, center, "O", BondPreset::Double, length, false)?;
-                if templates::valence(&result, center) == 6 {
-                    sprout(&mut result, center, "C", BondPreset::Single, length, false)?;
-                }
-                focus = center;
             }
             "9" | "K" => {
                 let valence = templates::valence(&result, id);
-                let center = if source.element == "C"
+                // Dimethyl grows directly on a labeled atom when it has room
+                // for two bonds. A new carbon would change N,N-dimethyl into
+                // N-isopropyl. Keep carbon's documented crowded-site fallback
+                // and tert-butyl's carbon center, but reject unavailable
+                // heteroatom valence instead of changing the intended group.
+                let center = if key == "9" && source.element != "C" {
+                    if valence.saturating_add(4) > templates::capacity(source) {
+                        return Err(
+                            "This atom has no available valence for two methyl groups".into()
+                        );
+                    }
+                    id
+                } else if source.element == "C"
                     && ((key == "9" && valence <= 4) || (key == "K" && valence <= 2))
                 {
                     id
@@ -478,7 +494,7 @@ pub fn ring_edit(
     };
     Some((|| {
         let aromatic = key == "a" || atom.is_some() && key == "3";
-        let part = if size == 0 {
+        let mut part = if size == 0 {
             match key {
                 "9" => crate::rings::Preset::ChairUp,
                 "0" => crate::rings::Preset::ChairDown,
@@ -509,11 +525,23 @@ pub fn ring_edit(
             }
             part
         };
+        let mut anchor = templates::Anchor::Auto;
         let (point, mode) = if let Some(id) = atom {
             let target = doc.atom(id).ok_or("Missing ring target")?;
             let capacity = templates::capacity(target);
-            let share = target.element == "C"
-                && templates::valence(doc, id) + if aromatic { 6 } else { 4 } <= capacity;
+            let share = templates::valence(doc, id).saturating_add(if aromatic { 6 } else { 4 })
+                <= capacity;
+            if share && target.element != "C" {
+                // The hotspot remains the ring vertex, including a nitrogen
+                // in a saturated ring. Give the temporary source anchor the
+                // same identity so the existing template compatibility and
+                // valence checks can share it without relaxing their rules.
+                let source = part.atoms.first_mut().ok_or("Missing source ring atom")?;
+                source.element = target.element.clone();
+                source.charge = target.charge;
+                source.isotope = target.isotope;
+                anchor = templates::Anchor::Atom(source.id);
+            }
             (
                 target.position,
                 if share {
@@ -532,16 +560,8 @@ pub fn ring_edit(
         } else {
             return Err("Point to an atom or bond to attach a ring".into());
         };
-        templates::place_with_mode(
-            doc,
-            &part,
-            point,
-            None,
-            length * 0.1,
-            templates::Anchor::Auto,
-            mode,
-        )
-        .map_err(str::to_owned)
+        templates::place_with_mode(doc, &part, point, None, length * 0.1, anchor, mode)
+            .map_err(str::to_owned)
     })())
 }
 
