@@ -95,8 +95,9 @@ ChemDraw's `com.revvity.cdxml`, `com.perkinelmer.cdxml` and
 [`NSPasteboardItem` requires a UTI](<https://developer.apple.com/documentation/appkit/nspasteboarditem/setdata(_:fortype:)>),
 so a MIME string containing `/` cannot be passed directly. These aliases are
 declared by ChemDraw 26's bundle metadata. Unique-pasteboard regressions check
-the exact native types and bytes for all eleven Copy as format packets, plus
-unchanged prior contents after invalid, conflicting or oversized writes. The
-64 MB combined limit includes the expanded native aliases.
+the exact native types and bytes for picture and chemical format packets,
+including ChemDoodle reaction text, and unchanged prior contents after invalid,
+conflicting or oversized writes. The available Copy as options are listed above.
+The 64 MB combined limit includes the expanded native aliases.
 
 Linux transport tests additionally cover multi-format selection publication, a 2 MiB X11 incremental image transfer, replacement and one-shot owners, rejected oversized transfer headers, stalled recipients, and atomic rejection of invalid writes. These are isolated Xvfb and process/pipe checks; they do not establish native GUI or compositor-specific Wayland compatibility. [Transport design and test commands](../native/linux/README.md).
