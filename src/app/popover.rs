@@ -328,3 +328,54 @@ impl overlay::Overlay<Message, Theme, Renderer> for Popup<'_, '_> {
             .overlay(self.tree, layout, renderer, &bounds, Vector::ZERO)
     }
 }
+
+/// A focusable selector with the same field chrome as the existing pick lists.
+/// Its app-owned popup choices share real mouse, keyboard and native actions.
+pub(super) fn choice_anchor(
+    id: &'static str,
+    name: String,
+    label: String,
+    size: f32,
+    padding: impl Into<iced::Padding>,
+    open: bool,
+    message: Message,
+) -> reshiki::accessibility::Button<'static, Message> {
+    reshiki::accessibility::button(
+        id,
+        name,
+        iced::widget::row![
+            iced::widget::text(label).size(size).width(Length::Fill),
+            super::workspace::caret(9.)
+        ]
+        .spacing(4)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding(padding)
+    .width(Length::Fill)
+    .expanded(open)
+    .on_press(message)
+    .style(move |theme, status| {
+        let hovered = matches!(
+            status,
+            iced::widget::button::Status::Hovered | iced::widget::button::Status::Pressed
+        );
+        let field = crate::appearance::dropdown(
+            theme,
+            if open {
+                iced::widget::pick_list::Status::Opened {
+                    is_hovered: hovered,
+                }
+            } else if hovered {
+                iced::widget::pick_list::Status::Hovered
+            } else {
+                iced::widget::pick_list::Status::Active
+            },
+        );
+        iced::widget::button::Style {
+            background: Some(field.background),
+            text_color: field.text_color,
+            border: field.border,
+            ..Default::default()
+        }
+    })
+}

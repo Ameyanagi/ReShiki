@@ -1,9 +1,7 @@
 //! In-place caption drafts. Applying is one document edit; Escape is nonmutating.
 use super::{App, Message};
 use crate::canvas::layered::canvas;
-use iced::widget::{
-    Space, button, column, container, mouse_area, opaque, row, stack, text, text_editor,
-};
+use iced::widget::{Space, column, container, mouse_area, opaque, row, stack, text, text_editor};
 use iced::{Alignment, Border, Color, Element, Length, Task};
 use reshiki::{
     document::{Annotation, Document, Point},
@@ -15,6 +13,7 @@ pub enum Action {
     Begin(Option<u64>, Point),
     Finish(bool),
     Undo(bool),
+    ReplaceText(String),
 }
 #[derive(Clone)]
 struct Revision {
@@ -247,6 +246,14 @@ impl App {
                 self.sync_style_inputs();
                 return iced::widget::operation::focus("inline-caption");
             }
+            Action::ReplaceText(value) => {
+                if self.tab.inline_text.is_some() {
+                    self.caption_action(text_editor::Action::SelectAll);
+                    self.caption_action(text_editor::Action::Edit(text_editor::Edit::Paste(
+                        std::sync::Arc::new(value),
+                    )));
+                }
+            }
             Action::Finish(apply) => {
                 self.finish_inline(apply);
             }
@@ -426,6 +433,13 @@ impl App {
                     Color::from_rgb8(193, 224, 216),
                 ),
             });
+        let editor = reshiki::accessibility::editor(
+            "inline-caption",
+            "Caption text",
+            self.tab.caption.clone(),
+            editor,
+            |value| Message::InlineText(Action::ReplaceText(value)),
+        );
         let mut body = column![editor].spacing(5);
         if complex {
             let preview = Document {
@@ -458,9 +472,13 @@ impl App {
                     .style(super::workspace::muted_text),
                 Space::new().width(Length::Fill),
                 iced::widget::tooltip(
-                    button(text("Done ↵").size(11))
-                        .on_press(Message::InlineText(Action::Finish(true)))
-                        .style(super::workspace::control(true)),
+                    reshiki::accessibility::button(
+                        "inline-caption-done",
+                        "Apply caption text",
+                        text("Done ↵").size(11)
+                    )
+                    .on_press(Message::InlineText(Action::Finish(true)))
+                    .style(super::workspace::control(true)),
                     super::workspace::keyed_text(
                         "Apply",
                         Some(super::shortcuts::keys(

@@ -43,6 +43,7 @@ pub enum Action {
     ReplaceText(String),
     /// Opens or closes the Insert ▾ menu.
     Menu(bool),
+    ExamplesMenu(bool),
     Choose,
     /// Chosen or dropped files, imported together.
     Files(Vec<PathBuf>),
@@ -72,6 +73,7 @@ pub struct State {
     /// Import format of the text in the box, or None while it is blank.
     format: Option<&'static str>,
     pub menu: bool,
+    pub examples_menu: bool,
     hovered: Vec<PathBuf>,
     dropped: Vec<PathBuf>,
 }
@@ -297,7 +299,14 @@ impl App {
                     )));
                 self.imports.format = detect(&self.imports.input.text());
             }
-            Action::Menu(open) => self.imports.menu = open,
+            Action::Menu(open) => {
+                self.imports.menu = open;
+                self.imports.examples_menu = false;
+            }
+            Action::ExamplesMenu(open) => {
+                self.imports.examples_menu = open;
+                self.imports.menu = false;
+            }
             Action::Choose => {
                 return Task::perform(choose(), |paths| Message::Imports(Action::Files(paths)));
             }
@@ -580,17 +589,7 @@ impl App {
                 (reshiki::clipboard::available() && !self.tab.clipboard_busy)
                     .then_some(Message::PastePicture)
             ),
-            crate::appearance::pick_list(EXAMPLES, None::<Example>, |e| Message::Example(e.1))
-                .placeholder("Examples")
-                .text_size(11)
-                .padding([6, 7])
-                .width(Length::Fill)
-                // A command menu, not an empty field.
-                .style(|theme, status| {
-                    let mut style = crate::appearance::dropdown(theme, status);
-                    style.placeholder_color = style.text_color;
-                    style
-                }),
+            self.import_examples_menu(),
         ]
         .spacing(5);
         let hint =
@@ -601,6 +600,42 @@ impl App {
     }
 
     /// Outlines the canvas while files are dragged over the window.
+    fn import_examples_menu(&self) -> Element<'_, Message> {
+        let open = self.imports.examples_menu;
+        let anchor = super::popover::choice_anchor(
+            "import-examples",
+            "Import examples".into(),
+            "Examples".into(),
+            11.,
+            [6, 7],
+            open,
+            Message::Imports(Action::ExamplesMenu(!open)),
+        );
+        let popup = open.then(|| {
+            let items = EXAMPLES.into_iter().enumerate().map(|(index, example)| {
+                reshiki::accessibility::button(
+                    format!("import-example-{index}"),
+                    example.0,
+                    text(example.0).size(12),
+                )
+                .padding([6, 10])
+                .width(Length::Fill)
+                .style(super::workspace::control(false))
+                .on_press(Message::Example(example.1))
+                .into()
+            });
+            container(column(items))
+                .width(170)
+                .padding(5)
+                .style(super::color_popover::surface)
+                .into()
+        });
+        Element::new(
+            super::popover::popover(anchor, popup, Message::Imports(Action::ExamplesMenu(false)))
+                .align_end(),
+        )
+    }
+
     pub(super) fn with_drop_overlay<'a>(
         &'a self,
         base: Element<'a, Message>,
