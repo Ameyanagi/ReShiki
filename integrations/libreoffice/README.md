@@ -42,6 +42,8 @@ The selected path is stored in the LibreOffice user profile, never in documents.
    **ReShiki → Copy Editable Drawing**. Wait for **Editable drawing copied —
    Ready to paste in ReShiki**, then paste in ReShiki. Preparing the clipboard
    runs in the background; the copying message remains until it finishes.
+   On Linux, keep the LibreOffice drawing window active until it finishes. If
+   focus changes during preparation, return to that window and copy again.
 
 Each edited object gets a separate process, directory, and session identity.
 Unsaved editor changes do not replace the embedded drawing. LibreOffice refuses
@@ -54,6 +56,15 @@ The extension menu is the explicit editable paste/copy route. Ordinary platform
 paste may choose an image or Windows OLE instead. DOCX, XLSX, PPTX, native
 ONLYOFFICE editing, in-place editing, and single-instance editor forwarding are
 outside this ODF adapter's contract.
+
+On Linux, the extension reads and publishes clipboard data through LibreOffice's
+own desktop clipboard backend. ReShiki's background worker only validates the
+captured native drawing and renders its preview. Copy publishes an independent
+native drawing and PNG snapshot, limited to 64 MB combined; later document edits
+or closure do not change those offered bytes. A preparation failure leaves the
+previous clipboard intact. **Copy Image** is a separate static-image route;
+**Paste ReShiki Drawing** requires native drawing data and rejects an image-only
+clipboard. Windows and macOS retain their native ReShiki clipboard workers.
 
 ## Validation status
 
@@ -118,6 +129,14 @@ headless integration checks, not substitutes for the required desktop workflow.
 `tests/test_copy_feedback.py` checks that copy readiness is announced only after
 the worker succeeds, failures retain their error message, and hosts without
 infobars use a temporary status indicator without interrupting clipboard work.
+
+`tests/test_host_clipboard.py` checks Linux host clipboard snapshots, type and
+size limits, focus loss, validation and publication failures, and original
+document identity. Linux copy completion waits until a later host callback
+verifies the retained native and PNG bytes. This host readback does not by
+itself prove compositor acceptance: native X11 and standard Wayland tests must
+also retrieve the data in a separate application. These method tests do not
+access a desktop clipboard.
 
 `tests/saveback.py` checks the save-new-document → keep open → edit → accept →
 save/close/reopen sequence. Compile `tests/editor_surrogate.c` into a dedicated

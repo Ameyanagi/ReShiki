@@ -10,6 +10,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -39,6 +40,12 @@ from com.sun.star.util import CloseVetoException, XCloseable
 CLASS_ID = "8E86A932-EBBE-4E9F-8D26-CA2D82096856"
 MIME = "application/vnd.reshiki.embedded-drawing"
 NATIVE_MIME = "application/x-reshiki-drawing+json"
+NATIVE_CLIPBOARD_TYPES = (
+    NATIVE_MIME,
+    "dev.reshiki.drawing",
+    "application/x-moruno-drawing+json",
+    "dev.moruno.drawing",
+)
 FACTORY = "dev.reshiki.libreoffice.EmbeddedFactory"
 HANDLER = "dev.reshiki.libreoffice.ProtocolHandler"
 PROTOCOL = "dev.reshiki.libreoffice:"
@@ -67,6 +74,95 @@ def flavor(mime):
 
 def service(ctx, name):
     return ctx.ServiceManager.createInstanceWithContext(name, ctx)
+
+
+def uses_host_clipboard():
+    # A separate Wayland helper does not own LibreOffice's input focus/serial.
+    # Let the host's VCL backend handle both Linux desktop clipboard protocols.
+    return sys.platform.startswith("linux")
+
+
+def bounded_clipboard_bytes(value):
+    if isinstance(value, uno.ByteSequence):
+        value = value.value
+    if not isinstance(value, (bytes, bytearray)):
+        raise ValueError("The clipboard did not provide binary drawing data.")
+    if not 0 < len(value) <= LIMIT:
+        raise ValueError("Clipboard drawing or preview exceeds 64 MB or is empty.")
+    return bytes(value)
+
+
+def transferable_bytes(contents, requested):
+    if requested.DataType != uno.getTypeByName("[]byte"):
+        raise ValueError("The clipboard drawing has an unsupported data type.")
+    return bounded_clipboard_bytes(contents.getTransferData(requested))
+
+
+def read_host_native(ctx):
+    clipboard = service(ctx, "com.sun.star.datatransfer.clipboard.SystemClipboard")
+    contents = clipboard.getContents()
+    offered = contents.getTransferDataFlavors() if contents else ()
+    for mime in NATIVE_CLIPBOARD_TYPES:
+        for requested in offered:
+            if requested.MimeType == mime:
+                return transferable_bytes(contents, requested)
+    raise ValueError("Copy an editable drawing in ReShiki before using Paste ReShiki Drawing.")
+
+
+class ClipboardDrawing(unohelper.Base, XTransferable):
+    """Immutable clipboard bytes, independent of a document or edit session."""
+
+    def __init__(self, native, png):
+        native, png = bounded_clipboard_bytes(native), bounded_clipboard_bytes(png)
+        if len(native) + len(png) > LIMIT:
+            raise ValueError("Combined clipboard drawing and preview exceed 64 MB.")
+        self._data = ((NATIVE_MIME, native), ("image/png", png))
+
+    def getTransferDataFlavors(self):
+        return tuple(flavor(mime) for mime, _ in self._data)
+
+    def isDataFlavorSupported(self, requested):
+        return requested.DataType == uno.getTypeByName("[]byte") and any(
+            mime == requested.MimeType for mime, _ in self._data
+        )
+
+    def getTransferData(self, requested):
+        if self.isDataFlavorSupported(requested):
+            for mime, raw in self._data:
+                if mime == requested.MimeType:
+                    return uno.ByteSequence(raw)
+        raise UnsupportedFlavorException("Unsupported ReShiki clipboard format.", self)
+
+
+def publish_host_clipboard(ctx, frame, drawing, finished):
+    """Publish on the UNO thread, then verify retention on its next callback."""
+    window = frame.getContainerWindow()
+    active = service(ctx, "com.sun.star.awt.Toolkit").getActiveTopWindow()
+    if not window or not active or active != window:
+        raise RuntimeError("Return to the LibreOffice drawing window and copy again.")
+    clipboard = service(ctx, "com.sun.star.datatransfer.clipboard.SystemClipboard")
+    clipboard.setContents(drawing, None)
+
+    def verify():
+        try:
+            current = clipboard.getContents()
+            if current is None:
+                raise RuntimeError("The clipboard changed before copying finished. Copy again.")
+            for requested in drawing.getTransferDataFlavors():
+                if (
+                    transferable_bytes(current, requested)
+                    != drawing.getTransferData(requested).value
+                ):
+                    raise RuntimeError("The clipboard changed before copying finished. Copy again.")
+        except Exception as error:
+            finished(str(error))
+        else:
+            finished()
+
+    # GTK VCL queues publication inside setContents; an immediate getContents
+    # or change listener only echoes its cached provider. This later callback
+    # verifies host retention after that event, not compositor acknowledgement.
+    post(ctx, verify)
 
 
 def settings_path(ctx):
@@ -926,8 +1022,12 @@ class Handler(unohelper.Base, XDispatchProvider, XDispatch, XInitialization, XSe
     def copy(self, program, raw):
         if self.copying:
             return
+        host_clipboard = uses_host_clipboard()
+        if host_clipboard:
+            raw = bounded_clipboard_bytes(raw)
+        frame = self.frame
         self.copying = True
-        feedback = CopyFeedback(self.ctx, self.frame)
+        feedback = CopyFeedback(self.ctx, frame)
 
         def finished(error=None):
             self.copying = False
@@ -937,13 +1037,32 @@ class Handler(unohelper.Base, XDispatchProvider, XDispatch, XInitialization, XSe
 
         def execute():
             error = None
+            drawing = None
             try:
-                worker(program, "--libreoffice-copy", raw)
+                if host_clipboard:
+                    native, png, _ = packet(worker(program, "--libreoffice-preview", raw))
+                    if native != raw:
+                        raise ValueError(
+                            "ReShiki returned a different drawing while preparing copy."
+                        )
+                    drawing = ClipboardDrawing(native, png)
+                else:
+                    worker(program, "--libreoffice-copy", raw)
             except Exception as failure:
                 error = str(failure)
-            # The worker returns only after the native clipboard write. Merely
-            # returning from menu dispatch must never announce readiness.
-            post(self.ctx, lambda: finished(error))
+
+            def complete():
+                if error is not None or not host_clipboard:
+                    finished(error)
+                    return
+                try:
+                    publish_host_clipboard(self.ctx, frame, drawing, finished)
+                except Exception as failure:
+                    finished(str(failure))
+
+            # Linux workers prepare bytes only; the focused host owns its
+            # clipboard. Other platforms retain their native helper route.
+            post(self.ctx, complete)
 
         try:
             threading.Thread(target=execute, daemon=True).start()
@@ -975,11 +1094,21 @@ class Handler(unohelper.Base, XDispatchProvider, XDispatch, XInitialization, XSe
                 raw = selected(document).getComponent().getTransferData(flavor(NATIVE_MIME)).value
                 self.copy(program, raw)
                 return
+            native = None
+            if url.Path == "paste" and uses_host_clipboard():
+                # Capture the current clipboard on the dispatch thread before
+                # asynchronous validation; a later owner must not change it.
+                native = read_host_native(self.ctx)
 
             def execute():
                 try:
                     if url.Path == "paste":
-                        value = worker(program, "--libreoffice-clipboard")
+                        if native is None:
+                            value = worker(program, "--libreoffice-clipboard")
+                        else:
+                            value = worker(program, "--libreoffice-preview", native)
+                            if packet(value)[0] != native:
+                                raise ValueError("ReShiki returned a different clipboard drawing.")
 
                         def apply():
                             try:

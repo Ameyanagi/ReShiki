@@ -32,6 +32,8 @@ class Controller:
 
 class CopyFeedbackTests(unittest.TestCase):
     def setUp(self):
+        # Keep coverage of the unchanged Windows/macOS helper route on every OS.
+        self.enterContext(patch.object(extension, "uses_host_clipboard", return_value=False))
         self.controller = Controller()
         self.handler = extension.Handler(None)
         self.handler.frame = SimpleNamespace(getController=lambda: self.controller)
