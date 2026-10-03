@@ -213,8 +213,10 @@ async fn keyboard_and_native_actions_use_the_live_control_and_real_focus_state()
         assert_ne!(before, focused, "keyboard focus must be painted");
         let bounds = snapshot.nodes[0].bounds;
         let changed: Vec<_> = before
-            .chunks_exact(4)
-            .zip(focused.chunks_exact(4))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(focused.as_chunks::<4>().0.iter())
             .enumerate()
             .filter(|(_, (a, b))| a != b)
             .map(|(index, _)| {
