@@ -234,8 +234,10 @@ fn label_typography_survives_native_copy_paste_and_typed_group_replacement() {
     doc.abbreviations[0].label_color_override = true;
     let part = editing::selection(&doc, &[anchor]);
     for canvas in CanvasTheme::ALL {
-        let mut destination = Document::default();
-        destination.canvas_theme = canvas;
+        let mut destination = Document {
+            canvas_theme: canvas,
+            ..Document::default()
+        };
         let pasted = canvas_theme::for_native_paste(part.clone(), canvas);
         let ids = editing::append(&mut destination, &pasted, Point::new(150., 90.));
         let group = destination.abbreviations.first().unwrap();
