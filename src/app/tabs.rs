@@ -237,6 +237,7 @@ impl App {
     }
 
     fn enter_tab(&mut self) {
+        self.sync_drawing_style_unit();
         if let Some(index) = self.tab.pages.fit {
             self.fit_pages(index);
         } else if self.tab.fit_to_view {

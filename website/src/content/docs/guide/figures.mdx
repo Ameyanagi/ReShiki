@@ -11,6 +11,8 @@ New documents use **JACS / ACS**. The style selector in the status bar switches 
 
 Choose **Manage styles…** to edit fonts, label size, bond length and stroke settings with a live sample preview. The fixed footer has **Import**, **Export**, and **Save** icons. Save applies the draft; returning to Properties leaves it unapplied. Export offers a native `.reshiki-style` file or ChemDraw `.cds`. Import accepts those files plus document settings from `.cdx` and `.cdxml`; template artwork and page layout are not imported. **Scale layout with bond length** is off by default in this editor; enable it when existing geometry should resize.
 
+**Dimension units** remembers `pt`, `mm`, or `cm` for bond length, line width, bold width, label margin, and hash spacing. Bare numbers use the displayed unit; add a suffix to override it (`0.5 cm` and `5mm` are equivalent). Use a decimal point, without grouping separators. Label size stays in points and bond spacing stays a percentage. Switching units preserves exact stored sizes and does not edit the drawing or add Undo history. Enter validates the current draft field; Save applies the whole draft. Incomplete or invalid dimensions must be corrected before changing units or saving. A pending draft in another tab retains its original units while an entry is incomplete. The preference persists after cancelling the draft or restarting; other tools retain their labeled units.
+
 ## Choose canvas colors
 
 [Compare and download every theme palette and element color →](/guide/color-palettes/)

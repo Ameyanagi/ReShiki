@@ -1,4 +1,5 @@
 //! Default ACS structure settings, shared with the exchange worker.
+pub mod units;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -62,17 +63,12 @@ impl DrawingStyle {
         if self.name.trim().is_empty() || self.name.len() > 120 {
             return Err("Give the drawing style a name of 1–120 characters.".into());
         }
-        for (name, value, min, max) in [
-            ("Bond length", self.bond_length_pt, 5., 100.),
-            ("Line width", self.line_width_pt, 0.1, 6.),
-            ("Bold width", self.bold_width_pt, 0.1, 12.),
-            ("Label margin", self.margin_width_pt, 0., 12.),
-            ("Hash spacing", self.hash_spacing_pt, 0.3, 12.),
-            ("Bond spacing", self.bond_spacing_ratio * 100., 5., 40.),
-        ] {
-            if !value.is_finite() || !(min..=max).contains(&value) {
-                return Err(format!("{name} must be between {min} and {max}."));
-            }
+        for dimension in units::Dimension::ALL {
+            dimension.validate(dimension.get(self), units::Unit::Points)?;
+        }
+        let spacing = self.bond_spacing_ratio * 100.;
+        if !spacing.is_finite() || !(5. ..=40.).contains(&spacing) {
+            return Err("Bond spacing must be between 5 and 40%.".into());
         }
         if self.bold_width_pt < self.line_width_pt {
             return Err("Bold width must be at least the line width.".into());
