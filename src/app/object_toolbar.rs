@@ -214,7 +214,6 @@ impl App {
             // Every arrange command needs a selection.
             let enabled = !self.tab.selected.is_empty();
             return self.menu_anchor(
-                Page::Arrange,
                 reshiki::accessibility::button(
                     "arrange-compact",
                     "Arrange: align, distribute, order, flip and rotate",
@@ -237,7 +236,6 @@ impl App {
         let menu = |icon: Command, page, name: &str, index: f32| {
             let enabled = icon.enabled(self, objects);
             self.menu_anchor(
-                page,
                 reshiki::accessibility::button(
                     format!("arrange-menu-{page:?}"),
                     name,

@@ -1191,7 +1191,6 @@ impl App {
             let page = super::context_menu::Page::More(folded);
             row = row.push(
                 self.menu_anchor(
-                    page,
                     reshiki::accessibility::button(
                         "context-overflow",
                         format!("More: {}", labels.join(", ")),
@@ -1220,21 +1219,13 @@ impl App {
         row.into()
     }
 
-    /// A context row menu button with its hover hint, which is left out while
-    /// the menu is open so that it cannot cover the menu's first item.
+    /// Keep the tooltip wrapper stable so opening a menu preserves its button
+    /// focus. The inert context bar suppresses its overlays while a menu is open.
     pub(super) fn menu_anchor<'a>(
         &self,
-        page: super::context_menu::Page,
         anchor: impl Into<Element<'a, Message>>,
         hint: impl Into<std::borrow::Cow<'a, str>>,
     ) -> Element<'a, Message> {
-        if self
-            .context_menu
-            .as_ref()
-            .is_some_and(|menu| menu.page == page)
-        {
-            return anchor.into();
-        }
         hover_hint(anchor, hint, tooltip::Position::Bottom).into()
     }
 
