@@ -220,25 +220,39 @@ impl App {
             .iter()
             .any(|a| self.tab.selected.contains(&a.id));
         let number = |label: &'static str, field: Field| {
-            row![
-                text(label).size(11).width(Length::Fill),
-                crate::appearance::text_input(
+            let value = self
+                .tab
+                .arrows
+                .numbers
+                .get(field as usize)
+                .map(String::as_str)
+                .unwrap_or("");
+            let input: Element<'_, Message> = if matches!(field, Field::Line) {
+                reshiki::accessibility::text_input(
+                    "arrow-line-width",
+                    "Arrow line width (pt)",
                     "",
-                    self.tab
-                        .arrows
-                        .numbers
-                        .get(field as usize)
-                        .map(String::as_str)
-                        .unwrap_or("")
+                    value,
                 )
+                .style(crate::appearance::input_style)
                 .size(12)
                 .padding(5)
                 .width(70)
                 .on_input(move |v| Message::ArrowAction(Action::Number(field, v)))
                 .on_submit(Message::ArrowAction(Action::ApplyNumber(field)))
-            ]
-            .spacing(6)
-            .align_y(Alignment::Center)
+                .into()
+            } else {
+                crate::appearance::text_input("", value)
+                    .size(12)
+                    .padding(5)
+                    .width(70)
+                    .on_input(move |v| Message::ArrowAction(Action::Number(field, v)))
+                    .on_submit(Message::ArrowAction(Action::ApplyNumber(field)))
+                    .into()
+            };
+            row![text(label).size(11).width(Length::Fill), input,]
+                .spacing(6)
+                .align_y(Alignment::Center)
         };
         let mut panel = column![
             section(if has_selection {

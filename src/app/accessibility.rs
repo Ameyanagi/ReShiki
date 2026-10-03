@@ -1,4 +1,7 @@
 //! Window lifecycle and a bounded, generation-checked native action queue.
+#[cfg(test)]
+mod point_controls_tests;
+
 use super::{App, Message};
 use iced::{Subscription, Task, futures::SinkExt, window};
 use reshiki::accessibility::{
