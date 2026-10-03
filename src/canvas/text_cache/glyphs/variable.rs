@@ -45,7 +45,9 @@ pub(super) fn prepare_system_weights(fonts: &mut FontSystem) -> usize {
                 }) else {
                     continue;
                 };
-                let selected = db.face(id).unwrap();
+                let Some(selected) = db.face(id) else {
+                    continue;
+                };
                 if selected.weight.0 == weight {
                     continue;
                 }
@@ -58,9 +60,12 @@ pub(super) fn prepare_system_weights(fonts: &mut FontSystem) -> usize {
                     aliases.push(alias);
                     index
                 });
+                let Some(alias) = aliases.get_mut(index) else {
+                    continue;
+                };
                 for name in selected.families.iter().filter(|(name, _)| name == family) {
-                    if !aliases[index].families.contains(name) {
-                        aliases[index].families.push(name.clone());
+                    if !alias.families.contains(name) {
+                        alias.families.push(name.clone());
                     }
                 }
             }
