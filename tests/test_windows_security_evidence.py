@@ -351,6 +351,67 @@ class SecurityEvidenceTests(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 security.summarize([source], root / "matrix")
 
+    def test_matrix_csv_keeps_prefixed_cells_literal_and_json_unchanged(self):
+        escaped = [
+            "=1+1",
+            "+1+1",
+            "-1+1",
+            "@SUM(1,1)",
+            " =1+1",
+            "\t=1+1",
+            "\r=1+1",
+            "\n=1+1",
+            "\r\n=1+1",
+            "\v=1+1",
+            "\f=1+1",
+            "\x00=1+1",
+            "\x1f=1+1",
+            "\x7f=1+1",
+            "\x85=1+1",
+            "\u00a0=1+1",
+            "\ufeff=1+1",
+            "\u200b=1+1",
+            " leading label",
+            "\t",
+        ]
+        ordinary = ["D-X64-PAYLOAD", "", "'=1+1", 'label,"quoted"\r\n=1+1']
+        values = escaped + ordinary
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            sources, original_bytes, expected_reports = [], [], []
+            for index, value in enumerate(values):
+                source = root / f"evidence-{index}.json"
+                evidence = fixture()
+                evidence["request"]["case_id"] = value
+                for phase in ("before", "after"):
+                    evidence[phase]["host"]["data"].update(build=0, system_type=value)
+                security.write_json(source, evidence)
+                sources.append(source)
+                original_bytes.append(source.read_bytes())
+                expected_reports.append(
+                    dict(security.evaluate(evidence), evidence_file=str(source))
+                )
+
+            output = root / "matrix"
+            self.assertEqual(security.summarize(sources, output), 0)
+            self.assertEqual(json.loads((output / "matrix.json").read_text()), expected_reports)
+            self.assertEqual([source.read_bytes() for source in sources], original_bytes)
+            with (output / "matrix.csv").open(encoding="utf-8-sig", newline="") as stream:
+                reader = csv.DictReader(stream)
+                rows = list(reader)
+                fields = set(reader.fieldnames or [])
+            self.assertEqual(len(rows), len(values))
+            for index, (value, row) in enumerate(zip(values, rows)):
+                with self.subTest(value=value):
+                    expected = "'" + value if index < len(escaped) else value
+                    self.assertEqual(set(row), fields)
+                    self.assertNotIn(None, row.values())
+                    self.assertEqual(row["case_id"], expected)
+                    self.assertEqual(row["host_type"], expected)
+                    self.assertEqual(row["os_build"], "0")
+                    self.assertEqual(row["expected_sha256"], DIGEST)
+                    self.assertEqual(row["status"], "scan_completed_no_detection")
+
     def test_probe_timeout_and_unavailable_powershell_preserve_failure(self):
         with patch.object(
             security.subprocess, "run", side_effect=security.subprocess.TimeoutExpired("scan", 1)
