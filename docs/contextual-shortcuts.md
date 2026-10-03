@@ -111,6 +111,7 @@ Acyclic triple-bond edits straighten the adjacent branches. Bond appearance and 
 | 1 or x or b    | Single bond                                                    |
 | 2 / 3 / 4      | Double / triple / quadruple bond                               |
 | X              | Straight chain                                                 |
+| Shift+3–8      | Select a saturated 3–8-membered ring tool                       |
 | r              | Ring tool, retaining its last size                             |
 | R              | Toggle saturated/aromatic ring drawing, retaining member count |
 | j / J          | Benzene / cyclopentadiene                                      |
@@ -120,6 +121,10 @@ Acyclic triple-bond edits straighten the adjacent branches. Bond appearance and 
 | Escape         | Cancel the current operation / return to selection             |
 
 **R** can also convert a selected complete 3–8 member ring. This changes its bonds; it is different from changing an aromatic ring's circle representation. Benzene starts with alternating bonds.
+
+**Shift+3–8** selects the corresponding saturated ring size without editing the
+drawing or its selection. The unshifted digit shortcuts retain their atom,
+bond and tool actions. Ring palette hover hints show one tool-selection key.
 
 ## Files, clipboard and help
 

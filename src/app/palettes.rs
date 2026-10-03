@@ -237,11 +237,17 @@ pub(super) fn bond_hint(preset: BondPreset, label: &str) -> String {
 pub(super) fn ring_hint(label: &str, action: &Action) -> String {
     use iced::keyboard::Modifiers;
     let key = match action {
+        Action::Ring(size, false) => {
+            let message = Message::Shortcut(super::shortcuts::Action::SelectRing(*size));
+            let Some(key) = super::shortcuts::label(&message) else {
+                return label.into();
+            };
+            key
+        }
         Action::RingPreset(RingPreset::Benzene) => "j".into(),
         Action::RingPreset(RingPreset::Cyclopentadiene) => {
             super::shortcuts::keys(Modifiers::SHIFT, "J")
         }
-        // r keeps the current size/style; it does not choose a palette preset.
         _ => return label.into(),
     };
     format!("{label} · {key}")

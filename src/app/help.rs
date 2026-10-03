@@ -31,6 +31,10 @@ impl App {
                 ("2 / 3 / 4".into(), "Double / Triple / Quadruple"),
                 (keys(shift, "X"), "Straight chain"),
                 (
+                    format!("{}–{}", keys(shift, "3"), keys(shift, "8")),
+                    "Saturated 3–8-membered ring tools",
+                ),
+                (
                     format!("r / {}", keys(shift, "R")),
                     "Ring / Toggle saturated–aromatic (same size)",
                 ),
