@@ -565,6 +565,12 @@ async fn updates_dialog_captures_keys_before_editors_file_commands_and_canvas() 
             None,
         ),
         press(Key::Named(Named::Tab), Code::Tab, Modifiers::CTRL, None),
+        press(
+            Key::Named(Named::Tab),
+            Code::Tab,
+            Modifiers::CTRL | Modifiers::SHIFT,
+            None,
+        ),
         Event::InputMethod(iced::advanced::input_method::Event::Commit("窒素".into())),
     ];
     events.extend(
