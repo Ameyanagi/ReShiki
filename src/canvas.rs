@@ -15,6 +15,8 @@ mod movement;
 mod pages;
 #[cfg(test)]
 mod performance;
+#[cfg(test)]
+pub(crate) mod rotation_gesture_tests;
 mod selection;
 mod smart_guides;
 mod text_cache;

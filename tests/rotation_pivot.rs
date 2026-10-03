@@ -4,6 +4,9 @@ use reshiki::{
     graphics::{ArcGeometry, Graphic, GraphicKind, PathCommand},
 };
 
+#[path = "rotation_pivot/edge_cases.rs"]
+mod edge_cases;
+
 fn rotated(p: Point, pivot: Point, degrees: f64) -> Point {
     let (s, c) = degrees.to_radians().sin_cos();
     let x = f64::from(p.x) - f64::from(pivot.x);
