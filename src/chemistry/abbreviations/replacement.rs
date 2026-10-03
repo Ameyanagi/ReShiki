@@ -428,10 +428,8 @@ pub fn replace_with_policy(
         }
     }
     result.abbreviations.push(Abbreviation {
-        label_style: doc.abbreviation(target).and_then(|g| g.label_style.clone()),
-        label_color_override: doc
-            .abbreviation(target)
-            .is_some_and(|g| g.label_color_override),
+        label_style: old.and_then(|g| g.label_style.clone()),
+        label_color_override: old.is_some_and(|g| g.label_color_override),
         highlight,
         alignment: Default::default(),
         label: label.into(),
