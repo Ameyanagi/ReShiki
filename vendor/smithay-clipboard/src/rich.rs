@@ -62,7 +62,7 @@ impl<T> Future for Request<T> {
             Poll::Ready(reply) => {
                 self.finished = true;
                 Poll::Ready(reply.unwrap_or_else(|_| Err(unavailable())))
-            },
+            }
         }
     }
 }
@@ -144,13 +144,15 @@ impl Client {
     /// generation in the focused seat's resulting standard selection offer.
     /// Queueing a request or completing a display roundtrip is not success.
     pub fn write(&self, offer: Offer) -> Request<()> {
-        self.submit(|completion| match StoredOffer::new(offer, self.inner.memory.clone(), true) {
-            Ok(offer) => Some(Operation::Write { offer, completion }),
-            Err(error) => {
-                completion.finish(Err(error));
-                None
+        self.submit(
+            |completion| match StoredOffer::new(offer, self.inner.memory.clone(), true) {
+                Ok(offer) => Some(Operation::Write { offer, completion }),
+                Err(error) => {
+                    completion.finish(Err(error));
+                    None
+                }
             },
-        })
+        )
     }
 
     /// Receives the first supported MIME in caller priority order. `None`
@@ -158,11 +160,14 @@ impl Client {
     /// Binary data is not decoded as text or normalized.
     pub fn read(&self, mime_types: Vec<String>) -> Request<Option<Data>> {
         self.submit(|completion| match validate_types(&mime_types) {
-            Ok(()) => Some(Operation::Read { mime_types, completion }),
+            Ok(()) => Some(Operation::Read {
+                mime_types,
+                completion,
+            }),
             Err(error) => {
                 completion.finish(Err(error));
                 None
-            },
+            }
         })
     }
 
@@ -182,8 +187,15 @@ impl Client {
         let id = self
             .inner
             .sequence
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| value.checked_add(1));
-        let mut completion = Completion { sender: Some(sender), control, permit: None, id: 0 };
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+                value.checked_add(1)
+            });
+        let mut completion = Completion {
+            sender: Some(sender),
+            control,
+            permit: None,
+            id: 0,
+        };
         if self.inner.stopped.load(Ordering::Acquire) || !self.inner.ready.load(Ordering::Acquire) {
             completion.finish(Err(unavailable()));
         } else if let (Ok(permit), Ok(id)) = (permit, id) {
@@ -207,9 +219,15 @@ pub(crate) struct Control {
 impl Control {
     pub fn error(&self, now: Instant) -> Option<io::Error> {
         if self.cancelled.load(Ordering::Acquire) {
-            Some(io::Error::new(io::ErrorKind::Interrupted, "clipboard request cancelled"))
+            Some(io::Error::new(
+                io::ErrorKind::Interrupted,
+                "clipboard request cancelled",
+            ))
         } else if now >= self.deadline {
-            Some(io::Error::new(io::ErrorKind::TimedOut, "clipboard request timed out"))
+            Some(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "clipboard request timed out",
+            ))
         } else {
             None
         }
@@ -232,8 +250,14 @@ impl<T> Completion<T> {
 }
 
 pub(crate) enum Operation {
-    Write { offer: Arc<StoredOffer>, completion: Completion<()> },
-    Read { mime_types: Vec<String>, completion: Completion<Option<Data>> },
+    Write {
+        offer: Arc<StoredOffer>,
+        completion: Completion<()>,
+    },
+    Read {
+        mime_types: Vec<String>,
+        completion: Completion<Option<Data>>,
+    },
 }
 
 impl Operation {
@@ -283,11 +307,18 @@ impl StoredOffer {
         }
         let marker = if receipt { Some(marker()?) } else { None };
         let memory = Counter::reserve(memory, size, MAX_RETAINED_BYTES)?;
-        Ok(Arc::new(Self { data, marker, _memory: memory }))
+        Ok(Arc::new(Self {
+            data,
+            marker,
+            _memory: memory,
+        }))
     }
 
     pub fn mime_types(&self) -> impl Iterator<Item = &str> {
-        self.data.keys().map(String::as_str).chain(self.marker.as_deref())
+        self.data
+            .keys()
+            .map(String::as_str)
+            .chain(self.marker.as_deref())
     }
 
     pub fn bytes(&self, mime: &str) -> Option<Arc<[u8]>> {
@@ -368,4 +399,219 @@ pub(crate) fn oversized() -> io::Error {
 
 pub(crate) fn unavailable() -> io::Error {
     io::Error::other("the GUI clipboard owner is unavailable")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sctk::reexports::calloop::channel::{self, Channel};
+    use std::task::Waker;
+
+    fn key() -> usize {
+        static NEXT: AtomicUsize = AtomicUsize::new(1);
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    }
+
+    fn ready_client() -> (usize, Client, Channel<Command>) {
+        let key = key();
+        let (sender, receiver) = channel::channel();
+        let client = Client::new(key, sender);
+        client.inner.ready.store(true, Ordering::Release);
+        (key, client, receiver)
+    }
+
+    fn poll<T>(request: &mut Request<T>) -> Poll<io::Result<T>> {
+        Pin::new(request).poll(&mut Context::from_waker(Waker::noop()))
+    }
+
+    fn offer(bytes: &[u8]) -> Offer {
+        [("image/png".to_owned(), Arc::from(bytes))]
+            .into_iter()
+            .collect()
+    }
+
+    #[test]
+    fn lookup_never_connects_and_stopped_command_clones_do_not_keep_owner_available() {
+        let key = key();
+        assert!(Client::for_display(key).is_none());
+        let (sender, receiver) = channel::channel();
+        let owner = Client::new(key, sender);
+        assert!(
+            Client::for_display(key).is_none(),
+            "initialization is not ready"
+        );
+        owner.inner.ready.store(true, Ordering::Release);
+        let clone = Client::for_display(key).unwrap();
+        let mut pending = clone.read(vec!["image/png".into()]);
+        assert!(poll(&mut pending).is_pending());
+        owner.stop(key);
+        assert!(Client::for_display(key).is_none());
+        let mut rejected = clone.read(vec!["image/png".into()]);
+        assert!(matches!(poll(&mut rejected), Poll::Ready(Err(_))));
+        // The owner worker dropping its command queue resolves pending replies.
+        drop(receiver);
+        assert!(matches!(poll(&mut pending), Poll::Ready(Err(_))));
+    }
+
+    #[test]
+    fn an_old_owner_cannot_unregister_a_replacement_using_the_same_display_key() {
+        let key = key();
+        let (first_sender, _first_queue) = channel::channel();
+        let (next_sender, _next_queue) = channel::channel();
+        let first = Client::new(key, first_sender);
+        let next = Client::new(key, next_sender);
+        first.inner.ready.store(true, Ordering::Release);
+        next.inner.ready.store(true, Ordering::Release);
+        first.stop(key);
+        let found = Client::for_display(key).unwrap();
+        assert!(Arc::ptr_eq(&found.inner, &next.inner));
+        assert!(first.inner.stopped.load(Ordering::Acquire));
+        assert!(!next.inner.stopped.load(Ordering::Acquire));
+        next.stop(key);
+    }
+
+    #[test]
+    fn queueing_and_accepting_a_command_never_produces_a_write_receipt() {
+        let (key, client, commands) = ready_client();
+        let mut request = client.write(offer(&[0, 255, 17]));
+        assert!(poll(&mut request).is_pending());
+        let Command::Rich(operation) = commands.try_recv().unwrap() else {
+            panic!()
+        };
+        assert!(poll(&mut request).is_pending());
+        let Operation::Write { offer, completion } = operation else {
+            panic!()
+        };
+        let marker = offer.marker.as_ref().unwrap();
+        assert!(marker.starts_with(MARKER_PREFIX));
+        assert_eq!(marker.len(), MARKER_PREFIX.len() + 32);
+        assert_eq!(offer.bytes("image/png").unwrap().as_ref(), [0, 255, 17]);
+        completion.finish(Err(io::Error::new(
+            io::ErrorKind::TimedOut,
+            "no ownership receipt",
+        )));
+        assert!(
+            matches!(poll(&mut request), Poll::Ready(Err(error)) if error.kind() == io::ErrorKind::TimedOut)
+        );
+        // A failed receipt leaves the sent immutable offer available to serve.
+        assert_eq!(offer.bytes("image/png").unwrap().as_ref(), [0, 255, 17]);
+        client.stop(key);
+    }
+
+    #[test]
+    fn cancelling_a_request_marks_queued_work_and_wakes_maintenance() {
+        let (key, client, commands) = ready_client();
+        let request = client.write(offer(b"first"));
+        let Command::Rich(operation) = commands.try_recv().unwrap() else {
+            panic!()
+        };
+        assert!(operation.control().error(Instant::now()).is_none());
+        drop(request);
+        assert!(matches!(commands.try_recv(), Ok(Command::Wake)));
+        assert_eq!(
+            operation.control().error(Instant::now()).unwrap().kind(),
+            io::ErrorKind::Interrupted
+        );
+        drop(operation);
+        assert_eq!(client.inner.pending.load(Ordering::Acquire), 0);
+        assert_eq!(client.inner.memory.load(Ordering::Acquire), 0);
+        client.stop(key);
+    }
+
+    #[test]
+    fn invalid_mime_requests_fail_before_the_worker_sees_them() {
+        let (key, client, commands) = ready_client();
+        let mut invalid =
+            client.write([(format!("{MARKER_PREFIX}forged"), Arc::from([1_u8]))].into());
+        assert!(
+            matches!(poll(&mut invalid), Poll::Ready(Err(error)) if error.to_string().contains("reserved"))
+        );
+        let mut empty = client.read(Vec::new());
+        assert!(matches!(poll(&mut empty), Poll::Ready(Err(_))));
+        let mut invalid = client.read(vec!["text/plain\0injected".into()]);
+        assert!(matches!(poll(&mut invalid), Poll::Ready(Err(_))));
+        assert!(commands.try_recv().is_err());
+        assert_eq!(client.inner.pending.load(Ordering::Acquire), 0);
+        client.stop(key);
+    }
+
+    #[test]
+    fn pending_request_limit_rejects_without_growing_the_command_queue() {
+        let (key, client, commands) = ready_client();
+        let mut requests: Vec<_> = (0..MAX_TRANSFERS)
+            .map(|_| client.read(vec!["image/png".into()]))
+            .collect();
+        let mut overflow = client.read(vec!["image/png".into()]);
+        assert!(matches!(poll(&mut overflow), Poll::Ready(Err(_))));
+        for request in &mut requests {
+            assert!(poll(request).is_pending());
+            let Command::Rich(operation) = commands.try_recv().unwrap() else {
+                panic!()
+            };
+            operation.fail(io::Error::other("test owner stopped"));
+            assert!(matches!(poll(request), Poll::Ready(Err(_))));
+        }
+        assert!(commands.try_recv().is_err());
+        assert_eq!(client.inner.pending.load(Ordering::Acquire), 0);
+        client.stop(key);
+    }
+
+    #[test]
+    fn aliases_share_bytes_and_old_transfers_retain_their_own_generation() {
+        let memory = Arc::new(AtomicUsize::new(0));
+        let bytes: Arc<[u8]> = Arc::from([0_u8, 255, 128, 4]);
+        let original = StoredOffer::new(
+            [
+                ("image/png".into(), bytes.clone()),
+                ("application/example".into(), bytes),
+            ]
+            .into(),
+            memory.clone(),
+            false,
+        )
+        .unwrap();
+        assert_eq!(memory.load(Ordering::Acquire), 4);
+        let serving_old_pipe = original.clone();
+        let replacement = StoredOffer::new(offer(b"new"), memory.clone(), false).unwrap();
+        drop(original);
+        assert_eq!(memory.load(Ordering::Acquire), 7);
+        assert_eq!(
+            serving_old_pipe.bytes("image/png").unwrap().as_ref(),
+            [0, 255, 128, 4]
+        );
+        assert_eq!(replacement.bytes("image/png").unwrap().as_ref(), b"new");
+        drop(serving_old_pipe);
+        assert_eq!(memory.load(Ordering::Acquire), 3);
+        drop(replacement);
+        assert_eq!(memory.load(Ordering::Acquire), 0);
+    }
+
+    #[test]
+    fn retained_memory_is_reserved_before_new_publication() {
+        let memory = Arc::new(AtomicUsize::new(0));
+        let occupied =
+            Counter::reserve(memory.clone(), MAX_RETAINED_BYTES - 3, MAX_RETAINED_BYTES).unwrap();
+        let current = StoredOffer::new(offer(b"old"), memory.clone(), false).unwrap();
+        assert!(StoredOffer::new(offer(b"new"), memory.clone(), false).is_err());
+        assert_eq!(current.bytes("image/png").unwrap().as_ref(), b"old");
+        assert_eq!(memory.load(Ordering::Acquire), MAX_RETAINED_BYTES);
+        drop(occupied);
+        drop(current);
+        assert_eq!(memory.load(Ordering::Acquire), 0);
+    }
+
+    #[test]
+    fn the_private_receipt_counts_toward_the_offer_format_limit() {
+        let memory = Arc::new(AtomicUsize::new(0));
+        let bytes: Arc<[u8]> = Arc::from([1_u8]);
+        let allowed: Offer = (0..MAX_FORMATS - 1)
+            .map(|index| (format!("application/example-{index}"), bytes.clone()))
+            .collect();
+        let ready = StoredOffer::new(allowed.clone(), memory.clone(), true).unwrap();
+        assert_eq!(ready.mime_types().count(), MAX_FORMATS);
+        let mut too_many = allowed;
+        too_many.insert("application/one-more".into(), bytes);
+        assert!(StoredOffer::new(too_many, memory.clone(), true).is_err());
+        assert_eq!(memory.load(Ordering::Acquire), 1);
+    }
 }

@@ -33,13 +33,27 @@ struct Transfer {
 }
 
 enum Body {
-    Read { bytes: Vec<u8>, memory: Counter, reply: ReadReply },
-    Write { _offer: Arc<StoredOffer>, bytes: Arc<[u8]>, written: usize },
+    Read {
+        bytes: Vec<u8>,
+        memory: Counter,
+        reply: ReadReply,
+    },
+    Write {
+        _offer: Arc<StoredOffer>,
+        bytes: Arc<[u8]>,
+        written: usize,
+    },
 }
 
 pub(super) enum ReadReply {
-    Text { sender: Sender<io::Result<String>>, mime_type: MimeType },
-    Binary { completion: Completion<Option<Data>>, mime_type: String },
+    Text {
+        sender: Sender<io::Result<String>>,
+        mime_type: MimeType,
+    },
+    Binary {
+        completion: Completion<Option<Data>>,
+        mime_type: String,
+    },
 }
 
 impl ReadReply {
@@ -57,10 +71,13 @@ impl ReadReply {
                     }
                 });
                 let _ = sender.send(result);
-            },
-            Self::Binary { completion, mime_type } => {
+            }
+            Self::Binary {
+                completion,
+                mime_type,
+            } => {
                 completion.finish(result.map(|bytes| Some(Data { mime_type, bytes })));
-            },
+            }
         }
     }
 
@@ -74,10 +91,14 @@ impl ReadReply {
 
 impl Transfer {
     fn error(&self, now: Instant) -> Option<io::Error> {
-        self.control.as_ref().and_then(|control| control.error(now)).or_else(|| {
-            (now >= self.deadline)
-                .then(|| io::Error::new(io::ErrorKind::TimedOut, "clipboard transfer timed out"))
-        })
+        self.control
+            .as_ref()
+            .and_then(|control| control.error(now))
+            .or_else(|| {
+                (now >= self.deadline).then(|| {
+                    io::Error::new(io::ErrorKind::TimedOut, "clipboard transfer timed out")
+                })
+            })
     }
 
     fn finish(self, result: io::Result<()>) {
@@ -100,7 +121,10 @@ impl Transfers {
     }
 
     pub(super) fn timeout(&self, now: Instant) -> Option<Duration> {
-        self.active.values().map(|transfer| transfer.deadline.saturating_duration_since(now)).min()
+        self.active
+            .values()
+            .map(|transfer| transfer.deadline.saturating_duration_since(now))
+            .min()
     }
 }
 
@@ -114,40 +138,45 @@ impl State {
             Err(error) => {
                 reply.finish(Err(error));
                 return;
-            },
+            }
         };
         let memory = match Counter::reserve(self.client.memory.clone(), 0, MAX_RETAINED_BYTES) {
             Ok(memory) => memory,
             Err(error) => {
                 reply.finish(Err(error));
                 return;
-            },
+            }
         };
         let control = reply.control();
-        let deadline = control.as_ref().map_or_else(|| Instant::now() + TIMEOUT, |c| c.deadline);
+        let deadline = control
+            .as_ref()
+            .map_or_else(|| Instant::now() + TIMEOUT, |c| c.deadline);
         self.transfers.active.insert(
             id,
             Transfer {
                 token: None,
                 deadline,
                 control,
-                body: Body::Read { bytes: Vec::new(), memory, reply },
+                body: Body::Read {
+                    bytes: Vec::new(),
+                    memory,
+                    reply,
+                },
             },
         );
-        match self
-            .loop_handle
-            .insert_source(pipe, move |_, file, state| state.read_ready(id, file.as_ref()))
-        {
+        match self.loop_handle.insert_source(pipe, move |_, file, state| {
+            state.read_ready(id, file.as_ref())
+        }) {
             Ok(token) => {
                 if let Some(transfer) = self.transfers.active.get_mut(&id) {
                     transfer.token = Some(token);
                 }
-            },
+            }
             Err(error) => {
                 if let Some(transfer) = self.transfers.active.remove(&id) {
                     transfer.finish(Err(io::Error::other(error.to_string())));
                 }
-            },
+            }
         }
     }
 
@@ -156,7 +185,9 @@ impl State {
         if bytes.is_empty() {
             return;
         }
-        let Ok(id) = self.transfers.next_id() else { return };
+        let Ok(id) = self.transfers.next_id() else {
+            return;
+        };
         if set_non_blocking(&pipe).is_err() {
             return;
         }
@@ -166,21 +197,24 @@ impl State {
                 token: None,
                 deadline: Instant::now() + TIMEOUT,
                 control: None,
-                body: Body::Write { _offer: offer, bytes, written: 0 },
+                body: Body::Write {
+                    _offer: offer,
+                    bytes,
+                    written: 0,
+                },
             },
         );
-        match self
-            .loop_handle
-            .insert_source(pipe, move |_, file, state| state.write_ready(id, file.as_ref()))
-        {
+        match self.loop_handle.insert_source(pipe, move |_, file, state| {
+            state.write_ready(id, file.as_ref())
+        }) {
             Ok(token) => {
                 if let Some(transfer) = self.transfers.active.get_mut(&id) {
                     transfer.token = Some(token);
                 }
-            },
+            }
             Err(_) => {
                 self.transfers.active.remove(&id);
-            },
+            }
         }
     }
 
@@ -270,9 +304,9 @@ fn read_available(
                 if progressed >= DISPATCH_BYTES {
                     return None;
                 }
-            },
+            }
             Err(error) if error.kind() == io::ErrorKind::WouldBlock => return None,
-            Err(error) if error.kind() == io::ErrorKind::Interrupted => {},
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
             Err(error) => return Some(Err(error)),
         }
     }
@@ -286,14 +320,16 @@ fn write_available(
 ) -> Option<io::Result<()>> {
     let mut progressed = 0;
     for _ in 0..128 {
-        let end = bytes.len().min(written.saturating_add(DISPATCH_BYTES - progressed));
+        let end = bytes
+            .len()
+            .min(written.saturating_add(DISPATCH_BYTES - progressed));
         match writer.write(&bytes[*written..end]) {
             Ok(0) => {
                 return Some(Err(io::Error::new(
                     io::ErrorKind::WriteZero,
                     "clipboard pipe closed",
                 )));
-            },
+            }
             Ok(count) => {
                 *written += count;
                 progressed += count;
@@ -303,11 +339,245 @@ fn write_available(
                 if progressed >= DISPATCH_BYTES {
                     return None;
                 }
-            },
+            }
             Err(error) if error.kind() == io::ErrorKind::WouldBlock => return None,
-            Err(error) if error.kind() == io::ErrorKind::Interrupted => {},
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
             Err(error) => return Some(Err(error)),
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::rich::{Client, MAX_RETAINED_BYTES};
+    use crate::worker::Command;
+    use sctk::reexports::calloop::channel;
+    use std::future::Future;
+    use std::io::Cursor;
+    use std::pin::Pin;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::task::{Context, Poll, Waker};
+
+    struct ChunkReader {
+        data: Cursor<Vec<u8>>,
+        calls: usize,
+    }
+
+    impl Read for ChunkReader {
+        fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+            self.calls += 1;
+            if self.calls % 3 == 0 {
+                return Err(io::ErrorKind::WouldBlock.into());
+            }
+            let end = buffer.len().min(127);
+            self.data.read(&mut buffer[..end])
+        }
+    }
+
+    #[derive(Default)]
+    struct ChunkWriter {
+        bytes: Vec<u8>,
+        calls: usize,
+    }
+
+    impl Write for ChunkWriter {
+        fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+            self.calls += 1;
+            if self.calls % 5 == 0 {
+                return Err(io::ErrorKind::WouldBlock.into());
+            }
+            let count = bytes.len().min(31);
+            self.bytes.extend_from_slice(&bytes[..count]);
+            Ok(count)
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    fn memory() -> (Arc<AtomicUsize>, Counter) {
+        let used = Arc::new(AtomicUsize::new(0));
+        let counter = Counter::reserve(used.clone(), 0, MAX_RETAINED_BYTES).unwrap();
+        (used, counter)
+    }
+
+    #[test]
+    fn short_binary_reads_and_would_block_preserve_every_byte_until_eof() {
+        let expected: Vec<_> = (0..70_003).map(|index| (index % 256) as u8).collect();
+        let mut reader = ChunkReader {
+            data: Cursor::new(expected.clone()),
+            calls: 0,
+        };
+        let mut received = Vec::new();
+        let (used, mut memory) = memory();
+        let mut done = false;
+        for _ in 0..10_000 {
+            let previous_calls = reader.calls;
+            if let Some(result) = read_available(&mut reader, &mut received, &mut memory) {
+                result.unwrap();
+                done = true;
+                break;
+            }
+            assert!(reader.calls - previous_calls <= 128);
+        }
+        assert!(done, "the pipe must reach EOF");
+        assert_eq!(received, expected);
+        assert_eq!(used.load(Ordering::Acquire), received.len());
+        drop(memory);
+        assert_eq!(used.load(Ordering::Acquire), 0);
+    }
+
+    #[test]
+    fn short_binary_writes_resume_from_the_exact_offset() {
+        let expected: Vec<_> = (0..70_003).map(|index| (index % 256) as u8).collect();
+        let mut writer = ChunkWriter::default();
+        let mut written = 0;
+        let mut done = false;
+        for _ in 0..10_000 {
+            let previous_calls = writer.calls;
+            if let Some(result) = write_available(&mut writer, &expected, &mut written) {
+                result.unwrap();
+                done = true;
+                break;
+            }
+            assert!(writer.calls - previous_calls <= 128);
+        }
+        assert!(done);
+        assert_eq!(written, expected.len());
+        assert_eq!(writer.bytes, expected);
+    }
+
+    #[test]
+    fn a_zero_write_terminates_instead_of_spinning() {
+        struct Closed;
+        impl Write for Closed {
+            fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+                Ok(0)
+            }
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+        let mut written = 0;
+        let error = write_available(&mut Closed, b"payload", &mut written)
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::WriteZero);
+        assert_eq!(written, 0);
+    }
+
+    #[test]
+    fn repeated_interrupts_are_bounded_per_dispatch() {
+        struct Interrupted(usize);
+        impl Read for Interrupted {
+            fn read(&mut self, _: &mut [u8]) -> io::Result<usize> {
+                self.0 += 1;
+                Err(io::ErrorKind::Interrupted.into())
+            }
+        }
+        impl Write for Interrupted {
+            fn write(&mut self, _: &[u8]) -> io::Result<usize> {
+                self.0 += 1;
+                Err(io::ErrorKind::Interrupted.into())
+            }
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+        let (_, mut memory) = memory();
+        let mut read = Interrupted(0);
+        assert!(read_available(&mut read, &mut Vec::new(), &mut memory).is_none());
+        assert_eq!(read.0, 128);
+        let mut write = Interrupted(0);
+        assert!(write_available(&mut write, b"payload", &mut 0).is_none());
+        assert_eq!(write.0, 128);
+    }
+
+    #[test]
+    fn a_read_cannot_exceed_its_representation_or_shared_retention_budget() {
+        let used = Arc::new(AtomicUsize::new(0));
+        let occupied =
+            Counter::reserve(used.clone(), MAX_RETAINED_BYTES - 3, MAX_RETAINED_BYTES).unwrap();
+        let mut memory = Counter::reserve(used.clone(), 0, MAX_RETAINED_BYTES).unwrap();
+        let mut bytes = Vec::new();
+        let mut reader = Cursor::new(b"four");
+        assert!(
+            read_available(&mut reader, &mut bytes, &mut memory)
+                .unwrap()
+                .is_err()
+        );
+        assert!(bytes.is_empty());
+        assert_eq!(used.load(Ordering::Acquire), MAX_RETAINED_BYTES - 3);
+        drop(occupied);
+
+        let mut full = vec![0; MAX_BYTES];
+        let mut one_more = Cursor::new([1]);
+        assert!(
+            read_available(&mut one_more, &mut full, &mut memory)
+                .unwrap()
+                .is_err()
+        );
+        assert_eq!(full.len(), MAX_BYTES);
+    }
+
+    #[test]
+    fn expiry_returns_an_error_instead_of_delivering_a_partial_read() {
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let (_, memory) = memory();
+        let transfer = Transfer {
+            token: None,
+            deadline: Instant::now(),
+            control: None,
+            body: Body::Read {
+                bytes: b"partial".to_vec(),
+                memory,
+                reply: ReadReply::Text {
+                    sender,
+                    mime_type: MimeType::TextPlain,
+                },
+            },
+        };
+        let error = transfer.error(Instant::now()).unwrap();
+        assert_eq!(error.kind(), io::ErrorKind::TimedOut);
+        transfer.finish(Err(error));
+        assert_eq!(
+            receiver.try_recv().unwrap().unwrap_err().kind(),
+            io::ErrorKind::TimedOut
+        );
+    }
+
+    #[test]
+    fn binary_completion_does_not_apply_the_legacy_text_normalizer() {
+        let (sender, commands) = channel::channel();
+        let client = Client::new(100_000, sender);
+        client.inner.ready.store(true, Ordering::Release);
+        let mut request = client.read(vec!["image/png".into()]);
+        let Command::Rich(crate::rich::Operation::Read { completion, .. }) =
+            commands.try_recv().unwrap()
+        else {
+            panic!()
+        };
+        let bytes = vec![0, 255, b'\r', b'\n', 128];
+        ReadReply::Binary {
+            completion,
+            mime_type: "image/png".into(),
+        }
+        .finish(Ok(bytes.clone()));
+        let result = Pin::new(&mut request).poll(&mut Context::from_waker(Waker::noop()));
+        assert!(
+            matches!(result, Poll::Ready(Ok(Some(data))) if data.bytes == bytes && data.mime_type == "image/png")
+        );
+        client.stop(100_000);
+
+        let (sender, receiver) = std::sync::mpsc::channel();
+        ReadReply::Text {
+            sender,
+            mime_type: MimeType::TextPlain,
+        }
+        .finish(Ok(b"a\r\nb\rc".to_vec()));
+        assert_eq!(receiver.try_recv().unwrap().unwrap(), "a\nb\nc");
+    }
 }

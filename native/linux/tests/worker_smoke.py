@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run only against a disposable X11/Wayland session; replaces its clipboard."""
+"""Run only against a disposable X11 session; replaces its clipboard."""
 import base64
 import json
 import selectors
