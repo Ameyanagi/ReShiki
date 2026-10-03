@@ -445,8 +445,8 @@ impl Writer<'_> {
                 .filter(|atom| atom.id == group.anchor)
                 .ok_or_else(|| invalid("Missing original abbreviation anchor"))?;
             // The label's paint can differ from its hidden anchor's halo.
-            // Keep each automatic foreground legible when ChemDraw expands
-            // the label; explicit user foreground colors still take priority.
+            // Store each foreground independently for editable exchange and
+            // ReShiki expansion; explicit user foregrounds take priority.
             style.color = crate::palette::Color::Custom(
                 self.original
                     .canvas_theme
