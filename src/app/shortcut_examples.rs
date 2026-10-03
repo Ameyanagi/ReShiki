@@ -44,7 +44,7 @@ impl App {
         self.tab.camera.zoom = 0.5;
         self.tab.fit_to_view = false;
         self.status =
-            "Shortcut examples · Pan or zoom to browse; double-click a structure to copy it".into();
+            "Shortcut examples · Pan or zoom to browse; double-click to select, then copy".into();
         self.error = false;
         Ok(())
     }
