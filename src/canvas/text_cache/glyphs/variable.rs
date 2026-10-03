@@ -4,46 +4,76 @@ use super::text::cosmic_text::{CacheKey, CacheKeyFlags, FontSystem, SwashCache};
 use swash::scale::ScaleContext;
 use swash::zeno::{Angle, PathData as _, Transform};
 
-/// cosmic-text's family fallback requires an exact metadata weight. A variable
-/// face's OS/2 default (often 100) otherwise hides it from normal/bold requests.
-/// Alias only the selected variable face at the requested weight; source bytes,
-/// collection index, style and family are unchanged. Iced has nine weights, so
-/// each installed face can acquire at most nine aliases for this process.
-pub(super) fn prepare_weight(fonts: &mut FontSystem, attrs: &super::text::cosmic_text::Attrs<'_>) {
+/// Prepare the nine Iced weights before any GUI paragraph or editor is shaped.
+/// cosmic-text's family fallback requires an exact metadata weight, otherwise a
+/// variable face's OS/2 default (often 100) can hide it from normal/bold requests.
+/// Query all weights before mutation and restrict each alias to the family names
+/// that selected its physical face. Mixed families can also need static aliases:
+/// these preserve CSS weight selection when variable aliases add exact matches.
+/// Static-only families and every physical font program remain unchanged.
+pub(super) fn prepare_system_weights(fonts: &mut FontSystem) -> usize {
     use super::text::cosmic_text::fontdb;
+    use std::collections::{HashMap, HashSet};
     let db = fonts.db();
-    let Some(id) = db.query(&fontdb::Query {
-        families: &[attrs.family],
-        weight: attrs.weight,
-        stretch: attrs.stretch,
-        style: attrs.style,
-    }) else {
-        return;
-    };
-    let Some(info) = db.face(id) else {
-        return;
-    };
-    if info.weight == attrs.weight {
-        return;
-    }
-    let has_weight_axis = db
-        .with_face_data(id, |bytes, index| {
-            ttf_parser::Face::parse(bytes, index)
-                .ok()
-                .is_some_and(|face| {
-                    face.variation_axes()
-                        .into_iter()
-                        .any(|axis| axis.tag == ttf_parser::Tag::from_bytes(b"wght"))
-                })
+    // Parse each original face once, rather than once per requested weight.
+    let variable_ids: HashSet<_> = db
+        .faces()
+        .filter_map(|info| {
+            db.with_face_data(info.id, |bytes, index| {
+                ttf_parser::Face::parse(bytes, index)
+                    .ok()
+                    .is_some_and(|face| {
+                        face.variation_axes()
+                            .into_iter()
+                            .any(|axis| axis.tag == ttf_parser::Tag::from_bytes(b"wght"))
+                    })
+            })
+            .unwrap_or(false)
+            .then_some(info.id)
         })
-        .unwrap_or(false);
-    if !has_weight_axis {
-        return;
+        .collect();
+    let mut prepared = HashMap::new();
+    let mut aliases: Vec<fontdb::FaceInfo> = Vec::new();
+    for info in db.faces().filter(|info| variable_ids.contains(&info.id)) {
+        for (family, _) in &info.families {
+            for weight in [100, 200, 300, 400, 500, 600, 700, 800, 900] {
+                let Some(id) = db.query(&fontdb::Query {
+                    families: &[fontdb::Family::Name(family)],
+                    weight: fontdb::Weight(weight),
+                    style: info.style,
+                    stretch: info.stretch,
+                }) else {
+                    continue;
+                };
+                let selected = db.face(id).unwrap();
+                if selected.weight.0 == weight {
+                    continue;
+                }
+                let index = *prepared.entry((id, weight)).or_insert_with(|| {
+                    let index = aliases.len();
+                    let mut alias = selected.clone();
+                    alias.id = fontdb::ID::dummy();
+                    alias.weight = fontdb::Weight(weight);
+                    alias.families.clear();
+                    aliases.push(alias);
+                    index
+                });
+                for name in selected.families.iter().filter(|(name, _)| name == family) {
+                    if !aliases[index].families.contains(name) {
+                        aliases[index].families.push(name.clone());
+                    }
+                }
+            }
+        }
     }
-    let mut alias = info.clone();
-    alias.id = fontdb::ID::dummy();
-    alias.weight = attrs.weight;
-    fonts.db_mut().push_face_info(alias);
+    let count = aliases.len();
+    if !aliases.is_empty() {
+        let db = fonts.db_mut();
+        for alias in aliases {
+            db.push_face_info(alias);
+        }
+    }
+    count
 }
 
 /// cosmic-text 0.15 applies the requested weight when shaping and rasterizing,
@@ -231,14 +261,14 @@ mod tests {
             }
             fonts.db_mut().set_sans_serif_family("Fallback fixture");
             let initial_count = fonts.db().len();
+            assert_eq!(prepare_system_weights(&mut fonts), 8);
+            let count = fonts.db().len();
+            assert_eq!(prepare_system_weights(&mut fonts), 0);
+            assert_eq!(fonts.db().len(), count, "Alias creation must be idempotent");
             for weight in [400, 700] {
                 let attrs = Attrs::new()
                     .family(fontdb::Family::Name(&family))
                     .weight(fontdb::Weight(weight));
-                prepare_weight(&mut fonts, &attrs);
-                let count = fonts.db().len();
-                prepare_weight(&mut fonts, &attrs);
-                assert_eq!(fonts.db().len(), count, "Alias creation must be idempotent");
                 let mut buffer = Buffer::new(&mut fonts, Metrics::new(1000., 1200.));
                 buffer.set_text(&mut fonts, "HNO", &attrs, Shaping::Advanced, None);
                 buffer.shape_until_scroll(&mut fonts, false);
@@ -261,7 +291,167 @@ mod tests {
                     assert!((glyph.w - f32::from(expected)).abs() <= 0.51);
                 }
             }
-            assert_eq!(fonts.db().len(), initial_count + 2);
+            assert_eq!(fonts.db().len(), initial_count + 8);
+        }
+    }
+
+    #[test]
+    fn startup_weights_shape_first_use_and_preserve_static_duplicate_choices() {
+        use super::super::text::cosmic_text::{Attrs, Buffer, Metrics, Shaping};
+        for bytes in [TT, CFF2] {
+            let (mut fonts, _) = font_system(bytes);
+            assert_eq!(prepare_system_weights(&mut fonts), 8);
+            assert_eq!(fonts.db().len(), 9);
+            assert_eq!(prepare_system_weights(&mut fonts), 0);
+            for weight in [400, 700] {
+                let attrs = Attrs::new()
+                    .family(fontdb::Family::Name("ReShiki Font Export Fixture"))
+                    .weight(fontdb::Weight(weight));
+                let mut buffer = Buffer::new(&mut fonts, Metrics::new(20., 24.));
+                buffer.set_text(&mut fonts, "HNO", &attrs, Shaping::Advanced, None);
+                buffer.shape_until_scroll(&mut fonts, false);
+                for glyph in buffer.layout_runs().flat_map(|run| run.glyphs) {
+                    let face = fonts.get_font(glyph.font_id, glyph.font_weight).unwrap();
+                    assert_eq!(face.data(), bytes);
+                    assert_eq!(glyph.font_weight.0, weight);
+                }
+            }
+        }
+        let controls = [
+            include_bytes!("../../../../tests/fixtures/font-export-103/static-400.subset.ttf")
+                .as_slice(),
+            include_bytes!("../../../../tests/fixtures/font-export-103/static-700.subset.ttf")
+                .as_slice(),
+        ];
+        for variable_first in [false, true] {
+            let mut db = fontdb::Database::new();
+            if variable_first {
+                db.load_font_data(TT.to_vec());
+            }
+            for bytes in controls {
+                db.load_font_data(bytes.to_vec());
+            }
+            if !variable_first {
+                db.load_font_data(TT.to_vec());
+            }
+            let mut fonts = FontSystem::new_with_locale_and_db("en-US".into(), db);
+            let expected: Vec<_> = (100..=900)
+                .step_by(100)
+                .map(|weight| {
+                    let id = fonts
+                        .db()
+                        .query(&fontdb::Query {
+                            families: &[fontdb::Family::Name("ReShiki Font Export Fixture")],
+                            weight: fontdb::Weight(weight),
+                            ..Default::default()
+                        })
+                        .unwrap();
+                    fonts
+                        .db()
+                        .with_face_data(id, |bytes, index| (weight, bytes.to_vec(), index))
+                        .unwrap()
+                })
+                .collect();
+            prepare_system_weights(&mut fonts);
+            for (weight, bytes, index) in expected {
+                let id = fonts
+                    .db()
+                    .query(&fontdb::Query {
+                        families: &[fontdb::Family::Name("ReShiki Font Export Fixture")],
+                        weight: fontdb::Weight(weight),
+                        ..Default::default()
+                    })
+                    .unwrap();
+                fonts
+                    .db()
+                    .with_face_data(id, |actual, i| {
+                        assert_eq!(
+                            actual, bytes,
+                            "Startup aliases changed the original query for weight {weight}"
+                        );
+                        assert_eq!(i, index);
+                    })
+                    .unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn startup_aliases_preserve_shared_family_and_intermediate_static_choices() {
+        for static_weight in [450, 600] {
+            for reverse in [false, true] {
+                let (variable_db, _) = font_system(TT);
+                let mut variable = variable_db.db().faces().next().unwrap().clone();
+                let language = variable.families[0].1;
+                variable.families =
+                    vec![("Family A".into(), language), ("Family B".into(), language)];
+                let static_bytes = include_bytes!(
+                    "../../../../tests/fixtures/font-export-103/static-400.subset.ttf"
+                );
+                let (static_db, _) = font_system(static_bytes);
+                let mut control = static_db.db().faces().next().unwrap().clone();
+                // Explicit face metadata constructs the CSS selection case; the
+                // immutable static program is only a physical-source identity.
+                control.weight = fontdb::Weight(static_weight);
+                control.families = vec![
+                    ("Family B".into(), language),
+                    ("Static only".into(), language),
+                ];
+                let mut db = fontdb::Database::new();
+                if reverse {
+                    db.push_face_info(control);
+                    db.push_face_info(variable);
+                } else {
+                    db.push_face_info(variable);
+                    db.push_face_info(control);
+                }
+                let mut fonts = FontSystem::new_with_locale_and_db("en-US".into(), db);
+                let mut original = Vec::new();
+                for family in ["Family A", "Family B", "Static only"] {
+                    for weight in (100..=900).step_by(100) {
+                        let id = fonts
+                            .db()
+                            .query(&fontdb::Query {
+                                families: &[fontdb::Family::Name(family)],
+                                weight: fontdb::Weight(weight),
+                                ..Default::default()
+                            })
+                            .unwrap();
+                        original.push((
+                            family,
+                            weight,
+                            fonts
+                                .db()
+                                .with_face_data(id, |bytes, index| (bytes.to_vec(), index))
+                                .unwrap(),
+                        ));
+                    }
+                }
+                prepare_system_weights(&mut fonts);
+                for (family, weight, (expected, index)) in original {
+                    let id = fonts
+                        .db()
+                        .query(&fontdb::Query {
+                            families: &[fontdb::Family::Name(family)],
+                            weight: fontdb::Weight(weight),
+                            ..Default::default()
+                        })
+                        .unwrap();
+                    fonts.db().with_face_data(id,|actual,actual_index| {
+                        assert_eq!(actual,expected,"{family}/{weight}/static{static_weight}: aliases displaced the original physical face");
+                        assert_eq!(actual_index,index);
+                    }).unwrap();
+                }
+                assert_eq!(
+                    fonts
+                        .db()
+                        .faces()
+                        .filter(|face| face.families.iter().any(|(name, _)| name == "Static only"))
+                        .count(),
+                    1,
+                    "A static-only family must not acquire aliases"
+                );
+            }
         }
     }
 
@@ -273,7 +463,7 @@ mod tests {
         let (mut fonts, id) = font_system(bytes);
         let family = fonts.db().face(id).unwrap().families[0].0.clone();
         let attrs = Attrs::new().family(fontdb::Family::Name(&family));
-        prepare_weight(&mut fonts, &attrs);
+        assert_eq!(prepare_system_weights(&mut fonts), 0);
         assert_eq!(fonts.db().len(), 1);
         for size in [8., 14., 28., 59.08, 120.] {
             let glyph_id = ttf_parser::Face::parse(bytes, 0)

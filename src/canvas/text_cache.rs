@@ -8,6 +8,10 @@ use iced::{
 use reshiki::typography::TextStyle;
 use std::{collections::HashMap, rc::Rc};
 
+pub(crate) fn prepare_fonts() {
+    glyphs::prepare_fonts();
+}
+
 #[derive(Hash, PartialEq, Eq)]
 struct Key {
     text: String,

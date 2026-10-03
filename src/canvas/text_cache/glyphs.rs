@@ -9,6 +9,16 @@ use text::cosmic_text::{Command, SwashCache};
 
 mod variable;
 
+pub(super) fn prepare_fonts() {
+    static PREPARED: std::sync::Once = std::sync::Once::new();
+    PREPARED.call_once(|| {
+        let mut fonts = text::font_system()
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        variable::prepare_system_weights(fonts.raw());
+    });
+}
+
 const BUDGET: usize = 2 * 1024 * 1024;
 const LIMIT: usize = 4096;
 
@@ -32,12 +42,7 @@ impl Glyphs {
     /// Keep Iced's unwrapped paragraph placement and raster fallback while
     /// honoring variable weights in both family selection and cached outlines.
     pub fn draw(&mut self, t: &Text, mut draw: impl FnMut(Path, Color)) {
-        {
-            let mut fonts = text::font_system()
-                .write()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            variable::prepare_weight(fonts.raw(), &text::to_attributes(t.font));
-        }
+        prepare_fonts();
         let paragraph = text::Paragraph::with_text(iced::advanced::text::Text {
             content: &t.content,
             bounds: Size::new(t.max_width, f32::INFINITY),
