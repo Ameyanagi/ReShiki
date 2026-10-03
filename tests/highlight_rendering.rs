@@ -331,8 +331,10 @@ fn molecular_ink_remains_after_highlight_paths_and_figure_formats_include_the_pa
 fn automatic_label_ink_uses_its_halo_background_and_manual_ink_keeps_precedence() {
     for canvas in CanvasTheme::ALL {
         for rgb in [[0; 3], [255; 3]] {
-            let mut doc = Document::default();
-            doc.canvas_theme = canvas;
+            let mut doc = Document {
+                canvas_theme: canvas,
+                ..Document::default()
+            };
             let a = doc.add_atom("O", Point::default());
             highlights::apply(&mut doc, &[a], Some(Color::Custom(rgb)));
             let atom = doc.atom(a).unwrap();
@@ -381,8 +383,10 @@ fn automatic_bond_ink_stays_legible_on_exact_highlights_without_mutating_its_col
 fn atom_halo_stays_above_different_incident_bond_colors_in_both_insertion_orders() {
     for canvas in CanvasTheme::ALL {
         for reverse in [false, true] {
-            let mut doc = Document::default();
-            doc.canvas_theme = canvas;
+            let mut doc = Document {
+                canvas_theme: canvas,
+                ..Document::default()
+            };
             let center = doc.add_atom("C", Point::default());
             let left = doc.add_atom("C", Point::new(-42., 0.));
             let right = doc.add_atom("C", Point::new(42., 0.));
