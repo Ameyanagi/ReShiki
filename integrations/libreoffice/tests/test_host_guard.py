@@ -50,6 +50,7 @@ class Model(CloseSource):
     def __init__(self):
         super().__init__()
         self.URL, self.modified = "file:///original.odt", False
+        self.controllers, self.document_events, self.modify_events = [], [], []
         self.frame = Frame(self)
 
     def getCurrentController(self):
@@ -57,16 +58,67 @@ class Model(CloseSource):
 
     def setModified(self, value):
         self.modified = value
+        for listener in tuple(self.modify_events):
+            listener.modified(SimpleNamespace(Source=self))
+
+    def isModified(self):
+        return self.modified
+
+    def hasLocation(self):
+        return bool(self.URL)
+
+    def getTitle(self):
+        return "Original"
+
+    def getControllers(self):
+        remaining = list(self.controllers)
+        return SimpleNamespace(
+            hasMoreElements=lambda: bool(remaining), nextElement=lambda: remaining.pop(0)
+        )
+
+    def addDocumentEventListener(self, listener):
+        self.document_events.append(listener)
+
+    def removeDocumentEventListener(self, listener):
+        self.document_events.remove(listener)
+
+    def addModifyListener(self, listener):
+        self.modify_events.append(listener)
+
+    def removeModifyListener(self, listener):
+        self.modify_events.remove(listener)
+
+    def event(self, name, controller):
+        for listener in tuple(self.document_events):
+            listener.documentEventOccured(
+                SimpleNamespace(Source=self, EventName=name, ViewController=controller)
+            )
+
+    def closed(self, disposal=False):
+        super().closed(disposal)
+        if disposal:
+            for listener in tuple(self.document_events) + tuple(self.modify_events):
+                listener.disposing(SimpleNamespace(Source=self))
+            self.document_events.clear()
+            self.modify_events.clear()
 
 
 class Frame(CloseSource):
     def __init__(self, model):
         super().__init__()
-        self.controller = SimpleNamespace(getModel=lambda: model, getFrame=lambda: self)
+        self.model = model
+        self.controller = SimpleNamespace(
+            getModel=lambda: model, getFrame=lambda: self, suspend=lambda value: True
+        )
+        model.controllers.append(self.controller)
         self.locks, self.adds, self.removes = 2, 0, 0  # Two locks belong to other code.
         self.fail_lock, self.on_unlock = False, None
         self.dispatches, self.results = [], []
         self.dispatch_error = None
+        self.interceptors = []
+        self.native_provider = SimpleNamespace(queryDispatch=lambda *args: self)
+        self.interceptor_adds = self.interceptor_removes = 0
+        self.fail_interceptor_add = self.fail_interceptor_remove = False
 
     def getController(self):
         return self.controller
@@ -84,13 +136,40 @@ class Frame(CloseSource):
             self.on_unlock()
 
     def queryDispatch(self, url, target, flags):
-        return self
+        provider = self.interceptors[0] if self.interceptors else self.native_provider
+        return provider.queryDispatch(url, target, flags)
+
+    def registerDispatchProviderInterceptor(self, interceptor):
+        self.interceptor_adds += 1
+        if self.fail_interceptor_add:
+            raise RuntimeError("interceptor registration failed")
+        interceptor.setMasterDispatchProvider(self)
+        interceptor.setSlaveDispatchProvider(
+            self.interceptors[0] if self.interceptors else self.native_provider
+        )
+        self.interceptors.insert(0, interceptor)
+
+    def releaseDispatchProviderInterceptor(self, interceptor):
+        self.interceptor_removes += 1
+        if self.fail_interceptor_remove:
+            raise RuntimeError("interceptor removal failed")
+        if interceptor in self.interceptors:
+            self.interceptors.remove(interceptor)
 
     def dispatchWithNotification(self, url, args, listener):
         self.dispatches.append(url.Complete)
         if self.dispatch_error:
             raise RuntimeError(self.dispatch_error)
         self.results.append(listener)
+        if listener is not None:
+            listener.dispatchFinished(SimpleNamespace(State=extension.FAILURE, Result=False))
+
+    def closed(self, disposal=False):
+        controller = self.controller
+        super().closed(disposal)
+        if controller in self.model.controllers:
+            self.model.controllers.remove(controller)
+        self.controller = None
 
 
 class Process:
@@ -112,8 +191,6 @@ class HostGuardTests(unittest.TestCase):
         self.queue = []
         extension.HOST_GUARDS.clear()
         self.addCleanup(extension.HOST_GUARDS.clear)
-        extension.RETIRED_HOST_GUARDS.clear()
-        self.addCleanup(extension.RETIRED_HOST_GUARDS.clear)
         self.post = patch.object(
             extension, "post", side_effect=lambda ctx, action: self.queue.append(action)
         )
@@ -122,6 +199,9 @@ class HostGuardTests(unittest.TestCase):
         errors = patch.object(extension, "show_error")
         self.errors = errors.start()
         self.addCleanup(errors.stop)
+        choices = patch.object(extension, "choose_host_close", return_value="discard")
+        self.choices = choices.start()
+        self.addCleanup(choices.stop)
         self.serial = 0
 
     def owner(self, model=None):
@@ -174,7 +254,7 @@ class HostGuardTests(unittest.TestCase):
             if "Your saved drawing remains at:" in str(call.args[1])
         ]
 
-    def test_false_host_broadcasts_veto_and_finish_never_auto_closes(self):
+    def test_false_host_broadcasts_retain_taint_but_finish_never_auto_closes(self):
         owner = self.owner()
         session = self.session(owner)
         self.vetoed(self.model)
@@ -182,10 +262,13 @@ class HostGuardTests(unittest.TestCase):
         owner._finish(session)
         self.pump()
         self.assertEqual(self.model.frame.dispatches, [])
-        self.assertEqual(self.model.listeners, [])
-        self.assertEqual(self.model.frame.listeners, [])
+        self.choices.assert_not_called()
+        self.assertTrue(session["guard"].tainted)
+        self.assertEqual(len(self.model.listeners), 1)
+        self.assertEqual(len(self.model.frame.listeners), 1)
         self.assertEqual(self.model.frame.locks, 2)
-        self.assertEqual(extension.HOST_GUARDS, [])
+        self.assertEqual(extension.HOST_GUARDS, [session["guard"]])
+        self.assertTrue(session["directory"].exists())
 
     def test_two_objects_share_guard_across_save_as_and_release_exact_tokens(self):
         first, second = self.owner(), self.owner()
@@ -247,11 +330,11 @@ class HostGuardTests(unittest.TestCase):
                 self.pump()
                 self.assertTrue(self.model.modified)  # No implicit store or clear-modified.
                 self.assertEqual(self.model.frame.dispatches, [command])
-                self.model.frame.results[0].dispatchFinished(SimpleNamespace(State=0))
+                self.model.frame.results[0].dispatchFinished(SimpleNamespace(State=0, Result=False))
                 self.pump()
                 self.assertIn(kind, guard.obligations)
                 self.assertEqual(self.model.frame.dispatches, [command])
-                source.closed()
+                source.closed(disposal=True)
                 self.assertNotIn(kind, guard.obligations)
 
     def test_new_true_request_after_cancel_gets_one_new_source_correct_retry(self):
@@ -264,7 +347,7 @@ class HostGuardTests(unittest.TestCase):
                 self.vetoed(source, True)
                 first._finish(a)
                 self.pump()
-                self.model.frame.results[0].dispatchFinished(SimpleNamespace(State=0))
+                self.model.frame.results[0].dispatchFinished(SimpleNamespace(State=0, Result=False))
                 self.pump()
                 self.assertEqual(self.model.frame.dispatches, [command])
                 second = self.owner()
@@ -274,38 +357,35 @@ class HostGuardTests(unittest.TestCase):
                 second._finish(b)
                 self.pump()
                 self.assertEqual(self.model.frame.dispatches, [command, command])
-                self.model.frame.results[1].dispatchFinished(SimpleNamespace(State=0))
+                self.model.frame.results[1].dispatchFinished(SimpleNamespace(State=0, Result=False))
                 self.pump()
                 self.assertEqual(self.model.frame.dispatches, [command, command])
-                source.closed()
+                source.closed(disposal=True)
 
-    def test_retained_frame_duty_does_not_block_later_view_or_invalidate_its_session(self):
+    def test_old_frame_duty_shares_model_taint_without_invalidating_later_view_session(self):
         first = self.owner()
         a = self.session(first)
         old_frame = self.model.frame
         self.vetoed(old_frame, True)
         first._finish(a)
         self.pump()
-        old_frame.results[0].dispatchFinished(SimpleNamespace(State=0))
         self.model.frame = Frame(self.model)
         second = self.owner()
         b = self.session(second, running=True)
-        self.assertIsNot(a["guard"], b["guard"])
-        self.assertIn(a["guard"], extension.RETIRED_HOST_GUARDS)
+        self.assertIs(a["guard"], b["guard"])
         self.assertEqual(extension.HOST_GUARDS, [b["guard"]])
         self.assertEqual(a["guard"].obligations, {"frame": True})
-        old_frame.query(False)  # Its idle guard must not veto the new frame's edit.
+        self.vetoed(old_frame)  # Every same-model view protects the current editor.
         self.vetoed(self.model)
         self.vetoed(self.model.frame)
-        old_frame.closed(disposal=True)
-        self.assertEqual(extension.RETIRED_HOST_GUARDS, [])
+        old_frame.closed(disposal=True)  # Unexpected forced old-view disposal.
         self.assertEqual(extension.HOST_GUARDS, [b["guard"]])
         self.assertTrue(b["guard"].owns(second, b))
         self.assertFalse(b["invalid"])
         self.assertEqual(self.model.frame.locks, 3)
         self.assertEqual(self.model.frame.dispatches, [])
 
-    def test_new_true_before_old_cancel_callback_retries_without_stale_result_interference(self):
+    def test_late_old_result_cannot_rearm_or_consume_new_synchronous_close_permission(self):
         for kind, command in (("model", ".uno:CloseDoc"), ("frame", ".uno:CloseWin")):
             with self.subTest(kind=kind):
                 self.model = Model()
@@ -316,24 +396,21 @@ class HostGuardTests(unittest.TestCase):
                 first._finish(a)
                 self.pump()
                 old_result = self.model.frame.results[0]
+                self.assertIsNone(a["guard"].permit)
                 second = self.owner()
                 b = self.session(second)
                 self.vetoed(source, True)
                 second._finish(b)
                 self.pump()
-                self.assertEqual(self.model.frame.dispatches, [command])
-                old_result.dispatchFinished(SimpleNamespace(State=0))
-                self.pump()
                 self.assertEqual(self.model.frame.dispatches, [command, command])
-                new_result = self.model.frame.results[1]
-                old_result.dispatchFinished(SimpleNamespace(State=0))
-                self.assertIs(b["guard"].inflight[kind], new_result)
-                new_result.dispatchFinished(SimpleNamespace(State=0))
+                old_result.dispatchFinished(SimpleNamespace(State=1, Result=None))
                 self.pump()
+                self.assertIsNone(b["guard"].permit)
+                self.assertFalse(b["guard"].in_choice)
                 self.assertEqual(self.model.frame.dispatches, [command, command])
-                source.closed()
+                source.closed(disposal=True)
 
-    def test_multiple_retained_frames_keep_their_own_duties_without_redirecting(self):
+    def test_multiple_old_views_keep_exact_source_duties_without_redirecting(self):
         frames, guards = [], []
         for _ in range(3):
             owner = self.owner()
@@ -342,22 +419,22 @@ class HostGuardTests(unittest.TestCase):
             self.vetoed(frame, True)
             owner._finish(session)
             self.pump()
-            frame.results[0].dispatchFinished(SimpleNamespace(State=0))
             frames.append(frame)
             guards.append(session["guard"])
             self.model.frame = Frame(self.model)
         active = self.owner()
         current = self.session(active, running=True)
-        self.assertEqual(extension.RETIRED_HOST_GUARDS, guards)
-        for frame, guard in zip(frames, guards):
-            frame.controller = object()  # A later unrelated controller, never a retry target.
-            guard._settle()
+        self.assertTrue(all(guard is current["guard"] for guard in guards))
+        self.assertEqual(len(current["guard"].obligations), 3)
+        for frame in frames:
+            frame.controller = object()  # Replacement is never a retry target.
+            current["guard"]._settle()
             self.pump()
             self.assertEqual(frame.dispatches, [".uno:CloseWin"])
             frame.closed(disposal=True)
             self.assertTrue(current["guard"].owns(active, current))
         self.assertEqual(extension.HOST_GUARDS, [current["guard"]])
-        self.assertEqual(extension.RETIRED_HOST_GUARDS, [])
+        self.assertEqual(current["guard"].obligations, {})
 
     def test_actual_close_query_feedback_is_queued_deduplicated_and_cannot_suppress_veto(self):
         owner = self.owner()
@@ -381,7 +458,7 @@ class HostGuardTests(unittest.TestCase):
         owner._finish(session)
         self.pump()
         self.model.frame.controller = object()  # Start Center or a different document.
-        self.model.frame.results[0].dispatchFinished(SimpleNamespace(State=1))
+        self.model.frame.results[0].dispatchFinished(SimpleNamespace(State=1, Result=None))
         guard._settle()
         self.pump()
         self.assertIn("frame", guard.obligations)
@@ -410,7 +487,7 @@ class HostGuardTests(unittest.TestCase):
         owner._finish(session)
         self.pump()
         self.assertEqual(self.model.frame.dispatches, [".uno:CloseDoc"])
-        self.model.frame.results[0].dispatchFinished(SimpleNamespace(State=0))
+        self.model.frame.results[0].dispatchFinished(SimpleNamespace(State=0, Result=False))
         guard._settle()
         self.pump()
         self.assertEqual(self.model.frame.dispatches, [".uno:CloseDoc"])
@@ -430,7 +507,7 @@ class HostGuardTests(unittest.TestCase):
         self.pump()
         self.assertEqual(self.model.frame.dispatches, [".uno:CloseDoc"])
         self.assertEqual(b["guard"].obligations, {"frame": True, "model": True})
-        self.model.frame.results[0].dispatchFinished(SimpleNamespace(State=0))
+        self.model.frame.results[0].dispatchFinished(SimpleNamespace(State=0, Result=False))
         self.pump()
         self.assertEqual(self.model.frame.dispatches, [".uno:CloseDoc"])
 
@@ -450,13 +527,16 @@ class HostGuardTests(unittest.TestCase):
         self.assertEqual(guard.obligations, {"frame": False})
         self.assertEqual(self.model.frame.dispatches, [])
 
-    def test_partial_acquisition_and_spawn_failure_balance_only_owned_resources(self):
-        for failure in ("model listener", "frame listener", "lock", "spawn"):
+    def test_partial_protection_failure_retains_owned_barrier_and_spawn_failure_releases_edit_lock(
+        self,
+    ):
+        for failure in ("interceptor", "model listener", "frame listener", "lock", "spawn"):
             with self.subTest(failure=failure):
                 self.model = Model()
                 self.model.fail_add = failure == "model listener"
                 self.model.frame.fail_add = failure == "frame listener"
                 self.model.frame.fail_lock = failure == "lock"
+                self.model.frame.fail_interceptor_add = failure == "interceptor"
                 owner = self.owner()
                 with (
                     patch.object(extension, "executable", return_value="editor"),
@@ -466,11 +546,29 @@ class HostGuardTests(unittest.TestCase):
                 ):
                     owner.doVerb(0)
                 self.assertIsNone(owner.session)
-                self.assertEqual(self.model.listeners, [])
-                self.assertEqual(self.model.frame.listeners, [])
-                self.assertEqual(self.model.frame.locks, 2)
-                self.assertEqual(extension.HOST_GUARDS, [])
+                guard = next(item for item in extension.HOST_GUARDS if item.model == self.model)
                 self.assertEqual(launch.call_count, int(failure == "spawn"))
+                self.assertEqual(
+                    self.model.frame.locks, 3 if failure in ("interceptor", "frame listener") else 2
+                )
+                if failure == "spawn":
+                    self.assertIsNone(guard.unlock_error)
+                    self.assertFalse(guard.tainted)
+                    self.assertEqual(self.model.frame.removes, 1)
+                    self.model.query(False)  # Dormant untainted coverage delegates.
+                else:
+                    self.assertTrue(guard.unlock_error)
+                    self.assertTrue(guard.tainted)
+                    self.assertEqual(launch.call_count, 0)
+                    self.assertTrue(guard.recovery)
+                    with self.assertRaises(RuntimeError):
+                        guard.acquire(owner, {"token": "new"}, self.model.frame)
+                self.model.closed(disposal=True)
+                # If even the very first listener registration failed, disposal
+                # notification is the explicit unsupported host-failure boundary.
+                if not guard.invalid:
+                    guard.model_disposed()
+                self.assertNotIn(guard, extension.HOST_GUARDS)
 
     def test_ambiguous_unlock_failure_never_retries_or_claims_edit_action_can_recover(self):
         for decremented in (False, True):

@@ -20,8 +20,9 @@ from pathlib import Path
 
 import uno
 import unohelper
-from com.sun.star.awt import XCallback
+from com.sun.star.awt import XActionListener, XCallback
 from com.sun.star.datatransfer import UnsupportedFlavorException, XTransferable
+from com.sun.star.document import XDocumentEventListener
 from com.sun.star.embed import (
     WrongStateException,
     XEmbeddedObject,
@@ -30,12 +31,20 @@ from com.sun.star.embed import (
     XTransactionListener,
 )
 from com.sun.star.embed.EmbedStates import ACTIVE, LOADED, RUNNING
-from com.sun.star.frame import XDispatch, XDispatchProvider, XDispatchResultListener
+from com.sun.star.frame import (
+    XDispatch,
+    XDispatchProvider,
+    XDispatchProviderInterceptor,
+    XDispatchResultListener,
+    XInterceptorInfo,
+    XNotifyingDispatch,
+)
+from com.sun.star.frame.DispatchResultState import DONTKNOW, FAILURE, SUCCESS
 from com.sun.star.frame.InfobarType import DANGER, INFO
 from com.sun.star.io import IOException
 from com.sun.star.lang import XComponent, XInitialization, XServiceInfo
 from com.sun.star.uno import RuntimeException as UnoRuntimeException
-from com.sun.star.util import CloseVetoException, XCloseable, XCloseListener
+from com.sun.star.util import CloseVetoException, XCloseable, XCloseListener, XModifyListener
 
 CLASS_ID = "8E86A932-EBBE-4E9F-8D26-CA2D82096856"
 MIME = "application/vnd.reshiki.embedded-drawing"
@@ -250,9 +259,10 @@ def post(ctx, action):
     service(ctx, "com.sun.star.awt.AsyncCallback").addCallback(Callback(action), None)
 
 
-def show_error(ctx, message):
-    desktop = service(ctx, "com.sun.star.frame.Desktop")
-    frame = desktop.getCurrentFrame()
+def show_error(ctx, message, frame=None):
+    if frame is None:
+        desktop = service(ctx, "com.sun.star.frame.Desktop")
+        frame = desktop.getCurrentFrame()
     if frame:
         toolkit = service(ctx, "com.sun.star.awt.Toolkit")
         box = toolkit.createMessageBox(
@@ -351,7 +361,169 @@ class ReplacementTransaction(unohelper.Base, XTransactionListener):
 
 
 HOST_GUARDS = []  # UNO model equality, never a filename (Save As keeps the model).
-RETIRED_HOST_GUARDS = []  # No sessions: retain only old source-specific close duties.
+
+
+class CloseChoiceAction(unohelper.Base, XActionListener):
+    def __init__(self, dialog, choice):
+        self.dialog, self.choice, self.selected = dialog, choice, False
+
+    def actionPerformed(self, event):
+        self.selected = True
+        self.dialog.endExecute()
+
+    def disposing(self, event):
+        pass
+
+
+def choose_host_close(ctx, model, frame, all_views):
+    """Fresh user intent, parented to the captured document, never the active tab."""
+    title = model.getTitle()
+    scope = "this document and all of its windows" if all_views else "this window"
+    dialog_model = service(ctx, "com.sun.star.awt.UnoControlDialogModel")
+    dialog_model.Width, dialog_model.Height = 284, 100
+    dialog_model.Title = "Close document — ReShiki"
+    text = dialog_model.createInstance("com.sun.star.awt.UnoControlFixedTextModel")
+    text.PositionX, text.PositionY, text.Width, text.Height = 10, 10, 264, 46
+    text.MultiLine = True
+    text.Label = (
+        f"Close {scope} for “{title}”?\n"
+        "Choose whether to save the document's current changes. "
+        "Cancel keeps it open."
+    )
+    dialog_model.insertByName("message", text)
+    for index, (name, label) in enumerate(
+        (("save", "Save and Close"), ("discard", "Don't Save and Close"), ("cancel", "Cancel"))
+    ):
+        button = dialog_model.createInstance("com.sun.star.awt.UnoControlButtonModel")
+        button.PositionX, button.PositionY = 10 + index * 90, 68
+        button.Width, button.Height = 84, 20
+        button.Label, button.PushButtonType = label, 2 if name == "cancel" else 0
+        button.DefaultButton = name == "cancel"
+        dialog_model.insertByName(name, button)
+    dialog = service(ctx, "com.sun.star.awt.UnoControlDialog")
+    dialog.setModel(dialog_model)
+    actions = []
+    try:
+        for name in ("save", "discard"):
+            action = CloseChoiceAction(dialog, name)
+            dialog.getControl(name).addActionListener(action)
+            actions.append(action)
+        dialog.createPeer(service(ctx, "com.sun.star.awt.Toolkit"), frame.getContainerWindow())
+        dialog.execute()
+        return next((action.choice for action in actions if action.selected), "cancel")
+    finally:
+        dialog.dispose()
+
+
+def command_url(command):
+    url = uno.createUnoStruct("com.sun.star.util.URL")
+    url.Complete, url.Protocol, url.Path = command, ".uno:", command[5:]
+    return url
+
+
+class DispatchCompletion(unohelper.Base, XDispatchResultListener):
+    def __init__(self):
+        self.done, self.state, self.result = False, None, None
+
+    def dispatchFinished(self, event):
+        self.done, self.state, self.result = True, event.State, event.Result
+
+    def disposing(self, event):
+        self.done = True
+
+
+class GuardedCloseDispatch(unohelper.Base, XNotifyingDispatch):
+    def __init__(self, view, delegate):
+        self.view, self.delegate = view, delegate
+
+    def dispatch(self, url, args):
+        self.dispatchWithNotification(url, args, None)
+
+    def dispatchWithNotification(self, url, args, listener):
+        view, guard = self.view, self.view.guard
+        blocked = False
+        if not guard.invalid and not view.current():
+            # Cached dispatches may outlive a controller (e.g. a view switch).
+            # A replacement for this SAME model still needs its current guard;
+            # only an unrelated model may bypass the old model's protection.
+            controller = view.frame.getController()
+            if controller is not None and controller.getModel() == guard.model:
+                current = next(
+                    (item for item in guard.views if item.frame == view.frame and item.current()),
+                    None,
+                )
+                if current is None:
+                    guard.protection_failed(
+                        RuntimeError(
+                            "The document controller changed before protection was ready."
+                        ),
+                        HostView(guard, view.frame, controller, "untracked"),
+                    )
+                    blocked = True
+                else:
+                    view = current
+        if not blocked and view.current() and not guard.invalid:
+            kind = "model" if url.Complete == ".uno:CloseDoc" else view.kind
+            if guard.permits_dispatch(view, url.Complete):
+                pass
+            elif guard.blocks_close() or guard.in_choice:
+                guard.notice_veto(view)
+                blocked = True
+            elif guard.tainted:
+                guard.request_choice(kind)
+                blocked = True
+        if blocked:
+            state = FAILURE
+        elif hasattr(self.delegate, "dispatchWithNotification"):
+            self.delegate.dispatchWithNotification(url, args, listener)
+            return
+        else:
+            self.delegate.dispatch(url, args)
+            state = DONTKNOW
+        if listener is not None:
+            event = uno.createUnoStruct("com.sun.star.frame.DispatchResultEvent")
+            event.Source, event.State = self, state
+            listener.dispatchFinished(event)
+
+    def addStatusListener(self, listener, url):
+        self.delegate.addStatusListener(listener, url)
+
+    def removeStatusListener(self, listener, url):
+        self.delegate.removeStatusListener(listener, url)
+
+
+class HostCloseInterceptor(unohelper.Base, XDispatchProviderInterceptor, XInterceptorInfo):
+    URLS = (".uno:CloseWin", ".uno:CloseDoc", ".uno:CloseFrame", ".uno:Quit")
+
+    def __init__(self, view):
+        self.view, self.master, self.slave = view, None, None
+
+    def getInterceptedURLs(self):
+        return self.URLS
+
+    def getMasterDispatchProvider(self):
+        return self.master
+
+    def setMasterDispatchProvider(self, value):
+        self.master = value
+
+    def getSlaveDispatchProvider(self):
+        return self.slave
+
+    def setSlaveDispatchProvider(self, value):
+        self.slave = value
+
+    def queryDispatch(self, url, target, flags):
+        delegate = self.slave.queryDispatch(url, target, flags) if self.slave else None
+        if delegate is not None and url.Complete in self.URLS and target in ("", "_self", "_top"):
+            return GuardedCloseDispatch(self.view, delegate)
+        return delegate
+
+    def queryDispatches(self, descriptors):
+        return tuple(
+            self.queryDispatch(item.FeatureURL, item.FrameName, item.SearchFlags)
+            for item in descriptors
+        )
 
 
 class HostCloseListener(unohelper.Base, XCloseListener):
@@ -360,77 +532,143 @@ class HostCloseListener(unohelper.Base, XCloseListener):
         self.attached, self.alive = False, True
 
     def queryClosing(self, event, ownership):
-        if event.Source == self.source and self.guard.blocks_close():
-            if ownership:
-                # A fresh veto can occur in a later edit after an earlier retry
-                # was cancelled. Its new ownership must receive a new retry.
-                self.guard.obligations[self.kind] = False
-            self.guard.notice_veto()
-            raise CloseVetoException(
-                self.guard.unlock_error
-                or "Close the ReShiki editing window before closing this document.",
-                self,
-            )
+        guard = self.guard
+        if event.Source != self.source or guard.invalid:
+            return
+        if self.kind != "model" and not guard.view_for(self.kind).current():
+            return
+        if guard.permits(self.kind, closing_model=self.kind == "model"):
+            return
+        if not guard.tainted and not guard.blocks_close() and not guard.in_choice:
+            return
+        # Native macOS Quit/Desktop.terminate bypass dispatch interception. Its
+        # Save/Discard may already be cached by PrepareClose before this veto.
+        guard.tainted = True
+        if ownership:
+            guard.obligations[self.kind] = False
+        if guard.blocks_close() or guard.in_choice:
+            guard.notice_veto(guard.view_for(self.kind))
+        else:
+            guard.request_choice(self.kind)
+        raise CloseVetoException(
+            guard.unlock_error or "Choose whether to save before closing this document.", self
+        )
 
     def notifyClosing(self, event):
+        if event.Source == self.source and self.kind != "model":
+            self.guard.view_closed(self.kind)
+
+    def disposing(self, event):
         if event.Source == self.source:
-            self.guard.source_closed(self.kind)
+            if self.kind == "model":
+                self.guard.model_disposed()
+            else:
+                self.guard.view_closed(self.kind)
+
+
+class HostModelEvents(unohelper.Base, XDocumentEventListener, XModifyListener):
+    def __init__(self, guard):
+        self.guard = guard
+
+    def documentEventOccured(self, event):
+        guard = self.guard
+        if event.Source != guard.model or guard.invalid:
+            return
+        controller = event.ViewController
+        if event.EventName == "OnViewCreated" and controller is not None:
+            try:
+                guard.ensure_view(controller.getFrame(), controller)
+            except Exception as error:
+                guard.protection_failed(error)
+        elif event.EventName == "OnViewClosed" and controller is not None:
+            for view in tuple(guard.views):
+                if view.controller == controller:
+                    guard.view_closed(view.kind)
+
+    def modified(self, event):
+        if event.Source == self.guard.model:
+            # This is XModifyListener, not the boolean OnModifyChanged event.
+            self.guard.content_generation += 1
 
     def disposing(self, event):
-        self.notifyClosing(event)
+        if event.Source == self.guard.model:
+            self.guard.model_disposed()
 
 
-class CloseResult(unohelper.Base, XDispatchResultListener):
-    def __init__(self, guard, kind):
-        self.guard, self.kind = guard, kind
+class HostView:
+    def __init__(self, guard, frame, controller, kind):
+        self.guard, self.frame, self.controller, self.kind = guard, frame, controller, kind
+        self.listener = HostCloseListener(guard, kind, frame)
+        self.interceptor = HostCloseInterceptor(self)
+        self.intercepting, self.attaching, self.temporary_lock = False, False, False
 
-    def dispatchFinished(self, event):
-        # Even SUCCESS is not a source-closure notification: the last CloseWin
-        # can replace the controller with Start Center in the same live frame.
-        self._complete()
-
-    def disposing(self, event):
-        self._complete()
-
-    def _complete(self):
-        if self.guard.inflight.get(self.kind) is self:
-            del self.guard.inflight[self.kind]
-            # Only a genuinely new TRUE veto can have rearmed this duty while
-            # its previous result was pending. Cancel alone does not retry.
-            self.guard._settle()
+    def current(self):
+        try:
+            return (
+                self.listener.alive
+                and self.frame.getController() == self.controller
+                and self.controller.getModel() == self.guard.model
+            )
+        except Exception:
+            return False
 
 
 class HostGuard:
-    """UI-thread lifetime protection for one model and its active edit frame.
-
-    A second active view is deliberately rejected before launching an editor.
-    Multiple embedded objects in the same view share one owned action lock.
-    """
+    """One model's editors, view coverage and fresh close decisions on the UI thread."""
 
     def __init__(self, ctx, model, frame):
         self.ctx, self.model, self.frame = ctx, model, frame
         self.controller = frame.getController()
-        self.listeners = {
-            "model": HostCloseListener(self, "model", model),
-            "frame": HostCloseListener(self, "frame", frame),
-        }
-        self.sessions, self.obligations, self.inflight = {}, {}, {}
+        self.views = []
+        self.listeners = {"model": HostCloseListener(self, "model", model)}
+        self.events = HostModelEvents(self)
+        self.document_events, self.modify_events = False, False
+        self.sessions, self.obligations = {}, {}
         self.scheduled = set()
         self.phase, self.locked, self.invalid = "IDLE", False, False
-        self.notice_pending = False
-        self.unlock_error = None
+        self.notice_pending, self.tainted, self.in_choice = False, False, False
+        self.notice_view = None
+        self.unlock_error, self.pending_choice, self.permit = None, None, None
+        self.content_generation, self.activity_generation = 0, 0
+        self.recovery = set()
+        self.active_view = self._new_view(frame, self.controller)
+
+    def _new_view(self, frame, controller):
+        kind = "frame" if not self.views else "frame:" + str(len(self.views))
+        view = HostView(self, frame, controller, kind)
+        self.views.append(view)
+        self.listeners[kind] = view.listener
+        self.activity_generation += 1
+        return view
+
+    def view_for(self, kind):
+        return next((view for view in self.views if view.kind == kind), self.active_view)
 
     def blocks_close(self):
-        return bool(self.sessions) or self.phase in ("ACQUIRING", "TEARING_DOWN")
+        return (
+            bool(self.sessions)
+            or self.phase in ("ACQUIRING", "TEARING_DOWN")
+            or bool(self.unlock_error)
+            or any(view.attaching for view in self.views)
+        )
 
-    def notice_veto(self):
+    def accepted_update(self):
+        # Explicitly track every acknowledged embedded update, including when
+        # the host was already dirty and no boolean modified event fires.
+        self.content_generation += 1
+
+    def notice_veto(self, view=None):
+        # A queued editor notice may outlive its original controller. Preserve
+        # the newest exact-view error target while coalescing callbacks.
+        self.notice_view = view or self.active_view
         if self.notice_pending:
             return
         self.notice_pending = True
 
         def notify():
+            view = self.notice_view
             try:
-                if self.blocks_close():
+                if not self.invalid and self.blocks_close() and view.current():
                     completed = self.sessions and all(
                         session["watch_complete"] and session["process"].poll() is not None
                         for _, session in self.sessions.values()
@@ -441,15 +679,27 @@ class HostGuard:
                         if completed
                         else "Close the ReShiki editing window before closing this document."
                     )
-                    show_error(self.ctx, message)
+                    show_error(self.ctx, message, view.frame)
             finally:
                 self.notice_pending = False
+                self.notice_view = None
 
         try:
             post(self.ctx, notify)
         except Exception:
-            # Reporting failure must never turn a veto into permission to close.
             self.notice_pending = False
+
+    def protection_failed(self, error, view=None):
+        self.tainted = True
+        self.unlock_error = self.unlock_error or (
+            "LibreOffice could not safely protect this document's windows. "
+            "New ReShiki editing is unavailable; existing windows remain protected. "
+            "Save your work before restarting LibreOffice. "
+            "Edit in ReShiki cannot clear this state. " + str(error)
+        )
+        self.activity_generation += 1
+        self.phase = "TEARING_DOWN"
+        self.notice_veto(view)
 
     def owns(self, owner, session):
         registered = self.sessions.get(session["token"])
@@ -458,40 +708,116 @@ class HostGuard:
             and registered is not None
             and registered[0] is owner
             and registered[1] is session
-            and all(listener.alive for listener in self.listeners.values())
+            and self.listeners["model"].alive
+            and self.active_view.current()
         )
 
+    def ensure_view(self, frame, controller):
+        if (
+            self.invalid
+            or controller.getModel() != self.model
+            or frame.getController() != controller
+        ):
+            raise RuntimeError("The document window changed while protection was being installed.")
+        view = next(
+            (item for item in self.views if item.frame == frame and item.controller == controller),
+            None,
+        )
+        if view is None:
+            view = self._new_view(frame, controller)
+        if view.intercepting and view.listener.attached:
+            return view
+        view.attaching = True
+        try:
+            # A new view's notification cannot veto creation. This owned lock
+            # covers normal frame.close AND CloseDispatcher's Start Center path
+            # until both early and late protection have attached.
+            frame.addActionLock()
+            view.temporary_lock = True
+            # Listener first: interceptor registration calls contextChanged and
+            # may reenter native Quit. Its late veto must mark model taint even
+            # while the temporary lock is still held.
+            view.listener.attached = True
+            frame.addCloseListener(view.listener)
+            view.intercepting = True  # Include partially failed registration.
+            frame.registerDispatchProviderInterceptor(view.interceptor)
+            if not view.current() or self.invalid:
+                raise RuntimeError("The document closed while installing close protection.")
+            if view is self.active_view and self.sessions and not self.locked:
+                self.locked = True  # Transfer this one owned lock to editing.
+                view.temporary_lock = False
+            else:
+                # removeActionLock can synchronously replay close(True). Keep
+                # attaching=True until the exact one decrement has returned.
+                frame.removeActionLock()
+                view.temporary_lock = False
+            return view
+        except Exception as error:
+            self.protection_failed(error)
+            raise
+        finally:
+            view.attaching = False
+
+    def reconcile_views(self):
+        enumeration = self.model.getControllers()
+        while enumeration.hasMoreElements():
+            controller = enumeration.nextElement()
+            self.ensure_view(controller.getFrame(), controller)
+
     def acquire(self, owner, session, frame):
+        if self.permit is not None:
+            # No editor is created once native close is already underway. A
+            # rejected launch must not turn expected view disposal into a veto.
+            raise RuntimeError("The document is closing. Try editing again afterward.")
+        self.activity_generation += 1
+        if self.in_choice:
+            raise RuntimeError(
+                "The document is deciding whether to close. Try editing again afterward."
+            )
         if self.unlock_error:
             raise RuntimeError(self.unlock_error)
         if self.invalid or self.phase == "TEARING_DOWN":
             raise RuntimeError("The document's editing window is no longer available.")
-        if frame != self.frame:
+        if self.sessions and frame != self.frame:
             raise RuntimeError(
                 "Finish ReShiki editing in the other LibreOffice window for this document "
                 "before editing from this window."
             )
+        controller = frame.getController()
+        if controller.getModel() != self.model:
+            raise RuntimeError("The document's editing window changed.")
+        self.active_view = next(
+            (view for view in self.views if view.frame == frame and view.controller == controller),
+            None,
+        ) or self._new_view(frame, controller)
+        self.frame, self.controller = frame, controller
         self.sessions[session["token"]] = (owner, session)
         session["guard"] = self
         self.phase = "ACQUIRING"
         try:
-            for listener in self.listeners.values():
-                if not listener.attached:
-                    listener.source.addCloseListener(listener)
-                    listener.attached = listener.alive
-                    if self.invalid:
-                        raise RuntimeError("The document closed while preparing the editor.")
+            listener = self.listeners["model"]
+            if not listener.attached:
+                listener.attached = True
+                self.model.addCloseListener(listener)
+            if not self.document_events:
+                self.document_events = True
+                self.model.addDocumentEventListener(self.events)
+            if not self.modify_events:
+                self.modify_events = True
+                self.model.addModifyListener(self.events)
+            self.reconcile_views()
+            self.ensure_view(frame, controller)
             if not self.locked:
-                self.frame.addActionLock()
+                frame.addActionLock()
                 self.locked = True
-            if self.invalid:
+            if self.invalid or not self.active_view.current():
                 raise RuntimeError("The document closed while preparing the editor.")
             self.phase = "ACTIVE"
-        except Exception:
-            if self.sessions:
-                self.release(owner, session)
-            else:
-                self._unprotect()
+        except Exception as error:
+            self.protection_failed(error)
+            self.sessions.pop(session["token"], None)
+            self.retain_recovery(session)
+            self.phase = "TEARING_DOWN"
             raise
 
     def release(self, owner, session):
@@ -499,101 +825,295 @@ class HostGuard:
         if registered is None or registered[0] is not owner or registered[1] is not session:
             return
         del self.sessions[session["token"]]
+        self.activity_generation += 1
+        if self.tainted or self.unlock_error:
+            self.retain_recovery(session)
         if self.sessions:
             self.phase = "ACTIVE"
             return
         self._unprotect()
 
+    def retain_recovery(self, session):
+        if self.tainted or self.unlock_error:
+            self.recovery.add(session["directory"])
+            return True
+        return False
+
     def _unprotect(self):
-        # removeActionLock may synchronously call close(True) for a remembered
-        # self-close. Keep BOTH listeners vetoing until that call returns.
         self.phase = "TEARING_DOWN"
         if self.unlock_error:
-            return  # The native decrement may already have happened. Never retry it.
+            return  # Never repeat a native decrement with uncertain outcome.
         if self.locked:
             try:
                 self.frame.removeActionLock()
             except Exception as error:
-                self.unlock_error = (
-                    "LibreOffice could not safely release this document's editing lock. "
-                    "The window remains protected. Save your work before restarting LibreOffice. "
-                    "Edit in ReShiki cannot clear this state. " + str(error)
-                )
-                self.notice_veto()
-                return  # Keep protection; the owned lock count is now uncertain.
+                self.protection_failed(error)
+                return
             self.locked = False
         self.phase = "IDLE"
+        # Keep idle, untainted coverage dormant until model disposal. Ordinary
+        # closes pass through. Removing/reinstalling listeners here would create
+        # a reentrant gap just as native preparation can become cached.
         self._settle()
 
     def _settle(self):
-        if self.blocks_close():
+        if self.invalid or self.blocks_close() or self.in_choice or self.pending_choice is not None:
             return
-        for kind, listener in self.listeners.items():
-            if kind not in self.obligations and listener.attached:
-                if listener.alive:
-                    listener.source.removeCloseListener(listener)
-                listener.attached = False
-        if not self.obligations:
-            HOST_GUARDS[:] = [guard for guard in HOST_GUARDS if guard is not self]
-            RETIRED_HOST_GUARDS[:] = [guard for guard in RETIRED_HOST_GUARDS if guard is not self]
-            return
-        if not self.invalid and not self.scheduled and not self.inflight:
-            pending = [kind for kind in ("model", "frame") if self.obligations.get(kind) is False]
-            if pending:
-                kind = pending[0]
-                self.scheduled.add(kind)
-                post(self.ctx, lambda: self._retry(kind))
+        pending = [kind for kind, attempted in self.obligations.items() if not attempted]
+        if pending:
+            self.request_choice("model" if "model" in pending else pending[0])
 
-    def _retry(self, scheduled_kind):
-        self.scheduled.discard(scheduled_kind)
-        pending = [kind for kind in ("model", "frame") if self.obligations.get(kind) is False]
-        if self.blocks_close() or self.invalid or not pending:
+    def request_choice(self, kind):
+        if self.invalid or self.blocks_close() or self.in_choice:
             return
-        # Another edit/TRUE request can arrive while this callback is queued.
-        # Select the currently authorized scope, not the originally queued one.
-        kind = pending[0]
-        # One UI decision for this batch of transferred obligations. If both
-        # sources transferred ownership, CloseDoc is the authorized wider scope.
-        # Cancel/save failure must not immediately prompt again via CloseWin.
-        for source in tuple(self.obligations):
-            if kind == "model" or source == "frame":
-                self.obligations[source] = True
+        if self.pending_choice is not None:
+            if kind == "model":
+                self.pending_choice = kind
+            return
+        self.pending_choice = kind
+        self.scheduled.add(kind)
         try:
-            controller = self.frame.getController()
-            if controller != self.controller or controller.getModel() != self.model:
-                raise RuntimeError("The original document window is no longer available.")
-            url = uno.createUnoStruct("com.sun.star.util.URL")
-            url.Complete = ".uno:CloseDoc" if kind == "model" else ".uno:CloseWin"
-            url.Protocol, url.Path = ".uno:", url.Complete[5:]
-            dispatch = self.frame.queryDispatch(url, "_self", 0)
-            if dispatch is None or not hasattr(dispatch, "dispatchWithNotification"):
-                raise RuntimeError("LibreOffice cannot confirm the requested close operation.")
-            result = CloseResult(self, kind)
-            self.inflight[kind] = result
-            dispatch.dispatchWithNotification(url, (), result)
-        except Exception as error:
-            self.inflight.pop(kind, None)
-            show_error(
-                self.ctx, "The document remains open. Close it again when ready.\n" + str(error)
+            post(self.ctx, self._run_choice)
+        except Exception:
+            self.pending_choice = None
+            self.scheduled.clear()
+            # Failed scheduling is not permission to close or an automatic loop.
+            if kind in self.obligations:
+                self.obligations[kind] = True
+
+    def _choice_snapshot(self, kind):
+        self.reconcile_views()
+        # Enumeration/attachment can reenter a model close(TRUE). Resolve the
+        # transferred scope only AFTER those calls, before choosing a surviving
+        # frame or presenting/consuming this single decision.
+        if self.obligations.get("model") is False:
+            kind = "model"
+        view = self.view_for(kind)
+        if kind == "model" and not view.current():
+            view = next((item for item in self.views if item.current()), None)
+        if view is None or not view.current() or self.invalid or self.blocks_close():
+            raise RuntimeError("The original document window is no longer available.")
+        live = tuple(item for item in self.views if item.current())
+        return kind, (view, live, self.activity_generation, self.content_generation)
+
+    def _check_choice(self, snapshot, content=True):
+        view, live, activity, revision = snapshot
+        if (
+            self.invalid
+            or self.blocks_close()
+            or not view.current()
+            or self.activity_generation != activity
+            or (content and self.content_generation != revision)
+            or any(not item.current() for item in live)
+        ):
+            raise RuntimeError(
+                "The document changed during the close decision. Close it again when ready."
             )
 
-    def source_closed(self, kind):
-        listener = self.listeners[kind]
-        if not listener.alive:
+    def _dispatch_sync(self, frame, command):
+        url = command_url(command)
+        dispatch = frame.queryDispatch(url, "_self", 0)
+        if dispatch is None or not hasattr(dispatch, "dispatchWithNotification"):
+            raise RuntimeError("LibreOffice cannot confirm the requested operation.")
+        result = DispatchCompletion()
+        dispatch.dispatchWithNotification(url, (prop("SynchronMode", True),), result)
+        if not result.done:
+            raise RuntimeError("LibreOffice did not synchronously confirm the requested operation.")
+        return result
+
+    def _run_choice(self):
+        kind, self.pending_choice = self.pending_choice, None
+        self.scheduled.clear()
+        if kind is None or self.invalid or self.blocks_close() or self.in_choice:
             return
-        listener.alive, listener.attached = False, False
-        self.obligations.pop(kind, None)
-        self.inflight.pop(kind, None)
-        self.invalid = True
-        for owner, session in tuple(self.sessions.values()):
-            owner._invalidate_session(
-                session, "The LibreOffice document or editing window closed.", True
+        self.in_choice = True
+        view = self.view_for(kind)
+        try:
+            kind, snapshot = self._choice_snapshot(kind)
+            view, live, _, _ = snapshot
+            for source in tuple(self.obligations):
+                if kind == "model" or source == kind:
+                    self.obligations[source] = True
+            choice = choose_host_close(self.ctx, self.model, view.frame, kind == "model")
+            if choice not in ("save", "discard"):
+                return
+            self._check_choice(snapshot)
+            # Original CloseDispatcher/Desktop caller has unwound and normally
+            # resumed this controller. Explicit reactivation is safe for direct
+            # UNO callers too; it does not reset the private prepared cache.
+            if not view.controller.suspend(False):
+                raise RuntimeError("LibreOffice could not reactivate the document window.")
+            self._check_choice(snapshot)
+            if choice == "save" and self.model.isModified():
+                result = self._dispatch_sync(view.frame, ".uno:Save")
+                if result.state != SUCCESS or result.result is not True:
+                    raise RuntimeError("The document was not saved. It remains open.")
+                # Save As may change title/URL on this same model. A new clean
+                # checkpoint follows successful native Save, not the old URL.
+                self._check_choice(snapshot, content=False)
+                if not self.model.hasLocation() or self.model.isModified():
+                    raise RuntimeError("The document still has unsaved changes. It remains open.")
+                snapshot = (view, live, self.activity_generation, self.content_generation)
+            elif choice == "save" and not self.model.hasLocation():
+                # A clean untitled model still needs native Save As.
+                result = self._dispatch_sync(view.frame, ".uno:Save")
+                if result.state != SUCCESS or result.result is not True:
+                    raise RuntimeError("The document was not saved. It remains open.")
+                self._check_choice(snapshot, content=False)
+                if not self.model.hasLocation() or self.model.isModified():
+                    raise RuntimeError("The document still has unsaved changes. It remains open.")
+                snapshot = (view, live, self.activity_generation, self.content_generation)
+            self._check_choice(snapshot)
+            allowed = live if kind == "model" else (view,)
+            self.permit = {
+                "kind": kind,
+                "command": ".uno:CloseDoc" if kind == "model" else ".uno:CloseWin",
+                "source_view": view,
+                "dispatched": False,
+                "views": allowed,
+                "activity": self.activity_generation,
+                "revision": self.content_generation,
+                "choice": choice,
+                "gone": set(),
+                "model_close": False,
+                "last_view": kind == "model" or len(live) == 1,
+            }
+            result = self._dispatch_sync(
+                view.frame, ".uno:CloseDoc" if kind == "model" else ".uno:CloseWin"
             )
+            if not self.invalid and result.state != SUCCESS:
+                raise RuntimeError("The document remains open. Close it again when ready.")
+        except Exception as error:
+            if not self.invalid and view is not None and view.current():
+                show_error(self.ctx, str(error), view.frame)
+        finally:
+            # No permission may survive an async callback, Cancel, another
+            # listener's veto, a failed Save, or any reentrant/exceptional exit.
+            self.permit = None
+            self.in_choice = False
+            # Deliberately do not _settle here: cancellation/failure never loops.
+
+    def permits_dispatch(self, view, command):
+        permit = self.permit
+        if (
+            permit is None
+            or permit["source_view"] is not view
+            or permit["command"] != command
+            or permit["dispatched"]
+            or not self.permits(permit["kind"])
+        ):
+            return False
+        permit["dispatched"] = True
+        return True
+
+    def permits(self, kind, closing_model=False):
+        permit = self.permit
+        if (
+            permit is None
+            or self.invalid
+            or self.blocks_close()
+            or self.activity_generation != permit["activity"]
+            or self.content_generation != permit["revision"]
+        ):
+            return False
+        for view in permit["views"]:
+            if view.kind not in permit["gone"] and not view.current():
+                return False
+        if permit["choice"] == "save":
+            try:
+                if self.model.isModified():
+                    return False
+            except Exception:
+                return False
+        if kind == "model":
+            if not permit["last_view"]:
+                return False
+            if closing_model:
+                permit["model_close"] = True
+            return True
+        return any(view.kind == kind for view in permit["views"])
+
+    def view_closed(self, kind):
+        view = self.view_for(kind)
+        if view is None or not view.listener.alive:
+            return
+        expected = self.permit is not None and any(item is view for item in self.permit["views"])
+        if expected:
+            self.permit["gone"].add(kind)
+        else:
+            self.activity_generation += 1
+        view.listener.alive = False
+        self._detach_view(view)
+        self.obligations.pop(kind, None)
+        if view is self.active_view:
+            self.locked = False
+            for owner, session in tuple(self.sessions.values()):
+                self.retain_recovery(session)
+                owner._invalidate_session(session, "The LibreOffice editing window closed.", True)
+            self.sessions.clear()
+            self.phase = "IDLE"
+        # The model's taint and other views outlive this exact source.
+
+    def _detach_view(self, view):
+        # A CloseWin backing transition keeps the frame alive. Remove only our
+        # interceptor/listener even when its old controller is already gone.
+        try:
+            if view.intercepting:
+                view.intercepting = False
+                view.frame.releaseDispatchProviderInterceptor(view.interceptor)
+            if view.listener.attached:
+                view.listener.attached = False
+                view.frame.removeCloseListener(view.listener)
+        except Exception as error:
+            if not self.invalid:
+                self.protection_failed(error)
+
+    def model_disposed(self):
+        if self.invalid:
+            return
+        permit = self.permit
+        cleanup = (
+            permit is not None
+            and permit["model_close"]
+            and self.activity_generation == permit["activity"]
+            and self.content_generation == permit["revision"]
+            and not self.unlock_error
+        )
+        self.invalid = True
+        self.listeners["model"].alive = False
+        for owner, session in tuple(self.sessions.values()):
+            self.retain_recovery(session)
+            owner._invalidate_session(session, "The LibreOffice document closed.", True)
         self.sessions.clear()
-        if kind == "frame":
-            self.locked = False  # A disposed frame owns no releasable lock.
-            self.unlock_error = None
-        self._unprotect()
+        self.obligations.clear()
+        self.pending_choice = None
+        self.scheduled.clear()
+        self.locked = False
+        for view in self.views:
+            view.listener.alive = False
+            self._detach_view(view)
+        if cleanup:
+            for directory in self.recovery:
+                with suppress(OSError):
+                    shutil.rmtree(directory)
+            self.recovery.clear()
+        # Native disposal clears all these listener containers too. Remove our
+        # references explicitly while the model is still in its dispose callback.
+        with suppress(Exception):
+            self.model.removeCloseListener(self.listeners["model"])
+        with suppress(Exception):
+            self.model.removeDocumentEventListener(self.events)
+        with suppress(Exception):
+            self.model.removeModifyListener(self.events)
+        self.document_events = self.modify_events = False
+        for listener in self.listeners.values():
+            listener.attached = False
+            listener.source = None
+        self.listeners.clear()
+        self.views.clear()
+        self.active_view = self.frame = self.controller = self.model = None
+        self.tainted = False  # Only actual model disposal ends this lifetime.
+        HOST_GUARDS[:] = [guard for guard in HOST_GUARDS if guard is not self]
 
 
 def acquire_host_guard(owner, session):
@@ -602,13 +1122,6 @@ def acquire_host_guard(owner, session):
     model = owner.client.getComponent()
     frame = model.getCurrentController().getFrame()
     guard = next((item for item in HOST_GUARDS if item.model == model), None)
-    if guard is not None and frame != guard.frame and not guard.blocks_close():
-        # A cancelled close can leave duties after all editors have finished.
-        # Keep those exact old sources alive without treating them as the new
-        # launch frame. Their later disposal must not invalidate new sessions.
-        HOST_GUARDS[:] = [item for item in HOST_GUARDS if item is not guard]
-        RETIRED_HOST_GUARDS.append(guard)
-        guard = None
     if guard is None:
         guard = HostGuard(owner.ctx, model, frame)
         HOST_GUARDS.append(guard)
@@ -1295,6 +1808,7 @@ class Embedded(
                 json.dumps(acknowledgement), encoding="utf-8"
             )
             session["accepted"] = self.native
+            session["guard"].accepted_update()
         except Exception as error:
             if not save_attempted and self.pending is not None and self._session_live(session):
                 # A lookup interrupted by HandsOff must retain its waiter.
@@ -1474,18 +1988,30 @@ class Embedded(
         finally:
             if self.session is None:
                 self.state = RUNNING
+            # Keep the recovery file until both lifecycle and host protection
+            # teardown finish. A failed native unregister/unlock is not cleanup.
+            try:
+                session["guard"].release(self, session)
+            except Exception as error:
+                failure = failure or error
+                session["error"] = (session["error"] + "; " if session["error"] else "") + str(
+                    error
+                )
+            if session["guard"].unlock_error:
+                session["error"] = (session["error"] + "; " if session["error"] else "") + session[
+                    "guard"
+                ].unlock_error
+                session["error_reported"] = False
             try:
                 if session["error"]:
                     self._report_failure(session)
-                else:
+                elif not session["guard"].retain_recovery(session):
                     shutil.rmtree(session["directory"])
             except Exception as error:
                 failure = failure or error
                 session["error"] = (session["error"] + "; " if session["error"] else "") + str(
                     error
                 )
-            finally:
-                session["guard"].release(self, session)
         if failure is not None:
             raise failure
 
