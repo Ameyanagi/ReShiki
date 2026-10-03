@@ -714,8 +714,13 @@ impl App {
         if let Message::Accessibility(action) = message {
             return self.accessibility_action(action);
         }
+        let controls_unchanged = matches!(&message, Message::Canvas(Edit::Hover(_)));
         let task = self.update_routed(message);
-        Task::batch([task, self.accessibility_refresh()])
+        if controls_unchanged {
+            task
+        } else {
+            Task::batch([task, self.accessibility_refresh()])
+        }
     }
     fn update_routed(&mut self, mut message: Message) -> Task<Message> {
         // Timer polls belong to the Assistant's drawing before any front-tab
@@ -883,8 +888,9 @@ impl App {
             self.context_menu = None;
             return Task::none();
         }
-        if self.imports.menu && matches!(message, Message::Escape) {
+        if (self.imports.menu || self.imports.examples_menu) && matches!(message, Message::Escape) {
             self.imports.menu = false;
+            self.imports.examples_menu = false;
             return Task::none();
         }
         if self.tabs.menu && matches!(message, Message::Escape) {
@@ -904,8 +910,12 @@ impl App {
         ) {
             self.context_menu = None;
             self.tab.inspector_ui.close_menu();
-            if !matches!(message, Message::Imports(import::Action::Menu(_))) {
+            if !matches!(
+                message,
+                Message::Imports(import::Action::Menu(_) | import::Action::ExamplesMenu(_))
+            ) {
                 self.imports.menu = false;
+                self.imports.examples_menu = false;
             }
             if !matches!(message, Message::Tabs(tabs::Action::Menu(_))) {
                 self.tabs.menu = false;

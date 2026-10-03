@@ -33,6 +33,7 @@ pub enum Action {
     Snapshot(u64, u64, Snapshot),
     Installed(u64, Result<native::Handle, String>),
     Native(u64, accesskit::ActionRequest),
+    Dispatch(u64, Box<Message>),
     Published(u64, Result<(), String>),
 }
 
@@ -42,14 +43,34 @@ enum Terminal {
     Exit,
 }
 
+struct Context {
+    document: (super::document_tab::TabId, u64, u64),
+    selected: Vec<u64>,
+    surface: (
+        super::InspectorTab,
+        crate::canvas::Tool,
+        bool,
+        bool,
+        bool,
+        bool,
+        bool,
+        bool,
+        bool,
+        bool,
+    ),
+}
+
 pub(super) struct State {
     generation: u64,
     window: Option<window::Id>,
     handle: Option<native::Handle>,
     installing: bool,
+    install_failed: bool,
     closed: bool,
     terminal: Option<Terminal>,
     sequence: u64,
+    context: Option<Context>,
+    context_version: u64,
     viewport: iced::Size,
     scale: f32,
     focused: bool,
@@ -71,9 +92,12 @@ impl Default for State {
             window: None,
             handle: None,
             installing: false,
+            install_failed: false,
             closed: false,
             terminal: None,
             sequence: 0,
+            context: None,
+            context_version: 0,
             viewport: iced::Size::new(1280., 820.),
             scale: 1.,
             focused: false,
@@ -127,7 +151,43 @@ pub(super) fn subscription() -> Subscription<Message> {
 
 impl App {
     pub(super) fn accessibility_refresh(&mut self) -> Task<Message> {
+        if !SUPPORTED && !cfg!(test) {
+            return Task::none();
+        }
+        let document = (self.tab.id, self.tab.file_epoch, self.tab.revision);
+        let surface = (
+            self.inspector_tab,
+            self.tool,
+            self.help_open,
+            self.updates.open,
+            self.assistant.viewed_image.is_some(),
+            self.tab.atom_text.is_some(),
+            self.palette.is_some(),
+            self.context_menu.is_some(),
+            self.imports.menu || self.imports.examples_menu,
+            self.style_menu.is_some() || self.tab.inspector_ui.menu_open(),
+        );
         let state = &mut self.accessibility;
+        let identity_changed = state.context.as_ref().is_none_or(|context| {
+            (context.document.0, context.document.1) != (document.0, document.1)
+                || context.selected != self.tab.selected
+                || context.surface != surface
+        });
+        if identity_changed {
+            state.context = Some(Context {
+                document,
+                selected: self.tab.selected.clone(),
+                surface,
+            });
+            state.context_version = state.context_version.wrapping_add(1);
+            state.tree.invalidate();
+            state.last = None;
+        } else if let Some(context) = &mut state.context
+            && context.document.2 != document.2
+        {
+            context.document = document;
+            state.context_version = state.context_version.wrapping_add(1);
+        }
         if !SUPPORTED || state.closed || state.window.is_none() {
             return Task::none();
         }
@@ -211,7 +271,7 @@ impl App {
                                 Message::Accessibility(Action::Published(generation, result))
                             });
                     }
-                    if !state.installing {
+                    if !state.installing && !state.install_failed {
                         state.installing = true;
                         let sender = state.sender.clone();
                         return window::run(id, move |window| {
@@ -240,7 +300,10 @@ impl App {
                 self.accessibility.installing = false;
                 match result {
                     Ok(handle) => self.accessibility.handle = Some(handle),
-                    Err(error) => eprintln!("Could not install native accessibility: {error}"),
+                    Err(error) => {
+                        self.accessibility.install_failed = true;
+                        eprintln!("Could not install native accessibility: {error}");
+                    }
                 }
                 if self.accessibility.terminal.is_some() {
                     return self.accessibility_finish_terminal();
@@ -258,10 +321,20 @@ impl App {
             {
                 match self.accessibility.tree.resolve(&request) {
                     Some(Request::Activate(id)) => {
-                        iced::advanced::widget::operate(Activate::<Message>::new(id))
+                        let version = self.accessibility.context_version;
+                        iced::advanced::widget::operate(Activate::<Message>::new(id)).map(
+                            move |message| {
+                                Message::Accessibility(Action::Dispatch(version, Box::new(message)))
+                            },
+                        )
                     }
                     Some(Request::SetValue(id, value)) => {
-                        iced::advanced::widget::operate(SetValue::<Message>::new(id, value))
+                        let version = self.accessibility.context_version;
+                        iced::advanced::widget::operate(SetValue::<Message>::new(id, value)).map(
+                            move |message| {
+                                Message::Accessibility(Action::Dispatch(version, Box::new(message)))
+                            },
+                        )
                     }
                     Some(Request::Focus(id)) => {
                         iced::advanced::widget::operate(FocusControl::new(id))
@@ -275,6 +348,11 @@ impl App {
                     }
                     None => Task::none(),
                 }
+            }
+            Action::Dispatch(version, message)
+                if version == self.accessibility.context_version && !self.accessibility.closed =>
+            {
+                self.update(*message)
             }
             Action::Published(generation, Err(error))
                 if generation == self.accessibility.generation =>
@@ -346,6 +424,40 @@ mod tests {
         assert!(task.units() > 0);
         assert!(!app.accessibility.installing);
         assert!(app.accessibility.terminal.is_none());
+    }
+    #[test]
+    fn a_failed_install_is_not_retried_on_the_visible_fallback_window() {
+        let (mut app, _) = App::new();
+        app.accessibility.window = Some(window::Id::unique());
+        app.accessibility.installing = true;
+        let generation = app.accessibility.generation;
+        let _ = app.accessibility_action(Action::Installed(
+            generation,
+            Err("injected install failure".into()),
+        ));
+        assert!(app.accessibility.install_failed);
+        let sequence = app.accessibility.sequence;
+        let task =
+            app.accessibility_action(Action::Snapshot(generation, sequence, Snapshot::default()));
+        assert_eq!(task.units(), 0);
+        assert!(!app.accessibility.installing);
+        assert!(app.accessibility.install_failed);
+    }
+    #[test]
+    fn queued_native_command_cannot_move_to_a_new_selection() {
+        let (mut app, _) = App::new();
+        let _ = app.accessibility_refresh();
+        let version = app.accessibility.context_version;
+        app.tab.selected.push(123);
+        let _ = app.accessibility_refresh();
+        assert_ne!(version, app.accessibility.context_version);
+        let before = app.tab.id;
+        assert_eq!(
+            app.accessibility_action(Action::Dispatch(version, Box::new(Message::New)))
+                .units(),
+            0
+        );
+        assert_eq!(app.tab.id, before);
     }
     #[test]
     fn updater_exit_uses_the_same_pending_install_barrier() {
@@ -470,6 +582,62 @@ mod renderer_tests {
                     .all(|node| node.id.starts_with("figure-format-"))
             );
             app.tab.inspector_ui.close_menu();
+            app.tab
+                .inspector_ui
+                .update(super::super::inspector::Action::Section(
+                    super::super::inspector::Section::ExportChemical,
+                    true,
+                ));
+            app.tab
+                .inspector_ui
+                .update(super::super::inspector::Action::ChemicalMenu(true));
+            let chemicals = snapshot(&app, &mut renderer, size);
+            assert_eq!(chemicals.nodes.len(), 4);
+            assert!(
+                chemicals
+                    .nodes
+                    .iter()
+                    .all(|node| node.id.starts_with("chemical-format-"))
+            );
+            app.tab.inspector_ui.close_menu();
+            app.inspector_tab = super::super::InspectorTab::Import;
+            app.imports.set_text("CCO");
+            app.imports.examples_menu = true;
+            let examples = snapshot(&app, &mut renderer, size);
+            assert_eq!(examples.nodes.len(), 4);
+            assert!(
+                examples
+                    .nodes
+                    .iter()
+                    .all(|node| node.id.starts_with("import-example-"))
+            );
+            app.imports.examples_menu = false;
+            app.imports.menu = true;
+            let insert = snapshot(&app, &mut renderer, size);
+            assert_eq!(insert.nodes.len(), 1);
+            assert_eq!(insert.nodes[0].id, "import-replace");
+            app.imports.menu = false;
+            let import = snapshot(&app, &mut renderer, size);
+            assert!(import.nodes.iter().any(|node| node.id == "import-input"
+                && node.role == reshiki::accessibility::Role::TextArea));
+            let _ = app.style_menu_action(super::super::color_popover::Action::Color);
+            let color = snapshot(&app, &mut renderer, size);
+            assert!(color.nodes.iter().any(|node| node.id == "color-input"));
+            assert!(
+                color
+                    .nodes
+                    .iter()
+                    .all(|node| node.id == "color-input" || node.id == "style-color-apply")
+            );
+            app.style_menu = None;
+            let _ = app.inline_action(super::super::inline_text::Action::Begin(
+                None,
+                reshiki::document::Point::default(),
+            ));
+            let caption = snapshot(&app, &mut renderer, size);
+            assert!(caption.nodes.iter().any(|node| node.id == "inline-caption"
+                && node.role == reshiki::accessibility::Role::TextArea));
+            app.finish_inline(false);
             app.inspector_tab = super::super::InspectorTab::Properties;
             app.tool = crate::canvas::Tool::Graphic(reshiki::graphics::GraphicKind::Arc);
             let arcs = snapshot(&app, &mut renderer, size);

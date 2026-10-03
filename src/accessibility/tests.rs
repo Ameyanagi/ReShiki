@@ -508,47 +508,45 @@ async fn tooltip_does_not_trap_tab_and_replaced_controls_do_not_inherit_mouse_do
     );
 }
 
-#[test]
+#[tokio::test]
 #[ignore = "requires the real Iced headless renderer"]
-fn native_field_edits_and_modal_focus_use_live_widgets() {
-    iced::futures::executor::block_on(async {
-        let mut ui = Ui::new(Size::new(320., 220.)).await;
-        let field = |enabled: bool| {
-            super::text_input("width", "Width (pt)", "", "20")
-                .on_input_maybe(enabled.then_some(Message::Edited))
-        };
-        let mut view: Element<'_, Message> = focus_scope(column![
-            field(true),
-            button("apply", "Apply", text("Apply")).on_press(Message::Apply)
-        ]);
-        let mut focus = FocusControl::new("width");
-        ui.operate(&mut view, &mut focus);
-        if let operation::Outcome::Chain(mut focus) = focus.finish() {
-            ui.operate(&mut view, focus.as_mut());
-        }
-        let snapshot = ui.snapshot(&mut view);
-        assert_eq!(snapshot.nodes[0].value.as_deref(), Some("20"));
-        assert!(snapshot.nodes[0].focused);
-        let mut edit = SetValue::<Message>::new("width", "42".into());
-        ui.operate(&mut view, &mut edit);
-        assert!(
-            matches!(edit.finish(), operation::Outcome::Some(Message::Edited(value)) if value == "42")
-        );
-        let mut disabled: Element<'_, Message> = focus_scope(column![field(false)]);
-        let mut edit = SetValue::<Message>::new("width", "99".into());
-        ui.operate(&mut disabled, &mut edit);
-        assert!(matches!(edit.finish(), operation::Outcome::None));
-        assert!(!ui.snapshot(&mut disabled).nodes[0].enabled);
-        assert!(ui.focused(&mut disabled).is_empty());
-        let mut modal: Element<'_, Message> = focus_scope(column![
-            inert(field(true)),
-            button("close", "Close", text("Close")).on_press(Message::Close)
-        ]);
-        let snapshot = ui.snapshot(&mut modal);
-        assert_eq!(snapshot.nodes.len(), 1);
-        assert_eq!(snapshot.nodes[0].id, "close");
-        let mut edit = SetValue::<Message>::new("width", "99".into());
-        ui.operate(&mut modal, &mut edit);
-        assert!(matches!(edit.finish(), operation::Outcome::None));
-    });
+async fn native_field_edits_and_modal_focus_use_live_widgets() {
+    let mut ui = Ui::new(Size::new(320., 220.)).await;
+    let field = |enabled: bool| {
+        super::text_input("width", "Width (pt)", "", "20")
+            .on_input_maybe(enabled.then_some(Message::Edited))
+    };
+    let mut view: Element<'_, Message> = focus_scope(column![
+        field(true),
+        button("apply", "Apply", text("Apply")).on_press(Message::Apply)
+    ]);
+    let mut focus = FocusControl::new("width");
+    ui.operate(&mut view, &mut focus);
+    if let operation::Outcome::Chain(mut focus) = focus.finish() {
+        ui.operate(&mut view, focus.as_mut());
+    }
+    let snapshot = ui.snapshot(&mut view);
+    assert_eq!(snapshot.nodes[0].value.as_deref(), Some("20"));
+    assert!(snapshot.nodes[0].focused);
+    let mut edit = SetValue::<Message>::new("width", "42".into());
+    ui.operate(&mut view, &mut edit);
+    assert!(
+        matches!(edit.finish(), operation::Outcome::Some(Message::Edited(value)) if value == "42")
+    );
+    let mut disabled: Element<'_, Message> = focus_scope(column![field(false)]);
+    let mut edit = SetValue::<Message>::new("width", "99".into());
+    ui.operate(&mut disabled, &mut edit);
+    assert!(matches!(edit.finish(), operation::Outcome::None));
+    assert!(!ui.snapshot(&mut disabled).nodes[0].enabled);
+    assert!(ui.focused(&mut disabled).is_empty());
+    let mut modal: Element<'_, Message> = focus_scope(column![
+        inert(field(true)),
+        button("close", "Close", text("Close")).on_press(Message::Close)
+    ]);
+    let snapshot = ui.snapshot(&mut modal);
+    assert_eq!(snapshot.nodes.len(), 1);
+    assert_eq!(snapshot.nodes[0].id, "close");
+    let mut edit = SetValue::<Message>::new("width", "99".into());
+    ui.operate(&mut modal, &mut edit);
+    assert!(matches!(edit.finish(), operation::Outcome::None));
 }

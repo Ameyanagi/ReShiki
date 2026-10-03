@@ -34,6 +34,11 @@ impl Default for NativeTree {
 }
 
 impl NativeTree {
+    /// Revoke a UI context without reusing any published native identifier.
+    pub fn invalidate(&mut self) {
+        self.ids.clear();
+        self.live.clear();
+    }
     /// Every result is a complete tree, usable for synchronous native
     /// activation as well as updates. The caller can skip unchanged results.
     pub fn update(
@@ -77,6 +82,14 @@ impl NativeTree {
                 }
             }
         }
+        let new_ids = snapshot
+            .nodes
+            .iter()
+            .filter(|node| !previous_ids.contains_key(&node.id))
+            .count() as u64;
+        self.next
+            .checked_add(new_ids)
+            .ok_or("Accessibility identifiers exhausted")?;
         let mut ids = BTreeMap::new();
         let mut nodes = Vec::with_capacity(snapshot.nodes.len() + 1);
         let mut children = Vec::with_capacity(snapshot.nodes.len());

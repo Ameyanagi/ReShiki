@@ -130,6 +130,7 @@ pub enum Action {
     /// Open or close the figure format menu.
     FigureMenu(bool),
     Chemical(ChemicalFormat),
+    ChemicalMenu(bool),
     RefreshProperties,
     Centroid,
     Attachment(reshiki::attachments::Kind),
@@ -149,12 +150,17 @@ pub(super) struct State {
     figure: FigureFormat,
     figure_menu: bool,
     chemical: ChemicalFormat,
+    chemical_menu: bool,
     pending: Option<PropertyKey>,
     properties: Option<(PropertyKey, Result<Analysis, String>)>,
 }
 impl State {
+    pub(super) fn menu_open(&self) -> bool {
+        self.figure_menu || self.chemical_menu
+    }
     pub(super) fn close_menu(&mut self) {
         self.figure_menu = false;
+        self.chemical_menu = false;
     }
     #[cfg(test)]
     pub(super) fn expanded(&self, section: Section) -> Option<bool> {
@@ -169,8 +175,18 @@ impl State {
                 self.figure = format;
                 self.figure_menu = false;
             }
-            Action::FigureMenu(open) => self.figure_menu = open,
-            Action::Chemical(format) => self.chemical = format,
+            Action::FigureMenu(open) => {
+                self.figure_menu = open;
+                self.chemical_menu = false;
+            }
+            Action::Chemical(format) => {
+                self.chemical = format;
+                self.chemical_menu = false;
+            }
+            Action::ChemicalMenu(open) => {
+                self.chemical_menu = open;
+                self.figure_menu = false;
+            }
             Action::RefreshProperties
             | Action::PropertiesCalculated(..)
             | Action::Centroid
@@ -1246,6 +1262,47 @@ impl App {
         )
     }
 
+    fn chemical_menu(&self, chemical: ChemicalFormat) -> Element<'_, Message> {
+        let open = self.tab.inspector_ui.chemical_menu;
+        let anchor = super::popover::choice_anchor(
+            "export-chemical-format",
+            format!("Structure format: {chemical}"),
+            chemical.to_string(),
+            12.,
+            8,
+            open,
+            Message::InspectorAction(Action::ChemicalMenu(!open)),
+        );
+        let popup = open.then(|| {
+            let items = ChemicalFormat::ALL.into_iter().map(|format| {
+                reshiki::accessibility::button(
+                    format!("chemical-format-{}", format.code()),
+                    format.to_string(),
+                    text(format.to_string()).size(12),
+                )
+                .checked(format == chemical)
+                .width(Length::Fill)
+                .padding([6, 10])
+                .style(super::workspace::control(format == chemical))
+                .on_press(Message::InspectorAction(Action::Chemical(format)))
+                .into()
+            });
+            container(column(items))
+                .width(Length::Fill)
+                .padding(5)
+                .style(super::color_popover::surface)
+                .into()
+        });
+        Element::new(
+            super::popover::popover(
+                anchor,
+                popup,
+                Message::InspectorAction(Action::ChemicalMenu(false)),
+            )
+            .fit_anchor(),
+        )
+    }
+
     pub(super) fn export_panel(&self) -> Element<'_, Message> {
         let figure = self.tab.inspector_ui.figure;
         let chemical = self.tab.inspector_ui.chemical;
@@ -1311,12 +1368,7 @@ impl App {
                 "MOL · SMILES · InChI · CDXML",
                 false,
                 column![
-                    crate::appearance::pick_list(ChemicalFormat::ALL, Some(chemical), |f| {
-                        Message::InspectorAction(Action::Chemical(f))
-                    })
-                    .text_size(12)
-                    .padding(8)
-                    .width(Length::Fill),
+                    self.chemical_menu(chemical),
                     text(chemical.description()).size(12).style(muted_text),
                     reshiki::accessibility::button(
                         "export-chemical",
