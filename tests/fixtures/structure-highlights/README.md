@@ -95,7 +95,23 @@ records the source/native hashes and full relevant style values.
 The 3,341-byte native fixture has SHA-256
 `d5e5cbde4d4353b2fa23e1444147486c6ad27cafeba8043718dde1d460fd3d4c`.
 It establishes native open/save preservation of both text presentations.
-Native clipboard paste into a matching styled destination and native
-expansion are separate acceptance steps. The regression imports this file,
-saves/reopens native ReShiki data, exports/imports CDXML and CDX, then expands
-the group while checking both presentations independently.
+A subsequent native copy/paste into a matching Helvetica 10 pt / 28 pt bond
+document also retained the gray OMe label, black internal oxygen, and all
+internal highlights. The completed native paste was 3,516 bytes, SHA-256
+`a17ffe06dfa344a6919a4fac3b1678b032ca6802f7e008dd10e012f224b12c6b`.
+
+Prime's subsequent **Structure > Expand Label** command changed the internal
+oxygen, carbon, and bond foregrounds to the wrapper's RGB `[124,124,124]`.
+Their white, cyan, and yellow highlights remained unchanged; the external
+bond stayed black. The completed native expansion was 3,175 bytes, SHA-256
+`511be84c703e049698d6675d2fa7c462febcd7363b47c54957de97ff9768dc02`.
+The provenance receipt records this native command's foreground inheritance
+separately from the successful matched-style clipboard transfer.
+
+ReShiki's input already explicitly writes black as `color="3"` on the internal
+oxygen text and bond. Prime removes these redundant default-black attributes
+when saving. Reserved black index `0` has not been verified to prevent the
+native command's foreground inheritance. ReShiki keeps the original internal
+styles during its own expansion. The regression imports the native contracted
+file, saves/reopens ReShiki data, exports/imports CDXML and CDX, then expands
+the group in ReShiki while checking both presentations independently.
