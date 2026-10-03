@@ -171,6 +171,8 @@ jobs:
         # This checks widget layout/input; it is not native desktop acceptance.
         run: cargo test --locked --no-default-features --bin reshiki app::numeric_transforms::focus::tests::handle_shortcut_focuses_selects_and_reveals_the_field_in_both_window_sizes -- --exact --ignored
       - run: cargo test --workspace --locked --no-default-features
+      - name: Verify public SciFinder handoff fixtures
+        run: cargo run --locked --no-default-features --example scifinder_handoff_qa -- "${{ runner.temp }}/reshiki-scifinder-handoff"
       - name: Install fixture reader dependencies
         run: uv sync --locked
       - name: Check all optional reference tests compile cleanly
