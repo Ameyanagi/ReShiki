@@ -1023,7 +1023,9 @@ impl App {
                 .copied();
                 if let Some(index) = next {
                     self.context_hover(level, index, false);
-                    self.context_menu.as_mut().unwrap().keyboard = true;
+                    if let Some(menu) = &mut self.context_menu {
+                        menu.keyboard = true;
+                    }
                 }
             }
             Named::ArrowLeft => {
