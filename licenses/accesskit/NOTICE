@@ -1,0 +1,126 @@
+AccessKit source attributions
+=============================
+
+The versioned Cargo license supplements include the complete upstream
+LICENSE-MIT, LICENSE-APACHE, LICENSE.chromium and AUTHORS files. The original
+source headers below retain their copyright and derived-code notices.
+Byte-identical headers are listed once with all source locations. These
+excerpts do not replace or change the upstream terms.
+
+Source header 1
+  accesskit@0.24.1: https://github.com/AccessKit/accesskit/blob/a55d3e1a18bb9ef0e4bccc9083fb13c3e0ad8969/common/src/geometry.rs#L1-L10
+
+// Copyright 2023 The AccessKit Authors. All rights reserved.
+// Licensed under the Apache License, Version 2.0 (found in
+// the LICENSE-APACHE file) or the MIT license (found in
+// the LICENSE-MIT file), at your option.
+
+// Derived from kurbo.
+// Copyright 2018 The kurbo Authors.
+// Licensed under the Apache License, Version 2.0 (found in
+// the LICENSE-APACHE file) or the MIT license (found in
+// the LICENSE-MIT file), at your option.
+
+Source header 2
+  accesskit@0.24.1: https://github.com/AccessKit/accesskit/blob/a55d3e1a18bb9ef0e4bccc9083fb13c3e0ad8969/common/src/lib.rs#L1-L9
+  accesskit_consumer@0.38.0: https://github.com/AccessKit/accesskit/blob/c88605b96d04431f9c3c792464a0f2f253480e94/consumer/src/iterators.rs#L1-L9
+
+// Copyright 2021 The AccessKit Authors. All rights reserved.
+// Licensed under the Apache License, Version 2.0 (found in
+// the LICENSE-APACHE file) or the MIT license (found in
+// the LICENSE-MIT file), at your option.
+
+// Derived from Chromium's accessibility abstraction.
+// Copyright 2018 The Chromium Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE.chromium file.
+
+Source header 3
+  accesskit_consumer@0.38.0: https://github.com/AccessKit/accesskit/blob/c88605b96d04431f9c3c792464a0f2f253480e94/consumer/src/filters.rs#L1-L4
+  accesskit_macos@0.26.3: https://github.com/AccessKit/accesskit/blob/c88605b96d04431f9c3c792464a0f2f253480e94/platforms/macos/src/filters.rs#L1-L4
+  accesskit_macos@0.26.3: https://github.com/AccessKit/accesskit/blob/c88605b96d04431f9c3c792464a0f2f253480e94/platforms/macos/src/patch.rs#L1-L4
+  accesskit_windows@0.34.0: https://github.com/AccessKit/accesskit/blob/c88605b96d04431f9c3c792464a0f2f253480e94/platforms/windows/src/context.rs#L1-L4
+  accesskit_windows@0.34.0: https://github.com/AccessKit/accesskit/blob/c88605b96d04431f9c3c792464a0f2f253480e94/platforms/windows/src/filters.rs#L1-L4
+
+// Copyright 2023 The AccessKit Authors. All rights reserved.
+// Licensed under the Apache License, Version 2.0 (found in
+// the LICENSE-APACHE file) or the MIT license (found in
+// the LICENSE-MIT file), at your option.
+
+Source header 4
+  accesskit_consumer@0.38.0: https://github.com/AccessKit/accesskit/blob/c88605b96d04431f9c3c792464a0f2f253480e94/consumer/src/lib.rs#L1-L4
+  accesskit_consumer@0.38.0: https://github.com/AccessKit/accesskit/blob/c88605b96d04431f9c3c792464a0f2f253480e94/consumer/src/tree.rs#L1-L4
+  accesskit_windows@0.34.0: https://github.com/AccessKit/accesskit/blob/c88605b96d04431f9c3c792464a0f2f253480e94/platforms/windows/src/lib.rs#L1-L4
+
+// Copyright 2021 The AccessKit Authors. All rights reserved.
+// Licensed under the Apache License, Version 2.0 (found in
+// the LICENSE-APACHE file) or the MIT license (found in
+// the LICENSE-MIT file), at your option.
+
+Source header 5
+  accesskit_consumer@0.38.0: https://github.com/AccessKit/accesskit/blob/c88605b96d04431f9c3c792464a0f2f253480e94/consumer/src/node.rs#L1-L9
+
+// Copyright 2021 The AccessKit Authors. All rights reserved.
+// Licensed under the Apache License, Version 2.0 (found in
+// the LICENSE-APACHE file) or the MIT license (found in
+// the LICENSE-MIT file), at your option.
+
+// Derived from Chromium's accessibility abstraction.
+// Copyright 2021 The Chromium Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE.chromium file.
+
+Source header 6
+  accesskit_consumer@0.38.0: https://github.com/AccessKit/accesskit/blob/c88605b96d04431f9c3c792464a0f2f253480e94/consumer/src/text.rs#L1-L4
+  accesskit_macos@0.26.3: https://github.com/AccessKit/accesskit/blob/c88605b96d04431f9c3c792464a0f2f253480e94/platforms/macos/src/adapter.rs#L1-L4
+  accesskit_macos@0.26.3: https://github.com/AccessKit/accesskit/blob/c88605b96d04431f9c3c792464a0f2f253480e94/platforms/macos/src/context.rs#L1-L4
+  accesskit_macos@0.26.3: https://github.com/AccessKit/accesskit/blob/c88605b96d04431f9c3c792464a0f2f253480e94/platforms/macos/src/event.rs#L1-L4
+  accesskit_macos@0.26.3: https://github.com/AccessKit/accesskit/blob/c88605b96d04431f9c3c792464a0f2f253480e94/platforms/macos/src/lib.rs#L1-L4
+  accesskit_macos@0.26.3: https://github.com/AccessKit/accesskit/blob/c88605b96d04431f9c3c792464a0f2f253480e94/platforms/macos/src/subclass.rs#L1-L4
+  accesskit_macos@0.26.3: https://github.com/AccessKit/accesskit/blob/c88605b96d04431f9c3c792464a0f2f253480e94/platforms/macos/src/util.rs#L1-L4
+  accesskit_windows@0.34.0: https://github.com/AccessKit/accesskit/blob/c88605b96d04431f9c3c792464a0f2f253480e94/platforms/windows/src/adapter.rs#L1-L4
+  accesskit_windows@0.34.0: https://github.com/AccessKit/accesskit/blob/c88605b96d04431f9c3c792464a0f2f253480e94/platforms/windows/src/subclass.rs#L1-L4
+  accesskit_windows@0.34.0: https://github.com/AccessKit/accesskit/blob/c88605b96d04431f9c3c792464a0f2f253480e94/platforms/windows/src/tests/mod.rs#L1-L4
+  accesskit_windows@0.34.0: https://github.com/AccessKit/accesskit/blob/c88605b96d04431f9c3c792464a0f2f253480e94/platforms/windows/src/tests/simple.rs#L1-L4
+  accesskit_windows@0.34.0: https://github.com/AccessKit/accesskit/blob/c88605b96d04431f9c3c792464a0f2f253480e94/platforms/windows/src/tests/subclassed.rs#L1-L4
+  accesskit_windows@0.34.0: https://github.com/AccessKit/accesskit/blob/c88605b96d04431f9c3c792464a0f2f253480e94/platforms/windows/src/text.rs#L1-L4
+  accesskit_windows@0.34.0: https://github.com/AccessKit/accesskit/blob/c88605b96d04431f9c3c792464a0f2f253480e94/platforms/windows/src/util.rs#L1-L4
+
+// Copyright 2022 The AccessKit Authors. All rights reserved.
+// Licensed under the Apache License, Version 2.0 (found in
+// the LICENSE-APACHE file) or the MIT license (found in
+// the LICENSE-MIT file), at your option.
+
+Source header 7
+  accesskit_macos@0.26.3: https://github.com/AccessKit/accesskit/blob/c88605b96d04431f9c3c792464a0f2f253480e94/platforms/macos/src/node.rs#L1-L9
+
+// Copyright 2022 The AccessKit Authors. All rights reserved.
+// Licensed under the Apache License, Version 2.0 (found in
+// the LICENSE-APACHE file) or the MIT license (found in
+// the LICENSE-MIT file), at your option.
+
+// Derived from Chromium's accessibility abstraction.
+// Copyright 2018 The Chromium Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE.chromium file.
+
+Source header 8
+  accesskit_windows@0.34.0: https://github.com/AccessKit/accesskit/blob/c88605b96d04431f9c3c792464a0f2f253480e94/platforms/windows/src/node.rs#L1-L9
+
+// Copyright 2022 The AccessKit Authors. All rights reserved.
+// Licensed under the Apache License, Version 2.0 (found in
+// the LICENSE-APACHE file) or the MIT license (found in
+// the LICENSE-MIT file), at your option.
+
+// Derived from Chromium's accessibility abstraction.
+// Copyright 2021 The Chromium Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE.chromium file.
+
+Source header 9
+  accesskit_windows@0.34.0: https://github.com/AccessKit/accesskit/blob/c88605b96d04431f9c3c792464a0f2f253480e94/platforms/windows/src/window_handle.rs#L1-L4
+
+// Copyright 2024 The AccessKit Authors. All rights reserved.
+// Licensed under the Apache License, Version 2.0 (found in
+// the LICENSE-APACHE file) or the MIT license (found in
+// the LICENSE-MIT file), at your option.
