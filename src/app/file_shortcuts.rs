@@ -15,7 +15,7 @@ use iced::{Element, Event, Length, Rectangle, Renderer, Size, Theme, Vector, key
 /// Text fields, including those in overlays, follow one rule: Command
 /// shortcuts never type their letter; Enter applies a field and leaves it, so
 /// Undo and Redo then act on the drawing; while a field is focused, Undo and
-/// Redo do nothing.
+/// Redo do nothing, and arrow keys remain in the text field.
 pub fn wrap(
     content: Element<'_, Message>,
     help_open: bool,
@@ -351,8 +351,8 @@ struct Fields {
 }
 
 impl Fields {
-    /// Enter that a field applied leaves it; Undo and Redo that nothing
-    /// handled do nothing while a field is focused.
+    /// Enter that a field applied leaves it. Unhandled Undo, Redo and arrow
+    /// keys stay in a focused field instead of changing the drawing.
     fn after(event: &Event, captured: bool) -> Option<Self> {
         let Event::Keyboard(keyboard::Event::KeyPressed {
             key,
@@ -369,10 +369,18 @@ impl Fields {
                 ..Self::default()
             })
         } else {
-            matches!(
+            (matches!(
+                key,
+                keyboard::Key::Named(
+                    keyboard::key::Named::ArrowUp
+                        | keyboard::key::Named::ArrowDown
+                        | keyboard::key::Named::ArrowLeft
+                        | keyboard::key::Named::ArrowRight
+                )
+            ) || matches!(
                 super::shortcuts::key_message(key, modified_key, *modifiers),
                 Some(Message::Undo | Message::Redo)
-            )
+            ))
             .then(Self::default)
         }
     }
