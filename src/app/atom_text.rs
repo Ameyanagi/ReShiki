@@ -2,7 +2,7 @@ use super::{
     App, Message,
     workspace::{control, muted_text},
 };
-use iced::widget::{Space, button, column, container, mouse_area, opaque, row, stack, text};
+use iced::widget::{Space, column, container, mouse_area, opaque, row, stack, text};
 use iced::{Element, Length, Task};
 use reshiki::abbreviations::LabelAlignment;
 use reshiki::atom_text::{self, Mode};
@@ -208,12 +208,17 @@ impl App {
                 "Edit atom label"
             })
             .size(20),
-            crate::appearance::text_input("N, NH3, C2H5, Boc, Cp*, M…", &state.input)
-                .id("atom-text")
-                .padding(10)
-                .size(18)
-                .on_input(|s| Message::AtomText(Action::Input(s)))
-                .on_submit(Message::AtomText(Action::Apply)),
+            reshiki::accessibility::text_input(
+                "atom-text",
+                "Atom or group label",
+                "N, NH3, C2H5, Boc, Cp*, M…",
+                &state.input
+            )
+            .style(crate::appearance::input_style)
+            .padding(10)
+            .size(18)
+            .on_input(|s| Message::AtomText(Action::Input(s)))
+            .on_submit(Message::AtomText(Action::Apply)),
         ]
         .spacing(12);
         if state.members.is_none() {
@@ -233,10 +238,16 @@ impl App {
                 .style(muted_text));
         if state.members.is_some() || self.tab.doc.abbreviation(state.id).is_some() {
             content = content.push(
-                crate::appearance::text_input("Label when facing left (optional)", &state.reverse)
-                    .on_input(|s| Message::AtomText(Action::ReverseInput(s)))
-                    .on_submit(Message::AtomText(Action::Apply))
-                    .padding(8),
+                reshiki::accessibility::text_input(
+                    "atom-text-reverse",
+                    "Label when facing left (optional)",
+                    "Label when facing left (optional)",
+                    &state.reverse,
+                )
+                .style(crate::appearance::input_style)
+                .on_input(|s| Message::AtomText(Action::ReverseInput(s)))
+                .on_submit(Message::AtomText(Action::Apply))
+                .padding(8),
             );
         }
         if let Some(error) = &state.error {
@@ -248,12 +259,20 @@ impl App {
             content.push(
                 row![
                     Space::new().width(Length::Fill),
-                    button("Cancel · Esc")
-                        .on_press(Message::AtomText(Action::Cancel))
-                        .style(control(false)),
-                    button("Apply · Enter")
-                        .on_press(Message::AtomText(Action::Apply))
-                        .style(crate::appearance::primary),
+                    reshiki::accessibility::button(
+                        "atom-text-cancel",
+                        "Cancel atom label edit",
+                        "Cancel · Esc"
+                    )
+                    .on_press(Message::AtomText(Action::Cancel))
+                    .style(control(false)),
+                    reshiki::accessibility::button(
+                        "atom-text-apply",
+                        "Apply atom label",
+                        "Apply · Enter"
+                    )
+                    .on_press(Message::AtomText(Action::Apply))
+                    .style(crate::appearance::primary),
                 ]
                 .spacing(8),
             ),

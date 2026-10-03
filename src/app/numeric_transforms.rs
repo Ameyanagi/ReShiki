@@ -1,8 +1,8 @@
 //! Explicit, atomic numeric edits using the same geometry as selection handles.
 use super::icons::{Glyph, Icon};
-use super::workspace::{accessible_unit_field, command, control, hover_hint, text_width};
+use super::workspace::{accessible_unit_field, control, hover_hint, text_width};
 use super::{App, Message};
-use iced::widget::{Space, button, canvas, column, container, row, text, tooltip};
+use iced::widget::{Space, canvas, column, container, row, text, tooltip};
 use iced::{Alignment, Element, Length, Task};
 use reshiki::{
     document::{Document, Point},
@@ -656,7 +656,7 @@ impl App {
                 )
                 .padding([7, 9])
                 .style(control(false))
-                .checked(state.more)
+                .expanded(state.more)
                 .on_press(Message::NumericTransform(Action::More(!state.more))),
                 Space::new().width(Length::Fill),
                 hover_hint(

@@ -72,6 +72,10 @@ impl Operation<Snapshot> for Collect {
         });
     }
     fn custom(&mut self, _: Option<&Id>, bounds: Rectangle, state: &mut dyn Any) {
+        if state.is::<super::Foreground>() {
+            self.snapshot = Snapshot::default();
+            self.ids.clear();
+        }
         if let Some(node) = state.downcast_ref::<Node>() {
             if !self.ids.insert(node.id.clone()) {
                 self.snapshot.duplicate_ids.push(node.id.clone());
@@ -118,6 +122,10 @@ impl<Message: Clone + Send + 'static> Operation<Message> for Activate<Message> {
         operate(self);
     }
     fn custom(&mut self, _: Option<&Id>, _: Rectangle, state: &mut dyn Any) {
+        if state.is::<super::Foreground>() {
+            self.matches = 0;
+            self.message = None;
+        }
         if let Some(action) = state.downcast_ref::<LiveAction<Message>>()
             && action.id == self.target
         {
@@ -152,6 +160,10 @@ impl<Message: Clone + Send + 'static> Operation<Message> for SetValue<Message> {
         operate(self);
     }
     fn custom(&mut self, _: Option<&Id>, _: Rectangle, state: &mut dyn Any) {
+        if state.is::<super::Foreground>() {
+            self.matches = 0;
+            self.message = None;
+        }
         if let Some(query) = state.downcast_mut::<super::ValueQuery>()
             && query.id == self.target
             && self.value.len() <= 16384

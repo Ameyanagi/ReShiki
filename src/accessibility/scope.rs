@@ -40,9 +40,18 @@ struct Targets {
     scrolls: Vec<Scroll>,
     path: Vec<usize>,
     pending: Option<usize>,
+    foreground: bool,
 }
 
 impl Operation for Targets {
+    fn custom(&mut self, _: Option<&Id>, _: Rectangle, state: &mut dyn std::any::Any) {
+        if state.is::<super::Foreground>() {
+            *self = Self {
+                foreground: true,
+                ..Self::default()
+            };
+        }
+    }
     fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
         let nested = self.pending.take();
         if let Some(index) = nested {
@@ -135,6 +144,7 @@ fn reveal_delta(position: f32, length: f32, start: f32, extent: f32) -> f32 {
 
 struct Focus {
     target: usize,
+    wait_foreground: bool,
     change_focus: bool,
     current: usize,
     scroll: usize,
@@ -142,10 +152,20 @@ struct Focus {
 }
 
 impl Operation for Focus {
+    fn custom(&mut self, _: Option<&Id>, _: Rectangle, state: &mut dyn std::any::Any) {
+        if state.is::<super::Foreground>() {
+            self.wait_foreground = false;
+            self.current = 0;
+            self.scroll = 0;
+        }
+    }
     fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
         operate(self);
     }
     fn focusable(&mut self, _: Option<&Id>, _: Rectangle, state: &mut dyn Focusable) {
+        if self.wait_foreground {
+            return;
+        }
         if self.change_focus {
             if self.current == self.target {
                 state.focus();
@@ -163,6 +183,9 @@ impl Operation for Focus {
         _: Vector,
         state: &mut dyn Scrollable,
     ) {
+        if self.wait_foreground {
+            return;
+        }
         if let Some(offset) = self.offsets.get(self.scroll) {
             state.scroll_to(operation::scrollable::AbsoluteOffset {
                 x: Some(offset.x),
@@ -195,6 +218,7 @@ fn traverse_key(event: &Event, mut operate: impl FnMut(&mut dyn Operation)) -> b
     targets.reveal(target);
     operate(&mut Focus {
         target,
+        wait_foreground: targets.foreground,
         change_focus: true,
         current: 0,
         scroll: 0,
@@ -230,6 +254,9 @@ impl FocusControl {
     }
 }
 impl Operation for FocusControl {
+    fn custom(&mut self, id: Option<&Id>, bounds: Rectangle, state: &mut dyn std::any::Any) {
+        self.targets.custom(id, bounds, state);
+    }
     fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
         let nested = self.targets.pending.take();
         if let Some(index) = nested {
@@ -271,6 +298,7 @@ impl Operation for FocusControl {
         targets.reveal(target);
         Outcome::Chain(Box::new(Focus {
             target,
+            wait_foreground: targets.foreground,
             change_focus: self.change_focus,
             current: 0,
             scroll: 0,
@@ -405,6 +433,13 @@ impl<Message> overlay::Overlay<Message, Theme, Renderer> for FocusOverlay<'_, Me
             .draw(renderer, theme, style, layout, cursor);
     }
     fn operate(&mut self, layout: Layout<'_>, renderer: &Renderer, operation: &mut dyn Operation) {
+        let mut targets = Targets::default();
+        self.0
+            .as_overlay_mut()
+            .operate(layout, renderer, &mut targets);
+        if !targets.targets.is_empty() {
+            operation.custom(None, layout.bounds(), &mut super::Foreground);
+        }
         self.0.as_overlay_mut().operate(layout, renderer, operation);
     }
     fn update(

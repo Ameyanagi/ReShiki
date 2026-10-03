@@ -235,9 +235,12 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
         let Some(base_layout) = layouts.next() else {
             return;
         };
-        self.base
-            .as_widget_mut()
-            .operate(base_state, base_layout, renderer, operation);
+        let _ = (base_state, base_layout);
+        operation.custom(
+            None,
+            layout.bounds(),
+            &mut reshiki::accessibility::Foreground,
+        );
         for ((panel, state), layout) in self.panels.iter_mut().zip(panel_states).zip(layouts) {
             panel
                 .content
@@ -257,6 +260,34 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
+        if matches!(
+            event,
+            Event::Keyboard(
+                keyboard::Event::KeyPressed {
+                    key: keyboard::Key::Named(
+                        keyboard::key::Named::Enter | keyboard::key::Named::Space
+                    ),
+                    ..
+                } | keyboard::Event::KeyReleased {
+                    key: keyboard::Key::Named(keyboard::key::Named::Space),
+                    ..
+                }
+            )
+        ) {
+            for ((panel, state), layout) in self
+                .panels
+                .iter_mut()
+                .zip(tree.children.iter_mut().skip(1))
+                .zip(layout.children().skip(1))
+            {
+                panel.content.as_widget_mut().update(
+                    state, event, layout, cursor, renderer, clipboard, shell, viewport,
+                );
+                if shell.is_event_captured() {
+                    return;
+                }
+            }
+        }
         if matches!(event, Event::Keyboard(_) | Event::InputMethod(_)) {
             if let Event::Keyboard(keyboard::Event::KeyPressed {
                 key: keyboard::Key::Named(key),

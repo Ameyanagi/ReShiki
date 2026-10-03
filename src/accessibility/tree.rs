@@ -95,6 +95,7 @@ impl NativeTree {
             let mut native = accesskit::Node::new(match node.role {
                 Role::Button | Role::ToggleButton => accesskit::Role::Button,
                 Role::TextInput => accesskit::Role::TextInput,
+                Role::TextArea => accesskit::Role::MultilineTextInput,
             });
             native.set_label(node.name.clone());
             native.set_author_id(node.id.clone());
@@ -108,11 +109,14 @@ impl NativeTree {
             if let Some(checked) = node.checked {
                 native.set_toggled(checked.into());
             }
+            if let Some(expanded) = node.expanded {
+                native.set_expanded(expanded);
+            }
             if let Some(value) = &node.value {
                 native.set_value(value.clone());
             }
             if node.enabled {
-                native.add_action(if node.role == Role::TextInput {
+                native.add_action(if matches!(node.role, Role::TextInput | Role::TextArea) {
                     Action::SetValue
                 } else {
                     Action::Click
@@ -157,7 +161,9 @@ impl NativeTree {
         if !node.enabled {
             return None;
         }
-        if request.action == Action::SetValue && node.role == Role::TextInput {
+        if request.action == Action::SetValue
+            && matches!(node.role, Role::TextInput | Role::TextArea)
+        {
             return match &request.data {
                 Some(accesskit::ActionData::Value(value)) if value.len() <= 16384 => {
                     Some(Request::SetValue(node.id.clone(), value.to_string()))
@@ -169,7 +175,7 @@ impl NativeTree {
             return None;
         }
         match request.action {
-            Action::Click if node.role != Role::TextInput => {
+            Action::Click if !matches!(node.role, Role::TextInput | Role::TextArea) => {
                 Some(Request::Activate(node.id.clone()))
             }
             Action::Focus => Some(Request::Focus(node.id.clone())),
@@ -208,6 +214,7 @@ mod tests {
             enabled: true,
             focused: true,
             checked: None,
+            expanded: None,
             value: None,
             bounds: Rectangle {
                 x: 10.,

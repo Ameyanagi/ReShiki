@@ -519,7 +519,14 @@ impl App {
         {
             return self.theme_generator_workspace();
         }
-        let mut content = column![self.command_bar(), self.style_bar()];
+        let background = |element| {
+            if self.context_menu.is_some() {
+                reshiki::accessibility::inert(element)
+            } else {
+                element
+            }
+        };
+        let mut content = column![background(self.command_bar()), background(self.style_bar())];
         let drawing: Element<'_, Edit> = canvas(MoleculeCanvas {
             element: &self.element,
             joining: self.tab.joining.as_ref().map(|s| &s.prepared),
@@ -632,18 +639,21 @@ impl App {
         } else {
             self.context_bar()
         };
-        let workspace = column![context, paper]
+        let workspace = column![background(context), paper]
             .height(Length::Fill)
             .width(Length::Fill);
-        let mut body = row![self.tool_palette(), workspace].height(Length::Fill);
+        let mut body = row![background(self.tool_palette()), workspace].height(Length::Fill);
         if self.inspector_open {
-            body = body.push(self.inspector());
+            body = body.push(background(self.inspector()));
         }
         content = content.push(body);
         if self.view_open {
-            content = content.push(self.view_options());
+            content = content.push(background(self.view_options()));
         }
-        content.push(self.status_bar()).height(Length::Fill).into()
+        content
+            .push(background(self.status_bar()))
+            .height(Length::Fill)
+            .into()
     }
 
     fn command_bar(&self) -> Element<'_, Message> {
@@ -1151,10 +1161,16 @@ impl App {
         }
         let (folded, compact) = (fit.folded, fit.compact);
         let mut x = CONTEXT_PADDING + fit.fixed;
-        for (c, w) in commands.iter().zip(&widths).skip(folded) {
+        for (index, (c, w)) in commands.iter().zip(&widths).enumerate().skip(folded) {
             row = row.push(hover_keys(
-                command(c.label, c.message.clone())
-                    .on_press_maybe(c.enabled.then(|| c.message.clone())),
+                reshiki::accessibility::button(
+                    format!("context-command-{index}"),
+                    c.hint,
+                    text(c.label).size(12),
+                )
+                .padding([7, 9])
+                .style(control(false))
+                .on_press_maybe(c.enabled.then(|| c.message.clone())),
                 c.hint,
                 super::shortcuts::label(&c.message),
                 tooltip::Position::Bottom,
@@ -1167,7 +1183,9 @@ impl App {
             row = row.push(
                 self.menu_anchor(
                     page,
-                    button(
+                    reshiki::accessibility::button(
+                        "context-overflow",
+                        format!("More: {}", labels.join(", ")),
                         iced::widget::canvas(Glyph(Icon::More, true))
                             .width(24)
                             .height(24),

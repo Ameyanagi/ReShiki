@@ -36,12 +36,19 @@ pub enum Action {
     Published(u64, Result<(), String>),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Terminal {
+    Close(window::Id),
+    Exit,
+}
+
 pub(super) struct State {
     generation: u64,
     window: Option<window::Id>,
     handle: Option<native::Handle>,
     installing: bool,
     closed: bool,
+    terminal: Option<Terminal>,
     sequence: u64,
     viewport: iced::Size,
     scale: f32,
@@ -65,6 +72,7 @@ impl Default for State {
             handle: None,
             installing: false,
             closed: false,
+            terminal: None,
             sequence: 0,
             viewport: iced::Size::new(1280., 820.),
             scale: 1.,
@@ -227,18 +235,23 @@ impl App {
                 Task::none()
             }
             Action::Installed(generation, result)
-                if generation == self.accessibility.generation && !self.accessibility.closed =>
+                if generation == self.accessibility.generation =>
             {
                 self.accessibility.installing = false;
                 match result {
                     Ok(handle) => self.accessibility.handle = Some(handle),
                     Err(error) => eprintln!("Could not install native accessibility: {error}"),
                 }
+                if self.accessibility.terminal.is_some() {
+                    return self.accessibility_finish_terminal();
+                }
+                self.accessibility.last = None;
                 // Installation runs before visibility. Even a failed adapter must
                 // leave the real application usable, with a diagnostic above.
-                self.accessibility.window.map_or_else(Task::none, |id| {
+                let show = self.accessibility.window.map_or_else(Task::none, |id| {
                     window::set_mode(id, window::Mode::Windowed)
-                })
+                });
+                Task::batch([show, self.accessibility_refresh()])
             }
             Action::Native(generation, request)
                 if generation == self.accessibility.generation && !self.accessibility.closed =>
@@ -252,10 +265,12 @@ impl App {
                     }
                     Some(Request::Focus(id)) => {
                         iced::advanced::widget::operate(FocusControl::new(id))
+                            .discard()
                             .chain(Task::done(Message::Accessibility(Action::Refresh)))
                     }
                     Some(Request::Reveal(id)) => {
                         iced::advanced::widget::operate(FocusControl::reveal(id))
+                            .discard()
                             .chain(Task::done(Message::Accessibility(Action::Refresh)))
                     }
                     None => Task::none(),
@@ -272,18 +287,81 @@ impl App {
     }
 
     pub(super) fn accessibility_close(&mut self, id: window::Id) -> Task<Message> {
+        self.accessibility.terminal = Some(Terminal::Close(id));
+        self.accessibility_finish_terminal()
+    }
+    pub(super) fn accessibility_exit(&mut self) -> Task<Message> {
+        self.accessibility.terminal = Some(Terminal::Exit);
+        self.accessibility_finish_terminal()
+    }
+    fn accessibility_finish_terminal(&mut self) -> Task<Message> {
         self.accessibility.closed = true;
         self.accessibility.last = None;
+        // An install callback can already own the adapter while its completion
+        // is queued. Keep its host alive until that completion supplies the token.
+        if self.accessibility.installing {
+            return Task::none();
+        }
+        let Some(terminal) = self.accessibility.terminal.take() else {
+            return Task::none();
+        };
         #[cfg(any(target_os = "macos", windows))]
-        if let Some(handle) = self.accessibility.handle.take() {
-            // Restore the native class/window procedure while its window lives.
+        if let Some(handle) = self.accessibility.handle.take()
+            && let Some(id) = self.accessibility.window
+        {
             return window::run(id, move |_| native::uninstall(handle)).then(move |result| {
                 if let Err(error) = result {
                     eprintln!("Could not remove native accessibility: {error}");
                 }
-                window::close(id)
+                finish_terminal(terminal)
             });
         }
-        window::close(id)
+        finish_terminal(terminal)
+    }
+}
+fn finish_terminal(terminal: Terminal) -> Task<Message> {
+    match terminal {
+        Terminal::Close(id) => window::close(id),
+        Terminal::Exit => iced::exit(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn closing_during_install_waits_for_completion_before_destroying_the_host() {
+        let (mut app, _) = App::new();
+        let id = window::Id::unique();
+        app.accessibility.window = Some(id);
+        app.accessibility.installing = true;
+        assert_eq!(app.accessibility_close(id).units(), 0);
+        assert!(app.accessibility.closed);
+        assert_eq!(app.accessibility.terminal, Some(Terminal::Close(id)));
+        let generation = app.accessibility.generation;
+        let task = app.accessibility_action(Action::Installed(
+            generation,
+            Err("injected install failure".into()),
+        ));
+        assert!(task.units() > 0);
+        assert!(!app.accessibility.installing);
+        assert!(app.accessibility.terminal.is_none());
+    }
+    #[test]
+    fn updater_exit_uses_the_same_pending_install_barrier() {
+        let (mut app, _) = App::new();
+        app.accessibility.installing = true;
+        assert_eq!(app.accessibility_exit().units(), 0);
+        assert_eq!(app.accessibility.terminal, Some(Terminal::Exit));
+        let generation = app.accessibility.generation;
+        assert!(
+            app.accessibility_action(Action::Installed(
+                generation,
+                Err("injected install failure".into())
+            ))
+            .units()
+                > 0
+        );
+        assert!(app.accessibility.terminal.is_none());
     }
 }

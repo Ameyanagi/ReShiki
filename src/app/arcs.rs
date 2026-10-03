@@ -1,6 +1,6 @@
 use super::*;
 use iced::Length;
-use iced::widget::{button, column, container, row, text, tooltip};
+use iced::widget::{column, container, row, text, tooltip};
 use reshiki::graphics::{ArcGeometry, GraphicKind};
 
 #[derive(Debug, Clone)]
@@ -115,7 +115,10 @@ impl App {
         let sweep = self.tab.arc_editor.geometry.sweep_degrees;
         let strip = row(ArcGeometry::PRESETS.into_iter().map(|degrees| {
             reshiki::accessibility::button(
-                format!("arc-preset-{degrees:.0}"),
+                format!(
+                    "arc-preset-{}-{degrees:.0}",
+                    if fill { "inspector" } else { "context" }
+                ),
                 format!("Arc sweep {degrees:.0} degrees"),
                 text(format!("{degrees:.0}°")).size(12).center(),
             )

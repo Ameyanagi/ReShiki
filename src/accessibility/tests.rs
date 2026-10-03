@@ -513,7 +513,7 @@ async fn tooltip_does_not_trap_tab_and_replaced_controls_do_not_inherit_mouse_do
 fn native_field_edits_and_modal_focus_use_live_widgets() {
     iced::futures::executor::block_on(async {
         let mut ui = Ui::new(Size::new(320., 220.)).await;
-        let field = |enabled| {
+        let field = |enabled: bool| {
             super::text_input("width", "Width (pt)", "", "20")
                 .on_input_maybe(enabled.then_some(Message::Edited))
         };
