@@ -111,7 +111,7 @@ Acyclic triple-bond edits straighten the adjacent branches. Bond appearance and 
 | 1 or x or b    | Single bond                                                    |
 | 2 / 3 / 4      | Double / triple / quadruple bond                               |
 | X              | Straight chain                                                 |
-| Shift+3–8      | Select a saturated 3–8-membered ring tool                       |
+| Shift+3–8      | Select a saturated 3–8-membered ring tool                      |
 | r              | Ring tool, retaining its last size                             |
 | R              | Toggle saturated/aromatic ring drawing, retaining member count |
 | j / J          | Benzene / cyclopentadiene                                      |
