@@ -57,3 +57,11 @@ Accepted C03 native macOS LibreOffice capture using extension 308d841 and ReShik
 ![Native screenshot for PR #118](pr118-reopened-macos-308d841.jpg)
 
 SHA-256: `209f3d3b0471ae7867328557a48bb69e617a1c2caf80de75f569cb428f709e30`
+
+## PR #121: pr121-ring-tool-macos-783b154
+
+Historical native macOS capture from production source 783b154 (QA eeb3d67), 1040×680 content points at 204% zoom: Regular ring / Size 6 is selected and a six-membered ring has been placed. This illustrates the resulting tool and canvas state; it does not establish Shift+3–8 key routing, atom-target behavior, or a new current-head execution.
+
+![Native screenshot for PR #121](pr121-ring-tool-macos-783b154.jpg)
+
+SHA-256: `c6ecaa391f8015bd3a6151e4c18a4190117933c307d385603231f80ba28ad7cf`
