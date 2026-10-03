@@ -44,7 +44,12 @@ class SessionTests(unittest.TestCase):
         # These tests isolate persistence/state handling. Real model/frame
         # broadcasts and guard acquisition are covered in test_host_guard.py.
         self.guard = SimpleNamespace(
-            model=None, owns=lambda owner, session: True, release=lambda *args: None
+            model=None,
+            unlock_error=None,
+            accepted_update=lambda: None,
+            retain_recovery=lambda session: False,
+            owns=lambda owner, session: True,
+            release=lambda *args: None,
         )
         self.object.client = SimpleNamespace(
             getComponent=lambda: None, visibilityChanged=lambda visible: None
