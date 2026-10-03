@@ -582,8 +582,9 @@ impl App {
         }
         if active && self.office_document() {
             hint.push_str(&format!(
-                " · {} updates Office",
-                super::shortcuts::label(&Message::Save).unwrap_or_default()
+                " · {} updates {}",
+                super::shortcuts::label(&Message::Save).unwrap_or_default(),
+                self.office_host,
             ));
         }
         hover_hint(body, hint, tooltip::Position::Bottom).into()

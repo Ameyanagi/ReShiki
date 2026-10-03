@@ -192,7 +192,11 @@ impl super::App {
                 self.tab.path = Some(path);
                 self.tab.untitled_name = None;
                 self.status = if self.office_document() {
-                    "Drawing updated in Office. Save the Office document to keep it."
+                    if self.office_host == "LibreOffice" {
+                        "Drawing saved for LibreOffice. Return to the document to check the update."
+                    } else {
+                        "Drawing updated in Office. Save the Office document to keep it."
+                    }
                 } else {
                     "Document saved"
                 }

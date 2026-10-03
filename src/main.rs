@@ -24,10 +24,26 @@ mod rendering;
 static ALLOCATOR: reshiki_process_heap::BoundedHeap = reshiki_process_heap::BoundedHeap;
 
 fn main() -> iced::Result {
+    if let Some(result) = reshiki::libreoffice::run(std::env::args_os().nth(1).as_deref()) {
+        if let Err(error) = result {
+            eprintln!("LibreOffice integration failed: {error}");
+            std::process::exit(1);
+        }
+        return Ok(());
+    }
     // Worker modes enter before graphics, AppKit/Office registration or Tokio.
     // Relaunching this executable keeps deadlines and memory failures isolated.
     if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--inchi-worker")) {
         reshiki::chemistry::inchi::worker::run();
+        return Ok(());
+    }
+    #[cfg(target_os = "linux")]
+    if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--clipboard-worker")) {
+        if let Err(error) = reshiki_linux::clipboard_worker() {
+            use std::io::Write;
+            let _ = writeln!(std::io::stderr(), "{error}");
+            std::process::exit(1);
+        }
         return Ok(());
     }
     #[cfg(target_os = "macos")]

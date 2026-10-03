@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<oor:component-data xmlns:oor="http://openoffice.org/2001/registry" xmlns:xs="http://www.w3.org/2001/XMLSchema" oor:name="Embedding" oor:package="org.openoffice.Office">
+  <node oor:name="Objects">
+    <node oor:name="8E86A932-EBBE-4E9F-8D26-CA2D82096856" oor:op="replace">
+      <prop oor:name="ObjectFactory"><value>dev.reshiki.libreoffice.EmbeddedFactory</value></prop>
+      <prop oor:name="ObjectVerbs"><value>PRIMARY OPEN</value></prop>
+    </node>
+  </node>
+  <node oor:name="MimeTypeClassIDRelations">
+    <prop oor:name="application/vnd.reshiki.embedded-drawing" oor:type="xs:string" oor:op="replace">
+      <value>8E86A932-EBBE-4E9F-8D26-CA2D82096856</value>
+    </prop>
+  </node>
+</oor:component-data>

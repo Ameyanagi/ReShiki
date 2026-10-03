@@ -60,6 +60,8 @@ mod theme_generator;
 mod tool_button;
 mod typography;
 mod updates;
+#[cfg(windows)]
+mod windows_libreoffice_save;
 mod workspace;
 pub(crate) use workspace::text_width;
 
@@ -324,8 +326,8 @@ pub struct App {
     status: String,
     error: bool,
     file_io: files::State,
-    #[cfg(windows)]
     office_path: Option<PathBuf>,
+    office_host: &'static str,
     pending: Option<Pending>,
     ring_size: u8,
     aromatic_ring: bool,
@@ -384,8 +386,8 @@ impl App {
             status: if recovered.is_empty() { READY } else { "" }.into(),
             error: false,
             file_io: files::State::default(),
-            #[cfg(windows)]
             office_path: None,
+            office_host: "Office",
             pending: None,
             ring_size: 6,
             aromatic_ring: false,
@@ -491,14 +493,7 @@ impl App {
         self.tab.dirty()
     }
     fn office_document(&self) -> bool {
-        #[cfg(windows)]
-        {
-            self.tab.path.is_some() && self.tab.path == self.office_path
-        }
-        #[cfg(not(windows))]
-        {
-            false
-        }
+        self.tab.path.is_some() && self.tab.path == self.office_path
     }
     fn run(&mut self, request: Request, kind: Job) -> Task<Message> {
         if self.tab.busy {
@@ -2020,7 +2015,8 @@ impl App {
                     self.front_pending();
                 }
                 #[cfg(windows)]
-                let office_save = self.office_document() && matches!(message, Message::Save);
+                let office_host = (self.office_document() && matches!(message, Message::Save))
+                    .then_some(self.office_host);
                 let (path, suggested_name) =
                     self.drawing_save_target(matches!(message, Message::SaveAs));
                 if self.file_io.saving {
@@ -2053,14 +2049,9 @@ impl App {
                         tokio::task::spawn_blocking(move || {
                             let bytes = save_snapshot.file_json()?;
                             #[cfg(windows)]
-                            if office_save {
-                                reshiki_windows::prepare_office_save(&save_path);
-                            }
+                            windows_libreoffice_save::save(&save_path, &bytes, office_host)?;
+                            #[cfg(not(windows))]
                             reshiki::storage::write_atomic(&save_path, &bytes)?;
-                            #[cfg(windows)]
-                            if office_save {
-                                reshiki_windows::wait_for_office_save(&save_path, &bytes)?;
-                            }
                             Ok::<_, String>(())
                         })
                         .await
