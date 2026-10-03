@@ -412,10 +412,13 @@ const STATES: [(&str, Setup); 20] = [
     ("molecule", molecule),
     ("copy-as", |app| {
         molecule(app);
-        app.context_menu = Some(crate::app::context_menu::State {
-            position: iced::Point::new(36., 24.),
-            page: crate::app::context_menu::Page::CopyAs,
-        });
+        app.context_menu = Some(crate::app::context_menu::State::new(
+            iced::Point::new(36., 24.),
+            crate::app::context_menu::Page::Main,
+        ));
+        let _ = app.context_action(crate::app::context_menu::Action::Page(
+            crate::app::context_menu::Page::CopyAs,
+        ));
     }),
     ("mixed", mixed),
     ("ring-tool", ring_tool),
