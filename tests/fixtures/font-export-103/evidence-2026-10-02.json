@@ -1,0 +1,337 @@
+{
+  "date": "2026-10-02",
+  "application_baseline_commit": "da5751d76db84c809b3562a3523536b459041cb8",
+  "environment": {
+    "os": "macOS 26.5.1 (25F80)",
+    "architecture": "aarch64-apple-darwin",
+    "rustc": "1.99.0 (b940084d7 2026-09-28)",
+    "cargo": "1.99.0 (5f94df478 2026-08-27)",
+    "fonttools": "4.61.1"
+  },
+  "scope": "Hermetic SVG backend reproduction; no native Fedora observation or application fix.",
+  "renderers": {
+    "current": {
+      "resvg": "0.45.1",
+      "usvg": "0.45.1",
+      "fontdb": "0.23.0",
+      "rustybuzz": "0.20.1",
+      "ttf-parser": "0.25.1",
+      "tiny-skia": "0.11.4"
+    },
+    "oracle": {
+      "resvg": "0.48.1",
+      "usvg": "0.48.1",
+      "fontdb": "0.24.0",
+      "harfrust": "0.12.0",
+      "skrifa": "0.44.0",
+      "tiny-skia": "0.12.0"
+    }
+  },
+  "font_database": "New database per image; exactly one face loaded from the checked-in fixture; no system-font loading.",
+  "comparison": "Exact equality of all premultiplied RGBA pixels against independently instantiated static 100/400/700 controls within the same backend.",
+  "reports": {
+    "current_bug": {
+      "exit_code": 0,
+      "rows": [
+        {
+          "case": "labels",
+          "requested": "unset",
+          "expected": "100",
+          "matched_static_weight": "100",
+          "width": "480",
+          "height": "180",
+          "dark_coverage_sum": "1098881"
+        },
+        {
+          "case": "labels",
+          "requested": "normal",
+          "expected": "100",
+          "matched_static_weight": "100",
+          "width": "480",
+          "height": "180",
+          "dark_coverage_sum": "1098881"
+        },
+        {
+          "case": "labels",
+          "requested": "400",
+          "expected": "100",
+          "matched_static_weight": "100",
+          "width": "480",
+          "height": "180",
+          "dark_coverage_sum": "1098881"
+        },
+        {
+          "case": "labels",
+          "requested": "bold",
+          "expected": "100",
+          "matched_static_weight": "100",
+          "width": "480",
+          "height": "180",
+          "dark_coverage_sum": "1098881"
+        },
+        {
+          "case": "labels",
+          "requested": "700",
+          "expected": "100",
+          "matched_static_weight": "100",
+          "width": "480",
+          "height": "180",
+          "dark_coverage_sum": "1098881"
+        },
+        {
+          "case": "reported-svg",
+          "requested": "unset",
+          "expected": "100",
+          "matched_static_weight": "100",
+          "width": "737",
+          "height": "889",
+          "dark_coverage_sum": "4951078"
+        },
+        {
+          "case": "reported-svg",
+          "requested": "normal",
+          "expected": "100",
+          "matched_static_weight": "100",
+          "width": "737",
+          "height": "889",
+          "dark_coverage_sum": "4951078"
+        },
+        {
+          "case": "reported-svg",
+          "requested": "400",
+          "expected": "100",
+          "matched_static_weight": "100",
+          "width": "737",
+          "height": "889",
+          "dark_coverage_sum": "4951078"
+        },
+        {
+          "case": "reported-svg",
+          "requested": "bold",
+          "expected": "100",
+          "matched_static_weight": "100",
+          "width": "737",
+          "height": "889",
+          "dark_coverage_sum": "4951078"
+        },
+        {
+          "case": "reported-svg",
+          "requested": "700",
+          "expected": "100",
+          "matched_static_weight": "100",
+          "width": "737",
+          "height": "889",
+          "dark_coverage_sum": "4951078"
+        }
+      ]
+    },
+    "current_acceptance": {
+      "exit_code": 1,
+      "rows": [
+        {
+          "case": "labels",
+          "requested": "unset",
+          "expected": "400",
+          "matched_static_weight": "100",
+          "width": "480",
+          "height": "180",
+          "dark_coverage_sum": "1098881"
+        },
+        {
+          "case": "labels",
+          "requested": "normal",
+          "expected": "400",
+          "matched_static_weight": "100",
+          "width": "480",
+          "height": "180",
+          "dark_coverage_sum": "1098881"
+        },
+        {
+          "case": "labels",
+          "requested": "400",
+          "expected": "400",
+          "matched_static_weight": "100",
+          "width": "480",
+          "height": "180",
+          "dark_coverage_sum": "1098881"
+        },
+        {
+          "case": "labels",
+          "requested": "bold",
+          "expected": "700",
+          "matched_static_weight": "100",
+          "width": "480",
+          "height": "180",
+          "dark_coverage_sum": "1098881"
+        },
+        {
+          "case": "labels",
+          "requested": "700",
+          "expected": "700",
+          "matched_static_weight": "100",
+          "width": "480",
+          "height": "180",
+          "dark_coverage_sum": "1098881"
+        },
+        {
+          "case": "reported-svg",
+          "requested": "unset",
+          "expected": "400",
+          "matched_static_weight": "100",
+          "width": "737",
+          "height": "889",
+          "dark_coverage_sum": "4951078"
+        },
+        {
+          "case": "reported-svg",
+          "requested": "normal",
+          "expected": "400",
+          "matched_static_weight": "100",
+          "width": "737",
+          "height": "889",
+          "dark_coverage_sum": "4951078"
+        },
+        {
+          "case": "reported-svg",
+          "requested": "400",
+          "expected": "400",
+          "matched_static_weight": "100",
+          "width": "737",
+          "height": "889",
+          "dark_coverage_sum": "4951078"
+        },
+        {
+          "case": "reported-svg",
+          "requested": "bold",
+          "expected": "700",
+          "matched_static_weight": "100",
+          "width": "737",
+          "height": "889",
+          "dark_coverage_sum": "4951078"
+        },
+        {
+          "case": "reported-svg",
+          "requested": "700",
+          "expected": "700",
+          "matched_static_weight": "100",
+          "width": "737",
+          "height": "889",
+          "dark_coverage_sum": "4951078"
+        }
+      ]
+    },
+    "oracle_acceptance": {
+      "exit_code": 0,
+      "rows": [
+        {
+          "case": "labels",
+          "requested": "unset",
+          "expected": "400",
+          "matched_static_weight": "400",
+          "width": "480",
+          "height": "180",
+          "dark_coverage_sum": "2573484"
+        },
+        {
+          "case": "labels",
+          "requested": "normal",
+          "expected": "400",
+          "matched_static_weight": "400",
+          "width": "480",
+          "height": "180",
+          "dark_coverage_sum": "2573484"
+        },
+        {
+          "case": "labels",
+          "requested": "400",
+          "expected": "400",
+          "matched_static_weight": "400",
+          "width": "480",
+          "height": "180",
+          "dark_coverage_sum": "2573484"
+        },
+        {
+          "case": "labels",
+          "requested": "bold",
+          "expected": "700",
+          "matched_static_weight": "700",
+          "width": "480",
+          "height": "180",
+          "dark_coverage_sum": "3957961"
+        },
+        {
+          "case": "labels",
+          "requested": "700",
+          "expected": "700",
+          "matched_static_weight": "700",
+          "width": "480",
+          "height": "180",
+          "dark_coverage_sum": "3957961"
+        },
+        {
+          "case": "reported-svg",
+          "requested": "unset",
+          "expected": "400",
+          "matched_static_weight": "400",
+          "width": "737",
+          "height": "889",
+          "dark_coverage_sum": "7738926"
+        },
+        {
+          "case": "reported-svg",
+          "requested": "normal",
+          "expected": "400",
+          "matched_static_weight": "400",
+          "width": "737",
+          "height": "889",
+          "dark_coverage_sum": "7738926"
+        },
+        {
+          "case": "reported-svg",
+          "requested": "400",
+          "expected": "400",
+          "matched_static_weight": "400",
+          "width": "737",
+          "height": "889",
+          "dark_coverage_sum": "7738926"
+        },
+        {
+          "case": "reported-svg",
+          "requested": "bold",
+          "expected": "700",
+          "matched_static_weight": "700",
+          "width": "737",
+          "height": "889",
+          "dark_coverage_sum": "10326139"
+        },
+        {
+          "case": "reported-svg",
+          "requested": "700",
+          "expected": "700",
+          "matched_static_weight": "700",
+          "width": "737",
+          "height": "889",
+          "dark_coverage_sum": "10326139"
+        }
+      ]
+    }
+  },
+  "conclusion": "With a wght default of 100, resvg/usvg 0.45.1 ignores the requested weight in all ten cases. resvg/usvg 0.48.1 matches static 400 for unset/normal/400 and static 700 for bold/700. This confirms the variable-default failure for the controlled substitute font.",
+  "fixture_regeneration": "All four font files, OFL.txt and source.json regenerated byte-identically on a second run.",
+  "issue_svg": {
+    "url": "https://github.com/user-attachments/assets/31478ca4-b6d3-4179-aca2-ca0b89ccd360",
+    "sha256": "9c7193a0c4fd78e75d57fa3ea80004a7123715ea1d20ad33629f8e09a393c18c",
+    "unmodified_on_disk": true,
+    "in_memory_substitutions": [
+      "Noto Sans CJK JP -> ReShiki Font Export Fixture",
+      "font-weight normal -> requested case"
+    ],
+    "render_scale": 12.5
+  },
+  "limits": [
+    "Source font is pinned upstream Noto Sans JP, not the reporter's original installed Noto Sans CJK JP bytes.",
+    "Original PNG screenshot was not used as a pixel-exact expected image.",
+    "Native Fedora, live Iced text, application metrics, font fallback selection and PDF were not validated.",
+    "Oracle success does not establish compatibility of a renderer upgrade with the application's svg2pdf dependency."
+  ]
+}

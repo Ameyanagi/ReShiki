@@ -107,6 +107,8 @@ static FONTS: LazyLock<resvg::usvg::fontdb::Database> = LazyLock::new(|| {
     db
 });
 
+mod font;
+
 /// Measure advances in the same font used by the drawing renderers.
 pub fn text_width(text: &str, size: f32) -> f32 {
     styled_text_width(text, size, &crate::typography::TextStyle::default())
@@ -127,7 +129,7 @@ pub fn text_ascent(style: &crate::typography::TextStyle) -> f32 {
         })
         .and_then(|id| {
             FONTS.with_face_data(id, |bytes, index| {
-                let face = ttf_parser::Face::parse(bytes, index).ok()?;
+                let face = font::face(bytes, index, if style.bold { 700 } else { 400 })?;
                 Some(face.ascender() as f32 / face.units_per_em() as f32 * style.size())
             })
         })
@@ -194,7 +196,7 @@ pub fn glyph_metrics(c: char, style: &crate::typography::TextStyle) -> GlyphMetr
             })?;
             FONTS
                 .with_face_data(id, |bytes, index| {
-                    let face = ttf_parser::Face::parse(bytes, index).ok()?;
+                    let face = font::face(bytes, index, if style.bold { 700 } else { 400 })?;
                     let advance = face.glyph_hor_advance(face.glyph_index(c)?)?;
                     Some((family, advance as f32 / face.units_per_em() as f32))
                 })
@@ -244,7 +246,7 @@ pub fn text_ink_boxes(text: &str, size: f32, style: &crate::typography::TextStyl
                 })
                 .and_then(|id| {
                     FONTS.with_face_data(id, |bytes, index| {
-                        let face = ttf_parser::Face::parse(bytes, index).ok()?;
+                        let face = font::face(bytes, index, if style.bold { 700 } else { 400 })?;
                         let glyph = face.glyph_index(c)?;
                         let bbox = face.glyph_bounding_box(glyph)?;
                         let em = face.units_per_em() as f32;
@@ -379,7 +381,7 @@ pub fn outline_text(
         })
         .and_then(|id| {
             FONTS.with_face_data(id, |bytes, index| {
-                let face = ttf_parser::Face::parse(bytes, index).ok()?;
+                let face = font::face(bytes, index, 400)?;
                 let mut b = Outline {
                     commands: vec![],
                     at: origin,

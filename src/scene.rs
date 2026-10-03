@@ -27,6 +27,11 @@ pub(crate) fn atom_label_bounds(a: &Atom, doc: &Document) -> Option<(Point, Poin
     text_bounds(&atom_label(a, doc))
 }
 
+#[cfg(test)]
+pub(crate) fn atom_label_ink_boxes(a: &Atom, doc: &Document) -> Vec<(Point, Point)> {
+    label_ink_boxes(&atom_label(a, doc))
+}
+
 fn atom_label(a: &Atom, doc: &Document) -> Vec<Primitive> {
     atom_label_runs(a, doc)
         .into_iter()
