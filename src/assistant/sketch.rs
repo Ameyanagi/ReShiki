@@ -407,6 +407,9 @@ impl Sketch {
         }
         for a in &self.abbreviations {
             doc.abbreviations.push(crate::abbreviations::Abbreviation {
+                label_style: None,
+                label_color_override: false,
+                highlight: None,
                 alignment: Default::default(),
                 label: a.label.clone(),
                 reverse_label: a.label.clone(),

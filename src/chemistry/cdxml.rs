@@ -36,7 +36,9 @@ mod variables;
 mod xml_guard;
 pub(crate) use variables::drawing_variables;
 
-pub use abbreviations::{Abbreviation, Flattened, flatten_abbreviations};
+pub use abbreviations::{
+    Abbreviation, AbbreviationPresentation, AtomPresentation, Flattened, flatten_abbreviations,
+};
 pub use arrows::{ArrowError, ArrowReader, NativeArrow, NativeArrowStyle};
 pub use association::{ImportPoint, ObjectMapEntry, PreparedAtoms};
 pub use groups::read_groups;

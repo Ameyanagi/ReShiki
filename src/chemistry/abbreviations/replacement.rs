@@ -266,6 +266,7 @@ pub fn replace_with_policy(
         .ok_or(Error::Selection)?;
     let atoms: HashMap<_, _> = document.atoms.iter().map(|a| (a.id, a)).collect();
     let anchor = atoms.get(&target).ok_or(Error::Selection)?;
+    let highlight = crate::highlights::atom_color(document, anchor);
     let boundary = document
         .bonds
         .iter()
@@ -392,6 +393,7 @@ pub fn replace_with_policy(
     for atom in &mut part.atoms {
         if atom.id == target {
             atom.text_style = anchor.text_style.clone();
+            atom.display.highlight = anchor.display.highlight;
         }
     }
     let members = part.atoms.iter().map(|a| a.id).collect::<Vec<_>>();
@@ -426,12 +428,18 @@ pub fn replace_with_policy(
         }
     }
     result.abbreviations.push(Abbreviation {
+        label_style: old.and_then(|g| g.label_style.clone()),
+        label_color_override: old.is_some_and(|g| g.label_color_override),
+        highlight,
         alignment: Default::default(),
         label: label.into(),
         reverse_label: preset.reverse_label.clone(),
         anchor: target,
         members,
     });
+    if let Some(color) = highlight {
+        crate::highlights::apply(&mut result, &[target], Some(color));
+    }
     result.version = result.version.max(15);
     crate::ring_fills::prune(&mut result);
     validate_with_policy(&result, policy)?;

@@ -160,6 +160,7 @@ pub enum Message {
     ApplyFontSize,
     ColorScope(typography::ColorScope),
     ClearRingFill,
+    ClearHighlights,
     TextColor(String),
     ApplyTextColor,
     TextAlign(reshiki::typography::TextAlign),
@@ -1548,11 +1549,15 @@ impl App {
                 }
             },
             Message::ClearRingFill => self.apply_ring_color(None),
+            Message::ClearHighlights => self.apply_highlight_color(None),
             Message::ColorScope(scope) => {
                 self.tab.color_scope = scope;
                 self.sync_color_input();
                 if scope == typography::ColorScope::Rings {
                     self.status = "Ring interiors · Select a ring, then choose a Tint color".into();
+                } else if scope == typography::ColorScope::Highlights {
+                    self.status =
+                        "Highlights · Select atoms or bonds, then choose a Tint color".into();
                 }
             }
             Message::TextColor(value) => {
@@ -3121,6 +3126,8 @@ fn chemistry_changed(before: &Document, after: &Document) -> bool {
             b.z_order = 0;
             a.color = Default::default();
             b.color = Default::default();
+            a.highlight = None;
+            b.highlight = None;
             a.double_position = Default::default();
             b.double_position = Default::default();
             a.secondary_display = None;

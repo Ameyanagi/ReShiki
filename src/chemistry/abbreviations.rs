@@ -311,6 +311,9 @@ pub fn find_with_policy(
         let anchor = *at(&molecule.ids, *at(&mapping, 1)?)?;
         used.extend(&members);
         result.abbreviations.push(Abbreviation {
+            label_style: None,
+            label_color_override: false,
+            highlight: None,
             alignment: Default::default(),
             label: preset.label.clone(),
             reverse_label: preset.reverse_label.clone(),

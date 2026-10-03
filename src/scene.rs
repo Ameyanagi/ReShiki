@@ -27,6 +27,18 @@ pub(crate) fn atom_label_bounds(a: &Atom, doc: &Document) -> Option<(Point, Poin
     text_bounds(&atom_label(a, doc))
 }
 
+/// Ink extents for persistent label backgrounds, excluding font line padding.
+pub(crate) fn atom_label_ink_bounds(a: &Atom, doc: &Document) -> Option<(Point, Point)> {
+    label_ink_boxes(&atom_label(a, doc))
+        .into_iter()
+        .reduce(|(lo, hi), (a, b)| {
+            (
+                Point::new(lo.x.min(a.x), lo.y.min(a.y)),
+                Point::new(hi.x.max(b.x), hi.y.max(b.y)),
+            )
+        })
+}
+
 /// The atom owning a visible label, including its hydrogens, isotope and charge.
 /// Keep this separate from geometric nearest-atom searches used for bond growth.
 pub fn atom_label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> {
@@ -110,9 +122,7 @@ fn atom_label_runs(a: &Atom, doc: &Document) -> Vec<Primitive> {
     if let Some(group) = doc.abbreviation(a.id).filter(|_| internal_group.is_none()) {
         let style = crate::typography::TextStyle {
             formula: true,
-            ..a.text_style
-                .clone()
-                .unwrap_or_else(|| doc.drawing_style.text_style())
+            ..group.text_style(doc)
         };
         let content = group.text(doc);
         let size = STYLE.world(style.size_pt);
@@ -170,10 +180,14 @@ fn atom_label_runs(a: &Atom, doc: &Document) -> Vec<Primitive> {
     if !show_element && a.charge == 0 {
         return vec![];
     }
-    let style = a
-        .text_style
-        .clone()
-        .unwrap_or_else(|| doc.drawing_style.text_style());
+    let style = internal_group.map_or_else(
+        || {
+            a.text_style
+                .clone()
+                .unwrap_or_else(|| doc.drawing_style.text_style())
+        },
+        |group| group.text_style(doc),
+    );
     let text_width = |text: &str, size| crate::style::styled_text_width(text, size, &style);
     let text = |position, content, size| Primitive::Text {
         position,
@@ -475,6 +489,25 @@ pub fn selections_bounds(doc: &Document, selections: &[Vec<u64>]) -> Vec<Option<
         if let Some((lo, hi)) = text_bounds(&atom_label(atom, doc)) {
             grow(atom.id, &mut [lo, hi].into_iter());
         }
+        if let Some((lo, hi)) = crate::highlights::atom_bounds(doc, atom) {
+            grow(atom.id, &mut [lo, hi].into_iter());
+        }
+    }
+    let mut highlight_joins = None;
+    for bond in &doc.bonds {
+        if bond.highlight.is_some()
+            && doc.bond_visible(bond.a, bond.b)
+            && owners
+                .get(&bond.a)
+                .is_some_and(|owner| Some(owner) == owners.get(&bond.b))
+            && let Some((lo, hi)) = crate::highlights::bond_bounds(
+                doc,
+                bond,
+                highlight_joins.get_or_insert_with(|| crate::bond_joins::Joins::new(doc)),
+            )
+        {
+            grow(bond.a, &mut [lo, hi].into_iter());
+        }
     }
     for a in doc
         .annotations
@@ -644,6 +677,7 @@ pub fn primitives(doc: &Document) -> Vec<Primitive> {
             .flat_map(graphic_primitive),
     );
     out.extend(doc.ring_fills.iter().filter_map(|fill| fill.primitive(doc)));
+    out.extend(crate::highlights::primitives(doc));
     let arcs = crate::ring_arcs::render(doc);
     // A partial curve replaces the ring's circle, not its aromatic membership.
     // Retain every ring here so its other edges do not gain fallback dashes.
@@ -1286,6 +1320,40 @@ fn render_svg(doc: &Document, background: bool) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn highlighted_selection_bounds_build_join_geometry_once_at_any_selection_size() {
+        use crate::{
+            document::{Document, Point},
+            palette::Color,
+        };
+        for count in [8, 128] {
+            let mut doc = Document::default();
+            let ids: Vec<_> = (0..count)
+                .map(|i| doc.add_atom("C", Point::new(i as f32 * 36., (i % 2) as f32 * 21.)))
+                .collect();
+            for pair in ids.windows(2) {
+                let [a, b] = pair else { continue };
+                doc.add_bond(*a, *b, 1, "bold");
+            }
+            let before = crate::bond_joins::construction_count();
+            assert!(super::selection_bounds(&doc, &ids).is_some());
+            assert_eq!(crate::bond_joins::construction_count() - before, 0);
+            for bond in &mut doc.bonds {
+                bond.highlight = Some(Color::Custom([190, 230, 240]));
+            }
+            let before = crate::bond_joins::construction_count();
+            assert!(super::selection_bounds(&doc, &[]).is_none());
+            assert_eq!(crate::bond_joins::construction_count() - before, 0);
+            let before = crate::bond_joins::construction_count();
+            assert!(super::selection_bounds(&doc, &ids).is_some());
+            assert_eq!(
+                crate::bond_joins::construction_count() - before,
+                1,
+                "{count} selected atoms"
+            );
+        }
+    }
+
     use super::*;
 
     #[test]

@@ -1,0 +1,106 @@
+{
+  "native_output": {
+    "file": "native-independent-label-ink.cdxml",
+    "bytes": 3341,
+    "sha256": "d5e5cbde4d4353b2fa23e1444147486c6ad27cafeba8043718dde1d460fd3d4c",
+    "creation_program": "ChemDraw 26.0.0.6599",
+    "platform": "macOS",
+    "date": "2026-10-03",
+    "action": "Open production ReShiki CDXML and native Save As CDXML"
+  },
+  "source": {
+    "file": "reshiki-ome-auto-ink.cdxml",
+    "bytes": 2259,
+    "sha256": "da71850de5b2d183aa379ea06c19e52c9e176e306e8b8893aab6c9b3663c0168",
+    "generator": "ReShiki production drawing writer, write_native_highlight_comparison_artifacts"
+  },
+  "drawing_style": {
+    "label_font": "Helvetica",
+    "label_size_pt": 10,
+    "bond_length_pt": 28,
+    "line_width_pt": 1,
+    "bold_width_pt": 4,
+    "margin_width_pt": 2,
+    "bond_spacing_percent": 12
+  },
+  "expected": {
+    "atoms": 3,
+    "bonds": 2,
+    "bond_orders": [
+      1,
+      1
+    ],
+    "contracted_label": {
+      "text": "OMe",
+      "font": "Helvetica",
+      "size_pt": 10,
+      "ink_rgb": [
+        124,
+        124,
+        124
+      ],
+      "highlight_rgb": [
+        0,
+        0,
+        0
+      ]
+    },
+    "internal_anchor": {
+      "element": "O",
+      "font": "Helvetica",
+      "size_pt": 10,
+      "ink_rgb": [
+        0,
+        0,
+        0
+      ],
+      "highlight_rgb": [
+        255,
+        255,
+        255
+      ]
+    },
+    "internal_carbon_highlight_rgb": [
+      129,
+      229,
+      255
+    ],
+    "internal_bond_highlight_rgb": [
+      255,
+      197,
+      0
+    ],
+    "external_atom_and_bond_highlights": null
+  },
+  "scope": "Native open/save and matched-style clipboard preserve independent contracted/internal text. Prime native Expand Label applies wrapper foreground to the internal fragment; ReShiki preserves original internal foregrounds when it expands its own imported document.",
+  "content_origin": "Three-atom dimethyl ether graph with an independently authored OMe contraction; no proprietary sample captions, illustrations, or page layout.",
+  "native_matched_clipboard": {
+    "file": "prime-ome-auto-ink-matched-clipboard.cdxml",
+    "bytes": 3516,
+    "sha256": "a17ffe06dfa344a6919a4fac3b1678b032ca6802f7e008dd10e012f224b12c6b",
+    "drawing_style": {
+      "font": "Helvetica",
+      "font_size_pt": 10.0,
+      "bond_length_pt": 28.0
+    },
+    "result": "Copy/paste into a matching Helvetica10 / 28pt-bond document preserves OMe RGB124, internal oxygen RGB0, and all internal highlights."
+  },
+  "native_expand_label": {
+    "file": "prime-ome-auto-ink-matched-expanded.cdxml",
+    "bytes": 3175,
+    "sha256": "511be84c703e049698d6675d2fa7c462febcd7363b47c54957de97ff9768dc02",
+    "drawing_style": {
+      "font": "Helvetica",
+      "font_size_pt": 10.0,
+      "bond_length_pt": 28.0
+    },
+    "result": "Prime Structure > Expand Label replaces the internal oxygen, carbon, and bond foregrounds with wrapper RGB124 while retaining their white, cyan, and yellow highlights; the external bond stays black."
+  },
+  "writer_assessment": {
+    "existing_input": "Internal O text already explicitly uses color=3, whose palette entry is exact RGB0. Internal bond also explicitly uses color=3.",
+    "native_save": "Prime removes these redundant default-black attributes while preserving black appearance and stored default foreground.",
+    "explicit_color_zero": "No evidence that replacing palette black index3 with reserved black index0 prevents the native Expand Label inheritance. Both identify black; neither is a verified lock or preservation flag.",
+    "production_change": "None. ReShiki import/export and its own Expand command preserve the original independent styles.",
+    "unverified_probe": "If needed, root can compare n color/LabelColor plus s color set to 0 versus 3 in a controlled native fixture. This would require fresh native save/expand evidence before any writer change."
+  }
+}

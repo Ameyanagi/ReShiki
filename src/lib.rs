@@ -40,6 +40,7 @@ pub mod export;
 pub mod graphics;
 pub mod grouping;
 pub mod haworth;
+pub mod highlights;
 pub mod hotkeys;
 pub mod joining;
 pub mod libreoffice;

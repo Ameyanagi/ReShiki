@@ -358,6 +358,10 @@ impl Writer<'_> {
                     ("Z", z),
                 ],
             )?;
+            if let Some(color) = group.highlight {
+                let color = self.color(color)?;
+                self.tree.set(outer, "highlightColor", color)?;
+            }
             let id = self.id()?;
             let inner = self.tree.add(Some(outer), "fragment", [("id", id)])?;
             for id in &group.members {
@@ -433,11 +437,21 @@ impl Writer<'_> {
                     .set(inner, "ConnectionOrder", connection_ids.join(" "))?;
                 self.tree.set(outer, "BondOrdering", bond_ids.join(" "))?;
             }
-            let mut style = self
-                .atom(group.anchor)?
-                .text_style
-                .clone()
-                .unwrap_or_default();
+            let mut style = group.text_style(self.doc);
+            let original = self
+                .atom_indices
+                .get(&group.anchor)
+                .and_then(|&index| self.original.atoms.get(index))
+                .filter(|atom| atom.id == group.anchor)
+                .ok_or_else(|| invalid("Missing original abbreviation anchor"))?;
+            // The label's paint can differ from its hidden anchor's halo.
+            // Store each foreground independently for editable exchange and
+            // ReShiki expansion; explicit user foregrounds take priority.
+            style.color = crate::palette::Color::Custom(
+                self.original
+                    .canvas_theme
+                    .color(crate::canvas_theme::atom_color(self.original, original)),
+            );
             style.formula = true;
             style.script = crate::typography::Script::Normal;
             let mut attributes = vec![

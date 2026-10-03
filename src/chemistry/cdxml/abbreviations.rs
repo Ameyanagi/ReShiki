@@ -12,6 +12,61 @@ pub struct Abbreviation {
     /// None preserves the original reader's supported absent-ID case.
     pub anchor: Option<String>,
     pub members: Vec<Option<String>>,
+    /// Explicit contracted-label paint; the expanded atoms retain their own.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub highlight: Option<String>,
+    /// Original text presentations before the chemical flattening step aliases
+    /// the wrapper label to its anchor. This detached import-only metadata does
+    /// not change the historical chemical XML/record serialization contract.
+    #[serde(skip)]
+    pub presentation: Option<AbbreviationPresentation>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AtomPresentation {
+    pub attributes: super::presentation::Attributes,
+    pub text: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AbbreviationPresentation {
+    pub label: AtomPresentation,
+    pub anchor: AtomPresentation,
+}
+
+impl AbbreviationPresentation {
+    pub(super) fn bytes(&self) -> Option<usize> {
+        [&self.label, &self.anchor]
+            .into_iter()
+            .try_fold(0usize, |bytes, part| {
+                part.attributes.iter().try_fold(
+                    bytes.checked_add(part.text.as_ref().map_or(0, String::len))?,
+                    |bytes, (key, value)| bytes.checked_add(key.len())?.checked_add(value.len()),
+                )
+            })
+    }
+}
+
+fn atom_presentation(tree: &Tree, atom: usize) -> Result<AtomPresentation> {
+    let attributes = tree
+        .node(atom)?
+        .attributes
+        .iter()
+        .filter(|(name, _)| {
+            matches!(
+                name.as_str(),
+                "LabelFont" | "LabelSize" | "LabelFace" | "LabelColor"
+            )
+        })
+        .cloned()
+        .collect();
+    let text = tree
+        .children(atom, "t")?
+        .first()
+        .copied()
+        .map(|text| tree.serialize_subtree(text))
+        .transpose()?;
+    Ok(AtomPresentation { attributes, text })
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -134,8 +189,20 @@ pub(super) fn flatten_tree(mut tree: Tree) -> Result<Flattened> {
         .collect::<Result<Vec<_>>>()?;
     let mut abbreviations = Vec::new();
     let mut removed = (0usize, 0usize);
+    let mut presentation_bytes = 0usize;
     for outer in wrappers {
         let expanded = flatten_one(&mut tree, outer)?;
+        presentation_bytes = presentation_bytes
+            .checked_add(
+                expanded
+                    .abbreviation
+                    .presentation
+                    .as_ref()
+                    .map_or(Some(0), AbbreviationPresentation::bytes)
+                    .ok_or(Error::Limit)?,
+            )
+            .filter(|bytes| *bytes <= 16 * 1024 * 1024)
+            .ok_or(Error::Limit)?;
         abbreviations.push(expanded.abbreviation);
         removed.0 += expanded.atoms;
         removed.1 += expanded.bonds;
@@ -167,6 +234,7 @@ struct Expanded {
     bonds: usize,
 }
 fn flatten_one(tree: &mut Tree, outer: usize) -> Result<Expanded> {
+    let highlight = tree.node(outer)?.attr("highlightColor").map(str::to_owned);
     // Python snapshots wrappers before editing, then rebuilds parents from the
     // surviving root for each one. A wrapper discarded by an earlier expansion
     // must therefore fail, even though its arena allocation still exists.
@@ -410,6 +478,11 @@ fn flatten_one(tree: &mut Tree, outer: usize) -> Result<Expanded> {
             significant(target[1] + x * s + y * c)
         );
         tree.node_mut(node)?.set("p", p.clone());
+        if let Some(color) = &highlight
+            && tree.node(node)?.attr("highlightColor").is_none()
+        {
+            tree.node_mut(node)?.set("highlightColor", color.clone());
+        }
         for text in tree.children(node, "t")? {
             tree.node_mut(text)?.set("p", p.clone());
         }
@@ -418,6 +491,11 @@ fn flatten_one(tree: &mut Tree, outer: usize) -> Result<Expanded> {
     }
     for bond in bonds {
         if !removed_bonds.contains(&bond) {
+            if let Some(color) = &highlight
+                && tree.node(bond)?.attr("highlightColor").is_none()
+            {
+                tree.node_mut(bond)?.set("highlightColor", color.clone());
+            }
             tree.append(parent, bond)?;
         }
     }
@@ -434,6 +512,10 @@ fn flatten_one(tree: &mut Tree, outer: usize) -> Result<Expanded> {
                 .ok_or_else(|| invalid("Missing abbreviation attachment atom ID"))?,
         );
     }
+    let presentation = Some(AbbreviationPresentation {
+        label: atom_presentation(tree, outer)?,
+        anchor: atom_presentation(tree, anchor)?,
+    });
     for text in tree.children(anchor, "t")? {
         tree.detach(text)?;
     }
@@ -481,6 +563,8 @@ fn flatten_one(tree: &mut Tree, outer: usize) -> Result<Expanded> {
             reverse_label,
             anchor: anchor_id,
             members,
+            highlight,
+            presentation,
         },
         atoms: 1 + connections.len(),
         bonds: removed_bonds.len(),

@@ -616,6 +616,7 @@ pub fn place_anchored(
             }
             let mut affected: Vec<_> = shared.values().copied().collect();
             affected.extend(mapping.keys());
+            crate::highlights::inherit_merged(&mut result, &mapping);
             result.invalidate_chemistry(&affected);
             result.atoms.retain(|a| !mapping.contains_key(&a.id));
             // A multi-edge fusion may map both endpoints of a genuinely new

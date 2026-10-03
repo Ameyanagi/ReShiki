@@ -117,6 +117,22 @@ fn compare_xml(actual: &str, expected: &str, name: &str) -> anyhow::Result<()> {
                 );
                 continue;
             }
+            if e.has_tag_name("color") && matches!(attr.name(), "r" | "g" | "b") {
+                // Native ChemDraw truncates normalized RGB components. The
+                // writer now biases by at most one 8-place decimal unit so
+                // these components retain the historical integer color.
+                let before = attr.value().parse::<f64>()?;
+                let after = value.parse::<f64>()?;
+                let channel = (before * 255.).round();
+                assert!((0.0..=1.0).contains(&after), "{name}: color range");
+                assert_eq!((after * 255.).trunc(), channel, "{name}: native RGB");
+                assert_eq!((after * 65535.).round(), channel * 257., "{name}: CDX RGB");
+                assert!(
+                    (after - before).abs() <= 0.00000001000001,
+                    "{name}: bounded color precision correction"
+                );
+                continue;
+            }
             // Geometry has six decimal places. Other numeric attributes must
             // be exactly equal after parsing; references and labels are text.
             let geometry = matches!(

@@ -78,6 +78,8 @@ pub struct NativeBond {
     pub secondary_display: Option<String>,
     pub double_position: DoublePosition,
     pub color: NativeColor,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub highlight: Option<NativeColor>,
 }
 impl NativeBond {
     pub fn into_document(self) -> Result<Bond> {
@@ -92,6 +94,11 @@ impl NativeBond {
             secondary_display: self.secondary_display,
             double_position: self.double_position,
             color: self.color.into_color().map_err(|_| Error::ColorBoundary)?,
+            highlight: self
+                .highlight
+                .map(|color| color.into_document().map(crate::palette::Color::Custom))
+                .transpose()
+                .map_err(|_| Error::ColorBoundary)?,
             indicator: Default::default(),
             cip_label: None,
             stereo: None,
@@ -325,6 +332,9 @@ pub fn read_native(
                 .and_then(|n| usize::try_from(n).ok())
                 .and_then(|n| colors.get(n).copied())
                 .ok_or(Error::Color)?;
+            let highlight =
+                super::presentation::highlight(node.attribute("highlightColor"), colors)
+                    .map_err(|error| Error::Invalid(error.to_string()))?;
             let mut double_position = match node
                 .attribute("DoublePosition")
                 .unwrap_or("auto")
@@ -375,6 +385,7 @@ pub fn read_native(
                 secondary_display,
                 double_position,
                 color,
+                highlight,
             });
         }
         offset = next;

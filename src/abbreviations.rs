@@ -5,6 +5,15 @@ use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Abbreviation {
+    /// Typography for the contracted label, independent of its internal atoms.
+    /// Older drawings fall back to the anchor's style when this is absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label_style: Option<crate::typography::TextStyle>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub label_color_override: bool,
+    /// Paint behind the contracted label, separate from its internal atoms.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub highlight: Option<crate::palette::Color>,
     pub label: String,
     #[serde(default)]
     pub reverse_label: String,
@@ -94,11 +103,35 @@ impl Connectivity {
 }
 
 impl Abbreviation {
+    pub fn text_style(&self, doc: &Document) -> crate::typography::TextStyle {
+        self.label_style
+            .clone()
+            .or_else(|| {
+                doc.atom(self.anchor)
+                    .and_then(|atom| atom.text_style.clone())
+            })
+            .unwrap_or_else(|| doc.drawing_style.text_style())
+    }
+
+    pub fn color_override(&self, doc: &Document) -> bool {
+        if self.label_style.is_some() {
+            self.label_color_override
+        } else {
+            doc.atom(self.anchor)
+                .is_some_and(|atom| atom.display.color_override)
+        }
+    }
+
     pub fn validate(&self, doc: &Document) -> Result<(), String> {
         self.validate_with(&Connectivity::new(doc))
     }
 
     fn validate_with(&self, connectivity: &Connectivity) -> Result<(), String> {
+        if let Some(style) = &self.label_style {
+            style.validate()?;
+        } else if self.label_color_override {
+            return Err("An explicit abbreviation color needs a label style".into());
+        }
         for label in [&self.label, &self.reverse_label] {
             if label.chars().count() > 32 || label.chars().any(char::is_control) {
                 return Err(
@@ -293,6 +326,9 @@ impl Document {
             .or_else(|| members.first().copied())
             .ok_or("Select atoms to abbreviate")?;
         let abbreviation = Abbreviation {
+            label_style: None,
+            label_color_override: false,
+            highlight: None,
             alignment: Default::default(),
             label: label.trim().into(),
             reverse_label: reverse_label.trim().into(),

@@ -243,6 +243,11 @@ pub fn apply(
                 matching_text(text, old, &style);
             }
         }
+        for group in &mut doc.abbreviations {
+            if let Some(text) = &mut group.label_style {
+                matching_text(text, old, &style);
+            }
+        }
         for label in &mut doc.annotations {
             matching_text(&mut label.format.style, old, &style);
             for span in &mut label.format.spans {

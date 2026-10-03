@@ -724,9 +724,22 @@ fn old_light_canvas_documents_keep_their_chemdraw_output() {
         serde_json::from_str(include_str!("fixtures/palette/legacy-light.rsk")).unwrap();
     assert_eq!(doc.bonds[0].color, Color::Ink);
     assert_eq!(doc.bonds[1].color, Color::Custom([10, 120, 200]));
+    // Preserve the historical fixture. The writer now places decimals above
+    // channel boundaries so native ChemDraw truncation keeps 150, 20 and 100
+    // rather than 149, 19 and 99. Only these three spellings may change; every
+    // other byte must match. All 256 channel boundaries are tested separately.
+    let expected = include_str!("fixtures/palette/legacy-light.cdxml")
+        .replace(
+            r#"<color r="0.58823529" g="0.15686275" b="0.07843137" />"#,
+            r#"<color r="0.58823530" g="0.15686275" b="0.07843138" />"#,
+        )
+        .replace(
+            r#"<color r="0.78431373" g="0.39215686" b="0.00000000" />"#,
+            r#"<color r="0.78431373" g="0.39215687" b="0.00000000" />"#,
+        );
     assert_eq!(
         exchange::drawing::write(&doc, Default::default()).unwrap(),
-        include_str!("fixtures/palette/legacy-light.cdxml")
+        expected
     );
     // Saving writes the current form, which reads back to the same drawing.
     let saved: Document = serde_json::from_slice(&serde_json::to_vec(&doc).unwrap()).unwrap();
