@@ -1135,7 +1135,7 @@ impl App {
                     enabled,
                 } => {
                     let destructive = matches!(&action, Action::Run(message) if matches!(message.as_ref(), Message::Delete));
-                    let accessible_name = label.clone();
+                    let accessible_name = label;
                     let label = text(label).size(12).width(Length::Fill);
                     let label = if destructive {
                         label.style(crate::appearance::text_color(Color::from_rgb8(167, 59, 51)))

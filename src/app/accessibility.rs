@@ -32,8 +32,10 @@ pub enum Action {
     Refresh,
     Snapshot(u64, u64, Snapshot),
     Installed(u64, Result<native::Handle, String>),
+    #[cfg_attr(not(any(target_os = "macos", windows)), allow(dead_code))]
     Native(u64, accesskit::ActionRequest),
     Dispatch(u64, Box<Message>),
+    #[cfg_attr(not(any(target_os = "macos", windows)), allow(dead_code))]
     Published(u64, Result<(), String>),
 }
 
@@ -76,6 +78,7 @@ pub(super) struct State {
     focused: bool,
     tree: NativeTree,
     last: Option<accesskit::TreeUpdate>,
+    #[cfg_attr(not(any(target_os = "macos", windows)), allow(dead_code))]
     sender: mpsc::Sender<Action>,
 }
 impl Default for State {
