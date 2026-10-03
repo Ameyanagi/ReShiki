@@ -175,7 +175,8 @@ fn concurrent_library_updates_and_corrupt_files_cannot_overwrite_saved_templates
         .write(true)
         .open(path.with_extension("json.lock"))
         .unwrap();
-    lock.lock().unwrap();
+    lock.try_lock()
+        .expect("a stale-state rejection must release the library lock");
     // A duplicate keeps the Unix lock alive after drop; explicitly release the
     // test-owned lock without depending on other handles closing first.
     #[cfg(unix)]
@@ -199,6 +200,15 @@ fn concurrent_library_updates_and_corrupt_files_cannot_overwrite_saved_templates
             .starts_with("Invalid template collection:")
     );
     assert_eq!(std::fs::read(&path).unwrap(), b"broken library");
+    let contender = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path.with_extension("json.lock"))
+        .unwrap();
+    contender
+        .try_lock()
+        .expect("a corrupt-file rejection must release the library lock");
+    contender.unlock().unwrap();
 }
 
 #[test]
