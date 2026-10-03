@@ -30,12 +30,12 @@ from com.sun.star.embed import (
     XTransactionListener,
 )
 from com.sun.star.embed.EmbedStates import ACTIVE, LOADED, RUNNING
-from com.sun.star.frame import XDispatch, XDispatchProvider
+from com.sun.star.frame import XDispatch, XDispatchProvider, XDispatchResultListener
 from com.sun.star.frame.InfobarType import DANGER, INFO
 from com.sun.star.io import IOException
 from com.sun.star.lang import XComponent, XInitialization, XServiceInfo
 from com.sun.star.uno import RuntimeException as UnoRuntimeException
-from com.sun.star.util import CloseVetoException, XCloseable
+from com.sun.star.util import CloseVetoException, XCloseable, XCloseListener
 
 CLASS_ID = "8E86A932-EBBE-4E9F-8D26-CA2D82096856"
 MIME = "application/vnd.reshiki.embedded-drawing"
@@ -350,6 +350,271 @@ class ReplacementTransaction(unohelper.Base, XTransactionListener):
             self.owner, self.parent = None, None
 
 
+HOST_GUARDS = []  # UNO model equality, never a filename (Save As keeps the model).
+RETIRED_HOST_GUARDS = []  # No sessions: retain only old source-specific close duties.
+
+
+class HostCloseListener(unohelper.Base, XCloseListener):
+    def __init__(self, guard, kind, source):
+        self.guard, self.kind, self.source = guard, kind, source
+        self.attached, self.alive = False, True
+
+    def queryClosing(self, event, ownership):
+        if event.Source == self.source and self.guard.blocks_close():
+            if ownership:
+                # A fresh veto can occur in a later edit after an earlier retry
+                # was cancelled. Its new ownership must receive a new retry.
+                self.guard.obligations[self.kind] = False
+            self.guard.notice_veto()
+            raise CloseVetoException(
+                self.guard.unlock_error
+                or "Close the ReShiki editing window before closing this document.",
+                self,
+            )
+
+    def notifyClosing(self, event):
+        if event.Source == self.source:
+            self.guard.source_closed(self.kind)
+
+    def disposing(self, event):
+        self.notifyClosing(event)
+
+
+class CloseResult(unohelper.Base, XDispatchResultListener):
+    def __init__(self, guard, kind):
+        self.guard, self.kind = guard, kind
+
+    def dispatchFinished(self, event):
+        # Even SUCCESS is not a source-closure notification: the last CloseWin
+        # can replace the controller with Start Center in the same live frame.
+        self._complete()
+
+    def disposing(self, event):
+        self._complete()
+
+    def _complete(self):
+        if self.guard.inflight.get(self.kind) is self:
+            del self.guard.inflight[self.kind]
+            # Only a genuinely new TRUE veto can have rearmed this duty while
+            # its previous result was pending. Cancel alone does not retry.
+            self.guard._settle()
+
+
+class HostGuard:
+    """UI-thread lifetime protection for one model and its active edit frame.
+
+    A second active view is deliberately rejected before launching an editor.
+    Multiple embedded objects in the same view share one owned action lock.
+    """
+
+    def __init__(self, ctx, model, frame):
+        self.ctx, self.model, self.frame = ctx, model, frame
+        self.controller = frame.getController()
+        self.listeners = {
+            "model": HostCloseListener(self, "model", model),
+            "frame": HostCloseListener(self, "frame", frame),
+        }
+        self.sessions, self.obligations, self.inflight = {}, {}, {}
+        self.scheduled = set()
+        self.phase, self.locked, self.invalid = "IDLE", False, False
+        self.notice_pending = False
+        self.unlock_error = None
+
+    def blocks_close(self):
+        return bool(self.sessions) or self.phase in ("ACQUIRING", "TEARING_DOWN")
+
+    def notice_veto(self):
+        if self.notice_pending:
+            return
+        self.notice_pending = True
+
+        def notify():
+            try:
+                if self.blocks_close():
+                    completed = self.sessions and all(
+                        session["watch_complete"] and session["process"].poll() is not None
+                        for _, session in self.sessions.values()
+                    )
+                    message = self.unlock_error or (
+                        "The editor has closed, but LibreOffice has not finished the session. "
+                        "Select the object and choose Edit in ReShiki to finish recovery."
+                        if completed
+                        else "Close the ReShiki editing window before closing this document."
+                    )
+                    show_error(self.ctx, message)
+            finally:
+                self.notice_pending = False
+
+        try:
+            post(self.ctx, notify)
+        except Exception:
+            # Reporting failure must never turn a veto into permission to close.
+            self.notice_pending = False
+
+    def owns(self, owner, session):
+        registered = self.sessions.get(session["token"])
+        return (
+            not self.invalid
+            and registered is not None
+            and registered[0] is owner
+            and registered[1] is session
+            and all(listener.alive for listener in self.listeners.values())
+        )
+
+    def acquire(self, owner, session, frame):
+        if self.unlock_error:
+            raise RuntimeError(self.unlock_error)
+        if self.invalid or self.phase == "TEARING_DOWN":
+            raise RuntimeError("The document's editing window is no longer available.")
+        if frame != self.frame:
+            raise RuntimeError(
+                "Finish ReShiki editing in the other LibreOffice window for this document "
+                "before editing from this window."
+            )
+        self.sessions[session["token"]] = (owner, session)
+        session["guard"] = self
+        self.phase = "ACQUIRING"
+        try:
+            for listener in self.listeners.values():
+                if not listener.attached:
+                    listener.source.addCloseListener(listener)
+                    listener.attached = listener.alive
+                    if self.invalid:
+                        raise RuntimeError("The document closed while preparing the editor.")
+            if not self.locked:
+                self.frame.addActionLock()
+                self.locked = True
+            if self.invalid:
+                raise RuntimeError("The document closed while preparing the editor.")
+            self.phase = "ACTIVE"
+        except Exception:
+            if self.sessions:
+                self.release(owner, session)
+            else:
+                self._unprotect()
+            raise
+
+    def release(self, owner, session):
+        registered = self.sessions.get(session["token"])
+        if registered is None or registered[0] is not owner or registered[1] is not session:
+            return
+        del self.sessions[session["token"]]
+        if self.sessions:
+            self.phase = "ACTIVE"
+            return
+        self._unprotect()
+
+    def _unprotect(self):
+        # removeActionLock may synchronously call close(True) for a remembered
+        # self-close. Keep BOTH listeners vetoing until that call returns.
+        self.phase = "TEARING_DOWN"
+        if self.unlock_error:
+            return  # The native decrement may already have happened. Never retry it.
+        if self.locked:
+            try:
+                self.frame.removeActionLock()
+            except Exception as error:
+                self.unlock_error = (
+                    "LibreOffice could not safely release this document's editing lock. "
+                    "The window remains protected. Save your work before restarting LibreOffice. "
+                    "Edit in ReShiki cannot clear this state. " + str(error)
+                )
+                self.notice_veto()
+                return  # Keep protection; the owned lock count is now uncertain.
+            self.locked = False
+        self.phase = "IDLE"
+        self._settle()
+
+    def _settle(self):
+        if self.blocks_close():
+            return
+        for kind, listener in self.listeners.items():
+            if kind not in self.obligations and listener.attached:
+                if listener.alive:
+                    listener.source.removeCloseListener(listener)
+                listener.attached = False
+        if not self.obligations:
+            HOST_GUARDS[:] = [guard for guard in HOST_GUARDS if guard is not self]
+            RETIRED_HOST_GUARDS[:] = [guard for guard in RETIRED_HOST_GUARDS if guard is not self]
+            return
+        if not self.invalid and not self.scheduled and not self.inflight:
+            pending = [kind for kind in ("model", "frame") if self.obligations.get(kind) is False]
+            if pending:
+                kind = pending[0]
+                self.scheduled.add(kind)
+                post(self.ctx, lambda: self._retry(kind))
+
+    def _retry(self, scheduled_kind):
+        self.scheduled.discard(scheduled_kind)
+        pending = [kind for kind in ("model", "frame") if self.obligations.get(kind) is False]
+        if self.blocks_close() or self.invalid or not pending:
+            return
+        # Another edit/TRUE request can arrive while this callback is queued.
+        # Select the currently authorized scope, not the originally queued one.
+        kind = pending[0]
+        # One UI decision for this batch of transferred obligations. If both
+        # sources transferred ownership, CloseDoc is the authorized wider scope.
+        # Cancel/save failure must not immediately prompt again via CloseWin.
+        for source in tuple(self.obligations):
+            if kind == "model" or source == "frame":
+                self.obligations[source] = True
+        try:
+            controller = self.frame.getController()
+            if controller != self.controller or controller.getModel() != self.model:
+                raise RuntimeError("The original document window is no longer available.")
+            url = uno.createUnoStruct("com.sun.star.util.URL")
+            url.Complete = ".uno:CloseDoc" if kind == "model" else ".uno:CloseWin"
+            url.Protocol, url.Path = ".uno:", url.Complete[5:]
+            dispatch = self.frame.queryDispatch(url, "_self", 0)
+            if dispatch is None or not hasattr(dispatch, "dispatchWithNotification"):
+                raise RuntimeError("LibreOffice cannot confirm the requested close operation.")
+            result = CloseResult(self, kind)
+            self.inflight[kind] = result
+            dispatch.dispatchWithNotification(url, (), result)
+        except Exception as error:
+            self.inflight.pop(kind, None)
+            show_error(
+                self.ctx, "The document remains open. Close it again when ready.\n" + str(error)
+            )
+
+    def source_closed(self, kind):
+        listener = self.listeners[kind]
+        if not listener.alive:
+            return
+        listener.alive, listener.attached = False, False
+        self.obligations.pop(kind, None)
+        self.inflight.pop(kind, None)
+        self.invalid = True
+        for owner, session in tuple(self.sessions.values()):
+            owner._invalidate_session(
+                session, "The LibreOffice document or editing window closed.", True
+            )
+        self.sessions.clear()
+        if kind == "frame":
+            self.locked = False  # A disposed frame owns no releasable lock.
+            self.unlock_error = None
+        self._unprotect()
+
+
+def acquire_host_guard(owner, session):
+    if owner.client is None:
+        raise RuntimeError("The drawing has no LibreOffice document.")
+    model = owner.client.getComponent()
+    frame = model.getCurrentController().getFrame()
+    guard = next((item for item in HOST_GUARDS if item.model == model), None)
+    if guard is not None and frame != guard.frame and not guard.blocks_close():
+        # A cancelled close can leave duties after all editors have finished.
+        # Keep those exact old sources alive without treating them as the new
+        # launch frame. Their later disposal must not invalidate new sessions.
+        HOST_GUARDS[:] = [item for item in HOST_GUARDS if item is not guard]
+        RETIRED_HOST_GUARDS.append(guard)
+        guard = None
+    if guard is None:
+        guard = HostGuard(owner.ctx, model, frame)
+        HOST_GUARDS.append(guard)
+    guard.acquire(owner, session, frame)
+
+
 class Embedded(
     unohelper.Base,
     XEmbeddedObject,
@@ -457,34 +722,82 @@ class Embedded(
             raise IOException("ReShiki supports editing in its own window.", self)
         self._set_state(value)
 
-    def _set_state(self, value):
+    def _set_state(self, value, snapshot=None, finishing_session=None):
         old = self.state
         if old == value:
             return
+        session = finishing_session or self.session
+        active_transition = old == ACTIVE or value == ACTIVE
+        if active_transition and self.client and snapshot is None:
+            snapshot = self._frame_snapshot(session, writer_only=True)
+        client = snapshot[0] if snapshot else self.client
+
+        def check():
+            if snapshot:
+                self._require_host(session, client, snapshot[1], finishing_session is not None)
+
         event = uno.createUnoStruct("com.sun.star.lang.EventObject")
         event.Source = self
+        failure = None
         try:
-            for listener in tuple(self.states):
+            check()
+            try:
+                for listener in tuple(self.states):
+                    try:
+                        listener.changingState(event, old, value)
+                    except (WrongStateException, UnoRuntimeException):
+                        pass
+                    check()
+            finally:
+                # Notifications cannot veto a launched editor or its completed exit.
+                if self.session is session or self.session is None:
+                    self.state = value
+            if client and active_transition:
                 try:
-                    listener.changingState(event, old, value)
+                    client.visibilityChanged(value == ACTIVE)
                 except (WrongStateException, UnoRuntimeException):
                     pass
+                check()
+            for listener in tuple(self.states):
+                try:
+                    listener.stateChanged(event, old, value)
+                except UnoRuntimeException:
+                    pass
+                check()
+            host = snapshot[1] if snapshot else client.getComponent() if client else None
+            if self.disposed or self.client is not client:
+                raise RuntimeError("The host drawing is no longer available.")
+            writer = hasattr(host, "supportsService") and host.supportsService(
+                "com.sun.star.text.TextDocument"
+            )
+            if self.disposed or self.client is not client:
+                raise RuntimeError("The host drawing is no longer available.")
+            check()
+            # Writer's new native client starts with scale 1. A lifecycle-only
+            # visual event can resize a reopened frame despite unchanged content.
+            # Other hosts still need this repaint, notably Impress.
+            if not writer:
+                self.event("OnVisAreaChanged")
+                check()
+        except Exception as error:
+            failure = error
         finally:
-            # Notifications cannot veto a launched editor or its completed exit.
-            self.state = value
-        if self.client and (old == ACTIVE or value == ACTIVE):
-            try:
-                self.client.visibilityChanged(value == ACTIVE)
-            except (WrongStateException, UnoRuntimeException):
-                pass
-        for listener in tuple(self.states):
-            try:
-                listener.stateChanged(event, old, value)
-            except UnoRuntimeException:
-                pass
-        # Impress caches no replacement image for an in-place UI state. Tell
-        # the host to rebuild its view after every actual lifecycle transition.
-        self.event("OnVisAreaChanged")
+            if snapshot and snapshot[3] is not None:
+                try:
+                    check()
+                    # visibilityChanged also invokes Writer's resizing ViewChanged.
+                    snapshot[3].Size = size(*snapshot[4])
+                    check()
+                except Exception as error:
+                    failure = (
+                        RuntimeError(
+                            str(failure) + "; could not restore the host frame: " + str(error)
+                        )
+                        if failure is not None
+                        else error
+                    )
+        if failure is not None:
+            raise failure
 
     def getReachableStates(self):
         return (LOADED, RUNNING, ACTIVE)
@@ -685,7 +998,11 @@ class Embedded(
         if self.deferred_update:
             session, data, completed = self.deferred_update
             self.deferred_update = None
-            post(self.ctx, lambda: self._accept(session, data, completed))
+            try:
+                post(self.ctx, lambda: self._accept(session, data, completed))
+            except Exception as error:
+                session["error"] = str(error)
+                self._complete(session, completed)
 
     def _ready(self):
         if self.pending is not None:
@@ -703,39 +1020,157 @@ class Embedded(
         if self.readonly or self.disposed:
             raise IOException("This drawing is read-only or its document has closed.", self)
         if self.session:
+            session = self.session
+            # Recovery for a live host whose callback service stopped accepting
+            # work. Only the UI thread may release UNO listeners/action locks.
+            if session["watch_complete"] and session["process"].poll() is not None:
+                self._finish(session)
             return
+        session = None
         try:
             program = executable(self.ctx)
             directory = Path(tempfile.mkdtemp(prefix="reshiki-libreoffice-"))
             path = directory / "drawing.rsk"
-            path.write_bytes(self.native)
-            process = subprocess.Popen(
-                [program, "--open", str(path), "--libreoffice-edit"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
             session = {
                 "token": uuid.uuid4().hex,
                 "directory": directory,
                 "path": path,
-                "process": process,
+                "process": None,
+                "guard": None,
+                "invalid": False,
+                "watch_complete": False,
+                "error_reported": False,
+                "completions": set(),
+                "completion_lock": threading.Lock(),
                 "accepted": self.native,
                 "error": None,
             }
             self.session = session
+            acquire_host_guard(self, session)
+            # Reject a missing/ambiguous Writer frame before creating an editor.
+            snapshot = self._frame_snapshot(session, writer_only=True)
+            path.write_bytes(self.native)
+            session["process"] = subprocess.Popen(
+                [program, "--open", str(path), "--libreoffice-edit"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
             try:
-                self._set_state(ACTIVE)
+                self._set_state(ACTIVE, snapshot=snapshot)
+            except Exception as error:
+                session["error"] = str(error)
+                raise
             finally:
                 # Even an unexpected notification failure must leave the
                 # launched editor watched so its saves and exit are handled.
-                threading.Thread(target=self._watch, args=(session, program), daemon=True).start()
+                try:
+                    threading.Thread(
+                        target=self._watch, args=(session, program), daemon=True
+                    ).start()
+                except Exception as error:
+                    # The child already exists. Explicitly abandon saveback,
+                    # preserving its draft, before releasing host protection.
+                    self._invalidate_session(
+                        session,
+                        "The editor could not be monitored; further saves in that window "
+                        "will not update LibreOffice. " + str(error),
+                    )
+                    self._finish(session)
         except Exception as error:
+            if session is not None and session["process"] is None:
+                if self.session is session:
+                    self.session = None
+                if session["guard"] is not None:
+                    session["guard"].release(self, session)
+                shutil.rmtree(session["directory"], ignore_errors=True)
             show_error(self.ctx, error)
+
+    def _session_live(self, session):
+        return (
+            not self.disposed
+            and self.session is session
+            and self.client is not None
+            and not session["invalid"]
+            and session["guard"].owns(self, session)
+        )
+
+    def _require_session(self, session):
+        if not self._session_live(session):
+            raise RuntimeError("The host drawing is no longer available.")
+
+    def _require_host(self, session, client, host, finishing=False):
+        if (
+            self.disposed
+            or self.client is not client
+            or session is None
+            or session["invalid"]
+            or not (self.session is session or (finishing and self.session is None))
+            or not session["guard"].owns(self, session)
+            or host != session["guard"].model
+        ):
+            raise RuntimeError("The host drawing is no longer available.")
+
+    def _frame_snapshot(self, session, writer_only=False):
+        self._require_session(session)
+        client, entry = self.client, self.entry
+        host = client.getComponent()
+
+        def check():
+            self._require_host(session, client, host)
+
+        check()
+        if writer_only:
+            writer = hasattr(host, "supportsService") and host.supportsService(
+                "com.sun.star.text.TextDocument"
+            )
+            check()
+            if not writer:
+                return client, host, entry, None, None
+        frame, dimensions = self._drawing_frame(host, entry, check)
+        check()
+        if writer_only and (self.pending is not None or self.entry != entry):
+            raise IOException("The host changed the drawing's storage during activation.", self)
+        return client, host, entry, frame, dimensions
+
+    def _invalidate_session(self, session, reason, host_closed=False):
+        with session["completion_lock"]:
+            session["invalid"] = True
+            session["error"] = reason
+            completions = tuple(session["completions"])
+            session["completions"].clear()
+        if self.deferred_update and self.deferred_update[0] is session:
+            completions += (self.deferred_update[2],)
+            self.deferred_update = None
+        if host_closed and self.session is session:
+            self.disposed, self.client = True, None
+        for completed in completions:
+            completed.set()
+
+    def _complete(self, session, completed):
+        with session["completion_lock"]:
+            session["completions"].discard(completed)
+        completed.set()
+
+    def _queue_accept(self, session, data):
+        completed = threading.Event()
+        # Register BEFORE posting: disposal can occur before the callback is
+        # delivered, including during the host's Save As HandsOff interval.
+        with session["completion_lock"]:
+            if session["invalid"]:
+                completed.set()
+                return completed
+            session["completions"].add(completed)
+        try:
+            post(self.ctx, lambda: self._accept(session, data, completed))
+        except Exception:
+            self._complete(session, completed)
+            raise
+        return completed
 
     def _watch(self, session, program):
         seen = hashlib.sha256(session["accepted"]).digest()
         try:
-            while True:
+            while not session["invalid"] and not session["error"]:
                 # Observe exit before reading: Save+exit may occur while this
                 # iteration reads the previous atomic file. In that case the
                 # next iteration must still read and accept the final save.
@@ -747,11 +1182,7 @@ class Embedded(
                 digest = hashlib.sha256(raw).digest()
                 if digest != seen:
                     rendered = packet(worker(program, "--libreoffice-preview", raw))
-                    completed = threading.Event()
-                    post(
-                        self.ctx,
-                        lambda data=rendered, done=completed: self._accept(session, data, done),
-                    )
+                    completed = self._queue_accept(session, rendered)
                     completed.wait()
                     if session["error"]:
                         break
@@ -761,9 +1192,37 @@ class Embedded(
                 time.sleep(0.3)
         except Exception as error:
             session["error"] = str(error)
-        post(self.ctx, lambda: self._finish(session))
+        if session["error"]:
+            with suppress(Exception):
+                post(self.ctx, lambda: self._report_failure(session))
+        # A render/accept failure does not mean that the editing window closed.
+        # Keep its token and guard until actual exit; preserve the failed draft.
+        while not session["invalid"] and session["process"].poll() is None:
+            time.sleep(0.3)
+        session["watch_complete"] = True
+        # A transient enqueue failure must not strand the owned host lock.
+        # Persistent failure remains recoverable by a later UI doVerb above;
+        # never manipulate UNO state from this watcher thread.
+        for attempt in range(3):
+            try:
+                post(self.ctx, lambda: self._finish(session))
+                return
+            except Exception as error:
+                if not session["error"]:
+                    session["error"] = (
+                        "LibreOffice could not finish the editing session. "
+                        "Select Edit in ReShiki again to finish recovery. " + str(error)
+                    )
+                if attempt < 2:
+                    time.sleep(0.3)
 
     def _accept(self, session, data, completed):
+        try:
+            self._require_session(session)
+        except Exception as error:
+            session["error"] = str(error)
+            self._complete(session, completed)
+            return
         if self.pending is not None:
             # XEmbedPersist's HandsOff interval must not write the old storage.
             # The watcher serializes saves, so there can be only one waiter.
@@ -771,35 +1230,63 @@ class Embedded(
             return
         old = self.native, self.png, self.extent
         save_attempted = False
+        deferred = False
         frame, frame_size = None, None
+        client, host = self.client, None
+        parent, entry = self.parent, self.entry
+
+        def check():
+            self._require_host(session, client, host)
+            if save_attempted:
+                if self.pending is not None:
+                    raise WrongStateException("The host has not completed Save As.", self)
+                if self.parent != parent or self.entry != entry:
+                    raise IOException(
+                        "The host changed the drawing's storage during saveback.", self
+                    )
+
+        def can_restore():
+            try:
+                check()
+                return self.pending is None
+            except Exception:
+                return False
+
         try:
-            if self.disposed or self.session is not session or not self.client:
-                raise RuntimeError("The host drawing is no longer available.")
+            client, host, entry, frame, frame_size = self._frame_snapshot(session)
+            check()
+            # UNO property reads may reenter the host's Save As callbacks.
+            if self.pending is not None:
+                self.deferred_update = (session, data, completed)
+                deferred = True
+                return
+            if self.parent != parent or self.entry != entry:
+                raise IOException("The host changed the drawing's storage during saveback.", self)
             self.native, self.png, self.extent = data
             save_attempted = True
             self.persisted, self.persist_error = None, None
-            self.client.saveObject()
+            client.saveObject()
+            check()
             # Native clients may catch a storeOwn exception and return normally.
             # Acknowledgement requires our exact drawing to have been committed.
             if self.persisted != data:
                 raise IOException(
                     self.persist_error or "LibreOffice did not store the edited drawing.", self
                 )
-            host = self.client.getComponent()
-            frame = self._drawing_frame(host)
-            if frame is not None:
-                frame_size = frame.Size.Width, frame.Size.Height
             if hasattr(host, "setModified"):
                 host.setModified(True)
+                check()
             self.event("OnVisAreaChanged")
+            check()
             if frame is not None:
-                # Calc/Impress full clients only repaint an external editor's
-                # changed view. Preserve the user's scale when sizing its frame.
+                # Use the pre-save frame, before native callbacks can reset it.
                 frame.Size = size(
                     max(1, round(frame_size[0] * self.extent[0] / old[2][0])),
                     max(1, round(frame_size[1] * self.extent[1] / old[2][1])),
                 )
+                check()
             self.event("OnSaveDone")
+            check()
             acknowledgement = {
                 "version": 1,
                 "accepted_sha256": hashlib.sha256(self.native).hexdigest(),
@@ -809,15 +1296,24 @@ class Embedded(
             )
             session["accepted"] = self.native
         except Exception as error:
-            self.native, self.png, self.extent = old
-            if save_attempted:
+            if not save_attempted and self.pending is not None and self._session_live(session):
+                # A lookup interrupted by HandsOff must retain its waiter.
+                if self.client is client:
+                    self.deferred_update = (session, data, completed)
+                    deferred = True
+                    return
+            if self.session is session:
+                self.native, self.png, self.extent = old
+            if save_attempted and can_restore():
                 try:
                     try:
                         self._write(self.parent, self.entry)
+                        check()
                         self.event("OnVisAreaChanged")
                     finally:
-                        if frame_size is not None:
+                        if frame_size is not None and can_restore():
                             frame.Size = size(*frame_size)
+                            check()
                 except Exception as rollback_error:
                     error = RuntimeError(
                         str(error)
@@ -826,25 +1322,60 @@ class Embedded(
                     )
             session["error"] = str(error)
         finally:
-            completed.set()
+            if not deferred:
+                self._complete(session, completed)
 
-    def _drawing_frame(self, host):
+    def _drawing_frame(self, host, entry, check):
         if not hasattr(host, "supportsService"):
-            return None
+            return None, None
+        writer = host.supportsService("com.sun.star.text.TextDocument")
+        check()
+        if writer:
+            objects = host.getEmbeddedObjects()
+            check()
+            names = objects.getElementNames()
+            check()
+            matches = []
+            for name in names:
+                frame = objects.getByName(name)
+                check()
+                value = frame.Size
+                dimensions = value.Width, value.Height
+                check()
+                # Writer's StreamName getter calls TryRunning. Read Size first;
+                # LOADED→RUNNING must not send a synthetic geometry event.
+                persisted_name = frame.StreamName
+                check()
+                if persisted_name == entry:
+                    matches.append((frame, dimensions))
+            if len(matches) == 1:
+                return matches[0]
+            if matches:
+                raise IOException("The embedded drawing's host frame is ambiguous.", self)
+            raise IOException("Cannot locate the embedded drawing's host frame.", self)
         spreadsheet = host.supportsService("com.sun.star.sheet.SpreadsheetDocument")
-        if not spreadsheet and not any(
-            host.supportsService(name)
+        check()
+        drawing = spreadsheet
+        if not spreadsheet:
             for name in (
                 "com.sun.star.presentation.PresentationDocument",
                 "com.sun.star.drawing.DrawingDocument",
-            )
-        ):
-            return None
+            ):
+                supported = host.supportsService(name)
+                check()
+                drawing = drawing or supported
+        if not drawing:
+            return None, None
 
         def find(shapes):
-            for index in range(shapes.getCount()):
+            count = shapes.getCount()
+            check()
+            for index in range(count):
                 shape = shapes.getByIndex(index)
-                if getattr(shape, "PersistName", None) == self.entry:
+                check()
+                persisted_name = getattr(shape, "PersistName", None)
+                check()
+                if persisted_name == entry:
                     return shape
                 if hasattr(shape, "getCount"):
                     found = find(shape)
@@ -854,42 +1385,109 @@ class Embedded(
 
         if spreadsheet:
             sheets = host.getSheets()
-            pages = [sheets.getByIndex(index).getDrawPage() for index in range(sheets.getCount())]
+            check()
+            count = sheets.getCount()
+            check()
+            pages = []
+            for index in range(count):
+                sheet = sheets.getByIndex(index)
+                check()
+                pages.append(sheet.getDrawPage())
+                check()
         else:
             collections = [host.getDrawPages()]
+            check()
             if hasattr(host, "getMasterPages"):
                 collections.append(host.getMasterPages())
-            pages = [
-                collection.getByIndex(index)
-                for collection in collections
-                for index in range(collection.getCount())
-            ]
+                check()
+            pages = []
+            for collection in collections:
+                count = collection.getCount()
+                check()
+                for index in range(count):
+                    pages.append(collection.getByIndex(index))
+                    check()
             if hasattr(host, "getHandoutMasterPage"):
                 pages.append(host.getHandoutMasterPage())
+                check()
         for page in pages:
             frame = find(page)
             if frame is None and hasattr(page, "getNotesPage"):
                 # Inspect each notes page once; never follow notes recursively.
-                frame = find(page.getNotesPage())
+                notes = page.getNotesPage()
+                check()
+                frame = find(notes)
             if frame is not None:
-                return frame
+                value = frame.Size
+                dimensions = value.Width, value.Height
+                check()
+                return frame, dimensions
         raise IOException("Cannot locate the embedded drawing's host frame.", self)
 
-    def _finish(self, session):
-        if self.session is not session:
+    def _report_failure(self, session):
+        if not session["error"] or session["error_reported"]:
             return
-        if session["error"]:
+        session["error_reported"] = True
+        try:
             show_error(
                 self.ctx,
-                "The update was not accepted by LibreOffice. Your saved drawing remains at:\n"
+                "The LibreOffice editing session needs attention. Your saved drawing remains at:\n"
                 + str(session["path"])
                 + "\n\n"
                 + session["error"],
             )
-        else:
-            shutil.rmtree(session["directory"])
-        self.session = None
-        self._set_state(RUNNING)
+        except Exception:
+            session["error_reported"] = False
+            raise
+
+    def _finish(self, session):
+        if self.session is not session:
+            return
+        if not session["invalid"] and session["process"].poll() is None:
+            return
+        with session["completion_lock"]:
+            if session["completions"] and not session["invalid"]:
+                return
+        if self.deferred_update and self.deferred_update[0] is session and not session["invalid"]:
+            return
+        failure = None
+        try:
+            snapshot = None
+            try:
+                if (
+                    not self.disposed
+                    and not session["invalid"]
+                    and self.state == ACTIVE
+                    and self.client
+                ):
+                    snapshot = self._frame_snapshot(session, writer_only=True)
+            finally:
+                # State callbacks may reenter; they must never see a finished editor.
+                if self.session is session:
+                    self.session = None
+            if not self.disposed and not session["invalid"]:
+                self._set_state(RUNNING, snapshot=snapshot, finishing_session=session)
+        except Exception as error:
+            failure = error
+            session["error"] = (session["error"] + "; " if session["error"] else "") + str(error)
+            session["error_reported"] = False
+        finally:
+            if self.session is None:
+                self.state = RUNNING
+            try:
+                if session["error"]:
+                    self._report_failure(session)
+                else:
+                    shutil.rmtree(session["directory"])
+            except Exception as error:
+                failure = failure or error
+                session["error"] = (session["error"] + "; " if session["error"] else "") + str(
+                    error
+                )
+            finally:
+                session["guard"].release(self, session)
+        if failure is not None:
+            raise failure
 
 
 class Factory(unohelper.Base, XEmbeddedObjectCreator, XServiceInfo):
@@ -927,8 +1525,28 @@ class Factory(unohelper.Base, XEmbeddedObjectCreator, XServiceInfo):
         raise IOException("ReShiki drawings are embedded, not linked to external files.", self)
 
 
+def writer_insertion_point(document):
+    if not document.supportsService("com.sun.star.text.TextDocument"):
+        return None
+    guidance = (
+        "Place a text cursor in the Writer document, then choose ReShiki → Paste ReShiki Drawing."
+    )
+    try:
+        cursor = document.CurrentController.getViewCursor()
+        owner = cursor.getText()
+        position = cursor.getStart()
+    except UnoRuntimeException as error:
+        if error.Message != "no text selection":
+            raise
+        raise ValueError(guidance) from error
+    if owner is None or position is None:
+        raise ValueError(guidance)
+    return owner, position
+
+
 def insert(ctx, document, value):
     initial = packet(value)
+    target = writer_insertion_point(document)
     storage = document.getDocumentStorage()
     entry = "ReShiki-" + uuid.uuid4().hex
     # Import through the public existing-storage path. Every object has its own
@@ -936,13 +1554,13 @@ def insert(ctx, document, value):
     Embedded(ctx, initial)._write(storage, entry)
     obj, page, attached = None, None, False
     try:
-        if document.supportsService("com.sun.star.text.TextDocument"):
+        if target is not None:
+            owner, position = target
             obj = document.createInstance("com.sun.star.text.TextEmbeddedObject")
             obj.StreamName = entry
             obj.AnchorType = uno.Enum("com.sun.star.text.TextContentAnchorType", "AS_CHARACTER")
             obj.Width, obj.Height = initial[2]
-            cursor = document.CurrentController.getViewCursor()
-            document.Text.insertTextContent(cursor, obj, False)
+            owner.insertTextContent(position, obj, False)
             attached = True
         else:
             obj = document.createInstance("com.sun.star.drawing.OLE2Shape")
@@ -961,7 +1579,7 @@ def insert(ctx, document, value):
             if page is not None:
                 page.remove(obj)
             else:
-                document.Text.removeTextContent(obj)
+                owner.removeTextContent(obj)
         if storage.hasByName(entry):
             storage.removeElement(entry)
         raise
@@ -1094,6 +1712,10 @@ class Handler(unohelper.Base, XDispatchProvider, XDispatch, XInitialization, XSe
                 raw = selected(document).getComponent().getTransferData(flavor(NATIVE_MIME)).value
                 self.copy(program, raw)
                 return
+            if url.Path == "paste":
+                # Reject nontext Writer selections before rendering. Insertion
+                # reacquires the target because selection can change meanwhile.
+                writer_insertion_point(document)
             native = None
             if url.Path == "paste" and uses_host_clipboard():
                 # Capture the current clipboard on the dispatch thread before

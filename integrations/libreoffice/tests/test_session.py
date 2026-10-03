@@ -19,6 +19,21 @@ SPEC.loader.exec_module(extension)
 
 
 class SessionTests(unittest.TestCase):
+    def make_session(self, accepted):
+        return {
+            "token": "controlled session",
+            "directory": self.root,
+            "accepted": accepted,
+            "error": None,
+            "invalid": False,
+            "watch_complete": False,
+            "error_reported": False,
+            "completions": set(),
+            "completion_lock": threading.Lock(),
+            "guard": self.guard,
+            "process": SimpleNamespace(poll=lambda: 0),
+        }
+
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.root = Path(self.directory.name)
@@ -26,7 +41,22 @@ class SessionTests(unittest.TestCase):
         self.new = (b'{"version":15,"title":"new"}', b"new PNG", (300, 400))
         self.object = extension.Embedded(None, self.old)
         self.object.parent, self.object.entry = "old storage", "Object 1"
-        self.session = {"directory": self.root, "accepted": self.old[0], "error": None}
+        # These tests isolate persistence/state handling. Real model/frame
+        # broadcasts and guard acquisition are covered in test_host_guard.py.
+        self.guard = SimpleNamespace(
+            model=None, owns=lambda owner, session: True, release=lambda *args: None
+        )
+        self.object.client = SimpleNamespace(
+            getComponent=lambda: None, visibilityChanged=lambda visible: None
+        )
+        acquire = patch.object(
+            extension,
+            "acquire_host_guard",
+            side_effect=lambda owner, session: session.__setitem__("guard", self.guard),
+        )
+        acquire.start()
+        self.addCleanup(acquire.stop)
+        self.session = self.make_session(self.old[0])
         self.object.session = self.session
 
     def tearDown(self):
@@ -69,7 +99,7 @@ class SessionTests(unittest.TestCase):
         def accept(session, data, done):
             accepted.append(data)
             session["accepted"] = data[0]
-            done.set()
+            self.object._complete(session, done)
 
         with (
             patch.object(extension, "post", side_effect=lambda ctx, action: action()),
@@ -88,6 +118,9 @@ class SessionTests(unittest.TestCase):
         owner = self.object
 
         class Client:
+            def getComponent(self):
+                return None
+
             def saveObject(self):
                 owner._write(owner.parent, owner.entry)
                 raise RuntimeError("host rejected after storage commit")
@@ -204,7 +237,7 @@ class SessionTests(unittest.TestCase):
             with self.subTest(target=target):
                 obj = extension.Embedded(None, self.old)
                 obj.parent, obj.entry = "old storage", "Object 1"
-                session = {"directory": self.root, "accepted": self.old[0], "error": None}
+                session = self.make_session(self.old[0])
                 obj.session = session
                 stored = []
 
@@ -242,6 +275,9 @@ class SessionTests(unittest.TestCase):
         owner = self.object
 
         class Client:
+            def getComponent(self):
+                return None
+
             def saveObject(self):
                 owner.storeOwn()
                 raise RuntimeError("host rejected after Save As")
@@ -421,6 +457,7 @@ class SessionTests(unittest.TestCase):
         self.object.client = SimpleNamespace(
             saveObject=self.object.storeOwn, getComponent=lambda: host
         )
+        self.guard.model = host
         return frame, other
 
     def test_impress_saveback_resizes_only_its_frame_and_preserves_user_scale(self):
@@ -509,6 +546,9 @@ class SessionTests(unittest.TestCase):
                 events.append((event.EventName, obj.getCurrentState()))
 
         class Client:
+            def getComponent(self):
+                return None
+
             def visibilityChanged(self, visible):
                 events.append(("visible", visible, obj.getCurrentState()))
 
@@ -605,6 +645,9 @@ class SessionTests(unittest.TestCase):
                         events.append((event.EventName, obj.getCurrentState()))
 
                 class Client:
+                    def getComponent(self):
+                        return None
+
                     def visibilityChanged(self, visible):
                         notify("visible")
 
@@ -674,6 +717,9 @@ class SessionTests(unittest.TestCase):
         self.session["path"] = path
 
         class Client:
+            def getComponent(self):
+                return None
+
             def saveObject(self):
                 raise RuntimeError("host rejected saved drawing")
 
@@ -700,17 +746,22 @@ class SessionTests(unittest.TestCase):
         directory = self.root / "finished-edit"
         directory.mkdir()
         self.session["directory"] = directory
+        self.session["path"] = directory / "drawing.rsk"
+        self.session["path"].write_bytes(self.old[0])
 
         class Listener:
             def changingState(self, *args):
                 raise RuntimeError("unexpected finish notice")
 
         obj.addStateChangeListener(Listener())
-        with self.assertRaisesRegex(RuntimeError, "unexpected finish notice"):
+        with (
+            patch.object(extension, "show_error"),
+            self.assertRaisesRegex(RuntimeError, "unexpected finish notice"),
+        ):
             obj._finish(self.session)
         self.assertIsNone(obj.session)
         self.assertEqual(obj.getCurrentState(), extension.RUNNING)
-        self.assertFalse(directory.exists())
+        self.assertEqual(self.session["path"].read_bytes(), self.old[0])
 
 
 if __name__ == "__main__":
