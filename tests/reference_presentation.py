@@ -84,6 +84,26 @@ def compare(actual, expected, format):
         raise ValueError("Drawing object counts changed")
     parents = {child: parent for parent in expected.iter() for child in parent}
     for a, e in zip(actual_nodes, expected_nodes, strict=True):
+        if format == "cdxml" and a.tag == e.tag == "color":
+            for name in {"r", "g", "b"} & a.attrib.keys() & e.attrib.keys():
+                if a.get(name) == e.get(name):
+                    continue
+                before, after = float(e.attrib[name]), float(a.attrib[name])
+                # ChemDraw truncates normalized RGB. The writer biases an
+                # eight-place decimal by at most one unit to retain the same
+                # 8-bit color, which must also encode to the same 16-bit CDX
+                # channel. Match the independently checked drawing contract.
+                if not (0 <= before <= 1 and 0 <= after <= 1):
+                    raise ValueError("RGB component outside its finite range")
+                channel = round(before * 255)
+                if (
+                    math.trunc(after * 255) != channel
+                    or round(after * 65535) != channel * 257
+                    or abs(after - before) > 0.00000001000001
+                ):
+                    raise ValueError("RGB changed beyond the bounded precision correction")
+                e.set(name, a.attrib[name])
+                changed += 1
         if e.tag == "t" and parents[e].tag in ("page", "group") and "CaptionLineHeight" in e.attrib:
             if a.get("InterpretChemically") != "no" or "InterpretChemically" in e.attrib:
                 raise ValueError("Caption must explicitly disable chemical interpretation")
@@ -106,7 +126,7 @@ def compare(actual, expected, format):
                 changed += 1
     if not changed or tree(actual) != tree(expected):
         raise ValueError(
-            "Drawing differs beyond hidden-dummy, bond-spacing, caption, and arrow compatibility contracts"
+            "Drawing differs beyond hidden-dummy, bond-spacing, RGB, caption, and arrow compatibility contracts"
         )
 
 

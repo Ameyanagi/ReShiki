@@ -6,6 +6,41 @@ from reference_presentation import compare
 
 
 class ReferenceContractTests(unittest.TestCase):
+    def test_rgb_bias_preserves_each_native_and_binary_color_channel(self):
+        for channel in range(1, 255):
+            before = f"{channel / 255:.8f}"
+            after = f"{(channel * 100_000_000 // 255 + 1) / 100_000_000:.8f}"
+            if before == after:
+                continue
+            for axis in ("r", "g", "b"):
+                expected = f'<CDXML><colortable><color {axis}="{before}"/></colortable></CDXML>'
+                actual = expected.replace(before, after)
+                with self.subTest(channel=channel, axis=axis):
+                    compare(actual, expected, "cdxml")
+
+    def test_rgb_adjustment_rejects_other_colors_attributes_and_structural_changes(self):
+        expected = '<CDXML><colortable><color r="0.27450980" g="0.07843137" b="0"/></colortable><page><n Element="8" p="1 2"/></page></CDXML>'
+        actual = expected.replace("0.27450980", "0.27450981").replace("0.07843137", "0.07843138")
+        compare(actual, expected, "cdxml")
+        for changed in (
+            actual.replace("0.27450981", "0.27843138"),
+            actual.replace("0.27450981", "0.27450982"),
+            actual.replace("0.27450981", "0.27450979"),
+            actual.replace("0.27450981", "nan"),
+            actual.replace("0.27450981", "inf"),
+            actual.replace("0.27450981", "-0.1"),
+            actual.replace("0.27450981", "1.1"),
+            actual.replace(' b="0"', ""),
+            actual.replace(' b="0"', ' b="0" color="3"'),
+            actual.replace('Element="8"', 'Element="7"'),
+            actual.replace('p="1 2"', 'p="1 3"'),
+            actual.replace("<color ", "<other "),
+        ):
+            with self.subTest(actual=changed), self.assertRaises(ValueError):
+                compare(changed, expected, "cdxml")
+        with self.assertRaises(ValueError):
+            compare('<CDXML r="0.27450981"/>', '<CDXML r="0.27450980"/>', "cdxml")
+
     def test_equivalent_f32_percentages_are_compared_without_losing_other_fields(self):
         expected = '<CDXML BondSpacing="11.999999731779099"><page><n Element="8"/></page></CDXML>'
         actual = expected.replace("11.999999731779099", "12")
