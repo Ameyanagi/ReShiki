@@ -83,6 +83,7 @@ impl<'a, Message: Clone + 'static> Button<'a, Message> {
 #[derive(Default)]
 struct State {
     id: String,
+    enabled: bool,
     focused: bool,
     space_down: bool,
 }
@@ -108,6 +109,7 @@ impl<Message: Clone + 'static> Widget<Message, Theme, Renderer> for Button<'_, M
     fn state(&self) -> tree::State {
         tree::State::new(State {
             id: self.id.clone(),
+            enabled: self.action.is_some(),
             ..State::default()
         })
     }
@@ -118,11 +120,17 @@ impl<Message: Clone + 'static> Widget<Message, Theme, Renderer> for Button<'_, M
     }
     fn diff(&self, tree: &mut Tree) {
         let state = tree.state.downcast_mut::<State>();
-        if state.id != self.id {
+        if state.id != self.id || state.enabled != self.action.is_some() {
             *state = State {
                 id: self.id.clone(),
+                enabled: self.action.is_some(),
                 ..State::default()
             };
+            // The inner Iced button owns a mouse-down flag. An in-flight
+            // gesture belongs to the old control, including when a control
+            // becomes disabled and later re-enabled before mouse-up.
+            tree.children = self.children();
+            return;
         }
         if self.action.is_none() {
             state.unfocus();
