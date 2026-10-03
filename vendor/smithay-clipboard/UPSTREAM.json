@@ -1,0 +1,28 @@
+{
+  "upstream": "https://github.com/Smithay/smithay-clipboard",
+  "version": "0.7.3",
+  "commit": "26c2f53f15f6bdc4f41a442d0ae2c2d63bbc617c",
+  "license": "MIT",
+  "source": "crates.io smithay-clipboard 0.7.3",
+  "unchanged_upstream_file_sha256": {
+    "Cargo.toml": "9f7a1d198a1385bfe35775e3c8d335d93cc31ea8d2ce15f189bebb0c42a99c98",
+    "Cargo.toml.orig": "976fb6f80a01f50e67cf8a7f6aa601246020ddb5e9476cf47d141030f590c481",
+    "LICENSE": "21c2bc064d4ad1bba2a66c6b6d111b859a616283687a11f7a32c1350814542c9",
+    "README.md": "0e1ce2826c6c74cb98922009fa2dfb6bcd142c774610c6603b9ae7f0c275fde1",
+    "CHANGELOG.md": "a61e4a55886233d02e4855bba024e584ad8119abee636cbeb32927817215615e",
+    "doc_index.html": "9191616fd8ecaef1615eda8a0f9cd36bf75eb4e5f20e24db8852faf07123dfcc",
+    "rustfmt.toml": "a0b3513964ccc1f72d7671376c1a2f073df01aad4b91bf99f0060fbe9dc88034",
+    "src/lib.rs": "ad96abaf7bf9c0a2d23de711823ac3e80065467e4b3453d160f3ea09481d9858",
+    "src/state.rs": "7c5e872387b7ebdbe061c667e7fb09ce3771e26572ae6a2a349fa6bdedf456e3",
+    "src/worker.rs": "3d9665e4794af1fae8f427a73333f88b9d1f78f142f9e2144eac6d3df73d47f1",
+    "src/mime.rs": "2d42f2c147d6ae93d53197f1eda57335f64e9af71e507415c3e89369a22cf0ce",
+    "examples/clipboard.rs": "771a50a8458fc4bb74dd0895220e3b7ed8ce95dae601a342a2ae273fcbb2c09a"
+  },
+  "purpose": "Bounded asynchronous multi-MIME requests through the existing Iced-owned standard Wayland data-device connection. A command-only weak registry avoids a second data device or extending foreign display lifetime.",
+  "local_changes": [
+    "Rich client lookup and per-request cancellation/completion",
+    "Positive selection-offer generation receipt before successful Copy/Cut",
+    "Immutable per-source MIME buffers and bounded nonblocking transfers",
+    "No ext/wlr data-control protocol"
+  ]
+}
