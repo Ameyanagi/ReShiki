@@ -90,10 +90,13 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
+        let Some(base_state) = tree.children.first_mut() else {
+            return layout::Node::new(limits.min());
+        };
         let base = self
             .base
             .as_widget_mut()
-            .layout(&mut tree.children[0], renderer, limits);
+            .layout(base_state, renderer, limits);
         let size = base.size();
         let panel_limits = layout::Limits::new(
             Size::ZERO,
@@ -104,28 +107,43 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
         );
         let mut nodes = vec![base];
         for level in 0..self.panels.len() {
-            let anchor = if level > 0 {
-                let index = self.panels[level].anchor.unwrap();
+            let anchor = if let Some(parent_level) = level.checked_sub(1) {
+                let Some(index) = self.panels.get(level).and_then(|panel| panel.anchor) else {
+                    break;
+                };
+                let Some(parent_node) = nodes.get(level) else {
+                    break;
+                };
+                let Some(parent_panel) = self.panels.get_mut(parent_level) else {
+                    break;
+                };
+                let Some(parent_state) = tree.children.get_mut(level) else {
+                    break;
+                };
                 let rows = rows(
-                    &mut self.panels[level - 1],
-                    level - 1,
-                    &mut tree.children[level],
-                    Layout::new(&nodes[level]),
+                    parent_panel,
+                    parent_level,
+                    parent_state,
+                    Layout::new(parent_node),
                     renderer,
                 );
                 Some((
-                    nodes[level].bounds(),
-                    rows.bounds(index).unwrap_or(nodes[level].bounds()),
+                    parent_node.bounds(),
+                    rows.bounds(index).unwrap_or(parent_node.bounds()),
                 ))
             } else {
                 None
             };
-            let panel = &mut self.panels[level];
-            let node = panel.content.as_widget_mut().layout(
-                &mut tree.children[level + 1],
-                renderer,
-                &panel_limits,
-            );
+            let Some(panel) = self.panels.get_mut(level) else {
+                break;
+            };
+            let Some(panel_state) = tree.children.get_mut(level + 1) else {
+                break;
+            };
+            let node = panel
+                .content
+                .as_widget_mut()
+                .layout(panel_state, renderer, &panel_limits);
             if self.menu.keyboard
                 && let Some((focused_level, index)) = self.menu.focused
                 && focused_level == level
@@ -134,7 +152,7 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
                     panel,
                     level,
                     index,
-                    &mut tree.children[level + 1],
+                    panel_state,
                     Layout::new(&node),
                     renderer,
                 );
@@ -159,12 +177,18 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
         viewport: &Rectangle,
     ) {
         let mut layouts = layout.children();
+        let Some((base_state, panel_states)) = tree.children.split_first() else {
+            return;
+        };
+        let Some(base_layout) = layouts.next() else {
+            return;
+        };
         self.base.as_widget().draw(
-            &tree.children[0],
+            base_state,
             renderer,
             theme,
             style,
-            layouts.next().unwrap(),
+            base_layout,
             mouse::Cursor::Unavailable,
             viewport,
         );
@@ -172,10 +196,16 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
         let hovered = layouts
             .iter()
             .rposition(|layout| cursor.is_over(layout.bounds()));
-        for (level, (panel, layout)) in self.panels.iter().zip(layouts).enumerate() {
+        for (level, ((panel, state), layout)) in self
+            .panels
+            .iter()
+            .zip(panel_states)
+            .zip(layouts)
+            .enumerate()
+        {
             renderer.with_layer(*viewport, |renderer| {
                 panel.content.as_widget().draw(
-                    &tree.children[level + 1],
+                    state,
                     renderer,
                     theme,
                     style,
@@ -199,19 +229,20 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
         operation: &mut dyn Operation,
     ) {
         let mut layouts = layout.children();
-        self.base.as_widget_mut().operate(
-            &mut tree.children[0],
-            layouts.next().unwrap(),
-            renderer,
-            operation,
-        );
-        for (level, (panel, layout)) in self.panels.iter_mut().zip(layouts).enumerate() {
-            panel.content.as_widget_mut().operate(
-                &mut tree.children[level + 1],
-                layout,
-                renderer,
-                operation,
-            );
+        let Some((base_state, panel_states)) = tree.children.split_first_mut() else {
+            return;
+        };
+        let Some(base_layout) = layouts.next() else {
+            return;
+        };
+        self.base
+            .as_widget_mut()
+            .operate(base_state, base_layout, renderer, operation);
+        for ((panel, state), layout) in self.panels.iter_mut().zip(panel_states).zip(layouts) {
+            panel
+                .content
+                .as_widget_mut()
+                .operate(state, layout, renderer, operation);
         }
     }
 
@@ -266,14 +297,14 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
             return;
         }
         if let Some(level) = hovered {
-            if matches!(event, Event::Mouse(mouse::Event::CursorMoved { .. })) {
-                let rows = rows(
-                    &mut self.panels[level],
-                    level,
-                    &mut tree.children[level + 1],
-                    layouts[level + 1],
-                    renderer,
-                );
+            if matches!(event, Event::Mouse(mouse::Event::CursorMoved { .. }))
+                && let Some(((panel, state), panel_layout)) = self
+                    .panels
+                    .get_mut(level)
+                    .zip(tree.children.get_mut(level + 1))
+                    .zip(layouts.get(level + 1))
+            {
+                let rows = rows(panel, level, state, *panel_layout, renderer);
                 if let Some(index) = cursor.position().and_then(|point| rows.at(point))
                     && (self.menu.focused != Some((level, index)) || self.menu.keyboard)
                 {
@@ -286,11 +317,17 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
                 shell.publish(Message::ContextMenu(Action::CloseAfter(level)));
             }
         }
-        for (level, panel) in self.panels.iter_mut().enumerate() {
+        for (level, ((panel, state), panel_layout)) in self
+            .panels
+            .iter_mut()
+            .zip(tree.children.iter_mut().skip(1))
+            .zip(layouts.iter().skip(1))
+            .enumerate()
+        {
             panel.content.as_widget_mut().update(
-                &mut tree.children[level + 1],
+                state,
                 event,
-                layouts[level + 1],
+                *panel_layout,
                 if hovered == Some(level) {
                     cursor
                 } else {
@@ -309,11 +346,13 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
             if cursor.is_over(layout.bounds()) {
                 shell.capture_event();
             }
-        } else {
+        } else if let Some((base_state, base_layout)) =
+            tree.children.first_mut().zip(layouts.first())
+        {
             self.base.as_widget_mut().update(
-                &mut tree.children[0],
+                base_state,
                 event,
-                layouts[0],
+                *base_layout,
                 mouse::Cursor::Unavailable,
                 renderer,
                 clipboard,
@@ -331,21 +370,19 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
-        for (level, (panel, layout)) in self
+        for ((panel, state), layout) in self
             .panels
             .iter()
+            .zip(tree.children.iter().skip(1))
             .zip(layout.children().skip(1))
-            .enumerate()
             .rev()
         {
             if cursor.is_over(layout.bounds()) {
-                return match panel.content.as_widget().mouse_interaction(
-                    &tree.children[level + 1],
-                    layout,
-                    cursor,
-                    viewport,
-                    renderer,
-                ) {
+                return match panel
+                    .content
+                    .as_widget()
+                    .mouse_interaction(state, layout, cursor, viewport, renderer)
+                {
                     mouse::Interaction::None => mouse::Interaction::Idle,
                     interaction => interaction,
                 };
