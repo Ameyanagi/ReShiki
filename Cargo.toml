@@ -70,6 +70,7 @@ image = { version = "0.25", default-features = false, features = [
 ] }
 pdf-writer = "0.12.1"
 ttf-parser = "0.25"
+swash = "0.2.10"
 svg2pdf = { version = "0.13", default-features = false, features = ["text", "image"] }
 reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
 semver = "1"

@@ -169,7 +169,7 @@ fn outline_with_glyphs(
     if let Some(glyphs) = glyphs {
         glyphs.draw(&t, |path, color| paths.push((path, color)));
     } else {
-        t.draw_with(|path, color| paths.push((path, color)));
+        glyphs::Glyphs::default().draw(&t, |path, color| paths.push((path, color)));
     }
     let actual_top = paths
         .iter()
@@ -288,7 +288,7 @@ mod tests {
     }
 
     #[test]
-    fn shared_glyphs_exactly_match_iced_at_each_zoom_and_font() {
+    fn shared_glyphs_exactly_match_fresh_outlines_at_each_zoom_and_font() {
         let mut cache = TextCache::default();
         for family in ["Arial", "Times New Roman", "Courier New"] {
             for zoom in [0.08, 0.45, 0.455, 0.5, 0.7, 1., 1.25, 2.5, 8.] {
