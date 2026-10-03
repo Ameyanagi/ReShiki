@@ -294,7 +294,40 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
                 ..
             }) = event
             {
-                shell.publish(Message::ContextMenu(Action::Key(*key)));
+                // Tab and native Focus change real widget focus without a
+                // model message. Start arrow navigation from that live target.
+                let mut focused = None;
+                if matches!(
+                    key,
+                    keyboard::key::Named::ArrowUp
+                        | keyboard::key::Named::ArrowDown
+                        | keyboard::key::Named::ArrowLeft
+                        | keyboard::key::Named::ArrowRight
+                        | keyboard::key::Named::Home
+                        | keyboard::key::Named::End
+                ) {
+                    for (level, ((panel, state), layout)) in self
+                        .panels
+                        .iter_mut()
+                        .zip(tree.children.iter_mut().skip(1))
+                        .zip(layout.children().skip(1))
+                        .enumerate()
+                    {
+                        let mut probe = FocusedRow::default();
+                        panel
+                            .content
+                            .as_widget_mut()
+                            .operate(state, layout, renderer, &mut probe);
+                        if let Some(index) = probe.0.filter(|index| panel.items.contains(index)) {
+                            focused = Some((level, index));
+                        }
+                    }
+                }
+                shell.publish(Message::ContextMenu(
+                    focused.map_or(Action::Key(*key), |(level, index)| {
+                        Action::FocusedKey(level, index, *key)
+                    }),
+                ));
                 shell.invalidate_layout();
             }
             shell.capture_event();
@@ -559,5 +592,23 @@ fn reveal(
             .content
             .as_widget_mut()
             .operate(tree, layout, renderer, &mut scroll);
+    }
+}
+
+#[derive(Default)]
+struct FocusedRow(Option<usize>);
+impl Operation for FocusedRow {
+    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+        operate(self);
+    }
+    fn custom(&mut self, _: Option<&Id>, _: Rectangle, state: &mut dyn std::any::Any) {
+        if let Some(node) = state.downcast_ref::<reshiki::accessibility::Node>()
+            && node.focused
+        {
+            self.0 = node
+                .id
+                .rsplit_once('-')
+                .and_then(|(_, index)| index.parse().ok());
+        }
     }
 }

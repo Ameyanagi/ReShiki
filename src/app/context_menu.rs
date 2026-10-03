@@ -420,6 +420,7 @@ pub enum Action {
     Activate(usize, usize),
     CloseAfter(usize),
     Key(Named),
+    FocusedKey(usize, usize, Named),
     Run(Box<Message>),
     Properties(bool),
 }
@@ -925,6 +926,12 @@ impl App {
                 }
             }
             Action::Key(key) => return self.context_key_action(key),
+            Action::FocusedKey(level, index, key) => {
+                if let Some(menu) = &mut self.context_menu {
+                    menu.focused = Some((level, index));
+                }
+                return self.context_key_action(key);
+            }
             Action::Run(message) => {
                 self.context_menu = None;
                 return self.update(*message);
@@ -1060,6 +1067,19 @@ impl App {
                 }
             }
             _ => {}
+        }
+        if let Some(menu) = &self.context_menu
+            && menu.keyboard
+            && let Some((level, index)) = menu.focused
+            && let Some(page) = menu.page_at(level)
+        {
+            return iced::advanced::widget::operate(reshiki::accessibility::FocusControl::new(
+                format!("menu-{page:?}-{index}"),
+            ))
+            .discard()
+            .chain(Task::done(Message::Accessibility(
+                super::accessibility::Action::Refresh,
+            )));
         }
         Task::none()
     }

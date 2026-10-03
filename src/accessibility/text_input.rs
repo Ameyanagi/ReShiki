@@ -39,7 +39,8 @@ impl<'a, Message: Clone + 'static> TextInput<'a, Message> {
         self.on_input_maybe(Some(on_input))
     }
     pub fn on_input_maybe(mut self, callback: Option<impl Fn(String) -> Message + 'a>) -> Self {
-        self.on_input = callback.map(|callback| Rc::new(callback) as Rc<dyn Fn(String) -> Message>);
+        self.on_input =
+            callback.map(|callback| Rc::new(callback) as Rc<dyn Fn(String) -> Message + 'a>);
         let callback = self.on_input.clone();
         self.inner = self
             .inner
@@ -108,10 +109,10 @@ impl<Message: Clone + 'static> Widget<Message, Theme, Renderer> for TextInput<'_
         }
     }
     fn size(&self) -> Size<Length> {
-        self.inner.size()
+        Widget::size(&self.inner)
     }
     fn size_hint(&self) -> Size<Length> {
-        self.inner.size_hint()
+        Widget::size_hint(&self.inner)
     }
     fn layout(
         &mut self,
@@ -120,7 +121,7 @@ impl<Message: Clone + 'static> Widget<Message, Theme, Renderer> for TextInput<'_
         limits: &layout::Limits,
     ) -> layout::Node {
         match tree.children.first_mut() {
-            Some(child) => self.inner.layout(child, renderer, limits),
+            Some(child) => Widget::layout(&mut self.inner, child, renderer, limits),
             None => layout::Node::new(Size::ZERO),
         }
     }
@@ -136,7 +137,7 @@ impl<Message: Clone + 'static> Widget<Message, Theme, Renderer> for TextInput<'_
         };
         let enabled = self.on_input.is_some();
         if enabled {
-            self.inner.operate(child, layout, renderer, operation);
+            Widget::operate(&mut self.inner, child, layout, renderer, operation);
         } else {
             child.state.downcast_mut::<InputState>().unfocus();
         }
@@ -186,8 +187,16 @@ impl<Message: Clone + 'static> Widget<Message, Theme, Renderer> for TextInput<'_
         viewport: &Rectangle,
     ) {
         if let Some(child) = tree.children.first_mut() {
-            self.inner.update(
-                child, event, layout, cursor, renderer, clipboard, shell, viewport,
+            Widget::update(
+                &mut self.inner,
+                child,
+                event,
+                layout,
+                cursor,
+                renderer,
+                clipboard,
+                shell,
+                viewport,
             );
         }
     }
@@ -202,8 +211,16 @@ impl<Message: Clone + 'static> Widget<Message, Theme, Renderer> for TextInput<'_
         viewport: &Rectangle,
     ) {
         if let Some(child) = tree.children.first() {
-            self.inner
-                .draw(child, renderer, theme, style, layout, cursor, viewport);
+            Widget::draw(
+                &self.inner,
+                child,
+                renderer,
+                theme,
+                style,
+                layout,
+                cursor,
+                viewport,
+            );
         }
     }
     fn mouse_interaction(
@@ -217,8 +234,7 @@ impl<Message: Clone + 'static> Widget<Message, Theme, Renderer> for TextInput<'_
         tree.children
             .first()
             .map_or(mouse::Interaction::None, |child| {
-                self.inner
-                    .mouse_interaction(child, layout, cursor, viewport, renderer)
+                Widget::mouse_interaction(&self.inner, child, layout, cursor, viewport, renderer)
             })
     }
 }
