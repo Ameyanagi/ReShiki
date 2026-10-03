@@ -1,35 +1,34 @@
-name: Release builds
+name: Six native validation packages (unpublished; Windows functional evidence)
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
     inputs:
+      candidate_sha:
+        description: Full frozen production SHA directly below this validation overlay
+        type: string
+        required: true
+      functional_only:
+        description: Required functional-only lane; does not qualify antivirus protection
+        type: boolean
+        default: true
       nightly:
-        description: Test nightly versions and installers without publishing
+        description: Must remain false; validation preserves production version bytes
         type: boolean
         default: false
       sign_macos:
-        description: Sign and notarize macOS test packages (requires signing secrets)
+        description: Must remain false; validation packages remain unsigned
         type: boolean
         default: false
-  workflow_call:
-    inputs:
-      nightly:
-        description: Build nightly packages with installers and a unique version
-        type: boolean
-        default: false
-    outputs:
-      nightly_version:
-        value: ${{ jobs.validate.outputs.nightly_version }}
 permissions:
   contents: read
 concurrency:
-  group: release-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || 'tag' }}
+  group: native-functional-${{ github.ref }}-${{ github.run_id }}
   cancel-in-progress: false
+env:
+  RESHIKI_PRODUCTION_CANDIDATE: ${{ inputs.candidate_sha }}
 jobs:
   reference:
     needs: validate
-    if: github.event_name == 'push'
+    if: false
     uses: ./.github/workflows/checks.yml
     with:
       live_reference: true
@@ -39,11 +38,17 @@ jobs:
       nightly_version: ${{ steps.nightly.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
           version: "0.12.3"
           python-version: "3.12"
           enable-cache: false
+      - name: Require unchanged version and unsigned functional-only validation
+        if: inputs.nightly || inputs.sign_macos || !inputs.functional_only
+        run: exit 1
       - name: Prepare nightly version
         if: inputs.nightly
         id: nightly
@@ -102,10 +107,19 @@ jobs:
       UV_PYTHON: ${{ matrix.python }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
           version: "0.12.3"
           python-version: ${{ matrix.python }}
+      - name: Record exact production-source equivalence and workflow identity
+        run: >-
+          uv run --no-project --isolated --python 3.12 python -c "import os, sys; from pathlib import Path; sys.path.insert(0, 'scripts'); import collect_windows_functional as f; Path('evidence').mkdir(exist_ok=True); f.security.write_json(Path('evidence/source-equivalence.json'), {'source_equivalence': f.source_equivalence(os.environ['RESHIKI_PRODUCTION_CANDIDATE'], os.environ['GITHUB_SHA']), 'workflow_run': f.workflow_run(), 'antivirus_qualification': f.NO_AV})"
+      - name: Verify native disposable Windows context before product execution
+        if: runner.os == 'Windows'
+        run: uv run --no-project --isolated --python 3.12 python scripts/collect_windows_functional.py preflight --architecture ${{ matrix.msvc_arch }} --source-commit ${{ github.sha }} --candidate "$env:RESHIKI_PRODUCTION_CANDIDATE" --output evidence/functional-preflight
       - name: Stamp nightly package version
         if: inputs.nightly
         shell: bash
@@ -155,10 +169,15 @@ jobs:
         if: matrix.native_only != true
         run: uv run --locked python scripts/check_reference_dependencies.py
       - name: Build and test extracted portable archive
+        if: runner.os != 'Windows'
         env:
           MACOSX_DEPLOYMENT_TARGET: "14.0"
         run: uv run --no-project --isolated --python 3.12 python scripts/build_release.py --target ${{ matrix.target }} --installer
+      - name: Build Windows once and retain original native assertions and uninstallers
+        if: runner.os == 'Windows'
+        run: uv run --no-project --isolated --python 3.12 python scripts/collect_windows_functional.py build --architecture ${{ matrix.msvc_arch }} --source-commit ${{ github.sha }} --candidate "$env:RESHIKI_PRODUCTION_CANDIDATE" --target ${{ matrix.target }} --preflight evidence/functional-preflight/preflight.json --output evidence/functional
       - name: Check the application worker protocol and heap boundaries
+        if: runner.os != 'Windows'
         env:
           RESHIKI_REQUIRE_INCHI_HELPER: "1"
           RESHIKI_TEST_PACKAGED_APP: ${{ github.workspace }}/target/${{ matrix.target }}/release/reshiki${{ runner.os == 'Windows' && '.exe' || '' }}
@@ -182,14 +201,31 @@ jobs:
           RESHIKI_REQUIRE_INCHI_HELPER: "1"
           RESHIKI_INCHI_HELPER: ${{ github.workspace }}/target/${{ matrix.target }}/release/reshiki${{ runner.os == 'Windows' && '.exe' || '' }}
         run: cargo test --release --locked --no-default-features --bin reshiki --target ${{ matrix.target }}
+      - name: Preserve Windows raw protection context without an antivirus verdict
+        if: always() && runner.os == 'Windows'
+        run: uv run --no-project --isolated --python 3.12 python scripts/collect_windows_functional.py final-capture --architecture ${{ matrix.msvc_arch }} --source-commit ${{ github.sha }} --candidate "$env:RESHIKI_PRODUCTION_CANDIDATE" --preflight evidence/functional-preflight/preflight.json --output evidence/functional-final-context.json
+      - name: Preserve source identity and Windows functional evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: functional-evidence-${{ matrix.artifact }}-${{ github.sha }}
+          path: |
+            evidence/**
+            build/release-bundles/*/build.json
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
         with:
           name: unsigned-${{ matrix.artifact }}
           path: dist/releases/*
           if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
   sign:
     needs: [validate, build]
-    if: ${{ github.event_name == 'push' || inputs.sign_macos || (inputs.nightly && github.ref == 'refs/heads/main') }}
+    if: false
     environment: macos-signing
     timeout-minutes: 75
     strategy:
@@ -203,6 +239,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
           version: "0.12.3"
@@ -232,12 +271,15 @@ jobs:
           if-no-files-found: error
   publish:
     needs: [build, sign, reference]
-    if: github.event_name == 'push'
+    if: false
     runs-on: ubuntu-22.04
     permissions:
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
           version: "0.12.3"
