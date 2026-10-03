@@ -3064,7 +3064,11 @@ impl App {
             self.assistant.viewed_image.is_some(),
             self.updates.open,
             self.tab.atom_text.is_some(),
-            self.inspector_tab == InspectorTab::DrawingStyle && self.tab.styles.editor.is_some(),
+            self.inspector_open
+                && self.inspector_tab == InspectorTab::DrawingStyle
+                && self.tab.styles.editor.is_some()
+                && self.tab.inline_text.is_none()
+                && self.context_menu.is_none(),
         )
     }
 }

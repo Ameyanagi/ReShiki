@@ -170,9 +170,9 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
                 })
             )
         {
-            shell.publish(Message::DrawingStyle(
-                super::document_styles::Action::Cancel,
-            ));
+            // Preserve the application's existing menu/dialog cancellation
+            // priority before it reaches the drawing-style draft.
+            shell.publish(Message::Escape);
             shell.capture_event();
             return;
         }
