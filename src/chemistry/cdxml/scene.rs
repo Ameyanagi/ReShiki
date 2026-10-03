@@ -68,6 +68,8 @@ pub struct SceneAtom {
     pub text_style: Option<NativeTextStyle>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hydrogen_color: Option<[u8; 3]>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub color_override: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub marks: Vec<NativeMark>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -155,6 +157,66 @@ fn default_style() -> NativeTextStyle {
         formula: false,
     }
 }
+fn label_presentation(text: NativeText) -> Result<(NativeTextStyle, Option<[u8; 3]>)> {
+    let style = plain(text.format.style.clone());
+    // Only the attached H/count may carry a second color. It remains part
+    // of one chemical atom label, with unchanged geometry and chemistry.
+    let isotope = text.text.bytes().take_while(u8::is_ascii_digit).count();
+    let core = text.text.get(isotope..).unwrap_or_default();
+    let core_len = 1 + core
+        .bytes()
+        .skip(1)
+        .take_while(u8::is_ascii_lowercase)
+        .count();
+    let h_start = isotope + core_len;
+    let h_range = text
+        .text
+        .get(h_start..)
+        .filter(|s| s.starts_with('H'))
+        .map(|s| h_start..h_start + 1 + s.bytes().skip(1).take_while(u8::is_ascii_digit).count());
+    let mut hydrogen_color = None;
+    for span in &text.format.spans {
+        let mut run = plain(span.style.clone());
+        if run == style {
+            continue;
+        }
+        let color = run.color;
+        run.color = style.color;
+        if run != style
+            || !h_range
+                .as_ref()
+                .is_some_and(|r| r.start <= span.start && span.end <= r.end)
+        {
+            return Err(SceneError::Invalid(
+                "Mixed fonts within a CDXML atom label are not supported yet",
+            ));
+        }
+        if hydrogen_color.is_some_and(|previous| previous != color) {
+            return Err(SceneError::Invalid(
+                "Mixed colors within attached hydrogen text are not supported",
+            ));
+        }
+        hydrogen_color = Some(color);
+    }
+    if let (Some(color), Some(range)) = (hydrogen_color, h_range) {
+        for index in range {
+            let actual = text
+                .format
+                .spans
+                .iter()
+                .find(|s| s.start <= index && index < s.end)
+                .map_or(style.color, |s| s.style.color);
+            if actual != color {
+                return Err(SceneError::Invalid(
+                    "Mixed colors within attached hydrogen text are not supported",
+                ));
+            }
+        }
+    }
+    let hydrogen_color = hydrogen_color.map(|c| c.into_document()).transpose()?;
+    Ok((style, hydrogen_color))
+}
+
 fn atom_slot(
     atoms: &mut Vec<SceneAtom>,
     slots: &mut HashMap<u64, usize>,
@@ -172,6 +234,7 @@ fn atom_slot(
         highlight: None,
         text_style: None,
         hydrogen_color: None,
+        color_override: false,
         marks: Vec::new(),
         display: None,
     });
@@ -365,64 +428,7 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
             Some(&attributes(*node)),
             true,
         )?;
-        let style = plain(text.format.style.clone());
-        // Only the attached H/count may carry a second color. It remains part
-        // of one chemical atom label, with unchanged geometry and chemistry.
-        let isotope = text.text.bytes().take_while(u8::is_ascii_digit).count();
-        let core = text.text.get(isotope..).unwrap_or_default();
-        let core_len = 1 + core
-            .bytes()
-            .skip(1)
-            .take_while(u8::is_ascii_lowercase)
-            .count();
-        let h_start = isotope + core_len;
-        let h_range = text
-            .text
-            .get(h_start..)
-            .filter(|s| s.starts_with('H'))
-            .map(|s| {
-                h_start..h_start + 1 + s.bytes().skip(1).take_while(u8::is_ascii_digit).count()
-            });
-        let mut hydrogen_color = None;
-        for span in &text.format.spans {
-            let mut run = plain(span.style.clone());
-            if run == style {
-                continue;
-            }
-            let color = run.color;
-            run.color = style.color;
-            if run != style
-                || !h_range
-                    .as_ref()
-                    .is_some_and(|r| r.start <= span.start && span.end <= r.end)
-            {
-                return Err(SceneError::Invalid(
-                    "Mixed fonts within a CDXML atom label are not supported yet",
-                ));
-            }
-            if hydrogen_color.is_some_and(|previous| previous != color) {
-                return Err(SceneError::Invalid(
-                    "Mixed colors within attached hydrogen text are not supported",
-                ));
-            }
-            hydrogen_color = Some(color);
-        }
-        if let (Some(color), Some(range)) = (hydrogen_color, h_range) {
-            for index in range {
-                let actual = text
-                    .format
-                    .spans
-                    .iter()
-                    .find(|s| s.start <= index && index < s.end)
-                    .map_or(style.color, |s| s.style.color);
-                if actual != color {
-                    return Err(SceneError::Invalid(
-                        "Mixed colors within attached hydrogen text are not supported",
-                    ));
-                }
-            }
-        }
-        let hydrogen_color = hydrogen_color.map(|c| c.into_document()).transpose()?;
+        let (style, hydrogen_color) = label_presentation(text)?;
         if style == default_style() && hydrogen_color.is_none() {
             continue;
         }
@@ -448,6 +454,7 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
             highlight: None,
             text_style: Some(style),
             hydrogen_color,
+            color_override: false,
             marks: Vec::new(),
             display: None,
         });
@@ -607,6 +614,51 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
         &prepared.molecule.positions,
         prepared.source_scale,
     )?;
+    // Chemistry still uses the original flattened XML and checked atom IDs.
+    // Restore independent presentations only after that association succeeds.
+    // Equal presentations keep the legacy anchor-style fallback unchanged.
+    let mut latest: HashMap<_, _> = base
+        .atoms
+        .iter()
+        .enumerate()
+        .map(|(i, atom)| (atom.id, i))
+        .collect();
+    for (record, group) in prepared.abbreviations.iter().zip(&mut base.abbreviations) {
+        let Some(presentation) = &record.presentation else {
+            continue;
+        };
+        let read = |part: &super::AtomPresentation| -> Result<_> {
+            let xml = presentation::parse(part.text.as_deref().unwrap_or("<t><s/></t>"))?;
+            let text = xml.root_element();
+            if !text.has_tag_name("t") {
+                return Err(SceneError::Invalid(
+                    "Invalid abbreviation text presentation",
+                ));
+            }
+            let explicit = root.attribute("LabelColor").is_some()
+                || part.attributes.contains_key("LabelColor")
+                || text.attribute("LabelColor").is_some()
+                || text
+                    .children()
+                    .filter(|n| n.has_tag_name("s"))
+                    .any(|n| n.attribute("color").is_some());
+            let (style, hydrogen) =
+                label_presentation(reader.read(text, Some(&part.attributes), true)?)?;
+            Ok((style, hydrogen, explicit))
+        };
+        let (label_style, label_hydrogen, label_explicit) = read(&presentation.label)?;
+        let (anchor_style, anchor_hydrogen, anchor_explicit) = read(&presentation.anchor)?;
+        if label_style == anchor_style && label_hydrogen == anchor_hydrogen {
+            continue;
+        }
+        group.label_style = Some(label_style.into_document()?);
+        group.label_color_override = label_explicit;
+        let slot = atom_slot(&mut base.atoms, &mut latest, group.anchor)?;
+        let atom = base.atoms.get_mut(slot).ok_or(SceneError::Limit)?;
+        atom.text_style = Some(anchor_style);
+        atom.hydrogen_color = anchor_hydrogen;
+        atom.color_override = anchor_explicit;
+    }
     if prepared.molecule.ids.is_empty()
         && base.annotations.is_empty()
         && base.arrows.is_empty()

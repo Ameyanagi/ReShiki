@@ -194,12 +194,15 @@ impl Tree {
         Ok(index)
     }
     pub fn serialize(&self) -> Result<String> {
+        self.serialize_subtree(0)
+    }
+    pub fn serialize_subtree(&self, root: usize) -> Result<String> {
         enum Event {
             Open(usize),
             Close(usize),
         }
         let mut output = String::new();
-        let mut stack = vec![Event::Open(0)];
+        let mut stack = vec![Event::Open(root)];
         while let Some(event) = stack.pop() {
             match event {
                 Event::Open(index) => {
@@ -223,7 +226,9 @@ impl Tree {
                     push(&mut output, "</")?;
                     push(&mut output, &node.tag)?;
                     push(&mut output, ">")?;
-                    escaped(&mut output, &node.tail, false)?;
+                    if index != root {
+                        escaped(&mut output, &node.tail, false)?;
+                    }
                 }
             }
         }
