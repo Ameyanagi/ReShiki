@@ -73,7 +73,8 @@ unrecognized format; its upload dialog offered only `.cxf` and `.mol`.
    selection, or clear the selection to use the whole drawing. The reaction must
    have explicit reactant/product assignments, not just an arrow graphic.
 2. Right-click an object in the selection and choose **Copy as → ChemDoodle
-   JSON · reaction**. To copy the whole drawing, right-click blank canvas.
+   JSON · reaction**. To copy the whole drawing, right-click blank canvas outside
+   the selection bounds. Check that the submenu says **Copy as · whole drawing**.
    Review any warning or error before switching applications.
 3. In SciFinder, open **Draw**, choose **ChemDoodle** from the editor selector,
    and select **Reactions**.
