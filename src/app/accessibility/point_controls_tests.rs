@@ -128,20 +128,52 @@ impl Ui {
     }
 
     fn tab(&mut self, app: &App, backwards: bool) {
-        let (status, messages) = self.event(
-            app,
-            key(
-                Named::Tab,
-                if backwards {
-                    Modifiers::SHIFT
-                } else {
-                    Modifiers::empty()
-                },
-                false,
-            ),
-        );
+        let modifiers = if backwards {
+            Modifiers::SHIFT
+        } else {
+            Modifiers::empty()
+        };
+        self.modifiers(app, modifiers);
+        let (status, messages) = self.event(app, key(Named::Tab, modifiers, false));
         assert_eq!(status, iced::event::Status::Captured);
         assert!(messages.is_empty(), "Tab only changes focus");
+        assert!(
+            self.event(app, release(Key::Named(Named::Tab), Code::Tab, modifiers))
+                .1
+                .is_empty()
+        );
+        self.modifiers(app, Modifiers::empty());
+    }
+
+    fn modifiers(&mut self, app: &App, modifiers: Modifiers) {
+        let (_, messages) = self.event(
+            app,
+            Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)),
+        );
+        assert!(
+            messages.is_empty(),
+            "modifier changes only update key state"
+        );
+    }
+
+    fn command(
+        &mut self,
+        app: &App,
+        text: &str,
+        code: Code,
+    ) -> (iced::event::Status, Vec<Message>) {
+        self.modifiers(app, Modifiers::COMMAND);
+        let result = self.event(app, character(text, code, Modifiers::COMMAND));
+        assert!(
+            self.event(
+                app,
+                release(Key::Character(text.into()), code, Modifiers::COMMAND),
+            )
+            .1
+            .is_empty()
+        );
+        self.modifiers(app, Modifiers::empty());
+        result
     }
 
     fn enter_once(&mut self, app: &App, tool: Tool) -> Message {
@@ -169,7 +201,7 @@ impl Ui {
 
     fn type_width(&mut self, app: &mut App, id: &str) {
         self.focus(app, id);
-        let (status, messages) = self.event(app, character("a", Code::KeyA, Modifiers::COMMAND));
+        let (status, messages) = self.command(app, "a", Code::KeyA);
         assert_eq!(status, iced::event::Status::Captured);
         assert!(
             messages.is_empty(),
@@ -200,13 +232,23 @@ impl Ui {
     }
 
     fn undo(&mut self, app: &mut App) {
-        let (_, messages) = self.event(app, character("z", Code::KeyZ, Modifiers::COMMAND));
+        let (_, messages) = self.command(app, "z", Code::KeyZ);
         assert_eq!(messages.len(), 1);
         assert!(matches!(messages[0], Message::Undo));
         for message in messages {
             let _ = app.update(message);
         }
     }
+}
+
+fn release(key: Key, code: Code, modifiers: Modifiers) -> Event {
+    Event::Keyboard(keyboard::Event::KeyReleased {
+        modified_key: key.clone(),
+        key,
+        physical_key: Physical::Code(code),
+        location: keyboard::Location::Standard,
+        modifiers,
+    })
 }
 
 fn character(text: &str, code: Code, modifiers: Modifiers) -> Event {
