@@ -217,7 +217,9 @@ mod tests {
                         })
                         .flatten()
                         .collect::<Vec<_>>()
-                        .chunks_exact(2)
+                        .as_chunks::<2>()
+                        .0
+                        .iter()
                         .map(|p| (p[0], p[1]))
                         .collect()
                         } else {
