@@ -23,6 +23,8 @@
     "Rich client lookup and per-request cancellation/completion",
     "Positive selection-offer generation receipt before successful Copy/Cut",
     "Immutable per-source MIME buffers and bounded nonblocking transfers",
-    "No ext/wlr data-control protocol"
-  ]
+    "No ext/wlr data-control protocol",
+    "Rust 1.88 minimum for edition-2024 let chains; exact existing futures-channel/rustix versions; upstream foreign-display lifetime boundary retained"
+  ],
+  "local_rust_version": "1.88.0"
 }

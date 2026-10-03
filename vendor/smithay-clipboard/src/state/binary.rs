@@ -39,7 +39,11 @@ impl Binary {
         self.pending
             .values()
             .map(|operation| operation.control().deadline)
-            .chain(self.writes.values().map(|write| write.completion.control.deadline))
+            .chain(
+                self.writes
+                    .values()
+                    .map(|write| write.completion.control.deadline),
+            )
             .map(|deadline| deadline.saturating_duration_since(now))
             .min()
     }
@@ -56,7 +60,9 @@ impl State {
             return;
         }
         if self.binary.synchronizing.len() >= MAX_TRANSFERS {
-            operation.fail(io::Error::other("clipboard display requests are still pending"));
+            operation.fail(io::Error::other(
+                "clipboard display requests are still pending",
+            ));
             return;
         }
         let id = operation.id();
@@ -70,7 +76,9 @@ impl State {
 
     fn finish_sync(&mut self, id: u64) {
         self.binary.synchronizing.remove(&id);
-        let Some(operation) = self.binary.pending.remove(&id) else { return };
+        let Some(operation) = self.binary.pending.remove(&id) else {
+            return;
+        };
         if self.client.stopped.load(Ordering::Acquire) {
             operation.fail(unavailable());
             return;
@@ -84,11 +92,15 @@ impl State {
             return;
         };
         let Some(seat) = self.seats.get(&seat_id).filter(|seat| seat.has_focus) else {
-            operation.fail(io::Error::other("focus ReShiki and try the clipboard command again"));
+            operation.fail(io::Error::other(
+                "focus ReShiki and try the clipboard command again",
+            ));
             return;
         };
         let Some(device) = seat.data_device.as_ref() else {
-            operation.fail(io::Error::other("the seat has no standard clipboard data device"));
+            operation.fail(io::Error::other(
+                "the seat has no standard clipboard data device",
+            ));
             return;
         };
 
@@ -103,8 +115,9 @@ impl State {
                     return;
                 }
                 let Some(manager) = &self.data_device_manager_state else {
-                    completion
-                        .finish(Err(io::Error::other("standard Wayland clipboard unavailable")));
+                    completion.finish(Err(io::Error::other(
+                        "standard Wayland clipboard unavailable",
+                    )));
                     return;
                 };
                 let Some(marker) = offer.marker.clone() else {
@@ -125,8 +138,11 @@ impl State {
                 );
                 source.set_selection(device, seat.latest_serial);
                 self.data_sources.push(ClipboardSource { source, offer });
-            },
-            Operation::Read { mime_types, completion } => {
+            }
+            Operation::Read {
+                mime_types,
+                completion,
+            } => {
                 let Some(selection) = device.data().selection_offer() else {
                     completion.finish(Ok(None));
                     return;
@@ -138,7 +154,10 @@ impl State {
                     return;
                 }
                 let chosen = selection.with_mime_types(|available| {
-                    mime_types.iter().find(|mime| available.contains(mime)).cloned()
+                    mime_types
+                        .iter()
+                        .find(|mime| available.contains(mime))
+                        .cloned()
                 });
                 let Some(mime_type) = chosen else {
                     completion.finish(Ok(None));
@@ -146,30 +165,42 @@ impl State {
                 };
                 match selection.receive(mime_type.clone()) {
                     Ok(pipe) => {
-                        self.receive_pipe(pipe, ReadReply::Binary { completion, mime_type });
-                    },
+                        self.receive_pipe(
+                            pipe,
+                            ReadReply::Binary {
+                                completion,
+                                mime_type,
+                            },
+                        );
+                    }
                     Err(error) => {
                         let error = match error {
                             DataOfferError::Io(error) => error,
                             DataOfferError::InvalidReceive => {
                                 io::Error::other("clipboard offer is not ready")
-                            },
+                            }
                         };
                         completion.finish(Err(error));
-                    },
+                    }
                 }
-            },
+            }
         }
     }
 
     pub(super) fn selection_receipt(&mut self, device: &WlDataDevice) {
         let Some((seat_id, seat)) = self.seats.iter().find(|(_, seat)| {
-            seat.has_focus && seat.data_device.as_ref().is_some_and(|data| data.inner() == device)
+            seat.has_focus
+                && seat
+                    .data_device
+                    .as_ref()
+                    .is_some_and(|data| data.inner() == device)
         }) else {
             return;
         };
-        let Some(selection) =
-            seat.data_device.as_ref().and_then(|data| data.data().selection_offer())
+        let Some(selection) = seat
+            .data_device
+            .as_ref()
+            .and_then(|data| data.data().selection_offer())
         else {
             return;
         };
@@ -190,7 +221,11 @@ impl State {
         });
         for source in ready {
             if let Some(write) = self.binary.writes.remove(&source) {
-                let result = write.completion.control.error(Instant::now()).map_or(Ok(()), Err);
+                let result = write
+                    .completion
+                    .control
+                    .error(Instant::now())
+                    .map_or(Ok(()), Err);
                 write.completion.finish(result);
             }
         }
@@ -198,9 +233,9 @@ impl State {
 
     pub(super) fn source_cancelled(&mut self, source: &ObjectId) {
         if let Some(write) = self.binary.writes.remove(source) {
-            write
-                .completion
-                .finish(Err(io::Error::other("clipboard ownership was rejected or replaced")));
+            write.completion.finish(Err(io::Error::other(
+                "clipboard ownership was rejected or replaced",
+            )));
         }
     }
 
@@ -238,7 +273,11 @@ impl State {
             .writes
             .iter()
             .filter_map(|(source, write)| {
-                write.completion.control.error(now).map(|error| (source.clone(), error))
+                write
+                    .completion
+                    .control
+                    .error(now)
+                    .map(|error| (source.clone(), error))
             })
             .collect();
         for (source, error) in expired {
@@ -254,7 +293,11 @@ impl State {
 
     pub fn timeout(&self) -> Option<Duration> {
         let now = Instant::now();
-        self.binary.timeout(now).into_iter().chain(self.transfers.timeout(now)).min()
+        self.binary
+            .timeout(now)
+            .into_iter()
+            .chain(self.transfers.timeout(now))
+            .min()
     }
 }
 
