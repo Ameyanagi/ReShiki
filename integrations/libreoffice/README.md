@@ -47,10 +47,25 @@ The selected path is stored in the LibreOffice user profile, never in documents.
 
 Each edited object gets a separate process, directory, and session identity.
 Unsaved editor changes do not replace the embedded drawing. LibreOffice refuses
-to close an active object while its editor session remains open. If an update
+to close the document or its editing window while an editor session remains open.
+Multiple objects can be edited from the same LibreOffice window; starting an
+editor from another window of that same document is rejected until editing in
+the first window finishes. If an update
 fails, the extension retains the saved `.rsk` file and shows its path. Only an
 accepted update receives a revision acknowledgement; ReShiki's save message asks
 the user to check the host document.
+
+If LibreOffice repeatedly rejects the final cleanup callback after the editor
+closes, select the object and choose **Edit in ReShiki** to finish the retained session
+and show its recovery path. Choose the command again to start another edit.
+Automatic cleanup is not guaranteed while that host service is unavailable.
+Close-listener vetoes queue a concise notice; the separate frame-lock route to
+Start Center may refuse closing without displaying that notice.
+
+If releasing the extension's frame action lock throws, its native lock count may
+already have changed. The extension leaves that document protected and does not
+retry the removal or reset other locks. Save your work before restarting
+LibreOffice; **Edit in ReShiki** cannot repair this separate failure.
 
 The extension menu is the explicit editable paste/copy route. Ordinary platform
 paste may choose an image or Windows OLE instead. DOCX, XLSX, PPTX, native
@@ -125,6 +140,15 @@ python3 integrations/libreoffice/tests/roundtrip.py \
 renderer; reports identify that limitation. `--incoming` also loads and resaves
 the `roundtrip-2.odt`, `.ods`, and `.odp` files from another test host. These are
 headless integration checks, not substitutes for the required desktop workflow.
+
+`tests/test_host_guard.py` exercises model/frame close broadcasts, shared session
+tokens, balanced frame locks, source-specific close ownership, Cancel/error
+retry limits, live-child failures, and disposal before or during deferred
+saveback. It also checks a new close request after Cancel, retained duties across
+later views, immediate failure notices, and bounded final-callback recovery.
+These controlled tests do not establish native close-dispatch or
+Save/Discard/Cancel behavior; the Writer edit → Save As → close while editing
+sequence must also be checked in the desktop application.
 
 `tests/test_copy_feedback.py` checks that copy readiness is announced only after
 the worker succeeds, failures retain their error message, and hosts without

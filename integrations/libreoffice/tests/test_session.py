@@ -19,6 +19,21 @@ SPEC.loader.exec_module(extension)
 
 
 class SessionTests(unittest.TestCase):
+    def make_session(self, accepted):
+        return {
+            "token": "controlled session",
+            "directory": self.root,
+            "accepted": accepted,
+            "error": None,
+            "invalid": False,
+            "watch_complete": False,
+            "error_reported": False,
+            "completions": set(),
+            "completion_lock": threading.Lock(),
+            "guard": self.guard,
+            "process": SimpleNamespace(poll=lambda: 0),
+        }
+
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.root = Path(self.directory.name)
@@ -26,7 +41,17 @@ class SessionTests(unittest.TestCase):
         self.new = (b'{"version":15,"title":"new"}', b"new PNG", (300, 400))
         self.object = extension.Embedded(None, self.old)
         self.object.parent, self.object.entry = "old storage", "Object 1"
-        self.session = {"directory": self.root, "accepted": self.old[0], "error": None}
+        # These tests isolate persistence/state handling. Real model/frame
+        # broadcasts and guard acquisition are covered in test_host_guard.py.
+        self.guard = SimpleNamespace(owns=lambda owner, session: True, release=lambda *args: None)
+        acquire = patch.object(
+            extension,
+            "acquire_host_guard",
+            side_effect=lambda owner, session: session.__setitem__("guard", self.guard),
+        )
+        acquire.start()
+        self.addCleanup(acquire.stop)
+        self.session = self.make_session(self.old[0])
         self.object.session = self.session
 
     def tearDown(self):
@@ -69,7 +94,7 @@ class SessionTests(unittest.TestCase):
         def accept(session, data, done):
             accepted.append(data)
             session["accepted"] = data[0]
-            done.set()
+            self.object._complete(session, done)
 
         with (
             patch.object(extension, "post", side_effect=lambda ctx, action: action()),
@@ -204,7 +229,7 @@ class SessionTests(unittest.TestCase):
             with self.subTest(target=target):
                 obj = extension.Embedded(None, self.old)
                 obj.parent, obj.entry = "old storage", "Object 1"
-                session = {"directory": self.root, "accepted": self.old[0], "error": None}
+                session = self.make_session(self.old[0])
                 obj.session = session
                 stored = []
 
