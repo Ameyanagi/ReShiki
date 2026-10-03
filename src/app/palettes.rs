@@ -331,6 +331,7 @@ impl App {
         let Some(family) = self.palette else {
             return base;
         };
+        let base = reshiki::accessibility::inert(base);
         let title = match family {
             Family::Atoms => "Choose an element",
             Family::Bonds => "Other bonds",

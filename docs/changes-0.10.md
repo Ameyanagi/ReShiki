@@ -21,7 +21,7 @@ The detailed changes below retain contributor credits and links to validation re
 
 ## Less crowded interface
 
-By @Ameyanagi in [PR #98](https://github.com/Ameyanagi/ReShiki/pull/98), resolving [issue #78](https://github.com/Ameyanagi/ReShiki/issues/78).
+By @Ameyanagi in [PR #98](https://github.com/Ameyanagi/ReShiki/pull/98), implementing the cleanup in [issue #78](https://github.com/Ameyanagi/ReShiki/issues/78). The [combined desktop acceptance record](changes/ui-declutter-validation.md) tracks the remaining platform checks.
 
 The drawing features added since 0.9.1 now share fewer rows, and each command has one home. Every row fits the 1040 × 680 minimum window without clipping or horizontal scrolling, and the canvas stays put when the selection changes.
 

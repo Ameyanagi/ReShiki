@@ -9,6 +9,7 @@ use reshiki::{
 };
 use std::path::PathBuf;
 mod abbreviations;
+mod accessibility;
 mod arcs;
 mod arrows;
 mod assistant;
@@ -89,6 +90,7 @@ pub enum InspectorTab {
 pub enum Message {
     #[cfg(target_os = "linux")]
     LinuxClipboardWindow(iced::window::Id),
+    Accessibility(accessibility::Action),
     ContextMenu(context_menu::Action),
     StyleMenu(color_popover::Action),
     ObjectToolbar(object_toolbar::Action),
@@ -311,6 +313,7 @@ struct CleanupPreview {
 }
 
 pub struct App {
+    accessibility: accessibility::State,
     /// The active document; see `document_tab` for what is per document.
     tab: DocumentTab,
     tabs: tabs::State,
@@ -371,6 +374,7 @@ impl App {
             .as_ref()
             .and_then(|r| r.session.parent().map(PathBuf::from));
         let mut app = Self {
+            accessibility: accessibility::State::default(),
             tab: DocumentTab::new(recovery),
             tabs: tabs::State::new(recovery_root),
             updates: updates::State::new(),
@@ -465,6 +469,7 @@ impl App {
     }
     pub fn subscription(&self) -> Subscription<Message> {
         Subscription::batch([
+            accessibility::subscription(),
             #[cfg(target_os = "macos")]
             macos_files::subscription(),
             #[cfg(target_os = "linux")]
@@ -705,7 +710,19 @@ impl App {
             .map(|p| &p.document)
             .unwrap_or(&self.tab.doc)
     }
-    pub fn update(&mut self, mut message: Message) -> Task<Message> {
+    pub fn update(&mut self, message: Message) -> Task<Message> {
+        if let Message::Accessibility(action) = message {
+            return self.accessibility_action(action);
+        }
+        let controls_unchanged = matches!(&message, Message::Canvas(Edit::Hover(_)));
+        let task = self.update_routed(message);
+        if controls_unchanged {
+            task
+        } else {
+            Task::batch([task, self.accessibility_refresh()])
+        }
+    }
+    fn update_routed(&mut self, mut message: Message) -> Task<Message> {
         // Timer polls belong to the Assistant's drawing before any front-tab
         // focus or menu handling runs.
         if matches!(&message, Message::Assistant(assistant::Action::Poll))
@@ -871,8 +888,9 @@ impl App {
             self.context_menu = None;
             return Task::none();
         }
-        if self.imports.menu && matches!(message, Message::Escape) {
+        if (self.imports.menu || self.imports.examples_menu) && matches!(message, Message::Escape) {
             self.imports.menu = false;
+            self.imports.examples_menu = false;
             return Task::none();
         }
         if self.tabs.menu && matches!(message, Message::Escape) {
@@ -892,8 +910,12 @@ impl App {
         ) {
             self.context_menu = None;
             self.tab.inspector_ui.close_menu();
-            if !matches!(message, Message::Imports(import::Action::Menu(_))) {
+            if !matches!(
+                message,
+                Message::Imports(import::Action::Menu(_) | import::Action::ExamplesMenu(_))
+            ) {
                 self.imports.menu = false;
+                self.imports.examples_menu = false;
             }
             if !matches!(message, Message::Tabs(tabs::Action::Menu(_))) {
                 self.tabs.menu = false;
@@ -1052,6 +1074,7 @@ impl App {
         ) || (self.inspector_tab != InspectorTab::Templates
             && matches!(&message, Message::Canvas(Edit::Select(ids)) if ids.iter().any(|id| self.tab.doc.annotations.iter().any(|a| a.id == *id) || self.tab.doc.graphics.iter().any(|g|g.id==*id))));
         match message {
+            Message::Accessibility(_) => return Task::none(),
             Message::DrawingStyle(action) => return self.drawing_style_action(action),
             Message::Imports(action) => return self.import_action(action),
             Message::Pages(action) => return self.page_action(action),
@@ -3067,7 +3090,7 @@ impl App {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        file_shortcuts::wrap(
+        reshiki::accessibility::focus_scope(file_shortcuts::wrap(
             self.with_updates(self.with_assistant_image(
                 self.with_atom_text(self.with_help(self.with_palette(self.workspace()))),
             )),
@@ -3075,7 +3098,12 @@ impl App {
             self.assistant.viewed_image.is_some(),
             self.updates.open,
             self.tab.atom_text.is_some(),
-        )
+            self.inspector_open
+                && self.inspector_tab == InspectorTab::DrawingStyle
+                && self.tab.styles.editor.is_some()
+                && self.tab.inline_text.is_none()
+                && self.context_menu.is_none(),
+        ))
     }
 }
 
@@ -3308,10 +3336,13 @@ mod tests {
         app.tab.busy = false;
         let idle = subscriptions(&app);
         // Window close and keyboard/mouse events are always subscribed.
-        // macOS adds Finder events; Linux adds window-open events for clipboard
-        // initialization. These streams do not poll.
-        let event_streams =
-            2 + usize::from(cfg!(target_os = "macos")) + usize::from(cfg!(target_os = "linux"));
+        // macOS adds Finder events; macOS/Windows add the native accessibility
+        // action receiver and window/input events; Linux adds window-open
+        // events for clipboard initialization. These streams do not poll.
+        let event_streams = 2
+            + usize::from(cfg!(target_os = "macos"))
+            + 2 * usize::from(cfg!(any(target_os = "macos", windows)))
+            + usize::from(cfg!(target_os = "linux"));
         assert_eq!(idle, event_streams);
         app.assistant.busy = true;
         assert_eq!(subscriptions(&app), idle + 1);
@@ -3789,8 +3820,11 @@ mod tests {
             app.tool = Tool::Ring;
             app.aromatic_ring = false;
             app.ring_size = 6;
-            let carbon = app.tab.doc.add_atom("C", Point::default());
-            app.tab.doc.atom_mut(carbon).unwrap().explicit_h = 4;
+            app.tab.doc = Document::from_json(include_bytes!(
+                "../tests/fixtures/ui-declutter/ring-rejection.rsk"
+            ))
+            .unwrap();
+            let carbon = app.tab.doc.atoms[0].id;
             let original = app.tab.doc.clone();
             // A valid placement is one history entry; an invalid attempt after
             // Undo must leave that entry available to Redo.
@@ -4042,6 +4076,64 @@ mod tests {
             reshiki::style::DEFAULT.bond_length_world
         );
         assert!(app.tab.doc.arrows.is_empty());
+    }
+
+    #[test]
+    fn arrow_width_in_mixed_selection_preserves_bonds_and_other_objects() {
+        use arrows::{Action, Field};
+
+        for selected in [vec![10], vec![1, 2, 3, 10, 20]] {
+            let (mut app, _) = App::new();
+            app.tab.doc = Document::from_json(include_bytes!(
+                "../tests/fixtures/ui-declutter/mixed-arrow-width.rsk"
+            ))
+            .unwrap();
+            app.tab.saved = app.tab.doc.clone();
+            let _ = app.update(Message::Canvas(Edit::Select(selected.clone())));
+            let before = app.tab.doc.clone();
+            assert!(!app.tab.history.can_undo());
+
+            let _ = app.update(Message::ArrowAction(Action::Number(
+                Field::Line,
+                "1.5".into(),
+            )));
+            assert_eq!(app.tab.doc, before, "Typing must not change the drawing");
+            assert!(!app.tab.history.can_undo());
+            let _ = app.update(Message::ArrowAction(Action::ApplyNumber(Field::Line)));
+            assert!(!app.error, "{}", app.status);
+
+            let mut expected = before.clone();
+            expected
+                .arrows
+                .iter_mut()
+                .find(|arrow| arrow.id == 10)
+                .unwrap()
+                .style
+                .as_mut()
+                .unwrap()
+                .width_pt = 1.5;
+            assert_eq!(app.tab.doc.drawing_style, before.drawing_style);
+            assert_eq!(app.tab.doc.bonds, before.bonds);
+            assert_eq!(
+                app.tab.doc, expected,
+                "Only the selected arrow width changes"
+            );
+            assert_eq!(app.tab.selected, selected);
+            let saved = serde_json::to_vec(&app.tab.doc).unwrap();
+            assert_eq!(Document::from_json(&saved).unwrap(), expected);
+
+            let _ = app.update(Message::Undo);
+            assert_eq!(app.tab.doc, before);
+            assert_eq!(app.tab.selected, selected);
+            assert!(
+                !app.tab.history.can_undo(),
+                "Apply is exactly one Undo step"
+            );
+            let _ = app.update(Message::Redo);
+            assert_eq!(app.tab.doc, expected);
+            assert_eq!(app.tab.selected, selected);
+            assert_eq!(app.tab.arrows.style.width_pt, 1.5);
+        }
     }
 
     #[test]

@@ -1,8 +1,8 @@
 //! Explicit, atomic numeric edits using the same geometry as selection handles.
 use super::icons::{Glyph, Icon};
-use super::workspace::{command, control, hover_hint, text_width, unit_field};
+use super::workspace::{accessible_unit_field, control, hover_hint, text_width};
 use super::{App, Message};
-use iced::widget::{Space, button, canvas, column, container, row, text, tooltip};
+use iced::widget::{Space, canvas, column, container, row, text, tooltip};
 use iced::{Alignment, Element, Length, Task};
 use reshiki::{
     document::{Document, Point},
@@ -555,19 +555,22 @@ impl App {
             } else {
                 selected
             };
-            let input =
-                crate::appearance::text_input("", state.value(field))
-                    .id(field.id())
-                    .on_input_maybe(enabled.then_some(move |value| {
-                        Message::NumericTransform(Action::Input(field, value))
-                    }))
-                    .on_submit_maybe(
-                        enabled.then_some(Message::NumericTransform(Action::Apply(field))),
-                    );
+            let input = reshiki::accessibility::text_input(
+                field.id(),
+                format!("{} ({})", field.name(), field.unit()),
+                "",
+                state.value(field),
+            )
+            .style(crate::appearance::input_style)
+            .on_input_maybe(
+                enabled
+                    .then_some(move |value| Message::NumericTransform(Action::Input(field, value))),
+            )
+            .on_submit_maybe(enabled.then_some(Message::NumericTransform(Action::Apply(field))));
             row![
                 container(label).width(label_width),
                 hover_hint(
-                    unit_field(input, field.unit()),
+                    accessible_unit_field(input, field.unit()),
                     match field {
                         _ if enabled => field.hint(),
                         Field::TiltX | Field::TiltY =>
@@ -583,12 +586,15 @@ impl App {
         };
         let label = |field: Field| text(field.label()).size(12);
         let lock = hover_hint(
-            button(
+            reshiki::accessibility::button(
+                "transform-proportions",
+                "Lock width and height proportions",
                 canvas(Glyph(Icon::Lock(state.proportional), true))
                     .width(LOCK)
                     .height(LOCK),
             )
             .padding(0)
+            .checked(state.proportional)
             .style(control(state.proportional))
             .on_press(Message::NumericTransform(Action::Proportional(
                 !state.proportional,
@@ -638,22 +644,30 @@ impl App {
                 .any(|f| matches!(f, Field::TiltX | Field::TiltY));
         body = body.push(
             row![
-                command(
-                    match (state.more, hidden_tilt) {
+                reshiki::accessibility::button(
+                    "transform-more",
+                    "More transform controls: tilt X and Y",
+                    text(match (state.more, hidden_tilt) {
                         (true, _) => "▾ More: tilt X / Y",
                         (false, false) => "▸ More: tilt X / Y",
                         (false, true) => "▸ More: tilt X / Y · edited",
-                    },
-                    Message::NumericTransform(Action::More(!state.more)),
-                ),
+                    })
+                    .size(12)
+                )
+                .padding([7, 9])
+                .style(control(false))
+                .expanded(state.more)
+                .on_press(Message::NumericTransform(Action::More(!state.more))),
                 Space::new().width(Length::Fill),
                 hover_hint(
-                    button(text("Apply").size(12))
-                        .padding([6, 14])
-                        .style(crate::appearance::primary)
-                        .on_press_maybe(
-                            edited.then_some(Message::NumericTransform(Action::ApplyAll))
-                        ),
+                    reshiki::accessibility::button(
+                        "transform-apply",
+                        "Apply numeric transforms",
+                        text("Apply").size(12)
+                    )
+                    .padding([6, 14])
+                    .style(crate::appearance::primary)
+                    .on_press_maybe(edited.then_some(Message::NumericTransform(Action::ApplyAll))),
                     if edited {
                         let names: Vec<_> = pending.iter().map(|f| f.name()).collect();
                         format!(

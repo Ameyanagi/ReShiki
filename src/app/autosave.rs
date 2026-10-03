@@ -223,7 +223,7 @@ impl App {
         self.exit
             .closing
             .take()
-            .map_or_else(Task::none, iced::window::close)
+            .map_or_else(Task::none, |id| self.accessibility_close(id))
     }
 
     pub(super) fn commit_exit(&mut self) {

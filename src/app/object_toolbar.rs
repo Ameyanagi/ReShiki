@@ -1,7 +1,7 @@
 //! Align, distribute, order, flip and rotate at the right end of the Select context row.
 use super::context_menu::{self, Page};
 use super::{App, Message, workspace};
-use iced::widget::{button, canvas, row, text, tooltip};
+use iced::widget::{canvas, row, text, tooltip};
 use iced::{Alignment, Element};
 use reshiki::editing::{Arrange, Transform};
 
@@ -214,8 +214,9 @@ impl App {
             // Every arrange command needs a selection.
             let enabled = !self.tab.selected.is_empty();
             return self.menu_anchor(
-                Page::Arrange,
-                button(
+                reshiki::accessibility::button(
+                    "arrange-compact",
+                    "Arrange: align, distribute, order, flip and rotate",
                     row![text("Arrange").size(12), workspace::caret(9.)]
                         .spacing(5)
                         .align_y(Alignment::Center),
@@ -235,8 +236,9 @@ impl App {
         let menu = |icon: Command, page, name: &str, index: f32| {
             let enabled = icon.enabled(self, objects);
             self.menu_anchor(
-                page,
-                button(
+                reshiki::accessibility::button(
+                    format!("arrange-menu-{page:?}"),
+                    name,
                     row![
                         canvas(Glyph(icon, enabled)).width(24).height(24),
                         workspace::caret(9.)
@@ -277,11 +279,19 @@ impl App {
             let enabled = command.enabled(self, objects);
             let keys = super::shortcuts::label(&command.message()).filter(|_| enabled);
             group = group.push(workspace::hover_keys(
-                button(canvas(Glyph(command, enabled)).width(24).height(24))
-                    .width(ICON_BUTTON)
-                    .padding(3)
-                    .on_press_maybe(enabled.then(|| command.message()))
-                    .style(workspace::control(false)),
+                reshiki::accessibility::button(
+                    match command {
+                        Command::Reflect(true) => "arrange-flip-horizontal",
+                        Command::Reflect(false) => "arrange-flip-vertical",
+                        _ => "arrange-rotate",
+                    },
+                    command.name(),
+                    canvas(Glyph(command, enabled)).width(24).height(24),
+                )
+                .width(ICON_BUTTON)
+                .padding(3)
+                .on_press_maybe(enabled.then(|| command.message()))
+                .style(workspace::control(false)),
                 &match (enabled, command) {
                     (false, _) => format!("{} · {}", command.name(), command.requirement()),
                     (true, Command::Reflect(_)) => {

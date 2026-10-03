@@ -420,6 +420,7 @@ pub enum Action {
     Activate(usize, usize),
     CloseAfter(usize),
     Key(Named),
+    FocusedKey(usize, usize, Named),
     Run(Box<Message>),
     Properties(bool),
 }
@@ -925,6 +926,12 @@ impl App {
                 }
             }
             Action::Key(key) => return self.context_key_action(key),
+            Action::FocusedKey(level, index, key) => {
+                if let Some(menu) = &mut self.context_menu {
+                    menu.focused = Some((level, index));
+                }
+                return self.context_key_action(key);
+            }
             Action::Run(message) => {
                 self.context_menu = None;
                 return self.update(*message);
@@ -1061,6 +1068,19 @@ impl App {
             }
             _ => {}
         }
+        if let Some(menu) = &self.context_menu
+            && menu.keyboard
+            && let Some((level, index)) = menu.focused
+            && let Some(page) = menu.page_at(level)
+        {
+            return iced::advanced::widget::operate(reshiki::accessibility::FocusControl::new(
+                format!("menu-{page:?}-{index}"),
+            ))
+            .discard()
+            .chain(Task::done(Message::Accessibility(
+                super::accessibility::Action::Refresh,
+            )));
+        }
         Task::none()
     }
 
@@ -1115,6 +1135,7 @@ impl App {
                     enabled,
                 } => {
                     let destructive = matches!(&action, Action::Run(message) if matches!(message.as_ref(), Message::Delete));
+                    let accessible_name = label;
                     let label = text(label).size(12).width(Length::Fill);
                     let label = if destructive {
                         label.style(crate::appearance::text_color(Color::from_rgb8(167, 59, 51)))
@@ -1139,25 +1160,29 @@ impl App {
                                 .children
                                 .get(level)
                                 .is_some_and(|child| child.anchor == index));
-                    let item = button(content)
-                        .padding([6, 10])
-                        .width(Length::Fill)
-                        .style(move |theme: &iced::Theme, status| {
-                            let mut style = button::text(theme, status);
-                            if active {
-                                style.background = Some(
-                                    Color {
-                                        a: 0.12,
-                                        ..theme.palette().primary
-                                    }
-                                    .into(),
-                                );
-                            }
-                            style
-                        })
-                        .on_press_maybe(
-                            enabled.then_some(Message::ContextMenu(Action::Activate(level, index))),
-                        );
+                    let item = reshiki::accessibility::button(
+                        format!("menu-{page:?}-{index}"),
+                        accessible_name,
+                        content,
+                    )
+                    .padding([6, 10])
+                    .width(Length::Fill)
+                    .style(move |theme: &iced::Theme, status| {
+                        let mut style = button::text(theme, status);
+                        if active {
+                            style.background = Some(
+                                Color {
+                                    a: 0.12,
+                                    ..theme.palette().primary
+                                }
+                                .into(),
+                            );
+                        }
+                        style
+                    })
+                    .on_press_maybe(
+                        enabled.then_some(Message::ContextMenu(Action::Activate(level, index))),
+                    );
                     items.push(index);
                     entries.push(container(item).id(cascade::row_id(level, index)))
                 }

@@ -15,13 +15,14 @@ use iced::{Element, Event, Length, Rectangle, Renderer, Size, Theme, Vector, key
 /// Text fields, including those in overlays, follow one rule: Command
 /// shortcuts never type their letter; Enter applies a field and leaves it, so
 /// Undo and Redo then act on the drawing; while a field is focused, Undo and
-/// Redo do nothing.
+/// Redo do nothing, and arrow keys remain in the text field.
 pub fn wrap(
     content: Element<'_, Message>,
     help_open: bool,
     image_open: bool,
     updates_open: bool,
     atom_text_open: bool,
+    drawing_style_open: bool,
 ) -> Element<'_, Message> {
     Element::new(FileShortcuts {
         content,
@@ -29,6 +30,7 @@ pub fn wrap(
         image_open,
         updates_open,
         atom_text_open,
+        drawing_style_open,
     })
 }
 
@@ -38,6 +40,7 @@ struct FileShortcuts<'a> {
     image_open: bool,
     updates_open: bool,
     atom_text_open: bool,
+    drawing_style_open: bool,
 }
 
 impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
@@ -105,7 +108,10 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
     ) {
         // Updates has no text fields. Stop keys before file routing and any
         // still-focused editor underneath the dialog sees them.
-        if self.updates_open && matches!(event, Event::Keyboard(_) | Event::InputMethod(_)) {
+        if self.updates_open
+            && matches!(event, Event::Keyboard(_) | Event::InputMethod(_))
+            && !activation_event(event)
+        {
             if matches!(
                 event,
                 Event::Keyboard(keyboard::Event::KeyPressed {
@@ -119,6 +125,7 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
             return;
         }
         if self.image_open
+            && !activation_event(event)
             && let Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) = event
         {
             if matches!(key, keyboard::Key::Named(keyboard::key::Named::Escape)) {
@@ -153,6 +160,32 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
             {
                 shell.publish(Message::ToggleHelp);
             }
+            if !matches!(
+                key,
+                keyboard::Key::Named(
+                    keyboard::key::Named::Enter
+                        | keyboard::key::Named::Space
+                        | keyboard::key::Named::Tab
+                )
+            ) {
+                shell.capture_event();
+                return;
+            }
+        }
+        // Cancel the visible style draft before a focused input consumes
+        // Escape only to unfocus. Modal dialogs above keep their own priority.
+        if self.drawing_style_open
+            && matches!(
+                event,
+                Event::Keyboard(keyboard::Event::KeyPressed {
+                    key: keyboard::Key::Named(keyboard::key::Named::Escape),
+                    ..
+                })
+            )
+        {
+            // Preserve the application's existing menu/dialog cancellation
+            // priority before it reaches the drawing-style draft.
+            shell.publish(Message::Escape);
             shell.capture_event();
             return;
         }
@@ -313,12 +346,13 @@ fn without_command_text(event: &Event) -> Option<Event> {
 struct Fields {
     leave: bool,
     single_line: bool,
+    button: bool,
     focused: bool,
 }
 
 impl Fields {
-    /// Enter that a field applied leaves it; Undo and Redo that nothing
-    /// handled do nothing while a field is focused.
+    /// Enter that a field applied leaves it. Unhandled Undo, Redo and arrow
+    /// keys stay in a focused field instead of changing the drawing.
     fn after(event: &Event, captured: bool) -> Option<Self> {
         let Event::Keyboard(keyboard::Event::KeyPressed {
             key,
@@ -335,10 +369,18 @@ impl Fields {
                 ..Self::default()
             })
         } else {
-            matches!(
+            (matches!(
+                key,
+                keyboard::Key::Named(
+                    keyboard::key::Named::ArrowUp
+                        | keyboard::key::Named::ArrowDown
+                        | keyboard::key::Named::ArrowLeft
+                        | keyboard::key::Named::ArrowRight
+                )
+            ) || matches!(
                 super::shortcuts::key_message(key, modified_key, *modifiers),
                 Some(Message::Undo | Message::Redo)
-            )
+            ))
             .then(Self::default)
         }
     }
@@ -351,6 +393,11 @@ impl Fields {
 }
 
 impl Operation for Fields {
+    fn custom(&mut self, _: Option<&Id>, _: Rectangle, state: &mut dyn std::any::Any) {
+        if state.is::<reshiki::accessibility::ButtonFocus>() {
+            self.button = true;
+        }
+    }
     fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
         operate(self);
     }
@@ -360,13 +407,14 @@ impl Operation for Fields {
         self.single_line = true;
     }
     fn focusable(&mut self, _id: Option<&Id>, _bounds: Rectangle, state: &mut dyn Focusable) {
-        if state.is_focused() {
+        if state.is_focused() && !self.button {
             self.focused = true;
             if self.leave && self.single_line {
                 state.unfocus();
             }
         }
         self.single_line = false;
+        self.button = false;
     }
 }
 
@@ -403,9 +451,59 @@ pub(super) fn file_message(key: &keyboard::Key, modifiers: keyboard::Modifiers) 
     })
 }
 
+fn activation_event(event: &Event) -> bool {
+    // Control is distinct from Command on macOS, but Control+Tab is still a
+    // document shortcut. Only unmodified or Shift navigation reaches a modal.
+    matches!(event, Event::Keyboard(keyboard::Event::KeyPressed { key: keyboard::Key::Named(keyboard::key::Named::Enter | keyboard::key::Named::Space | keyboard::key::Named::Tab), modifiers, .. }
+        | keyboard::Event::KeyReleased { key: keyboard::Key::Named(keyboard::key::Named::Space), modifiers, .. }) if !modifiers.control() && !modifiers.alt() && !modifiers.logo())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn modal_activation_rejects_control_alt_and_logo_on_every_platform() {
+        use keyboard::{Key, Modifiers, key::Named};
+        for modifiers in [
+            Modifiers::empty(),
+            Modifiers::SHIFT,
+            Modifiers::CTRL,
+            Modifiers::CTRL | Modifiers::SHIFT,
+            Modifiers::ALT,
+            Modifiers::ALT | Modifiers::SHIFT,
+            Modifiers::LOGO,
+            Modifiers::LOGO | Modifiers::SHIFT,
+        ] {
+            let allowed = modifiers.is_empty() || modifiers == Modifiers::SHIFT;
+            for named in [Named::Enter, Named::Space, Named::Tab] {
+                let key = Key::Named(named);
+                let event = Event::Keyboard(keyboard::Event::KeyPressed {
+                    key: key.clone(),
+                    modified_key: key,
+                    physical_key: keyboard::key::Physical::Code(match named {
+                        Named::Enter => keyboard::key::Code::Enter,
+                        Named::Space => keyboard::key::Code::Space,
+                        _ => keyboard::key::Code::Tab,
+                    }),
+                    location: keyboard::Location::Standard,
+                    modifiers,
+                    text: None,
+                    repeat: false,
+                });
+                assert_eq!(activation_event(&event), allowed, "{event:?}");
+            }
+            let event = Event::Keyboard(keyboard::Event::KeyReleased {
+                key: Key::Named(Named::Space),
+                modified_key: Key::Named(Named::Space),
+                physical_key: keyboard::key::Physical::Code(keyboard::key::Code::Space),
+                location: keyboard::Location::Standard,
+                modifiers,
+            });
+            assert_eq!(activation_event(&event), allowed, "{event:?}");
+        }
+    }
+
     #[test]
     fn longer_chords_do_not_trigger_plain_file_commands() {
         use keyboard::{Key, Modifiers};

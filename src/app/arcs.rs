@@ -1,6 +1,6 @@
 use super::*;
 use iced::Length;
-use iced::widget::{button, column, container, row, text, tooltip};
+use iced::widget::{column, container, row, text, tooltip};
 use reshiki::graphics::{ArcGeometry, GraphicKind};
 
 #[derive(Debug, Clone)]
@@ -114,18 +114,26 @@ impl App {
     pub(super) fn arc_presets(&self, fill: bool) -> Element<'_, Message> {
         let sweep = self.tab.arc_editor.geometry.sweep_degrees;
         let strip = row(ArcGeometry::PRESETS.into_iter().map(|degrees| {
-            button(text(format!("{degrees:.0}°")).size(12).center())
-                .width(if fill { Length::Fill } else { Length::Shrink })
-                .padding([4, 7])
-                .style(move |theme: &iced::Theme, status| {
-                    if sweep == degrees {
-                        crate::appearance::primary(theme, status)
-                    } else {
-                        workspace::control(false)(theme, status)
-                    }
-                })
-                .on_press(Message::Arc(Action::Preset(degrees)))
-                .into()
+            reshiki::accessibility::button(
+                format!(
+                    "arc-preset-{}-{degrees:.0}",
+                    if fill { "inspector" } else { "context" }
+                ),
+                format!("Arc sweep {degrees:.0} degrees"),
+                text(format!("{degrees:.0}°")).size(12).center(),
+            )
+            .checked(sweep == degrees)
+            .width(if fill { Length::Fill } else { Length::Shrink })
+            .padding([4, 7])
+            .style(move |theme: &iced::Theme, status| {
+                if sweep == degrees {
+                    crate::appearance::primary(theme, status)
+                } else {
+                    workspace::control(false)(theme, status)
+                }
+            })
+            .on_press(Message::Arc(Action::Preset(degrees)))
+            .into()
         }))
         .spacing(2);
         workspace::hover_hint(
@@ -145,14 +153,20 @@ impl App {
     }
 
     pub(super) fn arc_controls(&self) -> Element<'_, Message> {
-        let field = |label, value, hint, input: fn(String) -> Message| {
+        let field = |id, label, value, hint, input: fn(String) -> Message| {
             row![
                 text(label).size(12),
                 workspace::hover_hint(
-                    workspace::unit_field(
-                        crate::appearance::text_input("180", value)
-                            .on_input(input)
-                            .on_submit(Message::Arc(Action::Apply)),
+                    workspace::accessible_unit_field(
+                        reshiki::accessibility::text_input(
+                            id,
+                            format!("Arc {label} (degrees)"),
+                            "180",
+                            value
+                        )
+                        .style(crate::appearance::input_style)
+                        .on_input(input)
+                        .on_submit(Message::Arc(Action::Apply)),
                         "°",
                     ),
                     hint,
@@ -168,12 +182,14 @@ impl App {
             self.arc_presets(true),
             row![
                 field(
+                    "arc-start",
                     "Start",
                     &self.tab.arc_editor.start,
                     "Clockwise from the right · Enter applies",
                     |s| Message::Arc(Action::Start(s))
                 ),
                 field(
+                    "arc-sweep",
                     "Sweep",
                     &self.tab.arc_editor.sweep,
                     "0.1–360° · Enter applies",
