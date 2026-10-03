@@ -21,6 +21,10 @@ The canvas fills the drawing area. Rulers reserve only their top and left gutter
 
 Lowercase and uppercase are different: **m** inserts Me at an atom; **M** means **Shift+m** and inserts MgBr. Keys depend on what is under the pointer. A single selected atom, or a selected bond's two endpoints, can also provide the target. A hovered target takes precedence. Clear the selection and move to empty canvas before choosing a tool.
 
+An atom's visible label is part of its target, including the hydrogen count,
+isotope and charge. Hovering the `₂` in NH₂ targets that nitrogen. **g**, **?**
+and **/** refresh the target's property fields just as clicking to select it does.
+
 Text fields keep ordinary typing, and Cmd/Ctrl shortcuts never type their letter into a field. Enter applies a field and leaves it, so **Cmd/Ctrl+Z** then undoes the drawing; while a field is still focused, Undo and Redo do nothing. **Cmd** means Command on macOS; **Ctrl** is the corresponding modifier on Windows and Linux. **Alt** is Option on macOS. Uppercase letters in modified shortcuts, such as **Cmd/Ctrl+C**, do not imply Shift unless it is written explicitly.
 
 ## Two quick ring gestures
@@ -59,6 +63,26 @@ Choose an element in **Atoms**, then drag from an existing atom to add it with a
 
 Defined groups keep their underlying atoms and bonds, so molecular properties include their composition. Variable R/X labels do not define a complete molecular formula. **j** and **J** retain the metal as the target for repeated ligand insertion; chemical charges are retained. The initial ligand uses a 60° perspective tilt with tapered front edges and the metal contact behind the ring. Its X/Y/Z coordinates are retained, so the 3D Tilt tool can rotate it further and update the thick/tapered perspective edges. Crossing clearance is recalculated from depth as you drag or tilt the ligand; the contact can pass in front of the far ring edge and ellipse. Cp carries −1 in the chemical data; arene is neutral. Cp’s minus sign is hidden by default in the drawing. Charge display can be changed in Atoms → Show charge without changing that data. Native documents retain the 3D model. Tested Cp/arene ligands also copy as editable CDX, including aromatic ellipses, perspective edges, hidden ligand charges and multi-center targets. Other unsupported appearances are converted only in the external copy, or use a reported picture fallback; see the [compatibility table](clipboard.md#changes-made-for-an-external-copy).
 
+**9** adds two methyl groups directly to an atom with available valence. At
+aniline's NH₂, it gives N,N-dimethylaniline; at toluene's terminal carbon, it
+gives cumene. A heteroatom without room for two methyl bonds reports an error
+without changing the drawing. A crowded carbon retains its isopropyl attachment
+behavior, and **K** retains a tert-butyl carbon center.
+
+Saturated ring keys **6 / 7 / u / v** share the target atom when its valence
+allows two new ring bonds. For example, **6** at aniline's nitrogen makes
+N-phenylpiperidine. If sharing would exceed the target's valence, a ring may
+instead connect through a single bond using the existing attachment checks.
+In particular, **3 / a** at a neutral aniline nitrogen attach phenyl, and
+**2** attaches acetyl; they do not intentionally create an overvalent nitrogen.
+Explicitly entered hydrogen counts and stereochemistry retain their existing
+editing constraints.
+
+For a terminal carbonyl made with **2**, the new carbon continues the normal
+chain direction and oxygen occupies the other side. The hotspot moves to that
+new carbon so another growth key continues the chain. At an internal carbon,
+**2** adds only oxygen and keeps the hotspot on the existing carbon.
+
 With multiple atoms selected, **Enter** opens **Contract selection** so you can name the fragment.
 
 ## At a bond
@@ -87,6 +111,7 @@ Acyclic triple-bond edits straighten the adjacent branches. Bond appearance and 
 | 1 or x or b    | Single bond                                                    |
 | 2 / 3 / 4      | Double / triple / quadruple bond                               |
 | X              | Straight chain                                                 |
+| Shift+3–8      | Select a saturated 3–8-membered ring tool                      |
 | r              | Ring tool, retaining its last size                             |
 | R              | Toggle saturated/aromatic ring drawing, retaining member count |
 | j / J          | Benzene / cyclopentadiene                                      |
@@ -96,6 +121,10 @@ Acyclic triple-bond edits straighten the adjacent branches. Bond appearance and 
 | Escape         | Cancel the current operation / return to selection             |
 
 **R** can also convert a selected complete 3–8 member ring. This changes its bonds; it is different from changing an aromatic ring's circle representation. Benzene starts with alternating bonds.
+
+**Shift+3–8** selects the corresponding saturated ring size without editing the
+drawing or its selection. The unshifted digit shortcuts retain their atom,
+bond and tool actions. Ring palette hover hints show one tool-selection key.
 
 ## Files, clipboard and help
 
