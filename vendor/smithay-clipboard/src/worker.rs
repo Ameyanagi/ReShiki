@@ -67,7 +67,9 @@ fn worker_impl(
         Err(_) => return,
     };
 
-    let Ok(mut event_loop) = EventLoop::<State>::try_new() else { return };
+    let Ok(mut event_loop) = EventLoop::<State>::try_new() else {
+        return;
+    };
     let loop_handle = event_loop.handle();
 
     let mut state = match State::new(
@@ -88,27 +90,27 @@ fn worker_impl(
                 match event {
                     Command::StorePrimary(contents) => {
                         state.store_selection(SelectionTarget::Primary, contents);
-                    },
+                    }
                     Command::Store(contents) => {
                         state.store_selection(SelectionTarget::Clipboard, contents);
-                    },
+                    }
                     Command::Load if state.data_device_manager_state.is_some() => {
                         if let Err(err) = state.load_selection(SelectionTarget::Clipboard) {
                             let _ = state.reply_tx.send(Err(err));
                         }
-                    },
+                    }
                     Command::LoadPrimary if state.data_device_manager_state.is_some() => {
                         if let Err(err) = state.load_selection(SelectionTarget::Primary) {
                             let _ = state.reply_tx.send(Err(err));
                         }
-                    },
+                    }
                     Command::Load | Command::LoadPrimary => {
                         let _ = state
                             .reply_tx
                             .send(Err(Error::other("requested selection is not supported")));
-                    },
+                    }
                     Command::Rich(operation) => state.request(&command_connection, operation),
-                    Command::Wake => {},
+                    Command::Wake => {}
                     Command::Exit => state.exit = true,
                 }
             } else {
@@ -120,12 +122,19 @@ fn worker_impl(
         return;
     }
 
-    if WaylandSource::new(connection, event_queue).insert(loop_handle).is_err() {
+    if WaylandSource::new(connection, event_queue)
+        .insert(loop_handle)
+        .is_err()
+    {
         return;
     }
     client.ready.store(true, Ordering::Release);
 
     loop {
+        // Clear before maintenance observes cancellation. Keeping this set
+        // through channel dispatch also prevents repeated rejected requests
+        // from continuously feeding wake messages into that dispatch.
+        client.wake_pending.store(false, Ordering::Release);
         state.maintain();
         if event_loop.dispatch(state.timeout(), &mut state).is_err() || state.exit {
             break;

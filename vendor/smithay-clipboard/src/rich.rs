@@ -49,7 +49,7 @@ pub struct Data {
 pub struct Request<T> {
     receiver: oneshot::Receiver<io::Result<T>>,
     control: Arc<Control>,
-    wake: Sender<Command>,
+    wake: Arc<Inner>,
     finished: bool,
 }
 
@@ -71,7 +71,11 @@ impl<T> Drop for Request<T> {
     fn drop(&mut self) {
         if !self.finished {
             self.control.cancelled.store(true, Ordering::Release);
-            let _ = self.wake.send(Command::Wake);
+            // Failed requests can be dropped without ever entering the rich
+            // request budget. Coalesce their maintenance wake-ups as well.
+            if !self.wake.wake_pending.swap(true, Ordering::AcqRel) {
+                let _ = self.wake.sender.send(Command::Wake);
+            }
         }
     }
 }
@@ -86,6 +90,7 @@ pub(crate) struct Inner {
     pub sender: Sender<Command>,
     pub stopped: AtomicBool,
     pub ready: AtomicBool,
+    pub wake_pending: AtomicBool,
     sequence: AtomicU64,
     pending: Arc<AtomicUsize>,
     pub memory: Arc<AtomicUsize>,
@@ -118,6 +123,7 @@ impl Client {
             sender,
             stopped: AtomicBool::new(false),
             ready: AtomicBool::new(false),
+            wake_pending: AtomicBool::new(false),
             sequence: AtomicU64::new(1),
             pending: Arc::new(AtomicUsize::new(0)),
             memory: Arc::new(AtomicUsize::new(0)),
@@ -180,10 +186,12 @@ impl Client {
         let request = Request {
             receiver,
             control: control.clone(),
-            wake: self.inner.sender.clone(),
+            wake: self.inner.clone(),
             finished: false,
         };
         let permit = Counter::reserve(self.inner.pending.clone(), 1, MAX_TRANSFERS);
+        // The supported Rust 1.88 predates stable Atomic*::try_update.
+        #[allow(deprecated)]
         let id = self
             .inner
             .sequence
@@ -343,6 +351,8 @@ impl Counter {
     }
 
     pub fn grow(&mut self, amount: usize, limit: usize) -> io::Result<()> {
+        // The supported Rust 1.88 predates stable Atomic*::try_update.
+        #[allow(deprecated)]
         self.used
             .fetch_update(Ordering::AcqRel, Ordering::Acquire, |used| {
                 used.checked_add(amount).filter(|total| *total <= limit)
@@ -515,6 +525,23 @@ mod tests {
         drop(operation);
         assert_eq!(client.inner.pending.load(Ordering::Acquire), 0);
         assert_eq!(client.inner.memory.load(Ordering::Acquire), 0);
+        client.stop(key);
+    }
+
+    #[test]
+    fn dropping_rejected_requests_coalesces_maintenance_wakeups() {
+        let (key, client, commands) = ready_client();
+        for _ in 0..1_000 {
+            drop(client.read(Vec::new()));
+        }
+        assert!(matches!(commands.try_recv(), Ok(Command::Wake)));
+        assert!(commands.try_recv().is_err());
+        assert_eq!(client.inner.pending.load(Ordering::Acquire), 0);
+        // The next maintenance pass rearms later cancellation wakeups.
+        client.inner.wake_pending.store(false, Ordering::Release);
+        drop(client.read(Vec::new()));
+        assert!(matches!(commands.try_recv(), Ok(Command::Wake)));
+        assert!(commands.try_recv().is_err());
         client.stop(key);
     }
 

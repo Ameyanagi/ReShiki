@@ -4,7 +4,7 @@
   "commit": "26c2f53f15f6bdc4f41a442d0ae2c2d63bbc617c",
   "license": "MIT",
   "source": "crates.io smithay-clipboard 0.7.3",
-  "unchanged_upstream_file_sha256": {
+  "upstream_file_sha256": {
     "Cargo.toml": "9f7a1d198a1385bfe35775e3c8d335d93cc31ea8d2ce15f189bebb0c42a99c98",
     "Cargo.toml.orig": "976fb6f80a01f50e67cf8a7f6aa601246020ddb5e9476cf47d141030f590c481",
     "LICENSE": "21c2bc064d4ad1bba2a66c6b6d111b859a616283687a11f7a32c1350814542c9",
@@ -24,6 +24,7 @@
     "Positive selection-offer generation receipt before successful Copy/Cut",
     "Immutable per-source MIME buffers and bounded nonblocking transfers",
     "No ext/wlr data-control protocol",
+    "Omit upstream example-only target/dev-dependencies so fork unit tests run from the locked parent workspace without adding Wayland targets to every platform's workspace checks; original example and manifest retained",
     "Rust 1.88 minimum for edition-2024 let chains; exact existing futures-channel/rustix versions; upstream foreign-display lifetime boundary retained"
   ],
   "local_rust_version": "1.88.0"
