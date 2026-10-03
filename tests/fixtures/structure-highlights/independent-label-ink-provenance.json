@@ -1,0 +1,77 @@
+{
+  "native_output": {
+    "file": "native-independent-label-ink.cdxml",
+    "bytes": 3341,
+    "sha256": "d5e5cbde4d4353b2fa23e1444147486c6ad27cafeba8043718dde1d460fd3d4c",
+    "creation_program": "ChemDraw 26.0.0.6599",
+    "platform": "macOS",
+    "date": "2026-10-03",
+    "action": "Open production ReShiki CDXML and native Save As CDXML"
+  },
+  "source": {
+    "file": "reshiki-ome-auto-ink.cdxml",
+    "bytes": 2259,
+    "sha256": "da71850de5b2d183aa379ea06c19e52c9e176e306e8b8893aab6c9b3663c0168",
+    "generator": "ReShiki production drawing writer, write_native_highlight_comparison_artifacts"
+  },
+  "drawing_style": {
+    "label_font": "Helvetica",
+    "label_size_pt": 10,
+    "bond_length_pt": 28,
+    "line_width_pt": 1,
+    "bold_width_pt": 4,
+    "margin_width_pt": 2,
+    "bond_spacing_percent": 12
+  },
+  "expected": {
+    "atoms": 3,
+    "bonds": 2,
+    "bond_orders": [
+      1,
+      1
+    ],
+    "contracted_label": {
+      "text": "OMe",
+      "font": "Helvetica",
+      "size_pt": 10,
+      "ink_rgb": [
+        124,
+        124,
+        124
+      ],
+      "highlight_rgb": [
+        0,
+        0,
+        0
+      ]
+    },
+    "internal_anchor": {
+      "element": "O",
+      "font": "Helvetica",
+      "size_pt": 10,
+      "ink_rgb": [
+        0,
+        0,
+        0
+      ],
+      "highlight_rgb": [
+        255,
+        255,
+        255
+      ]
+    },
+    "internal_carbon_highlight_rgb": [
+      129,
+      229,
+      255
+    ],
+    "internal_bond_highlight_rgb": [
+      255,
+      197,
+      0
+    ],
+    "external_atom_and_bond_highlights": null
+  },
+  "scope": "This native open/save receipt establishes two independent text presentations. Clipboard paste into a matching styled destination and native expansion are separate acceptance steps, not claimed by this fixture.",
+  "content_origin": "Three-atom dimethyl ether graph with an independently authored OMe contraction; no proprietary sample captions, illustrations, or page layout."
+}

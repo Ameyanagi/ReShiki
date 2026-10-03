@@ -236,6 +236,7 @@ impl CdxmlScene {
                 atom.display.hide_charge = hidden_charge;
                 atom.display.hydrogen_color =
                     old.hydrogen_color.map(crate::palette::Color::imported);
+                atom.display.color_override = old.color_override;
                 atom.display.highlight = old.highlight.map(crate::palette::Color::Custom);
             }
         }

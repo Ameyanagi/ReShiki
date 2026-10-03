@@ -437,11 +437,7 @@ impl Writer<'_> {
                     .set(inner, "ConnectionOrder", connection_ids.join(" "))?;
                 self.tree.set(outer, "BondOrdering", bond_ids.join(" "))?;
             }
-            let mut style = self
-                .atom(group.anchor)?
-                .text_style
-                .clone()
-                .unwrap_or_default();
+            let mut style = group.text_style(self.doc);
             let original = self
                 .atom_indices
                 .get(&group.anchor)

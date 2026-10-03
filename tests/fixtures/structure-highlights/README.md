@@ -81,3 +81,21 @@ Native paste and Save completed asynchronously. An immediate read briefly
 showed an empty page; the completed file and visible pasted structure were
 subsequently verified. That timing observation is not evidence of a malformed
 input or failed clipboard transfer.
+
+## Independent contracted and internal text
+
+`native-independent-label-ink.cdxml` is an actual Prime 26.0.0.6599 native
+Save As of the production ReShiki OMe test drawing. Its contracted label has
+RGB `[124,124,124]` ink on a black highlight; the oxygen inside it has black
+ink on a white highlight. Both use Helvetica 10 pt, and the document bond
+length is 28 pt. The internal carbon and bond retain their cyan and yellow
+highlights. [The provenance receipt](independent-label-ink-provenance.json)
+records the source/native hashes and full relevant style values.
+
+The 3,341-byte native fixture has SHA-256
+`d5e5cbde4d4353b2fa23e1444147486c6ad27cafeba8043718dde1d460fd3d4c`.
+It establishes native open/save preservation of both text presentations.
+Native clipboard paste into a matching styled destination and native
+expansion are separate acceptance steps. The regression imports this file,
+saves/reopens native ReShiki data, exports/imports CDXML and CDX, then expands
+the group while checking both presentations independently.

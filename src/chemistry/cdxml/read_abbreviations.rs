@@ -99,6 +99,12 @@ pub fn read_abbreviations(
             .checked_add(record.label.len())
             .and_then(|n| n.checked_add(record.reverse_label.len()))
             .and_then(|n| n.checked_add(record.highlight.as_ref().map_or(0, String::len)))
+            .and_then(|n| {
+                n.checked_add(record.presentation.as_ref().map_or(
+                    Some(0),
+                    super::abbreviations::AbbreviationPresentation::bytes,
+                )?)
+            })
             .ok_or(Error::Limit)?;
         if members > 1_000_000 || bytes > 16 * 1024 * 1024 {
             return Err(Error::Limit);

@@ -596,6 +596,8 @@ fn write_native_highlight_comparison_artifacts() {
     autoink.canvas_theme = CanvasTheme::Light;
     let anchor = autoink.abbreviations[0].anchor;
     autoink.abbreviations[0].highlight = Some(Color::Custom([0; 3]));
+    autoink.abbreviations[0].label_style = None;
+    autoink.abbreviations[0].label_color_override = false;
     let atom = autoink.atom_mut(anchor).unwrap();
     atom.display.highlight = Some(Color::Custom([255; 3]));
     atom.display.color_override = false;
@@ -651,6 +653,14 @@ fn write_native_highlight_comparison_artifacts() {
     for (name, doc) in [
         ("reshiki-native-prime", native()),
         ("reshiki-ome-auto-ink", autoink),
+        (
+            "reshiki-native-independent-label-ink",
+            reshiki::chemistry::cdxml::import_cdxml(include_str!(
+                "fixtures/structure-highlights/native-independent-label-ink.cdxml"
+            ))
+            .unwrap()
+            .document,
+        ),
         (
             "reshiki-native-prime-acs-font10",
             reshiki::chemistry::cdxml::import_cdxml(include_str!(
