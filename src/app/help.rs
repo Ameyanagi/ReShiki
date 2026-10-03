@@ -19,7 +19,9 @@ pub(super) fn is_shortcut(key: &iced::keyboard::Key, modifiers: iced::keyboard::
 impl App {
     pub(super) fn with_help<'a>(&'a self, base: Element<'a, Message>) -> Element<'a, Message> {
         if !self.help_open {
-            return base;
+            // Keep the workspace at the same child position while Help opens
+            // and closes, so its inert focus and text selection survive.
+            return stack![base].into();
         }
         let base = reshiki::accessibility::inert(base);
         let (command, shift, alt) = (Modifiers::COMMAND, Modifiers::SHIFT, Modifiers::ALT);

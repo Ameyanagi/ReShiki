@@ -177,6 +177,12 @@ impl Ui {
     }
 
     fn enter_once(&mut self, app: &App, tool: Tool) -> Message {
+        let message = self.activate_focused(app);
+        assert!(matches!(&message, Message::Tool(actual) if *actual == tool));
+        message
+    }
+
+    fn activate_focused(&mut self, app: &App) -> Message {
         let (status, mut messages) = self.event(app, key(Named::Enter, Modifiers::empty(), false));
         assert_eq!(status, iced::event::Status::Captured);
         assert_eq!(
@@ -184,7 +190,6 @@ impl Ui {
             1,
             "Enter activates the control exactly once"
         );
-        assert!(matches!(&messages[0], Message::Tool(actual) if *actual == tool));
         let (status, repeats) = self.event(app, key(Named::Enter, Modifiers::empty(), true));
         assert_eq!(status, iced::event::Status::Captured);
         assert!(repeats.is_empty(), "held Enter does not activate again");
@@ -268,7 +273,8 @@ fn key(named: Named, modifiers: Modifiers, repeat: bool) -> Event {
         Named::Tab => Code::Tab,
         Named::Enter => Code::Enter,
         Named::Escape => Code::Escape,
-        _ => unreachable!("test only dispatches Tab, Enter and Escape"),
+        Named::F1 => Code::F1,
+        _ => unreachable!("test only dispatches Tab, Enter, Escape and F1"),
     };
     Event::Keyboard(keyboard::Event::KeyPressed {
         key: Key::Named(named),
@@ -532,5 +538,213 @@ async fn selected_width_fields_publish_units_and_apply_one_undo_step() {
         ui.undo(&mut app);
         assert_eq!(app.tab.doc, before);
         assert_eq!(app.tab.selected, selected);
+    }
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real Help open/close focus and input-selection regression"]
+async fn help_returns_keyboard_focus_and_preserves_the_underlying_input_selection() {
+    for size in [Size::new(1280., 820.), Size::new(1040., 680.)] {
+        let mut ui = Ui::new(size).await;
+        let mut app = selected_graphic(GraphicKind::Arc, size);
+        let drawing = app.tab.doc.clone();
+        let selected = app.tab.selected.clone();
+        let revision = app.tab.revision;
+
+        ui.focus(&app, "help-open");
+        ui.tab(&app, false);
+        let next = ui
+            .snapshot(&app)
+            .nodes
+            .into_iter()
+            .find(|node| node.focused)
+            .expect("Tab after Help reaches a control")
+            .id;
+        assert_ne!(next, "header-about");
+        ui.focus(&app, "help-open");
+        let before = ui.snapshot(&app);
+        let bounds = |snapshot: &Snapshot| {
+            snapshot
+                .nodes
+                .iter()
+                .map(|node| (node.id.clone(), node.bounds, node.visible_bounds))
+                .collect::<Vec<_>>()
+        };
+
+        for close_with_done in [false, true] {
+            let message = ui.activate_focused(&app);
+            assert!(matches!(message, Message::ToggleHelp));
+            let _ = app.update(message);
+            assert!(app.help_open);
+            let modal = ui.snapshot(&app);
+            assert_eq!(modal.nodes.len(), 3);
+            assert!(modal.nodes.iter().all(|node| node.id.starts_with("help-")));
+            assert!(matches!(
+                ui.activate(&app, "help-open"),
+                operation::Outcome::None
+            ));
+            assert!(matches!(
+                ui.activate(&app, "arc-edit-endpoints"),
+                operation::Outcome::None
+            ));
+
+            // Modal traversal stays inside Help, including wrapping and reverse
+            // traversal, without unfocusing the inert opener underneath it.
+            for id in ["help-close", "help-examples", "help-done", "help-close"] {
+                ui.tab(&app, false);
+                ui.assert_focused(&app, id);
+            }
+            ui.tab(&app, true);
+            ui.assert_focused(&app, "help-done");
+            let message = if close_with_done {
+                ui.activate_focused(&app)
+            } else {
+                let (status, mut messages) =
+                    ui.event(&app, key(Named::Escape, Modifiers::empty(), false));
+                assert_eq!(status, iced::event::Status::Captured);
+                assert_eq!(messages.len(), 1);
+                messages.remove(0)
+            };
+            assert!(matches!(message, Message::ToggleHelp));
+            let _ = app.update(message);
+            assert!(!app.help_open);
+            ui.assert_focused(&app, "help-open");
+            assert_eq!(bounds(&ui.snapshot(&app)), bounds(&before));
+            ui.tab(&app, false);
+            ui.assert_focused(&app, &next);
+            ui.tab(&app, true);
+            ui.assert_focused(&app, "help-open");
+            assert_eq!(app.tab.doc, drawing);
+            assert_eq!(app.tab.selected, selected);
+            assert_eq!(app.tab.revision, revision);
+        }
+
+        // F1 is also available while an input owns the keyboard. Preserve its
+        // actual selection, not just a semantic focus flag or its draft value.
+        ui.type_width(&mut app, "graphic-line-width");
+        assert!(ui.command(&app, "a", Code::KeyA).1.is_empty());
+        let (_, mut messages) = ui.event(&app, key(Named::F1, Modifiers::empty(), false));
+        assert_eq!(messages.len(), 1);
+        let message = messages.remove(0);
+        assert!(matches!(message, Message::ToggleHelp));
+        let _ = app.update(message);
+        assert!(app.help_open);
+        ui.tab(&app, false);
+        ui.assert_focused(&app, "help-close");
+        let (_, mut messages) = ui.event(&app, key(Named::Escape, Modifiers::empty(), false));
+        assert_eq!(messages.len(), 1);
+        let message = messages.remove(0);
+        assert!(matches!(message, Message::ToggleHelp));
+        let _ = app.update(message);
+        ui.assert_focused(&app, "graphic-line-width");
+        let (status, mut messages) =
+            ui.event(&app, character("2", Code::Digit2, Modifiers::empty()));
+        assert_eq!(status, iced::event::Status::Captured);
+        assert_eq!(messages.len(), 1);
+        let message = messages.remove(0);
+        assert!(matches!(&message, Message::GraphicWidth(value) if value == "2"));
+        let _ = app.update(message);
+        assert_eq!(app.tab.graphic_width_input, "2");
+        assert_eq!(app.tab.doc, drawing);
+        assert_eq!(app.tab.selected, selected);
+        assert_eq!(app.tab.revision, revision);
+    }
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real Import, Export and Arrange popup focus-return regression"]
+async fn changed_popovers_keep_the_keyboard_opener_focused_after_closing() {
+    use crate::app::{InspectorTab, inspector};
+
+    for size in [Size::new(1280., 820.), Size::new(1040., 680.)] {
+        let mut ui = Ui::new(size).await;
+        for popup in ["import", "export", "arrange"] {
+            ui.cache = Cache::new();
+            let mut app = selected_graphic(GraphicKind::Arc, size);
+            let (opener, prefix) = match popup {
+                "import" => {
+                    app.inspector_tab = InspectorTab::Import;
+                    app.imports.set_text("CCO");
+                    ("import-insert-menu", "import-replace")
+                }
+                "export" => {
+                    app.inspector_tab = InspectorTab::Export;
+                    ("export-figure-format", "figure-format-")
+                }
+                _ => {
+                    let snapshot = ui.snapshot(&app);
+                    let opener = if snapshot
+                        .nodes
+                        .iter()
+                        .any(|node| node.id == "arrange-compact")
+                    {
+                        "arrange-compact"
+                    } else {
+                        "arrange-menu-Order"
+                    };
+                    (opener, "menu-")
+                }
+            };
+            let drawing = app.tab.doc.clone();
+            let selected = app.tab.selected.clone();
+            let revision = app.tab.revision;
+            ui.focus(&app, opener);
+            let message = ui.activate_focused(&app);
+            let _ = app.update(message);
+            let foreground = ui.snapshot(&app);
+            assert!(!foreground.nodes.is_empty());
+            assert!(
+                foreground
+                    .nodes
+                    .iter()
+                    .all(|node| node.id.starts_with(prefix))
+            );
+            assert!(matches!(
+                ui.activate(&app, opener),
+                operation::Outcome::None
+            ));
+            ui.tab(&app, false);
+            let focused = ui.snapshot(&app);
+            assert_eq!(focused.nodes.iter().filter(|node| node.focused).count(), 1);
+            assert!(
+                focused
+                    .nodes
+                    .iter()
+                    .any(|node| node.focused && node.enabled)
+            );
+            let (status, messages) = ui.event(&app, key(Named::Escape, Modifiers::empty(), false));
+            assert_eq!(status, iced::event::Status::Captured);
+            assert_eq!(messages.len(), 1);
+            for message in messages {
+                let _ = app.update(message);
+            }
+            ui.assert_focused(&app, opener);
+            assert!(app.context_menu.is_none());
+            assert!(!app.imports.menu && !app.tab.inspector_ui.figure_menu);
+
+            if popup == "import" {
+                ui.tab(&app, false);
+                ui.assert_focused(&app, "import-choose-file");
+            } else if popup == "export" {
+                let message = ui.activate_focused(&app);
+                let _ = app.update(message);
+                ui.tab(&app, false);
+                ui.assert_focused(&app, "figure-format-svg");
+                let message = ui.activate_focused(&app);
+                assert!(matches!(
+                    message,
+                    Message::InspectorAction(inspector::Action::Figure(
+                        inspector::FigureFormat::Svg
+                    ))
+                ));
+                let _ = app.update(message);
+                assert_eq!(app.tab.inspector_ui.figure, inspector::FigureFormat::Svg);
+                assert!(!app.tab.inspector_ui.figure_menu);
+                ui.assert_focused(&app, opener);
+            }
+            assert_eq!(app.tab.doc, drawing);
+            assert_eq!(app.tab.selected, selected);
+            assert_eq!(app.tab.revision, revision);
+        }
     }
 }
