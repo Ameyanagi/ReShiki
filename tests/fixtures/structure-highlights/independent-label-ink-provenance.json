@@ -72,6 +72,35 @@
     ],
     "external_atom_and_bond_highlights": null
   },
-  "scope": "This native open/save receipt establishes two independent text presentations. Clipboard paste into a matching styled destination and native expansion are separate acceptance steps, not claimed by this fixture.",
-  "content_origin": "Three-atom dimethyl ether graph with an independently authored OMe contraction; no proprietary sample captions, illustrations, or page layout."
+  "scope": "Native open/save and matched-style clipboard preserve independent contracted/internal text. Prime native Expand Label applies wrapper foreground to the internal fragment; ReShiki preserves original internal foregrounds when it expands its own imported document.",
+  "content_origin": "Three-atom dimethyl ether graph with an independently authored OMe contraction; no proprietary sample captions, illustrations, or page layout.",
+  "native_matched_clipboard": {
+    "file": "prime-ome-auto-ink-matched-clipboard.cdxml",
+    "bytes": 3516,
+    "sha256": "a17ffe06dfa344a6919a4fac3b1678b032ca6802f7e008dd10e012f224b12c6b",
+    "drawing_style": {
+      "font": "Helvetica",
+      "font_size_pt": 10.0,
+      "bond_length_pt": 28.0
+    },
+    "result": "Copy/paste into a matching Helvetica10 / 28pt-bond document preserves OMe RGB124, internal oxygen RGB0, and all internal highlights."
+  },
+  "native_expand_label": {
+    "file": "prime-ome-auto-ink-matched-expanded.cdxml",
+    "bytes": 3175,
+    "sha256": "511be84c703e049698d6675d2fa7c462febcd7363b47c54957de97ff9768dc02",
+    "drawing_style": {
+      "font": "Helvetica",
+      "font_size_pt": 10.0,
+      "bond_length_pt": 28.0
+    },
+    "result": "Prime Structure > Expand Label replaces the internal oxygen, carbon, and bond foregrounds with wrapper RGB124 while retaining their white, cyan, and yellow highlights; the external bond stays black."
+  },
+  "writer_assessment": {
+    "existing_input": "Internal O text already explicitly uses color=3, whose palette entry is exact RGB0. Internal bond also explicitly uses color=3.",
+    "native_save": "Prime removes these redundant default-black attributes while preserving black appearance and stored default foreground.",
+    "explicit_color_zero": "No evidence that replacing palette black index3 with reserved black index0 prevents the native Expand Label inheritance. Both identify black; neither is a verified lock or preservation flag.",
+    "production_change": "None. ReShiki import/export and its own Expand command preserve the original independent styles.",
+    "unverified_probe": "If needed, root can compare n color/LabelColor plus s color set to 0 versus 3 in a controlled native fixture. This would require fresh native save/expand evidence before any writer change."
+  }
 }
