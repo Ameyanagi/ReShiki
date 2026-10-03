@@ -465,6 +465,146 @@ test("HTTP API rejects hostile Host, missing/null/wrong Origin, token and conten
   assert.equal(bootstrap.status, 403);
 });
 
+test("Office launch metadata loads only task-pane HTML and cannot relax API or resource boundaries", async (t) => {
+  const f = await fixture(t),
+    token = "private-taskpane-token";
+  let handler,
+    workerCalls = 0;
+  const server = http.createServer((req, res) => handler(req, res));
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  t.after(
+    () =>
+      new Promise((resolve) => {
+        server.closeAllConnections();
+        server.close(resolve);
+      }),
+  );
+  const port = server.address().port,
+    origin = `http://localhost:${port}`,
+    host = `localhost:${port}`;
+  handler = makeHandler({
+    origin,
+    sessions: f.sessions,
+    token,
+    worker: () => {
+      workerCalls++;
+      throw new Error("Launch metadata must never run a worker");
+    },
+  });
+  const request = (route, method = "GET", extraHeaders = {}) =>
+    new Promise((resolve, reject) => {
+      const req = http.request(
+        {
+          hostname: "127.0.0.1",
+          port,
+          path: route,
+          method,
+          headers: {
+            Host: host,
+            Origin: origin,
+            "X-ReShiki-Token": token,
+            "X-ReShiki-Bootstrap": "1",
+            "Sec-Fetch-Site": "same-origin",
+            "Content-Type": "application/json",
+            ...extraHeaders,
+          },
+        },
+        (res) => {
+          const chunks = [];
+          res.on("data", (chunk) => chunks.push(chunk));
+          res.on("end", () =>
+            resolve({
+              status: res.statusCode,
+              headers: res.headers,
+              body: Buffer.concat(chunks).toString("utf8"),
+            }),
+          );
+        },
+      );
+      req.on("error", reject);
+      req.end(method === "POST" ? JSON.stringify({ clientId: f.clientId }) : undefined);
+    });
+  const html = await readFile(new URL("./taskpane.html", import.meta.url), "utf8");
+  // First URL is the actual Word for Mac request that previously returned 403.
+  // Microsoft also documents the Win32 pattern in OfficeDev's debugger README.
+  const queries = [
+    "?_host_Info=Word$Mac$16.01$en-US$$$$0",
+    "?_host_Info=Excel%24Win32%2416.01%24en-US%24%24%24%240",
+    "?_host_info=PowerPoint$Mac$16.01$ja-JP$$$$0",
+  ];
+  for (const resource of ["/", "/taskpane.html"]) {
+    for (const query of ["", ...queries]) {
+      const response = await request(resource + query);
+      assert.equal(response.status, 200, resource + query);
+      assert.equal(response.body, html);
+      assert.match(response.headers["content-type"], /^text\/html/);
+      assert.equal(response.headers["cache-control"], "no-store");
+      assert.ok(!response.body.includes(token));
+    }
+  }
+  // The opaque value never enters HTML, session identity, native arguments or
+  // authorization. Even HTML-shaped text is inert and receives identical bytes.
+  const opaque = await request(
+    "/taskpane.html?_host_Info=" + encodeURIComponent("<script>evil()</script>&host=Word"),
+  );
+  assert.equal(opaque.status, 200);
+  assert.equal(opaque.body, html);
+  for (const query of [
+    "?unknown=1",
+    queries[0] + "&redirect=https://evil.test",
+    queries[0] + "&_host_Info=Excel",
+    queries[0] + "&_host_info=Excel",
+    queries[0] + "&",
+    "?_host_Info=",
+    "?_HOST_INFO=Word",
+    "?%5Fhost_Info=Word",
+    "?_host_Info=" + "a".repeat(2048),
+    "?_host_Info=%",
+    "?_host_Info=%GG",
+    "?_host_Info=%E0%A4%A",
+    "?_host_Info=%00",
+    "?_host_Info=%0A",
+    "?_host_Info=%7F",
+  ]) {
+    const response = await request("/taskpane.html" + query);
+    assert.equal(response.status, 403, query);
+    assert.match(response.body, /Invalid request URL/);
+  }
+  for (const resource of [
+    "/bootstrap.json",
+    "/api/heartbeat",
+    "/api/client",
+    "/taskpane.js",
+    "/taskpane.css",
+    "/host-adapters/word.js",
+    "/assets/icon-32.png",
+    "/companion/server.js",
+    "/unknown",
+  ]) {
+    const response = await request(resource + queries[0]);
+    assert.equal(response.status, 403, resource);
+    assert.ok(!response.body.includes(token));
+  }
+  for (const method of ["POST", "HEAD"]) {
+    assert.equal((await request("/taskpane.html" + queries[0], method)).status, 403);
+  }
+  assert.equal((await request("/api/heartbeat" + queries[0], "POST")).status, 403);
+  assert.equal(
+    (await request("/taskpane.html" + queries[0], "GET", { Host: "evil.test" })).status,
+    403,
+  );
+  assert.equal((await request("http://evil.test/taskpane.html" + queries[0])).status, 403);
+  assert.equal((await request("/taskpane.html" + queries[0] + "#extra")).status, 403);
+  assert.equal(
+    (await request(`http://user:password@${host}/taskpane.html${queries[0]}`)).status,
+    403,
+  );
+  assert.equal((await request("/companion/server.js")).status, 404);
+  assert.equal(workerCalls, 0);
+  assert.equal(f.sessions.clients.size, 1);
+  assert.equal(f.sessions.sessions.size, 0);
+});
+
 test("worker rejects unknown modes, impossible input sizes, launch failures and timeout", async (t) => {
   assert.throws(() => runWorker("/not-used", "--arbitrary-command"), /Unsupported/);
   assert.throws(

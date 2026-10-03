@@ -20,6 +20,27 @@ function secureEqual(a, b) {
     timingSafeEqual(Buffer.from(a), Buffer.from(b))
   );
 }
+function isOfficeLaunchRequest(req, url) {
+  if (
+    req.method !== "GET" ||
+    !["/", "/taskpane.html"].includes(url.pathname) ||
+    url.hash ||
+    url.username ||
+    url.password ||
+    url.search.length > 2048 ||
+    !/^\?_host_(?:Info|info)=[^&]+$/.test(url.search)
+  )
+    return false;
+  try {
+    // Office supplies opaque launch metadata for Office.js. Never use it as
+    // host identity or authorization, or interpolate it into the served HTML.
+    const value = decodeURIComponent(url.search.slice(url.search.indexOf("=") + 1));
+    // oxlint-disable-next-line no-control-regex -- reject encoded request controls.
+    return !/[\u0000-\u001f\u007f]/.test(value);
+  } catch {
+    return false;
+  }
+}
 async function jsonBody(req) {
   if (req.headers["content-type"] !== "application/json")
     throw Object.assign(new Error("Expected application/json"), { status: 415 });
@@ -57,7 +78,8 @@ export function makeHandler({ origin, sessions, worker, token = randomBytes(32).
     try {
       if (req.headers.host !== hostname) throw forbidden("Invalid localhost Host");
       const url = new URL(req.url, origin);
-      if (url.origin !== origin || url.search) throw forbidden("Invalid request URL");
+      if (url.origin !== origin || (url.search && !isOfficeLaunchRequest(req, url)))
+        throw forbidden("Invalid request URL");
       if (req.method === "GET" && url.pathname === "/bootstrap.json") {
         if (
           req.headers["x-reshiki-bootstrap"] !== "1" ||
