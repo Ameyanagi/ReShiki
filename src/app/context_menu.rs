@@ -20,6 +20,7 @@ pub enum Page {
     Bonds,
     Tilt,
     Attachments,
+    CopyAs,
     // Menus anchored under context row buttons.
     AlignObjects,
     Distribute,
@@ -60,6 +61,48 @@ mod tests {
                 _ => None,
             })
             .collect()
+    }
+
+    #[test]
+    fn copy_as_menu_names_scope_and_explains_disabled_reactions() -> Result<(), String> {
+        use reshiki::clipboard::CopyFormat;
+        let (mut app, _) = App::new();
+        app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
+        let original = app.tab.doc.clone();
+        assert!(labels(&app, Page::Main).contains(&"Copy as…"));
+        assert!(
+            app.context_entries(Page::CopyAs)
+                .iter()
+                .any(|entry| { matches!(entry, Entry::Hint("Copy as · whole drawing")) })
+        );
+        app.tab.selected = app.tab.doc.all_ids();
+        assert!(
+            app.context_entries(Page::CopyAs)
+                .iter()
+                .any(|entry| { matches!(entry, Entry::Hint("Copy as · selected objects")) })
+        );
+        assert!(app.context_entries(Page::CopyAs).iter().any(|entry| {
+            matches!(entry, Entry::Hint(reason) if reason.contains("one complete defined reaction"))
+        }));
+        for format in [CopyFormat::Mol, CopyFormat::Smiles, CopyFormat::Rxn] {
+            assert!(app.context_entries(Page::CopyAs).iter().any(|entry| {
+                matches!(entry, Entry::Item { action: Action::Run(message), enabled, .. }
+                    if matches!(message.as_ref(), Message::CopyAs(value) if *value == format)
+                    && *enabled == (format != CopyFormat::Rxn))
+            }));
+        }
+        app.context_menu = Some(State {
+            position: Point::new(20., 20.),
+            page: Page::CopyAs,
+        });
+        run_item(&mut app, Page::CopyAs, "‹ Back")?;
+        assert_eq!(
+            app.context_menu.as_ref().map(|state| state.page),
+            Some(Page::Main)
+        );
+        assert_eq!(app.tab.doc, original);
+        assert!(!app.tab.history.can_undo());
+        Ok(())
     }
 
     #[test]
@@ -124,7 +167,14 @@ mod tests {
         let before = app.tab.doc.clone();
         assert_eq!(
             labels(&app, Page::Main),
-            ["Undo", "Redo", "Paste", "Select all", "Fit drawing"]
+            [
+                "Undo",
+                "Redo",
+                "Paste",
+                "Copy as…",
+                "Select all",
+                "Fit drawing"
+            ]
         );
         app.tab.selected = vec![atom];
         let single = labels(&app, Page::Main);
@@ -411,6 +461,7 @@ impl App {
                 command("Redo", Message::Redo, self.tab.history.can_redo()),
                 Separator,
                 command("Paste", Message::Paste, !self.tab.clipboard_busy),
+                submenu("Copy as…", Page::CopyAs),
                 command(
                     "Select all",
                     Message::SelectAll,
@@ -518,6 +569,7 @@ impl App {
                 entries.push(Separator);
                 entries.push(command("Cut", Message::Copy(true), true));
                 entries.push(command("Copy", Message::Copy(false), true));
+                entries.push(submenu("Copy as…", Page::CopyAs));
                 entries.push(command("Paste", Message::Paste, !self.tab.clipboard_busy));
                 entries.push(command("Duplicate", Message::Duplicate, true));
                 entries.push(Separator);
@@ -527,6 +579,47 @@ impl App {
                     enabled: true,
                 });
                 entries.push(command("Delete", Message::Delete, true));
+                entries
+            }
+            Page::CopyAs => {
+                use reshiki::clipboard::{CopyFormat, selection_or_drawing};
+                let snapshot = selection_or_drawing(&self.tab.doc, &self.tab.selected);
+                let busy = self.clipboard_working();
+                let mut entries = vec![
+                    submenu("‹ Back", Page::Main),
+                    Hint(if self.tab.selected.is_empty() {
+                        "Copy as · whole drawing"
+                    } else {
+                        "Copy as · selected objects"
+                    }),
+                ];
+                let mut reasons = Vec::new();
+                for format in CopyFormat::ALL {
+                    if matches!(
+                        format,
+                        CopyFormat::Mol | CopyFormat::Cdxml | CopyFormat::Rxn
+                    ) {
+                        entries.push(Separator);
+                    }
+                    let reason = format.unavailable_reason(&snapshot);
+                    entries.push(command(
+                        format.label(),
+                        Message::CopyAs(format),
+                        !busy && reason.is_none(),
+                    ));
+                    if let Some(reason) = reason
+                        && !reasons.contains(&reason)
+                    {
+                        reasons.push(reason);
+                    }
+                }
+                if busy {
+                    reasons.push("A clipboard operation is already in progress.");
+                }
+                if !reasons.is_empty() {
+                    entries.push(Separator);
+                    entries.extend(reasons.into_iter().map(Hint));
+                }
                 entries
             }
             Page::Tilt => vec![

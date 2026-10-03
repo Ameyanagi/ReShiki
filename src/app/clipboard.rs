@@ -1,10 +1,133 @@
 use super::{App, Message, Point, Tool, editing};
 use iced::Task;
-use reshiki::clipboard::{CopyOutcome, PasteOutcome};
+use reshiki::clipboard::{CopyFormat, CopyOutcome, PasteOutcome, PreparedCopy};
+
+#[derive(Debug, Clone)]
+pub struct CopyAsKey {
+    pub epoch: u64,
+    pub revision: u64,
+    pub format: CopyFormat,
+    pub selected: Vec<u64>,
+}
 
 impl App {
+    pub(super) fn clipboard_working(&self) -> bool {
+        self.copy_as_busy
+            || self.native_copy_busy
+            || self.tab.clipboard_busy
+            || self.tabs.background.iter().any(|tab| tab.clipboard_busy)
+    }
+
+    pub(super) fn copy_as(&mut self, format: CopyFormat) -> Task<Message> {
+        if self.clipboard_working() {
+            self.status = "A clipboard operation is already in progress".into();
+            return Task::none();
+        }
+        let snapshot = reshiki::clipboard::selection_or_drawing(&self.tab.doc, &self.tab.selected);
+        if let Some(reason) = format.unavailable_reason(&snapshot) {
+            self.status = reason.into();
+            self.error = true;
+            return Task::none();
+        }
+        let key = CopyAsKey {
+            epoch: self.tab.file_epoch,
+            revision: self.tab.revision,
+            format,
+            selected: self.tab.selected.clone(),
+        };
+        self.copy_as_busy = true;
+        self.tab.clipboard_busy = true;
+        self.error = false;
+        self.status = format!("Preparing {} for the clipboard…", format.label());
+        Task::perform(
+            reshiki::clipboard::prepare_as(self.engine.clone(), snapshot, format),
+            move |result| Message::CopyAsPrepared(key.clone(), Box::new(result)),
+        )
+    }
+
+    fn finish_copy_as(&mut self) {
+        self.copy_as_busy = false;
+        self.tab.clipboard_busy = false;
+    }
+
+    pub(super) fn copy_as_prepared(
+        &mut self,
+        key: CopyAsKey,
+        result: Result<PreparedCopy, String>,
+    ) -> Task<Message> {
+        if key.epoch != self.tab.file_epoch {
+            self.finish_copy_as();
+            return Task::none();
+        }
+        if key.revision != self.tab.revision || key.selected != self.tab.selected {
+            self.finish_copy_as();
+            self.status = "Drawing or selection changed; copy again · Clipboard unchanged".into();
+            self.error = false;
+            return Task::none();
+        }
+        let copy = match result {
+            Ok(copy) => copy,
+            Err(error) => {
+                self.finish_copy_as();
+                self.status = format!(
+                    "Could not copy {}: {error} · Clipboard unchanged",
+                    key.format.label()
+                );
+                self.error = true;
+                return Task::none();
+            }
+        };
+        if !reshiki::clipboard::available() {
+            let Some(text) = copy.text().map(str::to_owned) else {
+                self.finish_copy_as();
+                self.status = "Native clipboard is unavailable; use Export for this format".into();
+                self.error = true;
+                return Task::none();
+            };
+            return iced::clipboard::write(text)
+                .chain(Task::done(Message::CopyAsWritten(key, Ok(copy.notices))));
+        }
+        Task::perform(reshiki::clipboard::write_prepared(copy), move |result| {
+            Message::CopyAsWritten(key.clone(), result)
+        })
+    }
+
+    pub(super) fn copy_as_written(&mut self, key: CopyAsKey, result: Result<Vec<String>, String>) {
+        self.finish_copy_as();
+        // A document replacement cannot receive an old operation's receipt.
+        if key.epoch != self.tab.file_epoch {
+            return;
+        }
+        match result {
+            Ok(notices) => {
+                let scope = match (
+                    !key.selected.is_empty(),
+                    key.revision == self.tab.revision && key.selected == self.tab.selected,
+                ) {
+                    (true, true) => "Selection",
+                    (false, true) => "Drawing",
+                    (true, false) => "Previous selection",
+                    (false, false) => "Previous drawing snapshot",
+                };
+                self.status = format!("{scope} copied as {}", key.format.label());
+                if !notices.is_empty() {
+                    self.status.push_str(" · Review details\n");
+                    self.status.push_str(&notices.join("\n"));
+                }
+                self.error = false;
+            }
+            Err(error) => {
+                self.status = format!(
+                    "Could not write {} to the clipboard: {error}",
+                    key.format.label()
+                );
+                self.error = true;
+            }
+        }
+    }
+
     pub(super) fn copy_native(&mut self, cut: bool, image_only: bool) -> Task<Message> {
-        if self.tab.clipboard_busy {
+        if self.clipboard_working() {
             self.status = "A clipboard operation is already in progress".into();
             return Task::none();
         }
@@ -23,6 +146,7 @@ impl App {
             vec![]
         };
         let (epoch, revision) = (self.tab.file_epoch, self.tab.revision);
+        self.native_copy_busy = true;
         self.tab.clipboard_busy = true;
         self.error = false;
         self.status = "Preparing clipboard…".into();
@@ -38,7 +162,7 @@ impl App {
     }
 
     pub(super) fn paste_native(&mut self, image_only: bool) -> Task<Message> {
-        if self.tab.clipboard_busy {
+        if self.clipboard_working() {
             self.status = "A clipboard operation is already in progress".into();
             return Task::none();
         }
@@ -63,6 +187,7 @@ impl App {
         cut_ids: Vec<u64>,
         result: Result<CopyOutcome, String>,
     ) {
+        self.native_copy_busy = false;
         self.tab.clipboard_busy = false;
         let outcome = match result {
             Ok(outcome) => outcome,
@@ -192,6 +317,151 @@ mod tests {
     use super::*;
     use crate::app::Job;
     use reshiki::document::Document;
+
+    fn copy_key(app: &App) -> CopyAsKey {
+        CopyAsKey {
+            epoch: app.tab.file_epoch,
+            revision: app.tab.revision,
+            selected: app.tab.selected.clone(),
+            format: CopyFormat::Smiles,
+        }
+    }
+
+    #[test]
+    fn copy_as_drops_stale_selection_revision_and_epoch_before_publication() {
+        for stale in ["selection", "revision", "epoch"] {
+            let (mut app, _) = App::new();
+            let atom = app.tab.doc.add_atom("O", Point::default());
+            app.tab.selected = vec![atom];
+            let key = copy_key(&app);
+            app.copy_as_busy = true;
+            app.tab.clipboard_busy = true;
+            match stale {
+                "selection" => app.tab.selected.clear(),
+                "revision" => app.tab.revision += 1,
+                _ => app.tab.file_epoch += 1,
+            }
+            let before = app.tab.doc.clone();
+            let selected = app.tab.selected.clone();
+            app.status = "Current drawing".into();
+            let task = app.copy_as_prepared(key, Err("old conversion failed".into()));
+            assert_eq!(task.units(), 0);
+            assert!(!app.copy_as_busy && !app.tab.clipboard_busy);
+            assert_eq!(app.tab.doc, before);
+            assert_eq!(app.tab.selected, selected);
+            assert!(!app.tab.history.can_undo());
+            if stale == "epoch" {
+                assert_eq!(app.status, "Current drawing");
+            } else {
+                assert!(app.status.contains("Clipboard unchanged"));
+            }
+        }
+    }
+
+    #[test]
+    fn copy_as_conversion_failure_is_nonmutating_and_retains_the_error() {
+        let (mut app, _) = App::new();
+        app.tab.doc.add_atom("O", Point::default());
+        let before = app.tab.doc.clone();
+        let key = copy_key(&app);
+        app.copy_as_busy = true;
+        app.tab.clipboard_busy = true;
+        assert_eq!(
+            app.copy_as_prepared(key, Err("Unsupported bond".into()))
+                .units(),
+            0
+        );
+        assert_eq!(app.tab.doc, before);
+        assert!(app.error && app.status.contains("Unsupported bond"));
+        assert!(app.status.contains("Clipboard unchanged"));
+        assert!(!app.copy_as_busy && !app.tab.clipboard_busy);
+    }
+
+    #[test]
+    fn copy_as_work_and_receipts_stay_with_the_originating_tab() {
+        use crate::app::tabs::tests::Front;
+        for closed in [false, true] {
+            for preparing in [false, true] {
+                let (mut app, _) = App::new();
+                app.tab.busy = false;
+                app.tab.doc.add_atom("O", Point::default());
+                app.tab.saved = app.tab.doc.clone();
+                let id = app.tab.id;
+                let key = copy_key(&app);
+                app.copy_as_busy = true;
+                app.tab.clipboard_busy = true;
+                if closed {
+                    let _ = app.close_active_tab();
+                }
+                let front = Front::new(&mut app);
+                assert!(app.clipboard_working());
+                let message = if preparing {
+                    Message::CopyAsPrepared(key, Box::new(Err("No structure output".into())))
+                } else {
+                    Message::CopyAsWritten(key, Ok(vec!["Retained format warning".into()]))
+                };
+                let _ = app.update(Message::Tab(id, Box::new(message)));
+                front.assert_unchanged(&app);
+                assert!(!app.copy_as_busy);
+                if !closed {
+                    let source = app.tabs.background.iter().find(|tab| tab.id == id).unwrap();
+                    assert!(!source.clipboard_busy);
+                    assert_eq!(source.doc.atoms.len(), 1);
+                    assert!(source.status.contains(if preparing {
+                        "No structure output"
+                    } else {
+                        "Retained format warning"
+                    }));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn copy_as_uses_one_snapshot_without_changing_selection_or_undo() {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let carbon = app.tab.doc.add_atom("C", Point::default());
+        app.tab.doc.add_atom("O", Point::new(240., 0.));
+        app.tab.selected = vec![carbon];
+        let before = app.tab.doc.clone();
+        let task = app.copy_as(CopyFormat::Smiles);
+        assert!(task.units() > 0);
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.selected, [carbon]);
+        assert!(!app.tab.history.can_undo());
+        assert!(app.copy_as_busy && app.tab.clipboard_busy);
+        assert_eq!(app.copy_as(CopyFormat::Mol).units(), 0);
+    }
+
+    #[test]
+    fn an_ordinary_copy_outliving_its_tab_cannot_overtake_a_new_copy_as() {
+        let (mut app, _) = App::new();
+        app.tab.busy = false;
+        let atom = app.tab.doc.add_atom("O", Point::default());
+        app.tab.selected = vec![atom];
+        app.tab.saved = app.tab.doc.clone();
+        let (id, epoch, revision) = (app.tab.id, app.tab.file_epoch, app.tab.revision);
+        let _task = app.copy_native(false, false);
+        assert!(app.native_copy_busy);
+        let _ = app.close_active_tab();
+        app.tab.doc.add_atom("N", Point::default());
+        assert_eq!(app.copy_as(CopyFormat::Smiles).units(), 0);
+        assert!(!app.copy_as_busy);
+        let before = app.tab.doc.clone();
+        let _ = app.update(Message::Tab(
+            id,
+            Box::new(Message::ClipboardWritten {
+                epoch,
+                revision,
+                cut_ids: vec![],
+                result: success(),
+            }),
+        ));
+        assert!(!app.native_copy_busy);
+        assert_eq!(app.tab.doc, before);
+        assert!(app.copy_as(CopyFormat::Smiles).units() > 0);
+    }
     use reshiki::engine::Response;
 
     fn success() -> Result<CopyOutcome, String> {

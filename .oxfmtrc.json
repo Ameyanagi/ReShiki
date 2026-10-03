@@ -8,6 +8,7 @@
     "tests/fixtures/**",
     "vendor/usvg/**",
     "vendor/svg2pdf/**",
+    "vendor/smithay-clipboard/**",
     "engine/cdx_schema.py",
     "website/.astro/**",
     "website/dist/**",

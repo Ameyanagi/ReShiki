@@ -1,18 +1,20 @@
-//! Clipboard selections owned by an isolated, persistent application worker.
+//! Bounded Linux clipboard transport on the GUI's actual display backend.
 #![cfg(target_os = "linux")]
 #![forbid(unsafe_code)]
 
+mod gui;
 mod protocol;
-mod wayland;
 mod x11;
 
 use std::io::{Read, Write};
 
+pub use gui::{gui_clipboard_request, initialize_clipboard};
 pub use protocol::{JSON_LIMIT, LIMIT};
 
-/// A display is configured; the worker still verifies connection/protocol support.
+/// Prefer the observed GUI backend, including inherited Wayland socket handles.
+/// The selected transport still verifies connection/protocol readiness.
 pub fn clipboard_available() -> bool {
-    configured("WAYLAND_DISPLAY") || configured("DISPLAY")
+    gui::available()
 }
 
 fn configured(name: &str) -> bool {
@@ -30,6 +32,8 @@ fn respond(response: &protocol::Response) -> Result<(), String> {
     output.flush().map_err(|e| e.to_string())
 }
 
+/// The standalone helper is X11-only. Standard Wayland clipboard requests use
+/// the already-focused GUI's data device through `gui_clipboard_request`.
 /// Enters before GUI initialization. Writes a single bounded response line.
 /// A successful write then serves selection requests until ownership is lost.
 pub fn clipboard_worker() -> Result<(), String> {
@@ -62,17 +66,7 @@ fn run() -> Result<(), String> {
     // base64 copy of every representation for its entire lifetime.
     drop(request);
     drop(input);
-    if configured("WAYLAND_DISPLAY") {
-        let mut clipboard = wayland::Clipboard::connect()?;
-        if let Some(offer) = offer {
-            clipboard.publish(offer)?;
-            respond(&protocol::Response::empty())?;
-            clipboard.serve()
-        } else {
-            let representation = clipboard.read(picture_only)?;
-            respond(&protocol::Response::read(representation))
-        }
-    } else if configured("DISPLAY") {
+    if configured("DISPLAY") {
         let mut clipboard = x11::Clipboard::connect()?;
         if let Some(offer) = offer {
             clipboard.publish(offer)?;
@@ -83,6 +77,6 @@ fn run() -> Result<(), String> {
             respond(&protocol::Response::read(representation))
         }
     } else {
-        Err("No Linux desktop clipboard is available. Open ReShiki in an X11 or Wayland desktop session, or export the drawing to a file.".into())
+        Err("The standalone clipboard worker requires an X11 display. In a Wayland desktop, use Copy or Paste in the focused ReShiki window.".into())
     }
 }
