@@ -11,9 +11,10 @@ use std::io::{Read, Write};
 pub use gui::{gui_clipboard_request, initialize_clipboard};
 pub use protocol::{JSON_LIMIT, LIMIT};
 
-/// A display is configured; the worker still verifies connection/protocol support.
+/// Prefer the observed GUI backend, including inherited Wayland socket handles.
+/// The selected transport still verifies connection/protocol readiness.
 pub fn clipboard_available() -> bool {
-    configured("WAYLAND_DISPLAY") || configured("DISPLAY")
+    gui::available()
 }
 
 fn configured(name: &str) -> bool {

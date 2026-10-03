@@ -16,6 +16,17 @@ enum Desktop {
 
 static DESKTOP: Mutex<Desktop> = Mutex::new(Desktop::Unknown);
 
+pub(crate) fn available() -> bool {
+    let Ok(desktop) = DESKTOP.lock() else {
+        return false;
+    };
+    match &*desktop {
+        Desktop::Wayland(_) | Desktop::X11 => true,
+        Desktop::Unknown => crate::configured("WAYLAND_DISPLAY") || crate::configured("DISPLAY"),
+        Desktop::Unavailable(_) => false,
+    }
+}
+
 /// Observe the actual window backend after Iced creates its clipboard owner.
 /// A Wayland address is only a lookup key, never dereferenced or retained as an
 /// owning display handle. Iced's owner stops the worker before its window drops.
