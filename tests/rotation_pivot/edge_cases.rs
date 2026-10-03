@@ -179,6 +179,35 @@ fn imported_open_and_closed_multicubic_paths_keep_their_local_anchor() {
         source.group_selection(&ids).unwrap();
         source.add_atom("O", Point::new(800., -600.));
         source.validate().unwrap();
+        // Explicit-pivot handles and nonuniform numeric resizing must transform
+        // the retained axes as vectors too, without moving the caller's pivot.
+        let explicit_pivot = Point::new(-120., 200.);
+        for (x_scale, y_scale, degrees) in [(1.25, 1.25, 23.5), (0.6, 1.8, 0.)] {
+            let mut doc = source.clone();
+            if degrees == 0. {
+                editing::scale_axes_about(&mut doc, &ids, explicit_pivot, x_scale, y_scale);
+            } else {
+                editing::transform_about(&mut doc, &ids, explicit_pivot, x_scale, degrees);
+            }
+            let (s, c) = f64::from(degrees).to_radians().sin_cos();
+            assert_points(
+                geometry(&doc, &ids),
+                geometry(&source, &ids)
+                    .into_iter()
+                    .map(|p| {
+                        let x = (f64::from(p.x) - f64::from(explicit_pivot.x)) * f64::from(x_scale);
+                        let y = (f64::from(p.y) - f64::from(explicit_pivot.y)) * f64::from(y_scale);
+                        Point::new(
+                            (f64::from(explicit_pivot.x) + x * c - y * s) as f32,
+                            (f64::from(explicit_pivot.y) + x * s + y * c) as f32,
+                        )
+                    })
+                    .collect(),
+            );
+            assert_eq!(doc.graphics[0].path, expected_path);
+            assert_eq!(doc.graphics[0].style, source.graphics[0].style);
+            assert_eq!(doc.atoms.last(), source.atoms.last());
+        }
         let pivot = Point::new(
             ((-25. + f64::from(anchor.x) + 250.) / 3.) as f32,
             ((80. + f64::from(anchor.y) - 60.) / 3.) as f32,
