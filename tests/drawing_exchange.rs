@@ -159,6 +159,7 @@ fn compare_xml(actual: &str, expected: &str, name: &str) -> anyhow::Result<()> {
                         | "size"
                         | "CaptionLineHeight"
                         | "WordWrapWidth"
+                        | "RotationAngle"
                         | "r"
                         | "g"
                         | "b"
@@ -196,6 +197,21 @@ fn compare_xml(actual: &str, expected: &str, name: &str) -> anyhow::Result<()> {
             a.children().filter(|c| c.is_element()).count(),
             e.children().filter(|c| c.is_element()).count(),
             "{name}: children"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn rotation_angle_comparison_accepts_signed_zero_only_as_equal_numbers() -> anyhow::Result<()> {
+    let expected = r#"<CDXML><page><embeddedobject id="1" RotationAngle="0"/></page></CDXML>"#;
+    let actual = expected.replace("RotationAngle=\"0\"", "RotationAngle=\"-0\"");
+    compare_xml(&actual, expected, "signed zero")?;
+    for angle in ["0.000001", "1", "NaN", "inf"] {
+        let actual = expected.replace("RotationAngle=\"0\"", &format!("RotationAngle=\"{angle}\""));
+        assert!(
+            std::panic::catch_unwind(|| compare_xml(&actual, expected, "changed angle")).is_err(),
+            "a distinct rotation must fail: {angle}"
         );
     }
     Ok(())
