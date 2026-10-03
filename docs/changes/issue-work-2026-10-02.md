@@ -143,6 +143,31 @@ See [drawing-style behavior](../drawing-styles.md).
 | [#109](https://github.com/Ameyanagi/ReShiki/issues/109), related [#83](https://github.com/Ameyanagi/ReShiki/issues/83) | The optional [LibreOffice ODF adapter](../../integrations/libreoffice/README.md#validation-status) passed installed-extension, real-renderer headless checks in Writer/Calc/Impress on macOS, Linux and Windows: two objects, two save/reopen cycles and all six cross-platform exchange directions preserved native data, stored PNG and intrinsic extent. Follow-up checks also verified host frame dimensions within 0.03 mm. Linux adds persistent, bounded multi-format clipboard ownership. | Final real-worker persistence and frame checks passed at `ca4c52e` on all three platforms; all six frame-aware exchanges also passed. Scripted editor save-back is not actual ReShiki desktop editing. Native host paste/double-click/edit/copy-back remains separate. OOXML and ONLYOFFICE are outside the adapter scope. |
 | [#110](https://github.com/Ameyanagi/ReShiki/issues/110)                                                                | Copy as prepares a selection or whole-drawing snapshot, checks tab/revision/selection before publication, and serializes ordinary Copy with Copy as even if the source tab closes. Conversion failures leave the clipboard untouched. [Tests](../../src/app/clipboard.rs) cover stale and closed-tab results; format tests cover figures, molecules and reactions.                                                                                                                                | Final renderer output and native macOS whole/selected menus verify all eleven rows. Actual ChemDoodle reaction menu actions, clipboard payloads and the receiver search passed for the stated public fixture; other format/platform combinations remain separate.                                                          |
 
+**#56 follow-up (2026-10-03).** `49141b5` adds
+[`SaveOutcome`](../../src/template_library.rs): a committed save remains
+successful if explicit unlock reports an error, with a library notice warning.
+The application applies the saved library and Undo state without retrying the
+save or cancelling a pending close. Failed writes retain their primary error;
+an additional unlock failure appends its diagnostic. Drop remains the
+best-effort unwind fallback.
+
+A controlled macOS 26.5.1 ARM64 counterexample used `e5dd0d9` with only the
+test-owned explicit unlock removed while a cloned `File` remained alive. The
+immediate following save failed with the expected contention panic; the paired
+checked-release case using the retained `0893e11` executable passed. Both tests
+reported 0.03 seconds of test execution. This demonstrates the retained-clone
+release contract, not the historical CI scheduler or helper-descriptor
+inheritance. The red/green logs and source patch are retained with the
+`template-lock-contract-e5dd0d9-20261003` receipt.
+
+At `0cf2df3`, all **6 library integration tests** and **6 library/guard unit
+tests** passed, along with the application tests for current/stale warning
+completion, Undo and pending close. Injected unlock errors test outcome handling;
+they do not establish an actual OS unlock failure. Separately, the prior
+`0893e11` macOS executable passed **50 full six-test repetitions** with all
+50 logs retained. Required native CI on **`macos-14` and `ubuntu-22.04`** remains
+pending; these local results do not close #56.
+
 Linux clipboard evidence includes **6 unit tests, 4 serial Xvfb protocol
 tests**, the actual application's `--clipboard-worker` process smoke, and an
 isolated harness compiling the production async wrapper for ownership after
