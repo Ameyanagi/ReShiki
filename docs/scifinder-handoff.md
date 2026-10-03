@@ -72,8 +72,9 @@ unrecognized format; its upload dialog offered only `.cxf` and `.mol`.
 1. In ReShiki, include the whole reaction and its participant molecules in the
    selection, or clear the selection to use the whole drawing. The reaction must
    have explicit reactant/product assignments, not just an arrow graphic.
-2. Right-click and choose **Copy as → ChemDoodle JSON (reaction)**. Review any
-   warning or error before switching applications.
+2. Right-click an object in the selection and choose **Copy as → ChemDoodle
+   JSON · reaction**. To copy the whole drawing, right-click blank canvas.
+   Review any warning or error before switching applications.
 3. In SciFinder, open **Draw**, choose **ChemDoodle** from the editor selector,
    and select **Reactions**.
 4. Choose **Open**. Paste into the field labeled **Or paste MOLFile or
@@ -167,9 +168,16 @@ for `ethanol-oxidation.rsk` was pasted into the receiving editor. Ethanol
 appeared as **reactant**, acetaldehyde as **product**, with the forward arrow.
 Submitting the search returned 2,070 **As Drawn** reactions. Opening the
 1,383-reaction alcohol-oxidation group showed the expected ethanol (64-17-5)
-to acetaldehyde (75-07-0) scheme. This verifies the generated payload and the
-manual browser path; a native ReShiki menu-click/clipboard check is a separate
-test. Agents, atom maps and reaction stereo were not part of this fixture.
+to acetaldehyde (75-07-0) scheme.
+
+The native macOS app was also checked with this fixture. Both **Copy as · whole
+drawing** and **Copy as · selected objects** displayed all 11 format choices.
+The actual **ChemDoodle JSON · reaction** menu actions copied identical
+609-byte payloads, matching the generated fixture. Keyboard paste from the
+system clipboard into ChemDoodle loaded the expected roles, and the selected
+reaction copy completed the same search through the expected ethanol-to-
+acetaldehyde result. Agents, atom maps and reaction stereo were not part of
+this fixture.
 
 ## Direct integration decision
 

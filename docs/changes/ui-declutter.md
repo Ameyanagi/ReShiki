@@ -6,9 +6,13 @@ acceptance remains open; see the [acceptance record](ui-declutter-validation.md)
 The [release notes](../changes-0.10.md#less-crowded-interface) describe the
 changes; this record holds the screenshots and how they were made.
 
+The [October 3 native comparison and current Help images](ui-declutter-native-2026-10-03.md)
+cover the later tabbed interface. The renderer pairs below remain the original
+cleanup evidence; they have not been replaced or relabelled as native captures.
+
 ## Capture
 
-Every image is application renderer output from the opt-in
+Every image below is application renderer output from the opt-in
 `ui_layout_snapshots` test (`src/app/workspace/layout_snapshots.rs`), which
 draws the real Iced widget tree with the headless renderer at the default
 1280 × 820 window and the 1040 × 680 minimum. Each state sets up the same
