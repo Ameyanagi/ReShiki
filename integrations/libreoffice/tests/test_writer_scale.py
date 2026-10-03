@@ -104,7 +104,14 @@ class WriterScaleTests(unittest.TestCase):
         self.other_events = []
         self.other.addEventListener(SimpleNamespace(notifyEvent=self.other_events.append))
         self.obj.addEventListener(SimpleNamespace(notifyEvent=event))
-        self.guard = SimpleNamespace(model=self.host, owns=lambda *args: True, release=Mock())
+        self.guard = SimpleNamespace(
+            model=self.host,
+            unlock_error=None,
+            accepted_update=lambda: None,
+            retain_recovery=lambda session: False,
+            owns=lambda *args: True,
+            release=Mock(),
+        )
         path = self.root / "drawing.rsk"
         path.write_bytes(self.new[0])
         self.session = {
