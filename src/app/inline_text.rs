@@ -22,6 +22,7 @@ struct Revision {
     auto_formula: bool,
 }
 pub struct State {
+    pub(super) session: iced::widget::Id,
     original: Option<Annotation>,
     position: Point,
     epoch: u64,
@@ -226,6 +227,7 @@ impl App {
                     .caption_editor
                     .perform(text_editor::Action::Move(text_editor::Motion::DocumentEnd));
                 self.tab.inline_text = Some(State {
+                    session: iced::widget::Id::unique(),
                     auto_formula: original.is_none()
                         && self.tab.caption_format.style.script
                             == reshiki::typography::Script::Normal,
