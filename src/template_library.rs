@@ -179,8 +179,8 @@ impl Library {
             .open(lock_path)
             .map_err(|e| e.to_string())?;
         lock.try_lock().map_err(lock_error)?;
-        // A concurrent process spawn can briefly inherit the same open file
-        // description. Release explicitly before close, including error paths.
+        // Closing one handle need not release a lock while a duplicate remains.
+        // Release explicitly before close, including error paths.
         let _lock = LibraryLock(lock);
         if Self::load(path)? != *expected {
             return Err("The library changed in another window. Reload it before saving.".into());
