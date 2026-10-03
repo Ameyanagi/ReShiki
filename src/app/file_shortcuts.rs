@@ -22,6 +22,7 @@ pub fn wrap(
     image_open: bool,
     updates_open: bool,
     atom_text_open: bool,
+    drawing_style_open: bool,
 ) -> Element<'_, Message> {
     Element::new(FileShortcuts {
         content,
@@ -29,6 +30,7 @@ pub fn wrap(
         image_open,
         updates_open,
         atom_text_open,
+        drawing_style_open,
     })
 }
 
@@ -38,6 +40,7 @@ struct FileShortcuts<'a> {
     image_open: bool,
     updates_open: bool,
     atom_text_open: bool,
+    drawing_style_open: bool,
 }
 
 impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
@@ -153,6 +156,23 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
             {
                 shell.publish(Message::ToggleHelp);
             }
+            shell.capture_event();
+            return;
+        }
+        // Cancel the visible style draft before a focused input consumes
+        // Escape only to unfocus. Modal dialogs above keep their own priority.
+        if self.drawing_style_open
+            && matches!(
+                event,
+                Event::Keyboard(keyboard::Event::KeyPressed {
+                    key: keyboard::Key::Named(keyboard::key::Named::Escape),
+                    ..
+                })
+            )
+        {
+            shell.publish(Message::DrawingStyle(
+                super::document_styles::Action::Cancel,
+            ));
             shell.capture_event();
             return;
         }
