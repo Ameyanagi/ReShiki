@@ -108,7 +108,10 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
     ) {
         // Updates has no text fields. Stop keys before file routing and any
         // still-focused editor underneath the dialog sees them.
-        if self.updates_open && matches!(event, Event::Keyboard(_) | Event::InputMethod(_)) {
+        if self.updates_open
+            && matches!(event, Event::Keyboard(_) | Event::InputMethod(_))
+            && !activation_event(event)
+        {
             if matches!(
                 event,
                 Event::Keyboard(keyboard::Event::KeyPressed {
@@ -122,6 +125,7 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
             return;
         }
         if self.image_open
+            && !activation_event(event)
             && let Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) = event
         {
             if matches!(key, keyboard::Key::Named(keyboard::key::Named::Escape)) {
@@ -342,6 +346,7 @@ fn without_command_text(event: &Event) -> Option<Event> {
 struct Fields {
     leave: bool,
     single_line: bool,
+    button: bool,
     focused: bool,
 }
 
@@ -380,6 +385,11 @@ impl Fields {
 }
 
 impl Operation for Fields {
+    fn custom(&mut self, _: Option<&Id>, _: Rectangle, state: &mut dyn std::any::Any) {
+        if state.is::<reshiki::accessibility::ButtonFocus>() {
+            self.button = true;
+        }
+    }
     fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
         operate(self);
     }
@@ -389,13 +399,14 @@ impl Operation for Fields {
         self.single_line = true;
     }
     fn focusable(&mut self, _id: Option<&Id>, _bounds: Rectangle, state: &mut dyn Focusable) {
-        if state.is_focused() {
+        if state.is_focused() && !self.button {
             self.focused = true;
             if self.leave && self.single_line {
                 state.unfocus();
             }
         }
         self.single_line = false;
+        self.button = false;
     }
 }
 
@@ -454,4 +465,9 @@ mod tests {
             assert!(file_message(&key, primary | Modifiers::ALT).is_none());
         }
     }
+}
+
+fn activation_event(event: &Event) -> bool {
+    matches!(event, Event::Keyboard(keyboard::Event::KeyPressed { key: keyboard::Key::Named(keyboard::key::Named::Enter | keyboard::key::Named::Space | keyboard::key::Named::Tab), modifiers, .. }
+        | keyboard::Event::KeyReleased { key: keyboard::Key::Named(keyboard::key::Named::Space), modifiers, .. }) if !modifiers.command() && !modifiers.alt())
 }

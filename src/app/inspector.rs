@@ -439,13 +439,21 @@ impl App {
             heading = heading.push(text(summary).size(11).style(muted_text));
         }
         let mut body = column![
-            button(heading)
-                .padding(10)
-                .width(Length::Fill)
-                .style(button::text)
-                .on_press(Message::InspectorAction(Action::Section(
-                    section, !expanded
-                )))
+            reshiki::accessibility::button(
+                format!("inspector-section-{section:?}"),
+                format!(
+                    "{title}: {}",
+                    if expanded { "expanded" } else { "collapsed" }
+                ),
+                heading
+            )
+            .expanded(expanded)
+            .padding(10)
+            .width(Length::Fill)
+            .style(button::text)
+            .on_press(Message::InspectorAction(Action::Section(
+                section, !expanded
+            )))
         ];
         if expanded {
             body = body.push(container(content()).padding(iced::Padding {
@@ -1186,7 +1194,9 @@ impl App {
     /// The figure format, chosen from a menu grouped into vector and raster.
     fn figure_menu(&self, figure: FigureFormat) -> Element<'_, Message> {
         let open = self.tab.inspector_ui.figure_menu;
-        let anchor = button(
+        let anchor = reshiki::accessibility::button(
+            "export-figure-format",
+            format!("Figure format: {figure}"),
             row![
                 text(format!("{} · {figure}", figure.kind()))
                     .size(12)
@@ -1198,6 +1208,7 @@ impl App {
         .padding(8)
         .width(Length::Fill)
         .style(crate::appearance::secondary)
+        .expanded(open)
         .on_press(Message::InspectorAction(Action::FigureMenu(!open)));
         let popup = open.then(|| {
             let mut items = column![].spacing(1);
@@ -1206,11 +1217,16 @@ impl App {
                     items.push(container(text(kind).size(11).style(muted_text)).padding([5, 10]));
                 for &format in FigureFormat::ALL.iter().filter(|f| f.kind() == kind) {
                     items = items.push(
-                        button(text(format.to_string()).size(12))
-                            .width(Length::Fill)
-                            .padding([6, 10])
-                            .style(super::workspace::control(format == figure))
-                            .on_press(Message::InspectorAction(Action::Figure(format))),
+                        reshiki::accessibility::button(
+                            format!("figure-format-{}", format.code()),
+                            format.to_string(),
+                            text(format.to_string()).size(12),
+                        )
+                        .checked(format == figure)
+                        .width(Length::Fill)
+                        .padding([6, 10])
+                        .style(super::workspace::control(format == figure))
+                        .on_press(Message::InspectorAction(Action::Figure(format))),
                     );
                 }
             }
@@ -1236,7 +1252,9 @@ impl App {
         let mut figures = column![
             self.figure_menu(figure),
             text(figure.description()).size(12).style(muted_text),
-            button(
+            reshiki::accessibility::button(
+                "export-figure",
+                format!("Export {} figure", figure.code().to_uppercase()),
                 text(if self.figure_exporting {
                     "Exporting…".into()
                 } else {
@@ -1255,9 +1273,15 @@ impl App {
         if reshiki::clipboard::available() {
             figures = figures
                 .push(
-                    keyed_command("Copy image", Message::CopyImage)
-                        .on_press_maybe((!self.tab.clipboard_busy).then_some(Message::CopyImage))
-                        .width(Length::Fill),
+                    reshiki::accessibility::button(
+                        "export-copy-image",
+                        "Copy image",
+                        text(super::workspace::keyed("Copy image", &Message::CopyImage)).size(12),
+                    )
+                    .padding([7, 9])
+                    .style(super::workspace::control(false))
+                    .on_press_maybe((!self.tab.clipboard_busy).then_some(Message::CopyImage))
+                    .width(Length::Fill),
                 )
                 .push(
                     text(if self.tab.selected.is_empty() {
@@ -1294,12 +1318,14 @@ impl App {
                     .padding(8)
                     .width(Length::Fill),
                     text(chemical.description()).size(12).style(muted_text),
-                    button(text(format!("Export {}…", chemical.code().to_uppercase())).size(13))
-                        .padding(10)
-                        .width(Length::Fill)
-                        .on_press_maybe(
-                            (!self.tab.busy).then_some(Message::Export(chemical.code()))
-                        ),
+                    reshiki::accessibility::button(
+                        "export-chemical",
+                        format!("Export {} structure", chemical.code().to_uppercase()),
+                        text(format!("Export {}…", chemical.code().to_uppercase())).size(13)
+                    )
+                    .padding(10)
+                    .width(Length::Fill)
+                    .on_press_maybe((!self.tab.busy).then_some(Message::Export(chemical.code()))),
                     command(
                         "Reaction roles & export…",
                         Message::Reaction(super::reactions::Action::Open)

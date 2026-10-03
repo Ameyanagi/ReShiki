@@ -17,6 +17,7 @@ pub struct Button<'a, Message> {
     inner: iced_button::Button<'a, Message>,
     action: Option<Message>,
     checked: Option<bool>,
+    expanded: Option<bool>,
     value: Option<String>,
 }
 
@@ -31,6 +32,7 @@ pub fn button<'a, Message: Clone + 'static>(
         inner: iced_button(content),
         action: None,
         checked: None,
+        expanded: None,
         value: None,
     }
 }
@@ -74,6 +76,10 @@ impl<'a, Message: Clone + 'static> Button<'a, Message> {
         self
     }
 
+    pub fn expanded(mut self, expanded: bool) -> Self {
+        self.expanded = Some(expanded);
+        self
+    }
     pub fn value(mut self, value: impl Into<String>) -> Self {
         self.value = Some(value.into());
         self
@@ -164,6 +170,7 @@ impl<Message: Clone + 'static> Widget<Message, Theme, Renderer> for Button<'_, M
         let state = tree.state.downcast_mut::<State>();
         let id = Id::from(self.id.clone());
         if self.action.is_some() {
+            operation.custom(Some(&id), layout.bounds(), &mut super::ButtonFocus);
             operation.focusable(Some(&id), layout.bounds(), state);
         } else {
             state.unfocus();
@@ -179,6 +186,7 @@ impl<Message: Clone + 'static> Widget<Message, Theme, Renderer> for Button<'_, M
             enabled: self.action.is_some(),
             focused: state.focused,
             checked: self.checked,
+            expanded: self.expanded,
             value: self.value.clone(),
             bounds: layout.bounds(),
             visible_bounds: Some(layout.bounds()),

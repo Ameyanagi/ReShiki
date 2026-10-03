@@ -4,7 +4,7 @@ use super::{
     workspace::{control, muted_text},
 };
 use iced::widget::{
-    Space, button, column, container, mouse_area, opaque, rich_text, row, scrollable, stack, text,
+    Space, column, container, mouse_area, opaque, rich_text, row, scrollable, stack, text,
 };
 use iced::{Alignment, Border, Color, Element, Length, keyboard::Modifiers};
 

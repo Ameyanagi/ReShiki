@@ -152,6 +152,7 @@ impl<Message: Clone + 'static> Widget<Message, Theme, Renderer> for TextInput<'_
                 enabled,
                 focused,
                 checked: None,
+                expanded: None,
                 value: Some(self.value.clone()),
                 bounds: layout.bounds(),
                 visible_bounds: Some(layout.bounds()),

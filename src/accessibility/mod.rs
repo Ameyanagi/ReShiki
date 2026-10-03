@@ -6,6 +6,7 @@
 //! validate their window generation before issuing an operation.
 
 mod button;
+mod editor;
 mod inert;
 mod operations;
 mod scope;
@@ -13,6 +14,7 @@ mod text_input;
 pub mod tree;
 
 pub use button::{Button, button};
+pub use editor::editor;
 pub use inert::inert;
 pub use operations::{Activate, Collect, SetValue, Snapshot};
 pub use scope::{FocusControl, focus_scope};
@@ -26,6 +28,7 @@ pub enum Role {
     Button,
     ToggleButton,
     TextInput,
+    TextArea,
 }
 
 /// A snapshot produced by the actual control during a widget operation.
@@ -38,6 +41,7 @@ pub struct Node {
     pub enabled: bool,
     pub focused: bool,
     pub checked: Option<bool>,
+    pub expanded: Option<bool>,
     pub value: Option<String>,
     /// Window-local logical coordinates, with scroll translations applied.
     pub bounds: Rectangle,
@@ -62,3 +66,10 @@ struct LiveValueAction<Message> {
     id: String,
     message: Option<Message>,
 }
+
+/// Marks a foreground popup discovered through the real overlay widget tree.
+#[derive(Default)]
+pub struct Foreground;
+
+/// Focus is on a button, rather than an editable text surface.
+pub struct ButtonFocus;
