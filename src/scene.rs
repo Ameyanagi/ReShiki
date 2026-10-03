@@ -122,9 +122,7 @@ fn atom_label_runs(a: &Atom, doc: &Document) -> Vec<Primitive> {
     if let Some(group) = doc.abbreviation(a.id).filter(|_| internal_group.is_none()) {
         let style = crate::typography::TextStyle {
             formula: true,
-            ..a.text_style
-                .clone()
-                .unwrap_or_else(|| doc.drawing_style.text_style())
+            ..group.text_style(doc)
         };
         let content = group.text(doc);
         let size = STYLE.world(style.size_pt);
@@ -182,10 +180,14 @@ fn atom_label_runs(a: &Atom, doc: &Document) -> Vec<Primitive> {
     if !show_element && a.charge == 0 {
         return vec![];
     }
-    let style = a
-        .text_style
-        .clone()
-        .unwrap_or_else(|| doc.drawing_style.text_style());
+    let style = internal_group.map_or_else(
+        || {
+            a.text_style
+                .clone()
+                .unwrap_or_else(|| doc.drawing_style.text_style())
+        },
+        |group| group.text_style(doc),
+    );
     let text_width = |text: &str, size| crate::style::styled_text_width(text, size, &style);
     let text = |position, content, size| Primitive::Text {
         position,

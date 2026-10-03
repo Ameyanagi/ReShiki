@@ -144,6 +144,12 @@ impl ColorTheme {
                 number.style.color = Color::Ink;
             }
         }
+        for group in &mut doc.abbreviations {
+            if let Some(style) = &mut group.label_style {
+                style.color = Color::Ink;
+            }
+            group.label_color_override = false;
+        }
     }
 }
 impl std::fmt::Display for ColorTheme {
@@ -166,7 +172,18 @@ fn atom_ink(
     palette: &Palette,
     atom: &crate::document::Atom,
 ) -> [u8; 3] {
-    atom_ink_on(doc, palette, atom, crate::highlights::atom_color(doc, atom))
+    if let Some(group) = doc.abbreviation(atom.id) {
+        label_ink_on(
+            doc,
+            palette,
+            atom,
+            group.text_style(doc).color,
+            group.color_override(doc),
+            crate::highlights::atom_color(doc, atom),
+        )
+    } else {
+        atom_ink_on(doc, palette, atom, atom.display.highlight)
+    }
 }
 fn atom_ink_on(
     doc: &crate::document::Document,
@@ -174,8 +191,24 @@ fn atom_ink_on(
     atom: &crate::document::Atom,
     highlight: Option<Color>,
 ) -> [u8; 3] {
-    let explicit = atom.text_style.as_ref().map_or(Color::Ink, |s| s.color);
-    if atom.display.color_override || explicit != Color::Ink {
+    label_ink_on(
+        doc,
+        palette,
+        atom,
+        atom.text_style.as_ref().map_or(Color::Ink, |s| s.color),
+        atom.display.color_override,
+        highlight,
+    )
+}
+fn label_ink_on(
+    doc: &crate::document::Document,
+    palette: &Palette,
+    atom: &crate::document::Atom,
+    explicit: Color,
+    color_override: bool,
+    highlight: Option<Color>,
+) -> [u8; 3] {
+    if color_override || explicit != Color::Ink {
         palette.canonical(explicit)
     } else {
         let mut ink = element_color(doc, &atom.element, doc.canvas_theme);
@@ -269,9 +302,14 @@ pub fn label_contrast_issues(doc: &crate::document::Document) -> Vec<u64> {
     doc.atoms
         .iter()
         .filter(|atom| {
-            if !crate::atom_labels::visible_with_degree(atom, doc, || {
-                degrees.get(&atom.id).copied().unwrap_or(0)
-            }) {
+            if !doc.atom_visible(atom.id) || crate::attachments::hidden(atom, doc) {
+                return false;
+            }
+            if doc.abbreviation(atom.id).is_none()
+                && !crate::atom_labels::visible_with_degree(atom, doc, || {
+                    degrees.get(&atom.id).copied().unwrap_or(0)
+                })
+            {
                 return false;
             }
             let ink = doc.canvas_theme.color(atom_ink(doc, &palette, atom));
@@ -292,21 +330,20 @@ pub fn label_contrast_issues(doc: &crate::document::Document) -> Vec<u64> {
 pub fn resolved_document(
     doc: &crate::document::Document,
 ) -> std::borrow::Cow<'_, crate::document::Document> {
-    resolve_document(doc, false)
+    resolve_document(doc)
 }
 
 /// Editable formats keep the contracted label and its underlying atoms as
-/// separate text objects. Resolve internal atom ink against its own halo;
-/// the writer resolves each visible wrapper label against the group paint.
+/// separate text objects. Each wrapper and internal atom resolves its own ink
+/// against its own halo, so expansion keeps the internal presentation.
 pub(crate) fn resolved_exchange_document(
     doc: &crate::document::Document,
 ) -> std::borrow::Cow<'_, crate::document::Document> {
-    resolve_document(doc, true)
+    resolve_document(doc)
 }
 
 fn resolve_document(
     doc: &crate::document::Document,
-    expanded_atoms: bool,
 ) -> std::borrow::Cow<'_, crate::document::Document> {
     if doc.custom_theme.is_none()
         && doc.color_theme.is_publication()
@@ -332,6 +369,14 @@ fn resolve_document(
             Color::Custom(rgb)
         }
     };
+    for (group, original) in resolved.abbreviations.iter_mut().zip(&doc.abbreviations) {
+        if let Some(anchor) = doc.atom(original.anchor) {
+            let mut style = original.text_style(doc);
+            style.color = visible(atom_ink(doc, &palette, anchor));
+            group.label_style = Some(style);
+            group.label_color_override = true;
+        }
+    }
     for (atom, original) in resolved.atoms.iter_mut().zip(&doc.atoms) {
         // Existing colored files remain explicit overrides, including old files
         // that predate the override flag. The flag also supports explicit black.
@@ -346,11 +391,7 @@ fn resolve_document(
         let style = atom
             .text_style
             .get_or_insert_with(|| doc.drawing_style.text_style());
-        let highlight = if expanded_atoms {
-            original.display.highlight
-        } else {
-            crate::highlights::atom_color(doc, original)
-        };
+        let highlight = original.display.highlight;
         style.color = visible(atom_ink_on(doc, &palette, original, highlight));
         atom.display.hydrogen_color =
             Some(visible(hydrogen_ink_on(doc, &palette, original, highlight)));
