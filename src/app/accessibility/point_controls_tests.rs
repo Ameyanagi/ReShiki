@@ -1,0 +1,494 @@
+//! Exercise the selected-graphic controls in the actual App widget tree.
+use super::{App, Message};
+use crate::canvas::{Edit, Tool};
+use iced::advanced::{
+    renderer::Headless,
+    widget::{Operation, operation},
+};
+use iced::keyboard::{
+    self, Key, Modifiers,
+    key::{Code, Named, Physical},
+};
+use iced::{Event, Rectangle, Size, mouse};
+use iced_runtime::{UserInterface, user_interface::Cache};
+use reshiki::accessibility::{Activate, Collect, FocusControl, Role, Snapshot, tree::NativeTree};
+use reshiki::document::Point;
+use reshiki::graphics::GraphicKind;
+
+struct Ui {
+    renderer: iced::Renderer,
+    cache: Cache,
+    size: Size,
+}
+
+impl Ui {
+    async fn new(size: Size) -> Self {
+        Self {
+            renderer: <iced::Renderer as Headless>::new(
+                iced::Font::with_name(reshiki::style::ui_font_family()),
+                iced::Pixels(16.),
+                None,
+            )
+            .await
+            .expect("headless renderer"),
+            cache: Cache::new(),
+            size,
+        }
+    }
+
+    fn snapshot(&mut self, app: &App) -> Snapshot {
+        let mut ui = UserInterface::build(
+            app.view(),
+            self.size,
+            std::mem::take(&mut self.cache),
+            &mut self.renderer,
+        );
+        let mut collect = Collect::new(Rectangle::with_size(self.size));
+        ui.operate(&self.renderer, &mut operation::black_box(&mut collect));
+        let snapshot = collect.snapshot().clone();
+        self.cache = ui.into_cache();
+        assert!(snapshot.duplicate_ids.is_empty());
+        NativeTree::default()
+            .update(&snapshot, "ReShiki", Rectangle::with_size(self.size), 2.)
+            .expect("selected graphics publish a valid native tree");
+        snapshot
+    }
+
+    fn focus(&mut self, app: &App, id: &str) {
+        let mut ui = UserInterface::build(
+            app.view(),
+            self.size,
+            std::mem::take(&mut self.cache),
+            &mut self.renderer,
+        );
+        let mut focus: Box<dyn Operation> = Box::new(FocusControl::new(id));
+        loop {
+            ui.operate(&self.renderer, focus.as_mut());
+            match focus.finish() {
+                operation::Outcome::Chain(next) => focus = next,
+                _ => break,
+            }
+        }
+        self.cache = ui.into_cache();
+        self.assert_focused(app, id);
+    }
+
+    fn assert_focused(&mut self, app: &App, id: &str) {
+        let snapshot = self.snapshot(app);
+        let focused: Vec<_> = snapshot.nodes.iter().filter(|node| node.focused).collect();
+        assert_eq!(focused.len(), 1, "expected one focused control: {id}");
+        assert_eq!(focused[0].id, id);
+        assert!(focused[0].visible_bounds.is_some(), "focus reveals {id}");
+    }
+
+    fn activate(&mut self, app: &App, id: &str) -> operation::Outcome<Message> {
+        let mut ui = UserInterface::build(
+            app.view(),
+            self.size,
+            std::mem::take(&mut self.cache),
+            &mut self.renderer,
+        );
+        let mut activate = Activate::<Message>::new(id);
+        ui.operate(&self.renderer, &mut operation::black_box(&mut activate));
+        self.cache = ui.into_cache();
+        activate.finish()
+    }
+
+    fn event(&mut self, app: &App, event: Event) -> (iced::event::Status, Vec<Message>) {
+        let mut ui = UserInterface::build(
+            app.view(),
+            self.size,
+            std::mem::take(&mut self.cache),
+            &mut self.renderer,
+        );
+        let mut messages = Vec::new();
+        let (_, statuses) = ui.update(
+            std::slice::from_ref(&event),
+            mouse::Cursor::Unavailable,
+            &mut self.renderer,
+            &mut iced::advanced::clipboard::Null,
+            &mut messages,
+        );
+        self.cache = ui.into_cache();
+        let status = statuses[0];
+        // Match the app's ignored-key subscription after real widget/overlay
+        // dispatch. In particular, Escape returns from EditPoints to Select.
+        if status == iced::event::Status::Ignored
+            && let Event::Keyboard(keyboard::Event::KeyPressed {
+                key,
+                modified_key,
+                modifiers,
+                ..
+            }) = &event
+            && let Some(message) = crate::app::shortcuts::key_message(key, modified_key, *modifiers)
+        {
+            messages.push(message);
+        }
+        (status, messages)
+    }
+
+    fn tab(&mut self, app: &App, backwards: bool) {
+        let (status, messages) = self.event(
+            app,
+            key(
+                Named::Tab,
+                if backwards {
+                    Modifiers::SHIFT
+                } else {
+                    Modifiers::empty()
+                },
+                false,
+            ),
+        );
+        assert_eq!(status, iced::event::Status::Captured);
+        assert!(messages.is_empty(), "Tab only changes focus");
+    }
+
+    fn enter_once(&mut self, app: &App, tool: Tool) -> Message {
+        let (status, mut messages) = self.event(app, key(Named::Enter, Modifiers::empty(), false));
+        assert_eq!(status, iced::event::Status::Captured);
+        assert_eq!(
+            messages.len(),
+            1,
+            "Enter activates the control exactly once"
+        );
+        assert!(matches!(&messages[0], Message::Tool(actual) if *actual == tool));
+        let (status, repeats) = self.event(app, key(Named::Enter, Modifiers::empty(), true));
+        assert_eq!(status, iced::event::Status::Captured);
+        assert!(repeats.is_empty(), "held Enter does not activate again");
+        let release = Event::Keyboard(keyboard::Event::KeyReleased {
+            key: Key::Named(Named::Enter),
+            modified_key: Key::Named(Named::Enter),
+            physical_key: Physical::Code(Code::Enter),
+            location: keyboard::Location::Standard,
+            modifiers: Modifiers::empty(),
+        });
+        assert!(self.event(app, release).1.is_empty());
+        messages.remove(0)
+    }
+
+    fn type_width(&mut self, app: &mut App, id: &str) {
+        self.focus(app, id);
+        let (status, messages) = self.event(app, character("a", Code::KeyA, Modifiers::COMMAND));
+        assert_eq!(status, iced::event::Status::Captured);
+        assert!(
+            messages.is_empty(),
+            "Select All only selects the input text"
+        );
+        for (text, code) in [
+            ("1", Code::Digit1),
+            (".", Code::Period),
+            ("5", Code::Digit5),
+        ] {
+            let (status, messages) = self.event(app, character(text, code, Modifiers::empty()));
+            assert_eq!(status, iced::event::Status::Captured);
+            assert_eq!(messages.len(), 1);
+            assert!(matches!(
+                messages[0],
+                Message::ArrowAction(crate::app::arrows::Action::Number(
+                    crate::app::arrows::Field::Line,
+                    _
+                )) | Message::GraphicWidth(_)
+            ));
+            for message in messages {
+                let _ = app.update(message);
+            }
+        }
+        let snapshot = self.snapshot(app);
+        let field = snapshot.nodes.iter().find(|node| node.id == id).unwrap();
+        assert_eq!(field.value.as_deref(), Some("1.5"));
+    }
+
+    fn undo(&mut self, app: &mut App) {
+        let (_, messages) = self.event(app, character("z", Code::KeyZ, Modifiers::COMMAND));
+        assert_eq!(messages.len(), 1);
+        assert!(matches!(messages[0], Message::Undo));
+        for message in messages {
+            let _ = app.update(message);
+        }
+    }
+}
+
+fn character(text: &str, code: Code, modifiers: Modifiers) -> Event {
+    Event::Keyboard(keyboard::Event::KeyPressed {
+        key: Key::Character(text.into()),
+        modified_key: Key::Character(text.into()),
+        physical_key: Physical::Code(code),
+        location: keyboard::Location::Standard,
+        modifiers,
+        text: modifiers.is_empty().then(|| text.into()),
+        repeat: false,
+    })
+}
+
+fn key(named: Named, modifiers: Modifiers, repeat: bool) -> Event {
+    let code = match named {
+        Named::Tab => Code::Tab,
+        Named::Enter => Code::Enter,
+        Named::Escape => Code::Escape,
+        _ => unreachable!("test only dispatches Tab, Enter and Escape"),
+    };
+    Event::Keyboard(keyboard::Event::KeyPressed {
+        key: Key::Named(named),
+        modified_key: Key::Named(named),
+        physical_key: Physical::Code(code),
+        location: keyboard::Location::Standard,
+        modifiers,
+        text: None,
+        repeat,
+    })
+}
+
+fn selected_graphic(kind: GraphicKind, size: Size) -> App {
+    let (mut app, _) = App::new();
+    app.viewport = size;
+    let drawn = if kind == GraphicKind::Path {
+        GraphicKind::Curve
+    } else {
+        kind
+    };
+    let _ = app.update(Message::Tool(Tool::Graphic(drawn)));
+    let _ = app.update(Message::Canvas(Edit::Graphic(
+        Point::new(-60., -30.),
+        Point::new(60., 30.),
+        false,
+    )));
+    if kind == GraphicKind::Path {
+        let id = app.tab.selected[0];
+        let _ = app.update(Message::Tool(Tool::EditPoints));
+        let _ = app.update(Message::Canvas(Edit::GraphicPoint(
+            id,
+            1,
+            Point::new(20., -50.),
+        )));
+        let _ = app.update(Message::Tool(Tool::Select));
+    }
+    assert_eq!(app.tool, Tool::Select);
+    assert_eq!(app.tab.selected.len(), 1);
+    assert_eq!(app.tab.doc.graphics[0].kind, kind);
+    app
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real selected-graphic keyboard and accessibility regression"]
+async fn selected_arc_and_curve_point_controls_are_reachable_and_exit_without_editing() {
+    for size in [Size::new(1280., 820.), Size::new(1040., 680.)] {
+        let mut ui = Ui::new(size).await;
+        for kind in [GraphicKind::Arc, GraphicKind::Curve, GraphicKind::Path] {
+            ui.cache = Cache::new();
+            let mut app = selected_graphic(kind, size);
+            let drawing = app.tab.doc.clone();
+            let selected = app.tab.selected.clone();
+            let revision = app.tab.revision;
+            let (entry_id, entry_name) = if kind == GraphicKind::Arc {
+                ("arc-edit-endpoints", "Edit arc endpoints")
+            } else {
+                ("curve-edit-points", "Edit curve points")
+            };
+            let snapshot = ui.snapshot(&app);
+            let entry = snapshot
+                .nodes
+                .iter()
+                .find(|node| node.id == entry_id)
+                .unwrap();
+            assert_eq!(entry.name, entry_name);
+            assert_eq!(entry.role, Role::Button);
+            assert!(entry.enabled);
+            assert!(
+                !snapshot
+                    .nodes
+                    .iter()
+                    .any(|node| node.id == "edit-points-done")
+            );
+
+            if kind == GraphicKind::Arc {
+                ui.focus(&app, "arc-start");
+                ui.tab(&app, false);
+                ui.assert_focused(&app, "arc-sweep");
+                ui.tab(&app, false);
+                ui.assert_focused(&app, entry_id);
+                ui.tab(&app, true);
+                ui.assert_focused(&app, "arc-sweep");
+                ui.tab(&app, false);
+            } else {
+                ui.focus(&app, entry_id);
+                ui.tab(&app, true);
+                ui.tab(&app, false);
+            }
+            ui.assert_focused(&app, entry_id);
+            let message = ui.enter_once(&app, Tool::EditPoints);
+            let _ = app.update(message);
+            assert_eq!(app.tool, Tool::EditPoints);
+            let editing = ui.snapshot(&app);
+            assert!(!editing.nodes.iter().any(|node| node.id == entry_id));
+            let done = editing
+                .nodes
+                .iter()
+                .find(|node| node.id == "edit-points-done")
+                .unwrap();
+            assert_eq!(done.name, "Finish editing points");
+            assert_eq!(done.role, Role::Button);
+            assert!(done.enabled);
+            ui.focus(&app, "edit-points-done");
+            ui.tab(&app, true);
+            ui.tab(&app, false);
+            ui.assert_focused(&app, "edit-points-done");
+            let message = ui.enter_once(&app, Tool::Select);
+            let _ = app.update(message);
+            assert_eq!(app.tool, Tool::Select);
+
+            // The same live native activation re-enters the mode. A foreground
+            // dialog hides both point controls and cannot activate the Done below.
+            let operation::Outcome::Some(message) = ui.activate(&app, entry_id) else {
+                panic!("native activation must find the selected-graphic entry");
+            };
+            assert!(matches!(message, Message::Tool(Tool::EditPoints)));
+            let _ = app.update(message);
+            let _ = app.update(Message::ToggleHelp);
+            let modal = ui.snapshot(&app);
+            assert!(modal.nodes.iter().all(|node| node.id.starts_with("help-")));
+            assert!(matches!(
+                ui.activate(&app, entry_id),
+                operation::Outcome::None
+            ));
+            assert!(matches!(
+                ui.activate(&app, "edit-points-done"),
+                operation::Outcome::None
+            ));
+            let (_, messages) = ui.event(&app, key(Named::Escape, Modifiers::empty(), false));
+            assert_eq!(messages.len(), 1);
+            for message in messages {
+                let _ = app.update(message);
+            }
+            assert!(!app.help_open);
+            assert_eq!(
+                app.tool,
+                Tool::EditPoints,
+                "Escape first closes the foreground"
+            );
+            ui.focus(&app, "edit-points-done");
+            let (_, messages) = ui.event(&app, key(Named::Escape, Modifiers::empty(), false));
+            assert_eq!(messages.len(), 1);
+            assert!(matches!(messages[0], Message::Escape));
+            for message in messages {
+                let _ = app.update(message);
+            }
+            assert_eq!(app.tool, Tool::Select);
+            assert_eq!(app.tab.doc, drawing);
+            assert_eq!(app.tab.selected, selected);
+            assert_eq!(app.tab.revision, revision);
+        }
+    }
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real selected-arrow and graphic width input regression"]
+async fn selected_width_fields_publish_units_and_apply_one_undo_step() {
+    use crate::app::arrows::{Action, Field};
+    use reshiki::document::Document;
+
+    for size in [Size::new(1280., 820.), Size::new(1040., 680.)] {
+        let mut ui = Ui::new(size).await;
+        for selected in [vec![10], vec![1, 2, 3, 10, 20]] {
+            ui.cache = Cache::new();
+            let (mut app, _) = App::new();
+            app.viewport = size;
+            app.tab.doc = Document::from_json(include_bytes!(
+                "../../../tests/fixtures/ui-declutter/mixed-arrow-width.rsk"
+            ))
+            .unwrap();
+            app.tab.saved = app.tab.doc.clone();
+            let _ = app.update(Message::Canvas(Edit::Select(selected.clone())));
+            let before = app.tab.doc.clone();
+            assert!(!app.tab.history.can_undo());
+            let snapshot = ui.snapshot(&app);
+            let field = snapshot
+                .nodes
+                .iter()
+                .find(|node| node.id == "arrow-line-width")
+                .unwrap();
+            assert_eq!(field.name, "Arrow line width (pt)");
+            assert_eq!(field.role, Role::TextInput);
+            assert_eq!(field.value.as_deref(), Some("1.2"));
+            assert!(field.enabled);
+            if selected.contains(&20) {
+                let graphic = snapshot
+                    .nodes
+                    .iter()
+                    .find(|node| node.id == "graphic-line-width")
+                    .unwrap();
+                assert_eq!(graphic.name, "Graphic line width (pt)");
+                assert_eq!(graphic.value.as_deref(), Some("0.3"));
+            }
+
+            ui.type_width(&mut app, "arrow-line-width");
+            assert_eq!(app.tab.doc, before, "typing only changes the width draft");
+            assert!(!app.tab.history.can_undo());
+            let (status, messages) = ui.event(&app, key(Named::Enter, Modifiers::empty(), false));
+            assert_eq!(status, iced::event::Status::Captured);
+            assert_eq!(messages.len(), 1);
+            assert!(matches!(
+                messages[0],
+                Message::ArrowAction(Action::ApplyNumber(Field::Line))
+            ));
+            for message in messages {
+                let _ = app.update(message);
+            }
+            assert!(!app.error, "{}", app.status);
+            let mut expected = before.clone();
+            expected
+                .arrows
+                .iter_mut()
+                .find(|arrow| arrow.id == 10)
+                .unwrap()
+                .style
+                .as_mut()
+                .unwrap()
+                .width_pt = 1.5;
+            assert_eq!(
+                app.tab.doc, expected,
+                "only the selected arrow width changes"
+            );
+            assert_eq!(app.tab.doc.bonds, before.bonds);
+            assert_eq!(app.tab.doc.drawing_style, before.drawing_style);
+            assert_eq!(app.tab.selected, selected);
+            ui.undo(&mut app);
+            assert_eq!(app.tab.doc, before);
+            assert_eq!(app.tab.selected, selected);
+            assert!(
+                !app.tab.history.can_undo(),
+                "one Enter produces one Undo step"
+            );
+        }
+
+        ui.cache = Cache::new();
+        let mut app = selected_graphic(GraphicKind::Arc, size);
+        let before = app.tab.doc.clone();
+        let selected = app.tab.selected.clone();
+        let snapshot = ui.snapshot(&app);
+        let field = snapshot
+            .nodes
+            .iter()
+            .find(|node| node.id == "graphic-line-width")
+            .unwrap();
+        assert_eq!(field.name, "Graphic line width (pt)");
+        assert_eq!(field.role, Role::TextInput);
+        assert_eq!(field.value.as_deref(), Some("0.6"));
+        assert!(field.enabled);
+        ui.type_width(&mut app, "graphic-line-width");
+        assert_eq!(app.tab.doc, before);
+        let (status, messages) = ui.event(&app, key(Named::Enter, Modifiers::empty(), false));
+        assert_eq!(status, iced::event::Status::Captured);
+        assert_eq!(messages.len(), 1);
+        assert!(matches!(messages[0], Message::ApplyGraphicWidth));
+        for message in messages {
+            let _ = app.update(message);
+        }
+        let mut expected = before.clone();
+        expected.graphics[0].style.width_pt = 1.5;
+        assert_eq!(app.tab.doc, expected);
+        ui.undo(&mut app);
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.selected, selected);
+    }
+}

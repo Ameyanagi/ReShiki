@@ -134,12 +134,18 @@ impl App {
             text(kind.to_string()).size(14),
             row![
                 text("Line (pt)").size(11),
-                crate::appearance::text_input("0.6", &self.tab.graphic_width_input)
-                    .on_input(Message::GraphicWidth)
-                    .on_submit(Message::ApplyGraphicWidth)
-                    .size(12)
-                    .padding(5)
-                    .width(48),
+                reshiki::accessibility::text_input(
+                    "graphic-line-width",
+                    "Graphic line width (pt)",
+                    "0.6",
+                    &self.tab.graphic_width_input,
+                )
+                .style(crate::appearance::input_style)
+                .on_input(Message::GraphicWidth)
+                .on_submit(Message::ApplyGraphicWidth)
+                .size(12)
+                .padding(5)
+                .width(48),
                 crate::appearance::pick_list(
                     [LinePattern::Solid, LinePattern::Dashed, LinePattern::Dotted],
                     Some(self.tab.graphic_style.pattern),
@@ -242,14 +248,17 @@ impl App {
         if self.tool != Tool::EditPoints
             && matches!(selected.as_slice(), [g] if matches!(g.kind, GraphicKind::Curve | GraphicKind::Path | GraphicKind::Arc))
         {
-            panel = panel.push(command(
-                if kind == GraphicKind::Arc {
-                    "Edit arc endpoints"
-                } else {
-                    "Edit curve points"
-                },
-                Message::Tool(Tool::EditPoints),
-            ));
+            let (id, label) = if kind == GraphicKind::Arc {
+                ("arc-edit-endpoints", "Edit arc endpoints")
+            } else {
+                ("curve-edit-points", "Edit curve points")
+            };
+            panel = panel.push(
+                reshiki::accessibility::button(id, label, text(label).size(12))
+                    .padding([7, 9])
+                    .on_press(Message::Tool(Tool::EditPoints))
+                    .style(control(false)),
+            );
         }
         panel
             .push(
@@ -1335,7 +1344,21 @@ impl App {
                 )
             }
             Tool::EditPoints => (
-                vec![done("Done")],
+                vec![
+                    hover_hint(
+                        reshiki::accessibility::button(
+                            "edit-points-done",
+                            "Finish editing points",
+                            text("Done").size(12),
+                        )
+                        .padding([7, 9])
+                        .on_press(Message::Tool(Tool::Select))
+                        .style(control(false)),
+                        "Return to Select · Esc",
+                        tooltip::Position::Bottom,
+                    )
+                    .into(),
+                ],
                 "Drag anchors or control points · Escape finishes",
             ),
             Tool::Template => (
