@@ -30,6 +30,7 @@ from com.sun.star.embed import (
 )
 from com.sun.star.embed.EmbedStates import ACTIVE, LOADED, RUNNING
 from com.sun.star.frame import XDispatch, XDispatchProvider
+from com.sun.star.frame.InfobarType import DANGER, INFO
 from com.sun.star.io import IOException
 from com.sun.star.lang import XComponent, XInitialization, XServiceInfo
 from com.sun.star.uno import RuntimeException as UnoRuntimeException
@@ -167,6 +168,63 @@ def show_error(ctx, message):
         )
         box.execute()
         box.dispose()
+
+
+class CopyFeedback:
+    """Optional host UI; every method runs on the LibreOffice callback thread."""
+
+    def __init__(self, ctx, frame):
+        self.ctx, self.frame, self.indicator = ctx, frame, None
+        self.controller = None
+        with suppress(Exception):
+            self.controller = frame.getController()
+        self.show("Copying editable drawing…", "Wait for confirmation before pasting.")
+
+    def show(self, title, detail, failed=False):
+        try:
+            controller = self.controller
+            kind = DANGER if failed else INFO
+            if controller.hasInfobar("reshiki-copy"):
+                controller.updateInfobar("reshiki-copy", title, detail, kind)
+            else:
+                controller.appendInfobar("reshiki-copy", title, detail, kind, (), True)
+            return
+        except Exception:
+            # Some hosts expose only the older frame status indicator. Neither
+            # missing UI nor a disposed frame may turn a good copy into failure.
+            pass
+        try:
+            text = title + " " + detail
+            if self.indicator is None:
+                self.indicator = self.frame.createStatusIndicator()
+                self.indicator.start(text, 1)
+            else:
+                self.indicator.setText(text)
+        except Exception:
+            pass
+
+    def finish(self, succeeded):
+        if succeeded:
+            self.show("Editable drawing copied", "Ready to paste in ReShiki.")
+        else:
+            self.show("Drawing was not copied", "See the error message before retrying.", True)
+        if self.indicator is not None:
+            # Keep fallback completion visible briefly without leaving the
+            # host's progress indicator active indefinitely.
+            def clear():
+                with suppress(Exception):
+                    post(self.ctx, self.end)
+
+            try:
+                timer = threading.Timer(4, clear)
+                timer.daemon = True
+                timer.start()
+            except Exception:
+                self.end()
+
+    def end(self):
+        with suppress(Exception):
+            self.indicator.end()
 
 
 class ReplacementTransaction(unohelper.Base, XTransactionListener):
@@ -833,6 +891,7 @@ def selected(document):
 class Handler(unohelper.Base, XDispatchProvider, XDispatch, XInitialization, XServiceInfo):
     def __init__(self, ctx):
         self.ctx, self.frame = ctx, None
+        self.copying = False
 
     def getImplementationName(self):
         return HANDLER
@@ -864,6 +923,33 @@ class Handler(unohelper.Base, XDispatchProvider, XDispatch, XInitialization, XSe
     def removeStatusListener(self, listener, url):
         pass
 
+    def copy(self, program, raw):
+        if self.copying:
+            return
+        self.copying = True
+        feedback = CopyFeedback(self.ctx, self.frame)
+
+        def finished(error=None):
+            self.copying = False
+            feedback.finish(error is None)
+            if error is not None:
+                show_error(self.ctx, error)
+
+        def execute():
+            error = None
+            try:
+                worker(program, "--libreoffice-copy", raw)
+            except Exception as failure:
+                error = str(failure)
+            # The worker returns only after the native clipboard write. Merely
+            # returning from menu dispatch must never announce readiness.
+            post(self.ctx, lambda: finished(error))
+
+        try:
+            threading.Thread(target=execute, daemon=True).start()
+        except Exception as error:
+            finished(str(error))
+
     def dispatch(self, url, args):
         try:
             if url.Path == "configure":
@@ -885,11 +971,10 @@ class Handler(unohelper.Base, XDispatchProvider, XDispatch, XInitialization, XSe
             if url.Path == "edit":
                 selected(document).doVerb(0)
                 return
-            raw = (
-                selected(document).getComponent().getTransferData(flavor(NATIVE_MIME)).value
-                if url.Path == "copy"
-                else b""
-            )
+            if url.Path == "copy":
+                raw = selected(document).getComponent().getTransferData(flavor(NATIVE_MIME)).value
+                self.copy(program, raw)
+                return
 
             def execute():
                 try:
@@ -903,8 +988,6 @@ class Handler(unohelper.Base, XDispatchProvider, XDispatch, XInitialization, XSe
                                 show_error(self.ctx, error)
 
                         post(self.ctx, apply)
-                    elif url.Path == "copy":
-                        worker(program, "--libreoffice-copy", raw)
                 except Exception as error:
                     post(self.ctx, lambda message=str(error): show_error(self.ctx, message))
 
