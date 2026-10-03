@@ -229,3 +229,199 @@ fn rotation_commands_keep_mixed_groups_and_upright_caption_anchors() {
     assert_eq!(caption.tab.doc, before);
     assert!(!caption.tab.history.can_undo());
 }
+
+#[test]
+fn rotation_pointer_events_cancel_without_history_and_commit_once_per_gesture() {
+    use crate::canvas::{
+        Camera,
+        rotation_gesture_tests::{self, Finish},
+    };
+    use reshiki::{
+        document::{Annotation, Arrow},
+        graphics::{Graphic, GraphicKind},
+    };
+    let points = |doc: &Document, ids: &[u64]| {
+        doc.atoms
+            .iter()
+            .filter(|a| ids.contains(&a.id))
+            .map(|a| a.position)
+            .chain(doc.annotations.iter().map(|a| a.position))
+            .chain(doc.arrows.iter().flat_map(|a| {
+                [Some(a.start), Some(a.end), a.control_point()]
+                    .into_iter()
+                    .flatten()
+            }))
+            .chain(
+                doc.graphics
+                    .iter()
+                    .flat_map(|g| g.commands().into_iter().flat_map(|c| c.points())),
+            )
+            .collect::<Vec<_>>()
+    };
+    let cancel = |app: &mut App, camera, pivot, moves, finish| {
+        let before = app.tab.doc.clone();
+        let selected = app.tab.selected.clone();
+        let revision = app.tab.revision;
+        let history = (app.tab.history.can_undo(), app.tab.history.can_redo());
+        let events =
+            rotation_gesture_tests::rotation_drag(&before, &selected, camera, pivot, moves, finish);
+        if moves > 0 {
+            assert_ne!(
+                events.preview, before,
+                "Cancel must discard an actual rotation preview"
+            );
+        }
+        assert!(events.release.is_none());
+        for edit in events.before_release {
+            let _ = app.update(Message::Canvas(edit));
+        }
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.selected, selected);
+        assert_eq!(app.tab.revision, revision);
+        assert_eq!(
+            (app.tab.history.can_undo(), app.tab.history.can_redo()),
+            history
+        );
+    };
+    for mixed in [false, true] {
+        let (mut app, _) = App::new();
+        let mut source = Document::default();
+        let a = source.add_atom("C", Point::new(-20., -10.));
+        let b = source.add_atom("C", Point::new(40., 0.));
+        let c = source.add_atom("N", Point::new(0., 50.));
+        source.add_bond(a, b, 1, "wedge");
+        source.add_bond(b, c, 1, "plain");
+        source.atom_mut(a).unwrap().depth = 7.;
+        let pivot = if mixed {
+            source.annotations.push(Annotation {
+                id: source.next_id(),
+                position: Point::new(120., 60.),
+                text: "Upright caption".into(),
+                format: Default::default(),
+            });
+            source.arrows.push(Arrow::new(
+                source.next_id(),
+                Point::new(80., -60.),
+                Point::new(160., -20.),
+                reshiki::arrows::Preset::Fishhook,
+                Default::default(),
+            ));
+            source.graphics.push(Graphic::dragged(
+                source.next_id(),
+                GraphicKind::Rectangle,
+                Point::new(-140., -40.),
+                Point::new(-80., 60.),
+                Default::default(),
+                Default::default(),
+                false,
+            ));
+            // Three atoms, caption insertion, arrow midpoint and rectangle center.
+            Point::new(25., 70. / 6.)
+        } else {
+            Point::new(20. / 3., 40. / 3.)
+        };
+        let selected = source.all_ids();
+        source.group_selection(&selected).unwrap();
+        let stationary = source.add_atom("O", Point::new(300., 180.));
+        let initial_points = points(&source, &selected);
+        for zoom in [0.5, 1., 3.] {
+            let camera = Camera {
+                center: Point::new(30., -15.),
+                zoom,
+            };
+            for moves in [1, 7, 31] {
+                app.tab.doc = source.clone();
+                app.tab.selected = selected.clone();
+                app.tab.history = History::default();
+                app.tab.busy = false;
+                app.error = false;
+                app.sync_numeric_transforms();
+                for (count, finish) in [
+                    (0, Finish::Release),
+                    (19, Finish::Escape),
+                    (19, Finish::FocusLost),
+                ] {
+                    cancel(&mut app, camera, pivot, count, finish);
+                }
+                let mut snapshots = vec![source.clone()];
+                for step in 1..=6 {
+                    let before = app.tab.doc.clone();
+                    let revision = app.tab.revision;
+                    let events = rotation_gesture_tests::rotation_drag(
+                        &before,
+                        &selected,
+                        camera,
+                        pivot,
+                        moves,
+                        Finish::Release,
+                    );
+                    for edit in events.before_release {
+                        let _ = app.update(Message::Canvas(edit));
+                        assert_eq!(app.tab.doc, before, "Pointer moves must only preview");
+                        assert_eq!(app.tab.revision, revision);
+                    }
+                    let _ = app.update(Message::Canvas(events.release.unwrap()));
+                    assert_eq!(
+                        app.tab.doc, events.preview,
+                        "Release must commit the preview"
+                    );
+                    assert_eq!(app.tab.selected, selected);
+                    assert_eq!(app.tab.doc.atom(stationary), source.atom(stationary));
+                    assert_eq!(app.tab.doc.bonds, source.bonds);
+                    assert_eq!(app.tab.doc.groups, source.groups);
+                    assert_eq!(app.tab.doc.atom(a).unwrap().depth, 7.);
+                    let (s, c) = f64::from(step * 15).to_radians().sin_cos();
+                    let expected: Vec<_> = initial_points
+                        .iter()
+                        .map(|p| {
+                            let x = f64::from(p.x) - f64::from(pivot.x);
+                            let y = f64::from(p.y) - f64::from(pivot.y);
+                            Point::new(
+                                (f64::from(pivot.x) + x * c - y * s) as f32,
+                                (f64::from(pivot.y) + x * s + y * c) as f32,
+                            )
+                        })
+                        .collect();
+                    let scale = initial_points
+                        .iter()
+                        .chain(&expected)
+                        .fold(1_f32, |m, p| m.max(p.x.abs()).max(p.y.abs()));
+                    let epsilon = (8. * f32::EPSILON * scale).max(0.0001);
+                    let actual = points(&app.tab.doc, &selected);
+                    assert_eq!(actual.len(), expected.len());
+                    for (actual, expected) in actual.into_iter().zip(expected) {
+                        assert!(
+                            actual.distance(expected) <= epsilon,
+                            "{actual:?} != {expected:?}"
+                        );
+                    }
+                    snapshots.push(app.tab.doc.clone());
+                    if step == 3 {
+                        cancel(&mut app, camera, pivot, 19, Finish::Escape);
+                        cancel(&mut app, camera, pivot, 19, Finish::FocusLost);
+                    }
+                }
+                for expected in snapshots[..6].iter().rev() {
+                    let _ = app.update(Message::Undo);
+                    assert_eq!(&app.tab.doc, expected);
+                    assert_eq!(app.tab.selected, selected);
+                }
+                assert!(
+                    !app.tab.history.can_undo(),
+                    "Six releases must be exactly six edits"
+                );
+                cancel(&mut app, camera, pivot, 19, Finish::Escape);
+                cancel(&mut app, camera, pivot, 19, Finish::FocusLost);
+                for expected in &snapshots[1..] {
+                    let _ = app.update(Message::Redo);
+                    assert_eq!(
+                        &app.tab.doc, expected,
+                        "Cancel must preserve every Redo snapshot"
+                    );
+                    assert_eq!(app.tab.selected, selected);
+                }
+                assert!(!app.tab.history.can_redo());
+            }
+        }
+    }
+}
