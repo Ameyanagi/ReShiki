@@ -631,3 +631,141 @@ async fn updates_dialog_captures_keys_before_editors_file_commands_and_canvas() 
     assert_eq!(app.tab.doc, drawing);
     assert!(!app.tab.history.can_undo());
 }
+
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn focused_numeric_field_keeps_arrow_keys_out_of_drawing_transforms() {
+    let mut ui = Ui::new().await;
+    // Keep the selected-object controls visible for a real input click.
+    ui.viewport = Rectangle::with_size(Size::new(1280., 1800.));
+    let (mut app, _) = App::new();
+    app.inspector_open = true;
+    app.inspector_tab = InspectorTab::Properties;
+    app.tab.doc = serde_json::from_str(include_str!(
+        "../../tests/fixtures/pyrrole-rotation-drift.rsk"
+    ))
+    .unwrap();
+    app.tab.selected = app.tab.doc.all_ids();
+    app.tab.saved = app.tab.doc.clone();
+    app.tab.history = super::History::default();
+    app.tab.busy = false;
+    let _ = app.update(Message::Canvas(crate::canvas::Edit::BeginTransform(
+        crate::canvas::TransformField::Rotation,
+    )));
+    let drawing = app.tab.doc.clone();
+    let revision = app.tab.revision;
+    let selection = app.tab.selected.clone();
+    let bounds = ui.input(&app, "transform-rotation").0;
+    assert!(ui.viewport.contains(bounds.center()), "{bounds:?}");
+    ui.click(&mut app, bounds.center());
+    assert!(ui.input(&app, "transform-rotation").1);
+    let primary = if cfg!(target_os = "macos") {
+        Modifiers::LOGO
+    } else {
+        Modifiers::CTRL
+    };
+    for event in [
+        Event::Keyboard(keyboard::Event::ModifiersChanged(primary)),
+        press(Key::Character("a".into()), Code::KeyA, primary, Some("a")),
+        Event::Keyboard(keyboard::Event::ModifiersChanged(Modifiers::empty())),
+    ] {
+        let (_, messages) = ui.event(&app, event, mouse::Cursor::Unavailable);
+        apply(&mut app, messages);
+    }
+    for (text, code) in [
+        ("1", Code::Digit1),
+        ("2", Code::Digit2),
+        ("3", Code::Digit3),
+    ] {
+        let (_, messages) = ui.event(
+            &app,
+            press(
+                Key::Character(text.into()),
+                code,
+                Modifiers::empty(),
+                Some(text),
+            ),
+            mouse::Cursor::Unavailable,
+        );
+        apply(&mut app, messages);
+    }
+    assert!(ui.input_text(&app, "123").1);
+    assert_eq!(app.tab.doc, drawing, "Typing is only a draft");
+    for modifiers in [
+        Modifiers::ALT,
+        Modifiers::ALT | Modifiers::SHIFT,
+        Modifiers::empty(),
+    ] {
+        let (_, messages) = ui.event(
+            &app,
+            Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)),
+            mouse::Cursor::Unavailable,
+        );
+        apply(&mut app, messages);
+        for (named, code) in [
+            (Named::ArrowUp, Code::ArrowUp),
+            (Named::ArrowDown, Code::ArrowDown),
+            (Named::ArrowLeft, Code::ArrowLeft),
+            (Named::ArrowRight, Code::ArrowRight),
+        ] {
+            let (status, messages) = ui.event(
+                &app,
+                press(Key::Named(named), code, modifiers, None),
+                mouse::Cursor::Unavailable,
+            );
+            assert_eq!(
+                status,
+                iced::event::Status::Captured,
+                "{named:?} {modifiers:?}: {messages:?}"
+            );
+            assert!(messages.is_empty(), "{named:?} {modifiers:?}: {messages:?}");
+            apply(&mut app, messages);
+            assert!(ui.input_text(&app, "123").1);
+            assert_eq!(app.tab.doc, drawing);
+            assert_eq!(app.tab.saved, drawing);
+            assert_eq!(app.tab.revision, revision);
+            assert_eq!(app.tab.selected, selection);
+            assert!(!app.tab.history.can_undo());
+            assert!(!app.tab.history.can_redo());
+            assert!(!app.dirty());
+        }
+    }
+    let (_, messages) = ui.event(
+        &app,
+        press(
+            Key::Named(Named::Escape),
+            Code::Escape,
+            Modifiers::empty(),
+            None,
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    apply(&mut app, messages);
+    assert!(!ui.input(&app, "transform-rotation").1);
+    let (_, messages) = ui.event(
+        &app,
+        Event::Keyboard(keyboard::Event::ModifiersChanged(Modifiers::ALT)),
+        mouse::Cursor::Unavailable,
+    );
+    apply(&mut app, messages);
+    let (status, messages) = ui.event(
+        &app,
+        press(
+            Key::Named(Named::ArrowDown),
+            Code::ArrowDown,
+            Modifiers::ALT,
+            None,
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    assert_eq!(status, iced::event::Status::Ignored);
+    assert!(matches!(
+        messages.as_slice(),
+        [Message::Transform(reshiki::editing::Transform::Rotate(15.))]
+    ));
+    apply(&mut app, messages);
+    assert_ne!(app.tab.doc, drawing, "Blur restores the drawing shortcut");
+    let _ = app.update(Message::Undo);
+    assert_eq!(app.tab.doc, drawing);
+    assert!(!app.tab.history.can_undo());
+}
