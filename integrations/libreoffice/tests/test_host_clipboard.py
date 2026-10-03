@@ -150,7 +150,8 @@ class TransferableTests(unittest.TestCase):
 class HostClipboardTests(unittest.TestCase):
     def setUp(self):
         self.enterContext(patch.object(extension, "uses_host_clipboard", return_value=True))
-        self.document, self.window = object(), object()
+        self.document = SimpleNamespace(supportsService=lambda name: False)
+        self.window = object()
         self.active = self.window
         self.controller = Controller(self.document)
         self.frame = SimpleNamespace(
