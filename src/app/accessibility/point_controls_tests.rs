@@ -720,7 +720,7 @@ async fn changed_popovers_keep_the_keyboard_opener_focused_after_closing() {
             }
             ui.assert_focused(&app, opener);
             assert!(app.context_menu.is_none());
-            assert!(!app.imports.menu && !app.tab.inspector_ui.figure_menu);
+            assert!(!app.imports.menu && !app.tab.inspector_ui.menu_open());
 
             if popup == "import" {
                 ui.tab(&app, false);
@@ -738,8 +738,11 @@ async fn changed_popovers_keep_the_keyboard_opener_focused_after_closing() {
                     ))
                 ));
                 let _ = app.update(message);
-                assert_eq!(app.tab.inspector_ui.figure, inspector::FigureFormat::Svg);
-                assert!(!app.tab.inspector_ui.figure_menu);
+                assert!(!app.tab.inspector_ui.menu_open());
+                let closed = ui.snapshot(&app);
+                let format = closed.nodes.iter().find(|node| node.id == opener).unwrap();
+                assert_eq!(format.name, "Figure format: SVG");
+                assert_eq!(format.expanded, Some(false));
                 ui.assert_focused(&app, opener);
             }
             assert_eq!(app.tab.doc, drawing);
