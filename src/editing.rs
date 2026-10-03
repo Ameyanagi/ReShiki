@@ -307,9 +307,8 @@ pub fn transform(doc: &mut Document, ids: &[u64], transform: Transform) {
     } else {
         center(doc, ids)
     };
-    let convert = |p: Point| {
-        let x = p.x - center.x;
-        let y = p.y - center.y;
+    let vector = |p: Point| {
+        let (x, y) = (p.x, p.y);
         let (x, y) = match transform {
             Transform::Rotate(degrees) => {
                 let (s, c) = degrees.to_radians().sin_cos();
@@ -319,9 +318,13 @@ pub fn transform(doc: &mut Document, ids: &[u64], transform: Transform) {
             Transform::FlipVertical => (x, -y),
             Transform::TiltX(_) | Transform::TiltY(_) => (x, y),
         };
-        center.offset(x, y)
+        Point::new(x, y)
     };
-    map_positions(doc, ids, convert);
+    let convert = |p: Point| {
+        let p = vector(Point::new(p.x - center.x, p.y - center.y));
+        center.offset(p.x, p.y)
+    };
+    map_positions(doc, ids, convert, vector);
     crate::projection::sync_centroids(doc);
     if matches!(
         transform,
@@ -367,11 +370,19 @@ pub fn transform_about(doc: &mut Document, ids: &[u64], pivot: Point, scale: f32
         }
     }
     let (s, c) = degrees.to_radians().sin_cos();
-    map_positions(doc, ids, |p| {
-        let x = (p.x - pivot.x) * scale;
-        let y = (p.y - pivot.y) * scale;
-        pivot.offset(x * c - y * s, x * s + y * c)
-    });
+    let vector = |p: Point| {
+        let (x, y) = (p.x * scale, p.y * scale);
+        Point::new(x * c - y * s, x * s + y * c)
+    };
+    map_positions(
+        doc,
+        ids,
+        |p| {
+            let p = vector(Point::new(p.x - pivot.x, p.y - pivot.y));
+            pivot.offset(p.x, p.y)
+        },
+        vector,
+    );
 }
 
 /// Stretch the drawing in its plane without reflecting atoms or resizing text.
@@ -387,18 +398,35 @@ pub fn scale_axes_about(doc: &mut Document, ids: &[u64], pivot: Point, x: f32, y
     {
         return;
     }
-    map_positions(doc, ids, |p| {
-        pivot.offset((p.x - pivot.x) * x, (p.y - pivot.y) * y)
-    });
+    let vector = |p: Point| Point::new(p.x * x, p.y * y);
+    map_positions(
+        doc,
+        ids,
+        |p| {
+            let p = vector(Point::new(p.x - pivot.x, p.y - pivot.y));
+            pivot.offset(p.x, p.y)
+        },
+        vector,
+    );
     crate::projection::sync_centroids(doc);
 }
 
-fn map_positions(doc: &mut Document, ids: &[u64], convert: impl Fn(Point) -> Point) {
+fn map_positions(
+    doc: &mut Document,
+    ids: &[u64],
+    convert: impl Fn(Point) -> Point,
+    vector: impl Fn(Point) -> Point,
+) {
     let ids = doc.expand_abbreviation_selection(ids);
     let ids = ids.as_slice();
     for graphic in &mut doc.graphics {
         if ids.contains(&graphic.id) {
-            graphic.map_positions(&convert);
+            // Axes are displacements, not translated points. Subtracting two
+            // transformed world endpoints loses precision when imported paths
+            // have small axes and large local control coordinates.
+            graphic.origin = convert(graphic.origin);
+            graphic.axis_x = vector(graphic.axis_x);
+            graphic.axis_y = vector(graphic.axis_y);
         }
     }
     let boundary: Vec<_> = doc
