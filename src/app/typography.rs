@@ -146,8 +146,21 @@ impl App {
     /// An atom's color as a swatch: its explicit color, or its automatic theme
     /// ink as Ink or an exact color.
     fn atom_paint(&self, atom: &reshiki::document::Atom) -> Paint {
-        let explicit = atom.text_style.as_ref().map_or(Paint::Ink, |s| s.color);
-        if atom.display.color_override || explicit != Paint::Ink {
+        let (explicit, overridden) = self.tab.doc.abbreviation(atom.id).map_or_else(
+            || {
+                (
+                    atom.text_style.as_ref().map_or(Paint::Ink, |s| s.color),
+                    atom.display.color_override,
+                )
+            },
+            |group| {
+                (
+                    group.text_style(&self.tab.doc).color,
+                    group.color_override(&self.tab.doc),
+                )
+            },
+        );
+        if overridden || explicit != Paint::Ink {
             return explicit;
         }
         let rgb = self
@@ -214,7 +227,9 @@ impl App {
                     .doc
                     .atoms
                     .iter()
-                    .filter(|a| self.tab.selected.contains(&a.id))
+                    .filter(|a| {
+                        self.tab.selected.contains(&a.id) && self.tab.doc.atom_visible(a.id)
+                    })
                     .map(|a| self.atom_paint(a)),
             );
             for a in self
@@ -238,7 +253,9 @@ impl App {
                     .bonds
                     .iter()
                     .filter(|b| {
-                        self.tab.selected.contains(&b.a) && self.tab.selected.contains(&b.b)
+                        self.tab.selected.contains(&b.a)
+                            && self.tab.selected.contains(&b.b)
+                            && self.tab.doc.bond_visible(b.a, b.b)
                     })
                     .map(|b| b.color),
             );
@@ -286,7 +303,7 @@ impl App {
             .doc
             .atoms
             .iter()
-            .filter(|a| self.tab.selected.contains(&a.id));
+            .filter(|a| self.tab.selected.contains(&a.id) && self.tab.doc.atom_visible(a.id));
         self.tab.labels.number = selected_atoms
             .next()
             .and_then(|a| a.display.number.as_ref())
@@ -327,13 +344,17 @@ impl App {
                 .doc
                 .atoms
                 .iter()
-                .find(|a| self.tab.selected.contains(&a.id))
+                .find(|a| self.tab.selected.contains(&a.id) && self.tab.doc.atom_visible(a.id))
             {
                 self.tab.caption_format = TextFormat {
-                    style: atom
-                        .text_style
-                        .clone()
-                        .unwrap_or_else(|| self.tab.doc.drawing_style.text_style()),
+                    style: self.tab.doc.abbreviation(atom.id).map_or_else(
+                        || {
+                            atom.text_style
+                                .clone()
+                                .unwrap_or_else(|| self.tab.doc.drawing_style.text_style())
+                        },
+                        |group| group.text_style(&self.tab.doc),
+                    ),
                     ..Default::default()
                 };
             }
@@ -413,6 +434,42 @@ impl App {
         }
         self.sync_style_inputs();
     }
+    fn apply_group_text_style(&mut self, change: &StyleChange) -> std::collections::HashSet<u64> {
+        let mut styles: std::collections::HashMap<_, _> = self
+            .tab
+            .doc
+            .abbreviations
+            .iter()
+            .filter(|group| {
+                group
+                    .members
+                    .iter()
+                    .any(|id| self.tab.selected.contains(id))
+            })
+            .map(|group| {
+                (
+                    group.anchor,
+                    (
+                        group.text_style(&self.tab.doc),
+                        group.color_override(&self.tab.doc),
+                    ),
+                )
+            })
+            .collect();
+        let mut members = std::collections::HashSet::new();
+        for group in &mut self.tab.doc.abbreviations {
+            if let Some((mut style, overridden)) = styles.remove(&group.anchor) {
+                change.apply(&mut style);
+                style.script = Script::Normal;
+                style.formula = false;
+                group.label_style = Some(style);
+                group.label_color_override = overridden || matches!(change, StyleChange::Color(_));
+                members.extend(group.members.iter().copied());
+            }
+        }
+        members
+    }
+
     pub(super) fn apply_text_style(&mut self, change: StyleChange) {
         if let StyleChange::Color(color) = change {
             self.apply_selection_color(color);
@@ -441,8 +498,9 @@ impl App {
                 label.format.apply(&label.text, target_range, &change);
             }
         }
+        let group_members = self.apply_group_text_style(&change);
         for atom in &mut self.tab.doc.atoms {
-            if self.tab.selected.contains(&atom.id) {
+            if self.tab.selected.contains(&atom.id) && !group_members.contains(&atom.id) {
                 let style = atom
                     .text_style
                     .get_or_insert_with(|| self.tab.doc.drawing_style.text_style());
@@ -528,6 +586,14 @@ impl App {
         let text_only = range.is_some() && self.tab.color_scope != ColorScope::Bonds;
         let text = self.tab.color_scope != ColorScope::Bonds;
         let bonds = self.tab.color_scope != ColorScope::Text && !text_only;
+        let visible_bonds: std::collections::HashSet<_> = self
+            .tab
+            .doc
+            .bonds
+            .iter()
+            .filter(|bond| self.tab.doc.bond_visible(bond.a, bond.b))
+            .map(|bond| (bond.a, bond.b))
+            .collect();
         if text {
             let change = StyleChange::Color(color);
             self.tab
@@ -538,8 +604,16 @@ impl App {
                     label.format.apply(&label.text, range.clone(), &change);
                 }
             }
+            let group_members = if text_only {
+                std::collections::HashSet::new()
+            } else {
+                self.apply_group_text_style(&change)
+            };
             for atom in &mut self.tab.doc.atoms {
-                if self.tab.selected.contains(&atom.id) && !text_only {
+                if self.tab.selected.contains(&atom.id)
+                    && !text_only
+                    && !group_members.contains(&atom.id)
+                {
                     atom.display.color_override = true;
                     atom.display.hydrogen_color = None;
                     atom.text_style
@@ -553,7 +627,10 @@ impl App {
             }
             if !text_only {
                 for bond in &mut self.tab.doc.bonds {
-                    if self.tab.selected.contains(&bond.a) && self.tab.selected.contains(&bond.b) {
+                    if self.tab.selected.contains(&bond.a)
+                        && self.tab.selected.contains(&bond.b)
+                        && visible_bonds.contains(&(bond.a, bond.b))
+                    {
                         bond.indicator.style.color = color;
                     }
                 }
@@ -561,7 +638,10 @@ impl App {
         }
         if bonds {
             for bond in &mut self.tab.doc.bonds {
-                if self.tab.selected.contains(&bond.a) && self.tab.selected.contains(&bond.b) {
+                if self.tab.selected.contains(&bond.a)
+                    && self.tab.selected.contains(&bond.b)
+                    && visible_bonds.contains(&(bond.a, bond.b))
+                {
                     bond.color = color;
                 }
             }
@@ -670,6 +750,90 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn selected_wrapper_typography_and_color_leave_internal_atom_and_bond_styles_untouched() {
+        let (mut app, _) = App::new();
+        app.tab.doc = Document::default();
+        let anchor = app.tab.doc.add_atom("O", Point::default());
+        let member = app.tab.doc.add_atom("C", Point::new(42., 0.));
+        app.tab.doc.add_bond(anchor, member, 1, "plain");
+        app.tab.doc.atom_mut(anchor).unwrap().text_style = Some(TextStyle {
+            size_pt: 11.,
+            color: Paint::Custom([0; 3]),
+            ..Default::default()
+        });
+        app.tab.doc.atom_mut(anchor).unwrap().display.color_override = true;
+        app.tab.doc.bonds[0].color = Paint::Custom([30, 70, 110]);
+        app.tab
+            .doc
+            .contract(&[anchor, member], "OMe", "MeO")
+            .unwrap();
+        app.tab.doc.reconcile_molecule_groups();
+        app.tab.selected = app.tab.doc.expand_abbreviation_selection(&[anchor]);
+        app.tab.labels_dirty = false;
+        app.sync_typography();
+        let original = app.tab.doc.clone();
+        assert_eq!(app.current_text_style().size_pt, 11.);
+        let _ = app.update(Message::TextStyle(StyleChange::Size(18.)));
+        let _ = app.update(Message::TextStyle(StyleChange::Bold(true)));
+        assert_eq!(app.tab.doc.atoms, original.atoms);
+        assert_eq!(app.tab.doc.bonds, original.bonds);
+        let group = app.tab.doc.abbreviation(anchor).unwrap();
+        assert_eq!(group.text_style(&app.tab.doc).size_pt, 18.);
+        assert!(group.text_style(&app.tab.doc).bold);
+        assert!(
+            group.label_color_override,
+            "font edits preserve legacy explicit ink"
+        );
+        let before_color = app.tab.doc.clone();
+        let color = Paint::Custom([124; 3]);
+        let _ = app.update(Message::ColorScope(ColorScope::All));
+        let _ = app.update(Message::TextStyle(StyleChange::Color(color)));
+        assert_eq!(app.current_selection_color(), Some(color));
+        assert_eq!(app.tab.doc.atoms, original.atoms);
+        assert_eq!(app.tab.doc.bonds, original.bonds);
+        assert!(!chemistry_changed(&original, &app.tab.doc));
+        assert!(!app.tab.labels_dirty);
+        let painted = app.tab.doc.clone();
+        let _ = app.update(Message::Undo);
+        assert_eq!(app.tab.doc, before_color);
+        let _ = app.update(Message::Redo);
+        assert_eq!(app.tab.doc, painted);
+        app.sync_typography();
+        assert_eq!(app.current_text_style().size_pt, 18.);
+        assert_eq!(app.current_selection_color(), Some(color));
+        app.tab.doc.expand_abbreviations(&[anchor]);
+        assert_eq!(app.tab.doc.atoms, original.atoms);
+    }
+
+    #[test]
+    fn wrapper_font_edits_keep_automatic_ink_until_the_color_is_explicitly_chosen() {
+        let (mut app, _) = App::new();
+        app.tab.doc = Document::default();
+        let anchor = group(&mut app, "OMe", 0.).unwrap();
+        app.tab.doc.reconcile_molecule_groups();
+        app.tab.selected = vec![anchor];
+        app.sync_typography();
+        let internal = app.tab.doc.atoms.clone();
+        let _ = app.update(Message::TextStyle(StyleChange::Size(16.)));
+        assert!(
+            !app.tab
+                .doc
+                .abbreviation(anchor)
+                .unwrap()
+                .label_color_override
+        );
+        let _ = app.update(Message::TextStyle(StyleChange::Color(Paint::Ink)));
+        assert!(
+            app.tab
+                .doc
+                .abbreviation(anchor)
+                .unwrap()
+                .label_color_override
+        );
+        assert_eq!(app.tab.doc.atoms, internal);
+    }
 
     #[test]
     fn highlight_scope_applies_and_clears_without_changing_ink_or_chemistry() {

@@ -1768,6 +1768,14 @@ impl MoleculeCanvas<'_> {
                             atom.text_style.get_or_insert_with(Default::default).color = tint;
                         }
                     }
+                    for group in &mut preview.abbreviations {
+                        if !existing.contains(&group.anchor)
+                            && let Some(style) = &mut group.label_style
+                        {
+                            style.color = tint;
+                            group.label_color_override = true;
+                        }
+                    }
                     for bond in &mut preview.bonds {
                         if !existing.contains(&bond.a) || !existing.contains(&bond.b) {
                             bond.color = tint;
