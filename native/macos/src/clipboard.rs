@@ -186,6 +186,10 @@ pub fn execute(input: &[u8]) -> Result<Vec<u8>, String> {
 mod tests {
     use super::*;
 
+    // Production handles one request per worker process. Keep these tests from
+    // concurrently entering AppKit's process-wide pasteboard type caches.
+    static PASTEBOARD_TEST: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     struct PrivatePasteboard<'a>(&'a NSPasteboard);
 
     impl Drop for PrivatePasteboard<'_> {
@@ -208,6 +212,9 @@ mod tests {
 
     #[test]
     fn explicit_structure_copies_offer_native_data_and_plain_text() -> Result<(), String> {
+        let _lock = PASTEBOARD_TEST
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let board = NSPasteboard::pasteboardWithUniqueName();
         let _release = PrivatePasteboard(&board);
         for (kind, native_kind, data) in [
@@ -238,6 +245,9 @@ mod tests {
 
     #[test]
     fn every_copy_as_format_publishes_exact_native_types_and_bytes() -> Result<(), String> {
+        let _lock = PASTEBOARD_TEST
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let board = NSPasteboard::pasteboardWithUniqueName();
         let _release = PrivatePasteboard(&board);
         // Mirror the portable Copy As packets, including binary bytes and text
@@ -312,6 +322,9 @@ mod tests {
 
     #[test]
     fn private_pasteboard_priorities_formats_and_invalid_writes() -> Result<(), String> {
+        let _lock = PASTEBOARD_TEST
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
         let board = NSPasteboard::pasteboardWithUniqueName();
         let _release = PrivatePasteboard(&board);
         let native = representation("dev.reshiki.drawing", "native");
