@@ -14,6 +14,7 @@
     )
 )]
 
+pub mod accessibility;
 mod clipboard;
 mod ole;
 mod printing;

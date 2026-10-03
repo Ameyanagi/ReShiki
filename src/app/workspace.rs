@@ -649,10 +649,14 @@ impl App {
     fn command_bar(&self) -> Element<'_, Message> {
         let bar = row![
             hover_hint(
-                button(crate::branding::wordmark(21.0))
-                    .padding(0)
-                    .style(button::text)
-                    .on_press(Message::Updates(super::updates::Action::Show(true))),
+                reshiki::accessibility::button(
+                    "header-about",
+                    "About ReShiki; check for updates",
+                    crate::branding::wordmark(21.0)
+                )
+                .padding(0)
+                .style(button::text)
+                .on_press(Message::Updates(super::updates::Action::Show(true))),
                 "About ReShiki · Check for updates",
                 tooltip::Position::Bottom
             ),
@@ -846,6 +850,21 @@ impl App {
                 })
                 .width(36)
                 .height(36);
+                let item = reshiki::accessibility::button(
+                    format!("tool-{tool:?}"),
+                    (*hint).to_owned(),
+                    item,
+                )
+                .padding(0)
+                .width(36)
+                .height(36)
+                .checked(self.tool == *tool)
+                .style(|_, _| iced::widget::button::Style::default())
+                .on_press(if family == Some(super::palettes::Family::Bonds) {
+                    Message::Palette(super::palettes::Action::Open(*tool))
+                } else {
+                    Message::Tool(*tool)
+                });
                 let item: Element<'_, Message> = if self.palette.is_some() {
                     item.into()
                 } else {
@@ -866,15 +885,20 @@ impl App {
             let mut line = row![].spacing(4);
             for symbol in pair {
                 line = line.push(hover_hint(
-                    button(text(symbol).size(13).center())
-                        .width(36)
-                        .height(30)
-                        .on_press(Message::Element(symbol.into()))
-                        .style(element_control(
-                            self.tool == Tool::Atom && self.element == symbol,
-                            &self.tab.doc,
-                            symbol,
-                        )),
+                    reshiki::accessibility::button(
+                        format!("element-{symbol}"),
+                        super::palettes::element_hint(symbol),
+                        text(symbol).size(13).center(),
+                    )
+                    .checked(self.tool == Tool::Atom && self.element == symbol)
+                    .width(36)
+                    .height(30)
+                    .on_press(Message::Element(symbol.into()))
+                    .style(element_control(
+                        self.tool == Tool::Atom && self.element == symbol,
+                        &self.tab.doc,
+                        symbol,
+                    )),
                     super::palettes::element_hint(symbol),
                     tooltip::Position::Right,
                 ));
@@ -891,7 +915,9 @@ impl App {
                         .spacing(3)
                 )),
             hover_hint(
-                button(
+                reshiki::accessibility::button(
+                    "help-open",
+                    "Help and keyboard shortcuts",
                     column![
                         iced::widget::canvas(Glyph(Icon::Keyboard, true))
                             .width(24)
@@ -2573,6 +2599,34 @@ pub(super) fn unit_field<'a>(
     .into()
 }
 
+pub(super) fn accessible_unit_field<'a>(
+    input: reshiki::accessibility::TextInput<'a, Message>,
+    unit: &'a str,
+) -> Element<'a, Message> {
+    iced::widget::stack![
+        input
+            .size(12)
+            .padding(iced::Padding {
+                top: 5.,
+                right: 18.,
+                bottom: 5.,
+                left: 5.,
+            })
+            .width(Length::Fill),
+        // The degree sign is too small to see at the other units' size.
+        container(
+            text(unit)
+                .size(if unit == "°" { 16 } else { 11 })
+                .style(muted_text)
+        )
+        .padding([0, 4])
+        .align_right(Length::Fill)
+        .center_y(Length::Fill),
+    ]
+    .width(Length::Fill)
+    .into()
+}
+
 pub(super) fn command(label: &str, message: Message) -> button::Button<'_, Message> {
     button(text(label).size(12))
         .padding([7, 9])
@@ -2609,8 +2663,27 @@ fn icon_button_at(
     active: bool,
     position: tooltip::Position,
 ) -> Element<'static, Message> {
+    let hint = hint.into();
+    let id = match icon {
+        Icon::New => "header-new",
+        Icon::Open => "header-open",
+        Icon::Save => "header-save",
+        Icon::SaveAs => "header-save-as",
+        Icon::Assistant(_) => "header-assistant",
+        Icon::Check => "header-check",
+        Icon::Cleanup => "header-cleanup",
+        Icon::Undo => "header-undo",
+        Icon::Redo => "header-redo",
+        Icon::Import => "header-import",
+        Icon::Export => "header-export",
+        Icon::Inspector => "header-inspector",
+        Icon::Keyboard => "help-open",
+        _ => "header-other",
+    };
     hover_hint(
-        button(
+        reshiki::accessibility::button(
+            id,
+            hint.to_string(),
             iced::widget::canvas(Glyph(icon, message.is_some()))
                 .width(24)
                 .height(24),

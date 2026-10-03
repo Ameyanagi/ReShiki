@@ -361,6 +361,7 @@ impl App {
         if !self.updates.open {
             return content;
         }
+        let content = reshiki::accessibility::inert(content);
         let state = &self.updates;
         let status = if state.restarting {
             "Installing and restarting ReShiki…".into()

@@ -2,7 +2,7 @@ use iced::advanced::{
     Clipboard, Layout, Shell, Widget, layout, mouse, overlay, renderer,
     widget::{
         Id, Operation, Tree,
-        operation::{self, Focusable, Scrollable},
+        operation::{self, Focusable, Outcome, Scrollable},
         tree,
     },
 };
@@ -21,18 +21,20 @@ struct Scope<'a, Message>(Element<'a, Message>);
 
 #[derive(Clone)]
 struct Target {
+    id: Option<Id>,
     bounds: Rectangle,
     path: Vec<usize>,
     focused: bool,
 }
 
+#[derive(Clone)]
 struct Scroll {
     bounds: Rectangle,
     content: Rectangle,
     translation: Vector,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct Targets {
     targets: Vec<Target>,
     scrolls: Vec<Scroll>,
@@ -66,8 +68,9 @@ impl Operation for Targets {
             translation,
         });
     }
-    fn focusable(&mut self, _: Option<&Id>, bounds: Rectangle, state: &mut dyn Focusable) {
+    fn focusable(&mut self, id: Option<&Id>, bounds: Rectangle, state: &mut dyn Focusable) {
         self.targets.push(Target {
+            id: id.cloned(),
             bounds,
             path: self.path.clone(),
             focused: state.is_focused(),
@@ -132,6 +135,7 @@ fn reveal_delta(position: f32, length: f32, start: f32, extent: f32) -> f32 {
 
 struct Focus {
     target: usize,
+    change_focus: bool,
     current: usize,
     scroll: usize,
     offsets: Vec<Vector>,
@@ -142,10 +146,12 @@ impl Operation for Focus {
         operate(self);
     }
     fn focusable(&mut self, _: Option<&Id>, _: Rectangle, state: &mut dyn Focusable) {
-        if self.current == self.target {
-            state.focus();
-        } else {
-            state.unfocus();
+        if self.change_focus {
+            if self.current == self.target {
+                state.focus();
+            } else {
+                state.unfocus();
+            }
         }
         self.current += 1;
     }
@@ -189,6 +195,7 @@ fn traverse_key(event: &Event, mut operate: impl FnMut(&mut dyn Operation)) -> b
     targets.reveal(target);
     operate(&mut Focus {
         target,
+        change_focus: true,
         current: 0,
         scroll: 0,
         offsets: targets
@@ -198,6 +205,82 @@ fn traverse_key(event: &Event, mut operate: impl FnMut(&mut dyn Operation)) -> b
             .collect(),
     });
     true
+}
+
+/// Resolve a current control, reveal it and change the actual widget focus.
+/// A missing or duplicate ID does nothing. `reveal` preserves current focus.
+pub struct FocusControl {
+    target: Id,
+    change_focus: bool,
+    targets: Targets,
+}
+impl FocusControl {
+    pub fn new(target: impl Into<String>) -> Self {
+        Self {
+            target: Id::from(target.into()),
+            change_focus: true,
+            targets: Targets::default(),
+        }
+    }
+    pub fn reveal(target: impl Into<String>) -> Self {
+        Self {
+            change_focus: false,
+            ..Self::new(target)
+        }
+    }
+}
+impl Operation for FocusControl {
+    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+        let nested = self.targets.pending.take();
+        if let Some(index) = nested {
+            self.targets.path.push(index);
+        }
+        operate(self);
+        if nested.is_some() {
+            self.targets.path.pop();
+        }
+    }
+    fn focusable(&mut self, id: Option<&Id>, bounds: Rectangle, state: &mut dyn Focusable) {
+        self.targets.focusable(id, bounds, state);
+    }
+    fn scrollable(
+        &mut self,
+        id: Option<&Id>,
+        bounds: Rectangle,
+        content: Rectangle,
+        translation: Vector,
+        state: &mut dyn Scrollable,
+    ) {
+        self.targets
+            .scrollable(id, bounds, content, translation, state);
+    }
+    fn finish(&self) -> Outcome<()> {
+        let mut matches = self
+            .targets
+            .targets
+            .iter()
+            .enumerate()
+            .filter(|(_, target)| target.id.as_ref() == Some(&self.target));
+        let Some((target, _)) = matches.next() else {
+            return Outcome::None;
+        };
+        if matches.next().is_some() {
+            return Outcome::None;
+        }
+        let mut targets = self.targets.clone();
+        targets.reveal(target);
+        Outcome::Chain(Box::new(Focus {
+            target,
+            change_focus: self.change_focus,
+            current: 0,
+            scroll: 0,
+            offsets: targets
+                .scrolls
+                .into_iter()
+                .map(|scroll| scroll.translation)
+                .collect(),
+        }))
+    }
 }
 
 impl<Message> Widget<Message, Theme, Renderer> for Scope<'_, Message> {

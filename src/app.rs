@@ -9,6 +9,7 @@ use reshiki::{
 };
 use std::path::PathBuf;
 mod abbreviations;
+mod accessibility;
 mod arcs;
 mod arrows;
 mod assistant;
@@ -89,6 +90,7 @@ pub enum InspectorTab {
 pub enum Message {
     #[cfg(target_os = "linux")]
     LinuxClipboardWindow(iced::window::Id),
+    Accessibility(accessibility::Action),
     ContextMenu(context_menu::Action),
     StyleMenu(color_popover::Action),
     ObjectToolbar(object_toolbar::Action),
@@ -311,6 +313,7 @@ struct CleanupPreview {
 }
 
 pub struct App {
+    accessibility: accessibility::State,
     /// The active document; see `document_tab` for what is per document.
     tab: DocumentTab,
     tabs: tabs::State,
@@ -371,6 +374,7 @@ impl App {
             .as_ref()
             .and_then(|r| r.session.parent().map(PathBuf::from));
         let mut app = Self {
+            accessibility: accessibility::State::default(),
             tab: DocumentTab::new(recovery),
             tabs: tabs::State::new(recovery_root),
             updates: updates::State::new(),
@@ -465,6 +469,7 @@ impl App {
     }
     pub fn subscription(&self) -> Subscription<Message> {
         Subscription::batch([
+            accessibility::subscription(),
             #[cfg(target_os = "macos")]
             macos_files::subscription(),
             #[cfg(target_os = "linux")]
@@ -705,7 +710,14 @@ impl App {
             .map(|p| &p.document)
             .unwrap_or(&self.tab.doc)
     }
-    pub fn update(&mut self, mut message: Message) -> Task<Message> {
+    pub fn update(&mut self, message: Message) -> Task<Message> {
+        if let Message::Accessibility(action) = message {
+            return self.accessibility_action(action);
+        }
+        let task = self.update_routed(message);
+        Task::batch([task, self.accessibility_refresh()])
+    }
+    fn update_routed(&mut self, mut message: Message) -> Task<Message> {
         // Timer polls belong to the Assistant's drawing before any front-tab
         // focus or menu handling runs.
         if matches!(&message, Message::Assistant(assistant::Action::Poll))
@@ -1052,6 +1064,7 @@ impl App {
         ) || (self.inspector_tab != InspectorTab::Templates
             && matches!(&message, Message::Canvas(Edit::Select(ids)) if ids.iter().any(|id| self.tab.doc.annotations.iter().any(|a| a.id == *id) || self.tab.doc.graphics.iter().any(|g|g.id==*id))));
         match message {
+            Message::Accessibility(_) => return Task::none(),
             Message::DrawingStyle(action) => return self.drawing_style_action(action),
             Message::Imports(action) => return self.import_action(action),
             Message::Pages(action) => return self.page_action(action),
@@ -3067,7 +3080,7 @@ impl App {
     }
 
     pub fn view(&self) -> Element<'_, Message> {
-        file_shortcuts::wrap(
+        reshiki::accessibility::focus_scope(file_shortcuts::wrap(
             self.with_updates(self.with_assistant_image(
                 self.with_atom_text(self.with_help(self.with_palette(self.workspace()))),
             )),
@@ -3080,7 +3093,7 @@ impl App {
                 && self.tab.styles.editor.is_some()
                 && self.tab.inline_text.is_none()
                 && self.context_menu.is_none(),
-        )
+        ))
     }
 }
 

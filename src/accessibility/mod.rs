@@ -6,12 +6,17 @@
 //! validate their window generation before issuing an operation.
 
 mod button;
+mod inert;
 mod operations;
 mod scope;
+mod text_input;
+pub mod tree;
 
 pub use button::{Button, button};
-pub use operations::{Activate, Collect, Snapshot};
-pub use scope::focus_scope;
+pub use inert::inert;
+pub use operations::{Activate, Collect, SetValue, Snapshot};
+pub use scope::{FocusControl, focus_scope};
+pub use text_input::{TextInput, text_input};
 
 use iced::Rectangle;
 
@@ -20,6 +25,7 @@ use iced::Rectangle;
 pub enum Role {
     Button,
     ToggleButton,
+    TextInput,
 }
 
 /// A snapshot produced by the actual control during a widget operation.
@@ -47,3 +53,12 @@ struct LiveAction<Message> {
 
 #[cfg(test)]
 mod tests;
+
+struct ValueQuery {
+    id: String,
+    value: Option<String>,
+}
+struct LiveValueAction<Message> {
+    id: String,
+    message: Option<Message>,
+}

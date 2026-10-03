@@ -221,6 +221,7 @@ impl App {
         let Some(handle) = source.handle(false) else {
             return base;
         };
+        let base = reshiki::accessibility::inert(base);
         let close = Message::Assistant(Action::ViewImage(None));
         let popup = container(
             column![

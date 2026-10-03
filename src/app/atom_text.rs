@@ -200,6 +200,7 @@ impl App {
         let Some(state) = &self.tab.atom_text else {
             return base;
         };
+        let base = reshiki::accessibility::inert(base);
         let mut content = column![
             text(if state.members.is_some() {
                 "Create group label"
