@@ -142,6 +142,9 @@ fn main() -> iced::Result {
             None
         }
     };
+    // The inline editor can shape a new font before the drawing reaches the
+    // canvas. Install variable-weight aliases before either creates text buffers.
+    canvas::prepare_fonts();
     iced::application(app::App::new, app::App::update, app::App::view)
         .default_font(iced::Font::with_name(reshiki::style::ui_font_family()))
         .title(app::App::title)

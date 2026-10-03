@@ -22,6 +22,7 @@ pub(crate) mod rotation_gesture_tests;
 mod selection;
 mod smart_guides;
 mod text_cache;
+pub(crate) use text_cache::prepare_fonts;
 pub(crate) mod tilt;
 use selection::{Handle, SelectionBox, TransformDrag};
 use smart_guides::{Axis, Guide};
