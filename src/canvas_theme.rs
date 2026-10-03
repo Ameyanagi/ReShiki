@@ -490,7 +490,13 @@ mod contrast_tests {
                     .atoms
                     .iter()
                     .filter(|atom| {
-                        crate::atom_labels::visible(atom, &doc)
+                        // Compare the indexed check with the ordinary visibility
+                        // path: wrappers remain visible in skeletal mode, while
+                        // hidden members do not contribute contrast warnings.
+                        doc.atom_visible(atom.id)
+                            && !crate::attachments::hidden(atom, &doc)
+                            && (doc.abbreviation(atom.id).is_some()
+                                || crate::atom_labels::visible(atom, &doc))
                             && !crate::color_contrast::meets(
                                 doc.canvas_theme.color(atom_color(&doc, atom)),
                                 &label_backgrounds(&doc, &Palette::of(&doc), atom),
@@ -499,7 +505,11 @@ mod contrast_tests {
                     })
                     .map(|atom| atom.id)
                     .collect();
-                assert_eq!(label_contrast_issues(&doc), expected);
+                assert_eq!(
+                    label_contrast_issues(&doc),
+                    expected,
+                    "{canvas:?} canvas, {carbons:?} carbon labels",
+                );
                 assert_eq!(doc, before);
             }
         }
