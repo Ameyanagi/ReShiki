@@ -3,7 +3,10 @@ use super::{App, InspectorTab, Message, assistant, shortcuts, updates};
 use iced::advanced::{
     Layout, Shell, layout, mouse,
     renderer::Headless,
-    widget::{Id, Operation, Tree, operation::Focusable},
+    widget::{
+        Id, Operation, Tree,
+        operation::{Focusable, TextInput},
+    },
 };
 use iced::keyboard::{
     self, Key, Modifiers,
@@ -122,6 +125,43 @@ impl Ui {
         find.1.expect("visible dialog control")
     }
 
+    fn input_text(&mut self, app: &App, target: &str) -> (Rectangle, bool) {
+        struct Find<'a> {
+            target: &'a str,
+            bounds: Option<Rectangle>,
+            matching: bool,
+            focused: bool,
+        }
+        impl Operation for Find<'_> {
+            fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+                operate(self);
+            }
+            fn text_input(&mut self, _: Option<&Id>, bounds: Rectangle, state: &mut dyn TextInput) {
+                self.matching = state.text() == self.target;
+                if self.matching {
+                    self.bounds = Some(bounds);
+                }
+            }
+            fn focusable(&mut self, _: Option<&Id>, _: Rectangle, state: &mut dyn Focusable) {
+                if self.matching {
+                    self.focused |= state.is_focused();
+                }
+                self.matching = false;
+            }
+        }
+        let mut find = Find {
+            target,
+            bounds: None,
+            matching: false,
+            focused: false,
+        };
+        self.inspect(app, &mut find);
+        (
+            find.bounds.expect("style input in the real app view"),
+            find.focused,
+        )
+    }
+
     fn click(&mut self, app: &mut App, point: iced::Point) {
         for event in [
             mouse::Event::CursorMoved { position: point },
@@ -219,6 +259,116 @@ async fn first_escape_cancels_focused_atom_label_without_applying_the_draft() {
     assert_eq!(app.tab.revision, revision);
     assert_eq!(app.tab.selected, [atom]);
     assert!(!app.tab.history.can_undo());
+}
+
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn first_escape_cancels_focused_partial_style_without_changing_either_document() {
+    use super::document_styles::{Action, Field};
+    use reshiki::style::units::Unit;
+
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    app.tab
+        .doc
+        .add_atom("O", reshiki::document::Point::default());
+    app.tab.saved = app.tab.doc.clone();
+    let other_document = app.tab.doc.clone();
+    let other_revision = app.tab.revision;
+    let _ = app.update(Message::DrawingStyle(Action::Open));
+    let _ = app.update(Message::DrawingStyle(Action::Input(
+        Field::Bond,
+        "1e".into(),
+    )));
+    app.add_tab();
+    app.tab.busy = false;
+    let atom = app
+        .tab
+        .doc
+        .add_atom("N", reshiki::document::Point::default());
+    app.tab.selected = vec![atom];
+    app.tab.saved = app.tab.doc.clone();
+    let drawing = app.tab.doc.clone();
+    let revision = app.tab.revision;
+    let _ = app.update(Message::DrawingStyle(Action::Open));
+    let _ = app.update(Message::DrawingStyle(Action::DisplayUnit(
+        Unit::Millimetres,
+    )));
+
+    let bounds = ui.input_text(&app, "5.08").0;
+    ui.click(&mut app, bounds.center());
+    let command = Modifiers::COMMAND;
+    for event in [
+        Event::Keyboard(keyboard::Event::ModifiersChanged(command)),
+        press(Key::Character("a".into()), Code::KeyA, command, None),
+        Event::Keyboard(keyboard::Event::ModifiersChanged(Modifiers::empty())),
+    ] {
+        let (_, messages) = ui.event(&app, event, mouse::Cursor::Unavailable);
+        apply(&mut app, messages);
+    }
+    for (text, code) in [("5", Code::Digit5), (" ", Code::Space), ("m", Code::KeyM)] {
+        let (_, messages) = ui.event(
+            &app,
+            press(
+                Key::Character(text.into()),
+                code,
+                Modifiers::empty(),
+                Some(text),
+            ),
+            mouse::Cursor::Unavailable,
+        );
+        assert!(messages.iter().any(|message| matches!(
+            message,
+            Message::DrawingStyle(Action::Input(Field::Bond, _))
+        )));
+        apply(&mut app, messages);
+    }
+    assert!(
+        ui.input_text(&app, "5 m").1,
+        "partial style field stays focused"
+    );
+    assert_eq!(app.tab.doc, drawing);
+    let (status, messages) = ui.event(
+        &app,
+        press(
+            Key::Named(Named::Escape),
+            Code::Escape,
+            Modifiers::empty(),
+            None,
+        ),
+        mouse::Cursor::Unavailable,
+    );
+    assert_eq!(status, iced::event::Status::Captured);
+    assert!(matches!(
+        messages.as_slice(),
+        [Message::DrawingStyle(Action::Cancel)]
+    ));
+    apply(&mut app, messages);
+    assert!(app.tab.styles.editor.is_none());
+    assert_eq!(app.inspector_tab, InspectorTab::Properties);
+    assert_eq!(app.tab.doc, drawing);
+    assert_eq!(app.tab.saved, drawing);
+    assert_eq!(app.tab.revision, revision);
+    assert_eq!(app.tab.selected, [atom]);
+    assert!(!app.dirty());
+    assert!(!app.tab.history.can_undo());
+    assert!(!app.tab.history.can_redo());
+    assert_eq!(app.appearance.drawing_style_unit, Unit::Millimetres);
+
+    app.select_tab(0);
+    assert_eq!(app.tab.doc, other_document);
+    assert_eq!(app.tab.saved, other_document);
+    assert_eq!(app.tab.revision, other_revision);
+    assert!(!app.dirty());
+    assert!(!app.tab.history.can_undo());
+    assert!(!app.tab.history.can_redo());
+    assert!(
+        app.tab.styles.editor.is_some(),
+        "the other tab keeps its draft"
+    );
+    app.inspector_tab = InspectorTab::DrawingStyle;
+    let _ = ui.input_text(&app, "1e");
 }
 
 #[tokio::test]
