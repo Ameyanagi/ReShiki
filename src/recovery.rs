@@ -193,7 +193,9 @@ mod tests {
         // This build's draft is marked current and reads back unchanged.
         store.save(&restored, None).unwrap();
         std::fs::rename(&store.session, &draft).unwrap();
-        assert_eq!(store.candidates()[0].snapshot.document, restored);
+        let resaved = store.candidates().remove(0).snapshot.document;
+        assert_eq!(resaved.version, VERSION);
+        assert_eq!(resaved, restored.current());
     }
     #[test]
     fn draft_is_durable_and_corrupt_files_are_ignored() {
