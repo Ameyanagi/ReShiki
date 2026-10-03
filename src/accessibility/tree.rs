@@ -76,10 +76,8 @@ impl NativeTree {
             {
                 return Err("Accessibility control identity, label or geometry is invalid".into());
             }
-            if node.focused {
-                if !node.enabled || focused.replace(node.id.as_str()).is_some() {
-                    return Err("Accessibility focus does not identify one enabled control".into());
-                }
+            if node.focused && (!node.enabled || focused.replace(node.id.as_str()).is_some()) {
+                return Err("Accessibility focus does not identify one enabled control".into());
             }
         }
         let new_ids = snapshot
