@@ -443,6 +443,11 @@ pub(super) fn file_message(key: &keyboard::Key, modifiers: keyboard::Modifiers) 
     })
 }
 
+fn activation_event(event: &Event) -> bool {
+    matches!(event, Event::Keyboard(keyboard::Event::KeyPressed { key: keyboard::Key::Named(keyboard::key::Named::Enter | keyboard::key::Named::Space | keyboard::key::Named::Tab), modifiers, .. }
+        | keyboard::Event::KeyReleased { key: keyboard::Key::Named(keyboard::key::Named::Space), modifiers, .. }) if !modifiers.command() && !modifiers.alt())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -465,9 +470,4 @@ mod tests {
             assert!(file_message(&key, primary | Modifiers::ALT).is_none());
         }
     }
-}
-
-fn activation_event(event: &Event) -> bool {
-    matches!(event, Event::Keyboard(keyboard::Event::KeyPressed { key: keyboard::Key::Named(keyboard::key::Named::Enter | keyboard::key::Named::Space | keyboard::key::Named::Tab), modifiers, .. }
-        | keyboard::Event::KeyReleased { key: keyboard::Key::Named(keyboard::key::Named::Space), modifiers, .. }) if !modifiers.command() && !modifiers.alt())
 }
