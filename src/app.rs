@@ -3303,9 +3303,12 @@ mod tests {
         let (mut app, _) = App::new();
         app.tab.busy = false;
         let idle = subscriptions(&app);
-        // Window close and keyboard/mouse events, plus the event-driven
-        // Finder receiver on macOS. None of these schedules a polling timer.
-        assert_eq!(idle, 2 + usize::from(cfg!(target_os = "macos")));
+        // Window close and keyboard/mouse events are always subscribed.
+        // macOS adds Finder events; Linux adds window-open events for clipboard
+        // initialization. These streams do not poll.
+        let event_streams =
+            2 + usize::from(cfg!(target_os = "macos")) + usize::from(cfg!(target_os = "linux"));
+        assert_eq!(idle, event_streams);
         app.assistant.busy = true;
         assert_eq!(subscriptions(&app), idle + 1);
         app.assistant.busy = false;
