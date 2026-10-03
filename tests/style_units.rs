@@ -1,3 +1,4 @@
+use base64::{Engine, engine::general_purpose::STANDARD};
 use reshiki::{
     document::{Document, Point},
     document_styles,
@@ -25,13 +26,18 @@ fn equivalent_styles() -> Vec<DrawingStyle> {
     .map(|inputs| {
         let mut style = DrawingStyle {
             name: "Unit check".into(),
-            // Nondefault and exactly representable in CDX's 1/20 pt size units.
+            // Native/CDXML and CDS's packed font style retain this fraction.
+            // Ordinary CDX currently stores document LabelSize in whole points.
             font_size_pt: 9.35,
             ..Default::default()
         };
         for (dimension, text) in Dimension::ALL.into_iter().zip(inputs) {
             dimension.set(&mut style, units::parse(text, Unit::Points).unwrap().points);
         }
+        assert_eq!(
+            style.font_size_pt, 9.35,
+            "Converting length units must leave LabelSize unchanged"
+        );
         style.validate().unwrap();
         style
     })
@@ -63,6 +69,32 @@ fn pdf_dimensions(bytes: &[u8]) -> (f64, f64) {
         .collect();
     assert_eq!(numbers.len(), 4);
     (numbers[2] - numbers[0], numbers[3] - numbers[1])
+}
+
+fn cdx_root_property(bytes: &[u8], wanted: u16) -> Option<&[u8]> {
+    assert!(bytes.starts_with(b"VjCD0100\x04\x03\x02\x01"));
+    assert_eq!(&bytes[22..24], &0x8000_u16.to_le_bytes());
+    let mut remaining = &bytes[28..];
+    loop {
+        let (tag, rest) = remaining.split_first_chunk::<2>().unwrap();
+        let tag = u16::from_le_bytes(*tag);
+        if tag == 0 || tag >= 0x8000 {
+            return None;
+        }
+        let (size, rest) = rest.split_first_chunk::<2>().unwrap();
+        let size = u16::from_le_bytes(*size);
+        let (size, rest) = if size == u16::MAX {
+            let (size, rest) = rest.split_first_chunk::<4>().unwrap();
+            (u32::from_le_bytes(*size) as usize, rest)
+        } else {
+            (usize::from(size), rest)
+        };
+        let (value, rest) = rest.split_at(size);
+        if tag == wanted {
+            return Some(value);
+        }
+        remaining = rest;
+    }
 }
 
 #[test]
@@ -130,9 +162,10 @@ fn equivalent_units_keep_native_styles_geometry_and_physical_figures() {
 async fn equivalent_units_keep_cdx_cdxml_and_stationery_dimensions_and_graph() {
     let engine = LocalEngine::default();
     let directory = tempfile::tempdir().unwrap();
+    let mut reference_outputs = std::collections::BTreeMap::new();
     for style in equivalent_styles() {
         let doc = document_styles::apply(&bond(), style.clone(), true, true).unwrap();
-        for format in ["cdxml", "cdx"] {
+        for (format, expected_label_size) in [("cdxml", 9.35), ("cdx", 9.0)] {
             let mut request = Request::molecule("export", doc.clone());
             request.format = Some(format.into());
             let output = engine.request(request).await.unwrap().output.unwrap();
@@ -163,6 +196,12 @@ async fn equivalent_units_keep_cdx_cdxml_and_stationery_dimensions_and_graph() {
                     .parse()
                     .unwrap();
                 assert!((label_size - style.font_size_pt).abs() < 0.00001);
+            } else {
+                let bytes = STANDARD.decode(&output).unwrap();
+                // This is the existing ordinary-CDX default property (0x081C,
+                // INT16), not the CDS packed font style's twentieths of a point.
+                let label_size = cdx_root_property(&bytes, 0x081c).unwrap();
+                assert_eq!(label_size, 9_i16.to_le_bytes());
             }
             let result = engine
                 .request(Request::import(format, &output))
@@ -170,7 +209,11 @@ async fn equivalent_units_keep_cdx_cdxml_and_stationery_dimensions_and_graph() {
                 .unwrap();
             assert_eq!(result.analysis.unwrap().formula, "C2H6");
             let back = result.document.unwrap();
-            assert!((back.drawing_style.font_size_pt - style.font_size_pt).abs() < 0.0011);
+            assert!(
+                (back.drawing_style.font_size_pt - expected_label_size).abs() < 0.0011,
+                "{format}: LabelSize {} != {expected_label_size}",
+                back.drawing_style.font_size_pt
+            );
             assert_eq!(back.atoms.len(), 2);
             assert_eq!(back.bonds.len(), 1);
             assert_eq!(back.bonds[0].order, 1);
@@ -197,6 +240,12 @@ async fn equivalent_units_keep_cdx_cdxml_and_stationery_dimensions_and_graph() {
                 old_delta.distance(new_delta) < 0.001,
                 "{format} changes relative geometry"
             );
+            if let Some(previous) = reference_outputs.insert(format, output.into_bytes()) {
+                assert_eq!(
+                    reference_outputs[format], previous,
+                    "{format}: equivalent cm/mm/pt inputs change the exported drawing"
+                );
+            }
         }
         let path = directory.path().join("units.cds");
         document_styles::save(&path, &style).unwrap();
@@ -204,6 +253,12 @@ async fn equivalent_units_keep_cdx_cdxml_and_stationery_dimensions_and_graph() {
         assert!((back.font_size_pt - style.font_size_pt).abs() < 0.0011);
         for dimension in Dimension::ALL {
             assert!((dimension.get(&back) - dimension.get(&style)).abs() < 0.0011);
+        }
+        if let Some(previous) = reference_outputs.insert("cds", std::fs::read(path).unwrap()) {
+            assert_eq!(
+                reference_outputs["cds"], previous,
+                "Equivalent cm/mm/pt inputs change the exported stationery"
+            );
         }
     }
 }
