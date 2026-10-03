@@ -117,6 +117,8 @@ zune-jpeg = { path = "vendor/zune-jpeg" }
 # Preserve requested variable-font weights through SVG and selectable PDF text.
 usvg = { path = "vendor/usvg" }
 svg2pdf = { path = "vendor/svg2pdf" }
+# Share Iced's standard Wayland data device for bounded binary clipboard offers.
+smithay-clipboard = { path = "vendor/smithay-clipboard" }
 
 # Independent oracle suites explicitly require the development reference.
 

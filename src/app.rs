@@ -87,6 +87,8 @@ pub enum InspectorTab {
 
 #[derive(Debug, Clone)]
 pub enum Message {
+    #[cfg(target_os = "linux")]
+    LinuxClipboardWindow(iced::window::Id),
     ContextMenu(context_menu::Action),
     StyleMenu(color_popover::Action),
     ObjectToolbar(object_toolbar::Action),
@@ -465,6 +467,8 @@ impl App {
         Subscription::batch([
             #[cfg(target_os = "macos")]
             macos_files::subscription(),
+            #[cfg(target_os = "linux")]
+            iced::window::open_events().map(Message::LinuxClipboardWindow),
             self.updates.subscription(),
             self.properties_subscription(),
             if self.assistant.needs_poll() {
@@ -2020,6 +2024,13 @@ impl App {
                 if self.pending.is_none() {
                     return self.close_window(window, vec![]);
                 }
+            }
+            #[cfg(target_os = "linux")]
+            Message::LinuxClipboardWindow(window) => {
+                return iced::window::run(window, |window| {
+                    reshiki_linux::initialize_clipboard(window);
+                })
+                .discard();
             }
             Message::Cancel => self.pending = None,
             Message::Discard => {

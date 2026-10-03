@@ -1,4 +1,4 @@
-//! A cancellation-safe request becomes a persistent owner only after its ACK.
+//! Wayland uses the focused GUI owner; X11 retains its persistent worker.
 use super::{CommandRequest, JSON_LIMIT, Packet, Representation};
 use serde::Deserialize;
 use std::{process::Stdio, time::Duration};
@@ -38,6 +38,13 @@ pub(super) async fn invoke(
     if input.len() > JSON_LIMIT {
         return Err("Clipboard request is too large".into());
     }
+    if let Some(output) = reshiki_linux::gui_clipboard_request(&input).await? {
+        let packet = parse_response(&output)?;
+        if operation == "write" && !packet.representations.is_empty() {
+            return Err("Invalid clipboard write acknowledgement".into());
+        }
+        return Ok(packet);
+    }
     let executable =
         std::env::current_exe().map_err(|e| format!("Could not locate the application: {e}"))?;
     let child = Command::new(executable)
@@ -72,12 +79,7 @@ pub(super) async fn invoke(
         if output.len() > JSON_LIMIT || output.last() != Some(&b'\n') {
             return Err("Invalid or oversized Linux clipboard response".into());
         }
-        let packet = match serde_json::from_slice::<Response>(&output)
-            .map_err(|_| "Invalid Linux clipboard response")?
-        {
-            Response::Success(packet) => packet,
-            Response::Failure { error } => return Err(error.chars().take(1000).collect()),
-        };
+        let packet = parse_response(&output)?;
         if operation == "write" {
             if !packet.representations.is_empty() {
                 return Err("Invalid clipboard write acknowledgement".into());
@@ -99,4 +101,13 @@ pub(super) async fn invoke(
     tokio::time::timeout(Duration::from_secs(10), request)
         .await
         .map_err(|_| "Clipboard operation timed out".to_owned())?
+}
+
+fn parse_response(output: &[u8]) -> Result<Packet, String> {
+    match serde_json::from_slice::<Response>(output)
+        .map_err(|_| "Invalid Linux clipboard response")?
+    {
+        Response::Success(packet) => Ok(packet),
+        Response::Failure { error } => Err(error.chars().take(1000).collect()),
+    }
 }
