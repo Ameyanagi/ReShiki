@@ -2084,7 +2084,6 @@ impl App {
                 if matches!(message, Message::Save) {
                     self.front_pending();
                 }
-                #[cfg(windows)]
                 let office_host = (self.office_document() && matches!(message, Message::Save))
                     .then_some(self.office_host);
                 let (path, suggested_name) =
@@ -2099,6 +2098,10 @@ impl App {
                 }
                 self.file_io.saving = true;
                 self.file_io.saving_tab = Some(self.tab.id);
+                if office_host == Some("Microsoft 365") {
+                    self.status = "Saving recovery draft and waiting for Microsoft 365 to confirm the drawing update…".into();
+                    self.error = false;
+                }
                 let snapshot = std::sync::Arc::new(self.tab.doc.clone());
                 let save_snapshot = std::sync::Arc::clone(&snapshot);
                 let epoch = self.tab.file_epoch;
@@ -2118,10 +2121,14 @@ impl App {
                         let save_path = path.clone();
                         tokio::task::spawn_blocking(move || {
                             let bytes = save_snapshot.file_json()?;
-                            #[cfg(windows)]
-                            windows_libreoffice_save::save(&save_path, &bytes, office_host)?;
-                            #[cfg(not(windows))]
-                            reshiki::storage::write_atomic(&save_path, &bytes)?;
+                            if office_host == Some("Microsoft 365") {
+                                reshiki::office_addin::save(&save_path, &bytes)?;
+                            } else {
+                                #[cfg(windows)]
+                                windows_libreoffice_save::save(&save_path, &bytes, office_host)?;
+                                #[cfg(not(windows))]
+                                reshiki::storage::write_atomic(&save_path, &bytes)?;
+                            }
                             Ok::<_, String>(())
                         })
                         .await

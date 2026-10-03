@@ -1,0 +1,13 @@
+{
+  "name": "reshiki-office-local",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "start": "node companion/server.js",
+    "setup": "node setup.js"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

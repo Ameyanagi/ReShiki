@@ -48,6 +48,7 @@ pub mod libreoffice;
 pub mod ligands;
 #[cfg(windows)]
 mod native_windows;
+pub mod office_addin;
 pub mod pages;
 pub mod palette;
 pub mod pictures;

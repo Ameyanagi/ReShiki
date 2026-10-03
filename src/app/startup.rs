@@ -24,6 +24,8 @@ pub(super) fn parse(args: impl IntoIterator<Item = OsString>) -> Arguments {
             parsed.office_host = Some("Office");
         } else if arg == "--libreoffice-edit" {
             parsed.office_host = Some("LibreOffice");
+        } else if arg == "--office-addin-edit" {
+            parsed.office_host = Some("Microsoft 365");
         }
     }
     parsed
@@ -78,6 +80,19 @@ mod tests {
         assert!(args.paths.is_empty());
         assert!(args.shortcut_examples);
         assert!(parse([]).paths.is_empty());
+    }
+
+    #[test]
+    fn microsoft_365_edit_flag_is_separate_from_legacy_office_and_libreoffice() {
+        for (flag, host) in [
+            ("--office-addin-edit", "Microsoft 365"),
+            ("--office-edit", "Office"),
+            ("--libreoffice-edit", "LibreOffice"),
+        ] {
+            let args = parse([flag, "--open", "drawing.rsk"].map(OsString::from));
+            assert_eq!(args.office_host, Some(host));
+            assert_eq!(args.paths, [PathBuf::from("drawing.rsk")]);
+        }
     }
 
     #[cfg(unix)]
