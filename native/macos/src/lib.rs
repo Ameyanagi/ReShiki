@@ -8,6 +8,7 @@
     clippy::indexing_slicing
 )]
 
+pub mod accessibility;
 pub mod clipboard;
 pub mod printing;
 pub mod workers;

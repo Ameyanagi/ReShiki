@@ -21,6 +21,7 @@ impl App {
         if !self.help_open {
             return base;
         }
+        let base = reshiki::accessibility::inert(base);
         let (command, shift, alt) = (Modifiers::COMMAND, Modifiers::SHIFT, Modifiers::ALT);
         let label = |message| super::shortcuts::label(&message).unwrap_or_default();
         let drawing = group(
@@ -228,7 +229,7 @@ impl App {
             ],
         );
         let examples = column![
-            button(text("Open shortcut examples").size(14))
+            reshiki::accessibility::button("help-examples", "Open shortcut examples", text("Open shortcut examples").size(14))
                 .padding([10, 16])
                 .on_press(Message::OpenShortcutExamples)
                 .style(control(true)),
@@ -250,12 +251,16 @@ impl App {
                     ]
                     .spacing(5),
                     Space::new().width(Length::Fill),
-                    button(text("×").size(25).center())
-                        .width(32)
-                        .height(32)
-                        .padding(0)
-                        .on_press(Message::ToggleHelp)
-                        .style(control(false)),
+                    reshiki::accessibility::button(
+                        "help-close",
+                        "Close Help and shortcuts",
+                        text("×").size(25).center()
+                    )
+                    .width(32)
+                    .height(32)
+                    .padding(0)
+                    .on_press(Message::ToggleHelp)
+                    .style(control(false)),
                 ]
                 .align_y(Alignment::Center)
                 .spacing(12),
@@ -265,10 +270,14 @@ impl App {
                         .size(12)
                         .style(muted_text),
                     Space::new().width(Length::Fill),
-                    button(text("Done").size(13))
-                        .padding([7, 18])
-                        .on_press(Message::ToggleHelp)
-                        .style(control(true))
+                    reshiki::accessibility::button(
+                        "help-done",
+                        "Done; close Help and shortcuts",
+                        text("Done").size(13)
+                    )
+                    .padding([7, 18])
+                    .on_press(Message::ToggleHelp)
+                    .style(control(true))
                 ]
                 .spacing(12)
                 .align_y(Alignment::Center),

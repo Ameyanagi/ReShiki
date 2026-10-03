@@ -156,8 +156,17 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
             {
                 shell.publish(Message::ToggleHelp);
             }
-            shell.capture_event();
-            return;
+            if !matches!(
+                key,
+                keyboard::Key::Named(
+                    keyboard::key::Named::Enter
+                        | keyboard::key::Named::Space
+                        | keyboard::key::Named::Tab
+                )
+            ) {
+                shell.capture_event();
+                return;
+            }
         }
         // Cancel the visible style draft before a focused input consumes
         // Escape only to unfocus. Modal dialogs above keep their own priority.
