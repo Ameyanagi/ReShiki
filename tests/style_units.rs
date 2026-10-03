@@ -25,6 +25,8 @@ fn equivalent_styles() -> Vec<DrawingStyle> {
     .map(|inputs| {
         let mut style = DrawingStyle {
             name: "Unit check".into(),
+            // Nondefault and exactly representable in CDX's 1/20 pt size units.
+            font_size_pt: 9.35,
             ..Default::default()
         };
         for (dimension, text) in Dimension::ALL.into_iter().zip(inputs) {
@@ -154,6 +156,13 @@ async fn equivalent_units_keep_cdx_cdxml_and_stationery_dimensions_and_graph() {
                         "{name}"
                     );
                 }
+                let label_size: f32 = xml
+                    .root_element()
+                    .attribute("LabelSize")
+                    .unwrap()
+                    .parse()
+                    .unwrap();
+                assert!((label_size - style.font_size_pt).abs() < 0.00001);
             }
             let result = engine
                 .request(Request::import(format, &output))
@@ -161,6 +170,7 @@ async fn equivalent_units_keep_cdx_cdxml_and_stationery_dimensions_and_graph() {
                 .unwrap();
             assert_eq!(result.analysis.unwrap().formula, "C2H6");
             let back = result.document.unwrap();
+            assert!((back.drawing_style.font_size_pt - style.font_size_pt).abs() < 0.0011);
             assert_eq!(back.atoms.len(), 2);
             assert_eq!(back.bonds.len(), 1);
             assert_eq!(back.bonds[0].order, 1);
@@ -191,6 +201,7 @@ async fn equivalent_units_keep_cdx_cdxml_and_stationery_dimensions_and_graph() {
         let path = directory.path().join("units.cds");
         document_styles::save(&path, &style).unwrap();
         let back = document_styles::load(&path).unwrap();
+        assert!((back.font_size_pt - style.font_size_pt).abs() < 0.0011);
         for dimension in Dimension::ALL {
             assert!((dimension.get(&back) - dimension.get(&style)).abs() < 0.0011);
         }

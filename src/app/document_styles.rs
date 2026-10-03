@@ -492,6 +492,43 @@ mod tests {
     }
 
     #[test]
+    fn non_round_dimensions_survive_a_hundred_switches_and_untouched_apply() {
+        let mut app = legacy_style_app();
+        let style = &mut app.tab.doc.drawing_style;
+        style.name = "Precise imported dimensions".into();
+        style.set_bond_length(17.123_457);
+        style.line_width_pt = 0.712_345_66;
+        style.bold_width_pt = 2.456_789;
+        style.margin_width_pt = 0.123_456_79;
+        style.hash_spacing_pt = 3.456_789;
+        app.tab.doc.validate().unwrap();
+        let before = app.tab.doc.clone();
+        app.tab.saved = before.clone();
+        let revision = app.tab.revision;
+        send(&mut app, Action::Open);
+        for _ in 0..100 {
+            for unit in [Unit::Millimetres, Unit::Centimetres, Unit::Points] {
+                send(&mut app, Action::DisplayUnit(unit));
+                let candidate = app.tab.styles.editor.as_ref().unwrap().candidate().unwrap();
+                assert_eq!(candidate, before.drawing_style);
+                for dimension in Dimension::ALL {
+                    assert_eq!(
+                        dimension.get(&candidate).to_bits(),
+                        dimension.get(&before.drawing_style).to_bits(),
+                    );
+                }
+            }
+        }
+        send(&mut app, Action::Apply);
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.saved, before);
+        assert_eq!(app.tab.revision, revision);
+        assert!(!app.dirty());
+        assert!(!app.tab.history.can_undo());
+        assert!(!app.tab.history.can_redo());
+    }
+
+    #[test]
     fn unfinished_input_blocks_switch_and_apply_without_accepting_a_prefix() {
         let mut app = legacy_style_app();
         let before = app.tab.doc.clone();
@@ -577,6 +614,98 @@ mod tests {
     }
 
     #[test]
+    fn invalid_name_or_percentage_allows_unit_choice_but_never_applies() {
+        for action in [
+            Action::Name(" ".into()),
+            Action::Input(Field::Spacing, "1e".into()),
+            Action::Input(Field::Spacing, "41".into()),
+        ] {
+            let mut app = legacy_style_app();
+            let before = app.tab.doc.clone();
+            let revision = app.tab.revision;
+            send(&mut app, Action::Open);
+            send(&mut app, Action::Input(Field::Bond, "5 mm".into()));
+            send(&mut app, action);
+            let editor = app.tab.styles.editor.as_ref().unwrap();
+            let name = editor.name.clone();
+            let spacing = input(editor, Field::Spacing).text.clone();
+            assert!(editor.candidate().is_err());
+            send(&mut app, Action::DisplayUnit(Unit::Centimetres));
+            let editor = app.tab.styles.editor.as_ref().unwrap();
+            assert_eq!(editor.display_unit, Unit::Centimetres);
+            assert_eq!(input(editor, Field::Bond).text, "0.5");
+            assert_eq!(editor.name, name);
+            assert_eq!(input(editor, Field::Spacing).text, spacing);
+            assert!(editor.candidate().is_err());
+            assert_eq!(app.appearance.drawing_style_unit, Unit::Centimetres);
+            send(&mut app, Action::Apply);
+            assert!(app.error);
+            assert!(app.tab.styles.editor.is_some());
+            assert_eq!(app.tab.doc, before);
+            assert_eq!(app.tab.saved, before);
+            assert_eq!(app.tab.revision, revision);
+            assert!(!app.dirty());
+            assert!(!app.tab.history.can_undo());
+        }
+    }
+
+    #[test]
+    fn invalid_style_export_schedules_no_dialog_and_keeps_the_entire_draft() {
+        for action in [
+            Action::Name(" ".into()),
+            Action::Input(Field::FontSize, "10 mm".into()),
+            Action::Input(Field::Spacing, "1e".into()),
+            Action::Input(Field::Bond, "5 m".into()),
+            Action::Input(Field::Line, "3 pt".into()),
+        ] {
+            let mut app = legacy_style_app();
+            let before = app.tab.doc.clone();
+            let revision = app.tab.revision;
+            send(&mut app, Action::Open);
+            send(&mut app, Action::DisplayUnit(Unit::Millimetres));
+            send(&mut app, action);
+            let editor = app.tab.styles.editor.as_ref().unwrap();
+            let expected_error = editor.candidate().unwrap_err();
+            let name = editor.name.clone();
+            let fields = |editor: &Editor| {
+                editor
+                    .inputs
+                    .iter()
+                    .map(|(field, input)| {
+                        (
+                            *field,
+                            input.text.clone(),
+                            input.rendered.clone(),
+                            input.accepted.to_bits(),
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            };
+            let before_fields = fields(editor);
+            for format in [SaveFormat::Native, SaveFormat::Cds] {
+                let task = app.drawing_style_action(Action::Save(format));
+                assert_eq!(
+                    task.units(),
+                    0,
+                    "invalid export must not open a file dialog"
+                );
+                assert!(app.error);
+                assert_eq!(app.status, expected_error);
+                let editor = app.tab.styles.editor.as_ref().unwrap();
+                assert_eq!(editor.name, name);
+                assert_eq!(fields(editor), before_fields);
+                assert_eq!(editor.display_unit, Unit::Millimetres);
+                assert_eq!(app.tab.doc, before);
+                assert_eq!(app.tab.saved, before);
+                assert_eq!(app.tab.revision, revision);
+                assert!(!app.dirty());
+                assert!(!app.tab.history.can_undo());
+                assert!(!app.tab.history.can_redo());
+            }
+        }
+    }
+
+    #[test]
     fn background_style_drafts_keep_incomplete_units_until_a_commit_boundary() {
         let mut app = legacy_style_app();
         let before = app.tab.doc.clone();
@@ -619,6 +748,89 @@ mod tests {
         assert_eq!(editor.display_unit, Unit::Centimetres);
         assert_eq!(editor.candidate().unwrap(), candidate);
         assert_eq!(app.tab.doc, before);
+    }
+
+    #[test]
+    fn choosing_the_retained_unit_cancels_pending_adoption_without_changing_either_tab() {
+        for raw in ["1e", "5 m"] {
+            let mut app = legacy_style_app();
+            let before = app.tab.doc.clone();
+            let revision = app.tab.revision;
+            send(&mut app, Action::Open);
+            send(&mut app, Action::Input(Field::Bond, raw.into()));
+            app.add_tab();
+            app.tab.busy = false;
+            let other = app.tab.doc.clone();
+            let other_revision = app.tab.revision;
+            send(&mut app, Action::Open);
+            send(&mut app, Action::DisplayUnit(Unit::Millimetres));
+            app.select_tab(0);
+            let editor = app.tab.styles.editor.as_ref().unwrap();
+            assert!(editor.unit_notice.is_some());
+            assert_eq!(editor.display_unit, Unit::Points);
+            let original_inputs = editor
+                .inputs
+                .iter()
+                .map(|(field, input)| {
+                    (
+                        *field,
+                        input.text.clone(),
+                        input.rendered.clone(),
+                        input.accepted.to_bits(),
+                    )
+                })
+                .collect::<Vec<_>>();
+            send(&mut app, Action::DisplayUnit(Unit::Points));
+            let editor = app.tab.styles.editor.as_ref().unwrap();
+            assert!(editor.unit_notice.is_none());
+            assert_eq!(app.appearance.drawing_style_unit, Unit::Points);
+            assert_eq!(input(editor, Field::Bond).text, raw);
+            assert_eq!(
+                editor
+                    .inputs
+                    .iter()
+                    .map(|(field, input)| {
+                        (
+                            *field,
+                            input.text.clone(),
+                            input.rendered.clone(),
+                            input.accepted.to_bits(),
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+                original_inputs
+            );
+            assert_eq!(app.tab.doc, before);
+            assert_eq!(app.tab.saved, before);
+            assert_eq!(app.tab.revision, revision);
+            assert!(!app.dirty());
+            assert!(!app.tab.history.can_undo());
+            assert_eq!(
+                app.tabs.background[0]
+                    .styles
+                    .editor
+                    .as_ref()
+                    .unwrap()
+                    .display_unit,
+                Unit::Millimetres
+            );
+            send(&mut app, Action::Cancel);
+            send(&mut app, Action::Open);
+            assert_eq!(
+                app.tab.styles.editor.as_ref().unwrap().display_unit,
+                Unit::Points
+            );
+            app.select_tab(1);
+            assert_eq!(
+                app.tab.styles.editor.as_ref().unwrap().display_unit,
+                Unit::Points
+            );
+            assert_eq!(app.tab.doc, other);
+            assert_eq!(app.tab.saved, other);
+            assert_eq!(app.tab.revision, other_revision);
+            assert!(!app.dirty());
+            assert!(!app.tab.history.can_undo());
+        }
     }
 
     #[test]

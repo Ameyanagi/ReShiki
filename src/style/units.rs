@@ -351,4 +351,41 @@ mod tests {
         assert!(Dimension::Margin.validate(0., Unit::Points).is_ok());
         assert!(Dimension::Line.validate(0., Unit::Points).is_err());
     }
+
+    #[test]
+    fn adjacent_physical_boundaries_have_the_same_result_in_every_unit() {
+        // The public point limits are an independent oracle. Exercise the
+        // neighboring representable values through real unit-bearing input,
+        // without using the editor's formatter or conversion helper.
+        for (dimension, min, max) in [
+            (Dimension::Bond, 5.0_f32, 100.0_f32),
+            (Dimension::Line, 0.1, 6.0),
+            (Dimension::Bold, 0.1, 12.0),
+            (Dimension::Margin, 0.0, 12.0),
+            (Dimension::Hash, 0.3, 12.0),
+        ] {
+            for (points, valid) in [
+                (min.next_down(), false),
+                (min, true),
+                (min.next_up(), true),
+                (max.next_down(), true),
+                (max, true),
+                (max.next_up(), false),
+            ] {
+                for (suffix, units_per_point) in
+                    [("pt", 1.0), ("mm", 25.4 / 72.0), ("cm", 2.54 / 72.0)]
+                {
+                    let value = f64::from(points) * units_per_point;
+                    let text = format!("{value:.17e} {suffix}");
+                    let parsed = parse(&text, Unit::Points);
+                    if let Ok(parsed) = parsed {
+                        assert_eq!(parsed.points.to_bits(), points.to_bits(), "{text}");
+                    }
+                    let accepted = parsed
+                        .is_ok_and(|parsed| dimension.validate(parsed.points, parsed.unit).is_ok());
+                    assert_eq!(accepted, valid, "{dimension:?}: {text}");
+                }
+            }
+        }
+    }
 }
