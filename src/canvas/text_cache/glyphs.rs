@@ -7,11 +7,14 @@ use iced::widget::canvas::{Path, Text};
 use iced::{Color, Point, Size, Vector};
 use text::cosmic_text::{Command, SwashCache};
 
+mod variable;
+
 const BUDGET: usize = 2 * 1024 * 1024;
 const LIMIT: usize = 4096;
 
 pub(super) struct Glyphs {
     cache: SwashCache,
+    variable_scaler: swash::scale::ScaleContext,
     cost: usize,
 }
 
@@ -19,15 +22,22 @@ impl Default for Glyphs {
     fn default() -> Self {
         Self {
             cache: SwashCache::new(),
+            variable_scaler: swash::scale::ScaleContext::new(),
             cost: 0,
         }
     }
 }
 
 impl Glyphs {
-    /// The same top-left, unwrapped paragraph and glyph positions as
-    /// `canvas::Text::draw_with`. Only the scaler cache lifetime is different.
+    /// Keep Iced's unwrapped paragraph placement and raster fallback while
+    /// honoring variable weights in both family selection and cached outlines.
     pub fn draw(&mut self, t: &Text, mut draw: impl FnMut(Path, Color)) {
+        {
+            let mut fonts = text::font_system()
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            variable::prepare_weight(fonts.raw(), &text::to_attributes(t.font));
+        }
         let paragraph = text::Paragraph::with_text(iced::advanced::text::Text {
             content: &t.content,
             bounds: Size::new(t.max_width, f32::INFINITY),
@@ -51,6 +61,14 @@ impl Glyphs {
                 let key = glyph.physical((0., 0.), 1.).cache_key;
                 let offset = Vector::new(glyph.x + glyph.x_offset, glyph.y_offset + run.line_y);
                 let new_outline = !self.cache.outline_command_cache.contains_key(&key);
+                if new_outline {
+                    variable::cache_outline(
+                        fonts.raw(),
+                        &mut self.cache,
+                        &mut self.variable_scaler,
+                        key,
+                    );
+                }
                 if let Some(commands) = self.cache.get_outline_commands(fonts.raw(), key) {
                     if new_outline {
                         self.cost += std::mem::size_of_val(commands)
@@ -122,6 +140,7 @@ impl Glyphs {
                     || self.cache.outline_command_cache.len() + self.cache.image_cache.len() > LIMIT
                 {
                     self.cache = SwashCache::new();
+                    self.variable_scaler = swash::scale::ScaleContext::new();
                     self.cost = 0;
                 }
             }
