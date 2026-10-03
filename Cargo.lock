@@ -3337,6 +3337,7 @@ dependencies = [
  "directories-next",
  "flate2",
  "iced",
+ "iced_runtime",
  "iced_tiny_skia",
  "image",
  "open",

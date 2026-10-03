@@ -181,19 +181,22 @@ fn traverse_key(event: &Event, mut operate: impl FnMut(&mut dyn Operation)) -> b
     }
     let mut targets = Targets::default();
     operate(&mut targets);
-    if let Some(target) = targets.next(modifiers.shift()) {
-        targets.reveal(target);
-        operate(&mut Focus {
-            target,
-            current: 0,
-            scroll: 0,
-            offsets: targets
-                .scrolls
-                .into_iter()
-                .map(|scroll| scroll.translation)
-                .collect(),
-        });
-    }
+    let Some(target) = targets.next(modifiers.shift()) else {
+        // Tooltips and standard menu overlays have no focusable descendants.
+        // Let their own handling and then the base widget see the key.
+        return false;
+    };
+    targets.reveal(target);
+    operate(&mut Focus {
+        target,
+        current: 0,
+        scroll: 0,
+        offsets: targets
+            .scrolls
+            .into_iter()
+            .map(|scroll| scroll.translation)
+            .collect(),
+    });
     true
 }
 

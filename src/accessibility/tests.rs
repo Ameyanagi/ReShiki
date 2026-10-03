@@ -121,7 +121,8 @@ impl Ui {
             mouse::Cursor::Unavailable,
             &self.viewport,
         );
-        self.renderer.screenshot(
+        Headless::screenshot(
+            &mut self.renderer,
             Size::new(self.viewport.width as u32, self.viewport.height as u32),
             1.,
             iced::Color::WHITE,
@@ -384,4 +385,125 @@ async fn focus_reveals_scrolled_control_and_ambiguous_ids_cannot_activate() {
     let mut activate = Activate::<Message>::new("duplicate");
     ui.operate(&mut view, &mut activate);
     assert_eq!(activate.message(), None);
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real runtime overlay and in-flight gesture regression"]
+async fn tooltip_does_not_trap_tab_and_replaced_controls_do_not_inherit_mouse_down() {
+    use iced::widget::tooltip;
+    use iced_runtime::{UserInterface, user_interface::Cache};
+    let size = Size::new(320., 220.);
+    let mut ui = Ui::new(size).await;
+    let mut view: Element<'_, Message> = button("before", "Apply", text("Apply"))
+        .on_press(Message::Apply)
+        .width(140)
+        .height(36)
+        .into();
+    let cursor = mouse::Cursor::Available(iced::Point::new(10., 10.));
+    ui.event(
+        &mut view,
+        Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+        cursor,
+    );
+    view = button("after", "Close", text("Close"))
+        .on_press(Message::Close)
+        .width(140)
+        .height(36)
+        .into();
+    assert!(
+        ui.event(
+            &mut view,
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+            cursor
+        )
+        .1
+        .is_empty(),
+        "replacement never received mouse-down"
+    );
+    ui.event(
+        &mut view,
+        Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)),
+        cursor,
+    );
+    view = button("after", "Close", text("Close"))
+        .width(140)
+        .height(36)
+        .into();
+    ui.layout(&mut view);
+    view = button("after", "Close", text("Close"))
+        .on_press(Message::Close)
+        .width(140)
+        .height(36)
+        .into();
+    assert!(
+        ui.event(
+            &mut view,
+            Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)),
+            cursor
+        )
+        .1
+        .is_empty(),
+        "disabled transition cancels pending mouse-down"
+    );
+    drop(view);
+
+    let view = focus_scope(
+        column![
+            tooltip(
+                button("apply", "Apply", text("Apply"))
+                    .on_press(Message::Apply)
+                    .width(140)
+                    .height(36),
+                text("Visible tooltip"),
+                tooltip::Position::Right,
+            )
+            .delay(std::time::Duration::ZERO),
+            button("close", "Close", text("Close"))
+                .on_press(Message::Close)
+                .width(140)
+                .height(36),
+        ]
+        .spacing(8),
+    );
+    let mut runtime = UserInterface::build(view, size, Cache::new(), &mut ui.renderer);
+    let mut messages = Vec::new();
+    runtime.update(
+        &[key(Named::Tab, Modifiers::empty(), false, false)],
+        mouse::Cursor::Unavailable,
+        &mut ui.renderer,
+        &mut iced::advanced::clipboard::Null,
+        &mut messages,
+    );
+    // The real tooltip opens synchronously on hover (zero delay). The runtime
+    // then calls its overlay before dispatching the next key to the base.
+    runtime.update(
+        &[Event::Mouse(mouse::Event::CursorMoved {
+            position: iced::Point::new(10., 10.),
+        })],
+        cursor,
+        &mut ui.renderer,
+        &mut iced::advanced::clipboard::Null,
+        &mut messages,
+    );
+    runtime.draw(&mut ui.renderer, &Theme::Light, &Style::default(), cursor);
+    let (_, status) = runtime.update(
+        &[key(Named::Tab, Modifiers::empty(), false, false)],
+        cursor,
+        &mut ui.renderer,
+        &mut iced::advanced::clipboard::Null,
+        &mut messages,
+    );
+    assert_eq!(status, vec![iced::event::Status::Captured]);
+    let mut collect = Collect::new(Rectangle::with_size(size));
+    runtime.operate(&ui.renderer, &mut operation::black_box(&mut collect));
+    assert_eq!(
+        collect
+            .snapshot()
+            .nodes
+            .iter()
+            .filter(|node| node.focused)
+            .map(|node| node.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["close"]
+    );
 }
