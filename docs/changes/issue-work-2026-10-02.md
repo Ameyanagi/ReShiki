@@ -6,6 +6,9 @@ release qualification. The tests below used different, explicitly identified
 candidates. All changes are credited to **@Ameyanagi**; issue links remain in
 the [unreleased notes](../changes-unreleased.md) until pull requests exist.
 
+For the later tabbed layout, current Help images and the bounded native checks,
+see the [October 3 evidence record](ui-declutter-native-2026-10-03.md).
+
 The five published PNGs are unchanged, inspected **renderer output**, not
 native desktop screenshots. Their sizes and SHA-256 values are in the
 [image manifest](../images/issue-work-2026-10-02/manifest.json).

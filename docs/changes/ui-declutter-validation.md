@@ -12,6 +12,8 @@ and explicitly leaves Windows outstanding. The
 interaction coverage to macOS. The [matched images](ui-declutter.md) are real
 application-widget renderer output at two sizes, from the disclosed historical
 commits. They are not native desktop captures of the final tabbed interface.
+The later [October 3 record](ui-declutter-native-2026-10-03.md) adds native
+two-size pairs, current Help renderer output and explicitly scoped results.
 
 ## Execution record
 
@@ -21,17 +23,19 @@ The same summary includes the final `ca4c52e` Linux headless renderer's Copy as
 and drawing-style examples, plus the final macOS whole/selected reaction
 **Copy as → system clipboard → SciFinder search** check. Both native menus
 showed all 11 formats, and their copied payloads matched. These targeted checks
-do not complete this native final-candidate matrix. Populate it with the exact
-integrated candidate and linked results after execution. A check that was
+do not complete this native final-candidate matrix. The October 3 update uses
+production `783b154`, retaining unaffected `483e70b` observations only through
+the documented two-file source comparison. It does not relabel those earlier
+executions as fresh runs. A check that was
 unavailable stays **not run**; Windows CLI tests cannot replace its native
 walkthrough or Office activation checks.
 
-| Run                 | Required coverage                                                           | Current result                                                  |
-| ------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| macOS               | Two-size combined interface, keyboard/focus, supported ChemDraw repeat      | Final Copy as/SciFinder check passed; complete sequence not run |
-| Windows             | Two-size combined interface, keyboard/focus, EMF and Word/PowerPoint/Excel  | Not run on the final candidate                                  |
-| Nightly performance | Help opening, gallery opening and loaded interactions, separately           | Not measured on the final candidate                             |
-| Linux               | Compatible UI/export smoke, including the Fedora font report when available | Final headless renderer checked; native desktop/Fedora not run  |
+| Run                 | Required coverage                                                           | Current result                                                                                                                                               |
+| ------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| macOS               | Two-size combined interface, keyboard/focus, supported ChemDraw repeat      | Native layout pairs and targeted actions recorded; combined acceptance remains open; see [current scope](ui-declutter-native-2026-10-03.md#acceptance-scope) |
+| Windows             | Two-size combined interface, keyboard/focus, EMF and Word/PowerPoint/Excel  | Not run on the final candidate                                                                                                                               |
+| Nightly performance | Help opening, gallery opening and loaded interactions, separately           | Separate timing evidence required; not established by the layout images or functional runs                                                                   |
+| Linux               | Compatible UI/export smoke, including the Fedora font report when available | Final headless renderer checked; native desktop/Fedora not run                                                                                               |
 
 For each run retain the commit, application version/Nightly run ID, executable
 SHA-256, build mode, OS/version/architecture, renderer, display scaling and
@@ -49,7 +53,9 @@ samples distinguishable. Do not edit a screenshot to hide a layout defect.
 ## Original acceptance
 
 The IDs below preserve the issue's seven work items, six release-review items
-and four additional checks. **Existing evidence** is not a claim of final
+and four additional checks. The evidence inventory retains the October 2
+audit; consult the [October 3 scope](ui-declutter-native-2026-10-03.md#acceptance-scope)
+before repeating a check. **Existing evidence** is not a claim of final
 cross-platform acceptance.
 
 | ID  | Requirement                                                                                       | Existing evidence                                                                                 | Still required for acceptance                                                 |
