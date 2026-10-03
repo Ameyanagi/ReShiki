@@ -616,7 +616,8 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
     )?;
     // Chemistry still uses the original flattened XML and checked atom IDs.
     // Restore independent presentations only after that association succeeds.
-    // Equal presentations keep the legacy anchor-style fallback unchanged.
+    // Equal automatic presentations keep the legacy anchor-style fallback.
+    // Explicit foregrounds must retain their override even when colors match.
     let mut latest: HashMap<_, _> = base
         .atoms
         .iter()
@@ -648,7 +649,11 @@ pub fn assemble_cdxml(prepared: &PreparedCdxml) -> Result<CdxmlScene> {
         };
         let (label_style, label_hydrogen, label_explicit) = read(&presentation.label)?;
         let (anchor_style, anchor_hydrogen, anchor_explicit) = read(&presentation.anchor)?;
-        if label_style == anchor_style && label_hydrogen == anchor_hydrogen {
+        if label_style == anchor_style
+            && label_hydrogen == anchor_hydrogen
+            && !label_explicit
+            && !anchor_explicit
+        {
             continue;
         }
         group.label_style = Some(label_style.into_document()?);

@@ -338,6 +338,25 @@ fn contracted_and_expanded_atom_ink_follow_their_own_highlight_backgrounds() -> 
                     expected_inner,
                     "native expanded atom, {canvas:?}, {manual:?}"
                 );
+                let mut back = import_cdxml(&written)?.document;
+                let anchor = back.abbreviations.first().ok_or("reimported label")?.anchor;
+                assert_eq!(
+                    back.canvas_theme.color(canvas_theme::atom_color(
+                        &back,
+                        back.atom(anchor).ok_or("reimported anchor")?,
+                    )),
+                    expected_outer,
+                    "reimported visible label, {canvas:?}, {manual:?}"
+                );
+                assert_eq!(back.expand_abbreviations(&[anchor]), 1);
+                assert_eq!(
+                    back.canvas_theme.color(canvas_theme::atom_color(
+                        &back,
+                        back.atom(anchor).ok_or("reimported expanded anchor")?,
+                    )),
+                    expected_inner,
+                    "reimported expanded atom, {canvas:?}, {manual:?}"
+                );
             }
             assert_eq!(source, before);
         }
