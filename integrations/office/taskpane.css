@@ -1,0 +1,68 @@
+:root {
+  color-scheme: light dark;
+  font:
+    14px/1.5 system-ui,
+    sans-serif;
+}
+body {
+  margin: 0;
+  background: Canvas;
+  color: CanvasText;
+}
+main {
+  max-width: 32rem;
+  margin: auto;
+  padding: 20px;
+}
+h1 {
+  font-size: 25px;
+  margin: 0;
+}
+p {
+  margin: 10px 0 16px;
+}
+button,
+.file {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 8px 0;
+  padding: 10px 12px;
+  border: 1px solid #727b80;
+  border-radius: 6px;
+  font: inherit;
+  background: ButtonFace;
+  color: ButtonText;
+  text-align: left;
+  cursor: pointer;
+}
+button:focus-visible,
+.file:focus-within {
+  outline: 3px solid #2470bc;
+  outline-offset: 2px;
+}
+button:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+input[type="file"] {
+  display: block;
+  max-width: 100%;
+  margin-top: 8px;
+}
+[hidden] {
+  display: none;
+}
+#status,
+.edit-status {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.edit-status {
+  border-top: 1px solid #727b80;
+  padding-top: 10px;
+}
+details {
+  margin-top: 22px;
+  font-size: 12px;
+}

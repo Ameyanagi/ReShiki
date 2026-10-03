@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ReShiki</title>
+    <link rel="stylesheet" href="/taskpane.css" />
+    <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+    <script type="module" src="/taskpane.js"></script>
+  </head>
+  <body>
+    <main>
+      <h1>ReShiki</h1>
+      <p>Editable molecular drawings</p>
+      <p id="support" role="status">Connecting to Office…</p>
+      <section id="actions" hidden>
+        <button id="paste">Paste editable drawing</button>
+        <label class="file"
+          >Insert a drawing file<input
+            id="file"
+            type="file"
+            accept=".rsk,.reshiki,application/json"
+        /></label>
+        <button id="edit">Edit selected drawing</button>
+        <button id="copy">Copy editable drawing</button>
+        <p>
+          Draw in ReShiki, copy, then paste here. To edit, select the drawing and choose “Edit
+          selected drawing”.
+        </p>
+        <p>
+          Keep this pane open while editing. Save in ReShiki, wait for confirmation, then save your
+          Office file.
+        </p>
+        <p>
+          After a confirmed save, closing ReShiki finishes the edit automatically. An interrupted
+          edit can be ended below; its recovery draft is kept.
+        </p>
+        <p id="excel-note" hidden>
+          In Excel, keep ReShiki objects as plain pictures. Added hyperlinks, assigned macros,
+          shadows, and other picture effects cannot be preserved when editing. Editing requires
+          ExcelApiDesktop 1.1 (Microsoft 365 2509 on Windows or 16.102 on Mac).
+        </p>
+      </section>
+      <p id="status" role="status" aria-live="polite"></p>
+      <div id="sessions"></div>
+      <details>
+        <summary>About editable drawings</summary>
+        <p>
+          ReShiki stores the native drawing with its preview in this Office file. Images pasted
+          without native ReShiki data cannot be edited. Use Copy editable drawing and Paste editable
+          drawing to transfer between Office files or apps.
+        </p>
+        <p>
+          Recovery drafts stay on this computer if Office closes or an update fails. The status
+          below each edit shows their location.
+        </p>
+      </details>
+    </main>
+  </body>
+</html>

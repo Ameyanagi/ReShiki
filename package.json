@@ -11,7 +11,7 @@
     "docs:dev": "bun run --cwd website dev",
     "docs:build": "bun run --cwd website build",
     "docs:check": "bun run --cwd website check",
-    "lint:js": "bun run --bun oxlint --deny-warnings website",
+    "lint:js": "bun run --bun oxlint --deny-warnings website integrations/office",
     "format:check": "bun run --bun oxfmt --check .",
     "format": "bun run --bun oxfmt .",
     "check": "bun run lint:js && bun run format:check && bun run docs:check"
