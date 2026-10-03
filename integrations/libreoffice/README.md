@@ -39,7 +39,9 @@ The selected path is stored in the LibreOffice user profile, never in documents.
    subprocess and asks LibreOffice to accept the new data and preview.
 5. Close the ReShiki edit window and save the LibreOffice document.
 6. To recover the native drawing, select the object and choose
-   **ReShiki → Copy Editable Drawing**, then paste in ReShiki.
+   **ReShiki → Copy Editable Drawing**. Wait for **Editable drawing copied —
+   Ready to paste in ReShiki**, then paste in ReShiki. Preparing the clipboard
+   runs in the background; the copying message remains until it finishes.
 
 Each edited object gets a separate process, directory, and session identity.
 Unsaved editor changes do not replace the embedded drawing. LibreOffice refuses
@@ -112,6 +114,10 @@ python3 integrations/libreoffice/tests/roundtrip.py \
 renderer; reports identify that limitation. `--incoming` also loads and resaves
 the `roundtrip-2.odt`, `.ods`, and `.odp` files from another test host. These are
 headless integration checks, not substitutes for the required desktop workflow.
+
+`tests/test_copy_feedback.py` checks that copy readiness is announced only after
+the worker succeeds, failures retain their error message, and hosts without
+infobars use a temporary status indicator without interrupting clipboard work.
 
 `tests/saveback.py` checks the save-new-document → keep open → edit → accept →
 save/close/reopen sequence. Compile `tests/editor_surrogate.c` into a dedicated
