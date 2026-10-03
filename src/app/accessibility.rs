@@ -6,7 +6,7 @@ use reshiki::accessibility::{
     tree::{NativeTree, Request},
 };
 use std::sync::{
-    Mutex,
+    Arc, Mutex,
     atomic::{AtomicU64, Ordering},
 };
 use tokio::sync::mpsc;
@@ -31,9 +31,10 @@ pub enum Action {
     Geometry(window::Id, iced::Size, f32),
     Refresh,
     Snapshot(u64, u64, Snapshot),
+    #[cfg_attr(not(any(target_os = "macos", windows)), allow(dead_code))]
     Installed(u64, Result<native::Handle, String>),
     #[cfg_attr(not(any(target_os = "macos", windows)), allow(dead_code))]
-    Native(u64, accesskit::ActionRequest),
+    Native(u64, u64, accesskit::ActionRequest),
     Dispatch(u64, Box<Message>),
     #[cfg_attr(not(any(target_os = "macos", windows)), allow(dead_code))]
     Published(u64, Result<(), String>),
@@ -48,6 +49,7 @@ enum Terminal {
 struct Context {
     document: (super::document_tab::TabId, u64, u64),
     selected: Vec<u64>,
+    inline_session: Option<iced::widget::Id>,
     surface: (
         super::InspectorTab,
         crate::canvas::Tool,
@@ -73,6 +75,7 @@ pub(super) struct State {
     sequence: u64,
     context: Option<Context>,
     context_version: u64,
+    context_epoch: Arc<AtomicU64>,
     viewport: iced::Size,
     scale: f32,
     focused: bool,
@@ -101,6 +104,7 @@ impl Default for State {
             sequence: 0,
             context: None,
             context_version: 0,
+            context_epoch: Arc::new(AtomicU64::new(0)),
             viewport: iced::Size::new(1280., 820.),
             scale: 1.,
             focused: false,
@@ -109,6 +113,24 @@ impl Default for State {
             sender,
         }
     }
+}
+
+#[cfg(any(target_os = "macos", windows, test))]
+fn enqueue_native(
+    sender: &mpsc::Sender<Action>,
+    context_epoch: &AtomicU64,
+    generation: u64,
+    request: accesskit::ActionRequest,
+) {
+    // Capture the context before the request enters the queue. Reading it only
+    // when App resolves the request would let an old request adopt a new edit.
+    let version = context_epoch.load(Ordering::Acquire);
+    if request.data.as_ref().is_some_and(
+        |data| !matches!(data, accesskit::ActionData::Value(value) if value.len() <= 16384),
+    ) {
+        return;
+    }
+    let _ = sender.try_send(Action::Native(generation, version, request));
 }
 
 pub(super) fn subscription() -> Subscription<Message> {
@@ -158,6 +180,11 @@ impl App {
             return Task::none();
         }
         let document = (self.tab.id, self.tab.file_epoch, self.tab.revision);
+        let inline_session = self
+            .tab
+            .inline_text
+            .as_ref()
+            .map(|draft| draft.session.clone());
         let surface = (
             self.inspector_tab,
             self.tool,
@@ -174,12 +201,14 @@ impl App {
         let identity_changed = state.context.as_ref().is_none_or(|context| {
             (context.document.0, context.document.1) != (document.0, document.1)
                 || context.selected != self.tab.selected
+                || context.inline_session != inline_session
                 || context.surface != surface
         });
         if identity_changed {
             state.context = Some(Context {
                 document,
                 selected: self.tab.selected.clone(),
+                inline_session,
                 surface,
             });
             state.context_version = state.context_version.wrapping_add(1);
@@ -191,6 +220,9 @@ impl App {
             context.document = document;
             state.context_version = state.context_version.wrapping_add(1);
         }
+        state
+            .context_epoch
+            .store(state.context_version, Ordering::Release);
         if !SUPPORTED || state.closed || state.window.is_none() {
             return Task::none();
         }
@@ -277,17 +309,12 @@ impl App {
                     if !state.installing && !state.install_failed {
                         state.installing = true;
                         let sender = state.sender.clone();
+                        let context_epoch = state.context_epoch.clone();
                         return window::run(id, move |window| {
                             native::install(window, tree, move |request| {
                                 // Native callbacks may run on UIA worker threads. Never
                                 // block, access App, or carry unbounded text into its queue.
-                                if request.data.as_ref().is_some_and(|data| {
-                                    !matches!(data,
-                                accesskit::ActionData::Value(value) if value.len() <= 16384)
-                                }) {
-                                    return;
-                                }
-                                let _ = sender.try_send(Action::Native(generation, request));
+                                enqueue_native(&sender, &context_epoch, generation, request);
                             })
                         })
                         .map(move |result| {
@@ -319,26 +346,25 @@ impl App {
                 });
                 Task::batch([show, self.accessibility_refresh()])
             }
-            Action::Native(generation, request)
-                if generation == self.accessibility.generation && !self.accessibility.closed =>
+            Action::Native(generation, version, request)
+                if generation == self.accessibility.generation
+                    && version == self.accessibility.context_version
+                    && !self.accessibility.closed =>
             {
                 match self.accessibility.tree.resolve(&request) {
                     Some(Request::Activate(id)) => {
-                        let version = self.accessibility.context_version;
                         iced::advanced::widget::operate(Activate::<Message>::new(id)).map(
                             move |message| {
                                 Message::Accessibility(Action::Dispatch(version, Box::new(message)))
                             },
                         )
                     }
-                    Some(Request::SetValue(id, value)) => {
-                        let version = self.accessibility.context_version;
-                        iced::advanced::widget::operate(SetValue::<Message>::new(id, value)).map(
-                            move |message| {
-                                Message::Accessibility(Action::Dispatch(version, Box::new(message)))
-                            },
-                        )
-                    }
+                    Some(Request::SetValue(id, value)) => iced::advanced::widget::operate(
+                        SetValue::<Message>::new(id, value),
+                    )
+                    .map(move |message| {
+                        Message::Accessibility(Action::Dispatch(version, Box::new(message)))
+                    }),
                     Some(Request::Focus(id)) => {
                         iced::advanced::widget::operate(FocusControl::new(id))
                             .discard()
@@ -410,6 +436,164 @@ fn finish_terminal(terminal: Terminal) -> Task<Message> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn native_request(
+        app: &mut App,
+        id: &str,
+        role: reshiki::accessibility::Role,
+    ) -> accesskit::ActionRequest {
+        let bounds = iced::Rectangle::new(iced::Point::new(10., 10.), iced::Size::new(80., 30.));
+        let snapshot = Snapshot {
+            nodes: vec![reshiki::accessibility::Node {
+                id: id.into(),
+                name: "Test control".into(),
+                role,
+                enabled: true,
+                focused: true,
+                checked: None,
+                expanded: None,
+                value: None,
+                bounds,
+                visible_bounds: Some(bounds),
+            }],
+            duplicate_ids: Vec::new(),
+        };
+        let tree = app
+            .accessibility
+            .tree
+            .update(
+                &snapshot,
+                "ReShiki",
+                iced::Rectangle::with_size(app.accessibility.viewport),
+                1.,
+            )
+            .unwrap();
+        accesskit::ActionRequest {
+            action: if role == reshiki::accessibility::Role::Button {
+                accesskit::Action::Click
+            } else {
+                accesskit::Action::SetValue
+            },
+            target_tree: accesskit::TreeId::ROOT,
+            target_node: tree.focus,
+            data: if role == reshiki::accessibility::Role::Button {
+                None
+            } else {
+                Some(accesskit::ActionData::Value("stale caption".into()))
+            },
+        }
+    }
+
+    #[test]
+    fn native_callback_keeps_its_enqueue_context_across_a_document_revision() {
+        let (mut app, _) = App::new();
+        let _ = app.accessibility_refresh();
+        let request = native_request(&mut app, "header-new", reshiki::accessibility::Role::Button);
+        let (sender, mut receiver) = mpsc::channel(2);
+        enqueue_native(
+            &sender,
+            &app.accessibility.context_epoch,
+            app.accessibility.generation,
+            request.clone(),
+        );
+        app.tab.revision += 1;
+        let _ = app.accessibility_refresh();
+        // Document edits keep the live control's ID. The enqueue stamp, not
+        // accidental removal of the control, must reject this stale request.
+        assert!(app.accessibility.tree.resolve(&request).is_some());
+        assert_eq!(
+            app.accessibility_action(receiver.try_recv().unwrap())
+                .units(),
+            0
+        );
+        enqueue_native(
+            &sender,
+            &app.accessibility.context_epoch,
+            app.accessibility.generation,
+            request,
+        );
+        assert!(
+            app.accessibility_action(receiver.try_recv().unwrap())
+                .units()
+                > 0
+        );
+    }
+
+    #[test]
+    fn cancelled_and_reopened_caption_rejects_old_native_and_dispatched_edits() {
+        use super::super::inline_text::Action as Inline;
+        use reshiki::document::Point;
+        let (mut app, _) = App::new();
+        let _ = app.update(Message::InlineText(Inline::Begin(
+            None,
+            Point::new(20., 30.),
+        )));
+        let version = app.accessibility.context_version;
+        let document = (app.tab.id, app.tab.file_epoch, app.tab.revision);
+        let selected = app.tab.selected.clone();
+        let tool = app.tool;
+        let request = native_request(
+            &mut app,
+            "inline-caption",
+            reshiki::accessibility::Role::TextArea,
+        );
+        let (sender, mut receiver) = mpsc::channel(1);
+        enqueue_native(
+            &sender,
+            &app.accessibility.context_epoch,
+            app.accessibility.generation,
+            request.clone(),
+        );
+        let _ = app.update(Message::InlineText(Inline::Finish(false)));
+        assert!(
+            app.accessibility
+                .context
+                .as_ref()
+                .unwrap()
+                .inline_session
+                .is_none()
+        );
+        let _ = app.update(Message::InlineText(Inline::Begin(
+            None,
+            Point::new(60., 70.),
+        )));
+        assert_eq!(document, (app.tab.id, app.tab.file_epoch, app.tab.revision));
+        assert_eq!(selected, app.tab.selected);
+        assert_eq!(tool, app.tool);
+        assert_ne!(version, app.accessibility.context_version);
+        let reopened = native_request(
+            &mut app,
+            "inline-caption",
+            reshiki::accessibility::Role::TextArea,
+        );
+        assert_ne!(request.target_node, reopened.target_node);
+        assert!(app.accessibility.tree.resolve(&request).is_none());
+        assert_eq!(
+            app.accessibility_action(receiver.try_recv().unwrap())
+                .units(),
+            0
+        );
+        assert_eq!(
+            app.accessibility_action(Action::Dispatch(
+                version,
+                Box::new(Message::InlineText(Inline::ReplaceText("old draft".into())))
+            ))
+            .units(),
+            0
+        );
+        assert!(app.tab.caption.is_empty());
+
+        // A new Begin may replace an empty draft in a single update, without
+        // ever publishing a context in which the editor is absent.
+        let version = app.accessibility.context_version;
+        let _ = app.update(Message::InlineText(Inline::Begin(
+            None,
+            Point::new(60., 70.),
+        )));
+        assert_ne!(version, app.accessibility.context_version);
+        assert!(app.accessibility.tree.resolve(&reopened).is_none());
+    }
+
     #[test]
     fn closing_during_install_waits_for_completion_before_destroying_the_host() {
         let (mut app, _) = App::new();
