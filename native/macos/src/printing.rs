@@ -284,11 +284,11 @@ pub fn execute(input: &[u8]) -> Result<Vec<u8>, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::has_pdf_header;
-    use std::io::Cursor;
-
     #[test]
     fn snapshot_header_preflight_is_bounded_and_accepts_a_leading_prefix() {
+        use super::has_pdf_header;
+        use std::io::Cursor;
+
         for offset in [0, 16, 1023, 1024] {
             let mut bytes = vec![b' '; offset];
             bytes.extend_from_slice(b"%PDF-1.7\n");
