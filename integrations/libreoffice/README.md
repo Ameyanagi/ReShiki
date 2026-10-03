@@ -35,8 +35,8 @@ The selected path is stored in the LibreOffice user profile, never in documents.
 1. Copy an editable drawing in ReShiki.
 2. In Writer, Calc, or Impress, choose **ReShiki → Paste ReShiki Drawing**.
 3. Double-click the object, or select it and choose **Edit in ReShiki**.
-4. Save in ReShiki. The extension validates the saved native drawing in a bounded
-   subprocess and asks LibreOffice to accept the new data and preview.
+4. Save in ReShiki. The extension validates the saved native drawing and asks
+   LibreOffice to accept the new data and preview.
 5. Close the ReShiki edit window and save the LibreOffice document.
 6. To recover the native drawing, select the object and choose
    **ReShiki → Copy Editable Drawing**. Wait for **Editable drawing copied —
@@ -45,27 +45,34 @@ The selected path is stored in the LibreOffice user profile, never in documents.
    On Linux, keep the LibreOffice drawing window active until it finishes. If
    focus changes during preparation, return to that window and copy again.
 
-Each edited object gets a separate process, directory, and session identity.
-Unsaved editor changes do not replace the embedded drawing. LibreOffice refuses
-to close the document or its editing window while an editor session remains open.
-Multiple objects can be edited from the same LibreOffice window; starting an
-editor from another window of that same document is rejected until editing in
-the first window finishes. If an update
-fails, the extension retains the saved `.rsk` file and shows its path. Only an
-accepted update receives a revision acknowledgement; ReShiki's save message asks
-the user to check the host document.
+Each edited object opens in its own ReShiki window. Unsaved editor changes do
+not replace the embedded drawing. Finish editing and close the ReShiki window
+before closing the LibreOffice document. Multiple objects can be edited from
+the same LibreOffice window; starting an editor from another window of that same
+document is rejected until editing in the first window finishes. Check the
+LibreOffice document after saving in ReShiki. If an update fails, the extension
+retains the saved `.rsk` file and shows its recovery path.
 
-If LibreOffice repeatedly rejects the final cleanup callback after the editor
-closes, select the object and choose **Edit in ReShiki** to finish the retained session
-and show its recovery path. Choose the command again to start another edit.
-Automatic cleanup is not guaranteed while that host service is unavailable.
-Close-listener vetoes queue a concise notice; the separate frame-lock route to
-Start Center may refuse closing without displaying that notice.
+After a blocked close, finish editing and try closing again when ready. You may
+see a fresh **Save and Close**, **Don't Save and Close**, or **Cancel** confirmation.
+It names whether you are closing this window or the document and all of its
+windows. Saving applies to the document; only the named windows are closed.
+Cancel, including cancellation of Save As, keeps the document open. LibreOffice
+may also show its own save confirmation; its Cancel choice keeps the document
+open too. The extension does not repeat an earlier application-wide Quit request.
+Choose Quit again afterward if you still want to exit LibreOffice.
 
-If releasing the extension's frame action lock throws, its native lock count may
-already have changed. The extension leaves that document protected and does not
-retry the removal or reset other locks. Save your work before restarting
-LibreOffice; **Edit in ReShiki** cannot repair this separate failure.
+After an interrupted close, a saved `.rsk` draft can remain after the ReShiki
+window closes, including when a later close is cancelled or saving fails. Saving
+the LibreOffice document alone does not necessarily remove this recovery copy.
+If an error is reported, use the displayed recovery path to find the drawing.
+
+If the ReShiki window has closed but LibreOffice says editing has not finished,
+select the object and choose **Edit in ReShiki** to finish recovery and show the
+saved drawing's path. Choose the command again to start another edit. If
+LibreOffice instead reports that it could not safely protect or release the
+document, save your work before restarting LibreOffice; **Edit in ReShiki**
+cannot clear that separate failure.
 
 The extension menu is the explicit editable paste/copy route. Ordinary platform
 paste may choose an image or Windows OLE instead. DOCX, XLSX, PPTX, native
@@ -83,12 +90,13 @@ clipboard. Windows and macOS retain their native ReShiki clipboard workers.
 
 ## Validation status
 
-The installed package has passed headless Writer, Calc, and Impress checks on
-macOS LibreOffice 25.8.4.2, Linux LibreOffice 25.8.7, and Windows LibreOffice
-26.8.0.3. Each platform used the real ReShiki preview worker and preserved two
-distinct objects through two save/close/reopen cycles, with byte-identical native
-data and PNG and unchanged intrinsic extent. All six directions of ODF exchange
-between the three platforms also passed import, save, close, and reopen checks.
+The earlier adapter versions identified below passed headless Writer, Calc, and
+Impress checks on macOS LibreOffice 25.8.4.2, Linux LibreOffice 25.8.7, and
+Windows LibreOffice 26.8.0.3. Each platform used the real ReShiki preview worker
+and preserved two distinct objects through two save/close/reopen cycles, with
+byte-identical native data and PNG and unchanged intrinsic extent. All six
+directions of ODF exchange between the three platforms also passed import, save,
+close, and reopen checks.
 Both persistence and interchange checks verify actual host frame dimensions
 within 0.03 mm to allow host-unit rounding. Writer insertion initializes its
 frame from the drawing's physical size.
@@ -149,6 +157,26 @@ later views, immediate failure notices, and bounded final-callback recovery.
 These controlled tests do not establish native close-dispatch or
 Save/Discard/Cancel behavior; the Writer edit → Save As → close while editing
 sequence must also be checked in the desktop application.
+
+`tests/test_close_dispatch.py` checks that normal close commands are blocked
+while an editor is open. `tests/test_deferred_close.py` covers fresh Save/Discard/Cancel
+choices after a blocked close, native Quit ordering, Save As cancellation,
+window versus document scope, additional or replaced views, changes during a
+confirmation, one close attempt per choice, and retained recovery drafts.
+
+The close/save/discard update, adapter SHA-256
+`a7330ece19f98a7d25ce89023e40f575ecf7022ab669e022657bd7a0cc877096`,
+passed all 150 controlled tests without skips using the installed Python UNO
+runtimes on macOS LibreOffice 25.8.4.2, Linux LibreOffice 26.2.6.3, and Windows
+LibreOffice 26.8.0.3. Native macOS Writer checks also verified that closing while
+editing is blocked before save preparation. After a second accepted edit,
+fresh Cancel kept the document open, fresh Save persisted that edit through
+reopening, and fresh Don't Save left the file byte-identical to its saved
+baseline. The second object and the first object's original scale were preserved.
+These checks cover the ordinary window-close path. Full desktop acceptance
+across all three platforms remains pending; application Quit, Save As
+cancellation, and multiple document windows require their own native checks.
+The earlier platform checks above apply to the source hashes recorded there.
 
 `tests/test_copy_feedback.py` checks that copy readiness is announced only after
 the worker succeeds, failures retain their error message, and hosts without
