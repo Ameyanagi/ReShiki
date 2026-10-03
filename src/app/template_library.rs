@@ -4,10 +4,13 @@ use iced::Task;
 use reshiki::{
     document::Document,
     editing,
-    template_library::{Library, standard_path},
+    template_library::{Library, SaveOutcome, standard_path},
     templates::{Anchor, Connection, LIBRARY},
 };
-use std::{collections::VecDeque, path::PathBuf};
+use std::{
+    collections::VecDeque,
+    path::{Path, PathBuf},
+};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Filter {
@@ -246,6 +249,7 @@ pub struct Transaction {
     library: Library,
     undo: Option<Library>,
     effect: Effect,
+    release_warning: Option<String>,
 }
 #[derive(Debug, Clone)]
 enum Effect {
@@ -378,6 +382,13 @@ impl Operation {
         }))
     }
     fn execute(self) -> Result<Transaction, String> {
+        self.execute_with_save(Library::save_checked)
+    }
+
+    fn execute_with_save(
+        self,
+        save: impl FnOnce(&Library, &Path, &Library) -> Result<SaveOutcome, String>,
+    ) -> Result<Transaction, String> {
         let mut library = self.previous.clone();
         let mut undo = None;
         let effect = match self.edit {
@@ -472,21 +483,24 @@ impl Operation {
                     library,
                     undo,
                     effect: Effect::Reloaded,
+                    release_warning: None,
                 });
             }
         };
-        if let Some(path) = self.path {
-            library.save_checked(&path, &self.previous)?;
+        let release_warning = if let Some(path) = self.path {
+            save(&library, &path, &self.previous)?.release_warning
         } else if cfg!(test) {
             library.validate()?;
+            None
         } else {
             return Err("Template storage is unavailable".into());
-        }
+        };
         Ok(Transaction {
             context: self.context,
             library,
             undo,
             effect,
+            release_warning,
         })
     }
 }
@@ -502,7 +516,9 @@ impl App {
         let state = &mut self.templates;
         state.library = transaction.library;
         state.undo = transaction.undo;
-        state.notice = None;
+        // A cleanup warning follows the committed shared library, even when
+        // its originating drawing is no longer the active editing context.
+        state.notice = transaction.release_warning;
         if !current {
             // The library is shared across drawings, but a completed write must
             // not select a template or change tools in a newer editing context.
@@ -898,6 +914,88 @@ mod navigation_tests {
         (app, dir)
     }
 
+    fn save_with_injected_release_warning(
+        library: &Library,
+        path: &Path,
+        expected: &Library,
+    ) -> Result<SaveOutcome, String> {
+        let mut outcome = library.save_checked(path, expected)?;
+        assert!(outcome.release_warning.is_none());
+        outcome.release_warning = Some("Templates saved; injected lock cleanup warning".into());
+        Ok(outcome)
+    }
+
+    #[test]
+    fn committed_library_warning_applies_state_without_cancelling_close_or_retrying() {
+        let (mut app, _dir) = persisted_app();
+        let operation = Operation::capture(&app, Action::SaveDetails)
+            .unwrap()
+            .unwrap();
+        let _ = app.update(Message::Templates(Action::SaveDetails));
+        let serial = app.templates.pending.unwrap();
+        let transaction = operation
+            .execute_with_save(save_with_injected_release_warning)
+            .unwrap();
+        let committed = transaction.library.clone();
+        let warning = transaction.release_warning.clone();
+        let _ = app.close_after_recovery(iced::window::Id::unique());
+        assert!(app.exit.closing());
+        let task = app.template_finished(serial, Ok(Box::new(transaction)));
+        assert_eq!(task.units(), 0, "Completion does not schedule a save retry");
+        assert!(
+            app.exit.closing(),
+            "Committed cleanup warning is not a failed save"
+        );
+        assert_eq!(app.templates.library, committed);
+        assert_eq!(
+            Library::load(app.templates.path.as_ref().unwrap()).unwrap(),
+            committed
+        );
+        assert_eq!(app.templates.notice, warning);
+        assert!(app.templates.draft.is_none() && !app.templates.editing);
+        assert!(!app.templates.pending());
+        assert_eq!(app.templates.serial, serial);
+        assert!(!app.error);
+        assert_eq!(app.status, "Template saved to your library");
+    }
+
+    #[test]
+    fn committed_library_warning_preserves_undo_for_applied_changes() {
+        let (mut app, _dir) = persisted_app();
+        let saved = Operation::capture(&app, Action::SaveDetails)
+            .unwrap()
+            .unwrap()
+            .execute()
+            .unwrap();
+        app.apply_library_transaction(saved);
+        let previous = app.templates.library.clone();
+        let removed = Operation::capture(&app, Action::Remove)
+            .unwrap()
+            .unwrap()
+            .execute_with_save(save_with_injected_release_warning)
+            .unwrap();
+        app.apply_library_transaction(removed);
+        assert!(app.templates.library.templates.is_empty());
+        assert_eq!(app.templates.undo.as_ref(), Some(&previous));
+        assert_eq!(
+            app.templates.notice.as_deref(),
+            Some("Templates saved; injected lock cleanup warning")
+        );
+        let restored = Operation::capture(&app, Action::Restore)
+            .unwrap()
+            .unwrap()
+            .execute()
+            .unwrap();
+        app.apply_library_transaction(restored);
+        assert_eq!(app.templates.library, previous);
+        assert_eq!(
+            Library::load(app.templates.path.as_ref().unwrap()).unwrap(),
+            previous
+        );
+        assert!(app.templates.undo.is_none());
+        assert!(app.templates.notice.is_none());
+    }
+
     #[test]
     fn library_write_failure_replays_a_background_job_held_during_close() {
         let (mut app, _dir) = persisted_app();
@@ -1001,7 +1099,9 @@ mod navigation_tests {
             .unwrap();
         let _ = app.update(Message::Templates(Action::SaveDetails));
         let serial = app.templates.pending.unwrap();
-        let transaction = operation.execute().map(Box::new);
+        let transaction = operation
+            .execute_with_save(save_with_injected_release_warning)
+            .map(Box::new);
         let _ = app.update(Message::New);
         app.status = "New drawing is active".into();
         let original = app.tab.doc.clone();
@@ -1011,12 +1111,20 @@ mod navigation_tests {
         assert_eq!(app.tool, tool);
         assert_eq!(app.status, "New drawing is active");
         assert_eq!(app.templates.library.templates.len(), 1);
+        assert_eq!(
+            app.templates.notice.as_deref(),
+            Some("Templates saved; injected lock cleanup warning")
+        );
         assert!(!app.templates.pending());
         let _ = app.update(Message::Templates(Action::Finished(
             serial,
             Err("duplicate late result".into()),
         )));
         assert_eq!(app.status, "New drawing is active");
+        assert_eq!(
+            app.templates.notice.as_deref(),
+            Some("Templates saved; injected lock cleanup warning")
+        );
     }
 
     #[test]
