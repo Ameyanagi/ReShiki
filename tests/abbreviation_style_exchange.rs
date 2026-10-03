@@ -145,6 +145,66 @@ fn assert_structure(doc: &Document) {
 }
 
 #[test]
+fn native_boc_and_ome_keep_independent_fonts() -> Result {
+    let text = from_cdx(include_bytes!("fixtures/abbreviations-native.cdx"))?;
+    let xml = roxmltree::Document::parse(&text)?;
+    let root = xml.root_element();
+    let label = TextStyle {
+        family: "Arial".into(),
+        size_pt: 10.,
+        color: Color::Ink,
+        ..Default::default()
+    };
+    let inner = TextStyle {
+        family: "Helvetica".into(),
+        ..label.clone()
+    };
+    // The binary fixture's wrappers carry font 60 (Arial) and color 3 (black).
+    // Its inner carbon inherits Helvetica/black; its oxygen has an explicit
+    // Helvetica/color-0 run. These are source declarations, not app defaults.
+    let document_font = xml
+        .descendants()
+        .find(|node| {
+            node.has_tag_name("font") && node.attribute("id") == root.attribute("LabelFont")
+        })
+        .and_then(|node| node.attribute("name"));
+    assert_eq!(document_font, Some("Helvetica"));
+    assert_eq!(root.attribute("LabelColor"), Some("3"));
+    let wrappers: Vec<_> = xml
+        .descendants()
+        .filter(|node| node.attribute("NodeType") == Some("Fragment"))
+        .collect();
+    assert_eq!(wrappers.len(), 2);
+    for (wrapper, expected) in wrappers.into_iter().zip(["Boc", "OMe"]) {
+        let run = wrapper
+            .children()
+            .find(|node| node.has_tag_name("t"))
+            .and_then(|node| node.children().find(|node| node.has_tag_name("s")))
+            .ok_or("native label run")?;
+        assert_eq!(run.text(), Some(expected));
+        assert_written_style(wrapper, &label)?;
+    }
+
+    let source = import_cdxml(&text)?.document;
+    for doc in std::iter::once(source.clone()).chain(editable_roundtrips(&source)?) {
+        assert_eq!(doc.abbreviations.len(), 2);
+        for expected in ["Boc", "OMe"] {
+            let group = doc
+                .abbreviations
+                .iter()
+                .find(|group| group.label == expected)
+                .ok_or("native abbreviation")?;
+            assert_eq!(group.label_style.as_ref(), Some(&label), "{expected}");
+            assert!(group.label_color_override, "{expected}");
+            let anchor = doc.atom(group.anchor).ok_or("native anchor")?;
+            assert_eq!(anchor.text_style.as_ref(), Some(&inner), "{expected}");
+            assert!(anchor.display.color_override, "{expected}");
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn native_prime_independent_label_ink_survives_import_save_exchange_and_expansion() -> Result {
     let source = native()?;
     let before = source.clone();

@@ -790,17 +790,20 @@ async fn mol_dummy_atoms_retain_the_reference_query_import_rejection() -> TestRe
 
 #[tokio::test]
 async fn native_drawings_match_the_original_python_importer() -> TestResult {
-    use reshiki::abbreviations::LabelAlignment;
+    use reshiki::{abbreviations::LabelAlignment, typography::TextStyle};
     let local = LocalEngine::default();
     let reference = PythonEngine::default();
-    for (data, alignments) in [
+    for (data, labels) in [
         (
             include_bytes!("fixtures/native-ethyl-clipboard.cdx").as_slice(),
             vec![],
         ),
         (
             include_bytes!("fixtures/abbreviations-native.cdx").as_slice(),
-            vec![LabelAlignment::Left, LabelAlignment::Right],
+            vec![
+                ("Boc", LabelAlignment::Left),
+                ("OMe", LabelAlignment::Right),
+            ],
         ),
         (
             include_bytes!("fixtures/picture-group-native.cdx").as_slice(),
@@ -812,16 +815,38 @@ async fn native_drawings_match_the_original_python_importer() -> TestResult {
             .execute(request.clone())
             .await
             .map_err(anyhow::Error::msg)?;
-        // The actual ChemDraw fixture declares Boc Flush Left and OMe Flush
-        // Right. The old worker discarded both LabelJustification values.
-        let groups = &mut expected
+        // This fixture explicitly uses Arial 10 black for Boc/OMe, independent
+        // of its Helvetica 10 black inner atoms, plus Left/Right justification.
+        // The historical Python importer discarded these presentations. Extend
+        // only these known fields from the source fixture; every other response
+        // field still has to match the original oracle. The exact fixture's
+        // import and editable roundtrips are also checked in
+        // abbreviation_style_exchange::native_boc_and_ome_keep_independent_fonts.
+        let document = expected
             .document
             .as_mut()
-            .context("Missing reference drawing")?
-            .abbreviations;
-        assert_eq!(groups.len(), alignments.len());
-        for (group, alignment) in groups.iter_mut().zip(alignments) {
+            .context("Missing reference drawing")?;
+        assert_eq!(document.abbreviations.len(), labels.len());
+        for (group, (label, alignment)) in document.abbreviations.iter_mut().zip(labels) {
+            assert_eq!(group.label, label);
             group.alignment = alignment;
+            group.label_style = Some(TextStyle {
+                family: "Arial".into(),
+                size_pt: 10.,
+                ..Default::default()
+            });
+            group.label_color_override = true;
+            let anchor = document
+                .atoms
+                .iter_mut()
+                .find(|atom| atom.id == group.anchor)
+                .context("Missing reference abbreviation anchor")?;
+            anchor.text_style = Some(TextStyle {
+                family: "Helvetica".into(),
+                size_pt: 10.,
+                ..Default::default()
+            });
+            anchor.display.color_override = true;
         }
         let actual = local.execute(request).await.map_err(anyhow::Error::msg)?;
         assert_response_matches(actual, expected)?;
