@@ -340,10 +340,7 @@ async fn first_escape_cancels_focused_partial_style_without_changing_either_docu
         mouse::Cursor::Unavailable,
     );
     assert_eq!(status, iced::event::Status::Captured);
-    assert!(matches!(
-        messages.as_slice(),
-        [Message::DrawingStyle(Action::Cancel)]
-    ));
+    assert!(matches!(messages.as_slice(), [Message::Escape]));
     apply(&mut app, messages);
     assert!(app.tab.styles.editor.is_none());
     assert_eq!(app.inspector_tab, InspectorTab::Properties);
@@ -369,6 +366,102 @@ async fn first_escape_cancels_focused_partial_style_without_changing_either_docu
     );
     app.inspector_tab = InspectorTab::DrawingStyle;
     let _ = ui.input_text(&app, "1e");
+}
+
+#[tokio::test]
+#[ignore = "Opt-in renderer input check"]
+async fn style_escape_keeps_context_menu_and_inline_caption_priority() {
+    use super::{
+        context_menu::{self, Page},
+        document_styles::{Action, Field},
+        inline_text,
+    };
+    use reshiki::document::Point;
+
+    let mut ui = Ui::new().await;
+    let (mut app, _) = App::new();
+    app.tab.busy = false;
+    let drawing = app.tab.doc.clone();
+    let saved = app.tab.saved.clone();
+    let revision = app.tab.revision;
+    let escape = || {
+        press(
+            Key::Named(Named::Escape),
+            Code::Escape,
+            Modifiers::empty(),
+            None,
+        )
+    };
+    let _ = app.update(Message::DrawingStyle(Action::Open));
+    let _ = app.update(Message::DrawingStyle(Action::Input(
+        Field::Bond,
+        "1e".into(),
+    )));
+    app.context_menu = Some(context_menu::State::new(
+        iced::Point::new(20., 20.),
+        Page::Main,
+    ));
+    let (status, messages) = ui.event(&app, escape(), mouse::Cursor::Unavailable);
+    assert_eq!(status, iced::event::Status::Captured);
+    assert!(matches!(
+        messages.as_slice(),
+        [Message::ContextMenu(context_menu::Action::Key(
+            Named::Escape
+        ))]
+    ));
+    apply(&mut app, messages);
+    assert!(app.context_menu.is_none());
+    assert!(app.tab.styles.editor.is_some());
+    let _ = ui.input_text(&app, "1e");
+    let (status, messages) = ui.event(&app, escape(), mouse::Cursor::Unavailable);
+    assert_eq!(status, iced::event::Status::Captured);
+    assert!(matches!(messages.as_slice(), [Message::Escape]));
+    apply(&mut app, messages);
+    assert!(app.tab.styles.editor.is_none());
+
+    for inspector_open in [true, false] {
+        let _ = app.update(Message::DrawingStyle(Action::Open));
+        let _ = app.update(Message::DrawingStyle(Action::Input(
+            Field::Bond,
+            "1e".into(),
+        )));
+        app.inspector_open = inspector_open;
+        let _ = app.update(Message::InlineText(inline_text::Action::Begin(
+            None,
+            Point::default(),
+        )));
+        let bounds = ui.input(&app, "inline-caption").0;
+        ui.click(&mut app, bounds.center());
+        let (_, messages) = ui.event(
+            &app,
+            press(
+                Key::Character("x".into()),
+                Code::KeyX,
+                Modifiers::empty(),
+                Some("x"),
+            ),
+            mouse::Cursor::Unavailable,
+        );
+        apply(&mut app, messages);
+        assert_eq!(app.tab.caption, "x");
+        assert!(ui.input(&app, "inline-caption").1);
+        let (status, messages) = ui.event(&app, escape(), mouse::Cursor::Unavailable);
+        assert_eq!(status, iced::event::Status::Captured);
+        assert!(matches!(
+            messages.as_slice(),
+            [Message::InlineText(inline_text::Action::Finish(false))]
+        ));
+        apply(&mut app, messages);
+        assert!(app.tab.inline_text.is_none());
+        assert!(app.tab.styles.editor.is_some());
+        app.inspector_open = true;
+        let _ = ui.input_text(&app, "1e");
+    }
+    assert_eq!(app.tab.doc, drawing);
+    assert_eq!(app.tab.saved, saved);
+    assert_eq!(app.tab.revision, revision);
+    assert!(!app.tab.history.can_undo());
+    assert!(!app.tab.history.can_redo());
 }
 
 #[tokio::test]
