@@ -399,6 +399,8 @@ mod tests {
     }
 }
 const SHORTCUT_GAP: f32 = 12.;
+const SCROLLBAR_WIDTH: f32 = 10.;
+const SCROLLBAR_GAP: f32 = 4.;
 
 /// The shortcut shown right-aligned beside a command.
 fn shortcut(action: &Action) -> Option<String> {
@@ -1086,7 +1088,8 @@ impl App {
                 _ => None,
             })
             .fold(0., f32::max);
-        (content + 30.).max(232.)
+        // Keep the measured text width after the scrollbar takes its own space.
+        (content + 30. + SCROLLBAR_WIDTH + SCROLLBAR_GAP).max(232.)
     }
 
     fn context_panel(&self, menu: &State, page: Page, level: usize) -> cascade::Panel<'_> {
@@ -1166,6 +1169,12 @@ impl App {
         let content = container(
             scrollable(entries)
                 .id(cascade::scroll_id(level))
+                .direction(scrollable::Direction::Vertical(
+                    scrollable::Scrollbar::new()
+                        .width(SCROLLBAR_WIDTH)
+                        .scroller_width(SCROLLBAR_WIDTH)
+                        .spacing(SCROLLBAR_GAP),
+                ))
                 .height(Length::Shrink),
         )
         .padding(5)

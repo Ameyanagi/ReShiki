@@ -201,6 +201,84 @@ impl Ui {
         }
         panic!("Cannot scroll to {label}");
     }
+
+    fn row_text_layout(
+        &mut self,
+        app: &App,
+        level: usize,
+        index: usize,
+    ) -> (Rectangle, Rectangle, Vec<Rectangle>) {
+        struct Find {
+            row_id: Id,
+            scroll_id: Id,
+            row: Option<Rectangle>,
+            scroll: Option<(Rectangle, Rectangle)>,
+        }
+        impl Operation for Find {
+            fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+                operate(self);
+            }
+            fn container(&mut self, id: Option<&Id>, bounds: Rectangle) {
+                if id == Some(&self.row_id) {
+                    self.row = Some(bounds);
+                }
+            }
+            fn scrollable(
+                &mut self,
+                id: Option<&Id>,
+                bounds: Rectangle,
+                content: Rectangle,
+                _: Vector,
+                _: &mut dyn Scrollable,
+            ) {
+                if id == Some(&self.scroll_id) {
+                    self.scroll = Some((bounds, content));
+                }
+            }
+        }
+        fn find_row<'a>(layout: Layout<'a>, row: Rectangle) -> Option<Layout<'a>> {
+            if layout.bounds() == row {
+                Some(layout)
+            } else {
+                layout.children().find_map(|child| find_row(child, row))
+            }
+        }
+        fn text_leaves(layout: Layout<'_>, leaves: &mut Vec<Rectangle>) {
+            if layout.children().next().is_none() {
+                leaves.push(layout.bounds());
+            } else {
+                for child in layout.children() {
+                    text_leaves(child, leaves);
+                }
+            }
+        }
+        let mut view = view(app);
+        self.tree.diff(view.as_widget());
+        let node = view.as_widget_mut().layout(
+            &mut self.tree,
+            &self.renderer,
+            &layout::Limits::new(self.viewport.size(), self.viewport.size()),
+        );
+        let mut find = Find {
+            row_id: cascade::row_id(level, index),
+            scroll_id: cascade::scroll_id(level),
+            row: None,
+            scroll: None,
+        };
+        view.as_widget_mut().operate(
+            &mut self.tree,
+            Layout::new(&node),
+            &self.renderer,
+            &mut find,
+        );
+        let mut leaves = Vec::new();
+        text_leaves(
+            find_row(Layout::new(&node), find.row.unwrap()).unwrap(),
+            &mut leaves,
+        );
+        let (viewport, content) = find.scroll.unwrap();
+        (viewport, content, leaves)
+    }
 }
 
 fn index(app: &App, page: Page, label: &str) -> usize {
@@ -482,4 +560,73 @@ async fn grabbed_scrollbar_keeps_scrolling_outside_panel_and_releases_there() {
     );
     assert_eq!(app.tab.doc, original);
     assert!(!app.tab.history.can_undo());
+}
+
+#[tokio::test]
+#[ignore = "Opt-in real renderer/menu layout regression"]
+async fn scrollable_bond_menu_reserves_gutter_for_text_and_shortcuts() {
+    let mut ui = Ui::new(Size::new(960., 500.)).await;
+    for size in [Size::new(960., 500.), Size::new(600., 430.)] {
+        ui.viewport = Rectangle::with_size(size);
+        let mut app = selected_ring(Point::new(size.width - 15., size.height - 15.));
+        let point = ui.row(&mut app, 0, "Bond appearance");
+        ui.hover(&mut app, point);
+        for label in ["Bond in front", "Saturated ↔ Aromatic"] {
+            let index = index(&app, Page::Bonds, label);
+            let (viewport, content, text) = ui.row_text_layout(&app, 1, index);
+            assert!(
+                content.height > viewport.height,
+                "Exercise a visible scrollbar"
+            );
+            assert_eq!(
+                text.len(),
+                2,
+                "The native row contains label and rich shortcut text"
+            );
+            let label_bounds = text[0];
+            let shortcut_bounds = text[1];
+            let scrollbar_left = viewport.x + viewport.width - SCROLLBAR_WIDTH;
+            assert!(
+                content.x + content.width <= scrollbar_left - SCROLLBAR_GAP + 0.1,
+                "Scrollable content must leave the scrollbar gutter"
+            );
+            assert!(
+                shortcut_bounds.x + shortcut_bounds.width <= scrollbar_left - SCROLLBAR_GAP + 0.1,
+                "The complete shortcut must stay clear of the scrollbar"
+            );
+            assert!(
+                label_bounds.x + label_bounds.width + SHORTCUT_GAP <= shortcut_bounds.x + 0.1,
+                "Labels and shortcuts must not overlap"
+            );
+            assert!(
+                label_bounds.width + 0.1 >= super::super::workspace::text_width(label, 12.),
+                "The complete label must fit on its line"
+            );
+            let action = match &app.context_entries(Page::Bonds)[index] {
+                Entry::Item { action, .. } => action.clone(),
+                _ => unreachable!(),
+            };
+            let keys = shortcut(&action).unwrap();
+            let required: f32 = super::super::shortcuts::spans(&keys)
+                .iter()
+                .map(|span| {
+                    span.font.map_or_else(
+                        || super::super::workspace::text_width(&span.text, 11.),
+                        |font| super::super::workspace::font_width(&span.text, 11., font),
+                    )
+                })
+                .sum();
+            assert!(
+                shortcut_bounds.width + 0.1 >= required,
+                "The shortcut's final glyph must fit"
+            );
+            let (_, _, panels) = ui.inspect(&app, 1, index);
+            assert!(
+                panels
+                    .iter()
+                    .all(|panel| panel.x >= 5.9 && panel.x + panel.width <= size.width - 5.9),
+                "The wider menus must still fit the compact canvas"
+            );
+        }
+    }
 }
