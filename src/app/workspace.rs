@@ -759,8 +759,13 @@ impl App {
                 &preset.to_string(),
                 &super::palettes::Action::RingPreset(preset),
             )
-        } else {
+        } else if self.aromatic_ring {
             "Rings · r".into()
+        } else {
+            super::palettes::ring_hint(
+                &format!("{}-membered", self.ring_size),
+                &super::palettes::Action::Ring(self.ring_size, false),
+            )
         };
         let chain = format!("Straight chain · {}", keys(Modifiers::SHIFT, "X"));
         let atom = format!(
