@@ -57,7 +57,6 @@ pub fn atom_label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> 
     })
 }
 
-#[cfg(test)]
 pub(crate) fn atom_label_ink_boxes(a: &Atom, doc: &Document) -> Vec<(Point, Point)> {
     label_ink_boxes(&atom_label(a, doc))
 }
