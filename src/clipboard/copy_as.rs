@@ -276,10 +276,11 @@ fn from_output(
     if bytes.len() > LIMIT / count.max(1) {
         return Err("Combined clipboard representations exceed 64 MB".into());
     }
-    let mut representations: Vec<_> = kinds
-        .iter()
-        .map(|kind| Representation::new(kind, &bytes))
-        .collect();
+    let mut representations: Vec<_> = if kinds.is_empty() {
+        Vec::new()
+    } else {
+        Representation::aliases(kinds, STANDARD.encode(&bytes).into()).collect()
+    };
     if let Some(text) = &text {
         representations.push(Representation::new(TEXT, text.as_bytes()));
     }
@@ -386,6 +387,12 @@ mod tests {
                     .iter()
                     .all(|r| r.kind != super::super::NATIVE)
             );
+            if format == CopyFormat::Cdx {
+                assert_eq!(copy.representations.len(), CDX_TYPES.len());
+                assert!(copy.representations.iter().all(|item| {
+                    std::sync::Arc::ptr_eq(&copy.representations[0].data, &item.data)
+                }));
+            }
             assert_eq!(copy.text(), (!binary).then_some(data));
             assert_eq!(copy.notices, ["keep warning"]);
             for representation in copy.representations {

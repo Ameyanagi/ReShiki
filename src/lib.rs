@@ -53,6 +53,8 @@ pub mod hotkeys;
 pub mod joining;
 pub mod libreoffice;
 pub mod ligands;
+#[cfg(not(windows))]
+pub(crate) mod native_process;
 #[cfg(windows)]
 mod native_windows;
 pub mod office_addin;

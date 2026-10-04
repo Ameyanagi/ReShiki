@@ -12,10 +12,7 @@ use std::{collections::HashSet, sync::Arc};
 #[cfg(not(windows))]
 use std::{io::Write, path::PathBuf, process::Stdio};
 #[cfg(not(windows))]
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    process::Command,
-};
+use tokio::process::Command;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Scope {
@@ -131,18 +128,10 @@ fn helper() -> Result<PathBuf, String> {
 
 #[cfg(not(windows))]
 async fn drain_errors(mut input: impl tokio::io::AsyncRead + Unpin) -> Result<Vec<u8>, String> {
-    let mut result = Vec::new();
-    let mut buffer = [0u8; 4096];
-    loop {
-        let size = input.read(&mut buffer).await.map_err(|e| e.to_string())?;
-        if size == 0 {
-            break;
-        }
-        let keep = size.min(8192usize.saturating_sub(result.len()));
-        if let Some(bytes) = buffer.get(..keep) {
-            result.extend_from_slice(bytes);
-        }
-    }
+    let result = crate::native_process::capture(&mut input, 8192).await?;
+    tokio::io::copy(&mut input, &mut tokio::io::sink())
+        .await
+        .map_err(|e| e.to_string())?;
     Ok(result)
 }
 #[cfg(windows)]
@@ -181,25 +170,15 @@ pub async fn show_dialog(job: Prepared) -> Result<Outcome, String> {
         .kill_on_drop(true)
         .spawn()
         .map_err(|e| format!("Could not open the print dialog: {e}"))?;
-    let mut input = child.stdin.take().ok_or("Print input is unavailable")?;
+    let input = child.stdin.take().ok_or("Print input is unavailable")?;
     let output = child.stdout.take().ok_or("Print output is unavailable")?;
     let errors = child
         .stderr
         .take()
         .ok_or("Print error output is unavailable")?;
-    let write = async {
-        input.write_all(&request).await.map_err(|e| e.to_string())?;
-        input.shutdown().await.map_err(|e| e.to_string())?;
-        drop(input);
-        Ok::<_, String>(())
-    };
+    let write = crate::native_process::write(input, &request);
     let read = async {
-        let mut bytes = Vec::new();
-        output
-            .take(65537)
-            .read_to_end(&mut bytes)
-            .await
-            .map_err(|e| e.to_string())?;
+        let bytes = crate::native_process::capture(output, 65537).await?;
         if bytes.len() > 65536 {
             return Err("Invalid print response".to_string());
         }
@@ -216,4 +195,28 @@ pub async fn show_dialog(job: Prepared) -> Result<Outcome, String> {
         });
     }
     serde_json::from_slice(&bytes).map_err(|_| "Invalid print response".into())
+}
+
+#[cfg(all(test, not(windows)))]
+mod transport_tests {
+    #[tokio::test]
+    async fn print_errors_keep_prefix_and_drain_remaining_bytes_to_eof() {
+        use tokio::io::AsyncWriteExt;
+        let bytes: Vec<_> = (0..65537).map(|index| (index % 251) as u8).collect();
+        let expected = bytes[..8192].to_vec();
+        let (mut writer, reader) = tokio::io::duplex(1024);
+        let producer = tokio::spawn(async move {
+            writer.write_all(&bytes).await.unwrap();
+            writer.shutdown().await.unwrap();
+        });
+        let retained = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            super::drain_errors(reader),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+        producer.await.unwrap();
+        assert_eq!(retained, expected);
+    }
 }

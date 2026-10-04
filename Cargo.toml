@@ -55,7 +55,7 @@ iced = { version = "0.14", default-features = false, features = [
   "x11",
   "wayland",
 ] }
-serde = { version = "1", features = ["derive"] }
+serde = { version = "1", features = ["derive", "rc"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 base64 = "0.22"
 tokio = { version = "1", features = [
