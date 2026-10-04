@@ -36,6 +36,22 @@ pub(super) struct Cascade<'a> {
 
 struct Pages(Vec<Page>);
 
+fn application_shortcut(event: &Event) -> Option<Message> {
+    let Event::Keyboard(keyboard::Event::KeyPressed {
+        key,
+        modified_key,
+        modifiers,
+        ..
+    }) = event
+    else {
+        return None;
+    };
+    if !modifiers.command() {
+        return None;
+    }
+    super::super::shortcuts::key_message(key, modified_key, *modifiers)
+}
+
 impl<'a> Cascade<'a> {
     pub fn new(base: Element<'a, Message>, panels: Vec<Panel<'a>>, menu: &'a State) -> Self {
         Self { base, panels, menu }
@@ -257,6 +273,14 @@ impl Widget<Message, Theme, Renderer> for Cascade<'_> {
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
+        if let Some(message) = application_shortcut(event) {
+            // Close before running the command, just like selecting its menu
+            // row. Keep it captured so neither the base nor the application's
+            // shortcut subscription dispatches the same key a second time.
+            shell.publish(Message::ContextMenu(Action::Run(Box::new(message))));
+            shell.capture_event();
+            return;
+        }
         if matches!(event, Event::Keyboard(_) | Event::InputMethod(_)) {
             if let Event::Keyboard(keyboard::Event::KeyPressed {
                 key: keyboard::Key::Named(key),
@@ -528,5 +552,60 @@ fn reveal(
             .content
             .as_widget_mut()
             .operate(tree, layout, renderer, &mut scroll);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use iced::keyboard::{Key, Modifiers};
+
+    fn pressed(character: &str, modifiers: Modifiers) -> Event {
+        Event::Keyboard(keyboard::Event::KeyPressed {
+            key: Key::Character(character.into()),
+            modified_key: Key::Character(character.into()),
+            physical_key: keyboard::key::Physical::Unidentified(
+                keyboard::key::NativeCode::Unidentified,
+            ),
+            location: keyboard::Location::Standard,
+            modifiers,
+            text: None,
+            repeat: false,
+        })
+    }
+
+    #[test]
+    fn application_shortcuts_use_the_platform_command_modifier() {
+        let command = Modifiers::COMMAND;
+        assert!(matches!(
+            application_shortcut(&pressed("c", command)),
+            Some(Message::Copy(false))
+        ));
+        assert!(matches!(
+            application_shortcut(&pressed("x", command)),
+            Some(Message::Copy(true))
+        ));
+        assert!(matches!(
+            application_shortcut(&pressed("z", command)),
+            Some(Message::Undo)
+        ));
+        assert!(matches!(
+            application_shortcut(&pressed("Z", command | Modifiers::SHIFT)),
+            Some(Message::Redo)
+        ));
+    }
+
+    #[test]
+    fn typing_and_unbound_shortcuts_do_not_dispatch_drawing_commands() {
+        for modifiers in [Modifiers::empty(), Modifiers::SHIFT, Modifiers::ALT] {
+            assert!(application_shortcut(&pressed("n", modifiers)).is_none());
+        }
+        assert!(application_shortcut(&pressed("b", Modifiers::COMMAND)).is_none());
+        assert!(
+            application_shortcut(&Event::InputMethod(
+                iced::advanced::input_method::Event::Commit("窒素".into())
+            ))
+            .is_none()
+        );
     }
 }
