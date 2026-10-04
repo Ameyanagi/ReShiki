@@ -180,6 +180,11 @@ jobs:
         # The Windows renderer includes Tiny Skia when WGPU is unavailable.
         # This checks widget layout/input; it is not native desktop acceptance.
         run: cargo test --locked --no-default-features --bin reshiki app::shortcut_focus_tests::updates_ -- --ignored
+      - name: Test rendered tool flyout input ownership on Windows
+        if: runner.os == 'Windows'
+        # Exercise the actual application widgets, including the Tiny Skia fallback.
+        # Native desktop timing and accessibility acceptance remain separate.
+        run: cargo test --locked --no-default-features --bin reshiki app::shortcut_focus_tests::tool_palette_pointer_gestures_and_keyboard_activation_have_one_owner -- --exact --ignored
       - run: cargo test --workspace --locked --no-default-features
       - name: Test public SciFinder fixtures on a one-megabyte stack
         run: cargo test --locked --no-default-features --example scifinder_handoff_qa tests::public_fixture_checks_fit_one_megabyte_stack -- --exact
