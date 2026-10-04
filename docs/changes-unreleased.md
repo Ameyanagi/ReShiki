@@ -32,6 +32,10 @@ See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
   placing oxygen. Selection shortcuts refresh their property fields.
   [Details](contextual-shortcuts.md) · @Ameyanagi.
 
+- **Under review — Canvas preview memory:** Borrow unchanged previews and share cache reads while preserving exact renderer pixels; measured allocation savings and CPU limits are documented.
+  [Validation and limits](changes/canvas-preview-cache-2026-10-04.md)
+  · [PR #140](https://github.com/Ameyanagi/ReShiki/pull/140) · @Ameyanagi.
+
 - **Under review — Handle shortcuts for precise transforms:** double-click a
   rotation, corner or edge handle to open the matching numeric field, ready to
   type. Opening a field leaves the drawing and Undo history unchanged.
