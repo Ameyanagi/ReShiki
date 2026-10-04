@@ -1335,91 +1335,14 @@ impl App {
             Message::Arc(action) => self.update_arc(action),
             Message::GraphicStyle(change) => self.apply_graphic_style(change),
             Message::GraphicWidth(s) => self.tab.graphic_width_input = s,
-            Message::ApplyGraphicWidth => match self.tab.graphic_width_input.parse::<f32>() {
-                Ok(w) if w.is_finite() && (0.1..=12.0).contains(&w) => {
-                    self.apply_graphic_style(GraphicChange::Width(w))
-                }
-                _ => {
-                    self.error = true;
-                    self.status = "Line width must be 0.1–12 pt".into();
-                }
-            },
+            Message::ApplyGraphicWidth => self.apply_graphic_width(),
             Message::GraphicStroke(s) => self.tab.graphic_stroke_input = s,
-            Message::ApplyGraphicStroke => {
-                if let Some(c) = graphics::parse_color(&self.tab.graphic_stroke_input) {
-                    self.apply_graphic_style(GraphicChange::Stroke(
-                        reshiki::palette::Color::Custom(c),
-                    ));
-                } else {
-                    self.error = true;
-                    self.status = "Enter a six-digit hex color, such as #117E6C".into();
-                }
-            }
+            Message::ApplyGraphicStroke => self.apply_graphic_color(graphics::ColorField::Stroke),
             Message::GraphicFill(s) => self.tab.graphic_fill_input = s,
-            Message::ApplyGraphicFill => {
-                if let Some(c) = graphics::parse_color(&self.tab.graphic_fill_input) {
-                    self.apply_graphic_style(GraphicChange::Fill(Some(
-                        reshiki::palette::Color::Custom(c),
-                    )));
-                } else {
-                    self.error = true;
-                    self.status = "Enter a six-digit hex color, such as #DCEFE9".into();
-                }
-            }
-            Message::ScientificKind(kind) => {
-                self.toolbar.remember(Tool::Graphic(kind));
-                let before = self.tab.doc.clone();
-                for g in self
-                    .tab
-                    .doc
-                    .graphics
-                    .iter_mut()
-                    .filter(|g| self.tab.selected.contains(&g.id))
-                {
-                    if matches!(
-                        (g.kind, kind),
-                        (
-                            reshiki::graphics::GraphicKind::Symbol(_),
-                            reshiki::graphics::GraphicKind::Symbol(_)
-                        ) | (
-                            reshiki::graphics::GraphicKind::Orbital(_),
-                            reshiki::graphics::GraphicKind::Orbital(_)
-                        )
-                    ) {
-                        g.kind = kind;
-                    }
-                }
-                self.tool = Tool::Graphic(kind);
-                self.changed(before);
-            }
-            Message::OrbitalPhase(phase) => {
-                self.tab.orbital_phase = phase;
-                let before = self.tab.doc.clone();
-                for g in self
-                    .tab
-                    .doc
-                    .graphics
-                    .iter_mut()
-                    .filter(|g| self.tab.selected.contains(&g.id))
-                {
-                    g.phase = phase;
-                }
-                self.changed(before);
-            }
-            Message::FlipPhase(value) => {
-                self.tab.phase_flipped = value;
-                let before = self.tab.doc.clone();
-                for g in self
-                    .tab
-                    .doc
-                    .graphics
-                    .iter_mut()
-                    .filter(|g| self.tab.selected.contains(&g.id))
-                {
-                    g.phase_flipped = value;
-                }
-                self.changed(before);
-            }
+            Message::ApplyGraphicFill => self.apply_graphic_color(graphics::ColorField::Fill),
+            Message::ScientificKind(kind) => self.set_scientific_kind(kind),
+            Message::OrbitalPhase(phase) => self.set_orbital_phase(phase),
+            Message::FlipPhase(value) => self.set_phase_flipped(value),
             Message::AttachSymbols(value) => self.tab.attach_symbols = value,
             Message::RotateMark(id, index) => {
                 let before = self.tab.doc.clone();
@@ -1466,16 +1389,7 @@ impl App {
                 }
                 self.changed(before);
             }
-            Message::GraphicSides(sides) => {
-                let before = self.tab.doc.clone();
-                self.tab.bracket_sides = sides;
-                for g in &mut self.tab.doc.graphics {
-                    if self.tab.selected.contains(&g.id) {
-                        g.sides = sides;
-                    }
-                }
-                self.changed(before);
-            }
+            Message::GraphicSides(sides) => self.set_graphic_sides(sides),
             Message::ToggleInspector => {
                 self.inspector_open = !self.inspector_open;
                 if self.inspector_open && self.inspector_tab == InspectorTab::Assistant {
