@@ -2,6 +2,12 @@
 
 See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
 
+- **Under review — Shared release checks and descriptor preparation:** share
+  native target definitions, checksum writing and descriptor query operations
+  while preserving supported platforms, checksums and generated chemistry data.
+  [Validation](changes/release-descriptor-tooling-2026-10-04.md)
+  · [PR #132](https://github.com/Ameyanagi/ReShiki/pull/132) · @Ameyanagi.
+
 - **Lower temporary memory:** reuse numeric-transform candidates,
   consume owned picture buffers and release completed development-worker packets
   while preserving drawing output and editing behavior.
