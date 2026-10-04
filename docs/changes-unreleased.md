@@ -2,7 +2,7 @@
 
 See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
 
-- **Under review — Lower temporary memory:** reuse numeric-transform candidates,
+- **Lower temporary memory:** reuse numeric-transform candidates,
   consume owned picture buffers and release completed development-worker packets
   while preserving drawing output and editing behavior.
   [Measurements and exact-output checks](changes/memory-footprint-2026-10-04.md)
