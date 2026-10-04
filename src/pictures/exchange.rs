@@ -44,20 +44,20 @@ pub fn import(
     let mut pixels = match pixels {
         // Pillow clips integer grayscale samples when converting to RGBA;
         // rescaling the full 16-bit range would change existing drawings.
-        DynamicImage::ImageLuma16(ref gray) => {
+        DynamicImage::ImageLuma16(gray) => {
             image::RgbaImage::from_fn(gray.width(), gray.height(), |x, y| {
                 let image::Luma([value]) = *gray.get_pixel(x, y);
                 let value = value.min(255) as u8;
                 image::Rgba([value, value, value, 255])
             })
         }
-        DynamicImage::ImageRgb16(ref rgb) => {
+        DynamicImage::ImageRgb16(rgb) => {
             image::RgbaImage::from_fn(rgb.width(), rgb.height(), |x, y| {
                 let image::Rgb([r, g, b]) = *rgb.get_pixel(x, y);
                 image::Rgba([(r >> 8) as u8, (g >> 8) as u8, (b >> 8) as u8, 255])
             })
         }
-        DynamicImage::ImageRgba16(ref rgba) => {
+        DynamicImage::ImageRgba16(rgba) => {
             image::RgbaImage::from_fn(rgba.width(), rgba.height(), |x, y| {
                 let image::Rgba([r, g, b, a]) = *rgba.get_pixel(x, y);
                 image::Rgba([
@@ -68,14 +68,14 @@ pub fn import(
                 ])
             })
         }
-        DynamicImage::ImageLumaA16(ref gray) => {
+        DynamicImage::ImageLumaA16(gray) => {
             image::RgbaImage::from_fn(gray.width(), gray.height(), |x, y| {
                 let image::LumaA([v, a]) = *gray.get_pixel(x, y);
                 let v = (v >> 8) as u8;
                 image::Rgba([v, v, v, (a >> 8) as u8])
             })
         }
-        _ => pixels.to_rgba8(),
+        _ => pixels.into_rgba8(),
     };
     for pixel in pixels.pixels_mut() {
         let [_, _, _, alpha] = &mut pixel.0;

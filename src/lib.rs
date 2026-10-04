@@ -12,6 +12,13 @@
     )
 )]
 
+#[cfg(test)]
+pub(crate) use reshiki_process_heap::allocation_metrics;
+#[cfg(test)]
+#[global_allocator]
+static ALLOCATOR: allocation_metrics::MeasuredAllocator<std::alloc::System> =
+    allocation_metrics::MeasuredAllocator::new(std::alloc::System);
+
 pub mod abbreviations;
 pub mod accessibility;
 pub mod aromatic;

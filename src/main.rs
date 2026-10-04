@@ -20,8 +20,16 @@ mod canvas;
 #[cfg(windows)]
 mod rendering;
 
+#[cfg(not(test))]
 #[global_allocator]
 static ALLOCATOR: reshiki_process_heap::BoundedHeap = reshiki_process_heap::BoundedHeap;
+
+#[cfg(test)]
+pub(crate) use reshiki_process_heap::allocation_metrics;
+#[cfg(test)]
+#[global_allocator]
+static ALLOCATOR: allocation_metrics::MeasuredAllocator<reshiki_process_heap::BoundedHeap> =
+    allocation_metrics::MeasuredAllocator::new(reshiki_process_heap::BoundedHeap);
 
 fn main() -> iced::Result {
     if let Some(result) = reshiki::libreoffice::run(std::env::args_os().nth(1).as_deref()) {

@@ -138,7 +138,7 @@ impl Picture {
         let (width, height) = (image.width(), image.height());
         let mut png = Cursor::new(Vec::new());
         image
-            .to_rgba8()
+            .into_rgba8()
             .write_to(&mut png, ImageFormat::Png)
             .map_err(|e| e.to_string())?;
         let bytes = png.into_inner();
@@ -189,7 +189,7 @@ impl Picture {
                 Ok(Handle::from_rgba(
                     self.width(),
                     self.height(),
-                    pixels.flipv().to_rgba8().into_raw(),
+                    pixels.flipv().into_rgba8().into_raw(),
                 ))
             })
             .as_ref()
