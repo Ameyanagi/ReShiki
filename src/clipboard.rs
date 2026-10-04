@@ -59,6 +59,19 @@ struct CommandRequest<'a> {
     operation: &'a str,
     representations: &'a [Representation],
 }
+
+fn encode_request(operation: &str, representations: &[Representation]) -> Result<Vec<u8>, String> {
+    let input = serde_json::to_vec(&CommandRequest {
+        operation,
+        representations,
+    })
+    .map_err(|e| e.to_string())?;
+    if input.len() > JSON_LIMIT {
+        return Err("Clipboard request is too large".into());
+    }
+    Ok(input)
+}
+
 #[derive(Deserialize)]
 struct Packet {
     representations: Vec<Representation>,
@@ -181,14 +194,7 @@ fn helper() -> Result<PathBuf, String> {
 
 #[cfg(windows)]
 async fn invoke(operation: &str, representations: &[Representation]) -> Result<Packet, String> {
-    let input = serde_json::to_vec(&CommandRequest {
-        operation,
-        representations,
-    })
-    .map_err(|e| e.to_string())?;
-    if input.len() > JSON_LIMIT {
-        return Err("Clipboard request is too large".into());
-    }
+    let input = encode_request(operation, representations)?;
     let output = tokio::task::spawn_blocking(move || reshiki_windows::clipboard(&input))
         .await
         .map_err(|e| e.to_string())??;
@@ -197,14 +203,7 @@ async fn invoke(operation: &str, representations: &[Representation]) -> Result<P
 
 #[cfg(not(any(windows, target_os = "linux")))]
 async fn invoke(operation: &str, representations: &[Representation]) -> Result<Packet, String> {
-    let input = serde_json::to_vec(&CommandRequest {
-        operation,
-        representations,
-    })
-    .map_err(|e| e.to_string())?;
-    if input.len() > JSON_LIMIT {
-        return Err("Clipboard request is too large".into());
-    }
+    let input = encode_request(operation, representations)?;
     let mut command = Command::new(helper()?);
     command.arg("--clipboard-worker");
     let mut child = command
