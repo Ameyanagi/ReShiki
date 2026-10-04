@@ -7,16 +7,18 @@ Validation wording corrections: [PR #143](https://github.com/Ameyanagi/ReShiki/p
 
 See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
 
-- **Draft — Chemical text alongside ordinary Copy:** prepare molecular SMILES
-  or copy-only reaction JSON without changing the drawing. October 5 Edge/macOS
-  checks loaded the aromatic reaction through ChemDoodle Open/Load and imported
-  the no-arrow two-ring SMILES through CAS Draw's text field, Add and Center
-  Structure. Both complete rings were visible; no search was submitted. Direct
-  canvas paste did not import the ReShiki selection in either tested editor.
-  The browser integration approach remains unresolved.
+- **Under review — Chemical text alongside ordinary Copy:** prepare molecular
+  SMILES or copy-only reaction JSON without changing the drawing. The accepted
+  reaction workflow is ReShiki Cmd+C → ChemDoodle Open text field Cmd+V → Load.
+  October 5 Edge/macOS checks preserved both complete participants and their
+  roles in the aromatic fixture, and imported the no-arrow two-ring SMILES
+  through CAS Draw's text field, Add and Center Structure. Both complete rings
+  were visible; no search was submitted. Direct canvas paste did not import the
+  ReShiki selection in either tested editor; CAS reaction integration is outside
+  this change.
   [Workflow and limits](scifinder-handoff.md)
   · [Fixture image](images/scifinder-handoff/benzene-hydrogenation.png)
-  · [Draft PR #144](https://github.com/Ameyanagi/ReShiki/pull/144) · @Ameyanagi.
+  · [PR #144](https://github.com/Ameyanagi/ReShiki/pull/144) · @Ameyanagi.
 
 - **Shared release checks and descriptor preparation:** share
   native target definitions, checksum writing and descriptor query operations

@@ -47,8 +47,9 @@ format and reports conversion failure instead of preparing another format.
 Review the Copy status before using the receiving text field.
 
 In CAS Draw, paste molecular SMILES into the text-to-structure field and choose
-**Add to Editor**. For reactions, use ChemDoodle's **Open** text field and
-**Load**, as described below. These are receiving-field routes.
+**Add to Editor**. The accepted reaction workflow is ReShiki **Cmd+C**, then
+**Cmd+V** into ChemDoodle's **Open** text field, followed by **Load**, as
+verified below.
 **Direct Cmd+V into either editor's drawing canvas did not import the ReShiki
 selection in the October 5 checks**. ChemDoodle Open/Load did load the new
 ordinary-Copy reaction JSON. CAS Draw accepted the no-arrow two-ring SMILES
@@ -290,10 +291,15 @@ references write text or read a Tagify text input; they do not import chemical
 content into these canvases. Receiver JavaScript was kept outside the repository.
 
 For this inspected build, changing ReShiki's clipboard text or MIME formats
-alone cannot satisfy direct canvas Cmd+V. The requested behavior remains
-unresolved, and [PR #144](https://github.com/Ameyanagi/ReShiki/pull/144) remains a
-draft. This diagnosis applies to the inspected build and does not establish
-behavior for every browser or editor release.
+alone cannot satisfy direct canvas Cmd+V. This diagnosis applies to the inspected
+build and does not establish behavior for every browser or editor release.
+
+The accepted reaction workflow is ReShiki Cmd+C → Cmd+V into ChemDoodle's Open
+text field → Load. It preserved both complete participants and their
+reactant/product roles in the tested benzene-to-cyclohexane fixture.
+[PR #144](https://github.com/Ameyanagi/ReShiki/pull/144) is under review for that
+workflow. Direct canvas paste and CAS reaction integration are outside this
+change.
 
 ## Direct integration decision
 

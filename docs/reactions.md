@@ -70,10 +70,14 @@ delivery, without Add/conversion. No searches were submitted, and
 vertical/reversed layouts remain covered locally rather than by these live
 checks.
 
-[PR #144](https://github.com/Ameyanagi/ReShiki/pull/144) remains a draft while the
-browser integration approach for direct canvas paste is clarified. The guide
-records the exact actions, baseline comparison and limits. Local fixtures can
-be prepared without publishing clipboard data or contacting CAS:
+The accepted workflow is ReShiki Cmd+C → Cmd+V into ChemDoodle's Open text
+field → Load. Both complete participants and their reactant/product roles were
+preserved in the tested benzene-to-cyclohexane fixture.
+[PR #144](https://github.com/Ameyanagi/ReShiki/pull/144) is under review for this
+workflow; direct canvas paste and CAS reaction integration are outside this
+change. The guide records the exact actions, baseline comparison and limits.
+Local fixtures can be prepared without publishing clipboard data or contacting
+CAS:
 
 ```sh
 cargo run --locked --example scifinder_clipboard_qa -- /tmp/reshiki-scifinder-clipboard
