@@ -1,5 +1,5 @@
 //! Convert live widget snapshots into the native tree and validate requests.
-use super::{Node, Role, Snapshot};
+use super::{Role, Snapshot};
 use accesskit::{Action, ActionRequest, Affine, NodeId, Rect, Tree, TreeId, TreeUpdate};
 use iced::Rectangle;
 use std::collections::{BTreeMap, BTreeSet};
@@ -20,7 +20,7 @@ pub enum Request {
 pub struct NativeTree {
     next: u64,
     ids: BTreeMap<String, NodeId>,
-    live: BTreeMap<NodeId, Node>,
+    live: BTreeMap<NodeId, (String, Role)>,
 }
 
 impl Default for NativeTree {
@@ -127,6 +127,7 @@ impl NativeTree {
                 native.set_value(value.clone());
             }
             if node.enabled {
+                self.live.insert(id, (node.id.clone(), node.role));
                 native.add_action(if matches!(node.role, Role::TextInput | Role::TextArea) {
                     Action::SetValue
                 } else {
@@ -139,7 +140,6 @@ impl NativeTree {
                 focus = id;
             }
             ids.insert(node.id.clone(), id);
-            self.live.insert(id, node.clone());
             children.push(id);
             nodes.push((id, native));
         }
@@ -168,16 +168,11 @@ impl NativeTree {
         if request.target_tree != TreeId::ROOT {
             return None;
         }
-        let node = self.live.get(&request.target_node)?;
-        if !node.enabled {
-            return None;
-        }
-        if request.action == Action::SetValue
-            && matches!(node.role, Role::TextInput | Role::TextArea)
-        {
+        let (id, role) = self.live.get(&request.target_node)?;
+        if request.action == Action::SetValue && matches!(role, Role::TextInput | Role::TextArea) {
             return match &request.data {
                 Some(accesskit::ActionData::Value(value)) if value.len() <= 16384 => {
-                    Some(Request::SetValue(node.id.clone(), value.to_string()))
+                    Some(Request::SetValue(id.clone(), value.to_string()))
                 }
                 _ => None,
             };
@@ -186,11 +181,11 @@ impl NativeTree {
             return None;
         }
         match request.action {
-            Action::Click if !matches!(node.role, Role::TextInput | Role::TextArea) => {
-                Some(Request::Activate(node.id.clone()))
+            Action::Click if !matches!(role, Role::TextInput | Role::TextArea) => {
+                Some(Request::Activate(id.clone()))
             }
-            Action::Focus => Some(Request::Focus(node.id.clone())),
-            Action::ScrollIntoView => Some(Request::Reveal(node.id.clone())),
+            Action::Focus => Some(Request::Focus(id.clone())),
+            Action::ScrollIntoView => Some(Request::Reveal(id.clone())),
             _ => None,
         }
     }
@@ -216,6 +211,7 @@ fn rect(bounds: Rectangle) -> Rect {
 
 #[cfg(test)]
 mod tests {
+    use super::super::Node;
     use super::*;
     fn node(id: &str) -> Node {
         Node {
@@ -318,5 +314,111 @@ mod tests {
             .update(&snapshot(vec![disabled]), "ReShiki", viewport, 1.)
             .unwrap();
         assert_eq!(bridge.resolve(&request(id)), None);
+    }
+
+    #[test]
+    fn disabling_controls_revokes_actions_without_changing_native_ids() {
+        let viewport = Rectangle::with_size(iced::Size::new(320., 220.));
+        let mut bridge = NativeTree::default();
+        let id = bridge
+            .update(&snapshot(vec![node("apply")]), "ReShiki", viewport, 1.)
+            .unwrap()
+            .focus;
+        for enabled in [false, true] {
+            let mut control = node("apply");
+            control.enabled = enabled;
+            control.focused = enabled;
+            let tree = bridge
+                .update(&snapshot(vec![control]), "ReShiki", viewport, 1.)
+                .unwrap();
+            assert_eq!(bridge.ids.get("apply"), Some(&id));
+            assert!(tree.nodes.iter().any(|(current, _)| *current == id));
+            for (action, expected) in [
+                (Action::Click, Request::Activate("apply".into())),
+                (Action::Focus, Request::Focus("apply".into())),
+                (Action::ScrollIntoView, Request::Reveal("apply".into())),
+            ] {
+                assert_eq!(
+                    bridge.resolve(&ActionRequest {
+                        action,
+                        ..request(id)
+                    }),
+                    enabled.then_some(expected)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn native_actions_follow_the_current_role_and_value_limits() {
+        let viewport = Rectangle::with_size(iced::Size::new(320., 220.));
+        let mut bridge = NativeTree::default();
+        let mut previous = None;
+        for role in [
+            Role::Button,
+            Role::TextInput,
+            Role::TextArea,
+            Role::ToggleButton,
+        ] {
+            let mut control = node("control");
+            control.role = role;
+            let id = bridge
+                .update(&snapshot(vec![control]), "ReShiki", viewport, 1.)
+                .unwrap()
+                .focus;
+            assert_eq!(*previous.get_or_insert(id), id);
+            let editable = matches!(role, Role::TextInput | Role::TextArea);
+            assert_eq!(
+                bridge.resolve(&request(id)),
+                (!editable).then(|| Request::Activate("control".into()))
+            );
+            for length in [16384, 16385] {
+                let value = "x".repeat(length);
+                let action = ActionRequest {
+                    action: Action::SetValue,
+                    data: Some(accesskit::ActionData::Value(value.clone().into())),
+                    ..request(id)
+                };
+                assert_eq!(
+                    bridge.resolve(&action),
+                    (editable && length <= 16384)
+                        .then_some(Request::SetValue("control".into(), value))
+                );
+            }
+            for action in [Action::Click, Action::Focus, Action::ScrollIntoView] {
+                assert_eq!(
+                    bridge.resolve(&ActionRequest {
+                        action,
+                        data: Some(accesskit::ActionData::Value("unexpected".into())),
+                        ..request(id)
+                    }),
+                    None
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn invalid_unretained_semantics_still_revoke_native_targets() {
+        let viewport = Rectangle::with_size(iced::Size::new(320., 220.));
+        let mut invalid_name = node("apply");
+        invalid_name.name.clear();
+        let mut invalid_value = node("apply");
+        invalid_value.value = Some("x".repeat(16385));
+        let mut invalid_bounds = node("apply");
+        invalid_bounds.bounds.x = f32::NAN;
+        for invalid in [invalid_name, invalid_value, invalid_bounds] {
+            let mut bridge = NativeTree::default();
+            let id = bridge
+                .update(&snapshot(vec![node("apply")]), "ReShiki", viewport, 1.)
+                .unwrap()
+                .focus;
+            assert!(
+                bridge
+                    .update(&snapshot(vec![invalid]), "ReShiki", viewport, 1.)
+                    .is_err()
+            );
+            assert_eq!(bridge.resolve(&request(id)), None);
+        }
     }
 }
