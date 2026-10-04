@@ -12,7 +12,7 @@ scoring and error behavior. This fix does not separately resize earlier objects;
 the journal command retains its established document-formatting behavior.
 
 This is an intentional behavior fix, separate from the behavior-preserving
-refactors: production source grows by **59 physical lines**. Focused tests and
+refactors: production source grows by **55 physical lines** (59 before integration with the canvas borrowing cleanup). Focused tests and
 optional renderer evidence add 756 lines, including their test-only wiring.
 The actual canvas hover tests account for 290 of those lines.
 
