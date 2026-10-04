@@ -48,6 +48,8 @@ mod pictures;
 mod popover;
 mod printing;
 mod reactions;
+#[cfg(test)]
+mod rotation_tests;
 mod shortcut_examples;
 mod shortcuts;
 mod startup;
@@ -731,6 +733,7 @@ impl App {
             return self.mac_file_action(action);
         }
         let previous = self.inspector_tab;
+        let opening_transform = matches!(&message, Message::Canvas(Edit::BeginTransform(_)));
         let refresh_dimensions = matches!(
             &message,
             Message::EngineDone { .. } | Message::LabelsReady(..)
@@ -748,6 +751,7 @@ impl App {
         // Include inspector changes made by tool-specific handlers, which can
         // return early. Ordinary updates within a panel retain its scroll state.
         if !background
+            && !opening_transform
             && previous != self.inspector_tab
             && self.inspector_tab != InspectorTab::Assistant
         {
@@ -1755,6 +1759,9 @@ impl App {
                     self.status = READY.into();
                 }
             }
+            Message::Canvas(Edit::BeginTransform(field)) => {
+                return self.begin_numeric_transform(field);
+            }
             Message::Canvas(edit) => self.edit(edit),
             Message::Appearance(mode) => {
                 self.appearance.mode = mode;
@@ -2416,6 +2423,7 @@ impl App {
             Edit::ContextMenu { .. } => return,
             Edit::Hover(_)
             | Edit::BeginText(_)
+            | Edit::BeginTransform(_)
             | Edit::EraseStart(_)
             | Edit::EraseTo(..)
             | Edit::EraseEnd => return,

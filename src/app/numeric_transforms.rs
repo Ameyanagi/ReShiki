@@ -9,6 +9,8 @@ use reshiki::{
     editing::{self, Transform},
 };
 
+mod focus;
+
 /// Size of the proportional lock beside H.
 const LOCK: f32 = 20.;
 
@@ -23,6 +25,17 @@ pub enum Field {
 }
 
 impl Field {
+    fn id(self) -> &'static str {
+        match self {
+            Self::Rotation => "transform-rotation",
+            Self::TiltX => "transform-tilt-x",
+            Self::TiltY => "transform-tilt-y",
+            Self::Width => "transform-width",
+            Self::Height => "transform-height",
+            Self::Scale => "transform-scale",
+        }
+    }
+
     /// Apply applies edited fields in this order, so sizes are final.
     const ALL: [Self; 6] = [
         Self::Rotation,
@@ -196,7 +209,6 @@ fn extent(doc: &Document, ids: &[u64], field: Field) -> Option<f32> {
 fn scale(doc: &mut Document, ids: &[u64], pivot: Point, field: Field, factor: f32, lock: bool) {
     if lock || field == Field::Scale {
         editing::transform_about(doc, ids, pivot, factor, 0.);
-        reshiki::projection::sync_centroids(doc);
     } else {
         let (x, y) = if field == Field::Width {
             (factor, 1.)
@@ -359,6 +371,36 @@ fn transformed(
 }
 
 impl App {
+    pub(super) fn begin_numeric_transform(
+        &mut self,
+        target: crate::canvas::TransformField,
+    ) -> Task<Message> {
+        if self.tab.selected.is_empty() {
+            return Task::none();
+        }
+        let field = match target {
+            crate::canvas::TransformField::Rotation => Field::Rotation,
+            crate::canvas::TransformField::Scale => Field::Scale,
+            crate::canvas::TransformField::Width => Field::Width,
+            crate::canvas::TransformField::Height => Field::Height,
+        };
+        let old_width = self.inspector_width();
+        self.inspector_open = true;
+        self.inspector_tab = super::InspectorTab::Properties;
+        self.tab
+            .inspector_ui
+            .update(super::inspector::Action::Section(
+                super::inspector::Section::Transform,
+                true,
+            ));
+        // Revealing the panel must not move the handle the user just clicked.
+        let width_change = old_width - self.inspector_width();
+        self.tab.camera.center.x += width_change / (2. * self.tab.camera.zoom);
+        self.viewport.width += width_change;
+        self.sync_numeric_transforms();
+        iced::advanced::widget::operate(focus::FieldOperation::new(field))
+    }
+
     pub(super) fn sync_numeric_transforms(&mut self) {
         let key = Key {
             revision: self.tab.revision,
@@ -514,6 +556,7 @@ impl App {
             };
             let input =
                 crate::appearance::text_input("", state.value(field))
+                    .id(field.id())
                     .on_input_maybe(enabled.then_some(move |value| {
                         Message::NumericTransform(Action::Input(field, value))
                     }))
@@ -640,7 +683,7 @@ mod tests {
         graphics::{Graphic, GraphicKind},
     };
 
-    fn fixture() -> App {
+    pub(super) fn fixture() -> App {
         let (mut app, _) = App::new();
         app.tab.busy = false;
         app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
@@ -680,6 +723,65 @@ mod tests {
             input.to_string(),
         )));
         let _ = app.update(Message::NumericTransform(Action::Apply(field)));
+    }
+
+    #[test]
+    fn handle_shortcut_reveals_properties_without_applying_or_discarding_drafts() {
+        use super::super::inspector::{Action as InspectorAction, Section};
+        use crate::canvas::{Edit, TransformField};
+        for target in [
+            TransformField::Rotation,
+            TransformField::Scale,
+            TransformField::Width,
+            TransformField::Height,
+        ] {
+            let mut app = fixture();
+            apply(&mut app, Field::Rotation, "15");
+            let _ = app.update(Message::Undo);
+            input(&mut app, Field::Rotation, "-");
+            input(&mut app, Field::Scale, "125");
+            app.inspector_open = false;
+            app.inspector_tab = super::super::InspectorTab::Export;
+            app.tab
+                .inspector_ui
+                .update(InspectorAction::Section(Section::Transform, false));
+            let before = app.tab.doc.clone();
+            let selected = app.tab.selected.clone();
+            let revision = app.tab.revision;
+            let _ = app.update(Message::Canvas(Edit::BeginTransform(target)));
+            assert!(app.inspector_open);
+            assert_eq!(app.inspector_tab, super::super::InspectorTab::Properties);
+            assert_eq!(
+                app.tab.inspector_ui.expanded(Section::Transform),
+                Some(true)
+            );
+            assert_eq!(app.tab.doc, before);
+            assert_eq!(app.tab.selected, selected);
+            assert_eq!(app.tab.revision, revision);
+            assert!(!app.tab.history.can_undo());
+            assert!(app.tab.history.can_redo());
+            assert_eq!(app.tab.numeric_transforms.rotation, "-");
+            assert_eq!(app.tab.numeric_transforms.scale, "125");
+        }
+        let mut app = fixture();
+        let id = app.tab.doc.annotations[0].id;
+        let _ = app.update(Message::InlineText(
+            super::super::inline_text::Action::Begin(Some(id), Point::default()),
+        ));
+        let _ = app.update(Message::CaptionAction(
+            iced::widget::text_editor::Action::Edit(iced::widget::text_editor::Edit::Paste(
+                " draft".to_owned().into(),
+            )),
+        ));
+        let before = app.tab.doc.clone();
+        let caption = app.tab.caption.clone();
+        let _ = app.update(Message::Canvas(Edit::BeginTransform(
+            TransformField::Rotation,
+        )));
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.caption, caption);
+        assert!(app.tab.inline_text.is_some());
+        assert!(!app.tab.history.can_undo());
     }
 
     #[test]

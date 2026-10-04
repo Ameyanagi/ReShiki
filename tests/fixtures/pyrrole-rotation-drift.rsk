@@ -1,0 +1,17 @@
+{
+  "version": 8,
+  "atoms": [
+    {"id":1,"element":"C","position":{"x":35.727333,"y":1.2434498e-15},"label_h":1},
+    {"id":2,"element":"C","position":{"x":11.040354,"y":-33.978714},"label_h":1},
+    {"id":3,"element":"C","position":{"x":-28.90402,"y":-21.0},"label_h":1},
+    {"id":4,"element":"N","position":{"x":-28.90402,"y":21.0},"label_h":1},
+    {"id":5,"element":"C","position":{"x":11.040354,"y":33.978714},"label_h":1}
+  ],
+  "bonds": [
+    {"a":1,"b":2,"order":1},
+    {"a":2,"b":3,"order":2},
+    {"a":3,"b":4,"order":1},
+    {"a":4,"b":5,"order":1},
+    {"a":5,"b":1,"order":2}
+  ]
+}
