@@ -1,5 +1,8 @@
 // A queued Office.js double: reads need load + sync, writes are deferred, and
 // sync can fail after an applied operation. It does not model Office rendering.
+import "./xml-dom.js";
+import { wordPictureXml } from "./word-xml.js";
+
 export function fakeOffice(host) {
   let serial = 0;
   const state = {
@@ -58,7 +61,7 @@ export function fakeOffice(host) {
     text: "\uFFFC",
     pictures: [picture],
     children: [],
-    ooxml: '<w:drawing><a:xfrm rot="0"/><a:srcRect/></w:drawing>',
+    ooxml: null,
   });
 
   function runtimeContext() {
@@ -252,7 +255,7 @@ export function fakeOffice(host) {
         getOoxml() {
           const result = {};
           enqueue("word.getOoxml", () => {
-            result.value = data.ooxml;
+            result.value = data.ooxml ?? wordPictureXml(data);
           });
           return result;
         },

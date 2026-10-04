@@ -18,6 +18,7 @@ import {
   WORD_TAG_PREFIX,
   writeFailure,
 } from "./common.js";
+import { assertEditableWordPicture } from "./word-ooxml.js";
 
 const CONTROL_PROPERTIES = "id,tag,type,subtype,cannotEdit,text";
 const PICTURE_PROPERTIES =
@@ -103,26 +104,7 @@ async function checkEditablePicture(context, state) {
     fail("PROTECTED_OBJECT", "This Word drawing was locked while the edit was being prepared.");
   Object.assign(state, loadedPicture(state.control));
   // These transformations cannot be restored through the Word 1.4 picture API.
-  // Inspect only this owned content control; never rewrite a document package.
-  const tags = ooxml.value.match(/<(?:[\w.-]+:)?(?:srcRect|xfrm)\b[^>]*>/g) || [];
-  const transformed = tags.some((tag) => {
-    if (/:?srcRect\b/.test(tag))
-      return [...tag.matchAll(/\b(?:l|t|r|b)\s*=\s*["'](-?\d+)["']/g)].some(
-        (match) => Number(match[1]) !== 0,
-      );
-    return [...tag.matchAll(/\b(?:rot|flipH|flipV)\s*=\s*["']([^"']+)["']/g)].some(
-      (match) => !["0", "false"].includes(match[1]),
-    );
-  });
-  const effects =
-    /<(?:[\w.-]+:)?(?:duotone|grayscl|biLevel|lum|clrChange|tint|shade|glow|outerShdw|innerShdw|softEdge|reflection)\b/.test(
-      ooxml.value,
-    );
-  if (transformed || effects)
-    fail(
-      "UNSUPPORTED_TRANSFORM",
-      "This Word picture has cropping, rotation, flipping or picture effects that cannot be safely preserved. Reset those picture effects before editing with ReShiki.",
-    );
+  assertEditableWordPicture(ooxml.value, state.control);
 }
 
 function replacePicture(control, record, geometry) {

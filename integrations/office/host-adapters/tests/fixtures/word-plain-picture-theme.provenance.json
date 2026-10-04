@@ -1,0 +1,15 @@
+{
+  "kind": "REDUCED_SAVED_DOCX_FLAT_OPC_RECONSTRUCTION_NOT_LIVE_GETOOXML",
+  "source_docx_sha256": "5b80b493aca83fceebeeb4ccb6f0fb0aa6c1f9387f8649636d3b3f30bea175f2",
+  "source_control_id": 399796563,
+  "source_tag": "reshiki:23a276c1-0c12-4c2b-a7a8-f81510c05cb8",
+  "fixture_sha256": "ac27637e8d50bfebcaf04dbb4d1827855b6b653907f618bce71b80ec9286ea49",
+  "retained": {
+    "content_control": "Only owned sdt subtree, reserialized with equivalent namespace names",
+    "theme_xml_sha256": "e7948e69d1ab51203d82e7e57d491987a16229547a1b6bfd124133a3a895c0ac",
+    "png_sha256": "27f574e6d8e15fcfb68d2cb8ed6020da46ecb1853c2e5a8b5497420b72452f83"
+  },
+  "omitted": "Unrelated document content, taskpane registration, custom native records, core metadata, settings, fonts, styles. Minimal package and selected relationships reconstructed.",
+  "authority": "https://learn.microsoft.com/office/dev/add-ins/word/create-better-add-ins-for-word-with-office-open-xml",
+  "live_response_observed": false
+}

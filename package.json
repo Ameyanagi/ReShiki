@@ -17,6 +17,7 @@
     "check": "bun run lint:js && bun run format:check && bun run docs:check"
   },
   "devDependencies": {
+    "@xmldom/xmldom": "0.9.12",
     "lefthook": "2.1.14",
     "oxfmt": "0.68.0",
     "oxlint": "1.83.0"

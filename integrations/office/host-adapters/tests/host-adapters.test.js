@@ -11,6 +11,7 @@ import {
   XML_NAMESPACE,
 } from "../common.js";
 import { fakeOffice } from "./fake-office.js";
+import { wordPictureXml } from "./word-xml.js";
 
 const PNG =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZ1sAAAAASUVORK5CYII=";
@@ -351,10 +352,10 @@ test("Excel: unrelated connectors are preserved while replacing a drawing", asyn
 test("Word: cropped/rotated content and added text fail before mutation", async () => {
   for (const mutate of [
     (object) => {
-      object.ooxml = '<a:srcRect l="2000"/>';
+      object.ooxml = wordPictureXml(object, '<a:srcRect l="2000"/>');
     },
     (object) => {
-      object.ooxml = '<a:xfrm rot="3600"/>';
+      object.ooxml = wordPictureXml(object, '<a:xfrm rot="3600"/>');
     },
     (object) => {
       object.text = "user text";

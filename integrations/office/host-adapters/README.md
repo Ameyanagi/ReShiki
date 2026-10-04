@@ -43,6 +43,8 @@ Native extents convert to Office points with `extent * 72 / 2540`. An edit prese
 - Excel supports **plain ReShiki image shapes**. Replacement preserves position, dimensions, rotation, aspect-ratio lock, name, human alt text, visibility, cell placement and stacking order. Grouped targets, detectable crops/color adjustments/outlines and attached connectors (including connectors inside groups) are rejected. Connector inspection stops at 10,000 shapes or over 32 nested group levels. Current stable APIs do not expose all shape-associated features: externally attached hyperlinks, assigned macros, shadows/other effects, flips and other features outside the fields listed above are unsupported and may not be detectable. Do not use this replacement path for such decorated/augmented pictures; physical shape identity changes on every successful edit.
 - PowerPoint updates the fill on the existing ungrouped geometric shape; identity, position, rotation and stack membership remain on that shape. Dimensions scale with native extent. A changed fill type or grouped target is rejected. General preservation of manually added fill-cropping/tiling and other picture effects is not established by these adapters.
 
+Word's OOXML preflight resolves the main document part through its Flat OPC package relationship, then locates the content control by its exact ID and tag. Only that control's single inline picture is checked for transforms; theme defaults and other drawings are outside the check. Malformed XML, DTDs and ambiguous identities or picture containers are rejected before replacement. The webview's native `DOMParser` performs XML parsing.
+
 ## Acknowledgement and recovery
 
 The adapters validate input, preserve complete native payloads before replacing a preview, recheck exact object markers after multi-batch reads, and read back the complete stored envelope and supported geometry before returning success. Word/PowerPoint try to restore the previous preview and locator if a partially applied edit fails. Excel retains the original image until the staged replacement has passed readback; it deletes the original as the final replacement mutation. A failed final-delete sync is treated as success only if a subsequent complete readback proves the intended replacement exists in the expected state.
@@ -56,9 +58,12 @@ A successful adapter result means Office returned the written document state. It
 Run from the repository root:
 
 ```sh
-node --test integrations/office/host-adapters/tests/host-adapters.test.js
+bun install --frozen-lockfile
+node --test integrations/office/host-adapters/tests/*.test.js
 ```
 
 The tests use queued Office doubles with explicit `load`/`sync`, enum validation, partial sync failures and concurrent marker changes. They cover exact opaque native-byte roundtrips, new pane sessions, captured targets, copied-object independence, repeated anisotropic scaling, safe rollback, connector/crop/group rejection and size bounds. They do not establish native Office rendering, custom-XML survival on save/close/reopen, native clipboard behavior, undo transaction boundaries, coauthor atomicity or cross-OS interoperability.
+
+Node tests use the pinned development-only `@xmldom/xmldom` parser with strict error handling. The Word theme regression fixture is reduced Flat OPC reconstructed from a saved Mac Word DOCX; its provenance file records the source and retained parts. It is not a captured live `getOoxml()` response or evidence of a successful native edit.
 
 Before claiming desktop acceptance, test Word, Excel and PowerPoint on both Mac and Windows: insert a real chemistry fixture; resize uniformly and by unequal axes; save/close the Office file; reopen and edit twice; copy and edit independently; then perform Windows → Mac → Windows file roundtrips. Verify native hashes and chemistry content, preview changes and displayed scale. Include an unsupported crop/connector case and an induced replacement failure. Those actual-host acceptance results are pending.
