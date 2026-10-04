@@ -2,6 +2,15 @@
 use crate::document::{Bond, Document, Point};
 #[cfg(test)]
 mod double_tests;
+#[cfg(test)]
+thread_local! {
+    static CONSTRUCTIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+#[cfg(test)]
+pub(crate) fn construction_count() -> usize {
+    CONSTRUCTIONS.with(std::cell::Cell::get)
+}
+
 fn eligible(doc: &Document, b: &Bond) -> bool {
     (b.order == 1
         || b.order == 4 && b.projection
@@ -29,6 +38,8 @@ pub struct Joins<'a> {
 }
 impl<'a> Joins<'a> {
     pub fn new(doc: &'a Document) -> Self {
+        #[cfg(test)]
+        CONSTRUCTIONS.with(|count| count.set(count.get() + 1));
         let atoms = doc
             .atoms
             .iter()

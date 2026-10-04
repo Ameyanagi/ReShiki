@@ -1,0 +1,14 @@
+<?xml version="1.0" standalone="no" ?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="81px" height="37px" viewBox="0 0 81 37" style="background-color: #ffffff00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" >
+<path stroke="none" fill="#ffc600" transform="matrix(0.05 0 0 0.05 -55 -45)" d="M 2645.97,1241.37 C 2645.97,1241.37 2645.97,1241.37 2347.57,1572.97 C 2324.74,1598.34 2285.6,1600.4 2260.23,1577.57 C 2234.86,1554.74 2232.8,1515.6 2255.63,1490.23 C 2255.63,1490.23 2255.63,1490.23 2554.03,1158.63 C 2576.86,1133.26 2616,1131.2 2641.37,1154.03 C 2666.74,1176.86 2668.8,1216 2645.97,1241.37 Z " />
+<path stroke="none" fill="#81e6ff" transform="matrix(0.05 0 0 0.05 -55 -45)" d="M 1328.79,1057.22 A 52.4961,104.992 0 1 1 1433.78,1057.22 A 52.4961,104.992 0 1 1 1328.79,1057.22 Z M 1381.28,952.228 L 1655.5,952.228 L 1655.5,1162.21 L 1381.28,1162.21 L 1381.28,952.228 M 1603.01,1057.22 A 52.4961,104.992 0 1 1 1708,1057.22 A 52.4961,104.992 0 1 1 1603.01,1057.22 Z " />
+<text x="0" y="0" stroke="none" fill="#000000" transform="matrix(0.05 0 0 0.05 13.5808 11.3815)" font-style="normal" font-weight="normal" font-size="200px" font-family="Arial" >
+OH</text>
+<text x="0" y="0" stroke="none" fill="#000000" transform="matrix(0.05 0 0 0.05 2.36084 32.9815)" font-style="normal" font-weight="normal" font-size="200px" font-family="Arial" >
+O</text>
+<path stroke="none" fill="#000000" transform="matrix(0.05 0 0 0.05 -55 -45)" d="M 1210,1205.77 L 1190,1194.23 L 1346.74,1103.73 L 1356.74,1121.05 L 1210,1205.77 Z " />
+<path stroke="none" fill="#000000" transform="matrix(0.05 0 0 0.05 -55 -45)" d="M 1190,1194.23 L 1210,1205.77 L 1210,1374.15 L 1190,1374.15 L 1190,1194.23 Z " />
+<path stroke="none" fill="#000000" transform="matrix(0.05 0 0 0.05 -55 -45)" d="M 1240,1228.87 L 1260,1228.87 L 1260,1374.15 L 1240,1374.15 L 1240,1228.87 Z " />
+<path stroke="none" fill="#000000" transform="matrix(0.05 0 0 0.05 -55 -45)" d="M 2592.57,1193.31 L 2607.43,1206.69 L 2309.03,1538.29 L 2294.17,1524.91 L 2592.57,1193.31 Z " />
+</svg>

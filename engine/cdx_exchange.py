@@ -46,6 +46,9 @@ for code, enum in {
     name, kind, _ = PROPERTIES[code]
     PROPERTIES[code] = name, kind, enum
 PROPERTIES[0x13] = ("SupersededBy", "CDXObjectID", {})
+# ChemDraw 26 native CDX saves use a two-byte color-table index on atoms,
+# bonds, and contracted labels for persistent highlight paint.
+PROPERTIES[0x308] = ("highlightColor", "UINT16", {})
 # The published overview duplicates 0xA38. Native closed-curve CDX uses
 # 0xA39 with an empty payload; 0xA38 is the numeric CurveSpacing property.
 PROPERTIES[0xA38] = ("CurveSpacing", "UINT16", {})

@@ -71,6 +71,9 @@ pub struct Atom {
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Bond {
+    /// Persistent paint behind the bond, independent of its ordinary ink.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub highlight: Option<crate::palette::Color>,
     /// Draw the inner component along its ring; chemical order stays unchanged.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub ring_arc: bool,
@@ -141,7 +144,7 @@ fn forward() -> String {
 }
 
 /// The newest document format this build reads. Saved files are marked with it.
-pub const VERSION: u32 = 17;
+pub const VERSION: u32 = 18;
 
 fn newer_version(version: u64) -> String {
     format!(
@@ -332,6 +335,7 @@ impl Document {
             .find(|x| (x.a == a && x.b == b) || (x.a == b && x.b == a))
         {
             *bond = Bond {
+                highlight: bond.highlight,
                 ring_arc: false,
                 projection: false,
                 z_order: bond.z_order,
@@ -349,6 +353,7 @@ impl Document {
             };
         } else {
             self.bonds.push(Bond {
+                highlight: None,
                 ring_arc: false,
                 projection: false,
                 z_order: 0,
@@ -723,6 +728,7 @@ mod tests {
         let mut doc = Document::default();
         let a = doc.add_atom("C", Point::default());
         doc.bonds.push(Bond {
+            highlight: None,
             ring_arc: false,
             projection: false,
             z_order: 0,

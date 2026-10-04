@@ -98,6 +98,13 @@ pub fn read_abbreviations(
         bytes = bytes
             .checked_add(record.label.len())
             .and_then(|n| n.checked_add(record.reverse_label.len()))
+            .and_then(|n| n.checked_add(record.highlight.as_ref().map_or(0, String::len)))
+            .and_then(|n| {
+                n.checked_add(record.presentation.as_ref().map_or(
+                    Some(0),
+                    super::abbreviations::AbbreviationPresentation::bytes,
+                )?)
+            })
             .ok_or(Error::Limit)?;
         if members > 1_000_000 || bytes > 16 * 1024 * 1024 {
             return Err(Error::Limit);
@@ -180,6 +187,15 @@ pub fn read_abbreviations(
         Ok(matched)
     };
     let mut result = Vec::with_capacity(records.len());
+    let colors = if records.iter().any(|record| record.highlight.is_some()) {
+        let xml = super::presentation::parse(expanded_xml)
+            .map_err(|error| Error::Invalid(error.to_string()))?;
+        super::presentation::palette(xml.root_element())
+            .map_err(|error| Error::Invalid(error.to_string()))?
+            .colors
+    } else {
+        Vec::new()
+    };
     for record in records {
         let anchor = identify(&record.anchor)?;
         let members = record
@@ -188,6 +204,12 @@ pub fn read_abbreviations(
             .map(&mut identify)
             .collect::<Result<Vec<_>>>()?;
         result.push(DrawingAbbreviation {
+            label_style: None,
+            label_color_override: false,
+            highlight: super::presentation::highlight(record.highlight.as_deref(), &colors)
+                .and_then(|value| value.map(|color| color.into_document()).transpose())
+                .map_err(|error| Error::Invalid(error.to_string()))?
+                .map(crate::palette::Color::Custom),
             alignment: {
                 let source = nodes
                     .get(&record.anchor)

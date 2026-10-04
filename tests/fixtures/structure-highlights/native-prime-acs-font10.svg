@@ -1,0 +1,14 @@
+<?xml version="1.0" standalone="no" ?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="82px" height="38px" viewBox="0 0 82 38" style="background-color: #ffffff00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" >
+<path stroke="none" fill="#ffc600" transform="matrix(0.05 0 0 0.05 -55 -45)" d="M 2662.26,1256.03 C 2662.26,1256.03 2662.26,1256.03 2363.86,1587.63 C 2332.94,1621.99 2279.93,1624.78 2245.57,1593.86 C 2211.21,1562.94 2208.41,1509.93 2239.34,1475.57 C 2239.34,1475.57 2239.34,1475.57 2537.74,1143.97 C 2568.66,1109.61 2621.67,1106.82 2656.03,1137.74 C 2690.39,1168.66 2693.18,1221.67 2662.26,1256.03 Z " />
+<path stroke="none" fill="#81e6ff" transform="matrix(0.05 0 0 0.05 -55 -45)" d="M 1323.31,1057.22 A 57.9761,115.952 0 1 1 1439.26,1057.22 A 57.9761,115.952 0 1 1 1323.31,1057.22 Z M 1381.28,941.268 L 1655.5,941.268 L 1655.5,1173.17 L 1381.28,1173.17 L 1381.28,941.268 M 1597.53,1057.22 A 57.9761,115.952 0 1 1 1713.48,1057.22 A 57.9761,115.952 0 1 1 1597.53,1057.22 Z " />
+<text x="0" y="0" stroke="none" fill="#000000" transform="matrix(0.05 0 0 0.05 13.5808 11.3815)" font-style="normal" font-weight="normal" font-size="200px" font-family="Arial" >
+OH</text>
+<text x="0" y="0" stroke="none" fill="#000000" transform="matrix(0.05 0 0 0.05 2.40684 32.9815)" font-style="normal" font-weight="normal" font-size="200px" font-family="Arial" >
+O</text>
+<path stroke="none" fill="#000000" transform="matrix(0.05 0 0 0.05 -55 -45)" d="M 1206,1203.46 L 1194,1196.54 L 1355.67,1103.19 L 1361.67,1113.58 L 1206,1203.46 Z " />
+<path stroke="none" fill="#000000" transform="matrix(0.05 0 0 0.05 -55 -45)" d="M 1194,1196.54 L 1206,1203.46 L 1206,1382.15 L 1194,1382.15 L 1194,1196.54 Z " />
+<path stroke="none" fill="#000000" transform="matrix(0.05 0 0 0.05 -55 -45)" d="M 1245.84,1229.93 L 1257.84,1229.93 L 1257.84,1382.15 L 1245.84,1382.15 L 1245.84,1229.93 Z " />
+<path stroke="none" fill="#000000" transform="matrix(0.05 0 0 0.05 -55 -45)" d="M 2595.54,1195.99 L 2604.46,1204.01 L 2306.06,1535.61 L 2297.14,1527.59 L 2595.54,1195.99 Z " />
+</svg>

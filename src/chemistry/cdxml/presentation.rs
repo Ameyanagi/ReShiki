@@ -54,6 +54,8 @@ pub enum Error {
     Rotation,
     #[error("CDXML color is outside the unsigned 8-bit document range")]
     ColorBoundary,
+    #[error("Invalid CDXML highlight color")]
+    HighlightColor,
     #[error("{0}")]
     Document(String),
     #[error("Invalid native drawing style defaults: {0}")]
@@ -134,6 +136,22 @@ impl NativeColor {
     pub fn into_color(self) -> Result<crate::palette::Color> {
         self.into_document().map(crate::palette::Color::imported)
     }
+}
+
+/// Native atom/bond highlight paint is a separate, explicit color-table index.
+/// It is not the foreground color and is not inherited from a parent object.
+pub(super) fn highlight(
+    value: Option<&str>,
+    colors: &[NativeColor],
+) -> Result<Option<NativeColor>> {
+    value
+        .map(|value| {
+            numeric::integer(value)?
+                .and_then(|n| usize::try_from(n).ok())
+                .and_then(|n| colors.get(n).copied())
+                .ok_or(Error::HighlightColor)
+        })
+        .transpose()
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]

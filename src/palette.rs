@@ -403,6 +403,9 @@ pub fn parse_color(text: &str) -> Option<Rgb> {
 /// Every stored document color, for resolution and migration passes.
 pub fn for_each_color_mut(doc: &mut Document, mut visit: impl FnMut(&mut Color)) {
     for atom in &mut doc.atoms {
+        if let Some(color) = &mut atom.display.highlight {
+            visit(color);
+        }
         if let Some(style) = &mut atom.text_style {
             visit(&mut style.color);
         }
@@ -415,6 +418,9 @@ pub fn for_each_color_mut(doc: &mut Document, mut visit: impl FnMut(&mut Color))
         }
     }
     for bond in &mut doc.bonds {
+        if let Some(color) = &mut bond.highlight {
+            visit(color);
+        }
         visit(&mut bond.color);
         visit(&mut bond.indicator.style.color);
     }
@@ -438,6 +444,14 @@ pub fn for_each_color_mut(doc: &mut Document, mut visit: impl FnMut(&mut Color))
     for fill in &mut doc.ring_fills {
         visit(&mut fill.color);
     }
+    for group in &mut doc.abbreviations {
+        if let Some(style) = &mut group.label_style {
+            visit(&mut style.color);
+        }
+        if let Some(color) = &mut group.highlight {
+            visit(color);
+        }
+    }
 }
 /// Read-only twin of `for_each_color_mut`; a test keeps the two in step.
 pub fn any_color(doc: &Document, test: impl Fn(Color) -> bool) -> bool {
@@ -446,14 +460,16 @@ pub fn any_color(doc: &Document, test: impl Fn(Color) -> bool) -> bool {
             .as_ref()
             .map(|s| s.color)
             .into_iter()
+            .chain(a.display.highlight)
             .chain(a.display.hydrogen_color)
             .chain([a.display.stereo.style.color])
             .chain(a.display.number.as_ref().map(|n| n.style.color))
     });
-    let bonds = doc
-        .bonds
-        .iter()
-        .flat_map(|b| [b.color, b.indicator.style.color]);
+    let bonds = doc.bonds.iter().flat_map(|b| {
+        [b.color, b.indicator.style.color]
+            .into_iter()
+            .chain(b.highlight)
+    });
     let texts = doc.annotations.iter().flat_map(|t| {
         std::iter::once(t.format.style.color).chain(t.format.spans.iter().map(|s| s.style.color))
     });
@@ -466,12 +482,20 @@ pub fn any_color(doc: &Document, test: impl Fn(Color) -> bool) -> bool {
         .iter()
         .flat_map(|g| std::iter::once(g.style.stroke).chain(g.style.fill));
     let fills = doc.ring_fills.iter().map(|f| f.color);
+    let abbreviations = doc.abbreviations.iter().flat_map(|g| {
+        g.label_style
+            .as_ref()
+            .map(|style| style.color)
+            .into_iter()
+            .chain(g.highlight)
+    });
     atoms
         .chain(bonds)
         .chain(texts)
         .chain(arrows)
         .chain(graphics)
         .chain(fills)
+        .chain(abbreviations)
         .any(test)
 }
 

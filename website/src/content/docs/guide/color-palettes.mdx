@@ -13,7 +13,7 @@ import ColorReference from "../../../components/ColorReference.astro";
 
 ## How the palette works
 
-Every theme has eight named hues, **Red, Orange, Amber, Green, Teal, Blue, Indigo and Purple**, plus **Ink**, which is black on the light canvas and white on the dark one. Each hue comes in two rows. **Strong** colors bonds, text and strokes; **Tint** colors fills, ring interiors and highlight boxes.
+Every theme has eight named hues, **Red, Orange, Amber, Green, Teal, Blue, Indigo and Purple**, plus **Ink**, which is black on the light canvas and white on the dark one. Each hue comes in two rows. **Strong** colors bonds, text and strokes; **Tint** colors fills, ring interiors and structure highlights. Select part of a structure and choose **Color → Apply to → Highlights** to keep its ink visible over the tint.
 
 **One lightness per row.** In each theme and canvas, every color in a row has the same OKLCH lightness (L) and aims for the same chroma (C), so no hue looks heavier or fainter than its neighbors, and swapping one hue for another keeps a figure balanced. If a hue cannot reach the target chroma in sRGB, ReShiki lowers its chroma and keeps its lightness and hue. Tint rows are light on the light canvas and dark on the dark canvas, so Ink bonds and labels stay readable on a filled ring.
 

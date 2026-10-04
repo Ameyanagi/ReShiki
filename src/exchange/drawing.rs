@@ -89,6 +89,7 @@ impl P {
 
 struct Writer<'a> {
     doc: &'a Document,
+    original: &'a Document,
     /// The source document's palette, for colors in export options.
     palette: crate::palette::Palette,
     options: Options<'a>,
@@ -129,7 +130,7 @@ fn write_impl(
     variable_labels: bool,
 ) -> Result<String> {
     let original = document;
-    let resolved = crate::canvas_theme::resolved_document(document);
+    let resolved = crate::canvas_theme::resolved_exchange_document(document);
     let document = resolved.as_ref();
     document.validate().map_err(invalid)?;
     if document
@@ -153,6 +154,13 @@ fn write_impl(
                 .ring_fills
                 .iter()
                 .any(|fill| fill.atoms.iter().all(|id| g.members.contains(id)))
+            // An anchor's paint is distinct from an explicit contracted label
+            // highlight. Promoting it to the wrapper would paint previously
+            // clear internal atoms/bonds when ChemDraw expands the label.
+            || g.highlight.is_none()
+                && document
+                    .atom(g.anchor)
+                    .is_some_and(|atom| atom.display.highlight.is_some())
     };
     let mut expanded;
     let document = if document.abbreviations.iter().any(needs_expansion) {
@@ -202,7 +210,12 @@ fn write_impl(
             "CDXML cannot yet preserve non-stereochemical front-bond emphasis or projected wedge styles. Restore plain bond appearance before editable export, or use ReShiki (.rsk), SVG, PNG or PDF to retain the appearance.",
         ));
     }
-    let mut w = Writer::new(document, options, crate::palette::Palette::of(original))?;
+    let mut w = Writer::new(
+        document,
+        original,
+        options,
+        crate::palette::Palette::of(original),
+    )?;
     w.variable_labels = variable_labels;
     w.atoms(&graph)?;
     w.bonds()?;
@@ -310,6 +323,7 @@ impl<'a> Writer<'a> {
     }
     fn new(
         doc: &'a Document,
+        original: &'a Document,
         options: Options<'a>,
         palette: crate::palette::Palette,
     ) -> Result<Self> {
@@ -409,6 +423,7 @@ impl<'a> Writer<'a> {
         let fragment = tree.add(Some(page), "fragment", [("id", "2".into())])?;
         let mut w = Self {
             doc,
+            original,
             palette,
             options,
             tree,
@@ -477,7 +492,20 @@ impl<'a> Writer<'a> {
         let attrs = ["r", "g", "b"]
             .into_iter()
             .zip(rgb)
-            .map(|(axis, c)| (axis, format!("{:.8}", f64::from(c) / 255.)))
+            .map(|(axis, c)| {
+                // ChemDraw truncates decimal components when recovering the
+                // 8-bit color. Nearest-decimal formatting can fall below the
+                // channel boundary (129/255 -> 0.50588235 -> 128). Choose the
+                // next 8-place decimal above it using integer arithmetic.
+                // The bias is <= 1e-8 and still rounds to the exact original
+                // 16-bit CDX channel. Preserve the black/white endpoints.
+                let component = match c {
+                    0 => "0.00000000".into(),
+                    255 => "1.00000000".into(),
+                    c => format!("0.{:08}", u64::from(c) * 100_000_000 / 255 + 1),
+                };
+                (axis, component)
+            })
             .collect::<Vec<_>>();
         self.tree.add(Some(self.colors), "color", attrs)?;
         self.color_ids.insert(rgb, id);
