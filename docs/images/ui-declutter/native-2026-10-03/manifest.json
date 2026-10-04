@@ -1,0 +1,841 @@
+{
+  "schema_version": 1,
+  "scope": "Preserved native macOS R1 pairs and Help renderer at production483e70b, source-qualified for layout reuse at 783b154; two actual783 focused-arrow checkpoints. Not full #78 acceptance.",
+  "asset_count": 31,
+  "asset_bytes": 8575115,
+  "transformations": "None: original JPEG/PNG bytes copied, with SHA-256 equality checked. No crop, resize, retouch or re-encode.",
+  "source_identity": {
+    "native_before": {
+      "commit": "ae5ec464ace991ec498bb1acb155635cc7262c1a",
+      "version": "0.9.1-nightly.20260929.36525615302.1",
+      "executable_sha256": "f2da3e1b1ce0a4846de6dcd58d6ab6ed10350a522377077284925ba729dda154"
+    },
+    "native_after": {
+      "production": "483e70bf168430eaad76c57ee9739512bffb0c51",
+      "qa_source": "e5339283785b90bf5e01e27ba1d95d8b81181fad",
+      "nonoverlay_modes_and_blobs_independently_equal": 1979,
+      "reviewed_workflow_test_overlay_paths_only": [
+        ".github/workflows/release.yml",
+        "scripts/collect_windows_functional.py",
+        "tests/test_windows_functional_evidence.py"
+      ]
+    },
+    "native_after_executable_sha256": "e2b733f3850916e21ee6158aac8957b1224b8a792f81a70d4747e3737a441c22",
+    "renderer": {
+      "source_commit": "483e70bf168430eaad76c57ee9739512bffb0c51",
+      "generator": "ui_layout_snapshots",
+      "independent_verification": {
+        "commands_passed": 11,
+        "command_log_hashes_verified": 11,
+        "source_files_verified": 1980,
+        "renderer_images_verified": 50,
+        "byte_identical_to_both_baselines": 50,
+        "changed_images": 0,
+        "dimension_mismatches": 0,
+        "actionable_visual_differences": 0,
+        "help_and_popover_focus_regressions_explicitly_ran_and_passed": true
+      }
+    },
+    "current_candidate_bridge": {
+      "from": "483e70bf168430eaad76c57ee9739512bffb0c51",
+      "to": "783b154d6232f960146396c1dc7b594924191895",
+      "direct_parent": true,
+      "changed": {
+        "src/app/file_shortcuts.rs": {
+          "483": "100644 blob a54a42cf505ff0b79b80270d88d0e21021864dcb",
+          "783": "100644 blob a346bc38258d76762d259240e798857c5dfc7ff6"
+        },
+        "src/app/shortcut_focus_tests.rs": {
+          "483": "100644 blob ec3b060b29fafcd3ab543f51d136360f77eb0ff5",
+          "783": "100644 blob 4fcee84a5c7401246bbed3b696701382e5f349f7"
+        }
+      },
+      "unchanged_mode_blob_count": 1978,
+      "total_current_tracked": 1980,
+      "diff_sha256": "3b6dbba2170102be0475ad27e3126d8a61fcb170f5aafe8399269425d88cfd4f",
+      "scope": "Only after-event focused-field unhandled arrows are captured, plus regression test. No layout, chemistry, serialization, native platform, font or export source change. Historical execution remains historical; this bridge supports retaining unaffected observations, not claiming a fresh 783 run."
+    },
+    "native_focused_arrow": {
+      "production": "783b154d6232f960146396c1dc7b594924191895",
+      "qa_build": "eeb3d67ce398b15b522d992d3f086098a359e9f5",
+      "run_id": 37120484130,
+      "executable_sha256": "a0d861750cd1b38e44fa7575eec77d112e0f573fb3d7e1727238f4f06a24bb7f",
+      "status": "PASS_NATIVE_MACOS_R5_FOCUSED_ARROW_PACKET",
+      "size_status": "PASS_SIZE_CLASSIFICATION_ADDENDUM_NO_NATIVE_RERUN_REQUIRED"
+    }
+  },
+  "native_environment": {
+    "os": "ProductName:\t\tmacOS\nProductVersion:\t\t26.5.1\nBuildVersion:\t\t25F80",
+    "gpu": "Apple M4",
+    "gpu_cores": "10",
+    "metal_capability": "spdisplays_metal4",
+    "display": "LG HDR 4K",
+    "reported_backing_pixels": "6016 x 3384",
+    "reported_logical_mode_and_refresh": "3008 x 1692 @ 60.00Hz",
+    "ui_framework": "Iced",
+    "runtime_renderer_adapter": "Not instrumented. GPU/Metal capability is system metadata, not proof of the runtime selected backend.",
+    "ui_font": "Retained source style::ui_font_family() fallback list begins Hiragino Sans; resolved family was not instrumented.",
+    "document_font": "Arial (explicit common fixture style and native STYLE field)"
+  },
+  "native_display_geometry": {
+    "required_content_points": [
+      [1280, 820],
+      [1040, 680]
+    ],
+    "native_raw_pixels": [
+      [2560, 1696],
+      [2080, 1416]
+    ],
+    "scale": 2,
+    "titlebar_physical_pixels": 56,
+    "outer_points": [
+      [1280, 848],
+      [1040, 708]
+    ],
+    "content_calculation": "height=(raw_height\u221256)/2; width=raw_width/2. Root accepted independent-size-classification-addendum.json: original CG binding dimensions are OUTER; required CONTENT dimensions are satisfied, with no native rerun.",
+    "limits": "R5 48-key guard evidence has the same required content dimensions after titlebar classification; no duplicate retest for this naming error. Its images are not the complete 14-state layout review.",
+    "size_addendum": {
+      "path": "/private/tmp/reshiki-implementation-evidence-20261002/r5-focused-arrow-native-783b154-20261003/independent-size-classification-addendum.json",
+      "bytes": 13334,
+      "sha256": "58daa76d7c6f7a2d27ad726cf20b13388f9dc33fa5c8f162ab9000ca01969ada"
+    }
+  },
+  "native_view": {
+    "theme": "Light",
+    "document_style": "Publication / JACS ACS; Arial 10 pt",
+    "displayed_zoom_percent": 131,
+    "exact_zoom_f32": 1.3107200860977173,
+    "zoom_method": "500% clamp, then six minus actions in both native applications",
+    "comparison_limit": "Equivalent semantic states, not pixel-aligned canvases: native Fit/recentering and removed toolbar rows change placement. Corrected large inspector-closed capture has four tabs; historical before has one. Pointer halos are retained.",
+    "scope": "R1 comparison only; R5 snapshots have their own zoom and independent action coverage."
+  },
+  "fixtures": [
+    {
+      "state": "default",
+      "file": "default.rsk",
+      "sha256": "3f8b4c4cb85f3905dd0c50a69c58caa98251a9ca44ee5b4198db2e310a73bb8b",
+      "bytes": 599,
+      "document_version": 15
+    },
+    {
+      "state": "molecule",
+      "file": "molecule.rsk",
+      "sha256": "361f62793b6ebb1459bd6b499b21e630dd5e3679e7f74e8ae8948baecf53d778",
+      "bytes": 4115,
+      "document_version": 15
+    },
+    {
+      "state": "mixed",
+      "file": "mixed.rsk",
+      "sha256": "9d146828560d193f452128140046f807ff5497bf385b64703c08cb11876496d9",
+      "bytes": 5222,
+      "document_version": 15
+    },
+    {
+      "state": "arc",
+      "file": "arc.rsk",
+      "sha256": "63270e3244af58b55870972e84a7c13cad5e380bd6be31343b7d6a5eb4322cd8",
+      "bytes": 2035,
+      "document_version": 15
+    }
+  ],
+  "review": {
+    "r1_status": "BOUNDED_R1_PASS",
+    "accepted_states": 14,
+    "native_savebacks_passed": 4,
+    "excluded_claims": [
+      "W6 keyboard navigation, focus order, activation, endpoint workflow or general accessibility",
+      "D4 performance, latency, frame rate or timing",
+      "Native clipboard/external application exchange and export behavior",
+      "#103 font fallback semantics or physical typography",
+      "Other fixtures, platforms, display scales, window dimensions, themes or application states",
+      "All-application acceptance or release readiness"
+    ]
+  },
+  "source_receipts": [
+    {
+      "evidence_path": "78-r1-independent-review-483e70b-fonts/independent-review.json",
+      "bytes": 93768,
+      "sha256": "86d85ee1b3c260d2134633aa7386afe9d9ca1ee9da67ed28d560d8461b37c8f5",
+      "availability": "Retained QA artifact; not included as a published repository asset."
+    },
+    {
+      "evidence_path": "78-r1-macos-baseline-native-20261003/native-baseline-manifest.json",
+      "bytes": 43098,
+      "sha256": "b5435beae30771085004cf8e5b7ce11a7e10401e15cb4b8a457dd9a64fa161dd",
+      "availability": "Retained QA artifact; not included as a published repository asset."
+    },
+    {
+      "evidence_path": "78-r1-baseline-prep-20261003/matched-fixtures-v15/manifest.json",
+      "bytes": 7163,
+      "sha256": "0143072582f0d30cfcb5aceb2ecd5da9ddbfc36e676fda9a3c7c00f22f135e80",
+      "availability": "Retained QA artifact; not included as a published repository asset."
+    },
+    {
+      "evidence_path": "78-macos-final-483e70b/identity.json",
+      "bytes": 2499,
+      "sha256": "ea2106ddfa053835ad08ebc0080cd21fca418536799118ebe71a5054341bade0",
+      "availability": "Retained QA artifact; not included as a published repository asset."
+    },
+    {
+      "evidence_path": "78-macos-final-483e70b/r1/native-action-receipt.json",
+      "bytes": 1222,
+      "sha256": "7fb1f7501e0b4a233f54cf34e9263c3c055513e939130a525ab63da7db819b83",
+      "availability": "Retained QA artifact; not included as a published repository asset."
+    },
+    {
+      "evidence_path": "checks-483e70b/independent-evidence-review.json",
+      "bytes": 22696,
+      "sha256": "6b84bb928fe527aba70ca8aadd3571033bb4ed244675b458bb10e348a7d96a40",
+      "availability": "Retained QA artifact; not included as a published repository asset."
+    },
+    {
+      "evidence_path": "17-native-reconciliation-783b154-20261003/reconciliation.json",
+      "bytes": 35553,
+      "sha256": "8d4cbddcf4fb1f0b41c501ebae337de4d4ad1e178d8aec10e4cd7d3bc6476ccb",
+      "availability": "Retained QA artifact; not included as a published repository asset."
+    },
+    {
+      "evidence_path": "r5-focused-arrow-native-783b154-20261003/native-focused-arrow-receipt.json",
+      "sha256": "0a620a089f281e228669c0c2603c760a69e415890b0d74f8f4a3131030953737",
+      "bytes": 3723,
+      "availability": "Retained QA artifact; not included as a published repository asset."
+    },
+    {
+      "evidence_path": "r5-focused-arrow-native-783b154-20261003/independent-native-focused-arrow-review.json",
+      "sha256": "2af3ce83d05acc4240a66868bdde3cc10260c0beeaa860d69627c8e470a26c2b",
+      "bytes": 30833,
+      "availability": "Retained QA artifact; not included as a published repository asset."
+    },
+    {
+      "evidence_path": "r5-focused-arrow-native-783b154-20261003/independent-size-classification-addendum.json",
+      "sha256": "58daa76d7c6f7a2d27ad726cf20b13388f9dc33fa5c8f162ab9000ca01969ada",
+      "bytes": 13334,
+      "availability": "Retained QA artifact; not included as a published repository asset."
+    },
+    {
+      "evidence_path": "78-r3-native-783b154/native-results.json",
+      "sha256": "661a0ab3843b81e265a3332698c2e4dc29c03479c3e0648e390b142fa8027004",
+      "bytes": 91713,
+      "availability": "Retained QA artifact; not included as a published repository asset."
+    },
+    {
+      "evidence_path": "78-r3-native-783b154/native-receipt.txt",
+      "sha256": "5832b85382aca3095e545fde9ce70019aa34815ee18bb3f2023a35c8b5dd9a5d",
+      "bytes": 4521,
+      "availability": "Retained QA artifact; not included as a published repository asset."
+    },
+    {
+      "evidence_path": "78-r3-native-783b154/reports/native-analysis.json",
+      "sha256": "b7b5f7d200146449b76899be6342f53d3db3bd1c67fc9b140a0f5864c1f7550e",
+      "bytes": 173742,
+      "availability": "Retained QA artifact; not included as a published repository asset."
+    },
+    {
+      "evidence_path": "78-r3-native-783b154/reports/style-review.json",
+      "sha256": "f637f05730849dbc9428656f21db6dccae2270e11c01f20daad7f5707b650905",
+      "bytes": 19255,
+      "availability": "Retained QA artifact; not included as a published repository asset."
+    },
+    {
+      "evidence_path": "78-r3-native-783b154/reports/final-integrity.json",
+      "sha256": "6b23ee49e1a8f5730eab6f28a85afcae6a8b46c65b2b4066135cb1adf2e9d888",
+      "bytes": 1452,
+      "availability": "Retained QA artifact; not included as a published repository asset."
+    },
+    {
+      "evidence_path": "78-r3-native-783b154-independent-review-audit-unsafe.json",
+      "bytes": 7031,
+      "sha256": "9acf826b85115b7d483559c85783f216d333b5e9249faf8adbbf42e5ebd4ef91",
+      "availability": "Retained QA artifact; not included as a published repository asset."
+    }
+  ],
+  "pairs": [
+    {
+      "criterion": "R1-default-1280x820",
+      "before": "before/default-1280x820.jpg",
+      "after": "after/default-1280x820.jpg",
+      "bounded_result": "PASS",
+      "observed_state": "Properties open, default unselected state"
+    },
+    {
+      "criterion": "R1-default-1040x680",
+      "before": "before/default-1040x680.jpg",
+      "after": "after/default-1040x680.jpg",
+      "bounded_result": "PASS",
+      "observed_state": "Properties open, default unselected state"
+    },
+    {
+      "criterion": "R1-molecule-1280x820",
+      "before": "before/molecule-1280x820.jpg",
+      "after": "after/molecule-1280x820.jpg",
+      "bounded_result": "PASS",
+      "observed_state": "Bonds/Bond appearance expanded"
+    },
+    {
+      "criterion": "R1-molecule-1040x680",
+      "before": "before/molecule-1040x680.jpg",
+      "after": "after/molecule-1040x680.jpg",
+      "bounded_result": "PASS",
+      "observed_state": "Bonds/Bond appearance expanded"
+    },
+    {
+      "criterion": "R1-mixed-1280x820",
+      "before": "before/mixed-1280x820.jpg",
+      "after": "after/mixed-1280x820.jpg",
+      "bounded_result": "PASS",
+      "observed_state": "Arrange controls visible; source-equivalent mixed selection; Transform collapsed"
+    },
+    {
+      "criterion": "R1-mixed-1040x680",
+      "before": "before/mixed-1040x680.jpg",
+      "after": "after/mixed-1040x680.jpg",
+      "bounded_result": "PASS",
+      "observed_state": "Arrange controls visible; source-equivalent mixed selection; Transform collapsed"
+    },
+    {
+      "criterion": "R1-transform-more-closed-1280x820",
+      "before": "before/transform-1280x820.jpg",
+      "after": "after/transform-more-closed-1280x820.jpg",
+      "bounded_result": "PASS",
+      "observed_state": "Bonds collapsed; Transform expanded; More CLOSED; all numeric fields unchanged"
+    },
+    {
+      "criterion": "R1-transform-more-closed-1040x680",
+      "before": "before/transform-1040x680.jpg",
+      "after": "after/transform-more-closed-1040x680.jpg",
+      "bounded_result": "PASS",
+      "observed_state": "Bonds collapsed; Transform expanded; More CLOSED; all numeric fields unchanged"
+    },
+    {
+      "criterion": "R1-transform-more-open-1280x820",
+      "before": "before/transform-1280x820.jpg",
+      "after": "after/transform-more-open-1280x820.jpg",
+      "bounded_result": "PASS",
+      "observed_state": "Bonds collapsed; Transform expanded; More OPEN; Rotate/Tilt X/Tilt Y=0; Scale=100; W=24.94pt; H=28.80pt; proportions locked"
+    },
+    {
+      "criterion": "R1-transform-more-open-1040x680",
+      "before": "before/transform-1040x680.jpg",
+      "after": "after/transform-more-open-1040x680.jpg",
+      "bounded_result": "PASS",
+      "observed_state": "Bonds collapsed; Transform expanded; More OPEN; Rotate/Tilt X/Tilt Y=0; Scale=100; W=24.94pt; H=28.80pt; proportions locked"
+    },
+    {
+      "criterion": "R1-arc-1280x820",
+      "before": "before/arc-1280x820.jpg",
+      "after": "after/arc-1280x820.jpg",
+      "bounded_result": "PASS",
+      "observed_state": "Select tool; selected native arc; Start=180; Sweep=180; black 0.6pt Solid; no fill"
+    },
+    {
+      "criterion": "R1-arc-1040x680",
+      "before": "before/arc-1040x680.jpg",
+      "after": "after/arc-1040x680.jpg",
+      "bounded_result": "PASS",
+      "observed_state": "Select tool; selected native arc; Start=180; Sweep=180; black 0.6pt Solid; no fill"
+    },
+    {
+      "criterion": "R1-default-inspector-closed-1280x820",
+      "before": "before/default-inspector-closed-1280x820.jpg",
+      "after": "after/default-inspector-closed-corrected-1280x820.jpg",
+      "bounded_result": "PASS",
+      "observed_state": "Inspector closed; Arrange preference remains true"
+    },
+    {
+      "criterion": "R1-default-inspector-closed-1040x680",
+      "before": "before/default-inspector-closed-1040x680.jpg",
+      "after": "after/default-inspector-closed-1040x680.jpg",
+      "bounded_result": "PASS",
+      "observed_state": "Inspector closed; Arrange preference remains true"
+    }
+  ],
+  "assets": [
+    {
+      "path": "after/arc-1040x680.jpg",
+      "kind": "native-macOS-desktop-capture",
+      "evidence_path": "78-macos-final-483e70b/r1/captures/arc-1040x680.jpg",
+      "bytes": 256497,
+      "sha256": "90daaaf8f52d6d8b6e78be131f5795c6c89669bcfb6d1f58aa94c8b79edc6aac",
+      "source_commit": "483e70bf168430eaad76c57ee9739512bffb0c51",
+      "logical_content_points": [1040, 680],
+      "physical_pixels": [2080, 1416],
+      "fixture": "arc",
+      "state": "Select tool; selected native arc; Start=180; Sweep=180; black 0.6pt Solid; no fill",
+      "ax_receipt": {
+        "evidence_path": "78-macos-final-483e70b/r1/captures/arc-1040x680.txt",
+        "bytes": 4610,
+        "sha256": "d1ae9a9b6f6a29a9fb9eb84229b3da0fbece47059a7d4a29eae98c3525c41b04"
+      }
+    },
+    {
+      "path": "after/arc-1280x820.jpg",
+      "kind": "native-macOS-desktop-capture",
+      "evidence_path": "78-macos-final-483e70b/r1/captures/arc-1280x820.jpg",
+      "bytes": 313362,
+      "sha256": "155e94339316cfe4ac1a20b98e6b2dbc9bb1bd16a221003d5ca446d0f00821d2",
+      "source_commit": "483e70bf168430eaad76c57ee9739512bffb0c51",
+      "logical_content_points": [1280, 820],
+      "physical_pixels": [2560, 1696],
+      "fixture": "arc",
+      "state": "Select tool; selected native arc; Start=180; Sweep=180; black 0.6pt Solid; no fill",
+      "ax_receipt": {
+        "evidence_path": "78-macos-final-483e70b/r1/captures/arc-1280x820.txt",
+        "bytes": 5050,
+        "sha256": "54b2c5574d634083837e90ffd00c94a0be101a5112ae303917c543ff19416d69"
+      }
+    },
+    {
+      "path": "after/default-1040x680.jpg",
+      "kind": "native-macOS-desktop-capture",
+      "evidence_path": "78-macos-final-483e70b/r1/captures/default-1040x680.jpg",
+      "bytes": 199570,
+      "sha256": "f4ba7f55141d5d4f2deca5f6f69533729928e379375fcd016081423f369ae54d",
+      "source_commit": "483e70bf168430eaad76c57ee9739512bffb0c51",
+      "logical_content_points": [1040, 680],
+      "physical_pixels": [2080, 1416],
+      "fixture": "default",
+      "state": "Properties open, default unselected state",
+      "ax_receipt": {
+        "evidence_path": "78-macos-final-483e70b/r1/captures/default-1040x680.txt",
+        "bytes": 3718,
+        "sha256": "780acca437f977f93bec8951cbebbcc6f719497b883bc14cb128111eef90293d"
+      }
+    },
+    {
+      "path": "after/default-1280x820.jpg",
+      "kind": "native-macOS-desktop-capture",
+      "evidence_path": "78-macos-final-483e70b/r1/captures/default-1280x820.jpg",
+      "bytes": 234664,
+      "sha256": "a126ca514c0c1d95a47e6e3f130e30bf4f5fbdbaccca287bedace2023892d8ed",
+      "source_commit": "483e70bf168430eaad76c57ee9739512bffb0c51",
+      "logical_content_points": [1280, 820],
+      "physical_pixels": [2560, 1696],
+      "fixture": "default",
+      "state": "Properties open, default unselected state",
+      "ax_receipt": {
+        "evidence_path": "78-macos-final-483e70b/r1/captures/default-1280x820.txt",
+        "bytes": 4010,
+        "sha256": "be4ea510ebba26b87144a1478a48f2c955094576ede25cdeeb609e3cc9345689"
+      }
+    },
+    {
+      "path": "after/default-inspector-closed-1040x680.jpg",
+      "kind": "native-macOS-desktop-capture",
+      "evidence_path": "78-macos-final-483e70b/r1/captures/default-inspector-closed-1040x680.jpg",
+      "bytes": 157902,
+      "sha256": "7fce2e96adfdae162ae91a9b8be70f15facd32af25916e868c5ed2669ad60c63",
+      "source_commit": "483e70bf168430eaad76c57ee9739512bffb0c51",
+      "logical_content_points": [1040, 680],
+      "physical_pixels": [2080, 1416],
+      "fixture": "default",
+      "state": "Inspector closed; Arrange preference remains true",
+      "ax_receipt": {
+        "evidence_path": "78-macos-final-483e70b/r1/captures/default-inspector-closed-1040x680.txt",
+        "bytes": 3494,
+        "sha256": "192b8c87d14506f7d9e6cf7d329b1695e2c5d425007071fbdb563bc6ea1337d6"
+      }
+    },
+    {
+      "path": "after/default-inspector-closed-corrected-1280x820.jpg",
+      "kind": "native-macOS-desktop-capture",
+      "evidence_path": "78-macos-final-483e70b/r1/captures/default-inspector-closed-corrected-1280x820.jpg",
+      "bytes": 201217,
+      "sha256": "c04035e667c5945b22fcabc7e03d4f550c37907fdddda99fbc3fab11972e66a3",
+      "source_commit": "483e70bf168430eaad76c57ee9739512bffb0c51",
+      "logical_content_points": [1280, 820],
+      "physical_pixels": [2560, 1696],
+      "fixture": "default",
+      "state": "Inspector closed; Arrange preference remains true",
+      "ax_receipt": {
+        "evidence_path": "78-macos-final-483e70b/r1/captures/default-inspector-closed-corrected-1280x820.txt",
+        "bytes": 3786,
+        "sha256": "877cc0bc51b9c29f243ac49e2ede8bb6a98367ed68539670f15bece8210adf2f"
+      }
+    },
+    {
+      "path": "after/mixed-1040x680.jpg",
+      "kind": "native-macOS-desktop-capture",
+      "evidence_path": "78-macos-final-483e70b/r1/captures/mixed-1040x680.jpg",
+      "bytes": 272218,
+      "sha256": "8bcc1d54bfc52653b339bf8f00efda7b0b23e9a20db5381a83bef2208af2f0a8",
+      "source_commit": "483e70bf168430eaad76c57ee9739512bffb0c51",
+      "logical_content_points": [1040, 680],
+      "physical_pixels": [2080, 1416],
+      "fixture": "mixed",
+      "state": "Arrange controls visible; source-equivalent mixed selection; Transform collapsed",
+      "ax_receipt": {
+        "evidence_path": "78-macos-final-483e70b/r1/captures/mixed-1040x680.txt",
+        "bytes": 3732,
+        "sha256": "a0f4a17e279ca930f313ebcb345b99a28335007763ca077f48fff20b8713d816"
+      }
+    },
+    {
+      "path": "after/mixed-1280x820.jpg",
+      "kind": "native-macOS-desktop-capture",
+      "evidence_path": "78-macos-final-483e70b/r1/captures/mixed-1280x820.jpg",
+      "bytes": 327675,
+      "sha256": "68b20cc4fef733fdfe9eca55c8b52c5c55246f4e39ae888030aa759624f3b269",
+      "source_commit": "483e70bf168430eaad76c57ee9739512bffb0c51",
+      "logical_content_points": [1280, 820],
+      "physical_pixels": [2560, 1696],
+      "fixture": "mixed",
+      "state": "Arrange controls visible; source-equivalent mixed selection; Transform collapsed",
+      "ax_receipt": {
+        "evidence_path": "78-macos-final-483e70b/r1/captures/mixed-1280x820.txt",
+        "bytes": 4095,
+        "sha256": "01a3512e5218b2e0ee42ffc1332c3a9e79525c2c4c78281ce895d9a33a754e3c"
+      }
+    },
+    {
+      "path": "after/molecule-1040x680.jpg",
+      "kind": "native-macOS-desktop-capture",
+      "evidence_path": "78-macos-final-483e70b/r1/captures/molecule-1040x680.jpg",
+      "bytes": 260948,
+      "sha256": "5750896d73c1209eea21b92903eaed317ea32231a26a758ebdd26109e5595643",
+      "source_commit": "483e70bf168430eaad76c57ee9739512bffb0c51",
+      "logical_content_points": [1040, 680],
+      "physical_pixels": [2080, 1416],
+      "fixture": "molecule",
+      "state": "Bonds/Bond appearance expanded",
+      "ax_receipt": {
+        "evidence_path": "78-macos-final-483e70b/r1/captures/molecule-1040x680.txt",
+        "bytes": 3907,
+        "sha256": "d060659735734fd316719c4424e9e831f56387e33b5e7329a02794db6ce2a3c1"
+      }
+    },
+    {
+      "path": "after/molecule-1280x820.jpg",
+      "kind": "native-macOS-desktop-capture",
+      "evidence_path": "78-macos-final-483e70b/r1/captures/molecule-1280x820.jpg",
+      "bytes": 315138,
+      "sha256": "94932ea3acd1cf1d9fefdc64bc984958e13c5059a1dfc92199b136c0451dfa2f",
+      "source_commit": "483e70bf168430eaad76c57ee9739512bffb0c51",
+      "logical_content_points": [1280, 820],
+      "physical_pixels": [2560, 1696],
+      "fixture": "molecule",
+      "state": "Bonds/Bond appearance expanded",
+      "ax_receipt": {
+        "evidence_path": "78-macos-final-483e70b/r1/captures/molecule-1280x820.txt",
+        "bytes": 4382,
+        "sha256": "1f6ed2fe328ad6480776a112cb08a104965dffd01b7976e9079eec68e1b33ed5"
+      }
+    },
+    {
+      "path": "after/transform-more-closed-1040x680.jpg",
+      "kind": "native-macOS-desktop-capture",
+      "evidence_path": "78-macos-final-483e70b/r1/captures/transform-more-closed-1040x680.jpg",
+      "bytes": 265583,
+      "sha256": "995228f2f5f89c3464674826278ebec307a691e35e80a6e98cb95ca3d4458bd6",
+      "source_commit": "483e70bf168430eaad76c57ee9739512bffb0c51",
+      "logical_content_points": [1040, 680],
+      "physical_pixels": [2080, 1416],
+      "fixture": "molecule",
+      "state": "Bonds collapsed; Transform expanded; More CLOSED; all numeric fields unchanged",
+      "ax_receipt": {
+        "evidence_path": "78-macos-final-483e70b/r1/captures/transform-more-closed-1040x680.txt",
+        "bytes": 4596,
+        "sha256": "44b318919a4c279cebbbc23d951fd96a5bc2802a92b9ffaaeb1030ab45cfdffd"
+      }
+    },
+    {
+      "path": "after/transform-more-closed-1280x820.jpg",
+      "kind": "native-macOS-desktop-capture",
+      "evidence_path": "78-macos-final-483e70b/r1/captures/transform-more-closed-1280x820.jpg",
+      "bytes": 320010,
+      "sha256": "2fcca701d43532a0517c9196b8fdc26605fee8dae167b726808885352ee16419",
+      "source_commit": "483e70bf168430eaad76c57ee9739512bffb0c51",
+      "logical_content_points": [1280, 820],
+      "physical_pixels": [2560, 1696],
+      "fixture": "molecule",
+      "state": "Bonds collapsed; Transform expanded; More CLOSED; all numeric fields unchanged",
+      "ax_receipt": {
+        "evidence_path": "78-macos-final-483e70b/r1/captures/transform-more-closed-1280x820.txt",
+        "bytes": 4998,
+        "sha256": "d290245de76fb2e6592e6fee3d5484079c36e7b72f6145435eebdb0d4fcdf181"
+      }
+    },
+    {
+      "path": "after/transform-more-open-1040x680.jpg",
+      "kind": "native-macOS-desktop-capture",
+      "evidence_path": "78-macos-final-483e70b/r1/captures/transform-more-open-1040x680.jpg",
+      "bytes": 265603,
+      "sha256": "1cb478fbf94c87338ae6a81ef4e4bc00c743147f188bb47055f99b0895ee28dd",
+      "source_commit": "483e70bf168430eaad76c57ee9739512bffb0c51",
+      "logical_content_points": [1040, 680],
+      "physical_pixels": [2080, 1416],
+      "fixture": "molecule",
+      "state": "Bonds collapsed; Transform expanded; More OPEN; Rotate/Tilt X/Tilt Y=0; Scale=100; W=24.94pt; H=28.80pt; proportions locked",
+      "ax_receipt": {
+        "evidence_path": "78-macos-final-483e70b/r1/captures/transform-more-open-1040x680.txt",
+        "bytes": 4738,
+        "sha256": "026cd2828664fb48321ee09d06e40416250f20874a6a344d57c46e8bd67ecd40"
+      }
+    },
+    {
+      "path": "after/transform-more-open-1280x820.jpg",
+      "kind": "native-macOS-desktop-capture",
+      "evidence_path": "78-macos-final-483e70b/r1/captures/transform-more-open-1280x820.jpg",
+      "bytes": 318976,
+      "sha256": "a9cbaa3c72066817b894e5dd023b3512a69b3219056eb81be0857a0b72ff2d0f",
+      "source_commit": "483e70bf168430eaad76c57ee9739512bffb0c51",
+      "logical_content_points": [1280, 820],
+      "physical_pixels": [2560, 1696],
+      "fixture": "molecule",
+      "state": "Bonds collapsed; Transform expanded; More OPEN; Rotate/Tilt X/Tilt Y=0; Scale=100; W=24.94pt; H=28.80pt; proportions locked",
+      "ax_receipt": {
+        "evidence_path": "78-macos-final-483e70b/r1/captures/transform-more-open-1280x820.txt",
+        "bytes": 5140,
+        "sha256": "26c5eaa12cb1096accd16dd95ff491e087a4daee45a5e4331b8a8803da337f7e"
+      }
+    },
+    {
+      "path": "before/arc-1040x680.jpg",
+      "kind": "native-macOS-desktop-capture",
+      "evidence_path": "78-r1-macos-baseline-native-20261003/captures/arc-1040x680.jpg",
+      "bytes": 288966,
+      "sha256": "270ddd4f19b558ea791a0947c26cc07b5aaff141a8582672fd91519bf1349667",
+      "source_commit": "ae5ec464ace991ec498bb1acb155635cc7262c1a",
+      "logical_content_points": [1040, 680],
+      "physical_pixels": [2080, 1416],
+      "fixture": "arc"
+    },
+    {
+      "path": "before/arc-1280x820.jpg",
+      "kind": "native-macOS-desktop-capture",
+      "evidence_path": "78-r1-macos-baseline-native-20261003/captures/arc-1280x820.jpg",
+      "bytes": 354139,
+      "sha256": "27ff5b412dd69d738f752ab82abf9e5b12993ae0c6d84c2ac87ec45fe7d3ca0d",
+      "source_commit": "ae5ec464ace991ec498bb1acb155635cc7262c1a",
+      "logical_content_points": [1280, 820],
+      "physical_pixels": [2560, 1696],
+      "fixture": "arc"
+    },
+    {
+      "path": "before/default-1040x680.jpg",
+      "kind": "native-macOS-desktop-capture",
+      "evidence_path": "78-r1-macos-baseline-native-20261003/captures/default-1040x680.jpg",
+      "bytes": 238546,
+      "sha256": "420dacad1e1d829f21b60803c9d40039571f83a68446a0439300507f1fe3ca79",
+      "source_commit": "ae5ec464ace991ec498bb1acb155635cc7262c1a",
+      "logical_content_points": [1040, 680],
+      "physical_pixels": [2080, 1416],
+      "fixture": "default"
+    },
+    {
+      "path": "before/default-1280x820.jpg",
+      "kind": "native-macOS-desktop-capture",
+      "evidence_path": "78-r1-macos-baseline-native-20261003/captures/default-1280x820.jpg",
+      "bytes": 276274,
+      "sha256": "fcdf4cd71273a516235666843df77920040a68e4e4f8b222553588dd2baf267d",
+      "source_commit": "ae5ec464ace991ec498bb1acb155635cc7262c1a",
+      "logical_content_points": [1280, 820],
+      "physical_pixels": [2560, 1696],
+      "fixture": "default"
+    },
+    {
+      "path": "before/default-inspector-closed-1040x680.jpg",
+      "kind": "native-macOS-desktop-capture",
+      "evidence_path": "78-r1-macos-baseline-native-20261003/captures/default-inspector-closed-1040x680.jpg",
+      "bytes": 194892,
+      "sha256": "66594701e54075741b9b3a623968f5b27780dc9238867b2d0981a57e2e9874db",
+      "source_commit": "ae5ec464ace991ec498bb1acb155635cc7262c1a",
+      "logical_content_points": [1040, 680],
+      "physical_pixels": [2080, 1416],
+      "fixture": "default"
+    },
+    {
+      "path": "before/default-inspector-closed-1280x820.jpg",
+      "kind": "native-macOS-desktop-capture",
+      "evidence_path": "78-r1-macos-baseline-native-20261003/captures/default-inspector-closed-1280x820.jpg",
+      "bytes": 229248,
+      "sha256": "7068949224a8158387f9fef267a6498b52490a74bc993506f115d85e8553b3b3",
+      "source_commit": "ae5ec464ace991ec498bb1acb155635cc7262c1a",
+      "logical_content_points": [1280, 820],
+      "physical_pixels": [2560, 1696],
+      "fixture": "default"
+    },
+    {
+      "path": "before/mixed-1040x680.jpg",
+      "kind": "native-macOS-desktop-capture",
+      "evidence_path": "78-r1-macos-baseline-native-20261003/captures/mixed-1040x680.jpg",
+      "bytes": 303721,
+      "sha256": "216824e902c804f8f86aa7adb0bc6ed1c6106d2185677c13402a53d709f6d277",
+      "source_commit": "ae5ec464ace991ec498bb1acb155635cc7262c1a",
+      "logical_content_points": [1040, 680],
+      "physical_pixels": [2080, 1416],
+      "fixture": "mixed"
+    },
+    {
+      "path": "before/mixed-1280x820.jpg",
+      "kind": "native-macOS-desktop-capture",
+      "evidence_path": "78-r1-macos-baseline-native-20261003/captures/mixed-1280x820.jpg",
+      "bytes": 369707,
+      "sha256": "9e551e76f0b08a01f241582c791bfca8cb18768af58895f13718e2f62ff9c96c",
+      "source_commit": "ae5ec464ace991ec498bb1acb155635cc7262c1a",
+      "logical_content_points": [1280, 820],
+      "physical_pixels": [2560, 1696],
+      "fixture": "mixed"
+    },
+    {
+      "path": "before/molecule-1040x680.jpg",
+      "kind": "native-macOS-desktop-capture",
+      "evidence_path": "78-r1-macos-baseline-native-20261003/captures/molecule-1040x680.jpg",
+      "bytes": 298145,
+      "sha256": "c97df52cf646b37ffa8ab906b8f0882bd8497c615c7f942b7bb5e54b0e75b33a",
+      "source_commit": "ae5ec464ace991ec498bb1acb155635cc7262c1a",
+      "logical_content_points": [1040, 680],
+      "physical_pixels": [2080, 1416],
+      "fixture": "molecule"
+    },
+    {
+      "path": "before/molecule-1280x820.jpg",
+      "kind": "native-macOS-desktop-capture",
+      "evidence_path": "78-r1-macos-baseline-native-20261003/captures/molecule-1280x820.jpg",
+      "bytes": 357843,
+      "sha256": "fb06539bf2acfeb1eb6a51beed7390a20da7db7ce84165b4cf5478e5804fb076",
+      "source_commit": "ae5ec464ace991ec498bb1acb155635cc7262c1a",
+      "logical_content_points": [1280, 820],
+      "physical_pixels": [2560, 1696],
+      "fixture": "molecule"
+    },
+    {
+      "path": "before/transform-1040x680.jpg",
+      "kind": "native-macOS-desktop-capture",
+      "evidence_path": "78-r1-macos-baseline-native-20261003/captures/transform-1040x680.jpg",
+      "bytes": 289685,
+      "sha256": "a1560991f7787074311fa6fc87e2d834839a4aaf6e893c18cb2a0750067ff2ad",
+      "source_commit": "ae5ec464ace991ec498bb1acb155635cc7262c1a",
+      "logical_content_points": [1040, 680],
+      "physical_pixels": [2080, 1416],
+      "fixture": "molecule"
+    },
+    {
+      "path": "before/transform-1280x820.jpg",
+      "kind": "native-macOS-desktop-capture",
+      "evidence_path": "78-r1-macos-baseline-native-20261003/captures/transform-1280x820.jpg",
+      "bytes": 363382,
+      "sha256": "9a4fe8d1bb320ec8015bfbdf8fa2272cb705c78df1ab918429e473a5dcc97c9b",
+      "source_commit": "ae5ec464ace991ec498bb1acb155635cc7262c1a",
+      "logical_content_points": [1280, 820],
+      "physical_pixels": [2560, 1696],
+      "fixture": "molecule"
+    },
+    {
+      "path": "before/transform-numeric-visible-1040x680.jpg",
+      "kind": "native-macOS-desktop-capture",
+      "evidence_path": "78-r1-macos-baseline-native-20261003/captures/transform-numeric-visible-1040x680.jpg",
+      "bytes": 310442,
+      "sha256": "d3ac7760c0f489b8af84d637a14596d9d4645a11b7c4d2a94082f92ce56cb19f",
+      "source_commit": "ae5ec464ace991ec498bb1acb155635cc7262c1a",
+      "logical_content_points": [1040, 680],
+      "physical_pixels": [2080, 1416],
+      "fixture": "molecule",
+      "state": "Historical numeric transform controls after scrolling the inspector"
+    },
+    {
+      "path": "r5-783b154/compact-arrows-final.jpg",
+      "kind": "native-macOS-desktop-capture",
+      "evidence_path": "r5-focused-arrow-native-783b154-20261003/compact-arrows-final.jpg",
+      "sha256": "5f00968e465aec15b675bc333e78748d26d4c5e3a1420b0987e5421a1650bea7",
+      "bytes": 279202,
+      "source_commit": "783b154d6232f960146396c1dc7b594924191895",
+      "qa_commit": "eeb3d67ce398b15b522d992d3f086098a359e9f5",
+      "logical_content_points": [1040, 680],
+      "physical_pixels": [2080, 1416],
+      "displayed_zoom_percent": 204,
+      "state": "Rotation field retains uncommitted draft123 after 12 focused arrow-key actions; position unchanged",
+      "ax_receipt": {
+        "evidence_path": "r5-focused-arrow-native-783b154-20261003/compact-arrows-final.txt",
+        "sha256": "bf6ddf7be3bf485e4b4419071768f460ccadb3acee2660d52f32a8e98c99971f",
+        "bytes": 4767
+      }
+    },
+    {
+      "path": "r5-783b154/large-arrows-final.jpg",
+      "kind": "native-macOS-desktop-capture",
+      "evidence_path": "r5-focused-arrow-native-783b154-20261003/large-arrows-final.jpg",
+      "sha256": "0f8c6652b400b9a34d6022d193d4d5657aaabc3e80597e5bdc26c36fc594d830",
+      "bytes": 339345,
+      "source_commit": "783b154d6232f960146396c1dc7b594924191895",
+      "qa_commit": "eeb3d67ce398b15b522d992d3f086098a359e9f5",
+      "logical_content_points": [1280, 820],
+      "physical_pixels": [2560, 1696],
+      "displayed_zoom_percent": 250,
+      "state": "Rotation field retains uncommitted draft123 after 12 focused arrow-key actions; position unchanged",
+      "ax_receipt": {
+        "evidence_path": "r5-focused-arrow-native-783b154-20261003/large-arrows-final.txt",
+        "sha256": "6a55de5e274818ad282804ee0039887cf58e861a8d74c38abe5e65e7ef80952d",
+        "bytes": 4815
+      }
+    },
+    {
+      "path": "renderer/help-1040.png",
+      "kind": "application-renderer-output",
+      "evidence_path": "checks-483e70b/renderer-layout/help-1040.png",
+      "bytes": 164668,
+      "sha256": "3c5c357dc2c4341afd03d816b71a39c655abb57b7a2022267f9d0086415c75af",
+      "source_commit": "483e70bf168430eaad76c57ee9739512bffb0c51",
+      "pixel_dimensions": [1040, 680],
+      "zoom": 1.0,
+      "theme": "Light",
+      "generator": "ui_layout_snapshots; real Iced widget tree, headless application renderer"
+    },
+    {
+      "path": "renderer/help-1280.png",
+      "kind": "application-renderer-output",
+      "evidence_path": "checks-483e70b/renderer-layout/help-1280.png",
+      "bytes": 207547,
+      "sha256": "f48ad664b4a0a16f5030fdb4362e64f1bd301a12045e3ca471567d6e54ecf03f",
+      "source_commit": "483e70bf168430eaad76c57ee9739512bffb0c51",
+      "pixel_dimensions": [1280, 820],
+      "zoom": 1.0,
+      "theme": "Light",
+      "generator": "ui_layout_snapshots; real Iced widget tree, headless application renderer"
+    }
+  ],
+  "focused_arrow_result": {
+    "focused_key_cases": 48,
+    "field_drafts": ["Rotation123", "color#123456"],
+    "keys_per_field_per_size": "plain, Option and Shift+Option with Up/Down/Left/Right",
+    "native_savebacks_identical_to_baseline": 5,
+    "baseline_sha256": "fdeb6323433d703c9af5191ab25ccf2a1472ddda34b5c12a27d943c71f90f846",
+    "unfocused_plus15_and_undo": "PASS; coordinates checked independently, nonposition data exact, Undo returns exact baseline",
+    "scope_limits": [
+      "No caret-position measurement",
+      "No Windows/Linux native keyboard result",
+      "No latency or general W6 completion claim"
+    ],
+    "size_correction": "The 1280x848 dimensions in the recorded CGWindow binding are outer-window points, not app-content points. At the observed 2x raster scale, the retained 2560x1696 screenshot includes a 56-pixel (28-point) native titlebar, leaving 2560x1640 pixels or 1280x820 logical points of app content. Compact 2080x1416 leaves 2080x1360 pixels or 1040x680 content points after the same native titlebar."
+  },
+  "historical_chemdraw_operator_result": {
+    "status": "COMPLETE_WITH_DISCLOSED_EXCHANGE_LIMITS_ROOT_REVIEW_PENDING",
+    "production_commit": "783b154d6232f960146396c1dc7b594924191895",
+    "qa_build_commit": "eeb3d67ce398b15b522d992d3f086098a359e9f5",
+    "chemdraw_version": "26.0.0.6599 Prime",
+    "route": "MATCHED-SETTINGS QA DESTINATION",
+    "default_destination_workflow": "NOT RUN; previously preserved inaccessible-conflict evidence remains a limitation.",
+    "review_required": true,
+    "completed_utc": "2026-10-03T12:52:00.790168+00:00",
+    "results_summary": {
+      "PASS": 21,
+      "PASS_WITH_DISCLOSED_EXCHANGE_LIMITS": 3
+    },
+    "no_windows_or_other_chemdraw_claim": true
+  },
+  "chemdraw_accepted_review": {
+    "status": "PASS_WITH_DISCLOSED_EXCHANGE_LIMITS",
+    "independent_review": {
+      "evidence_path": "78-r3-native-783b154-independent-review-audit-unsafe.json",
+      "bytes": 7031,
+      "sha256": "9acf826b85115b7d483559c85783f216d333b5e9249faf8adbbf42e5ebd4ef91",
+      "availability": "Retained QA artifact; not included as a published repository asset."
+    },
+    "integration_reviewer_accepted": true,
+    "results_summary": {
+      "PASS": 21,
+      "PASS_WITH_DISCLOSED_EXCHANGE_LIMITS": 3
+    },
+    "scope": "Matched-settings QA destination only; all recorded exchange losses, default-destination NOT RUN, platform and version limits remain. This accepted bounded review supersedes the historical operator report review-pending status."
+  }
+}

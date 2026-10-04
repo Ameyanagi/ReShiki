@@ -10,7 +10,12 @@ Groups and templates are available in their current form and may be extended or 
 
 Press **F1**, or click **Help** at the bottom of the tools. Choose **Open shortcut examples**. The reference is arranged in nine sections on the ordinary unbounded canvas. Scroll vertically or sideways to pan, hold Cmd/Ctrl while scrolling to zoom at the pointer, or use Fit for an overview. Double-click a structure, copy, switch tabs, and paste. Captions stay in the reference; the underlying atoms and bonds remain editable.
 
-![Help offers an editable shortcut reference](../images/shortcut-help/help.png)
+![Help offers shortcut examples in a tab](../images/ui-declutter/native-2026-10-03/renderer/help-1280.png)
+
+Help above is application-renderer output from `483e70b`, at 1280 × 820.
+The [October 3 layout record](ui-declutter-native-2026-10-03.md#help-renderer-output)
+includes the compact view and its source qualification for `783b154`.
+The feature examples below retain their historical captures.
 
 ![One ReShiki file of copyable structures on the normal unbounded canvas](../images/shortcut-help/gallery.png)
 
