@@ -43,16 +43,20 @@ pub(crate) fn atom_label_ink_bounds(a: &Atom, doc: &Document) -> Option<(Point, 
 /// Keep this separate from geometric nearest-atom searches used for bond growth.
 pub fn atom_label_hit(doc: &Document, point: Point, radius: f32) -> Option<u64> {
     doc.atoms.iter().rev().find_map(|atom| {
-        let (lo, hi) = atom_label_bounds(atom, doc)?;
-        (point.x >= lo.x - radius
-            && point.x <= hi.x + radius
-            && point.y >= lo.y - radius
-            && point.y <= hi.y + radius)
+        // Empty corners between a symbol and its stacked H/isotope/charge
+        // must not hide a neighboring atom or bond from pointer targeting.
+        label_ink_boxes(&atom_label(atom, doc))
+            .into_iter()
+            .any(|(lo, hi)| {
+                point.x >= lo.x - radius
+                    && point.x <= hi.x + radius
+                    && point.y >= lo.y - radius
+                    && point.y <= hi.y + radius
+            })
             .then_some(atom.id)
     })
 }
 
-#[cfg(test)]
 pub(crate) fn atom_label_ink_boxes(a: &Atom, doc: &Document) -> Vec<(Point, Point)> {
     label_ink_boxes(&atom_label(a, doc))
 }
@@ -1355,6 +1359,18 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn overlapping_atom_label_ink_keeps_reverse_paint_order() {
+        let mut doc = Document::default();
+        let first = doc.add_atom("N", Point::default());
+        let last = doc.add_atom("N", Point::default());
+        let (lo, hi) = atom_label_ink_boxes(doc.atom(first).unwrap(), &doc)[0];
+        let point = Point::new((lo.x + hi.x) / 2., (lo.y + hi.y) / 2.);
+        assert_eq!(atom_label_hit(&doc, point, 0.), Some(last));
+        doc.atoms.reverse();
+        assert_eq!(atom_label_hit(&doc, point, 0.), Some(first));
+    }
 
     #[test]
     fn batched_bounds_match_each_selection() {

@@ -118,6 +118,71 @@ class CopyFeedbackTests(unittest.TestCase):
         self.assertEqual(self.controller.messages[-1][0], "Drawing was not copied")
         self.errors.assert_called_once_with(None, "no thread")
 
+    def fail_completion_scheduling(self, worker_error=None):
+        with patch.object(extension, "worker", side_effect=worker_error):
+            self.handler.copy("editor", b"native")
+            with patch.object(extension, "post", side_effect=RuntimeError("callback unavailable")):
+                self.jobs.pop()()
+        # Scheduling failed in the worker: it must not call host UI directly.
+        self.assertFalse(self.handler.copying)
+        self.assertEqual(
+            [message[0] for message in self.controller.messages], ["Copying editable drawing…"]
+        )
+        self.errors.assert_not_called()
+        self.assertFalse(self.callbacks)
+
+    def test_completion_scheduling_failure_reports_on_next_copy_and_allows_retry(self):
+        self.fail_completion_scheduling()
+        with patch.object(extension, "worker") as work:
+            self.handler.copy("editor", b"retry")
+            self.errors.assert_called_once_with(None, "callback unavailable")
+            self.assertEqual(
+                [message[0] for message in self.controller.messages],
+                [
+                    "Copying editable drawing…",
+                    "Drawing was not copied",
+                    "Copying editable drawing…",
+                ],
+            )
+            self.assertTrue(self.handler.copying)
+            self.assertEqual(len(self.jobs), 1)
+            self.jobs.pop()()
+            self.callbacks.pop()()
+        work.assert_called_once_with("editor", "--libreoffice-copy", b"retry")
+        self.assertFalse(self.handler.copying)
+        self.assertEqual(self.controller.messages[-1][0], "Editable drawing copied")
+
+    def test_worker_failure_is_preserved_when_completion_scheduling_also_fails(self):
+        self.fail_completion_scheduling(RuntimeError("clipboard denied"))
+        self.handler.copy("editor", b"retry")
+        self.errors.assert_called_once_with(None, "clipboard denied")
+        self.assertEqual(len(self.jobs), 1)
+
+    def test_deferred_failure_notice_reentrant_copy_does_not_start_duplicate_worker(self):
+        self.fail_completion_scheduling()
+        self.errors.side_effect = lambda *_: self.handler.copy("editor", b"reentrant retry")
+        self.handler.copy("editor", b"outer retry")
+        self.errors.assert_called_once_with(None, "callback unavailable")
+        self.assertTrue(self.handler.copying)
+        self.assertEqual(len(self.jobs), 1)
+        with patch.object(extension, "worker") as work:
+            self.jobs.pop()()
+            self.callbacks.pop()()
+        work.assert_called_once_with("editor", "--libreoffice-copy", b"reentrant retry")
+        self.assertFalse(self.handler.copying)
+
+    def test_unavailable_deferred_failure_ui_does_not_leave_copy_busy(self):
+        self.fail_completion_scheduling()
+        self.errors.side_effect = RuntimeError("frame disposed")
+        with self.assertRaisesRegex(RuntimeError, "frame disposed"):
+            self.handler.copy("editor", b"retry")
+        self.assertFalse(self.handler.copying)
+        self.assertFalse(self.jobs)
+        self.errors.side_effect = None
+        self.handler.copy("editor", b"later retry")
+        self.assertEqual(len(self.jobs), 1)
+        self.assertEqual(self.errors.call_count, 1)
+
     def test_infobar_closed_during_copy_is_recreated_on_completion(self):
         with patch.object(extension, "worker"):
             self.handler.copy("editor", b"native")

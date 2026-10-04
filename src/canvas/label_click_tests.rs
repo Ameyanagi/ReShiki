@@ -35,6 +35,28 @@ pub(crate) fn aniline() -> (Document, u64) {
     (doc, ids[0])
 }
 
+pub(crate) fn stacked_label_neighbor() -> (Document, u64, u64) {
+    let mut doc = Document::default();
+    doc.drawing_style.font_family = "Arial".into();
+    let oxygen = doc.add_atom("O", World::new(40., 0.));
+    let carbon = doc.add_atom("C", World::new(-42., 0.));
+    // Paint N last: its H₂ line extends above and to the right, but the
+    // neighboring O is in the empty corner beneath the subscript.
+    let nitrogen = doc.add_atom("N", World::default());
+    doc.add_bond(carbon, nitrogen, 1, "plain");
+    let atom = doc.atom_mut(nitrogen).unwrap();
+    atom.no_implicit = true;
+    atom.explicit_h = 2;
+    atom.display.hydrogens = Some(true);
+    atom.display.hydrogen_position = reshiki::atom_labels::HydrogenPosition::Above;
+    atom.text_style = Some(reshiki::typography::TextStyle {
+        family: "Arial".into(),
+        size_pt: 24.,
+        ..Default::default()
+    });
+    (doc, nitrogen, oxygen)
+}
+
 pub(crate) fn subscript_ink(doc: &Document) -> World {
     primitives(doc)
         .into_iter()

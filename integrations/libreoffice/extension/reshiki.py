@@ -2132,6 +2132,7 @@ class Handler(unohelper.Base, XDispatchProvider, XDispatch, XInitialization, XSe
     def __init__(self, ctx):
         self.ctx, self.frame = ctx, None
         self.copying = False
+        self.copy_failure = None
 
     def getImplementationName(self):
         return HANDLER
@@ -2166,6 +2167,15 @@ class Handler(unohelper.Base, XDispatchProvider, XDispatch, XInitialization, XSe
     def copy(self, program, raw):
         if self.copying:
             return
+        if self.copy_failure is not None:
+            feedback, error = self.copy_failure
+            self.copy_failure = None
+            # A rejected callback cannot safely update UI from its worker.
+            # Report on this next UNO-thread request before accepting a retry.
+            feedback.finish(False)
+            show_error(self.ctx, error)
+            if self.copying:  # The modal notice may allow a reentrant copy.
+                return
         host_clipboard = uses_host_clipboard()
         if host_clipboard:
             raw = bounded_clipboard_bytes(raw)
@@ -2206,7 +2216,13 @@ class Handler(unohelper.Base, XDispatchProvider, XDispatch, XInitialization, XSe
 
             # Linux workers prepare bytes only; the focused host owns its
             # clipboard. Other platforms retain their native helper route.
-            post(self.ctx, complete)
+            try:
+                post(self.ctx, complete)
+            except Exception as failure:
+                # Publish the deferred notice before releasing the busy gate;
+                # neither clipboard nor feedback belongs on this worker.
+                self.copy_failure = (feedback, error or str(failure))
+                self.copying = False
 
         try:
             threading.Thread(target=execute, daemon=True).start()
