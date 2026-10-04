@@ -226,11 +226,11 @@ def worker(program, mode, data=b""):
         return json.loads(raw)
 
 
-def packet(value):
+def packet(value, *, binary=False):
     if value.get("version") != 1:
         raise ValueError("Unsupported ReShiki embedding version.")
-    native = base64.b64decode(value["native"], validate=True)
-    png = base64.b64decode(value["png"], validate=True)
+    native = value["native"] if binary else base64.b64decode(value["native"], validate=True)
+    png = value["png"] if binary else base64.b64decode(value["png"], validate=True)
     extent = value["extent"]
     if not 0 < len(native) <= LIMIT or not 0 < len(png) <= LIMIT:
         raise ValueError("Embedded drawing or preview exceeds 64 MB.")
@@ -1428,24 +1428,27 @@ class Embedded(
         storage = parent.openStorageElement(name, 1)
         try:
 
-            def read(entry):
+            def read(entry, *, binary=False):
                 stream = storage.openStreamElement(entry, 1).getInputStream()
                 try:
                     count, raw = stream.readBytes(None, LIMIT + 1)
                     if count > LIMIT:
                         raise ValueError("Embedded data exceeds 64 MB.")
-                    return raw.value
+                    raw = raw.value
                 finally:
                     stream.closeInput()
+                if binary and type(raw) is not bytes:
+                    raw = base64.b64decode(base64.b64encode(raw))
+                return raw
 
             metadata = json.loads(read("metadata.json"))
             value = {
                 "version": metadata["version"],
                 "extent": metadata["extent"],
-                "native": base64.b64encode(read("drawing.rsk")).decode("ascii"),
-                "png": base64.b64encode(read("preview.png")).decode("ascii"),
+                "native": read("drawing.rsk", binary=True),
+                "png": read("preview.png", binary=True),
             }
-            self.native, self.png, self.extent = packet(value)
+            self.native, self.png, self.extent = packet(value, binary=True)
         finally:
             storage.dispose()
 

@@ -230,7 +230,7 @@ export async function readRecords(context, collection) {
         "STORAGE_LIMIT",
         "The embedded ReShiki data exceeds the document storage limit. No records were removed.",
       );
-    records.push({ ...(await decodeRecord(xml.value)), part, xml: xml.value });
+    records.push({ ...(await decodeRecord(xml.value)), part, xmlLength: xml.value.length });
   }
   return records;
 }
@@ -269,7 +269,7 @@ export async function discardUnpublishedRecord(context, collection, attempted, i
 export function assertCanAdd(records, record) {
   if (
     records.length + 1 > STORAGE_LIMITS.records ||
-    records.reduce((sum, item) => sum + item.xml.length, 0) + encodeRecord(record).length + 8192 >
+    records.reduce((sum, item) => sum + item.xmlLength, 0) + encodeRecord(record).length + 8192 >
       STORAGE_LIMITS.xmlBytes
   ) {
     fail(

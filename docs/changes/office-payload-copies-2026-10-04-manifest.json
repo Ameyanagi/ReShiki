@@ -1,0 +1,308 @@
+{
+  "date": "2026-10-04",
+  "pull_request": {
+    "number": 134,
+    "url": "https://github.com/Ameyanagi/ReShiki/pull/134",
+    "state": "under_review",
+    "production_test_head": "d2dfbe26ae7437131c3f29c58a6596376e0f21a2"
+  },
+  "baseline_commit": "81ca82101061ecc201545a3cae8d8257f03254d3",
+  "candidate_production_test_commit": "d2dfbe26ae7437131c3f29c58a6596376e0f21a2",
+  "runtime": {
+    "container": "reshiki-refactor-uno-20261004",
+    "container_id": "426dbfc7f3f893c411a744140b6ce560a9fba998a9755eb1747e1609b369f226",
+    "image": "ubuntu:24.04",
+    "image_id": "sha256:008173c23f95b170204355c12626cb5a965d779a7e1283b09e9cffbb1bf33ca3",
+    "os": "Ubuntu 24.04.5 LTS",
+    "architecture": "arm64",
+    "libreoffice": "26.2.5.2 620(Build:2)",
+    "python": "3.12.3",
+    "package_origin": "official Ubuntu noble-backports, ubuntu-archive-keyring",
+    "matched_libreoffice_package_version": "4:26.2.5.2-0ubuntu0.26.04.1~bpo24.04.1",
+    "packages": [
+      "libreoffice-calc-nogui\t4:26.2.5.2-0ubuntu0.26.04.1~bpo24.04.1",
+      "libreoffice-core-nogui\t4:26.2.5.2-0ubuntu0.26.04.1~bpo24.04.1",
+      "libreoffice-impress-nogui\t4:26.2.5.2-0ubuntu0.26.04.1~bpo24.04.1",
+      "libreoffice-script-provider-python\t4:26.2.5.2-0ubuntu0.26.04.1~bpo24.04.1",
+      "libreoffice-writer-nogui\t4:26.2.5.2-0ubuntu0.26.04.1~bpo24.04.1",
+      "python3\t3.12.3-0ubuntu2.1",
+      "python3-uno\t4:26.2.5.2-0ubuntu0.26.04.1~bpo24.04.1"
+    ],
+    "profiles": ["/work/profiles/baseline", "/work/profiles/candidate"],
+    "bind_mounts": [],
+    "headless": true,
+    "final_container_state": "stopped, retained"
+  },
+  "extensions": {
+    "baseline": {
+      "source_sha256": "c2de0f37a89e4ae54662fe63a2f32e3c4f5043b70da0cf2a85347e102661a816",
+      "oxt_sha256": "7f94fd1efd96d0006184bb892c999f74da6cca92e6059bdf929aef2e7b3bc7d0"
+    },
+    "candidate": {
+      "source_sha256": "bd282131c4eb87d69c2660f94d28fab6967c5347f0e16c2260c08e64d494a312",
+      "oxt_sha256": "0f7aa45c54343f18951abb3a83ea572dd619e9d9c0790686bd57ec5962541706"
+    },
+    "installed_source_equality_checked_before_each_harness": true
+  },
+  "packet": {
+    "fixture": "tests/fixtures/chemdraw-captions/source.rsk",
+    "fixture_sha256": "ff3389166fc74dbbd4bb7606a5b1042814770e0ae26c38124374e02a2ea0312d",
+    "worker_sha256": "81e034f047a57e3073d41ccfe76c2f537229cf28d15bf23e9bd8ef046973d093",
+    "worker_platform": "macOS arm64",
+    "worker_command": ["reshiki", "--libreoffice-preview"],
+    "worker_build_scope": "candidate images/app/core/B01; chemistry/platform changes not yet integrated",
+    "packet_sha256": "20151f7efab90a2c91d86f1349b4f30e0062081cab22edf511ec3d08da2e8307",
+    "native_bytes": 77245,
+    "native_sha256": "ff3389166fc74dbbd4bb7606a5b1042814770e0ae26c38124374e02a2ea0312d",
+    "png_bytes": 845174,
+    "png_dimensions": [5946, 3902],
+    "png_sha256": "f1e7588acf7ba4af0f24b979ea3e6d2afb36f52c8fbaef7cab238d08ce1c5ad7",
+    "extent_hundredths_mm": [12586, 8258],
+    "linux_renderer_executed": false,
+    "mode": "--packet"
+  },
+  "results": {
+    "office_node_tests": {
+      "node": "24.19.0",
+      "passed": 158,
+      "failed": 0,
+      "skipped": 0
+    },
+    "source_extracted_python_tests": {
+      "python": "3.12.12",
+      "candidate_passed": 15,
+      "baseline_behavior_passed": 14,
+      "baseline_excluded": "intentional no-base64 performance contract"
+    },
+    "installed_python_uno_controlled_tests": {
+      "passed": 171,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 0.358,
+      "log_sha256": "23ee0d8be30f76bde54210101ac3c8e3023757af2e9dddb9b3a893a9a6f9990b"
+    },
+    "roundtrip_reports": {
+      "baseline-roundtrip": {
+        "sha256": "05e97ecc3c44610da0a1c1805c6a77a1c36cc0de2b842c0deb2ed89ef685ab71",
+        "extension_sha256": "c2de0f37a89e4ae54662fe63a2f32e3c4f5043b70da0cf2a85347e102661a816",
+        "cases": [
+          {
+            "format": "odt",
+            "objects": 2,
+            "save_reopen_cycles": 2,
+            "passed": true
+          },
+          {
+            "format": "ods",
+            "objects": 2,
+            "save_reopen_cycles": 2,
+            "passed": true
+          },
+          {
+            "format": "odp",
+            "objects": 2,
+            "save_reopen_cycles": 2,
+            "passed": true
+          }
+        ],
+        "imported_cases": []
+      },
+      "candidate-roundtrip": {
+        "sha256": "316131520f59a1779472b2982318a4672812c0ce62601c7becfbe2152a122395",
+        "extension_sha256": "bd282131c4eb87d69c2660f94d28fab6967c5347f0e16c2260c08e64d494a312",
+        "cases": [
+          {
+            "format": "odt",
+            "objects": 2,
+            "save_reopen_cycles": 2,
+            "passed": true
+          },
+          {
+            "format": "ods",
+            "objects": 2,
+            "save_reopen_cycles": 2,
+            "passed": true
+          },
+          {
+            "format": "odp",
+            "objects": 2,
+            "save_reopen_cycles": 2,
+            "passed": true
+          }
+        ],
+        "imported_cases": [
+          {
+            "format": "odt",
+            "objects": 2,
+            "passed": true
+          },
+          {
+            "format": "ods",
+            "objects": 2,
+            "passed": true
+          },
+          {
+            "format": "odp",
+            "objects": 2,
+            "passed": true
+          }
+        ]
+      },
+      "baseline-reload-save-as": {
+        "sha256": "52ebe7c612bf44b2ffecd60b2aac30a5ed928703f63ef21107a00176bbaf5c29",
+        "extension_sha256": "c2de0f37a89e4ae54662fe63a2f32e3c4f5043b70da0cf2a85347e102661a816",
+        "cases": [
+          {
+            "format": "odt",
+            "objects": 2,
+            "explicit_reload_calls": 4,
+            "save_as_while_open": true,
+            "reopen_after_save_as": true,
+            "host_frame_size_checked": true,
+            "passed": true
+          },
+          {
+            "format": "ods",
+            "objects": 2,
+            "explicit_reload_calls": 4,
+            "save_as_while_open": true,
+            "reopen_after_save_as": true,
+            "host_frame_size_checked": true,
+            "passed": true
+          },
+          {
+            "format": "odp",
+            "objects": 2,
+            "explicit_reload_calls": 4,
+            "save_as_while_open": true,
+            "reopen_after_save_as": true,
+            "host_frame_size_checked": true,
+            "passed": true
+          }
+        ],
+        "imported_cases": []
+      },
+      "candidate-reload-save-as": {
+        "sha256": "000f20236760349d650159f112f7bedcd8726688246f9ed79db31e8c25a9c609",
+        "extension_sha256": "bd282131c4eb87d69c2660f94d28fab6967c5347f0e16c2260c08e64d494a312",
+        "cases": [
+          {
+            "format": "odt",
+            "objects": 2,
+            "explicit_reload_calls": 4,
+            "save_as_while_open": true,
+            "reopen_after_save_as": true,
+            "host_frame_size_checked": true,
+            "passed": true
+          },
+          {
+            "format": "ods",
+            "objects": 2,
+            "explicit_reload_calls": 4,
+            "save_as_while_open": true,
+            "reopen_after_save_as": true,
+            "host_frame_size_checked": true,
+            "passed": true
+          },
+          {
+            "format": "odp",
+            "objects": 2,
+            "explicit_reload_calls": 4,
+            "save_as_while_open": true,
+            "reopen_after_save_as": true,
+            "host_frame_size_checked": true,
+            "passed": true
+          }
+        ],
+        "imported_cases": []
+      },
+      "baseline-reading-candidate": {
+        "sha256": "52ebe7c612bf44b2ffecd60b2aac30a5ed928703f63ef21107a00176bbaf5c29",
+        "extension_sha256": "c2de0f37a89e4ae54662fe63a2f32e3c4f5043b70da0cf2a85347e102661a816",
+        "cases": [
+          {
+            "format": "odt",
+            "objects": 2,
+            "explicit_reload_calls": 4,
+            "save_as_while_open": true,
+            "reopen_after_save_as": true,
+            "host_frame_size_checked": true,
+            "passed": true
+          },
+          {
+            "format": "ods",
+            "objects": 2,
+            "explicit_reload_calls": 4,
+            "save_as_while_open": true,
+            "reopen_after_save_as": true,
+            "host_frame_size_checked": true,
+            "passed": true
+          },
+          {
+            "format": "odp",
+            "objects": 2,
+            "explicit_reload_calls": 4,
+            "save_as_while_open": true,
+            "reopen_after_save_as": true,
+            "host_frame_size_checked": true,
+            "passed": true
+          }
+        ],
+        "imported_cases": []
+      }
+    },
+    "zip_payload_audit": {
+      "documents": 24,
+      "object_storages": 48,
+      "native_png_metadata_exact": true,
+      "report_sha256": "83c69b580fc10369c3e895549a3e639eecc42b080791b5fc362cb5b4c01c17e9"
+    },
+    "real_pyuno_binary_reads": {
+      "count": 12,
+      "value_type": "bytes",
+      "count_equals_value_length": true,
+      "report_sha256": "19fa6f4f4ecf76418b7dd4b052e2c47e0c41ff397b4f059ef892bb88352a502e"
+    },
+    "host_frame_tolerance_hundredths_mm": 3,
+    "production_loc_delta": -15,
+    "test_physical_loc_delta": 540,
+    "measured_heap_or_latency_claim": false
+  },
+  "supplemental_drivers": {
+    "reload_save_as.py": "44f93d2cf4c44bfdad55e7a524f51e13ec91119073254b1d0a6c4baf48839b03",
+    "storage_audit.py": "51f5a5bbe011b6f87ed903dcb80357fea06678817fb182daae28f21944734d88",
+    "storage_types.py": "96e79fbec7a2ec2fe82ae7c85acc8aab1478594a5912b1846a5e92dabde5a648"
+  },
+  "commands": [
+    "docker run --init --detach --name reshiki-refactor-uno-20261004 --memory 2g --cpus 2 --pids-limit 512 ubuntu:24.04 sleep infinity",
+    "apt-get update",
+    "DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends -t noble-backports libreoffice-core-nogui python3-uno libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui libreoffice-script-provider-python",
+    "runuser -u qa -- /usr/bin/python3 -B /work/candidate/integrations/libreoffice/build_extension.py /work/evidence/candidate.oxt",
+    "runuser -u qa -- env SAL_USE_VCLPLUGIN=svp /usr/bin/unopkg add --force --suppress-license -env:UserInstallation=file:///work/profiles/candidate /work/evidence/candidate.oxt",
+    "runuser -u qa -- env SAL_USE_VCLPLUGIN=svp /usr/bin/libreoffice -env:UserInstallation=file:///work/profiles/candidate --headless --norestore --nodefault --nofirststartwizard '--accept=pipe,name=reshiki-refactor-candidate;urp;StarOffice.ServiceManager'",
+    "runuser -u qa -- /usr/bin/python3 -B /work/candidate/integrations/libreoffice/tests/roundtrip.py --uno-url 'uno:pipe,name=reshiki-refactor-candidate;urp;StarOffice.ComponentContext' --packet /work/evidence/preview-packet.json --output /work/evidence/candidate-roundtrip --incoming /work/evidence/baseline-roundtrip",
+    "runuser -u qa -- /usr/bin/python3 -B /work/evidence/reload_save_as.py --source-tree /work/candidate --uno-url 'uno:pipe,name=reshiki-refactor-candidate;urp;StarOffice.ComponentContext' --packet /work/evidence/preview-packet.json --incoming /work/evidence/candidate-roundtrip --output /work/evidence/candidate-reload-save-as",
+    "runuser -u qa -- /usr/bin/python3 -B /work/evidence/reload_save_as.py --source-tree /work/baseline --uno-url 'uno:pipe,name=reshiki-refactor-baseline;urp;StarOffice.ComponentContext' --packet /work/evidence/preview-packet.json --incoming /work/evidence/candidate-roundtrip --output /work/evidence/baseline-reading-candidate",
+    "runuser -u qa -- /usr/bin/python3 -B /work/evidence/storage_types.py",
+    "runuser -u qa -- /usr/bin/python3 -B /work/evidence/storage_audit.py --evidence /work/evidence"
+  ],
+  "local_evidence": "/tmp/reshiki-improvements-20261004/evidence/uno-c07/container-evidence",
+  "local_full_report": "/tmp/reshiki-improvements-20261004/uno-c07-result.md",
+  "remaining_acceptance": [
+    "Microsoft desktop Word/Excel/PowerPoint insertion, edit/readback, rollback and ACK workflows",
+    "Windows/macOS LibreOffice GUI and additional OS/Python UNO combinations",
+    "LibreOffice desktop activation, actual ReShiki edit/save-back, clipboard and native close/Save/Discard/Cancel dispatch",
+    "Near-64 MB native drawings and native fault injection; bounded abnormal/error paths are controlled parity tests"
+  ],
+  "artifact_verification": {
+    "verified_at_utc": "2026-10-04 13:55:35 UTC",
+    "evidence_checksums": "/tmp/reshiki-improvements-20261004/evidence/uno-c07/SHA256SUMS.json",
+    "saved_evidence_files_checked": 68,
+    "output_document_hashes_checked": 24,
+    "baseline_candidate_commit_source_hashes_match": true,
+    "current_fixture_matches_captured_hash": true,
+    "current_preview_executable_matches_captured_hash": true,
+    "declared_driver_package_report_hashes_match": true,
+    "evidence_checksums_sha256": "88ff1c12ca5653e7cf3ee5d27c74c0b47b3216a2b86f1337a10e4405da4de633"
+  }
+}

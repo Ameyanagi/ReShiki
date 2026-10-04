@@ -3,10 +3,12 @@ import assert from "node:assert/strict";
 import { createHostAdapter } from "../index.js";
 import { createEnvelope } from "../../protocol.js";
 import {
+  assertCanAdd,
   decodeRecord,
   encodeRecord,
   newRecord,
   owner,
+  readRecords,
   STORAGE_LIMITS,
   XML_NAMESPACE,
 } from "../common.js";
@@ -632,6 +634,26 @@ test("XML: document record limit stops insert without deleting history", async (
   const adapter = createHostAdapter(fake.dependencies);
   await assert.rejects(adapter.insert(original), code("STORAGE_LIMIT"));
   assert.equal(fake.state.parts.length, STORAGE_LIMITS.records);
+  assert.equal(fake.state.mutations.length, 0);
+});
+
+test("XML: records retain string lengths and enforce the exact capacity boundary", async () => {
+  const fake = fakeOffice("Word");
+  const record = newRecord(await envelope(), owner("Word", { contentControlId: 1 }));
+  const xml = "\uFEFF" + encodeRecord(record);
+  fake.state.parts.push({ id: "existing", xml });
+  const records = await fake.dependencies.Word.run((context) =>
+    readRecords(context, context.document.customXmlParts),
+  );
+  assert.equal(records.length, 1);
+  assert.equal(records[0].xmlLength, xml.length);
+  assert.notEqual(records[0].xmlLength, Buffer.byteLength(xml, "utf8"));
+  assert.equal(Object.hasOwn(records[0], "xml"), false);
+  assert.deepEqual(records[0].envelope, record.envelope);
+
+  const available = STORAGE_LIMITS.xmlBytes - encodeRecord(record).length - 8192;
+  assert.doesNotThrow(() => assertCanAdd([{ xmlLength: available }], record));
+  assert.throws(() => assertCanAdd([{ xmlLength: available + 1 }], record), code("STORAGE_LIMIT"));
   assert.equal(fake.state.mutations.length, 0);
 });
 

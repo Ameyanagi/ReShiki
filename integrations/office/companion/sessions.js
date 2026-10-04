@@ -131,10 +131,9 @@ export class Sessions {
     if ([...this.sessions.values()].some((s) => s.target.objectId === target.objectId))
       throw new Error("This drawing already has an open edit session");
     // Validate native semantics with the installed trusted worker before launching.
-    const checked = await this.worker(
-      "--libreoffice-preview",
-      Buffer.from(decodeBase64(envelope.native, LIMITS.nativeBytes)),
-    );
+    const bytes = Buffer.from(decodeBase64(envelope.native, LIMITS.nativeBytes));
+    // The trusted worker consumes these bytes without modifying them.
+    const checked = await this.worker("--libreoffice-preview", bytes);
     this.touch(clientId);
     if (checked.revision !== envelope.revision)
       throw new Error("Worker changed the native drawing");
@@ -142,7 +141,7 @@ export class Sessions {
       directory = path.join(this.root, id),
       file = path.join(directory, "drawing.rsk");
     await mkdir(directory, { recursive: true, mode: 0o700 });
-    await writeFile(file, decodeBase64(envelope.native, LIMITS.nativeBytes), {
+    await writeFile(file, bytes, {
       mode: 0o600,
       flag: "wx",
       flush: true,

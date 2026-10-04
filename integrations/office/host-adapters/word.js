@@ -27,6 +27,14 @@ import { assertEditableWordPicture } from "./word-ooxml.js";
 const CONTROL_PROPERTIES = "id,tag,type,subtype,cannotEdit,text";
 const PICTURE_PROPERTIES =
   "items/width,items/height,items/lockAspectRatio,items/altTextTitle,items/altTextDescription,items/hyperlink";
+const GEOMETRY_FIELDS = [
+  "width",
+  "height",
+  "lockAspectRatio",
+  "altTextTitle",
+  "altTextDescription",
+  "hyperlink",
+];
 
 async function controlAt(context, id) {
   const control = context.document.contentControls.getByIdOrNullObject(id);
@@ -267,14 +275,7 @@ export function createWordAdapter(Word, { sessionId }) {
           await context.sync();
           const written = await readControl(context, target.contentControlId);
           assertReadback(written.record, attempted);
-          assertGeometry(written.geometry, geometry, [
-            "width",
-            "height",
-            "lockAspectRatio",
-            "altTextTitle",
-            "altTextDescription",
-            "hyperlink",
-          ]);
+          assertGeometry(written.geometry, geometry, GEOMETRY_FIELDS);
           return makeResult(written.record, sessionId);
         } catch (error) {
           if (!writingPicture) {
@@ -300,31 +301,22 @@ export function createWordAdapter(Word, { sessionId }) {
             throw retryableUpdateFailure(error);
           }
           let recoveryError;
-          if (writingPicture) {
-            try {
-              const current = await readControl(context, target.contentControlId, {
-                verifyPreview: false,
-              });
-              if (!mayRollback(current.record, before.record, attempted))
-                fail(
-                  "REVISION_CONFLICT",
-                  "Another edit superseded the failed write; it was left untouched.",
-                );
-              replacePicture(current.control, before.record, before.geometry);
-              await context.sync();
-              const restored = await readControl(context, target.contentControlId);
-              assertReadback(restored.record, before.record);
-              assertGeometry(restored.geometry, before.geometry, [
-                "width",
-                "height",
-                "lockAspectRatio",
-                "altTextTitle",
-                "altTextDescription",
-                "hyperlink",
-              ]);
-            } catch (recovery) {
-              recoveryError = recovery;
-            }
+          try {
+            const current = await readControl(context, target.contentControlId, {
+              verifyPreview: false,
+            });
+            if (!mayRollback(current.record, before.record, attempted))
+              fail(
+                "REVISION_CONFLICT",
+                "Another edit superseded the failed write; it was left untouched.",
+              );
+            replacePicture(current.control, before.record, before.geometry);
+            await context.sync();
+            const restored = await readControl(context, target.contentControlId);
+            assertReadback(restored.record, before.record);
+            assertGeometry(restored.geometry, before.geometry, GEOMETRY_FIELDS);
+          } catch (recovery) {
+            recoveryError = recovery;
           }
           throw writeFailure(error, recoveryError, { operation: "update", target });
         }
