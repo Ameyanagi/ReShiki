@@ -7,6 +7,15 @@ Validation wording corrections: [PR #143](https://github.com/Ameyanagi/ReShiki/p
 
 See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
 
+- **Under review — Interactive 3D geometry and keyboard drawing:** generate
+  conformers with RDKit MMFF94, MMFF94s, or UFF, relax around dragged or pinned
+  atoms, and rotate an editable projection before Apply. Automatic rear fading
+  can be frozen or cleared independently of the geometry. F8 provides an
+  explicit drawing hotspot with arrow navigation and marked ring closure.
+  [Workflow and supported chemistry](3d-keyboard-drawing.md)
+  · [Review evidence](changes/3d-keyboard-review-2026-10-05.md)
+  · [Issue #48](https://github.com/Ameyanagi/ReShiki/issues/48) · @Ameyanagi.
+
 - **Chemical text alongside ordinary Copy:** prepare molecular
   SMILES or copy-only reaction JSON without changing the drawing. The accepted
   reaction workflow is ReShiki Cmd+C → ChemDoodle Open text field Cmd+V → Load.

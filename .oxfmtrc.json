@@ -9,6 +9,7 @@
     "vendor/usvg/**",
     "vendor/svg2pdf/**",
     "vendor/smithay-clipboard/**",
+    "native/geometry/vendor/**",
     "engine/cdx_schema.py",
     "website/.astro/**",
     "website/dist/**",

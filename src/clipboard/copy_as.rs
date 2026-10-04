@@ -251,7 +251,10 @@ pub async fn prepare_as(
         // Match ordinary editable Copy: external drawings carry visible ink,
         // not theme-dependent palette references or a page background.
         let doc = if matches!(format, CopyFormat::Cdxml | CopyFormat::Cdx) {
-            crate::canvas_theme::for_paste(original, crate::canvas_theme::CanvasTheme::Light)
+            crate::canvas_theme::for_paste(
+                crate::depth_appearance::materialize(&original).into_owned(),
+                crate::canvas_theme::CanvasTheme::Light,
+            )
         } else {
             original
         };
@@ -335,6 +338,68 @@ mod tests {
         let oxygen = doc.add_atom("O", Point::new(42., 0.));
         doc.add_bond(carbon, oxygen, 1, "plain");
         doc
+    }
+
+    #[tokio::test]
+    async fn dark_depth_copy_as_cdxml_and_cdx_preserves_exact_source_ink() {
+        use crate::{canvas_theme::CanvasTheme, palette::Color};
+        for frozen in [false, true] {
+            let mut original = Document {
+                canvas_theme: CanvasTheme::Dark,
+                ..Document::default()
+            };
+            for (i, element) in ["O", "C", "O"].into_iter().enumerate() {
+                let id = original.add_atom(element, Point::new(i as f32 * 42., 0.));
+                original.atom_mut(id).unwrap().depth = i as f32 * 20. - 20.;
+                if i > 0 {
+                    original.add_bond(id - 1, id, 1, "plain");
+                }
+            }
+            let ids = original.all_ids();
+            crate::depth_appearance::enable(&mut original, &ids, 0.6).unwrap();
+            if frozen {
+                crate::depth_appearance::freeze(&mut original, &ids);
+            }
+            let before = original.clone();
+            for format in [CopyFormat::Cdxml, CopyFormat::Cdx] {
+                let copy = prepare_as(Default::default(), original.clone(), format)
+                    .await
+                    .unwrap();
+                let xml = if format == CopyFormat::Cdxml {
+                    copy.text().unwrap().to_owned()
+                } else {
+                    let representation = copy
+                        .representations
+                        .iter()
+                        .find(|r| r.kind == CDX_TYPES[0])
+                        .unwrap();
+                    crate::exchange::from_cdx(&representation.bytes().unwrap()).unwrap()
+                };
+                let restored = crate::chemistry::cdxml::import_cdxml(&xml)
+                    .unwrap()
+                    .document;
+                let rear = restored
+                    .atoms
+                    .iter()
+                    .min_by(|a, b| a.position.x.total_cmp(&b.position.x))
+                    .unwrap();
+                assert_eq!(
+                    rear.text_style.as_ref().unwrap().color.rgb(),
+                    [102; 3],
+                    "{format:?}/{frozen}"
+                );
+                let bond = restored
+                    .bonds
+                    .iter()
+                    .find(|b| b.a == rear.id || b.b == rear.id)
+                    .unwrap();
+                assert_eq!(bond.color.rgb(), [140; 3], "{format:?}/{frozen}");
+                assert!(restored.depth_appearance.is_empty());
+                assert_eq!(original.depth_appearance, before.depth_appearance);
+                assert_eq!(original.bonds[0].color, Color::Ink);
+                assert_eq!(original, before);
+            }
+        }
     }
 
     #[test]

@@ -19,6 +19,7 @@ members = [
   "native/macos",
   "native/windows",
   "native/linux",
+  "native/geometry",
   "crates/depict-math",
   "crates/process-heap",
 ]
@@ -42,6 +43,7 @@ iced_tiny_skia = { version = "0.14", default-features = false }
 iced = { version = "0.14", default-features = false, features = ["wgpu"] }
 
 [dependencies]
+reshiki-geometry = { path = "native/geometry" }
 accesskit = "=0.24.1"
 reshiki-process-heap = { path = "crates/process-heap" }
 cosmolkit-inchi = { version = "=0.3.0", git = "https://github.com/Ameyanagi/COSMolKit.git", rev = "3a437849dcd28319b1a3cdf02d7897a7ee200cb2" }

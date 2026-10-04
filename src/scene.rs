@@ -654,7 +654,9 @@ fn ring_center(doc: &Document, from: u64, to: u64) -> Option<Point> {
 /// Drawing primitives with colors in canonical light-canvas bytes; renderers
 /// apply the canvas conversion once.
 pub fn primitives(doc: &Document) -> Vec<Primitive> {
-    let resolved = crate::canvas_theme::canonical_document(doc);
+    let paint = crate::depth_appearance::Paint::new(doc);
+    let painted = paint.materialize(doc);
+    let resolved = crate::canvas_theme::canonical_document(&painted);
     let doc = resolved.as_ref();
     let style = &doc.drawing_style;
     let mut out = vec![];

@@ -100,6 +100,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       UV_PYTHON: ${{ matrix.python }}
+      # Ship the Rust application and C++ geometry archive with one static CRT.
+      RUSTFLAGS: ${{ runner.os == 'Windows' && '-C target-feature=+crt-static' || '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
@@ -119,7 +121,7 @@ jobs:
           cache-on-failure: true
       - name: Install Linux libraries
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libfontconfig1-dev libudev-dev
+        run: sudo apt-get update && sudo apt-get install -y cmake g++ binutils libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev libxinerama-dev libgl1-mesa-dev libfontconfig1-dev libudev-dev
       - run: rustup toolchain install 1.99.0 --profile minimal --target ${{ matrix.target }}
       - run: rustup default 1.99.0
       - name: Select the native Windows compiler
@@ -127,6 +129,8 @@ jobs:
         uses: ./.github/actions/setup-msvc
         with:
           arch: ${{ matrix.msvc_arch }}
+      - name: Require the native geometry build tools
+        run: cmake --version
       - run: uv sync --locked
         if: matrix.native_only != true
       - name: Install pinned Windows installer compiler
@@ -150,7 +154,7 @@ jobs:
         if: matrix.native_only == true
         env:
           RESHIKI_REQUIRE_INCHI_HELPER: "1"
-        run: uv run --no-project --isolated --python 3.12 python -m unittest tests.test_release tests.test_release_downloads tests.test_prepare_nightly tests.test_inchi_distribution tests.test_inchi_helper_builder tests.test_inchi_helper_protocol tests.test_native_packaging tests.test_license_notices tests.test_native_clipboard tests.test_native_print
+        run: uv run --no-project --isolated --python 3.12 python -m unittest tests.test_release tests.test_release_downloads tests.test_prepare_nightly tests.test_inchi_distribution tests.test_inchi_helper_builder tests.test_inchi_helper_protocol tests.test_native_packaging tests.test_geometry_distribution tests.test_license_notices tests.test_native_clipboard tests.test_native_print
       - name: Verify reference dependencies
         if: matrix.native_only != true
         run: uv run --locked python scripts/check_reference_dependencies.py
@@ -158,11 +162,17 @@ jobs:
         env:
           MACOSX_DEPLOYMENT_TARGET: "14.0"
         run: uv run --no-project --isolated --python 3.12 python scripts/build_release.py --target ${{ matrix.target }} --installer
-      - name: Check the application worker protocol and heap boundaries
+      - name: Check the application worker protocols and heap boundaries
         env:
           RESHIKI_REQUIRE_INCHI_HELPER: "1"
           RESHIKI_TEST_PACKAGED_APP: ${{ github.workspace }}/target/${{ matrix.target }}/release/reshiki${{ runner.os == 'Windows' && '.exe' || '' }}
-        run: uv run --no-project --isolated --python 3.12 python -m unittest tests.test_inchi_helper_protocol tests.test_inchi_distribution.HelperTests.test_packaged_application_worker_executes_when_supplied_for_validation
+        run: uv run --no-project --isolated --python 3.12 python -m unittest tests.test_inchi_helper_protocol tests.test_inchi_distribution.HelperTests.test_packaged_application_worker_executes_when_supplied_for_validation tests.test_geometry_distribution.GeometryWorkerTests.test_packaged_application_worker_executes_when_supplied_for_validation
+      - name: Compare geometry energies and gradients with the pinned independent oracle
+        if: matrix.native_only != true
+        env:
+          RESHIKI_GEOMETRY_REFERENCE_APP: ${{ github.workspace }}/target/${{ matrix.target }}/release/reshiki${{ runner.os == 'Windows' && '.exe' || '' }}
+          RESHIKI_REQUIRE_GEOMETRY_REFERENCE: "1"
+        run: uv run --locked python -m unittest tests.test_geometry_reference
       - name: Test native macOS clipboard and physical print coordinates
         if: runner.os == 'macOS'
         env:

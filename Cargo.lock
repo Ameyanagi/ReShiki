@@ -3394,6 +3394,7 @@ dependencies = [
  "png 0.17.16",
  "reqwest",
  "reshiki-depict-math",
+ "reshiki-geometry",
  "reshiki-linux",
  "reshiki-macos",
  "reshiki-process-heap",
@@ -3419,6 +3420,13 @@ dependencies = [
 [[package]]
 name = "reshiki-depict-math"
 version = "0.1.0"
+
+[[package]]
+name = "reshiki-geometry"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "reshiki-linux"

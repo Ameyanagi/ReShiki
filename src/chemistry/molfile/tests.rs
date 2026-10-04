@@ -65,6 +65,86 @@ fn attachment_indices_keep_member_order_and_missing_target_errors() {
 }
 
 #[test]
+fn projected_molecular_files_preserve_stereo_when_the_drawing_is_edge_on() -> anyhow::Result<()> {
+    use crate::chemistry::{inchi::kernel, smiles, stereo::Point3};
+    for text in [
+        "F/C=C/F",
+        "F/C=C\\F",
+        "FC=CF",
+        "F/C=C/C=C/Cl",
+        "F[C@](Cl)(Br)I",
+        "F[C@@](Cl)(Br)I",
+        "FC(Cl)(Br)I",
+        "F[C@H](Cl)[C@@H](Br)I",
+        "C[C@H]1CCC[C@@H](C)C1",
+    ] {
+        let mut state = smiles::prepare(text)?.state;
+        state.rings.kind = RingKind::Symmetric;
+        let count = state.graph.atoms.len();
+        let expected = smiles::write::write(&state, Default::default())?.text;
+        let expected_inchi = kernel::generate(&kernel::Molecule::prepare(&state, None)?)
+            .map_err(anyhow::Error::msg)?
+            .inchi;
+        for slope in [0., 1., -1.] {
+            let molecule = Molecule {
+                rdkit_version: RDKIT_VERSION,
+                ids: (1..=count as u64).collect(),
+                positions: (0..count)
+                    .map(|i| Point3 {
+                        x: i as f64,
+                        y: slope * i as f64,
+                        z: 0.,
+                    })
+                    .collect(),
+                state: state.clone(),
+            };
+            let before = serde_json::to_value(&molecule)?;
+            for force_v3000 in [false, true] {
+                let block = write_projected_absolute(&molecule, Options { force_v3000 })?;
+                let imported = read(&block)?;
+                assert_eq!(
+                    smiles::write::write(&imported.molecule.state, Default::default())?.text,
+                    expected,
+                    "{text}, slope={slope}, V3000={force_v3000}"
+                );
+                let actual_inchi =
+                    kernel::generate(&kernel::Molecule::prepare(&imported.molecule.state, None)?)
+                        .map_err(anyhow::Error::msg)?
+                        .inchi;
+                assert_eq!(actual_inchi, expected_inchi, "{text}");
+                assert_eq!(serde_json::to_value(&molecule)?, before);
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn projected_mol_preserves_explicit_unknown_double_bonds() -> anyhow::Result<()> {
+    let mut molecule = molecule();
+    molecule.state = crate::chemistry::smiles::prepare("FC=CF")?.state;
+    molecule.state.rings.kind = RingKind::Symmetric;
+    molecule.ids.truncate(4);
+    molecule.positions.truncate(4);
+    let metadata = molecule
+        .state
+        .metadata
+        .bonds
+        .get_mut(1)
+        .ok_or_else(|| invalid("Missing test double bond"))?;
+    metadata.stereo = 1;
+    metadata.stereo_atoms.clear();
+    for force_v3000 in [false, true] {
+        let imported = read(&write_projected_absolute(
+            &molecule,
+            Options { force_v3000 },
+        )?)?;
+        assert_eq!(imported.molecule.state.metadata.bonds[1].stereo, 1);
+    }
+    Ok(())
+}
+
+#[test]
 #[ignore = "isolated requested-Rust-allocation and lookup timing measurement"]
 fn measure_attachment_index_tradeoff() {
     for (atoms, members) in [(32, 0), (4096, 0), (4096, 300), (4096, 30_000)] {

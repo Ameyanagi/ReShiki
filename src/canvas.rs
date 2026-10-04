@@ -14,6 +14,7 @@ pub(crate) mod label_click_tests;
 pub mod layered;
 mod markers;
 mod movement;
+pub(crate) mod optimization;
 mod pages;
 #[cfg(test)]
 mod performance;
@@ -154,6 +155,28 @@ pub enum Edit {
     ArrowHandle(u64, usize, World),
     ArrowClick(u64),
     Select(Vec<u64>),
+    RelaxDragStart {
+        session: u64,
+        atom: u64,
+    },
+    RelaxDragTarget {
+        session: u64,
+        atom: u64,
+        target: World,
+    },
+    RelaxDragEnd {
+        session: u64,
+        atom: u64,
+        target: Option<World>,
+    },
+    RelaxDragCancel {
+        session: u64,
+    },
+    RelaxRotate {
+        session: u64,
+        x: f64,
+        y: f64,
+    },
     Move(Vec<u64>, f32, f32),
     /// Copy the objects to the offset, leaving the originals in place.
     Duplicate(Vec<u64>, f32, f32),
@@ -217,6 +240,7 @@ pub struct State {
     grid: std::cell::RefCell<GridCache>,
     text: std::cell::RefCell<text_cache::TextCache>,
     gesture: Option<Gesture>,
+    relaxation: Option<optimization::Drag>,
     cursor: Option<Point>,
     last_click: Option<(std::time::Instant, u64)>,
     last_transform_click: Option<HandleClick>,
@@ -315,6 +339,8 @@ fn delocalized_ring_size(tool: Tool, size: u8, modifiers: iced::keyboard::Modifi
 }
 
 pub struct MoleculeCanvas<'a> {
+    pub(crate) optimizer: Option<optimization::Context<'a>>,
+    pub(crate) keyboard_target: Option<World>,
     pub joining: Option<(&'a reshiki::joining::Prepared, reshiki::templates::Anchor)>,
     pub hidden_annotation: Option<u64>,
     pub bond_drawing: BondDrawing,
@@ -590,6 +616,10 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
             .or(cursor.position())
             .map(|p| Point::new(p.x - bounds.x, p.y - bounds.y));
         let inside = point.is_some_and(|p| Rectangle::with_size(bounds.size()).contains(p));
+        if let Some(context) = self.optimizer {
+            return optimization::update(self, context, state, event, bounds, point, inside);
+        }
+        state.relaxation = None;
         if matches!(
             event,
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
@@ -1323,6 +1353,28 @@ impl canvas::Program<Edit> for MoleculeCanvas<'_> {
         .with_canvas(self.doc.canvas_theme)
         .with_text_cache(&state.text);
         self.draw_paper(&mut frame, state, paper, cursor);
+        if let Some(context) = self.optimizer {
+            optimization::draw_pins(self, context, &mut frame, paper);
+        }
+        if let Some(target) = self.keyboard_target {
+            let point = self.camera.screen(target, paper);
+            let ink = rgb([192, 112, 32]);
+            frame.stroke(
+                &Path::circle(point, 9.),
+                Stroke::default().with_width(2.).with_color(ink),
+            );
+            for (a, b) in [
+                (point - Vector::new(12., 0.), point - Vector::new(6., 0.)),
+                (point + Vector::new(6., 0.), point + Vector::new(12., 0.)),
+                (point - Vector::new(0., 12.), point - Vector::new(0., 6.)),
+                (point + Vector::new(0., 6.), point + Vector::new(0., 12.)),
+            ] {
+                frame.stroke(
+                    &Path::line(a, b),
+                    Stroke::default().with_width(1.5).with_color(ink),
+                );
+            }
+        }
         let mut layers = frame.finish();
         let mut frame = layered::Frame::new(renderer, bounds.size()).with_theme(theme);
         let pointer = state
@@ -2303,7 +2355,7 @@ impl MoleculeCanvas<'_> {
                     .with_color(rgb([180, 66, 66])),
             );
         }
-        if self.tool.selects() {
+        if self.tool.selects() && self.optimizer.is_none() {
             if let (Some(Gesture::Transform(drag)), Some(p)) = (&state.gesture, state.cursor)
                 && matches!(drag.handle, Handle::Rotate)
             {
@@ -3283,6 +3335,8 @@ mod tests {
     fn rulers_exclude_editing_and_pointer_coordinates_use_the_inset_paper() {
         let doc = Document::default();
         let canvas = MoleculeCanvas {
+            optimizer: None,
+            keyboard_target: None,
             element: "C",
             joining: None,
             hidden_annotation: None,
@@ -3363,6 +3417,8 @@ mod tests {
     fn free_ring_preset_drag_keeps_its_start_as_rotation_anchor() {
         let doc = Document::default();
         let canvas = MoleculeCanvas {
+            optimizer: None,
+            keyboard_target: None,
             element: "C",
             joining: None,
             hidden_annotation: None,
@@ -3494,6 +3550,8 @@ mod tests {
             ArrowStyle::default(),
         ));
         let canvas = MoleculeCanvas {
+            optimizer: None,
+            keyboard_target: None,
             element: "C",
             joining: None,
             hidden_annotation: None,
@@ -3514,6 +3572,8 @@ mod tests {
         assert_eq!(hit_object(&doc, World::new(0., -55.), 4.), Some(1));
         assert_eq!(hit_object(&doc, World::new(0., 0.), 4.), None);
         let canvas = MoleculeCanvas {
+            optimizer: None,
+            keyboard_target: None,
             element: "C",
             joining: None,
             hidden_annotation: None,
@@ -3738,6 +3798,8 @@ mod tests {
         static STYLE: std::sync::LazyLock<GraphicStyle> =
             std::sync::LazyLock::new(GraphicStyle::default);
         MoleculeCanvas {
+            optimizer: None,
+            keyboard_target: None,
             element: "C",
             joining: None,
             hidden_annotation: None,
@@ -4423,6 +4485,8 @@ mod tests {
         doc.add_atom("O", World::new(50., 0.));
         let style = GraphicStyle::default();
         let canvas = MoleculeCanvas {
+            optimizer: None,
+            keyboard_target: None,
             element: "C",
             joining: None,
             hidden_annotation: None,
@@ -4538,6 +4602,8 @@ mod tests {
         doc.group_selection(&[1, 2]).unwrap();
         let style = GraphicStyle::default();
         let canvas = MoleculeCanvas {
+            optimizer: None,
+            keyboard_target: None,
             element: "C",
             joining: None,
             hidden_annotation: None,
@@ -4604,6 +4670,8 @@ mod tests {
         // Alt-drag edits a member immediately, even when its group is selected.
         let selected = [1, 2];
         let canvas = MoleculeCanvas {
+            optimizer: None,
+            keyboard_target: None,
             element: "C",
             joining: None,
             hidden_annotation: None,
@@ -4665,6 +4733,8 @@ mod tests {
         let doc = Document::default();
         let style = GraphicStyle::default();
         let mut canvas = MoleculeCanvas {
+            optimizer: None,
+            keyboard_target: None,
             element: "C",
             joining: None,
             hidden_annotation: None,
@@ -4775,6 +4845,8 @@ mod tests {
         doc.group_selection(&[atom, label]).unwrap();
         let style = GraphicStyle::default();
         let canvas = MoleculeCanvas {
+            optimizer: None,
+            keyboard_target: None,
             element: "C",
             joining: None,
             hidden_annotation: None,
@@ -4882,6 +4954,8 @@ mod tests {
         let b = doc.add_atom("C", World::new(30.0, 0.0));
         doc.add_bond(a, b, 1, "plain");
         let canvas = MoleculeCanvas {
+            optimizer: None,
+            keyboard_target: None,
             element: "C",
             joining: None,
             hidden_annotation: None,
@@ -5026,6 +5100,8 @@ mod tests {
         doc.add_bond(a, b, 1, "plain");
         let original = doc.clone();
         let canvas = MoleculeCanvas {
+            optimizer: None,
+            keyboard_target: None,
             element: "C",
             joining: None,
             hidden_annotation: None,
@@ -5127,6 +5203,8 @@ mod tests {
         assert_eq!(hit_selection(&doc, World::default(), 10.0), vec![a, b]);
         assert_eq!(hit_selection(&doc, World::new(-20.0, 0.0), 10.0), vec![a]);
         let canvas = MoleculeCanvas {
+            optimizer: None,
+            keyboard_target: None,
             element: "C",
             joining: None,
             hidden_annotation: None,
@@ -5164,6 +5242,8 @@ mod tests {
         );
         let selected = [a, b];
         let canvas = MoleculeCanvas {
+            optimizer: None,
+            keyboard_target: None,
             element: "C",
             joining: None,
             hidden_annotation: None,
@@ -5191,6 +5271,8 @@ mod tests {
         doc.add_bond(b, c, 1, "plain");
         let selected = [a, b, c];
         let canvas = MoleculeCanvas {
+            optimizer: None,
+            keyboard_target: None,
             element: "C",
             joining: None,
             hidden_annotation: None,
@@ -5232,6 +5314,8 @@ mod tests {
         // Duplicating a bonded part of a molecule copies it free of the rest.
         let partial = [b, c];
         let canvas = MoleculeCanvas {
+            optimizer: None,
+            keyboard_target: None,
             selected: &partial,
             ..canvas
         };
@@ -5327,6 +5411,8 @@ mod tests {
         let b = doc.add_atom("C", World::new(21.0, 0.0));
         doc.add_bond(a, b, 1, "plain");
         let canvas = MoleculeCanvas {
+            optimizer: None,
+            keyboard_target: None,
             element: "C",
             joining: None,
             hidden_annotation: None,
@@ -5368,6 +5454,8 @@ mod tests {
     fn leaving_the_canvas_requests_a_redraw_and_leaving_the_window_clears_hover() {
         let doc = Document::default();
         let canvas = MoleculeCanvas {
+            optimizer: None,
+            keyboard_target: None,
             element: "C",
             joining: None,
             hidden_annotation: None,
@@ -5425,6 +5513,8 @@ mod tests {
         let mut doc = Document::default();
         let source = doc.add_atom("C", World::default());
         let canvas = MoleculeCanvas {
+            optimizer: None,
+            keyboard_target: None,
             element: "C",
             joining: None,
             hidden_annotation: None,
@@ -5499,6 +5589,8 @@ mod tests {
     fn fast_drag_uses_each_motion_event_instead_of_final_cursor_snapshot() {
         let doc = Document::default();
         let canvas = MoleculeCanvas {
+            optimizer: None,
+            keyboard_target: None,
             element: "C",
             joining: None,
             hidden_annotation: None,

@@ -201,6 +201,9 @@ pub(crate) fn refresh_depth_bonds(doc: &mut Document, ids: &[u64]) {
     let mut adjacent = HashMap::<u64, Vec<u64>>::new();
     let eligible = |b: &crate::document::Bond| {
         b.projection
+            && !doc.depth_appearance.iter().any(|scope| {
+                !scope.automatic && scope.atoms.contains(&b.a) && scope.atoms.contains(&b.b)
+            })
             && matches!(b.order, 1 | 2 | 4)
             && matches!(b.display.as_str(), "plain" | "bold" | "wedge")
             && b.secondary_display.as_deref() != Some("dashed")

@@ -115,6 +115,40 @@ impl Drawing {
     pub fn finish(self, labels: Labels) -> Result<Document, Error> {
         self.finish_with(labels, |_| Ok(()))
     }
+    /// Analyze/export may refresh display labels on a projection, while its
+    /// stored XYZ, captured chemical stereo and all paint remain drawing data.
+    pub(crate) fn finish_preserving(
+        self,
+        labels: Labels,
+        source: &Document,
+    ) -> Result<Document, Error> {
+        let labeled = self.labeled(labels)?;
+        if labeled.atoms.len() != source.atoms.len()
+            || labeled.bonds.len() != source.bonds.len()
+            || !labeled
+                .atoms
+                .iter()
+                .zip(&source.atoms)
+                .all(|(a, b)| a.id == b.id)
+            || !labeled
+                .bonds
+                .iter()
+                .zip(&source.bonds)
+                .all(|(a, b)| (a.a, a.b) == (b.a, b.b))
+        {
+            return Err(invalid("Projected drawing label identities changed"));
+        }
+        let mut document = source.clone();
+        for (atom, labeled) in document.atoms.iter_mut().zip(labeled.atoms) {
+            atom.label_h = labeled.label_h;
+            atom.cip_label = labeled.cip_label;
+        }
+        for (bond, labeled) in document.bonds.iter_mut().zip(labeled.bonds) {
+            bond.cip_label = labeled.cip_label;
+        }
+        document.validate().map_err(Error::Drawing)?;
+        Ok(document)
+    }
     /// Restore import-owned appearance after CIP labels and before final
     /// validation. The callback only receives a detached draft; an error
     /// publishes no partial drawing and leaves the caller's source unchanged.
@@ -201,6 +235,27 @@ pub fn for_drawing(molecule: &Molecule, base: &Document) -> Result<Drawing, Erro
     let drawing = reconstruct(work, molecule, Some(base), &previous, None)?;
     drawing.document.validate().map_err(Error::Drawing)?;
     Ok(drawing)
+}
+
+impl Molecule {
+    /// Build a label/wedge preparation from chemical tags instead of a possibly
+    /// collapsed projection. Publishing the drawing requires finish_preserving.
+    pub(crate) fn projected_drawing(&self, base: &Document) -> Result<Drawing, Error> {
+        validate_molecule(self)?;
+        let ranks = self
+            .state
+            .properties
+            .atoms
+            .iter()
+            .map(|atom| atom.cip_rank)
+            .collect::<Vec<_>>();
+        let conformer =
+            crate::chemistry::depict::compute(&self.state, &ranks, None, Default::default())
+                .map_err(|error| invalid(format!("Projected label depiction: {error}")))?;
+        let mut detached = self.clone();
+        detached.positions = conformer.positions;
+        for_drawing(&detached, base)
+    }
 }
 
 /// Construct a new drawing from an imported molecular state. File coordinates
@@ -469,6 +524,7 @@ fn reconstruct(
                 highlight: None,
                 ring_arc: false,
                 projection: false,
+                stereo_authoritative: false,
                 a: *at(&work.ids, b.a)?,
                 b: *at(&work.ids, b.b)?,
                 order: b.order,

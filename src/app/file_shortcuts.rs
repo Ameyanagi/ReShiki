@@ -382,6 +382,7 @@ impl Fields {
                         | keyboard::key::Named::ArrowDown
                         | keyboard::key::Named::ArrowLeft
                         | keyboard::key::Named::ArrowRight
+                        | keyboard::key::Named::F8
                 )
             ) || matches!(
                 super::shortcuts::key_message(key, modified_key, *modifiers),

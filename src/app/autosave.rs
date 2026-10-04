@@ -169,12 +169,14 @@ impl App {
     }
 
     pub(super) fn close_after_recovery(&mut self, id: iced::window::Id) -> Task<Message> {
+        self.each_tab(Self::pause_optimization);
         self.each_tab(Self::clear_recovery);
         self.exit.closing = Some(id);
         Task::batch([self.retry_retired(), self.start_autosave()])
     }
 
     pub(super) fn restart_after_recovery(&mut self) -> Task<Message> {
+        self.each_tab(Self::pause_optimization);
         self.each_tab(Self::clear_recovery);
         self.exit.updating = true;
         Task::batch([self.retry_retired(), self.start_autosave()])

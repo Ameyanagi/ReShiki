@@ -1,0 +1,44 @@
+Pinned native geometry core
+===========================
+
+ReShiki includes a geometry-only, statically linked source slice of RDKit
+2026.03.6 from https://github.com/rdkit/rdkit at revision
+0e0d85f4ca34aeae15dfc0f7cf5503bdb0a8e985. Original source files, copyright
+headers, parameter tables and experimental torsion data are preserved in
+native/geometry/vendor/rdkit-geometry-2026.03.6.tar.gz. The adjacent manifest
+records every file SHA-256. These files retain their upstream BSD-3-Clause
+terms; see RDKIT-LICENSE.
+
+This core contains ETKDGv3 distance-geometry embedding, the MMFF94 and
+MMFF94s force fields, the Universal Force Field (UFF), their atom typing and
+parameter data, and their graph, geometry, optimizer and matching support.
+The geometry interface and build integration are original ReShiki code.
+The native source slice is not the existing ReShiki Rust chemistry engine.
+
+The MMFF parameter data in Code/ForceField/MMFF/Params.cpp preserve:
+Copyright (c) Merck and Co., Inc., 1994, 1995, 1996
+All Rights Reserved
+and, for MMFF94s-specific tables:
+Copyright (c) Merck and Co., Inc., 1994,1995,1996,1997,1998,1999
+The original notices remain in the data and source archive. This notice
+does not replace, modify or relicense those upstream notices.
+
+Boost 1.92.0 headers are statically compiled into this core. The checked
+source slice is native/geometry/vendor/boost-geometry-1.92.0.tar.gz.
+The initial capture uses the unmodified installed Homebrew Boost headers;
+every copied file is individually checksum pinned. Homebrew identifies the
+upstream source as:
+https://github.com/boostorg/boost/releases/download/boost-1.92.0/boost-1.92.0-b2-nodocs.tar.xz
+SHA-256 ea7b982002cc9dfbe59b0b217b206f470dc75f3de0bb2973d844118934d82411
+That upstream archive checksum identifies the original source release;
+the checked source-slice checksum is separately recorded in the manifest.
+Boost files preserve their original authors' notices and BSL-1.0 terms;
+see BOOST-LICENSE. No compiled Boost library is linked.
+
+The build preserves conditional platform headers and expands modules that
+compute include filenames, so it does not rely on the developer's installed
+headers. The generated export/configuration headers describe static linking
+and the selected upstream geometry options. The unused SMILES JSON settings
+translation unit is excluded; no numerical geometry implementation is
+substituted or approximated. Neither Python nor a downloaded executable is
+part of this native core or its runtime.

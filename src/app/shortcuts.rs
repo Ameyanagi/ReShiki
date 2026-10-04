@@ -140,6 +140,9 @@ fn binding(message: &Message) -> Option<(Modifiers, &'static str)> {
             },
         ),
         Message::Delete => (Modifiers::empty(), "Delete"),
+        Message::KeyboardDrawing(super::keyboard_drawing::Action::Toggle) => {
+            (Modifiers::empty(), "F8")
+        }
         Message::Shortcut(Action::SelectRing(size)) => (
             Modifiers::SHIFT,
             match size {
@@ -165,6 +168,11 @@ fn binding(message: &Message) -> Option<(Modifiers, &'static str)> {
 pub(super) fn key_message(key: &Key, modified: &Key, mods: Modifiers) -> Option<Message> {
     if super::help::is_shortcut(key, mods) {
         return Some(Message::ToggleHelp);
+    }
+    if mods.is_empty() && matches!(key, Key::Named(Named::F8)) {
+        return Some(Message::KeyboardDrawing(
+            super::keyboard_drawing::Action::Toggle,
+        ));
     }
     if mods.command() {
         if mods.shift() && !mods.alt() && matches!(key, Key::Named(Named::ArrowRight)) {
@@ -294,6 +302,16 @@ impl App {
             Action::Rulers => return self.update(Message::Rulers(!self.guides.rulers)),
             Action::Crosshair => return self.update(Message::Crosshair(!self.guides.crosshair)),
             Action::Nudge(x, y) => {
+                if self.tab.keyboard_drawing.enabled()
+                    && let Some(direction) = reshiki::keyboard_drawing::Direction::from_delta(x, y)
+                {
+                    return self.keyboard_drawing_action(
+                        super::keyboard_drawing::Action::Navigate(
+                            direction,
+                            x.abs().max(y.abs()) > 1.,
+                        ),
+                    );
+                }
                 let before = self.tab.doc.clone();
                 let ids = if self.tool == Tool::EditPoints {
                     self.tab.selected.clone()
@@ -380,25 +398,38 @@ impl App {
         )
     }
 
-    fn commit_hotkey(&mut self, result: Result<(Document, Vec<u64>), String>, status: &str) {
+    pub(super) fn commit_hotkey(
+        &mut self,
+        result: Result<(Document, Vec<u64>), String>,
+        status: &str,
+    ) -> bool {
         match result {
             Ok((doc, selected)) => {
                 let before = std::mem::replace(&mut self.tab.doc, doc);
-                self.tab.selected = selected;
-                self.changed(before);
-                self.status = status.into();
+                let previous_selection = std::mem::replace(&mut self.tab.selected, selected);
                 self.error = false;
+                self.changed(before);
+                if self.error {
+                    self.tab.selected = previous_selection;
+                    return false;
+                }
+                self.status = status.into();
                 self.sync_typography();
                 self.sync_bonds();
+                true
             }
             Err(error) => {
                 self.status = error;
                 self.error = true;
+                false
             }
         }
     }
 
     pub(super) fn context_key(&mut self, key: &str) -> Task<Message> {
+        if self.tab.keyboard_drawing.enabled() {
+            return self.keyboard_context_key(key);
+        }
         let point = self
             .tab
             .hover
@@ -449,11 +480,43 @@ impl App {
                 None
             }
         });
+        self.context_key_resolved(
+            key,
+            atom,
+            bond,
+            false,
+            hovered_atom.is_some() || hovered_bond.is_some(),
+        )
+    }
+
+    /// The keyboard mode supplies its hotspot directly, without synthesizing
+    /// hover events or relying on the selection created by the previous edit.
+    pub(super) fn context_key_at(
+        &mut self,
+        key: &str,
+        target: reshiki::keyboard_drawing::Target,
+    ) -> Task<Message> {
+        let (atom, bond) = match target {
+            reshiki::keyboard_drawing::Target::Atom(id) => (Some(id), None),
+            reshiki::keyboard_drawing::Target::Bond(a, b) => (None, Some((a, b))),
+            reshiki::keyboard_drawing::Target::Blank(_) => (None, None),
+        };
+        self.context_key_resolved(key, atom, bond, true, false)
+    }
+
+    fn context_key_resolved(
+        &mut self,
+        key: &str,
+        atom: Option<u64>,
+        bond: Option<(u64, u64)>,
+        explicit: bool,
+        pointed: bool,
+    ) -> Task<Message> {
         // Hover attachment wins even when placement automatically selected the
         // previous ring. Only an unpointed selection gives `a` a display action.
         if key == "a"
-            && hovered_atom.is_none()
-            && hovered_bond.is_none()
+            && !explicit
+            && !pointed
             && reshiki::rings::selected_cycle(&self.tab.doc, &self.tab.selected).is_some()
             && self.tab.doc.bonds.iter().any(|b| {
                 self.tab.selected.contains(&b.a)
@@ -473,6 +536,7 @@ impl App {
         }
         if ["/", "?", "=", "Enter"].contains(&key) {
             if key == "Enter"
+                && !explicit
                 && self
                     .tab
                     .selected
@@ -548,17 +612,26 @@ impl App {
             && let Some(result) =
                 hotkeys::atom_edit(&self.tab.doc, id, key, self.tab.bond_drawing.length)
         {
+            let focus = result.as_ref().ok().map(|(_, focus)| *focus);
             let result = result.map(|(doc, focus)| (doc, vec![focus]));
-            self.commit_hotkey(result, "Atom shortcut applied");
-            if !self.error {
+            if self.commit_hotkey(result, "Atom shortcut applied") {
                 self.tab.labels_dirty = true;
-                // Continue growth at its new endpoint until the pointer moves again.
-                self.tab.hover = self
-                    .tab
-                    .selected
-                    .first()
-                    .and_then(|id| self.tab.doc.atom(*id))
-                    .map(|a| (a.position, self.tab.file_epoch));
+                if explicit {
+                    if let Some(focus) = focus {
+                        self.tab.keyboard_drawing.set_target(
+                            reshiki::keyboard_drawing::Target::Atom(focus),
+                            &self.tab.doc,
+                        );
+                    }
+                } else {
+                    // Continue ordinary hover growth until the pointer moves again.
+                    self.tab.hover = self
+                        .tab
+                        .selected
+                        .first()
+                        .and_then(|id| self.tab.doc.atom(*id))
+                        .map(|a| (a.position, self.tab.file_epoch));
+                }
             }
             return Task::none();
         }
@@ -567,6 +640,11 @@ impl App {
                 hotkeys::ring_edit(&self.tab.doc, atom, bond, key, self.tab.bond_drawing.length)
         {
             self.commit_hotkey(result, "Ring attached");
+            return Task::none();
+        }
+        if explicit {
+            self.status = format!("No drawing shortcut for {key}");
+            self.error = false;
             return Task::none();
         }
         // No contextual action: select a drawing tool. Preserve useful nonconflicting aliases.

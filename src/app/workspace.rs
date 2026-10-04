@@ -220,6 +220,11 @@ impl App {
         };
         let mut content = column![background(self.command_bar()), background(self.style_bar())];
         let drawing: Element<'_, Edit> = canvas(MoleculeCanvas {
+            optimizer: self.optimization_canvas(),
+            keyboard_target: self
+                .tab
+                .keyboard_drawing
+                .marker_point(self.display_document()),
             element: &self.element,
             joining: self.tab.joining.as_ref().map(|s| (&s.prepared, s.anchor)),
             hidden_annotation: self.inline_label_id(),
@@ -278,7 +283,9 @@ impl App {
                 .on_resize(Message::Viewport)
                 .into(),
         );
-        let context: Element<'_, Message> = if let Some(preview) = &self.tab.cleanup {
+        let context: Element<'_, Message> = if self.tab.optimization.is_some() {
+            self.optimization_bar()
+        } else if let Some(preview) = &self.tab.cleanup {
             use reshiki::cleanup::Scope;
             let scopes = vec![Scope::SelectedAtoms, Scope::SelectedMolecules];
             let mut bar = column![
@@ -739,6 +746,59 @@ impl App {
                 enabled: true,
             });
         }
+        if matches!(self.tool, Tool::Select | Tool::Lasso) {
+            commands.extend([
+                RowCommand {
+                    label: "3D optimize…",
+                    menu: "3D optimize…",
+                    hint: "Generate an optimized conformer using MMFF or UFF; preview before applying",
+                    message: Message::Optimization(super::optimization::Action::Begin),
+                    enabled: !self.tab.doc.atoms.is_empty() && !self.tab.busy,
+                },
+                RowCommand {
+                    label: "Keyboard drawing",
+                    menu: "Keyboard drawing (F8)",
+                    hint: "Draw with digits and letters; navigate atoms and bonds with arrows (F8)",
+                    message: Message::KeyboardDrawing(super::keyboard_drawing::Action::Toggle),
+                    enabled: !self.tab.busy,
+                },
+            ]);
+            let ids = self.depth_ids();
+            if ids
+                .iter()
+                .any(|id| self.tab.doc.atom(*id).is_some_and(|a| a.depth != 0.))
+                || reshiki::depth_appearance::has(&self.tab.doc, &ids)
+            {
+                let automatic = reshiki::depth_appearance::is_automatic_for(&self.tab.doc, &ids);
+                commands.push(RowCommand {
+                    label: if automatic { "Freeze depth" } else { "Enhance depth" },
+                    menu: if automatic { "Freeze depth appearance" } else { "Enhance depth appearance" },
+                    hint: "Rear ink fades with depth; freezing keeps positions and editable appearance",
+                    message: Message::DepthAppearance(super::depth_appearance::Action::Enhance(!automatic)),
+                    enabled: true,
+                });
+                if reshiki::depth_appearance::has(&self.tab.doc, &ids) {
+                    commands.push(RowCommand {
+                        label: "Clear depth",
+                        menu: "Clear depth appearance",
+                        hint: "Restore base colors while keeping the current 3D projection",
+                        message: Message::DepthAppearance(super::depth_appearance::Action::Clear),
+                        enabled: true,
+                    });
+                    if !self.tab.selected.is_empty() {
+                        commands.push(RowCommand {
+                            label: "Original ink",
+                            menu: "Use original ink for selection",
+                            hint: "Keep selected atoms and bonds in their editable base colors",
+                            message: Message::DepthAppearance(
+                                super::depth_appearance::Action::OriginalInk,
+                            ),
+                            enabled: true,
+                        });
+                    }
+                }
+            }
+        }
         if !matches!(self.tool, Tool::Select | Tool::Lasso) || self.tab.selected.is_empty() {
             return commands;
         }
@@ -782,6 +842,64 @@ impl App {
     pub(super) fn context_bar(&self) -> Element<'_, Message> {
         if self.tab.joining.is_some() {
             return self.join_bar();
+        }
+        if self.tab.keyboard_drawing.enabled() {
+            use super::keyboard_drawing::Action;
+            use reshiki::keyboard_drawing::Target;
+            let active = self.tab.keyboard_drawing.active_label(&self.tab.doc);
+            let atom = match self.tab.keyboard_drawing.target() {
+                Target::Atom(id) => Some(id),
+                _ => None,
+            };
+            let marked_atom = self.tab.keyboard_drawing.marked();
+            let marked = self
+                .tab
+                .keyboard_drawing
+                .marked()
+                .map(|id| format!(" · Marked atom {id}"))
+                .unwrap_or_default();
+            return container(
+                column![
+                    row![
+                        text(format!("Keyboard drawing · {active}{marked}")).size(12),
+                        reshiki::accessibility::button(
+                            "keyboard-mark",
+                            format!("Mark {active} for connection · ["),
+                            text("Mark [").size(12)
+                        )
+                        .on_press_maybe(atom.map(|_| Message::KeyboardDrawing(Action::Mark)))
+                        .style(control(false)),
+                        reshiki::accessibility::button(
+                            "keyboard-connect",
+                            format!("Connect {active} to marked atom · ]"),
+                            text("Connect ]").size(12)
+                        )
+                        .on_press_maybe(
+                            atom.zip(marked_atom)
+                                .filter(|(a, b)| a != b)
+                                .map(|_| Message::KeyboardDrawing(Action::Connect))
+                        )
+                        .style(control(false)),
+                        reshiki::accessibility::button(
+                            "keyboard-done",
+                            format!("Leave keyboard drawing · F8 · Active {active}{marked}"),
+                            text("Done (F8)").size(12)
+                        )
+                        .on_press(Message::KeyboardDrawing(Action::Leave))
+                        .style(control(false)),
+                    ]
+                    .spacing(8)
+                    .align_y(Alignment::Center)
+                    .wrap(),
+                    text(reshiki::keyboard_drawing::State::hint())
+                        .size(11)
+                        .style(muted_text),
+                ]
+                .spacing(4),
+            )
+            .padding([7, 12])
+            .style(panel)
+            .into();
         }
         container(responsive(move |size| self.context_row(size.width)).height(Length::Shrink))
             .height(46)
@@ -2664,14 +2782,32 @@ mod selection_tests {
     fn row_commands_leave_clipboard_to_menus_and_shortcuts() {
         let (mut app, _) = App::new();
         app.tab.doc = reshiki::rings::Preset::Regular.document(42., false);
-        assert!(app.context_commands().is_empty());
+        let labels: Vec<_> = app.context_commands().iter().map(|c| c.label).collect();
+        assert_eq!(labels, ["3D optimize…", "Keyboard drawing"]);
         app.tab.selected = app.tab.doc.all_ids();
         let labels: Vec<_> = app.context_commands().iter().map(|c| c.label).collect();
-        assert_eq!(labels, ["Move & attach…", "Group"]);
+        assert_eq!(
+            labels,
+            [
+                "3D optimize…",
+                "Keyboard drawing",
+                "Move & attach…",
+                "Group"
+            ]
+        );
         let _ = app.update(Message::Group);
         let labels: Vec<_> = app.context_commands().iter().map(|c| c.label).collect();
-        assert_eq!(labels, ["Move & attach…", "Group", "Ungroup"]);
-        assert!(!app.context_commands()[1].enabled);
+        assert_eq!(
+            labels,
+            [
+                "3D optimize…",
+                "Keyboard drawing",
+                "Move & attach…",
+                "Group",
+                "Ungroup"
+            ]
+        );
+        assert!(!app.context_commands()[3].enabled);
     }
 
     #[test]

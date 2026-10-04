@@ -96,6 +96,29 @@ pub fn detect_bond_stereo(
     double_bond_directions(graph, metadata, directions, positions, rings)
 }
 
+/// Retained 3D projections carry explicit double-bond identity, including
+/// intentionally unspecified stereo. Those bonds must never generate XY
+/// directions that can contaminate their own or a neighboring alkene's state.
+pub(crate) fn detect_bond_stereo_preserving(
+    graph: &Graph,
+    metadata: &Metadata,
+    directions: &[Direction],
+    positions: Option<&[Point3]>,
+    rings: &[Vec<usize>],
+    authoritative: &[bool],
+) -> Result<BondGeometry, String> {
+    with_work_preserving(
+        graph,
+        metadata,
+        directions,
+        positions,
+        rings,
+        &mut Work::default(),
+        super::CoordinateBounds::Drawing,
+        Some(authoritative),
+    )
+}
+
 /// Assign neighboring single/aromatic bond directions from coordinates, or
 /// from existing cis/trans or E/Z tags when coordinates are absent. Preserve
 /// the reference traversal order while replacing recursion with a bounded stack.
@@ -154,7 +177,26 @@ fn with_work(
     work: &mut Work,
     bounds: super::CoordinateBounds,
 ) -> Result<BondGeometry, String> {
+    with_work_preserving(
+        graph, metadata, directions, positions, rings, work, bounds, None,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn with_work_preserving(
+    graph: &Graph,
+    metadata: &Metadata,
+    directions: &[Direction],
+    positions: Option<&[Point3]>,
+    rings: &[Vec<usize>],
+    work: &mut Work,
+    bounds: super::CoordinateBounds,
+    authoritative: Option<&[bool]>,
+) -> Result<BondGeometry, String> {
     validate(graph, metadata, directions, positions, bounds)?;
+    if authoritative.is_some_and(|mask| mask.len() != graph.bonds.len()) {
+        return Err("Invalid authoritative bond mask dimensions".into());
+    }
     let mut ctx = Context {
         graph,
         positions,
@@ -196,6 +238,7 @@ fn with_work(
     for (id, bond) in graph.bonds.iter().enumerate() {
         work.spend(1)?;
         if bond.order != 2
+            || authoritative.is_some_and(|mask| mask.get(id).copied().unwrap_or(false))
             || at(&metadata.bonds, id)?.stereo == 1
             || *at(directions, id)? == Direction::EitherDouble
             || at(&ctx.adjacent, bond.a)?.len() <= 1

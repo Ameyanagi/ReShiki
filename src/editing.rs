@@ -95,6 +95,8 @@ pub fn selection(doc: &Document, ids: &[u64]) -> Document {
     if !removed.is_empty() {
         part.delete(&removed);
     }
+    part.depth_appearance =
+        crate::depth_appearance::selection(doc, &ids.iter().copied().collect::<Vec<_>>());
     part
 }
 
@@ -123,6 +125,7 @@ pub fn append(doc: &mut Document, source: &Document, offset: Point) -> Vec<u64> 
         return vec![];
     };
     let mut part = source.clone();
+    part.depth_appearance = crate::depth_appearance::remap(&source.depth_appearance, &mapping);
     for a in &mut part.atoms {
         // A pasted fragment keeps its source appearance when document defaults differ.
         if source.atom_labels != doc.atom_labels {
@@ -242,6 +245,7 @@ pub fn append(doc: &mut Document, source: &Document, offset: Point) -> Vec<u64> 
     doc.abbreviations.extend(part.abbreviations);
     doc.reactions.extend(part.reactions);
     doc.ring_fills.extend(part.ring_fills);
+    doc.depth_appearance.extend(part.depth_appearance);
     if !doc.reactions.is_empty() {
         doc.version = doc.version.max(15);
     }

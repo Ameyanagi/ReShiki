@@ -262,6 +262,7 @@ class ReleaseTests(unittest.TestCase):
                     "build_inchi_helper.dependency",
                     return_value={"name": "cosmolkit-inchi", "version": "0.3.0"},
                 ),
+                patch("geometry_source.metadata", return_value={"version": "2026.03.6"}),
                 patch("build_release.verify_archive"),
                 patch("build_release.run") as run,
                 patch("sys.argv", ["build_release.py", "--target", target]),

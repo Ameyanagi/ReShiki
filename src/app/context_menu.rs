@@ -205,7 +205,7 @@ mod tests {
         assert!(run_item(&mut app, Page::Arrange, "Align needs 2 objects").is_err());
         assert_eq!(
             labels(&app, Page::More(2)),
-            ["Move & attach…", "Group"],
+            ["3D optimize…", "Keyboard drawing (F8)"],
             "⋯ lists the folded commands in row order"
         );
         let _ = app.update(Message::ContextMenu(Action::Open(Page::Arrange, 300.)));

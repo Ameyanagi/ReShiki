@@ -19,13 +19,52 @@ The canvas fills the drawing area. Rulers reserve only their top and left gutter
 
 ## How to read the keys
 
-Lowercase and uppercase are different: **m** inserts Me at an atom; **M** means **Shift+m** and inserts MgBr. Keys depend on what is under the pointer. A single selected atom, or a selected bond's two endpoints, can also provide the target. A hovered target takes precedence. Clear the selection and move to empty canvas before choosing a tool.
+Lowercase and uppercase are different: **m** inserts Me at an atom; **M** means **Shift+m** and inserts MgBr. In the default mode, keys depend on what is under the pointer. A single selected atom, or a selected bond's two endpoints, can also provide the target. A hovered target takes precedence. Clear the selection and move to empty canvas before choosing a tool. **Keyboard drawing (F8)** instead uses an explicit hotspot, as described below.
 
 An atom's visible label is part of its target, including the hydrogen count,
 isotope and charge. Hovering the `₂` in NH₂ targets that nitrogen. **g**, **?**
 and **/** refresh the target's property fields just as clicking to select it does.
 
 Text fields keep ordinary typing, and Cmd/Ctrl shortcuts never type their letter into a field. Enter applies a field and leaves it, so **Cmd/Ctrl+Z** then undoes the drawing; while a field is still focused, Undo and Redo do nothing. **Cmd** means Command on macOS; **Ctrl** is the corresponding modifier on Windows and Linux. **Alt** is Option on macOS. Uppercase letters in modified shortcuts, such as **Cmd/Ctrl+C**, do not imply Shift unless it is written explicitly.
+
+## Keyboard drawing without pointer hover
+
+Press unmodified **F8**, or choose **Keyboard drawing** from the Select/Lasso
+context row or its **⋯** menu. The marker and row show the active hotspot.
+A selected atom starts at that atom; a selected bond's two endpoints start at
+that bond. Otherwise the nearest visible atom or bond to the view centre is
+used. On an empty drawing, the starting position is the view centre.
+
+| Key                     | Result in Keyboard drawing                                                   |
+| ----------------------- | ---------------------------------------------------------------------------- |
+| Arrow                   | Navigate atom → bond → atom in the chosen direction                          |
+| Shift+arrow             | Navigate atom → atom or bond → bond, skipping the other kind                 |
+| 1 at an atom            | Extend a chain; the new endpoint becomes active                              |
+| 0 at an atom            | Add a branch; its origin remains active                                      |
+| Enter at an atom        | Edit its label, including after a ring selected several atoms                |
+| [ / ]                   | Mark an atom / connect the active atom to the marked atom with a single bond |
+| F8 / Escape / Done (F8) | Leave Keyboard drawing                                                       |
+
+The atom and bond tables below apply to the active hotspot. On an empty
+drawing, an atom letter creates the first atom, **1** creates a C–C bond,
+and **3 / 6 / 7** starts phenyl / a six-member / a five-member ring.
+Ring attachment keeps the attachment hotspot. Use arrows to choose a bond
+before changing its order or fusing a ring; arrows only navigate.
+
+For a branch, navigate back to the desired atom and press **0**. For ring
+closure, navigate to the first endpoint, press **[**, navigate to the second,
+and press **]**. Rejected connections do not change the drawing. Each committed
+edit is an Undo step, and Undo/Redo restore the corresponding hotspot and mark.
+
+Pointer hover does not change the active hotspot. Text fields and label drafts
+retain their typing and caret keys; finish or cancel them to resume drawing.
+Cmd/Ctrl and Alt shortcuts keep their existing actions, and **Shift+3–8** still
+chooses ring tools. Outside this mode, the default pointer/selection shortcuts
+and arrow nudges are unchanged. This is ReShiki's keyboard contract, informed
+by ChemDraw rather than an exact emulation.
+
+See [3D optimization and keyboard drawing](3d-keyboard-drawing.md) for a complete
+workflow, force-field choices, pins, rotation, and retained depth appearance.
 
 ## Two quick ring gestures
 

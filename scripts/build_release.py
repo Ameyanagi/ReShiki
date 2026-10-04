@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import math
 import os
 import platform
 import plistlib
@@ -151,6 +152,216 @@ def verify_inchi_worker(binary, version):
         raise ValueError("Packaged InChI helper did not read methane correctly")
 
 
+def verify_geometry_dependencies(binary):
+    """Reject chemistry shared libraries and redistributable Windows C++ runtimes."""
+    binary = Path(binary).resolve(strict=True)
+    system = platform.system()
+    if system == "Darwin":
+        command = ["otool", "-L", binary]
+    elif system == "Windows":
+        command = ["dumpbin", "/DEPENDENTS", binary]
+    elif system == "Linux":
+        command = ["readelf", "-d", binary]
+    else:
+        raise ValueError(f"Unsupported geometry dependency check: {system}")
+    try:
+        output = run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env=dict(os.environ, LC_ALL="C"),
+        ).stdout
+    except FileNotFoundError as error:
+        raise ValueError(f"Geometry package verification requires {command[0]}") from error
+    if system == "Darwin":
+        dependencies = [line.strip().split(" (", 1)[0] for line in output.splitlines()[1:]]
+    elif system == "Windows":
+        dependencies = re.findall(
+            r"^\s+([A-Za-z0-9_.-]+\.dll)\s*$", output, re.MULTILINE | re.IGNORECASE
+        )
+    else:
+        dependencies = re.findall(r"\(NEEDED\).*\[([^\]]+)\]", output)
+    for dependency in dependencies:
+        name = dependency.replace("\\", "/").rsplit("/", 1)[-1].lower()
+        if (
+            "rdkit" in name
+            or "boost" in name
+            or "python" in name
+            or (
+                system == "Windows"
+                and re.match(r"(?:msvcp|msvcr|vcruntime|concrt|vcomp|mfc)\d", name)
+            )
+        ):
+            raise ValueError(
+                f"Geometry executable requires an external runtime library: {dependency}"
+            )
+
+
+def geometry_smoke_request(field):
+    """Exercise ETKDG embedding and explicit force-field optimization of ethanol."""
+    operation = dict(
+        atoms=[
+            dict(
+                atomic_number=number,
+                isotope=0,
+                charge=0,
+                explicit_h=0,
+                no_implicit=False,
+                aromatic=False,
+                radical=0,
+                chiral_tag=0,
+            )
+            for number in (6, 6, 8)
+        ],
+        bonds=[
+            dict(a=a, b=b, order=1, aromatic=False, stereo=0, stereo_atoms=None)
+            for a, b in ((0, 1), (1, 2))
+        ],
+        field=field,
+        operation="Generate",
+        coordinates=[],
+        fixed_atoms=[],
+        conformers=2,
+        seed=42,
+        max_iterations=1000,
+    )
+    body = json.dumps(dict(heap_bytes=256 * 1024 * 1024, operation=operation)).encode()
+    return b"RSHGEOM1" + struct.pack("<HHI", 1, 0, len(body)) + body
+
+
+def verify_geometry_response(response, field, version):
+    if (
+        len(response) < 16
+        or len(response) > 4 * 1024 * 1024
+        or response[:12] != b"RSHGEOM1\x01\x00\x00\x00"
+    ):
+        raise ValueError("Packaged geometry worker returned an incompatible protocol")
+    if struct.unpack("<I", response[12:16])[0] != len(response) - 16:
+        raise ValueError("Packaged geometry worker returned an invalid frame length")
+    result = json.loads(response[16:])
+
+    def finite(value):
+        try:
+            return (
+                isinstance(value, (int, float))
+                and not isinstance(value, bool)
+                and math.isfinite(value)
+            )
+        except OverflowError:
+            return False
+
+    try:
+        geometry = result["result"]["Ok"]
+        coordinates = geometry["coordinates"]
+        parents = geometry["hydrogen_parents"]
+        valid = (
+            result["version"] == version
+            and geometry["field"] == field
+            and geometry["original_count"] == 3
+            and len(coordinates) == 9
+            and len(parents) == 6
+            and all(type(parent) is int and 0 <= parent < 3 for parent in parents)
+            and [parents.count(i) for i in range(3)] == [3, 2, 1]
+            and all(
+                len(point) == 3 and all(finite(value) and abs(value) < 1000 for value in point)
+                for point in coordinates
+            )
+            and finite(geometry["initial_energy"])
+            and finite(geometry["energy"])
+            and geometry["energy"] <= geometry["initial_energy"] + 1e-5
+            and geometry["converged"] is True
+            and geometry["gradient"] is None
+            and all(
+                0.9 < math.dist(coordinates[a], coordinates[b]) < 2.0 for a, b in ((0, 1), (1, 2))
+            )
+            and all(
+                0.7 < math.dist(coordinates[3 + i], coordinates[parent]) < 1.4
+                for i, parent in enumerate(parents)
+            )
+        )
+    except (KeyError, TypeError, IndexError) as error:
+        raise ValueError("Packaged geometry worker returned invalid ethanol geometry") from error
+    if not valid:
+        raise ValueError(f"Packaged geometry worker did not optimize ethanol with {field}")
+
+
+def verify_geometry_worker(binary, version):
+    """Launch the sole relocated executable without Python or chemistry libraries."""
+    binary = Path(binary).resolve(strict=True)
+    verify_geometry_dependencies(binary)
+    with tempfile.TemporaryDirectory(prefix="ReShiki geometry distribution ") as temporary:
+        root = Path(temporary)
+        isolated = root / "Only executable"
+        isolated.mkdir()
+        executable = isolated / binary.name
+        shutil.copy2(binary, executable)
+        empty_path = root / "Empty PATH"
+        empty_path.mkdir()
+        environment = dict(os.environ)
+        for key in (
+            "VIRTUAL_ENV",
+            "PYTHONPATH",
+            "PYTHONHOME",
+            "UV_PROJECT_ENVIRONMENT",
+            "LD_LIBRARY_PATH",
+            "LD_PRELOAD",
+            "LD_AUDIT",
+            "LD_DEBUG_OUTPUT",
+            "DYLD_LIBRARY_PATH",
+            "DYLD_FALLBACK_LIBRARY_PATH",
+            "DYLD_FRAMEWORK_PATH",
+            "DYLD_FALLBACK_FRAMEWORK_PATH",
+            "DYLD_INSERT_LIBRARIES",
+            "DYLD_VERSIONED_LIBRARY_PATH",
+            "DYLD_VERSIONED_FRAMEWORK_PATH",
+            "RDBASE",
+            "RDKIT_HOME",
+            "RDKIT_ROOT",
+            "BOOST_ROOT",
+            "RESHIKI_GEOMETRY_HELPER",
+            "MORUNO_GEOMETRY_HELPER",
+            "RESHIKI_INCHI_HELPER",
+            "MORUNO_INCHI_HELPER",
+        ):
+            environment.pop(key, None)
+        environment.update(
+            PATH=str(empty_path),
+            HOME=str(root / "Home"),
+            USERPROFILE=str(root / "Home"),
+            XDG_CACHE_HOME=str(root / "Cache"),
+            XDG_DATA_HOME=str(root / "Data"),
+            APPDATA=str(root / "Roaming"),
+            LOCALAPPDATA=str(root / "Local"),
+            UV_CACHE_DIR=str(root / "UV cache"),
+            UV_OFFLINE="1",
+            PYTHONNOUSERSITE="1",
+        )
+        for prefix in ("RESHIKI", "MORUNO"):
+            for key in ("PYTHON", "REFERENCE_PYTHON", "UV", "ROOT", "RUNTIME_DIR", "DATA_DIR"):
+                environment[f"{prefix}_{key}"] = str(root / f"Missing {prefix} {key}")
+        for field in ("MMFF94", "UFF"):
+            response = run(
+                [executable, "--geometry-worker"],
+                input=geometry_smoke_request(field),
+                cwd=root,
+                env=environment,
+                capture_output=True,
+                timeout=120,
+            ).stdout
+            verify_geometry_response(response, field, version)
+        # The worker has no need to stage sources, data, interpreters, or libraries.
+        if (
+            sorted(root.iterdir()) != sorted([isolated, empty_path])
+            or list(isolated.iterdir()) != [executable]
+            or any(empty_path.iterdir())
+        ):
+            raise ValueError("Packaged geometry worker created an unexpected runtime payload")
+    print(
+        "MMFF94 and UFF passed from the sole relocated executable without Python or RDKit libraries."
+    )
+
+
 def notices(destination):
     metadata = json.loads(
         run(
@@ -278,6 +489,7 @@ def verify_archive(archive_path, signed=False):
         verify_inchi_worker(binary, metadata["inchi"]["version"])
         verify_single_executable(binary, folder)
         verify_runtime(binary, folder)
+        verify_geometry_worker(binary, metadata["geometry"]["version"])
         if platform.system() == "Darwin":
             verify_macos_workers(binary)
             run(["codesign", "--verify", "--deep", "--strict", app])
@@ -333,6 +545,7 @@ def main():
         shutil.copy2(build / binary_name, folder / binary_name)
         notices(folder / "Licenses")
     from build_inchi_helper import INCHI_VERSION, dependency
+    from geometry_source import metadata as geometry_metadata
 
     metadata = dict(
         version=version(),
@@ -340,6 +553,7 @@ def main():
         architecture=arch,
         rust_target=target,
         inchi=dict(version=INCHI_VERSION, dependency=dependency(ROOT), runtime="self-process"),
+        geometry=dict(geometry_metadata(ROOT), runtime="self-process", linkage="static"),
         signed=args.sign,
         notarized=args.sign,
         commit=os.environ.get("GITHUB_SHA", "local"),

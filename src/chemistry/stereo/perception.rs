@@ -113,6 +113,25 @@ pub fn perceive(input: &State, options: Options) -> Result<State, String> {
     with_work(input, options, None, &mut Work(50_000_000))
 }
 
+/// Drawing-only provenance: skip legacy assignment for retained double-bond
+/// identities, including an authoritative absence of a stereo descriptor.
+pub(crate) fn perceive_preserving_bonds(
+    input: &State,
+    options: Options,
+    authoritative: &[bool],
+) -> Result<State, String> {
+    if options.clean || authoritative.len() != input.graph.bonds.len() {
+        return Err("Authoritative stereo requires a matching mask and no cleanup".into());
+    }
+    with_work_preserving(
+        input,
+        options,
+        None,
+        Some(authoritative),
+        &mut Work(50_000_000),
+    )
+}
+
 /// Depiction supplies freshly perceived symmetric rings. Requiring that cache
 /// excludes the independent fallback ring searches used by the public API.
 pub(crate) fn perceive_prepared_with_work(
@@ -190,6 +209,15 @@ fn with_work(
     queries: Option<&[bool]>,
     work: &mut Work,
 ) -> Result<State, String> {
+    with_work_preserving(input, options, queries, None, work)
+}
+fn with_work_preserving(
+    input: &State,
+    options: Options,
+    queries: Option<&[bool]>,
+    authoritative: Option<&[bool]>,
+    work: &mut Work,
+) -> Result<State, String> {
     input.graph.cached_valences(Some(&input.valences))?;
     input.metadata.validate(&input.graph)?;
     let (n, e) = (input.graph.atoms.len(), input.graph.bonds.len());
@@ -233,6 +261,7 @@ fn with_work(
     }
     let mut ctx = Context::new(input.clone(), work)?;
     ctx.queries = queries.map(<[bool]>::to_vec);
+    ctx.authoritative_bonds = authoritative.map(<[bool]>::to_vec);
     if !options.force && ctx.state.properties.done.is_some() {
         return Ok(ctx.state);
     }
@@ -374,6 +403,7 @@ fn with_work(
 struct Context {
     state: State,
     queries: Option<Vec<bool>>,
+    authoritative_bonds: Option<Vec<bool>>,
     neighbors: Vec<Vec<usize>>,
     pairs: HashMap<(usize, usize), usize>,
     ranks: Vec<u32>,
@@ -407,6 +437,7 @@ impl Context {
         let mut result = Self {
             state,
             queries: None,
+            authoritative_bonds: None,
             neighbors,
             pairs,
             ranks: Vec::new(),

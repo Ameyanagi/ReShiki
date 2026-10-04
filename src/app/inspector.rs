@@ -274,6 +274,7 @@ impl App {
             || self.tab.busy
             || self.tab.erase_stroke
             || self.tab.cleanup.is_some()
+            || self.tab.optimization.is_some()
             || self.tab.inspector_ui.pending.is_some()
             || (self.tab.selected.is_empty() && self.tab.analysis.is_some())
         {

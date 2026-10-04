@@ -58,7 +58,13 @@ impl Context {
         for i in 0..self.state.graph.bonds.len() {
             work.spend(1)?;
             let bond = at(&self.state.graph.bonds, i)?.clone();
-            if bond.order != 2 || at(&self.state.metadata.bonds, i)?.stereo != 0 {
+            if bond.order != 2
+                || at(&self.state.metadata.bonds, i)?.stereo != 0
+                || self
+                    .authoritative_bonds
+                    .as_ref()
+                    .is_some_and(|mask| mask.get(i).copied().unwrap_or(false))
+            {
                 continue;
             }
             self.ensure_ranks(work)?;

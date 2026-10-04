@@ -25,6 +25,8 @@ pub enum Error {
     Stereo(String),
     #[error("MOL cannot preserve hydrogen, partial or quadruple bonds; use native or CDXML")]
     UnsupportedBond,
+    #[error(transparent)]
+    Depiction(#[from] super::depict::Error),
     #[error("Could not format MOL output: {0}")]
     Formatting(#[from] std::fmt::Error),
 }
@@ -55,6 +57,51 @@ pub fn write(molecule: &Molecule, options: Options) -> Result<String, Error> {
 /// Keep `write` unchanged for RDKit-compatible reference output.
 pub fn write_absolute(molecule: &Molecule, options: Options) -> Result<String, Error> {
     write_part(molecule, options, false, &[], true)
+}
+
+/// Molecular interchange needs a stereochemically valid 2D conformer even when
+/// the editable drawing is an edge-on projection. Replace only a detached copy
+/// of the coordinates; the drawing and its chemical annotations stay intact.
+pub fn write_projected_absolute(molecule: &Molecule, options: Options) -> Result<String, Error> {
+    write_absolute(&interchange_depiction(molecule)?, options)
+}
+
+pub(crate) fn has_projected_coordinates(doc: &crate::document::Document) -> bool {
+    doc.bonds
+        .iter()
+        .any(|bond| bond.projection || bond.stereo_authoritative)
+        || doc.atoms.iter().any(|atom| atom.depth != 0.)
+}
+
+fn interchange_depiction(molecule: &Molecule) -> Result<Molecule, Error> {
+    document::validate_molecule(molecule)?;
+    if molecule.positions.iter().any(|position| {
+        [position.x, position.y, position.z]
+            .iter()
+            .any(|value| !value.is_finite() || value.abs() > 1e100)
+    }) {
+        return Err(invalid("Molecule dimensions or annotations changed"));
+    }
+    if molecule
+        .state
+        .graph
+        .bonds
+        .iter()
+        .any(|bond| matches!(bond.order, 0 | 6 | 7))
+    {
+        return Err(Error::UnsupportedBond);
+    }
+    let ranks = molecule
+        .state
+        .properties
+        .atoms
+        .iter()
+        .map(|atom| atom.cip_rank)
+        .collect::<Vec<_>>();
+    let conformer = super::depict::compute(&molecule.state, &ranks, None, Default::default())?;
+    let mut detached = molecule.clone();
+    detached.positions = conformer.positions;
+    Ok(detached)
 }
 
 /// Write semantic ALL/ANY endpoints as V3000 properties. Distributed charges
@@ -102,6 +149,11 @@ pub fn write_document(doc: &crate::document::Document) -> Result<String, Error> 
         });
     }
     let molecule = document::prepare(&proxy)?;
+    let molecule = if has_projected_coordinates(doc) {
+        interchange_depiction(&molecule)?
+    } else {
+        molecule
+    };
     write_part(
         &molecule,
         Options {
@@ -116,6 +168,10 @@ pub fn write_document(doc: &crate::document::Document) -> Result<String, Error> 
 /// Reaction CTABs retain aromatic bond types instead of assigning Kekulé bonds.
 pub(crate) fn reaction_ctab(molecule: &Molecule) -> Result<String, Error> {
     write_part(molecule, Options { force_v3000: true }, true, &[], false)
+}
+
+pub(crate) fn reaction_ctab_projected(molecule: &Molecule) -> Result<String, Error> {
+    reaction_ctab(&interchange_depiction(molecule)?)
 }
 
 fn write_part(

@@ -130,6 +130,8 @@ fn write_impl(
     variable_labels: bool,
 ) -> Result<String> {
     let original = document;
+    let depth_painted = crate::depth_appearance::materialize(document);
+    let document = depth_painted.as_ref();
     let resolved = crate::canvas_theme::resolved_exchange_document(document);
     let document = resolved.as_ref();
     document.validate().map_err(invalid)?;

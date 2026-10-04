@@ -224,6 +224,7 @@ impl App {
     }
 
     fn leave_tab(&mut self) {
+        self.pause_optimization();
         if self.style_menu.is_some() {
             self.close_style_menu();
         }
@@ -657,6 +658,7 @@ pub(super) fn document_result(message: &Message) -> bool {
     matches!(
         message,
         Message::EngineDone { .. }
+            | Message::Optimization(super::optimization::Action::WorkerDone(..))
             | Message::Exported(_)
             | Message::FigureExported(_)
             | Message::Printing(printing::Action::Prepared(..) | printing::Action::Finished(..))
