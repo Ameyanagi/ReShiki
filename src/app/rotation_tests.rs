@@ -64,6 +64,46 @@ fn assert_coordinates(actual: &Document, expected: &Document) {
 }
 
 #[test]
+fn centroid_only_rotation_drag_preview_and_release_keep_document_and_history_unchanged() {
+    use crate::canvas::{
+        Camera,
+        rotation_gesture_tests::{Finish, rotation_drag},
+    };
+    let (mut app, _) = App::new();
+    app.tab.doc = Document::default();
+    let a = app.tab.doc.add_atom("C", Point::new(-60., -40.));
+    let b = app.tab.doc.add_atom("C", Point::new(-20., 0.));
+    let c = app.tab.doc.add_atom("C", Point::new(40., 40.));
+    let d = app.tab.doc.add_atom("C", Point::new(80., 80.));
+    let first = reshiki::projection::add_centroid(&mut app.tab.doc, &[a, b]).unwrap();
+    let second = reshiki::projection::add_centroid(&mut app.tab.doc, &[c, d]).unwrap();
+    app.tab.selected = vec![first, second];
+    app.tab.saved = app.tab.doc.clone();
+    app.tab.history = History::default();
+    let before = app.tab.doc.clone();
+    let revision = app.tab.revision;
+    for zoom in [0.5, 1., 3.] {
+        let events = rotation_drag(
+            &app.tab.doc,
+            &app.tab.selected,
+            Camera {
+                center: Point::default(),
+                zoom,
+            },
+            Point::new(10., 20.),
+            7,
+            Finish::Release,
+        );
+        assert_eq!(events.preview, before);
+        let _ = app.update(Message::Canvas(events.release.unwrap()));
+        assert_eq!(app.tab.doc, before);
+        assert_eq!(app.tab.saved, before);
+        assert_eq!(app.tab.revision, revision);
+        assert!(!app.tab.history.can_undo());
+    }
+}
+
+#[test]
 fn rotation_shortcuts_return_pyrrole_and_preserve_each_history_step() {
     for orientation in [0., 17., 90.] {
         for offset in [Point::default(), Point::new(250., -130.)] {
