@@ -1,5 +1,8 @@
 # Unreleased changes
 
+Review checks for the completed allocation and correctness audit are listed in
+[the audit review checklist](changes/audit-review-2026-10-04.md).
+
 See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
 
 - **Shared release checks and descriptor preparation:** share
@@ -32,7 +35,7 @@ See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
   Automated regression checks and rendered graphic-control checks passed.
   [PR #129](https://github.com/Ameyanagi/ReShiki/pull/129) · @Ameyanagi.
 
-- **Under review — Fewer temporary copies in editing and properties:** consume
+- **Fewer temporary copies in editing and properties:** consume
   owned aromatic edit drawings, build one properties-cache key per subscription,
   and retain a smaller native accessibility action registry. Validation errors,
   cached failures and stale-action rejection preserve their existing behavior.
@@ -45,7 +48,7 @@ See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
   placing oxygen. Selection shortcuts refresh their property fields.
   [Details](contextual-shortcuts.md) · @Ameyanagi.
 
-- **Under review — Canvas preview memory:** Borrow unchanged previews and share cache reads while preserving exact renderer pixels; measured allocation savings and CPU limits are documented.
+- **Canvas preview memory:** Borrow unchanged previews and share cache reads while preserving exact renderer pixels; measured allocation savings and CPU limits are documented.
   [Validation and limits](changes/canvas-preview-cache-2026-10-04.md)
   · [PR #140](https://github.com/Ameyanagi/ReShiki/pull/140) · @Ameyanagi.
 
@@ -80,7 +83,7 @@ See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
   · [Image](images/issue-work-2026-10-02/font-normal-after.png)
   · [Issue #103](https://github.com/Ameyanagi/ReShiki/issues/103) · @Ameyanagi.
 
-- **Under review — Native clipboard transport:** Share ChemDraw alias buffers, release completed Wayland requests and wait for X11 events while preserving formats, pipe bounds and print behavior.
+- **Native clipboard transport:** Share ChemDraw alias buffers, release completed Wayland requests and wait for X11 events while preserving formats, pipe bounds and print behavior.
   [Validation and limits](changes/native-clipboard-transport-2026-10-04.md)
   · [PR #139](https://github.com/Ameyanagi/ReShiki/pull/139) · @Ameyanagi.
 
@@ -90,7 +93,7 @@ See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
   [Evidence](changes/issue-work-2026-10-02.md#interchange-and-nonvisual-evidence)
   · [Issue #107](https://github.com/Ameyanagi/ReShiki/issues/107) · @Ameyanagi.
 
-- **Under review — Built-in template journal size:** Built-in templates inserted in empty space follow the current journal size; personal and attached templates keep their existing geometry.
+- **Built-in template journal size:** Built-in templates inserted in empty space follow the current journal size; personal and attached templates keep their existing geometry.
   [Validation and limits](changes/template-journal-size-2026-10-04.md)
   · [PR #136](https://github.com/Ameyanagi/ReShiki/pull/136) · @Ameyanagi.
 
@@ -102,7 +105,7 @@ See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
   · [Native check](changes/issue-work-2026-10-02.md#physical-units-and-retained-input-focus-89)
   · [Issue #89](https://github.com/Ameyanagi/ReShiki/issues/89) · @Ameyanagi.
 
-- **Under review — Native chemistry allocations:** Move owned requests, borrow serialization and ranking data, and share immutable codec defaults while preserving scientific outputs and bounded worker behavior.
+- **Native chemistry allocations:** Move owned requests, borrow serialization and ranking data, and share immutable codec defaults while preserving scientific outputs and bounded worker behavior.
   [Validation and limits](changes/native-chemistry-allocations-2026-10-04.md)
   · [PR #141](https://github.com/Ameyanagi/ReShiki/pull/141) · @Ameyanagi.
 
@@ -112,7 +115,7 @@ See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
   [Guide and limits](scifinder-handoff.md)
   · [Issue #95](https://github.com/Ameyanagi/ReShiki/issues/95) · @Ameyanagi.
 
-- **Under review — Office and LibreOffice payload handling:** reuse drawing
+- **Office and LibreOffice payload handling:** reuse drawing
   bytes and stored XML lengths while preserving document data, validation and
   recovery behavior. Office regressions and Linux headless Writer/Calc/Impress
   reopen, reload and Save As checks passed; desktop and cross-platform
