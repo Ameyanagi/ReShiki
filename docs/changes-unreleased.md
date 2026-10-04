@@ -2,6 +2,13 @@
 
 See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
 
+- **Under review — Fewer temporary copies in editing and properties:** consume
+  owned aromatic edit drawings, build one properties-cache key per subscription,
+  and retain a smaller native accessibility action registry. Validation errors,
+  cached failures and stale-action rejection preserve their existing behavior.
+  [Validation and limits](changes/app-property-accessibility-2026-10-04.md)
+  · [PR #133](https://github.com/Ameyanagi/ReShiki/pull/133) · @Ameyanagi.
+
 - **Under review — Shared release checks and descriptor preparation:** share
   native target definitions, checksum writing and descriptor query operations
   while preserving supported platforms, checksums and generated chemistry data.
