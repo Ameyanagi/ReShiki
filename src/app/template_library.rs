@@ -104,8 +104,8 @@ pub struct State {
     pub notice: Option<String>,
     pub undo: Option<Library>,
     pending: Option<u64>,
-    /// The cleanup notice also needs acknowledgment if this window later exits.
-    close_warning: Option<String>,
+    /// Unique cleanup notices need acknowledgment if this window later exits.
+    close_warnings: Vec<String>,
     /// A committed save's warning must be dismissed before close can continue.
     pending_warning: Option<u64>,
     importing: bool,
@@ -134,7 +134,7 @@ impl Default for State {
             notice: None,
             undo: None,
             pending: None,
-            close_warning: None,
+            close_warnings: Vec::new(),
             pending_warning: None,
             importing: false,
             serial: 0,
@@ -143,6 +143,9 @@ impl Default for State {
     }
 }
 impl State {
+    fn close_warning(&self) -> Option<String> {
+        (!self.close_warnings.is_empty()).then(|| self.close_warnings.join("\n\n"))
+    }
     pub(super) fn pending(&self) -> bool {
         self.pending.is_some() || self.pending_warning.is_some() || self.importing
     }
@@ -525,15 +528,10 @@ impl App {
         state.undo = transaction.undo;
         // A cleanup warning follows the committed shared library, even when
         // its originating drawing is no longer the active editing context.
-        if let Some(warning) = &transaction.release_warning {
-            match &mut state.close_warning {
-                Some(previous) if previous != warning => {
-                    previous.push_str("\n\n");
-                    previous.push_str(warning);
-                }
-                Some(_) => {}
-                None => state.close_warning = Some(warning.clone()),
-            }
+        if let Some(warning) = &transaction.release_warning
+            && !state.close_warnings.contains(warning)
+        {
+            state.close_warnings.push(warning.clone());
         }
         state.notice = transaction.release_warning;
         if !current {
@@ -680,7 +678,7 @@ impl App {
         if self.templates.pending_warning.is_some() {
             return Some(Task::none());
         }
-        let warning = self.templates.close_warning.take()?;
+        let warning = self.templates.close_warning()?;
         let serial = self.templates.serial;
         // Recovery completion and update_front can both try to finish exit.
         // Keep their gate held until this one native warning is dismissed.
@@ -690,6 +688,7 @@ impl App {
     pub(super) fn template_warning_acknowledged(&mut self, serial: u64) -> Task<Message> {
         if self.templates.pending_warning == Some(serial) {
             self.templates.pending_warning = None;
+            self.templates.close_warnings.clear();
         }
         Task::none()
     }
@@ -1009,7 +1008,7 @@ mod navigation_tests {
             assert!(task.units() > 0, "The native warning is scheduled");
             assert!(app.exit.closing() && !app.exit.committed());
             assert_eq!(app.templates.pending_warning, Some(serial));
-            assert!(app.templates.close_warning.is_none());
+            assert_eq!(app.templates.close_warning(), warning);
             assert!(app.templates.pending());
             assert!(app.templates.pending.is_none(), "The write is finished");
             assert_eq!(app.templates.library, committed);
@@ -1043,6 +1042,7 @@ mod navigation_tests {
             assert_eq!(app.exit.committed(), !restart);
             assert_eq!(app.templates.library, committed);
             assert_eq!(app.templates.notice, warning);
+            assert!(app.templates.close_warnings.is_empty());
             assert_eq!(app.templates.serial, serial, "No save retry is started");
             assert!(app.templates.pending.is_none());
             assert_eq!(std::fs::read(&path).unwrap(), committed_bytes);
@@ -1076,7 +1076,7 @@ mod navigation_tests {
                 Ok(Box::new(transaction)),
             )));
             assert_eq!(app.templates.notice, warning);
-            assert_eq!(app.templates.close_warning, warning);
+            assert_eq!(app.templates.close_warning(), warning);
             assert!(app.templates.pending_warning.is_none());
             assert!(!app.templates.pending() && !app.exit.frozen());
             assert!(!app.error);
@@ -1132,7 +1132,7 @@ mod navigation_tests {
         assert!(app.templates.undo.is_none());
         assert!(app.templates.notice.is_none());
         assert_eq!(
-            app.templates.close_warning.as_deref(),
+            app.templates.close_warning().as_deref(),
             Some("Templates saved; injected lock cleanup warning")
         );
     }
@@ -1155,7 +1155,7 @@ mod navigation_tests {
                 serial,
                 Ok(Box::new(transaction)),
             )));
-            assert_eq!(app.templates.close_warning, warning);
+            assert_eq!(app.templates.close_warning(), warning);
 
             let reload = Operation::capture(&app, Action::Reload).unwrap().unwrap();
             let _ = app.update(Message::Templates(Action::Reload));
@@ -1165,7 +1165,7 @@ mod navigation_tests {
                 Ok(Box::new(reload.execute().unwrap())),
             )));
             assert!(app.templates.notice.is_none());
-            assert_eq!(app.templates.close_warning, warning);
+            assert_eq!(app.templates.close_warning(), warning);
             let path = app.templates.path.clone().unwrap();
             let committed_bytes = std::fs::read(&path).unwrap();
 
@@ -1178,11 +1178,91 @@ mod navigation_tests {
             assert_eq!(app.templates.pending_warning, Some(serial));
             let _ = app.update(Message::Templates(Action::WarningAcknowledged(serial)));
             assert!(!app.templates.pending());
-            assert!(app.templates.close_warning.is_none());
+            assert!(app.templates.close_warnings.is_empty());
             assert_eq!(app.exit.committed(), !restart);
             assert_eq!(std::fs::read(path).unwrap(), committed_bytes);
             assert_eq!(app.templates.serial, serial, "Exit must not retry a save");
         }
+    }
+
+    #[test]
+    fn cleanup_warning_messages_remain_unique_and_clear_only_on_acknowledgment() {
+        let (mut app, _dir) = persisted_app();
+        app.inspector_open = false;
+        const FIRST: &str = "Cleanup failed";
+        const MULTILINE: &str = "Cleanup failed\n\nRetained lock";
+        const OVERLAPPING: &str = "Retained lock";
+        for (i, warning) in [FIRST, MULTILINE, FIRST, OVERLAPPING, MULTILINE]
+            .into_iter()
+            .enumerate()
+        {
+            let action = if i == 0 {
+                Action::SaveDetails
+            } else {
+                Action::Favorite(app.template_index)
+            };
+            let operation = Operation::capture(&app, action.clone()).unwrap().unwrap();
+            let _ = app.update(Message::Templates(action));
+            let serial = app.templates.pending.unwrap();
+            let transaction = operation
+                .execute_with_save(|library, path, expected| {
+                    let mut saved = library.save_checked(path, expected)?;
+                    assert!(saved.release_warning.is_none());
+                    saved.release_warning = Some(warning.into());
+                    Ok(saved)
+                })
+                .unwrap();
+            let _ = app.update(Message::Templates(Action::Finished(
+                serial,
+                Ok(Box::new(transaction)),
+            )));
+            if i == 2 {
+                assert_eq!(app.templates.close_warnings, [FIRST, MULTILINE]);
+                assert_eq!(
+                    app.templates.close_warning(),
+                    Some(format!("{FIRST}\n\n{MULTILINE}"))
+                );
+            }
+        }
+
+        let reload = Operation::capture(&app, Action::Reload).unwrap().unwrap();
+        let _ = app.update(Message::Templates(Action::Reload));
+        let serial = app.templates.pending.unwrap();
+        let _ = app.update(Message::Templates(Action::Finished(
+            serial,
+            Ok(Box::new(reload.execute().unwrap())),
+        )));
+        assert!(app.templates.notice.is_none());
+        assert_eq!(
+            app.templates.close_warnings,
+            [FIRST, MULTILINE, OVERLAPPING]
+        );
+        let rendered = Some(format!("{FIRST}\n\n{MULTILINE}\n\n{OVERLAPPING}"));
+        assert_eq!(app.templates.close_warning(), rendered);
+        let path = app.templates.path.clone().unwrap();
+        let committed_bytes = std::fs::read(&path).unwrap();
+        let committed = app.templates.library.clone();
+
+        assert!(app.template_close_warning().unwrap().units() > 0);
+        assert_eq!(app.templates.pending_warning, Some(serial));
+        assert_eq!(app.templates.close_warning(), rendered);
+        assert_eq!(app.template_close_warning().unwrap().units(), 0);
+        let _ = app.update(Message::Templates(Action::WarningAcknowledged(
+            serial.wrapping_sub(1),
+        )));
+        assert_eq!(app.templates.close_warning(), rendered);
+        assert_eq!(app.templates.pending_warning, Some(serial));
+
+        let _ = app.update(Message::Templates(Action::WarningAcknowledged(serial)));
+        assert!(app.templates.close_warnings.is_empty());
+        assert!(!app.templates.pending());
+        assert!(app.template_close_warning().is_none());
+        assert_eq!(app.templates.library, committed);
+        assert_eq!(std::fs::read(path).unwrap(), committed_bytes);
+        assert_eq!(
+            app.templates.serial, serial,
+            "Acknowledgment never retries a save"
+        );
     }
 
     #[test]
