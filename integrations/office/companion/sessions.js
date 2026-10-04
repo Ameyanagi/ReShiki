@@ -85,11 +85,18 @@ export class Sessions {
   }
   createClient(host) {
     if (!["Word", "Excel", "PowerPoint"].includes(host)) throw new Error("Unsupported Office host");
+    this.pruneClients();
     if (this.clients.size >= 32)
-      throw new Error("Too many task panes; restart the companion after closing unused panes");
+      throw new Error(
+        "Too many task panes; close unused panes and wait for their sessions to expire",
+      );
     const id = randomUUID();
     this.clients.set(id, { host, seen: this.now() });
     return id;
+  }
+  pruneClients() {
+    const now = this.now();
+    for (const [id, client] of this.clients) if (now - client.seen > 30000) this.clients.delete(id);
   }
   touch(clientId) {
     const client = this.clients.get(clientId);
@@ -114,19 +121,21 @@ export class Sessions {
       envelope = await validateEnvelope(supplied);
     target = validateTarget(target, envelope.revision);
     if (target.host !== client.host) throw new Error("Host mismatch");
+    this.pruneClients();
+    // Expired panes cannot acknowledge saves or finish their sessions. Release
+    // their reservations, but retain every draft and close its authorization.
+    for (const session of this.sessions.values())
+      if (!this.clients.has(session.clientId)) await this.retireLocked(session);
     if (this.sessions.size >= 32)
       throw new Error("Too many edit sessions; restart the companion after finishing edits");
-    if (
-      [...this.sessions.values()].some(
-        (s) => s.clientId === clientId && s.target.objectId === target.objectId,
-      )
-    )
+    if ([...this.sessions.values()].some((s) => s.target.objectId === target.objectId))
       throw new Error("This drawing already has an open edit session");
     // Validate native semantics with the installed trusted worker before launching.
     const checked = await this.worker(
       "--libreoffice-preview",
       Buffer.from(decodeBase64(envelope.native, LIMITS.nativeBytes)),
     );
+    this.touch(clientId);
     if (checked.revision !== envelope.revision)
       throw new Error("Worker changed the native drawing");
     const id = randomUUID(),
@@ -267,9 +276,18 @@ export class Sessions {
   }
   failLocked(id, clientId, body) {
     const session = this.own(id, clientId);
+    if (session.lastFailure && sameTarget(session.lastFailure, body))
+      return { retained: true, recoveryFile: session.file };
     if (session.pending?.requestId !== body.requestId)
       throw new Error("Stale failed-update report");
     session.error = String(body.error).slice(0, 1024);
+    if (body.retryable === true) {
+      // Never repeat this failed request automatically. The next native Save
+      // has a new request ID and can retry after the host error is resolved.
+      session.handledRequest = session.pending.requestId;
+      session.pending = null;
+    }
+    session.lastFailure = structuredClone(body);
     return { retained: true, recoveryFile: session.file };
   }
   finish(id, clientId) {

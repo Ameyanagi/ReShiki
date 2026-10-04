@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Generates configuration/manifests only. It never trusts a certificate, writes
 // Office's sideload directories, changes a registry, or starts an Office app.
-import { readFile, writeFile, mkdir, stat } from "node:fs/promises";
-import { X509Certificate, createPrivateKey, createPublicKey } from "node:crypto";
+import { readFile, writeFile, mkdir, stat, lstat, link, unlink } from "node:fs/promises";
+import { X509Certificate, createPrivateKey, createPublicKey, randomUUID } from "node:crypto";
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
@@ -48,6 +48,32 @@ export function manifest(host, port = 43127) {
 </OfficeApp>
 `;
 }
+// Publish complete files without overwriting any destination. Identical files
+// from a previous or interrupted run can be reused on the next invocation.
+async function publish(file, contents) {
+  const temporary = path.join(path.dirname(file), `.${path.basename(file)}.${randomUUID()}.tmp`);
+  try {
+    await writeFile(temporary, contents, { flag: "wx", mode: 0o600, flush: true });
+    try {
+      await link(temporary, file);
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+      const existing = await lstat(file);
+      if (
+        !existing.isFile() ||
+        existing.isSymbolicLink() ||
+        existing.size !== Buffer.byteLength(contents) ||
+        (await readFile(file, "utf8")) !== contents
+      )
+        throw error;
+    }
+  } finally {
+    await unlink(temporary).catch((error) => {
+      if (error.code !== "ENOENT") throw error;
+    });
+  }
+}
+
 export async function setup({ executable, cert, key, directory, port = 43127 }) {
   for (const [label, value] of Object.entries({ executable, cert, key, directory }))
     if (typeof value !== "string" || !path.isAbsolute(value))
@@ -71,21 +97,19 @@ export async function setup({ executable, cert, key, directory, port = 43127 }) 
   const rendered = HOSTS.map((host) => [host.name, manifest(host, port)]);
   await mkdir(path.join(directory, "manifests"), { recursive: true, mode: 0o700 });
   await mkdir(path.join(directory, "recovery"), { recursive: true, mode: 0o700 });
-  // Exclusive creation prevents accidentally replacing an existing installation.
-  await writeFile(
+  // The config is the installation's completion marker. Publish it only once
+  // all three complete manifests are available; matching partial output is safe
+  // to reuse and conflicting existing files are never replaced.
+  for (const [name, xml] of rendered)
+    await publish(path.join(directory, "manifests", `${name}.xml`), xml);
+  await publish(
     path.join(directory, "config.json"),
     JSON.stringify(
       { executable, cert, key, recoveryDir: path.join(directory, "recovery"), port },
       null,
       2,
     ) + "\n",
-    { flag: "wx", mode: 0o600 },
   );
-  for (const [name, xml] of rendered)
-    await writeFile(path.join(directory, "manifests", `${name}.xml`), xml, {
-      flag: "wx",
-      mode: 0o600,
-    });
   return directory;
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

@@ -189,7 +189,7 @@ for (const [host, failureLabel] of [
     fake.failAfter(failureLabel);
     await assert.rejects(
       adapter.update(inserted.target, await envelope("failed", [6000, 4000])),
-      code("HOST_WRITE_FAILED"),
+      (error) => error.code === "HOST_WRITE_FAILED" && error.details.retryable === true,
     );
     assert.deepEqual((await adapter.read(inserted.target)).envelope, original);
     assert.equal(preview(fake, inserted.target).png, before.png);
@@ -222,7 +222,7 @@ for (const [host, failureLabel] of [
     });
     await assert.rejects(
       adapter.update(inserted.target, await envelope("failed")),
-      code("RECOVERY_REQUIRED"),
+      (error) => error.code === "RECOVERY_REQUIRED" && error.details.retryable === false,
     );
     assert.deepEqual((await adapter.readSelected()).envelope, coauthor.envelope);
     assert.equal(preview(fake, inserted.target).png, coauthor.envelope.png);
@@ -462,4 +462,25 @@ test("XML: maximum native payload roundtrips without regex stack overflow", asyn
   const result = await decodeRecord(encodeRecord(record));
   assert.equal(result.envelope.native, native);
   assert.equal(result.envelope.revision, payload.revision);
+});
+
+test("Word: locked picture preflight permits a new save after unlocking without touching the original", async () => {
+  const fake = fakeOffice("Word");
+  const adapter = createHostAdapter(fake.dependencies);
+  const original = await envelope();
+  const inserted = await adapter.insert(original);
+  const object = fake.object(inserted.target.contentControlId);
+  const before = fake.state.mutations.length;
+  object.cannotEdit = true;
+  await assert.rejects(
+    adapter.update(inserted.target, await envelope("edited")),
+    (error) => error.code === "PROTECTED_OBJECT" && error.details.retryable === true,
+  );
+  assert.equal(fake.state.mutations.length, before);
+  assert.deepEqual((await adapter.read(inserted.target)).envelope, original);
+  object.cannotEdit = false;
+  assert.deepEqual(
+    (await adapter.update(inserted.target, await envelope("edited"))).envelope,
+    await envelope("edited"),
+  );
 });

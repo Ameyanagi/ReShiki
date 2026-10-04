@@ -17,6 +17,7 @@ import {
   sameOwner,
   scaledSize,
   writeFailure,
+  updatePreflight,
 } from "./common.js";
 
 const MARKER =
@@ -300,11 +301,14 @@ export function createExcelAdapter(Excel, { sessionId, Office }) {
 
     async update(target, envelope) {
       return Excel.run(async (context) => {
-        let before = await readShape(context, target);
-        assertRevision(before.record, target);
-        await checkEditablePicture(context, before, Office);
-        const attempted = newRecord(envelope, null, before.record.objectId);
-        assertCanAdd(before.records, attempted);
+        let { before, attempted } = await updatePreflight(async () => {
+          const before = await readShape(context, target);
+          assertRevision(before.record, target);
+          await checkEditablePicture(context, before, Office);
+          const attempted = newRecord(envelope, null, before.record.objectId);
+          assertCanAdd(before.records, attempted);
+          return { before, attempted };
+        });
         const stagedName = `ReShiki_pending_${objectId()}`;
         const oldName = `ReShiki_previous_${objectId()}`;
         let replacementIdentity;
