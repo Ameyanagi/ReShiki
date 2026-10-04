@@ -208,6 +208,18 @@ impl Prepared {
             group.members.dedup();
         }
         placed.reconcile_molecule_groups();
+        // Selection can omit the reaction arrow, but its participant roles still
+        // belong to the moved atoms. Restore them before checking the join.
+        placed.reactions = self.original.reactions.clone();
+        for reaction in &mut placed.reactions {
+            for role in crate::reactions::Role::ALL {
+                for participant in reaction.participants_mut(role) {
+                    for id in &mut participant.atoms {
+                        *id = merged.get(id).copied().unwrap_or(*id);
+                    }
+                }
+            }
+        }
         crate::reactions::reconcile(&mut placed)?;
         placed.validate()?;
         Ok((placed, ids.into_iter().map(original_id).collect()))
