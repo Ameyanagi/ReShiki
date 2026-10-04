@@ -58,13 +58,16 @@ def checked_source(path):
     return path.resolve()
 
 
-def source_checkout(path):
+def source_checkout(path, *, initialize=None):
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
         # Publish only after fetching and verifying the exact commit. Source
         # checkouts and their Git metadata are deliberately not CI cache input.
         with tempfile.TemporaryDirectory(prefix="rdkit-fetch-", dir=path.parent) as temporary:
-            subprocess.run(["git", "init", "--quiet", temporary], check=True)
+            if initialize is None:
+                subprocess.run(["git", "init", "--quiet", temporary], check=True)
+            else:
+                initialize(Path(temporary))
             subprocess.run(
                 [
                     "git",

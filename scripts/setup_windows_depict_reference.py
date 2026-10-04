@@ -25,6 +25,9 @@ from setup_linux_depict_reference import (
     digest,
     extract_headers,
 )
+from setup_linux_depict_reference import (
+    source_checkout as shared_source_checkout,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -38,30 +41,7 @@ def initialize_checkout(path):
 
 
 def source_checkout(path):
-    if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with tempfile.TemporaryDirectory(prefix="rdkit-fetch-", dir=path.parent) as temporary:
-            initialize_checkout(Path(temporary))
-            subprocess.run(
-                [
-                    "git",
-                    "-C",
-                    temporary,
-                    "fetch",
-                    "--depth=1",
-                    "https://github.com/rdkit/rdkit.git",
-                    PIN,
-                ],
-                check=True,
-                timeout=300,
-            )
-            subprocess.run(
-                ["git", "-C", temporary, "checkout", "--quiet", "--detach", "FETCH_HEAD"],
-                check=True,
-            )
-            checked_source(Path(temporary))
-            Path(temporary).rename(path)
-    return checked_source(path)
+    return shared_source_checkout(path, initialize=initialize_checkout)
 
 
 def build(source, boost, directory, environment):
