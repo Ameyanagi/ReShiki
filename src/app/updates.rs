@@ -23,6 +23,30 @@ pub enum Action {
     Opened(Result<(), String>),
 }
 
+/// Already-started work and window/save lifecycle events keep running while
+/// the dialog owns input. Document results retain their usual epoch guards.
+pub(super) fn background(message: &Message) -> bool {
+    super::tabs::document_result(message)
+        || matches!(
+            message,
+            Message::Tick
+                | Message::Viewport(_)
+                | Message::Close(_)
+                | Message::Cancel
+                | Message::Discard
+                | Message::Opened(_)
+                | Message::ThemeFile(
+                    super::theme_files::Action::Loaded(..) | super::theme_files::Action::Saved(..)
+                )
+                | Message::Assistant(
+                    super::assistant::Action::Connected(..)
+                        | super::assistant::Action::PreferencesSaved(_)
+                        | super::assistant::Action::ImageRead { .. }
+                        | super::assistant::Action::TextPasted { .. }
+                )
+        )
+}
+
 pub struct State {
     pub open: bool,
     pub automatic: bool,
@@ -337,6 +361,7 @@ impl App {
         if !self.updates.open {
             return content;
         }
+        let content = reshiki::accessibility::inert(content);
         let state = &self.updates;
         let status = if state.restarting {
             "Installing and restarting ReShiki…".into()
@@ -370,7 +395,7 @@ impl App {
             row![
                 crate::branding::wordmark(24.0),
                 Space::new().width(Length::Fill),
-                button("Close")
+                reshiki::accessibility::button("updates-close", "Close updates", "Close")
                     .on_press(msg(Action::Show(false)))
                     .padding([7, 10])
                     .style(button::text)
@@ -381,32 +406,43 @@ impl App {
                 .style(super::workspace::muted_text),
             row![
                 text("Channel").size(13),
-                button("Stable")
+                reshiki::accessibility::button("updates-stable", "Stable update channel", "Stable").checked(state.channel == Channel::Stable)
                     .on_press_maybe((!state.saving && !state.installing && !state.restarting).then_some(msg(Action::Channel(Channel::Stable))))
                     .style(if state.channel == Channel::Stable { button::primary } else { button::secondary }),
-                button("Nightly")
+                reshiki::accessibility::button("updates-nightly", "Nightly update channel", "Nightly").checked(state.channel == Channel::Nightly)
                     .on_press_maybe((!state.saving && !state.installing && !state.restarting).then_some(msg(Action::Channel(Channel::Nightly))))
                     .style(if state.channel == Channel::Nightly { button::primary } else { button::secondary }),
             ].spacing(8).align_y(Alignment::Center),
             text(status).size(15),
             row![
-                button("Check for updates")
+                reshiki::accessibility::button("updates-check", "Check for updates", "Check for updates")
                     .padding([9, 12])
                     .on_press_maybe((!state.checking && !state.installing && !state.restarting).then_some(msg(Action::Check(true)))),
-                button(if state.channel == Channel::Nightly { "Download nightly ↗" } else if state.installing { "Downloading…" } else { "Update and restart" })
+                reshiki::accessibility::button("updates-install", "Download or install update", if state.channel == Channel::Nightly { "Download nightly ↗" } else if state.installing { "Downloading…" } else { "Update and restart" })
                     .padding([9, 12])
                     .on_press_maybe((state.available() && !state.installing && !state.restarting).then_some(msg(if state.channel == Channel::Nightly { Action::Portable } else { Action::Install })))
             ]
             .spacing(10),
-            checkbox(state.automatic)
-                .label("Check automatically")
-                .on_toggle_maybe(
-                    (!state.saving)
-                        .then_some(|enabled| Message::Updates(Action::Automatic(enabled)))
-                )
-                .size(16)
-                .text_size(13),
-            button("Release notes ↗").on_press(msg(Action::Download)).style(button::text),
+            reshiki::accessibility::button(
+                "updates-automatic",
+                "Check automatically",
+                checkbox(state.automatic)
+                    .label("Check automatically")
+                    .on_toggle_maybe(
+                        (!state.saving)
+                            .then_some(|enabled| Message::Updates(Action::Automatic(enabled)))
+                    )
+                    .size(16)
+                    .text_size(13),
+            )
+            .checked(state.automatic)
+            .on_press_maybe((!state.saving).then_some(msg(Action::Automatic(!state.automatic))))
+            .padding(0)
+            .style(|theme, _| button::Style {
+                text_color: theme.palette().text,
+                ..Default::default()
+            }),
+            reshiki::accessibility::button("updates-notes", "Open release notes", "Release notes ↗").on_press(msg(Action::Download)).style(button::text),
             text(if state.channel == Channel::Nightly { "Checks once a day. Nightlies are installed manually. Downloads prefer installers when available; Release notes also links portable archives." } else { "Checks once a day. Stable updates are verified before installation. Your saved tabs reopen after restarting." })
                 .size(12)
                 .style(super::workspace::muted_text),
@@ -445,13 +481,122 @@ impl App {
         )))
         .center_x(Length::Fill)
         .center_y(Length::Fill);
-        stack![content, backdrop, dialog].into()
+        reshiki::accessibility::focus_scope(stack![content, backdrop, dialog])
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn updates_modal_rejects_drawing_and_file_messages_before_they_change_state() {
+        let (mut app, _) = App::new();
+        let atom = app
+            .tab
+            .doc
+            .add_atom("C", reshiki::document::Point::default());
+        app.tab.selected = vec![atom];
+        let _ = app.update(Message::Assistant(super::super::assistant::Action::Input(
+            iced::widget::text_editor::Action::Edit(iced::widget::text_editor::Edit::Paste(
+                "Unsent draft".to_owned().into(),
+            )),
+        )));
+        let drawing = app.tab.doc.clone();
+        let revision = app.tab.revision;
+        let tab = app.tab.id;
+        let tool = app.tool;
+        let _ = app.update(Message::Updates(Action::Show(true)));
+        for message in [
+            Message::Delete,
+            Message::Shortcut(super::super::shortcuts::Action::Nudge(1., 0.)),
+            Message::ContextKey("N".into()),
+            Message::ToggleHelp,
+            Message::New,
+            Message::Open,
+            Message::Save,
+            Message::SaveAs,
+            Message::Tabs(super::super::tabs::Action::Close(None)),
+            Message::Paste,
+            Message::Assistant(super::super::assistant::Action::Send),
+        ] {
+            let _ = app.update(message);
+            assert_eq!(app.tab.doc, drawing);
+            assert_eq!(app.tab.revision, revision);
+            assert_eq!(app.tab.id, tab);
+            assert_eq!(app.tab.selected, [atom]);
+            assert_eq!(app.tool, tool);
+            assert_eq!(app.assistant.input_text(), "Unsent draft");
+            assert!(!app.assistant.busy);
+            assert!(app.updates.open);
+            assert!(!app.help_open);
+            assert!(!app.tab.history.can_undo());
+            assert!(!app.file_io.saving);
+            assert!(app.pending.is_none());
+        }
+        // Escape belongs to the topmost dialog even with an older panel open.
+        app.help_open = true;
+        let _ = app.update(Message::Escape);
+        assert!(!app.updates.open);
+        assert!(app.help_open);
+        assert_eq!(app.tab.doc, drawing);
+    }
+
+    #[test]
+    fn updates_modal_keeps_async_results_and_save_completion_running() {
+        let (mut app, _) = App::new();
+        app.updates.open = true;
+        app.tab.busy = true;
+        app.file_io.saving = true;
+        let drawing = app.tab.doc.clone();
+        let _ = app.update(Message::EngineDone {
+            revision: app.tab.revision,
+            kind: super::super::Job::Analyze,
+            result: Box::new(Err("Analysis completed with an error".into())),
+        });
+        assert!(!app.tab.busy);
+        assert!(app.status.contains("Analysis completed"));
+        let _ = app.update(Message::Saved(
+            app.tab.file_epoch,
+            Box::new(drawing.clone()),
+            Err("Save completed with an error".into()),
+        ));
+        assert!(!app.file_io.saving);
+        assert!(app.status.contains("Save completed"));
+        let _ = app.update(Message::Updates(Action::Check(true)));
+        assert!(app.updates.checking);
+        let _ = app.update(Message::Updates(Action::Checked(
+            app.updates.check_id,
+            Ok(Release {
+                version: "99.0.0".into(),
+            }),
+        )));
+        assert!(!app.updates.checking);
+        assert!(app.updates.available());
+        assert!(app.updates.open);
+        assert_eq!(app.tab.doc, drawing);
+        assert!(!app.tab.history.can_undo());
+
+        // A result from an insertion started before opening Updates still
+        // lands in this tab and records its normal undo step.
+        let mut inserted = reshiki::document::Document::default();
+        inserted.add_atom("O", reshiki::document::Point::default());
+        let _ = app.update(Message::EngineDone {
+            revision: app.tab.revision,
+            kind: super::super::Job::Insert,
+            result: Box::new(Ok(reshiki::engine::Response {
+                document: Some(inserted),
+                analysis: None,
+                output: None,
+                engine_version: "test".into(),
+                warnings: vec![],
+            })),
+        });
+        assert_eq!(app.tab.doc.atoms.len(), 1);
+        assert_eq!(app.tab.doc.atoms[0].element, "O");
+        assert!(app.tab.history.can_undo());
+        assert!(app.updates.open);
+    }
 
     #[tokio::test]
     async fn update_reopens_saved_tabs_in_order_and_restores_each_front() {

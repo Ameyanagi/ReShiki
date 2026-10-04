@@ -13,6 +13,7 @@
 )]
 
 pub mod abbreviations;
+pub mod accessibility;
 pub mod aromatic;
 pub mod arrows;
 pub mod assistant;

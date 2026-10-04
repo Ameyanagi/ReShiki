@@ -20,30 +20,44 @@ pub fn wrap(
     content: Element<'_, Message>,
     help_open: bool,
     image_open: bool,
+    updates_open: bool,
+    atom_text_open: bool,
 ) -> Element<'_, Message> {
-    Element::new(FileShortcuts(content, help_open, image_open))
+    Element::new(FileShortcuts {
+        content,
+        help_open,
+        image_open,
+        updates_open,
+        atom_text_open,
+    })
 }
 
-struct FileShortcuts<'a>(Element<'a, Message>, bool, bool);
+struct FileShortcuts<'a> {
+    content: Element<'a, Message>,
+    help_open: bool,
+    image_open: bool,
+    updates_open: bool,
+    atom_text_open: bool,
+}
 
 impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
     fn tag(&self) -> tree::Tag {
-        self.0.as_widget().tag()
+        self.content.as_widget().tag()
     }
     fn state(&self) -> tree::State {
-        self.0.as_widget().state()
+        self.content.as_widget().state()
     }
     fn children(&self) -> Vec<Tree> {
-        self.0.as_widget().children()
+        self.content.as_widget().children()
     }
     fn diff(&self, tree: &mut Tree) {
-        self.0.as_widget().diff(tree);
+        self.content.as_widget().diff(tree);
     }
     fn size(&self) -> Size<Length> {
-        self.0.as_widget().size()
+        self.content.as_widget().size()
     }
     fn size_hint(&self) -> Size<Length> {
-        self.0.as_widget().size_hint()
+        self.content.as_widget().size_hint()
     }
     fn layout(
         &mut self,
@@ -51,7 +65,7 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
         renderer: &Renderer,
         limits: &layout::Limits,
     ) -> layout::Node {
-        self.0.as_widget_mut().layout(tree, renderer, limits)
+        self.content.as_widget_mut().layout(tree, renderer, limits)
     }
     fn draw(
         &self,
@@ -63,7 +77,7 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
         cursor: mouse::Cursor,
         viewport: &Rectangle,
     ) {
-        self.0
+        self.content
             .as_widget()
             .draw(tree, renderer, theme, style, layout, cursor, viewport);
     }
@@ -74,7 +88,7 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
         renderer: &Renderer,
         operation: &mut dyn Operation,
     ) {
-        self.0
+        self.content
             .as_widget_mut()
             .operate(tree, layout, renderer, operation);
     }
@@ -89,7 +103,25 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
         shell: &mut Shell<'_, Message>,
         viewport: &Rectangle,
     ) {
-        if self.2
+        // The Updates focus scope owns Tab, Enter and Space. Keep other keys
+        // away from file routing and the focused editor behind the dialog.
+        if self.updates_open
+            && matches!(event, Event::Keyboard(_) | Event::InputMethod(_))
+            && !activation_event(event)
+        {
+            if matches!(
+                event,
+                Event::Keyboard(keyboard::Event::KeyPressed {
+                    key: keyboard::Key::Named(keyboard::key::Named::Escape),
+                    ..
+                })
+            ) {
+                shell.publish(Message::Updates(super::updates::Action::Show(false)));
+            }
+            shell.capture_event();
+            return;
+        }
+        if self.image_open
             && let Event::Keyboard(keyboard::Event::KeyPressed { key, .. }) = event
         {
             if matches!(key, keyboard::Key::Named(keyboard::key::Named::Escape)) {
@@ -100,7 +132,23 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
             shell.capture_event();
             return;
         }
-        if self.1
+        // A text input consumes Escape to unfocus itself. The atom-label
+        // dialog promises Cancel on the first press, including while typing.
+        if self.atom_text_open
+            && matches!(
+                event,
+                Event::Keyboard(keyboard::Event::KeyPressed {
+                    key: keyboard::Key::Named(keyboard::key::Named::Escape),
+                    ..
+                })
+            )
+        {
+            shell.publish(Message::AtomText(super::atom_text::Action::Cancel));
+            shell.capture_event();
+            return;
+        }
+        if self.help_open
+            && !self.atom_text_open
             && let Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) = event
         {
             if matches!(key, keyboard::Key::Named(keyboard::key::Named::Escape))
@@ -120,11 +168,17 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
         }
         let untyped = without_command_text(event);
         let event = untyped.as_ref().unwrap_or(event);
-        self.0.as_widget_mut().update(
+        self.content.as_widget_mut().update(
             tree, event, layout, cursor, renderer, clipboard, shell, viewport,
         );
+        if self.updates_open && activation_event(event) {
+            // An unfocused dialog control may leave activation unhandled.
+            // Capture it here before the drawing's subscription sees it.
+            shell.capture_event();
+            return;
+        }
         if let Some(mut fields) = Fields::after(event, shell.is_event_captured()) {
-            self.0
+            self.content
                 .as_widget_mut()
                 .operate(tree, layout, renderer, &mut fields);
             fields.finish(shell);
@@ -138,7 +192,7 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
         viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
-        self.0
+        self.content
             .as_widget()
             .mouse_interaction(tree, layout, cursor, viewport, renderer)
     }
@@ -150,7 +204,12 @@ impl Widget<Message, Theme, Renderer> for FileShortcuts<'_> {
         viewport: &Rectangle,
         translation: Vector,
     ) -> Option<overlay::Element<'a, Message, Theme, Renderer>> {
-        self.0
+        // A popover in the workspace must not float above the modal dialog or
+        // receive keys before this wrapper does.
+        if self.updates_open {
+            return None;
+        }
+        self.content
             .as_widget_mut()
             .overlay(tree, layout, renderer, viewport, translation)
             .map(|overlay| overlay::Element::new(Box::new(FieldKeys(overlay))))
@@ -353,9 +412,59 @@ pub(super) fn file_message(key: &keyboard::Key, modifiers: keyboard::Modifiers) 
     })
 }
 
+fn activation_event(event: &Event) -> bool {
+    // Control is distinct from Command on macOS, but Control+Tab is still a
+    // document shortcut. Only unmodified or Shift navigation reaches a modal.
+    matches!(event, Event::Keyboard(keyboard::Event::KeyPressed { key: keyboard::Key::Named(keyboard::key::Named::Enter | keyboard::key::Named::Space | keyboard::key::Named::Tab), modifiers, .. }
+        | keyboard::Event::KeyReleased { key: keyboard::Key::Named(keyboard::key::Named::Space), modifiers, .. }) if !modifiers.control() && !modifiers.alt() && !modifiers.logo())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn modal_activation_rejects_control_alt_and_logo_on_every_platform() {
+        use keyboard::{Key, Modifiers, key::Named};
+        for modifiers in [
+            Modifiers::empty(),
+            Modifiers::SHIFT,
+            Modifiers::CTRL,
+            Modifiers::CTRL | Modifiers::SHIFT,
+            Modifiers::ALT,
+            Modifiers::ALT | Modifiers::SHIFT,
+            Modifiers::LOGO,
+            Modifiers::LOGO | Modifiers::SHIFT,
+        ] {
+            let allowed = modifiers.is_empty() || modifiers == Modifiers::SHIFT;
+            for named in [Named::Enter, Named::Space, Named::Tab] {
+                let key = Key::Named(named);
+                let event = Event::Keyboard(keyboard::Event::KeyPressed {
+                    key: key.clone(),
+                    modified_key: key,
+                    physical_key: keyboard::key::Physical::Code(match named {
+                        Named::Enter => keyboard::key::Code::Enter,
+                        Named::Space => keyboard::key::Code::Space,
+                        _ => keyboard::key::Code::Tab,
+                    }),
+                    location: keyboard::Location::Standard,
+                    modifiers,
+                    text: None,
+                    repeat: false,
+                });
+                assert_eq!(activation_event(&event), allowed, "{event:?}");
+            }
+            let event = Event::Keyboard(keyboard::Event::KeyReleased {
+                key: Key::Named(Named::Space),
+                modified_key: Key::Named(Named::Space),
+                physical_key: keyboard::key::Physical::Code(keyboard::key::Code::Space),
+                location: keyboard::Location::Standard,
+                modifiers,
+            });
+            assert_eq!(activation_event(&event), allowed, "{event:?}");
+        }
+    }
+
     #[test]
     fn longer_chords_do_not_trigger_plain_file_commands() {
         use keyboard::{Key, Modifiers};

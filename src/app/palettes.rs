@@ -199,6 +199,74 @@ fn graphic_options(family: Family) -> Vec<(String, GraphicOption)> {
     }
     options
 }
+
+// Hover hints show one key that selects this tool on empty, unselected canvas.
+// Contextual atom/bond actions belong in Help, not in tool-selection hints.
+pub(super) fn element_hint(symbol: &str) -> String {
+    use iced::keyboard::Modifiers;
+    let shift = |key| super::shortcuts::keys(Modifiers::SHIFT, key);
+    let key = match symbol {
+        "C" => "c".into(),
+        "N" => "n".into(),
+        "O" => "o".into(),
+        "S" => "s".into(),
+        "P" => "p".into(),
+        "F" => "f".into(),
+        "H" => "h".into(),
+        "B" => shift("B"),
+        "Cl" => shift("C"),
+        "I" => "i".into(),
+        "Li" => shift("L"),
+        "Si" => shift("S"),
+        _ => return symbol.into(),
+    };
+    format!("{symbol} · {key}")
+}
+
+pub(super) fn bond_hint(preset: BondPreset, label: &str) -> String {
+    let key = match preset {
+        BondPreset::Single => "1",
+        BondPreset::Double => "2",
+        BondPreset::Triple => "3",
+        BondPreset::Quadruple => "4",
+        _ => return label.into(),
+    };
+    format!("{label} · {key}")
+}
+
+pub(super) fn ring_hint(label: &str, action: &Action) -> String {
+    use iced::keyboard::Modifiers;
+    let key = match action {
+        Action::Ring(size, false) => {
+            let message = Message::Shortcut(super::shortcuts::Action::SelectRing(*size));
+            let Some(key) = super::shortcuts::label(&message) else {
+                return label.into();
+            };
+            key
+        }
+        Action::RingPreset(RingPreset::Benzene) => "j".into(),
+        Action::RingPreset(RingPreset::Cyclopentadiene) => {
+            super::shortcuts::keys(Modifiers::SHIFT, "J")
+        }
+        _ => return label.into(),
+    };
+    format!("{label} · {key}")
+}
+
+pub(super) fn graphic_hint(kind: GraphicKind, label: &str) -> String {
+    use iced::keyboard::Modifiers;
+    let key = match kind {
+        GraphicKind::Brackets => "T",
+        GraphicKind::Symbol(reshiki::scientific::SymbolKind::CirclePlus) => "E",
+        GraphicKind::Orbital(reshiki::scientific::OrbitalKind::P) => "G",
+        _ => return label.into(),
+    };
+    format!(
+        "{label} · {}",
+        super::shortcuts::keys(Modifiers::SHIFT, key)
+    )
+}
+
 impl App {
     pub(super) fn palette_action(&mut self, action: Action) -> iced::Task<Message> {
         match action {
@@ -305,11 +373,6 @@ impl App {
                         if symbol == "." {
                             line = line.push(Space::new().width(29).height(29));
                         } else {
-                            let number = reshiki::editing::ELEMENTS
-                                .iter()
-                                .position(|e| *e == symbol)
-                                .map(|n| n + 1)
-                                .unwrap_or(0);
                             line = line.push(super::workspace::hover_hint(
                                 button(text(symbol).size(12).center())
                                     .width(29)
@@ -321,7 +384,7 @@ impl App {
                                         symbol,
                                     ))
                                     .on_press(Message::Palette(Action::Atom(symbol.into()))),
-                                format!("{symbol} · Atomic number {number}"),
+                                element_hint(symbol),
                                 tooltip::Position::Bottom,
                             ));
                         }
@@ -365,7 +428,7 @@ impl App {
                                 self.tool.bond_preset() == Some(*preset),
                             ))
                             .on_press(Message::Palette(Action::Bond(*preset))),
-                            preset.name(),
+                            bond_hint(*preset, preset.name()),
                             tooltip::Position::Bottom,
                         ));
                     }
@@ -421,7 +484,7 @@ impl App {
                                 _ => false,
                             }))
                             .on_press(Message::Palette(action.clone())),
-                            label.clone(),
+                            ring_hint(label, action),
                             tooltip::Position::Bottom,
                         ));
                     }
@@ -536,7 +599,7 @@ impl App {
                 for options in graphic_options(family).chunks(3) {
                     let mut line = row![].spacing(8);
                     for (label, option) in options {
-                        line = line.push(
+                        line = line.push(super::workspace::hover_hint(
                             button(
                                 column![
                                     canvas(PalettePreview(option.document()))
@@ -552,7 +615,11 @@ impl App {
                                     && self.toolbar.graphic(self.tool) == Some(option),
                             ))
                             .on_press(Message::Palette(Action::Graphic(option.clone()))),
-                        );
+                            // T keeps the remembered bracket style and sides;
+                            // it cannot choose this specific palette variant.
+                            label.clone(),
+                            tooltip::Position::Bottom,
+                        ));
                     }
                     body = body.push(line);
                 }
@@ -581,7 +648,7 @@ impl App {
                             Tool::Graphic(kind) => kind.to_string(),
                             _ => String::new(),
                         };
-                        line = line.push(
+                        line = line.push(super::workspace::hover_hint(
                             button(
                                 column![
                                     canvas(super::icons::Glyph(
@@ -597,7 +664,13 @@ impl App {
                             .padding(6)
                             .style(super::workspace::control(self.tool == tool))
                             .on_press(Message::Palette(Action::Tool(tool))),
-                        );
+                            if let Tool::Graphic(kind) = tool {
+                                graphic_hint(kind, &label)
+                            } else {
+                                label
+                            },
+                            tooltip::Position::Bottom,
+                        ));
                     }
                     body = body.push(line);
                 }

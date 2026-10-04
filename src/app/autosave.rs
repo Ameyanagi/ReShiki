@@ -1055,13 +1055,21 @@ pub(super) mod tests {
                 )));
                 assert!(!app.exit.frozen() && !app.updates.restarting);
                 assert!(app.tabs.deferred_results.is_empty());
+                assert!(app.updates.open, "The failed handoff remains visible");
                 app.in_tab(id, |app| {
                     assert!(!app.tab.clipboard_busy);
                     assert!(app.status.contains("Clipboard unavailable"));
+                    // Replay finishes while the failure dialog owns input;
+                    // new clipboard commands resume after dismissing it.
+                    let _ = app.update(Message::Escape);
+                    assert!(!app.updates.open);
                     assert!(
                         app.update(Message::Paste).units() > 0,
-                        "Paste is usable after a failed handoff"
+                        "Paste is usable after dismissing a failed handoff"
                     );
+                    if reshiki::clipboard::available() {
+                        assert!(app.tab.clipboard_busy, "The new paste actually starts");
+                    }
                 })
                 .unwrap();
             }

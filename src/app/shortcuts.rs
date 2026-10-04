@@ -11,10 +11,16 @@ use reshiki::{
     hotkeys,
 };
 
+#[cfg(test)]
+mod atom_target_tests;
+#[cfg(test)]
+mod ring_tool_tests;
+
 #[derive(Debug, Clone)]
 pub enum Action {
     ReactionCopy,
     SelectRecent,
+    SelectRing(u8),
     FixedLength,
     FixedAngles,
     Rulers,
@@ -134,6 +140,18 @@ fn binding(message: &Message) -> Option<(Modifiers, &'static str)> {
             },
         ),
         Message::Delete => (Modifiers::empty(), "Delete"),
+        Message::Shortcut(Action::SelectRing(size)) => (
+            Modifiers::SHIFT,
+            match size {
+                3 => "3",
+                4 => "4",
+                5 => "5",
+                6 => "6",
+                7 => "7",
+                8 => "8",
+                _ => return None,
+            },
+        ),
         // Keys for the selected atom or ring, through `App::context_key`.
         Message::AtomText(super::atom_text::Action::Begin(None)) => (Modifiers::empty(), "Enter"),
         Message::ToggleSelectedRing => (Modifiers::SHIFT, "R"),
@@ -142,7 +160,8 @@ fn binding(message: &Message) -> Option<(Modifiers, &'static str)> {
 }
 
 /// Called only after focused widgets have had an opportunity to capture the key.
-/// Character hotkeys use the actual modified character (including Caps Lock).
+/// Character hotkeys use the modified character (including Caps Lock), except
+/// Shift+digit ring selectors, which use the digit before Shift adds punctuation.
 pub(super) fn key_message(key: &Key, modified: &Key, mods: Modifiers) -> Option<Message> {
     if super::help::is_shortcut(key, mods) {
         return Some(Message::ToggleHelp);
@@ -233,6 +252,12 @@ pub(super) fn key_message(key: &Key, modified: &Key, mods: Modifiers) -> Option<
             _ => return None,
         });
     }
+    if mods == Modifiers::SHIFT
+        && let Key::Character(digit) = key
+        && let [digit @ b'3'..=b'8'] = digit.as_bytes()
+    {
+        return Some(Message::Shortcut(Action::SelectRing(*digit - b'0')));
+    }
     let step = if mods.shift() { 10. } else { 1. };
     Some(match modified {
         Key::Character(c) => Message::ContextKey(c.to_string()),
@@ -254,6 +279,12 @@ impl App {
         match action {
             Action::ReactionCopy => self.reaction_copy_shortcut(),
             Action::SelectRecent => self.select_recent_shortcut(),
+            Action::SelectRing(size) => {
+                if (3..=8).contains(&size) {
+                    return self
+                        .update(Message::Palette(super::palettes::Action::Ring(size, false)));
+                }
+            }
             Action::FixedLength => {
                 return self.update(Message::FixedLength(!self.tab.bond_drawing.fixed_length));
             }
@@ -373,7 +404,14 @@ impl App {
             .hover
             .filter(|(_, epoch)| *epoch == self.tab.file_epoch)
             .map(|(p, _)| p);
-        let hovered_atom = point.and_then(|p| self.tab.doc.nearest(p, 10. / self.tab.camera.zoom));
+        let hovered_atom = point.and_then(|p| {
+            let radius = 10. / self.tab.camera.zoom;
+            // The visible label owns its hydrogens, isotope and charge even
+            // when their glyphs extend beyond the atom's center hit radius.
+            // Do not pad the label here: nearby bonds must remain targetable.
+            reshiki::scene::atom_label_hit(&self.tab.doc, p, 0.)
+                .or_else(|| self.tab.doc.nearest(p, radius))
+        });
         let hovered_bond = if hovered_atom.is_none() {
             point
                 .and_then(|p| editing::nearest_bond(&self.tab.doc, p, 7. / self.tab.camera.zoom))
@@ -427,9 +465,9 @@ impl App {
         }
         if key == "g" {
             if let Some(id) = atom {
-                self.tab.selected = vec![id];
+                self.edit(crate::canvas::Edit::Select(vec![id]));
             } else if let Some((a, b)) = bond {
-                self.tab.selected = vec![a, b];
+                self.edit(crate::canvas::Edit::Select(vec![a, b]));
             }
             return Task::none();
         }
@@ -450,13 +488,13 @@ impl App {
                 }));
             }
             if let Some(id) = atom {
-                self.tab.selected = vec![id];
+                self.edit(crate::canvas::Edit::Select(vec![id]));
                 if ["=", "Enter"].contains(&key) {
                     return self
                         .update(Message::AtomText(super::atom_text::Action::Begin(Some(id))));
                 }
             } else if let Some((a, b)) = bond {
-                self.tab.selected = vec![a, b];
+                self.edit(crate::canvas::Edit::Select(vec![a, b]));
             }
             return self.update(Message::Inspector(InspectorTab::Properties));
         }

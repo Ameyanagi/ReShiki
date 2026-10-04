@@ -170,6 +170,11 @@ jobs:
         # The Windows renderer includes Tiny Skia when WGPU is unavailable.
         # This checks widget layout/input; it is not native desktop acceptance.
         run: cargo test --locked --no-default-features --bin reshiki app::numeric_transforms::focus::tests::handle_shortcut_focuses_selects_and_reveals_the_field_in_both_window_sizes -- --exact --ignored
+      - name: Test rendered Updates modal keyboard input on Windows
+        if: runner.os == 'Windows'
+        # The Windows renderer includes Tiny Skia when WGPU is unavailable.
+        # This checks widget layout/input; it is not native desktop acceptance.
+        run: cargo test --locked --no-default-features --bin reshiki app::shortcut_focus_tests::updates_ -- --ignored
       - run: cargo test --workspace --locked --no-default-features
       - name: Test the isolated font export probe
         run: cargo test --locked --manifest-path tools/font-export-probe/Cargo.toml -j 2

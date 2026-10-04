@@ -9,6 +9,8 @@ use reshiki::{
 mod cache;
 mod dashes;
 pub mod guides;
+#[cfg(test)]
+pub(crate) mod label_click_tests;
 pub mod layered;
 mod markers;
 mod movement;
@@ -2615,6 +2617,10 @@ pub fn hit_object(doc: &Document, p: World, r: f32) -> Option<u64> {
                 })
                 .map(|a| a.id)
         })
+        // A visible atom label owns its H/isotope/charge appendages when
+        // selecting, just as it does for hover shortcuts. Keep the exact label
+        // bounds so adjacent bonds remain targetable; growth still uses nearest.
+        .or_else(|| reshiki::scene::atom_label_hit(doc, p, 0.))
         .or_else(|| doc.nearest(p, r))
         .or_else(|| {
             doc.annotations
