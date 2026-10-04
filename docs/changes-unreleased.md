@@ -2,7 +2,13 @@
 
 See [ReShiki 0.10.0](changes-0.10.md) for the latest release notes.
 
-- **Under review — Shared release checks and descriptor preparation:** share
+- **Under review — Document and geometry cleanup:** reuse internal drawing
+  iterators, owned ring and template data, and bounded editing history while
+  preserving drawing output, selection order, geometry and Undo behavior.
+  [Validation](changes/document-geometry-cleanup-2026-10-04.md)
+  · [PR #135](https://github.com/Ameyanagi/ReShiki/pull/135) · @Ameyanagi.
+
+- **Shared release checks and descriptor preparation:** share
   native target definitions, checksum writing and descriptor query operations
   while preserving supported platforms, checksums and generated chemistry data.
   [Validation](changes/release-descriptor-tooling-2026-10-04.md)

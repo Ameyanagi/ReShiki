@@ -1,5 +1,8 @@
 # Document and geometry cleanup
 
+[PR #135](https://github.com/Ameyanagi/ReShiki/pull/135), by @Ameyanagi, is under
+review.
+
 This internal refactor removes repeated allocation, copying, and scanning from
 document editing while preserving drawing output and controls. The branch is
 `refactor/document-geometry-cleanup`; its comparison baseline is
@@ -79,6 +82,9 @@ Those local artifacts are verification records, not permanent published assets.
 Production source has a net change of **−22 physical lines**. Tests and test
 wiring add **714 lines**, for **+692 overall**, excluding this documentation.
 The count includes formatting changes; it is not a semantic complexity metric.
+The Rust-only count was rechecked against merged main
+`409e08051affa9e320771e515e7243202934d686` at PR head
+`a779f2ba3d71fa14572579bc5b0b0847ce1e5bbb`; the totals remain unchanged.
 
 Internal ID and point consumers avoid temporary vectors; graphic command
 generation still creates its existing vector. Ring connection avoids an
