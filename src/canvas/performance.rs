@@ -21,6 +21,24 @@ fn measure(name: &str, count: usize, mut run: impl FnMut(usize)) {
         samples[(count * 95 / 100).min(count - 1)],
         samples.iter().sum::<f64>() / count as f64
     );
+    // Opt-in, process-wide requested Rust bytes. Run this test alone with one
+    // test thread. Fixture creation, CPU samples and printing precede reset;
+    // renderer-internal allocations are included, native/GPU/RSS bytes are not.
+    // This extra pass reuses the outlines prepared by the timed pass above.
+    if std::env::var("RESHIKI_PERF_ALLOCATIONS").as_deref() == Ok("1") {
+        let baseline = crate::allocation_metrics::reset();
+        for i in 0..count {
+            run(i);
+        }
+        let snapshot = crate::allocation_metrics::snapshot();
+        println!(
+            "ALLOC,{name},{count},{},{},{},{}",
+            snapshot.allocated_bytes,
+            snapshot.allocation_count,
+            snapshot.peak_bytes.saturating_sub(baseline),
+            snapshot.live_bytes as i128 - baseline as i128,
+        );
+    }
 }
 
 #[tokio::test]
