@@ -112,10 +112,11 @@ env SAL_USE_VCLPLUGIN=svp libreoffice -env:UserInstallation=file:///work/profile
 python3 -B integrations/libreoffice/tests/roundtrip.py --uno-url 'uno:pipe,name=reshiki-refactor-candidate;urp;StarOffice.ComponentContext' --packet /work/evidence/preview-packet.json --output /work/evidence/candidate-roundtrip --incoming /work/evidence/baseline-roundtrip
 ```
 
-The dedicated-container setup uses its own unprivileged account for package
-installation and LibreOffice. The process-start command runs in the background;
-wait for its UNO endpoint before starting the Python harness. The manifest
-records the supplemental driver's exact commands and source hash.
+Distribution packages were installed as root inside the dedicated container.
+Extension installation, UNO tests and LibreOffice used the private unprivileged
+`qa` account. The process-start command runs in the background; wait for its UNO
+endpoint before starting the Python harness. The manifest records the
+supplemental driver's exact commands and source hash.
 
 ## Acceptance limits
 
