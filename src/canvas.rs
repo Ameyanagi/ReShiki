@@ -18,6 +18,8 @@ mod pages;
 #[cfg(test)]
 mod performance;
 #[cfg(test)]
+mod render_parity_tests;
+#[cfg(test)]
 pub(crate) mod rotation_gesture_tests;
 mod selection;
 mod smart_guides;
@@ -2011,25 +2013,24 @@ impl MoleculeCanvas<'_> {
             .annotations
             .retain(|a| Some(a.id) != self.hidden_annotation);
         let selected = ring_selection.as_deref().unwrap_or(self.selected);
-        if self.hidden_annotation.is_none() && (translation.is_some() || preview == *self.doc) {
+        let cached_camera = (self.hidden_annotation.is_none()
+            && (translation.is_some() || preview == *self.doc))
+            .then(|| {
+                let delta = translation.unwrap_or_default();
+                Camera {
+                    center: self.camera.center.offset(-delta.x, -delta.y),
+                    ..self.camera
+                }
+            });
+        if let Some(camera) = cached_camera {
             let markers = state.scene.borrow_mut().markers(self.doc, selected);
-            let delta = translation.unwrap_or_default();
-            let camera = Camera {
-                center: self.camera.center.offset(-delta.x, -delta.y),
-                ..self.camera
-            };
             markers.draw(frame, camera, bounds, true);
         } else {
             markers::Markers::new(&preview, selected).draw(frame, self.camera, bounds, true);
         }
-        if self.hidden_annotation.is_none() && (translation.is_some() || preview == *self.doc) {
+        if let Some(camera) = cached_camera {
             let scene = state.scene.borrow_mut().primitives(self.doc);
-            let delta = translation.unwrap_or_default();
-            let camera = Camera {
-                center: self.camera.center.offset(-delta.x, -delta.y),
-                ..self.camera
-            };
-            draw_primitives(frame, scene.iter().cloned(), camera, bounds, 0.);
+            draw_primitives(frame, &scene, camera, bounds, 0.);
         } else {
             draw_document(frame, &preview, self.camera, bounds);
         }
@@ -2310,9 +2311,7 @@ impl MoleculeCanvas<'_> {
                 drag.selection
                     .draw(frame, drag.values(end, state.modifiers.shift()).1);
             } else {
-                let selection = if self.hidden_annotation.is_none()
-                    && (translation.is_some() || preview == *self.doc)
-                {
+                let selection = if cached_camera.is_some() {
                     state
                         .scene
                         .borrow_mut()
@@ -2677,12 +2676,12 @@ fn draw_document_with_minimum_stroke(
     bounds: Rectangle,
     minimum: f32,
 ) {
-    draw_primitives(frame, primitives(doc), camera, bounds, minimum);
+    draw_primitives(frame, &primitives(doc), camera, bounds, minimum);
 }
 
 fn draw_primitives(
     frame: &mut layered::Frame<'_>,
-    primitives: impl IntoIterator<Item = Primitive>,
+    primitives: &[Primitive],
     camera: Camera,
     bounds: Rectangle,
     minimum: f32,
@@ -2724,18 +2723,18 @@ fn draw_primitives(
                 let path = Path::new(|b| {
                     for c in commands {
                         match c {
-                            PathCommand::Move(p) => b.move_to(camera.screen(p, bounds)),
-                            PathCommand::Line(p) => b.line_to(camera.screen(p, bounds)),
+                            PathCommand::Move(p) => b.move_to(camera.screen(*p, bounds)),
+                            PathCommand::Line(p) => b.line_to(camera.screen(*p, bounds)),
                             PathCommand::Cubic(a, z, p) => b.bezier_curve_to(
-                                camera.screen(a, bounds),
-                                camera.screen(z, bounds),
-                                camera.screen(p, bounds),
+                                camera.screen(*a, bounds),
+                                camera.screen(*z, bounds),
+                                camera.screen(*p, bounds),
                             ),
                             PathCommand::Close => b.close(),
                         }
                     }
                 });
-                if filled && let Some(c) = style.fill {
+                if *filled && let Some(c) = style.fill {
                     frame.fill(&path, rgb(c.rgb()));
                 }
                 let dashes: Vec<_> = style.dashes().iter().map(|v| v * camera.zoom).collect();
@@ -2755,9 +2754,9 @@ fn draw_primitives(
                 }
             }
             Primitive::Line(a, b, width) => frame.stroke(
-                &Path::line(camera.screen(a, bounds), camera.screen(b, bounds)),
+                &Path::line(camera.screen(*a, bounds), camera.screen(*b, bounds)),
                 Stroke::default()
-                    .with_width((width * camera.zoom).max(minimum))
+                    .with_width((*width * camera.zoom).max(minimum))
                     .with_line_cap(canvas::LineCap::Round)
                     .with_color(Color::BLACK),
             ),
@@ -2783,11 +2782,11 @@ fn draw_primitives(
                 let paths = if let Some(cache) = frame.text_cache {
                     cache
                         .borrow_mut()
-                        .get(&text, size, camera.zoom, color, &style)
+                        .get(text, *size, camera.zoom, *color, style)
                 } else {
-                    std::rc::Rc::new(text_cache::outline(&text, size, camera.zoom, color, &style))
+                    std::rc::Rc::new(text_cache::outline(text, *size, camera.zoom, *color, style))
                 };
-                let position_screen = camera.screen(position, bounds);
+                let position_screen = camera.screen(*position, bounds);
                 let visible = paths.bounds.is_some_and(|text_bounds| {
                     Rectangle {
                         x: text_bounds.x + position_screen.x,
@@ -2807,15 +2806,15 @@ fn draw_primitives(
                     }
                 }
                 if style.underline {
-                    let width = reshiki::style::styled_text_width(&text, size, &style);
+                    let width = reshiki::style::styled_text_width(text, *size, style);
                     frame.stroke(
                         &Path::line(
-                            camera.screen(position.offset(0.0, size * 0.95), bounds),
-                            camera.screen(position.offset(width, size * 0.95), bounds),
+                            camera.screen(position.offset(0.0, *size * 0.95), bounds),
+                            camera.screen(position.offset(width, *size * 0.95), bounds),
                         ),
                         Stroke::default()
-                            .with_width((size * 0.045 * camera.zoom).max(0.5))
-                            .with_color(rgb(color)),
+                            .with_width((*size * 0.045 * camera.zoom).max(0.5))
+                            .with_color(rgb(*color)),
                     );
                 }
             }

@@ -1,6 +1,8 @@
 use crate::document::{Document, Point};
 use std::collections::{HashMap, HashSet};
 
+#[cfg(test)]
+mod arrange_tests;
 mod rotation;
 pub use rotation::center as rotation_center;
 
@@ -560,9 +562,15 @@ pub fn arrange(doc: &mut Document, ids: &[u64], action: Arrange) {
         action,
         Arrange::DistributeHorizontal | Arrange::DistributeVertical
     );
-    let mut groups: Vec<_> = groups(doc, ids)
+    let groups = groups(doc, ids);
+    if groups.is_empty() {
+        return;
+    }
+    let bounds = crate::scene::selections_bounds(doc, &groups);
+    let mut groups: Vec<_> = groups
         .into_iter()
-        .filter_map(|g| crate::scene::selection_bounds(doc, &g).map(|b| (g, b)))
+        .zip(bounds)
+        .filter_map(|(g, bounds)| bounds.map(|b| (g, b)))
         .collect();
     if groups.len() < 2 {
         return;
