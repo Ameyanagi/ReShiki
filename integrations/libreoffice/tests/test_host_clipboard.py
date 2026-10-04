@@ -251,6 +251,56 @@ class HostClipboardTests(unittest.TestCase):
         )
         self.assertEqual(self.published.getTransferData(extension.flavor("image/png")).value, PNG)
 
+    def test_completion_scheduling_failure_leaves_clipboard_untouched_and_allows_retry(self):
+        self.handler.copy("editor", NATIVE)
+        with patch.object(extension, "post", side_effect=RuntimeError("callback unavailable")):
+            self.run_worker()
+        self.assertFalse(self.handler.copying)
+        self.assertFalse(self.writes)
+        self.assertIs(self.contents, self.old)
+        self.assertIs(self.published, self.old)
+        self.assertFalse(self.callbacks)
+        self.assertEqual(len(self.controller.messages), 1)
+        self.assert_no_ready()
+        self.errors.assert_not_called()
+
+        def report(ctx, message):
+            self.assertFalse(self.in_worker, "Failure UI must remain on the UNO thread")
+            self.assertEqual(message, "callback unavailable")
+
+        self.errors.side_effect = report
+        self.handler.copy("editor", NATIVE)
+        self.errors.assert_called_once_with(None, "callback unavailable")
+        self.assertEqual(self.controller.messages[-2][0], "Drawing was not copied")
+        self.run_worker()
+        self.assert_no_ready()
+        while self.callbacks:
+            self.callback()
+        self.assertFalse(self.handler.copying)
+        self.assertEqual(self.controller.messages[-1][0], "Editable drawing copied")
+        self.assertEqual(len(self.writes), 1)
+        self.assertEqual(
+            self.published.getTransferData(extension.flavor(extension.NATIVE_MIME)).value, NATIVE
+        )
+
+    def test_retention_scheduling_failure_reports_on_callback_thread_and_allows_retry(self):
+        self.handler.copy("editor", NATIVE)
+        self.run_worker()
+        with patch.object(extension, "post", side_effect=RuntimeError("retention unavailable")):
+            self.callback()
+        self.assertFalse(self.handler.copying)
+        self.assertEqual(self.controller.messages[-1][0], "Drawing was not copied")
+        self.errors.assert_called_once_with(None, "retention unavailable")
+        self.assert_no_ready()
+        self.callback()  # Already queued host publication is not a completion acknowledgement.
+        self.assert_no_ready()
+        self.handler.copy("editor", NATIVE)
+        self.run_worker()
+        while self.callbacks:
+            self.callback()
+        self.assertFalse(self.handler.copying)
+        self.assertEqual(self.controller.messages[-1][0], "Editable drawing copied")
+
     def test_copy_freezes_selected_bytes_and_original_frame_before_background_work(self):
         embedded = extension.Embedded(None, (NATIVE, PNG, (100, 200)))
         with patch.object(extension, "selected", return_value=embedded):
