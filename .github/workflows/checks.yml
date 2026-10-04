@@ -68,7 +68,7 @@ jobs:
           node --version
           openssl version
       - name: Run Office add-in and host adapter regressions
-        run: node --test integrations/office/office.test.js integrations/office/taskpane.test.js integrations/office/host-adapters/tests/*.test.js
+        run: node --test integrations/office/*.test.js integrations/office/host-adapters/tests/*.test.js
   python:
     needs: scope
     if: needs.scope.outputs.native == 'true'
