@@ -165,6 +165,88 @@ for (const host of ["Word", "Excel", "PowerPoint"]) {
     await assert.rejects(adapter.read(inserted.target), code("REVISION_CONFLICT"));
   });
 
+  for (const conflict of [
+    {
+      name: "a new record with the same native revision",
+      changedNative: false,
+      changedIdentity: false,
+      code: "REVISION_CONFLICT",
+      message: "The drawing received another update while this edit was being applied.",
+    },
+    {
+      name: "native revision before record identity",
+      changedNative: true,
+      changedIdentity: false,
+      code: "REVISION_CONFLICT",
+      message:
+        "This ReShiki drawing changed after editing began. Reopen it before applying your changes.",
+    },
+    {
+      name: "logical identity before native revision and record identity",
+      changedNative: true,
+      changedIdentity: true,
+      code: "TARGET_CHANGED",
+      message: "The original ReShiki drawing no longer matches this edit. Select it again.",
+    },
+  ]) {
+    test(`${host}: staged update rejects ${conflict.name} without overwriting the coauthor`, async () => {
+      const fake = fakeOffice(host);
+      const adapter = createHostAdapter(fake.dependencies);
+      const original = await envelope();
+      const inserted = await adapter.insert(original);
+      const object = fake.object(idFrom(inserted.target));
+      const coauthor = newRecord(
+        conflict.changedNative ? await envelope("coauthor") : original,
+        owner(host, inserted.target),
+        conflict.changedIdentity ? crypto.randomUUID() : inserted.target.objectId,
+      );
+      // Another pane publishes a new immutable record after our staging write,
+      // before the original is re-read. A native hash alone cannot detect it.
+      fake.afterBatch(
+        (labels) => labels.includes("part.add"),
+        () => {
+          (host === "PowerPoint" ? object.parts : fake.state.parts).push({
+            id: "coauthor-part",
+            xml: encodeRecord(coauthor),
+          });
+          if (host === "Word") {
+            object.tag = `reshiki:${coauthor.recordId}`;
+            object.pictures[0].png = coauthor.envelope.png;
+          } else if (host === "Excel") {
+            object.altTextDescription = object.altTextDescription.replace(
+              /data:[^\]]+/,
+              `data:${coauthor.recordId}`,
+            );
+            object.png = coauthor.envelope.png;
+          } else {
+            object.tags[0].value = coauthor.recordId;
+            object.png = coauthor.envelope.png;
+          }
+        },
+      );
+      const mutations = fake.state.mutations.length;
+      await assert.rejects(
+        adapter.update(inserted.target, await envelope("local edit")),
+        (error) => {
+          assert.equal(error.cause.code, conflict.code);
+          assert.equal(error.cause.message, conflict.message);
+          // Excel's staged replacement cannot roll back over the newer record.
+          // The untouched Word/PPT preview permits retry after private cleanup.
+          assert.equal(error.code, host === "Excel" ? "RECOVERY_REQUIRED" : conflict.code);
+          assert.equal(error.details.retryable, host !== "Excel");
+          return true;
+        },
+      );
+      const writes = fake.state.mutations.slice(mutations);
+      assert.equal(writes.includes("word.replace"), false);
+      if (host === "PowerPoint") assert.equal(writes.includes("ppt.setImage"), false);
+      if (host === "Excel") assert.equal(writes.includes("Excel.delete"), false);
+      fake.state.activeId = idFrom(inserted.target);
+      assert.deepEqual((await adapter.readSelected()).envelope, coauthor.envelope);
+      assert.equal(preview(fake, inserted.target).png, coauthor.envelope.png);
+    });
+  }
+
   test(`${host}: only one operation per adapter can mutate Office at a time`, async () => {
     const fake = fakeOffice(host);
     const adapter = createHostAdapter(fake.dependencies);

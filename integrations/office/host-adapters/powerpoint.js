@@ -1,5 +1,6 @@
 import {
   assertCanAdd,
+  assertCurrentRecord,
   assertGeometry,
   assertReadback,
   assertRevision,
@@ -219,12 +220,7 @@ export function createPowerPointAdapter(PowerPoint, { sessionId }) {
           before.shape.customXmlParts.add(encodeRecord(attempted));
           await context.sync();
           const fresh = await readShape(context, target);
-          assertRevision(fresh.record, target);
-          if (fresh.record.recordId !== before.record.recordId)
-            fail(
-              "REVISION_CONFLICT",
-              "The drawing received another update while this edit was being applied.",
-            );
+          assertCurrentRecord(fresh.record, before.record, target);
           before = fresh;
           const geometry = {
             ...before.geometry,
