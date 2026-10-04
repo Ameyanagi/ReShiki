@@ -24,6 +24,8 @@ use linux::invoke;
 const NATIVE: &str = "dev.reshiki.drawing";
 const LIMIT: usize = 64 * 1024 * 1024;
 const JSON_LIMIT: usize = LIMIT * 2;
+mod copy_as;
+pub use copy_as::{CopyFormat, PreparedCopy, prepare_as, selection_or_drawing, write_prepared};
 const CDX_TYPES: [&str; 3] = [
     "com.revvity.chemdraw.cdx-clipboard",
     "com.perkinelmer.chemdraw.cdx-clipboard",

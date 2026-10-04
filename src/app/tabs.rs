@@ -404,6 +404,14 @@ impl App {
                     self.figure_exporting = false;
                     Task::none()
                 }
+                Message::CopyAsPrepared(..) | Message::CopyAsWritten(..) => {
+                    self.copy_as_busy = false;
+                    Task::none()
+                }
+                Message::ClipboardWritten { .. } => {
+                    self.native_copy_busy = false;
+                    Task::none()
+                }
                 Message::Printing(action) => {
                     self.discard_print_result(action);
                     Task::none()
@@ -645,7 +653,7 @@ impl App {
 
 /// Engine and clipboard results that change a drawing, dropped for a closed tab.
 pub(super) fn document_result(message: &Message) -> bool {
-    use super::{assistant, document_styles, import, pictures, printing, shortcuts};
+    use super::{assistant, document_styles, import, pictures, printing};
     matches!(
         message,
         Message::EngineDone { .. }
@@ -660,10 +668,11 @@ pub(super) fn document_result(message: &Message) -> bool {
             | Message::InspectorAction(super::inspector::Action::PropertiesCalculated(..))
             | Message::Imports(import::Action::Loaded(..))
             | Message::ClipboardWritten { .. }
+            | Message::CopyAsPrepared(..)
+            | Message::CopyAsWritten(..)
             | Message::ClipboardRead { .. }
             | Message::Pasted(_)
             | Message::Pictures(pictures::Action::Loaded(..))
-            | Message::Shortcut(shortcuts::Action::Copied { .. })
     )
 }
 
